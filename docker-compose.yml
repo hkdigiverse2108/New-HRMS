@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  web:
+    build: ./backend
+    container_name: fastapi_backend
+    ports:
+      - "${PORT:-8000}:${PORT:-8000}"
+    env_file:
+      - ./backend/.env
+    environment:
+      # Pass the PORT variable so the container knows what port to listen on
+      - PORT=${PORT:-8000}
+    depends_on:
+      - redis
+      - mongodb
+    volumes:
+      - ./backend:/app # Sync code changes for development
+
+  redis:
+    image: redis:alpine
+    container_name: redis_cache
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data # Persist Redis data
+
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb_db
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db # Persist MongoDB data
+
+volumes:
+  redis_data:
+  mongodb_data:
