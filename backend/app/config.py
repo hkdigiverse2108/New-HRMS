@@ -11,7 +11,20 @@ class Settings(BaseSettings):
     MONGODB_URL: str
     MONGODB_DB_NAME: str
 
+    # JWT Settings
+    SECRET_KEY: str
+    ALGORITHM: str
+    ACCESS_TOKEN_EXPIRE_MINUTES: int
+
+    # Email Settings
+    SMTP_SERVER: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASS: str = ""
+    SENDER_EMAIL: str = ""
+
     class Config:
-        env_file = ".env"
+        env_file = "../.env"
+        extra = "ignore"
 
 settings = Settings()

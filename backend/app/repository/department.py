@@ -1,0 +1,55 @@
+from app.database.db import get_database
+from bson import ObjectId
+
+class DepartmentRepository:
+    collection_name = "departments"
+
+    @classmethod
+    async def get_collection(cls):
+        db = get_database()
+        return db[cls.collection_name]
+
+    @classmethod
+    async def create(cls, data: dict):
+        collection = await cls.get_collection()
+        result = await collection.insert_one(data)
+        data["_id"] = str(result.inserted_id)
+        return data
+
+    @classmethod
+    async def get_all(cls):
+        collection = await cls.get_collection()
+        items = []
+        async for item in collection.find():
+            item["_id"] = str(item["_id"])
+            items.append(item)
+        return items
+
+    @classmethod
+    async def get_by_id(cls, item_id: str):
+        collection = await cls.get_collection()
+        try:
+            item = await collection.find_one({"_id": ObjectId(item_id)})
+            if item:
+                item["_id"] = str(item["_id"])
+            return item
+        except Exception:
+            return None
+
+    @classmethod
+    async def update(cls, item_id: str, update_data: dict):
+        collection = await cls.get_collection()
+        try:
+            await collection.update_one({"_id": ObjectId(item_id)}, {"$set": update_data})
+            return await cls.get_by_id(item_id)
+        except Exception:
+            return None
+
+    @classmethod
+    async def delete(cls, item_id: str):
+        collection = await cls.get_collection()
+        try:
+            result = await collection.delete_one({"_id": ObjectId(item_id)})
+            return result.deleted_count > 0
+        except Exception:
+            return False
