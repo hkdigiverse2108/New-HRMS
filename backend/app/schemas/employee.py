@@ -24,7 +24,7 @@ class PersonalInfoOut(PersonalInfo):
 
 class WorkDetails(BaseModel):
     system_role: SystemRole
-    department: str
+    department: Optional[str] = None
     sub_department: Optional[str] = None
     designation: Optional[str] = None
     status: Optional[StatusEnum] = StatusEnum.ACTIVE

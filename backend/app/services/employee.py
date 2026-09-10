@@ -12,7 +12,7 @@ class EmployeeService:
             raise HTTPException(status_code=400, detail="Email already registered")
 
         # Hash password
-        employee_dict = employee_in.model_dump()
+        employee_dict = employee_in.model_dump(mode="json")
         employee_dict["personal_info"]["password"] = get_password_hash(employee_dict["personal_info"]["password"])
 
         return await EmployeeRepository.create_employee(employee_dict)
@@ -30,7 +30,7 @@ class EmployeeService:
 
     @staticmethod
     async def update_employee(employee_id: str, employee_update: EmployeeUpdate):
-        update_data = employee_update.model_dump(exclude_unset=True)
+        update_data = employee_update.model_dump(exclude_unset=True, mode="json")
         
         # If password is being updated, hash it
         if "personal_info" in update_data and "password" in update_data["personal_info"]:

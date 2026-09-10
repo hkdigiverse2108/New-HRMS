@@ -57,6 +57,38 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     except JWTError:
         raise credentials_exception
 
+async def get_current_employee(token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+        
+    employee = await EmployeeRepository.get_employee_by_email(email)
+    if employee is None:
+        raise credentials_exception
+    return employee
+
+class RoleChecker:
+    def __init__(self, allowed_roles: list[str]):
+        self.allowed_roles = allowed_roles
+
+    def __call__(self, employee: dict = Depends(get_current_employee)):
+        role = employee.get("work_details", {}).get("system_role")
+        if role not in self.allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Operation not permitted"
+            )
+        return employee
+
 # --- Router & Endpoints ---
 router = APIRouter(tags=["Authentication"])
 
