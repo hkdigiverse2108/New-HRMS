@@ -23,6 +23,6 @@ class StatusEnum(str, Enum):
     INACTIVE = "Inactive"
 
 class WorkModeEnum(str, Enum):
-    WFO = "Work From Office"
-    WFH = "Work From Home"
+    WFO = "WFO"
+    WFH = "WFH"
     HYBRID = "Hybrid"

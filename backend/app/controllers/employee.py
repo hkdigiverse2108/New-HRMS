@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, status, Query
-from typing import List, Dict
+from typing import List, Dict, Optional
 from app.schemas.enums import SystemRole, GenderEnum, RelationEnum, StatusEnum, WorkModeEnum
 from app.schemas.employee import EmployeeCreate, EmployeeOut, EmployeeUpdate
 from app.schemas.pagination import PaginatedResponse
@@ -27,9 +27,14 @@ async def create_employee(employee: EmployeeCreate, current_user: dict = Depends
 async def get_all_employees(
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
+    gender: Optional[GenderEnum] = Query(None, description="Filter by Gender"),
+    role: Optional[SystemRole] = Query(None, description="Filter by Role"),
+    department: Optional[str] = Query(None, description="Filter by Department ID or Name"),
+    status: Optional[StatusEnum] = Query(None, description="Filter by Status"),
+    work_mode: Optional[WorkModeEnum] = Query(None, alias="workMode", description="Filter by Work Mode"),
     current_user: str = Depends(get_current_user)
 ):
-    return await EmployeeService.get_employees(page, limit)
+    return await EmployeeService.get_employees(page, limit, gender, role, department, status, work_mode)
 
 @router.get("/{employee_id}", response_model=EmployeeOut)
 async def get_employee(employee_id: str, current_user: str = Depends(get_current_user)):

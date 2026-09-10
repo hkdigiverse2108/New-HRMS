@@ -1,5 +1,7 @@
 from app.database.db import get_database
 from bson import ObjectId
+from app.schemas.enums import GenderEnum, SystemRole, StatusEnum, WorkModeEnum
+from typing import Optional
 
 class EmployeeRepository:
     collection_name = "employees"
@@ -17,12 +19,34 @@ class EmployeeRepository:
         return employee_data
 
     @classmethod
-    async def get_all_employees(cls, page: int = 1, limit: int = 10):
+    async def get_all_employees(
+        cls, 
+        page: int = 1, 
+        limit: int = 10,
+        gender: Optional[GenderEnum] = None,
+        role: Optional[SystemRole] = None,
+        department: Optional[str] = None,
+        status: Optional[StatusEnum] = None,
+        work_mode: Optional[WorkModeEnum] = None
+    ):
         collection = await cls.get_collection()
         skip = (page - 1) * limit
-        total = await collection.count_documents({})
+        
+        query = {}
+        if gender:
+            query["personal_info.gender"] = gender.value
+        if role:
+            query["work_details.system_role"] = role.value
+        if department:
+            query["work_details.department"] = department
+        if status:
+            query["work_details.status"] = status.value
+        if work_mode:
+            query["work_details.work_mode"] = work_mode.value
+            
+        total = await collection.count_documents(query)
         employees = []
-        async for emp in collection.find().skip(skip).limit(limit):
+        async for emp in collection.find(query).skip(skip).limit(limit):
             emp["_id"] = str(emp["_id"])
             employees.append(emp)
         return {

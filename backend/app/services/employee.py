@@ -3,6 +3,9 @@ from app.repository.employee import EmployeeRepository
 from app.controllers.auth import get_password_hash
 from fastapi import HTTPException
 
+from app.schemas.enums import GenderEnum, SystemRole, StatusEnum, WorkModeEnum
+from typing import Optional
+
 class EmployeeService:
     @staticmethod
     async def create_employee(employee_in: EmployeeCreate):
@@ -18,8 +21,16 @@ class EmployeeService:
         return await EmployeeRepository.create_employee(employee_dict)
 
     @staticmethod
-    async def get_employees(page: int = 1, limit: int = 10):
-        return await EmployeeRepository.get_all_employees(page, limit)
+    async def get_employees(
+        page: int = 1, 
+        limit: int = 10,
+        gender: Optional[GenderEnum] = None,
+        role: Optional[SystemRole] = None,
+        department: Optional[str] = None,
+        status: Optional[StatusEnum] = None,
+        work_mode: Optional[WorkModeEnum] = None
+    ):
+        return await EmployeeRepository.get_all_employees(page, limit, gender, role, department, status, work_mode)
 
     @staticmethod
     async def get_employee(employee_id: str):
