@@ -1,6 +1,6 @@
 from app.database.db import get_database
 from bson import ObjectId
-from app.schemas.enums import GenderEnum, SystemRole, StatusEnum, WorkModeEnum
+from app.schemas.enums import GenderEnum, SystemRole, WorkModeEnum
 from typing import Optional
 
 class EmployeeRepository:
@@ -26,7 +26,8 @@ class EmployeeRepository:
         gender: Optional[GenderEnum] = None,
         role: Optional[SystemRole] = None,
         department: Optional[str] = None,
-        status: Optional[StatusEnum] = None,
+        is_delete: Optional[bool] = None,
+        is_block: Optional[bool] = None,
         work_mode: Optional[WorkModeEnum] = None
     ):
         collection = await cls.get_collection()
@@ -39,8 +40,10 @@ class EmployeeRepository:
             query["work_details.system_role"] = role.value
         if department:
             query["work_details.department"] = department
-        if status:
-            query["work_details.status"] = status.value
+        if is_delete is not None:
+            query["work_details.is_delete"] = is_delete
+        if is_block is not None:
+            query["work_details.is_block"] = is_block
         if work_mode:
             query["work_details.work_mode"] = work_mode.value
             
@@ -89,7 +92,10 @@ class EmployeeRepository:
     async def delete_employee(cls, employee_id: str):
         collection = await cls.get_collection()
         try:
-            result = await collection.delete_one({"_id": ObjectId(employee_id)})
-            return result.deleted_count > 0
+            result = await collection.update_one(
+                {"_id": ObjectId(employee_id)}, 
+                {"$set": {"work_details.is_delete": True}}
+            )
+            return result.modified_count > 0
         except Exception:
             return False

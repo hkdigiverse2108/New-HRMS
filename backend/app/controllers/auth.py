@@ -127,6 +127,19 @@ async def login_for_access_token(login_data: LoginRequest, background_tasks: Bac
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+        
+    work_details = employee.get("work_details", {})
+    if work_details.get("is_delete") is True:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account has been deleted."
+        )
+        
+    if work_details.get("is_block") is True:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account is blocked. Please contact Admin."
+        )
     
     # Verify password
     hashed_password = employee["personal_info"]["password"]
@@ -139,10 +152,8 @@ async def login_for_access_token(login_data: LoginRequest, background_tasks: Bac
     
     # Generate 6 digit OTP
     otp = str(random.randint(100000, 999999))
-    
-    # Store OTP in dictionary (temporary alternative to Redis)
-    otp_store[login_data.email] = otp
-    # await redis_client.setex(f"otp:{login_data.email}", 300, otp)
+    # Store OTP in Database
+    await EmployeeRepository.update_employee(employee["_id"], {"otp": otp})
     
     # Send OTP email
     background_tasks.add_task(send_otp_email, login_data.email, otp)
@@ -151,19 +162,22 @@ async def login_for_access_token(login_data: LoginRequest, background_tasks: Bac
 
 @router.post("/verify-otp", response_model=Token)
 async def verify_otp(verify_data: VerifyOTPRequest):
-    # Check OTP from dictionary
-    stored_otp = otp_store.get(verify_data.email)
-    # stored_otp = await redis_client.get(f"otp:{verify_data.email}")
+    employee = await EmployeeRepository.get_employee_by_email(verify_data.email)
+    if not employee:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Employee not found",
+        )
+        
+    stored_otp = employee.get("otp")
     if not stored_otp or stored_otp != verify_data.otp:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired OTP",
         )
     
-    # OTP is valid, remove it
-    if verify_data.email in otp_store:
-        del otp_store[verify_data.email]
-    # await redis_client.delete(f"otp:{verify_data.email}")
+    # OTP is valid, remove it from DB
+    await EmployeeRepository.update_employee(employee["_id"], {"otp": None})
     
     # Create token
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)

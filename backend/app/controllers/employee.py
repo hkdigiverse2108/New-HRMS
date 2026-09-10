@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, status, Query
 from typing import List, Dict, Optional
-from app.schemas.enums import SystemRole, GenderEnum, RelationEnum, StatusEnum, WorkModeEnum
+from app.schemas.enums import SystemRole, GenderEnum, RelationEnum, WorkModeEnum
 from app.schemas.employee import EmployeeCreate, EmployeeOut, EmployeeUpdate
 from app.schemas.pagination import PaginatedResponse
 from app.services.employee import EmployeeService
@@ -15,7 +15,6 @@ async def get_employee_form_options(current_user: str = Depends(get_current_user
         "genders": [{"id": e.value, "label": e.value, "value": e.value} for e in GenderEnum],
         "system_roles": [{"id": e.value, "label": e.value, "value": e.value} for e in SystemRole],
         "relations": [{"id": e.value, "label": e.value, "value": e.value} for e in RelationEnum],
-        "status": [{"id": e.value, "label": e.value, "value": e.value} for e in StatusEnum],
         "work_modes": [{"id": e.value, "label": e.value, "value": e.value} for e in WorkModeEnum]
     }
 
@@ -30,11 +29,12 @@ async def get_all_employees(
     gender: Optional[GenderEnum] = Query(None, description="Filter by Gender"),
     role: Optional[SystemRole] = Query(None, description="Filter by Role"),
     department: Optional[str] = Query(None, description="Filter by Department ID or Name"),
-    status: Optional[StatusEnum] = Query(None, description="Filter by Status"),
+    is_delete: Optional[bool] = Query(None, description="Filter by is_delete"),
+    is_block: Optional[bool] = Query(None, description="Filter by is_block"),
     work_mode: Optional[WorkModeEnum] = Query(None, alias="workMode", description="Filter by Work Mode"),
     current_user: str = Depends(get_current_user)
 ):
-    return await EmployeeService.get_employees(page, limit, gender, role, department, status, work_mode)
+    return await EmployeeService.get_employees(page, limit, gender, role, department, is_delete, is_block, work_mode)
 
 @router.get("/{employee_id}", response_model=EmployeeOut)
 async def get_employee(employee_id: str, current_user: str = Depends(get_current_user)):

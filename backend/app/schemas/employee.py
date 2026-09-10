@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from typing import Optional
 from datetime import date, time
-from app.schemas.enums import SystemRole, GenderEnum, RelationEnum, StatusEnum, WorkModeEnum
+from app.schemas.enums import SystemRole, GenderEnum, RelationEnum, WorkModeEnum
 
 class PersonalInfo(BaseModel):
     first_name: str
@@ -27,7 +27,8 @@ class WorkDetails(BaseModel):
     department: Optional[str] = None
     sub_department: Optional[str] = None
     designation: Optional[str] = None
-    status: Optional[StatusEnum] = StatusEnum.ACTIVE
+    is_delete: bool = False
+    is_block: bool = False
     work_mode: Optional[WorkModeEnum] = None
     joining_date: Optional[date] = None
     start_time: Optional[time] = None

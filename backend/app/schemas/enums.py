@@ -17,10 +17,7 @@ class RelationEnum(str, Enum):
     SIBLING = "Sibling"
     OTHER = "Other"
 
-class StatusEnum(str, Enum):
-    ACTIVE = "Active"
-    REMOTE = "Remote"
-    INACTIVE = "Inactive"
+
 
 class WorkModeEnum(str, Enum):
     WFO = "WFO"

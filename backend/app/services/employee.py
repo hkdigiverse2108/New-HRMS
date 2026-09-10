@@ -3,7 +3,7 @@ from app.repository.employee import EmployeeRepository
 from app.controllers.auth import get_password_hash
 from fastapi import HTTPException
 
-from app.schemas.enums import GenderEnum, SystemRole, StatusEnum, WorkModeEnum
+from app.schemas.enums import GenderEnum, SystemRole, WorkModeEnum
 from typing import Optional
 
 class EmployeeService:
@@ -27,10 +27,11 @@ class EmployeeService:
         gender: Optional[GenderEnum] = None,
         role: Optional[SystemRole] = None,
         department: Optional[str] = None,
-        status: Optional[StatusEnum] = None,
+        is_delete: Optional[bool] = None,
+        is_block: Optional[bool] = None,
         work_mode: Optional[WorkModeEnum] = None
     ):
-        return await EmployeeRepository.get_all_employees(page, limit, gender, role, department, status, work_mode)
+        return await EmployeeRepository.get_all_employees(page, limit, gender, role, department, is_delete, is_block, work_mode)
 
     @staticmethod
     async def get_employee(employee_id: str):
