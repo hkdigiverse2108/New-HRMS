@@ -7,12 +7,15 @@ from passlib.context import CryptContext
 from pydantic import BaseModel
 from app.config import settings
 import random
+import uuid
 from fastapi import BackgroundTasks
 from app.redis.client import redis_client
 from app.utils.email import send_otp_email
 
 # Temporary in-memory store for OTPs (to bypass Redis error)
 otp_store = {}
+forgot_password_otp_store = {}
+reset_token_store = {}
 
 # --- Schemas ---
 class Token(BaseModel):
@@ -102,6 +105,18 @@ class VerifyOTPRequest(BaseModel):
     email: EmailStr
     otp: str
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class VerifyForgotPasswordRequest(BaseModel):
+    email: EmailStr
+    otp: str
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    reset_token: str
+    new_password: str
+
 @router.post("/login")
 async def login_for_access_token(login_data: LoginRequest, background_tasks: BackgroundTasks):
     # Find employee by email
@@ -157,3 +172,56 @@ async def verify_otp(verify_data: VerifyOTPRequest):
     )
     
     return {"access_token": access_token, "token_type": "bearer"}
+
+@router.post("/forgot-password")
+async def forgot_password(request: ForgotPasswordRequest, background_tasks: BackgroundTasks):
+    employee = await EmployeeRepository.get_employee_by_email(request.email)
+    if not employee:
+        # We shouldn't reveal if the email exists for security reasons, but for simplicity we can return success anyway
+        return {"message": "If your email is registered, you will receive an OTP."}
+
+    # Generate 6 digit OTP
+    otp = str(random.randint(100000, 999999))
+    forgot_password_otp_store[request.email] = otp
+    
+    # Send OTP email
+    background_tasks.add_task(send_otp_email, request.email, otp)
+    return {"message": "If your email is registered, you will receive an OTP."}
+
+@router.post("/verify-forgot-password-otp")
+async def verify_forgot_password_otp(request: VerifyForgotPasswordRequest):
+    stored_otp = forgot_password_otp_store.get(request.email)
+    if not stored_otp or stored_otp != request.otp:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired OTP")
+    
+    # OTP is valid, remove it
+    del forgot_password_otp_store[request.email]
+    
+    # Generate a secure reset token
+    reset_token = str(uuid.uuid4())
+    reset_token_store[request.email] = reset_token
+    
+    return {"message": "OTP verified successfully", "reset_token": reset_token}
+
+@router.post("/reset-password")
+async def reset_password(request: ResetPasswordRequest):
+    stored_token = reset_token_store.get(request.email)
+    if not stored_token or stored_token != request.reset_token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired reset token")
+    
+    employee = await EmployeeRepository.get_employee_by_email(request.email)
+    if not employee:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found")
+        
+    # Hash the new password
+    hashed_password = get_password_hash(request.new_password)
+    
+    # Update employee document in DB
+    updated = await EmployeeRepository.update_employee(employee["_id"], {"personal_info.password": hashed_password})
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update password")
+        
+    # Remove the reset token so it can't be used again
+    del reset_token_store[request.email]
+    
+    return {"message": "Password reset successfully. You can now login."}
