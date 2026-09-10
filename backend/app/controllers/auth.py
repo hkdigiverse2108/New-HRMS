@@ -9,7 +9,7 @@ from app.config import settings
 import random
 import uuid
 from fastapi import BackgroundTasks
-from app.redis.client import redis_client
+from app.redis.service import redis_client
 from app.utils.email import send_otp_email
 
 # Temporary in-memory store for OTPs (to bypass Redis error)
@@ -174,7 +174,11 @@ async def login_for_access_token(login_data: LoginRequest, background_tasks: Bac
     
     # Generate 6 digit OTP
     otp = str(random.randint(100000, 999999))
-    # Store OTP in Database
+    # Store OTP in Redis (with 5 min expiry) and fallback in Database
+    try:
+        await redis_client.set(f"otp:{login_data.email}", otp, ex=300)
+    except Exception as e:
+        print(f"Redis warning: {e}")
     await EmployeeRepository.update_employee(employee["_id"], {"otp": otp})
     
     # Send OTP email
@@ -191,19 +195,31 @@ async def verify_otp(verify_data: VerifyOTPRequest):
             detail="Employee not found",
         )
         
-    stored_otp = employee.get("otp")
-    if not stored_otp or stored_otp != verify_data.otp:
+    stored_otp = None
+    try:
+        stored_otp = await redis_client.get(f"otp:{verify_data.email}")
+    except Exception as e:
+        print(f"Redis warning: {e}")
+
+    if not stored_otp:
+        stored_otp = employee.get("otp")
+
+    if not stored_otp or str(stored_otp).strip() != str(verify_data.otp).strip():
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired OTP",
         )
     
-    # OTP is valid, remove it from DB
+    # OTP is valid, remove it from Redis and DB
+    try:
+        await redis_client.delete(f"otp:{verify_data.email}")
+    except Exception:
+        pass
     await EmployeeRepository.update_employee(employee["_id"], {"otp": None})
     
     # Create token
-    # Hardcoded access token expiration time (10 seconds)
-    access_token_expires = timedelta(seconds=60)
+    # Access token expiration time (60 seconds)
+    access_token_expires = timedelta(minutes=60)
     access_token = create_access_token(
         data={"sub": verify_data.email}, expires_delta=access_token_expires
     )

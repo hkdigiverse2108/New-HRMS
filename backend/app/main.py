@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from app.redis.client import redis_client
+from app.redis.service import redis_client
 from app.database.db import connect_to_mongo, close_mongo_connection, db
 from app.controllers.employee import router as employee_router
 from app.controllers.auth import router as auth_router
@@ -24,7 +24,19 @@ async def lifespan(app: FastAPI):
     # Shutdown events
     await close_mongo_connection()
 
+from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI(title="New-HRMS", lifespan=lifespan)
+
+# Enable CORS for all origins (allow any URL to access API)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_origin_regex=".*",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Register routes
 app.include_router(auth_router)

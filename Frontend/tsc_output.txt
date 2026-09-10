@@ -1,0 +1,2 @@
+src/components/admin/b2b/B2BModule.tsx(2,10): error TS2300: Duplicate identifier 'X'.
+src/components/admin/b2b/B2BModule.tsx(6,24): error TS2300: Duplicate identifier 'X'.

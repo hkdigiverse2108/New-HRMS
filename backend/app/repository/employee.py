@@ -34,18 +34,29 @@ class EmployeeRepository:
         skip = (page - 1) * limit
         
         query = {}
-        if gender:
+        if gender and hasattr(gender, "value"):
             query["personal_info.gender"] = gender.value
-        if role:
+        elif isinstance(gender, str):
+            query["personal_info.gender"] = gender
+
+        if role and hasattr(role, "value"):
             query["work_details.system_role"] = role.value
-        if department:
+        elif isinstance(role, str):
+            query["work_details.system_role"] = role
+
+        if department and isinstance(department, str):
             query["work_details.department"] = department
-        if is_delete is not None:
+
+        if isinstance(is_delete, bool):
             query["work_details.is_delete"] = is_delete
-        if is_block is not None:
+
+        if isinstance(is_block, bool):
             query["work_details.is_block"] = is_block
-        if work_mode:
+
+        if work_mode and hasattr(work_mode, "value"):
             query["work_details.work_mode"] = work_mode.value
+        elif isinstance(work_mode, str):
+            query["work_details.work_mode"] = work_mode
             
         total = await collection.count_documents(query)
         employees = []
