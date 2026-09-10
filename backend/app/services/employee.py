@@ -18,8 +18,8 @@ class EmployeeService:
         return await EmployeeRepository.create_employee(employee_dict)
 
     @staticmethod
-    async def get_employees():
-        return await EmployeeRepository.get_all_employees()
+    async def get_employees(page: int = 1, limit: int = 10):
+        return await EmployeeRepository.get_all_employees(page, limit)
 
     @staticmethod
     async def get_employee(employee_id: str):

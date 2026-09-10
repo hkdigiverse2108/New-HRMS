@@ -17,13 +17,21 @@ class EmployeeRepository:
         return employee_data
 
     @classmethod
-    async def get_all_employees(cls):
+    async def get_all_employees(cls, page: int = 1, limit: int = 10):
         collection = await cls.get_collection()
+        skip = (page - 1) * limit
+        total = await collection.count_documents({})
         employees = []
-        async for emp in collection.find():
+        async for emp in collection.find().skip(skip).limit(limit):
             emp["_id"] = str(emp["_id"])
             employees.append(emp)
-        return employees
+        return {
+            "data": employees,
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "total_pages": (total + limit - 1) // limit if limit > 0 else 1
+        }
 
     @classmethod
     async def get_employee_by_id(cls, employee_id: str):

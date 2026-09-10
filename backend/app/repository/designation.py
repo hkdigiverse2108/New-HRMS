@@ -17,13 +17,21 @@ class DesignationRepository:
         return data
 
     @classmethod
-    async def get_all(cls):
+    async def get_all(cls, page: int = 1, limit: int = 10):
         collection = await cls.get_collection()
+        skip = (page - 1) * limit
+        total = await collection.count_documents({})
         items = []
-        async for item in collection.find():
+        async for item in collection.find().skip(skip).limit(limit):
             item["_id"] = str(item["_id"])
             items.append(item)
-        return items
+        return {
+            "data": items,
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "total_pages": (total + limit - 1) // limit if limit > 0 else 1
+        }
 
     @classmethod
     async def get_by_id(cls, item_id: str):

@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Query
 from typing import List, Dict
 from app.schemas.enums import SystemRole, GenderEnum, RelationEnum, StatusEnum, WorkModeEnum
 from app.schemas.employee import EmployeeCreate, EmployeeOut, EmployeeUpdate
+from app.schemas.pagination import PaginatedResponse
 from app.services.employee import EmployeeService
 from app.controllers.auth import RoleChecker, get_current_user
 
@@ -22,9 +23,13 @@ async def get_employee_form_options(current_user: str = Depends(get_current_user
 async def create_employee(employee: EmployeeCreate, current_user: dict = Depends(RoleChecker(["Admin"]))):
     return await EmployeeService.create_employee(employee)
 
-@router.get("/", response_model=List[EmployeeOut])
-async def get_all_employees(current_user: str = Depends(get_current_user)):
-    return await EmployeeService.get_employees()
+@router.get("/", response_model=PaginatedResponse[EmployeeOut])
+async def get_all_employees(
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    current_user: str = Depends(get_current_user)
+):
+    return await EmployeeService.get_employees(page, limit)
 
 @router.get("/{employee_id}", response_model=EmployeeOut)
 async def get_employee(employee_id: str, current_user: str = Depends(get_current_user)):

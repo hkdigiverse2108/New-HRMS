@@ -8,8 +8,8 @@ class SubDepartmentService:
         return await SubDepartmentRepository.create(data.model_dump(exclude_unset=True))
 
     @staticmethod
-    async def get_all():
-        return await SubDepartmentRepository.get_all()
+    async def get_all(page: int = 1, limit: int = 10):
+        return await SubDepartmentRepository.get_all(page, limit)
 
     @staticmethod
     async def get_by_id(item_id: str):
@@ -19,8 +19,8 @@ class SubDepartmentService:
         return item
 
     @staticmethod
-    async def get_by_department_id(department_id: str):
-        return await SubDepartmentRepository.get_by_department_id(department_id)
+    async def get_by_department_id(department_id: str, page: int = 1, limit: int = 10):
+        return await SubDepartmentRepository.get_by_department_id(department_id, page, limit)
 
     @staticmethod
     async def update(item_id: str, data: SubDepartmentUpdate):

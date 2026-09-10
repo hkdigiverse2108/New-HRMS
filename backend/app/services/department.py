@@ -8,8 +8,8 @@ class DepartmentService:
         return await DepartmentRepository.create(data.model_dump(exclude_unset=True))
 
     @staticmethod
-    async def get_all():
-        return await DepartmentRepository.get_all()
+    async def get_all(page: int = 1, limit: int = 10):
+        return await DepartmentRepository.get_all(page, limit)
 
     @staticmethod
     async def get_by_id(item_id: str):

@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Query
 from typing import List
 from app.schemas.designation import DesignationCreate, DesignationUpdate, DesignationOut
+from app.schemas.pagination import PaginatedResponse
 from app.services.designation import DesignationService
 from app.controllers.auth import RoleChecker, get_current_user
 
@@ -10,9 +11,13 @@ router = APIRouter(prefix="/designations", tags=["Designations"])
 async def create_designation(data: DesignationCreate, current_user: dict = Depends(RoleChecker(["Admin"]))):
     return await DesignationService.create(data)
 
-@router.get("/", response_model=List[DesignationOut])
-async def get_all_designations(current_user: str = Depends(get_current_user)):
-    return await DesignationService.get_all()
+@router.get("/", response_model=PaginatedResponse[DesignationOut])
+async def get_all_designations(
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    current_user: str = Depends(get_current_user)
+):
+    return await DesignationService.get_all(page, limit)
 
 @router.get("/{item_id}", response_model=DesignationOut)
 async def get_designation(item_id: str, current_user: str = Depends(get_current_user)):

@@ -8,8 +8,8 @@ class DesignationService:
         return await DesignationRepository.create(data.model_dump(exclude_unset=True))
 
     @staticmethod
-    async def get_all():
-        return await DesignationRepository.get_all()
+    async def get_all(page: int = 1, limit: int = 10):
+        return await DesignationRepository.get_all(page, limit)
 
     @staticmethod
     async def get_by_id(item_id: str):
