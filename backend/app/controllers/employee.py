@@ -4,7 +4,7 @@ from app.schemas.enums import SystemRole, GenderEnum, RelationEnum, WorkModeEnum
 from app.schemas.employee import EmployeeCreate, EmployeeOut, EmployeeUpdate
 from app.schemas.pagination import PaginatedResponse
 from app.services.employee import EmployeeService
-from app.controllers.auth import RoleChecker, get_current_user
+from app.controllers.auth import RoleChecker, get_current_user, get_current_employee
 
 router = APIRouter(prefix="/employees", tags=["Employees"])
 
@@ -27,14 +27,26 @@ async def get_all_employees(
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
     gender: Optional[GenderEnum] = Query(None, description="Filter by Gender"),
-    role: Optional[SystemRole] = Query(None, description="Filter by Role"),
+    role_filter: Optional[SystemRole] = Query(None, alias="role", description="Filter by Role"),
     department: Optional[str] = Query(None, description="Filter by Department ID or Name"),
     is_delete: Optional[bool] = Query(None, description="Filter by is_delete"),
     is_block: Optional[bool] = Query(None, description="Filter by is_block"),
     work_mode: Optional[WorkModeEnum] = Query(None, alias="workMode", description="Filter by Work Mode"),
-    current_user: str = Depends(get_current_user)
+    current_user: dict = Depends(get_current_employee)
 ):
-    return await EmployeeService.get_employees(page, limit, gender, role, department, is_delete, is_block, work_mode)
+    role = current_user.get("work_details", {}).get("system_role")
+    
+    # If the user is just an Employee, only return their own data
+    if role == SystemRole.EMPLOYEE.value:
+        return {
+            "data": [current_user],
+            "total": 1,
+            "page": 1,
+            "limit": limit,
+            "total_pages": 1
+        }
+        
+    return await EmployeeService.get_employees(page, limit, gender, role_filter, department, is_delete, is_block, work_mode)
 
 @router.get("/{employee_id}", response_model=EmployeeOut)
 async def get_employee(employee_id: str, current_user: str = Depends(get_current_user)):

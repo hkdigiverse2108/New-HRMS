@@ -56,6 +56,19 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         email: str = payload.get("sub")
         if email is None:
             raise credentials_exception
+            
+        employee = await EmployeeRepository.get_employee_by_email(email)
+        if not employee:
+            raise credentials_exception
+            
+        work_details = employee.get("work_details", {})
+        if work_details.get("is_delete") is True or work_details.get("is_block") is True:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Your account is blocked or deleted.",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
+            
         return email
     except JWTError:
         raise credentials_exception
@@ -77,6 +90,15 @@ async def get_current_employee(token: str = Depends(oauth2_scheme)):
     employee = await EmployeeRepository.get_employee_by_email(email)
     if employee is None:
         raise credentials_exception
+        
+    work_details = employee.get("work_details", {})
+    if work_details.get("is_delete") is True or work_details.get("is_block") is True:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Your account is blocked or deleted.",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+        
     return employee
 
 class RoleChecker:
@@ -180,7 +202,8 @@ async def verify_otp(verify_data: VerifyOTPRequest):
     await EmployeeRepository.update_employee(employee["_id"], {"otp": None})
     
     # Create token
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    # Hardcoded access token expiration time (10 seconds)
+    access_token_expires = timedelta(seconds=60)
     access_token = create_access_token(
         data={"sub": verify_data.email}, expires_delta=access_token_expires
     )

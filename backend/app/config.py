@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     # JWT Settings
     SECRET_KEY: str
     ALGORITHM: str
-    ACCESS_TOKEN_EXPIRE_MINUTES: int
+
 
     # Email Settings
     SMTP_SERVER: str = "smtp.gmail.com"
