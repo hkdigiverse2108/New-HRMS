@@ -117,16 +117,22 @@ function RootShell({ children }: { children: ReactNode }) {
 }
 
 import { ThemeProvider } from "../components/ThemeProvider";
+import { AuthProvider } from "../components/auth/AuthContext";
+import { GlobalApiLoader } from "../components/common/GlobalApiLoader";
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        <Outlet />
-      </ThemeProvider>
+      <AuthProvider>
+        <ThemeProvider>
+          {/* Global Loading Spinner for all API requests */}
+          <GlobalApiLoader />
+          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+          <Outlet />
+        </ThemeProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

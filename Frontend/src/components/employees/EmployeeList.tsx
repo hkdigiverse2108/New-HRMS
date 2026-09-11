@@ -11,6 +11,7 @@ import { useEmployeesContext } from "./EmployeeContext";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";
+import { getAvatarUrl } from "@/lib/config";
 
 const COLUMN_OPTIONS = [
   { key: "employee", label: "Employee", default: true },
@@ -78,7 +79,7 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
       case "employee":
         return (
           <div className="flex items-center gap-3">
-            <img src={emp.avatar} alt={emp.name} className="w-10 h-10 rounded-full object-cover" />
+            <img src={getAvatarUrl(emp.avatar || emp.profile_photo, emp.name)} alt={emp.name} className="w-10 h-10 rounded-full object-cover" />
             <div>
               <p className="text-[14px] font-bold text-foreground">{emp.name}</p>
               <p className="text-[12px] text-muted-foreground">{emp.role}</p>
@@ -369,7 +370,7 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
               
               <div className="flex flex-col items-center text-center">
                 <div className="relative mb-4">
-                  <img src={emp.avatar} alt={emp.name} className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-md" />
+                  <img src={getAvatarUrl(emp.avatar || emp.profile_photo, emp.name)} alt={emp.name} className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-md" />
                   <span className={cn(
                     "absolute bottom-1 right-1 w-4 h-4 rounded-full border-2 border-white",
                     getStatusColor(emp.status)

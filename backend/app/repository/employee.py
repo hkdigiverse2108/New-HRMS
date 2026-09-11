@@ -85,7 +85,15 @@ class EmployeeRepository:
     @classmethod
     async def get_employee_by_email(cls, email: str):
         collection = await cls.get_collection()
-        employee = await collection.find_one({"personal_info.email_address": email})
+        clean_email = (email or "").strip()
+        import re
+        regex = re.compile(f"^{re.escape(clean_email)}$", re.IGNORECASE)
+        employee = await collection.find_one({
+            "$or": [
+                {"personal_info.email_address": regex},
+                {"email": regex}
+            ]
+        })
         if employee:
             employee["_id"] = str(employee["_id"])
         return employee

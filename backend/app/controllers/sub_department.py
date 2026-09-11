@@ -8,6 +8,7 @@ from app.redis.service import get_cache, set_cache, delete_cache, clear_pattern,
 
 router = APIRouter(prefix="/sub-departments", tags=["Sub-Departments"])
 
+@router.post("", response_model=SubDepartmentOut, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=SubDepartmentOut, status_code=status.HTTP_201_CREATED)
 async def create_sub_department(data: SubDepartmentCreate, current_user: dict = Depends(RoleChecker(["Admin"]))):
     result = await SubDepartmentService.create(data)
@@ -21,6 +22,7 @@ async def create_sub_department(data: SubDepartmentCreate, current_user: dict = 
 
     return result
 
+@router.get("", response_model=PaginatedResponse[SubDepartmentOut])
 @router.get("/", response_model=PaginatedResponse[SubDepartmentOut])
 async def get_all_sub_departments(
     page: int = Query(1, ge=1),

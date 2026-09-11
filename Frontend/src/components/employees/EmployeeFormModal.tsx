@@ -7,6 +7,10 @@ import { useDepartments } from "./DepartmentContext";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
+import { getAvatarUrl, API_URL } from "@/lib/config";
+import { api } from "@/lib/api";
+import { Camera, Loader2, Image as ImageIcon, FolderOpen } from "lucide-react";
+
 interface EmployeeFormModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -60,7 +64,11 @@ const REQUIRED_DOCUMENTS_LIST = [
 export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSelfEdit }: EmployeeFormModalProps) {
   const { departments } = useDepartments();
   const [activeTab, setActiveTab] = useState<TabType>('personal');
-  
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [showGallery, setShowGallery] = useState(false);
+  const [galleryImages, setGalleryImages] = useState<Array<{ filename: string; url: string; folder: string }>>([]);
+  const [isLoadingGallery, setIsLoadingGallery] = useState(false);
+
   const [formData, setFormData] = useState<Partial<Employee>>({
     name: "",
     firstName: "",
@@ -73,6 +81,8 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
     parentName: "",
     parentNumber: "",
     relation: "",
+    avatar: "",
+    profile_photo: "",
     
     role: "Employee",
     department: "Development",
@@ -176,8 +186,6 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
     }
   }, [formData.hasNoticePeriod, formData.noticePeriodStartDate, formData.noticePeriodDays]);
   
-  if (!isOpen) return null;
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const fullName = formData.name || `${formData.firstName || ''} ${formData.lastName || ''}`.trim();
@@ -193,6 +201,49 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  const fetchGallery = async () => {
+    try {
+      setIsLoadingGallery(true);
+      const images = await api.listImages("employee");
+      setGalleryImages(images);
+    } catch (err) {
+      console.error("Failed to load gallery images:", err);
+    } finally {
+      setIsLoadingGallery(false);
+    }
+  };
+
+  const handleOpenGallery = () => {
+    setShowGallery(true);
+    fetchGallery();
+  };
+
+  const handleImageUpload = async (file: File) => {
+    if (!file) return;
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Please select a valid image (JPG, PNG, WebP, GIF, SVG).");
+      return;
+    }
+
+    try {
+      setIsUploadingPhoto(true);
+      const result = await api.uploadImage(file, "employee");
+      const photoUrl = result.url;
+      setFormData(prev => ({
+        ...prev,
+        avatar: photoUrl,
+        profile_photo: photoUrl
+      }));
+      toast.success("Profile photo uploaded to employee folder successfully!");
+      if (showGallery) fetchGallery();
+    } catch (err: any) {
+      // Toast is handled automatically by common api client
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
   const tabs = [
     { id: 'personal', label: 'Personal Info', icon: User },
     { id: 'work', label: 'Work Details', icon: Briefcase },
@@ -201,6 +252,7 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
   ];
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-5xl p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
         {/* Header */}
@@ -249,9 +301,55 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                 
                 {/* 1. PERSONAL INFO */}
                 <div className={cn("space-y-6 animate-in fade-in slide-in-from-right-4 duration-300", activeTab === 'personal' ? 'block' : 'hidden')}>
-                  <div className="pb-4 border-b border-border/50">
-                    <h3 className="text-lg font-black">Personal Information</h3>
-                    <p className="text-sm text-muted-foreground">Basic identity and contact details.</p>
+                  <div className="pb-4 border-b border-border/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-lg font-black">Personal Information</h3>
+                      <p className="text-sm text-muted-foreground">Basic identity, profile photo, and contact details.</p>
+                    </div>
+
+                    {/* Photo Upload, Gallery Selector & Preview */}
+                    <div className="flex items-center gap-4 bg-muted/30 p-2.5 px-4 rounded-2xl border border-border/50">
+                      <div className="relative group w-14 h-14 rounded-full overflow-hidden bg-muted border-2 border-border/80 flex items-center justify-center shrink-0 shadow-inner">
+                        <img 
+                          src={getAvatarUrl(formData.avatar || formData.profile_photo || '', formData.name || 'Employee')} 
+                          alt="Employee"
+                          className="w-full h-full object-cover"
+                        />
+                        {isUploadingPhoto && (
+                          <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                            <Loader2 className="w-5 h-5 text-white animate-spin" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center gap-2">
+                          <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold rounded-lg cursor-pointer transition-all shadow-sm">
+                            <Camera className="w-3.5 h-3.5" />
+                            <span>{isUploadingPhoto ? "Uploading..." : "Upload New"}</span>
+                            <input 
+                              type="file" 
+                              accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml"
+                              className="hidden"
+                              disabled={isUploadingPhoto}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) handleImageUpload(file);
+                              }}
+                            />
+                          </label>
+
+                          <button
+                            type="button"
+                            onClick={handleOpenGallery}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-muted hover:bg-muted/80 text-foreground text-xs font-bold rounded-lg border border-border/80 transition-all shadow-sm"
+                          >
+                            <FolderOpen className="w-3.5 h-3.5 text-primary" />
+                            <span>Choose Existing</span>
+                          </button>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground">Stored in root: /images/employee</span>
+                      </div>
+                    </div>
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -719,5 +817,92 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
           </div>
       </DialogContent>
     </Dialog>
+
+    {/* Gallery Picker Modal */}
+    {showGallery && (
+      <Dialog open={showGallery} onOpenChange={(open) => !open && setShowGallery(false)}>
+        <DialogContent className="max-w-3xl p-6 rounded-3xl bg-card border border-border/60 shadow-2xl">
+          <div className="flex items-center justify-between pb-4 border-b border-border/50">
+            <div>
+              <h3 className="text-xl font-black">Employee Image Library</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">Select an existing photo from the server's employee folder</p>
+            </div>
+            <button 
+              type="button"
+              onClick={() => setShowGallery(false)}
+              className="p-1.5 text-muted-foreground hover:text-foreground rounded-full hover:bg-muted"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="py-4">
+            {isLoadingGallery ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                <span className="text-xs font-semibold">Loading employee images...</span>
+              </div>
+            ) : galleryImages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
+                <ImageIcon className="w-12 h-12 stroke-[1.2] mb-3 text-muted-foreground/50" />
+                <p className="text-sm font-bold">No images found in employee library</p>
+                <p className="text-xs mt-1">Upload an image using "Upload New" to store it here.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4 max-h-[380px] overflow-y-auto p-1">
+                {galleryImages.map((img, idx) => {
+                  const fullUrl = getAvatarUrl(img.url, 'Employee');
+                  const isSelected = formData.avatar === img.url || formData.profile_photo === img.url;
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        setFormData(prev => ({
+                          ...prev,
+                          avatar: img.url,
+                          profile_photo: img.url
+                        }));
+                        setShowGallery(false);
+                        toast.success("Image selected from library!");
+                      }}
+                      className={cn(
+                        "group relative aspect-square rounded-2xl overflow-hidden border-2 transition-all p-1 bg-muted/20 hover:scale-105",
+                        isSelected ? "border-primary ring-2 ring-primary/30" : "border-border/60 hover:border-primary/50"
+                      )}
+                    >
+                      <img 
+                        src={fullUrl} 
+                        alt={img.filename}
+                        className="w-full h-full object-cover rounded-xl"
+                      />
+                      {isSelected && (
+                        <div className="absolute top-2 right-2 bg-primary text-primary-foreground p-1 rounded-full shadow-md">
+                          <Check className="w-3 h-3 stroke-[3]" />
+                        </div>
+                      )}
+                      <div className="absolute inset-x-0 bottom-0 bg-black/60 text-[9px] text-white p-1 truncate text-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        {img.filename}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="pt-4 border-t border-border/50 flex justify-end">
+            <button
+              type="button"
+              onClick={() => setShowGallery(false)}
+              className="px-5 py-2 text-xs font-bold text-muted-foreground hover:text-foreground bg-muted rounded-xl"
+            >
+              Close
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    )}
+  </>
   );
 }

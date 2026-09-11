@@ -7,6 +7,7 @@ from app.controllers.auth import router as auth_router
 from app.controllers.department import router as department_router
 from app.controllers.sub_department import router as sub_department_router
 from app.controllers.designation import router as designation_router
+from app.controllers.image import router as image_router, upload_router
 from app.models.employee import setup_employee_indexes
 from app.models.department import setup_department_indexes
 from app.models.sub_department import setup_sub_department_indexes
@@ -26,24 +27,54 @@ async def lifespan(app: FastAPI):
 
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="New-HRMS", lifespan=lifespan)
+app = FastAPI(title="New-HRMS", lifespan=lifespan, redirect_slashes=False)
 
-# Enable CORS for all origins (allow any URL to access API)
+# Enable CORS for all origins with credentials support
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_origin_regex=".*",
+    allow_origin_regex=r"^https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Register routes
+from starlette.types import ASGIApp, Scope, Receive, Send
+
+class ImageRouteMiddleware:
+    """Redirects API endpoints from /images/* prefix so StaticFiles mount doesn't intercept them with 405."""
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send):
+        if scope["type"] == "http":
+            path = scope.get("path", "")
+            if path in ("/images/upload", "/images/upload/"):
+                scope["path"] = "/upload"
+            elif path in ("/images/list", "/images/list/"):
+                scope["path"] = "/api/images/list"
+        await self.app(scope, receive, send)
+
+app.add_middleware(ImageRouteMiddleware)
+
+from fastapi.staticfiles import StaticFiles
+from app.config import ROOT_DIR
+
+# Root images folder (outside frontend and backend)
+IMAGES_DIR = ROOT_DIR / "images"
+IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+
+# Register API routes FIRST so FastAPI matches endpoint routes before static file mounts
 app.include_router(auth_router)
 app.include_router(employee_router)
 app.include_router(department_router)
 app.include_router(sub_department_router)
 app.include_router(designation_router)
+app.include_router(image_router)
+app.include_router(upload_router)
+
+# Mount static image paths AFTER API routes
+app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
+app.mount("/uploads", StaticFiles(directory=str(IMAGES_DIR)), name="uploads")
 
 @app.get("/")
 async def root():

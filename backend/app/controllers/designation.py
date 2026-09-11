@@ -8,7 +8,7 @@ from app.redis.service import get_cache, set_cache, delete_cache, clear_pattern,
 
 router = APIRouter(prefix="/designations", tags=["Designations"])
 
-@router.post("/", response_model=DesignationOut, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=DesignationOut, status_code=status.HTTP_201_CREATED)
 async def create_designation(data: DesignationCreate, current_user: dict = Depends(RoleChecker(["Admin"]))):
     result = await DesignationService.create(data)
 
@@ -21,7 +21,7 @@ async def create_designation(data: DesignationCreate, current_user: dict = Depen
 
     return result
 
-@router.get("/", response_model=PaginatedResponse[DesignationOut])
+@router.get("", response_model=PaginatedResponse[DesignationOut])
 async def get_all_designations(
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),

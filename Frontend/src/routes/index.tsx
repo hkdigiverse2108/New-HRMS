@@ -118,7 +118,11 @@ const suggestions = [
   ["Mobile drawer", "Off-canvas sidebar with a bottom bar for the 4 most used screens."],
 ];
 
+import { useAuth } from "@/components/auth/AuthContext";
+import { LoginPage } from "@/components/auth/LoginPage";
+
 function Index() {
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const [isClient, setIsClient] = useState(false);
   const [active, setActiveState] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -150,12 +154,17 @@ function Index() {
     }
   };
 
-  if (!isClient) {
+  if (!isClient || isAuthLoading) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-background">
         <div className="w-8 h-8 rounded-full border-4 border-primary border-r-transparent animate-spin" />
       </div>
     );
+  }
+
+  // If user is not authenticated, show the dedicated LoginPage
+  if (!isAuthenticated) {
+    return <LoginPage />;
   }
 
   const basePath = active.split('?')[0] || "/";

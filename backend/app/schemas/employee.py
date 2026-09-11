@@ -67,6 +67,7 @@ class EmployeeCreate(BaseModel):
     bank_and_docs: Optional[BankAndDocs] = BankAndDocs()
     document_checklist: Optional[DocumentChecklist] = DocumentChecklist()
     bond_and_exit: Optional[BondAndExit] = BondAndExit()
+    profile_photo: Optional[str] = None
 
 class EmployeeUpdate(BaseModel):
     personal_info: Optional[PersonalInfo] = None
@@ -74,6 +75,7 @@ class EmployeeUpdate(BaseModel):
     bank_and_docs: Optional[BankAndDocs] = None
     document_checklist: Optional[DocumentChecklist] = None
     bond_and_exit: Optional[BondAndExit] = None
+    profile_photo: Optional[str] = None
 
 class EmployeeOut(BaseModel):
     id: str = Field(..., alias="_id")
@@ -82,5 +84,6 @@ class EmployeeOut(BaseModel):
     bank_and_docs: Optional[BankAndDocs] = None
     document_checklist: Optional[DocumentChecklist] = None
     bond_and_exit: Optional[BondAndExit] = None
+    profile_photo: Optional[str] = None
 
     model_config = ConfigDict(populate_by_name=True)

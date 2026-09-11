@@ -116,7 +116,7 @@ def get_config():
     root_env = ROOT_DIR / ".env"
     frontend_port = 5173
     backend_port = 8000
-    host = "0.0.0.0" if os.name != "nt" else "127.0.0.1"
+    host = "0.0.0.0"
 
     if root_env.exists():
         for line in root_env.read_text(encoding="utf-8", errors="ignore").splitlines():
@@ -137,13 +137,31 @@ def get_config():
                     host = val
     return frontend_port, backend_port, host
 
+def wait_for_backend(port, timeout=12):
+    """Actively verify backend responds on HTTP before proceeding."""
+    import urllib.request
+    test_url = f"http://127.0.0.1:{port}/"
+    start_time = time.time()
+    print(f"      Pinging FastAPI at {test_url} ...", end=" ", flush=True)
+    while time.time() - start_time < timeout:
+        try:
+            req = urllib.request.Request(test_url, headers={"User-Agent": "HRMS-Launcher"})
+            with urllib.request.urlopen(req, timeout=1.5) as resp:
+                if resp.status in (200, 404):
+                    print("\033[92mREADY (HTTP 200)\033[0m")
+                    return True
+        except Exception:
+            time.sleep(0.5)
+    print("\033[93mTIMED OUT\033[0m")
+    return False
+
 def free_ports(*ports):
     """Free up listening ports on both Windows and Linux/Ubuntu."""
     for port in ports:
         if not port:
             continue
         if os.name == "nt":
-            # Pass 1: netstat -ano & taskkill
+            # Pass 1: netstat -ano & taskkill with process tree (/T)
             try:
                 out = subprocess.check_output(f'netstat -ano | findstr :{port}', shell=True, text=True, stderr=subprocess.DEVNULL)
                 for line in out.splitlines():
@@ -151,13 +169,13 @@ def free_ports(*ports):
                     if len(parts) >= 5 and "LISTENING" in parts:
                         pid = parts[-1]
                         if pid.isdigit() and int(pid) != os.getpid():
-                            subprocess.call(["taskkill", "/F", "/PID", pid], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            subprocess.call(["taskkill", "/F", "/T", "/PID", pid], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception:
                 pass
 
-            # Pass 2: PowerShell Get-NetTCPConnection
+            # Pass 2: PowerShell Get-NetTCPConnection with tree kill
             try:
-                ps_cmd = f'Get-NetTCPConnection -LocalPort {port} -ErrorAction SilentlyContinue | ForEach-Object {{ Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }}'
+                ps_cmd = f'Get-NetTCPConnection -LocalPort {port} -ErrorAction SilentlyContinue | ForEach-Object {{ $pid = $_.OwningProcess; taskkill /F /T /PID $pid; Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue }}'
                 subprocess.call(["powershell", "-NoProfile", "-Command", ps_cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception:
                 pass
@@ -198,6 +216,8 @@ def main():
     if os.name != "nt":
         popen_kwargs["preexec_fn"] = os.setsid
 
+    backend_env = {**os.environ, "PYTHONUNBUFFERED": "1"}
+
     try:
         # Start Backend
         display_host = "localhost" if host in ("127.0.0.1", "0.0.0.0") else host
@@ -211,11 +231,14 @@ def main():
             "--port", str(backend_port),
             "--reload"
         ]
-        backend_proc = subprocess.Popen(backend_cmd, cwd=str(ROOT_DIR), **popen_kwargs)
+        backend_proc = subprocess.Popen(backend_cmd, cwd=str(ROOT_DIR), env=backend_env, **popen_kwargs)
         processes.append(backend_proc)
 
-        # Wait a moment for backend initialization
-        time.sleep(2)
+        # Health check backend
+        backend_ready = wait_for_backend(backend_port, timeout=12)
+        if backend_proc.poll() is not None:
+            print(f"\033[91m[CRITICAL] Backend crashed immediately with exit code {backend_proc.returncode}!\033[0m")
+            return
 
         # Start Frontend (Production Preview)
         print(f"[4/4] Starting Frontend (npm run preview) on port {frontend_port} ...")
@@ -237,8 +260,10 @@ def main():
         # Keep running and monitor
         while True:
             for proc in processes:
-                if proc.poll() is not None:
-                    print(f"Process exited with code {proc.returncode}")
+                code = proc.poll()
+                if code is not None:
+                    pname = "FastAPI Backend" if proc == backend_proc else "Frontend Server"
+                    print(f"\n\033[91m[SHUTDOWN] {pname} terminated with exit code {code}.\033[0m")
                     return
             time.sleep(1)
 

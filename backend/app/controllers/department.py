@@ -8,7 +8,7 @@ from app.redis.service import get_cache, set_cache, delete_cache, clear_pattern,
 
 router = APIRouter(prefix="/departments", tags=["Departments"])
 
-@router.post("/", response_model=DepartmentOut, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=DepartmentOut, status_code=status.HTTP_201_CREATED)
 async def create_department(data: DepartmentCreate, current_user: dict = Depends(RoleChecker(["Admin"]))):
     result = await DepartmentService.create(data)
 
@@ -21,7 +21,7 @@ async def create_department(data: DepartmentCreate, current_user: dict = Depends
 
     return result
 
-@router.get("/", response_model=PaginatedResponse[DepartmentOut])
+@router.get("", response_model=PaginatedResponse[DepartmentOut])
 async def get_all_departments(
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),

@@ -33,6 +33,10 @@ import {
 } from "./nav-data";
 import { useTheme } from "./ThemeProvider";
 import { triggerGlobalModal, type GlobalModalType } from "./GlobalModalContext";
+import { useAuth } from "./auth/AuthContext";
+import { LoginModal } from "./auth/LoginModal";
+import { getAvatarUrl } from "@/lib/config";
+import { LogIn, LogOut } from "lucide-react";
 
 
 function Badge({ count }: { count: number }) {
@@ -222,6 +226,8 @@ function SidebarBody({
   isLocked?: boolean;
 }) {
   const { logoUrl, companyName } = useTheme();
+  const { user, isAuthenticated, logout } = useAuth();
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const [query, setQuery] = useState("");
   const [openGroups, setOpenGroups] = useState<string[]>(
     navItems.filter((i) => i.children?.length).map((i) => i.title),
@@ -596,23 +602,49 @@ function SidebarBody({
         )}
       </nav>
 
-      <button 
-        onClick={() => go("/profile")}
-        className={cn(
-          "flex items-center gap-2 border-t border-sidebar-border px-3 py-3 w-full text-left transition-colors cursor-pointer",
-          active === "/profile" ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/50"
-        )}
-      >
-        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-sidebar-accent text-xs font-bold text-sidebar-accent-foreground">
-          AR
-        </div>
-        {!collapsed && (
-          <div className="min-w-0">
-            <p className={cn("truncate text-sm font-medium", active === "/profile" ? "text-sidebar-foreground" : "")}>Aarav R.</p>
-            <p className="truncate text-[11px] text-sidebar-muted">HR Admin</p>
+      {/* User Footer / Login Action */}
+      <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} />
+      <div className="border-t border-sidebar-border p-2 shrink-0">
+        {isAuthenticated && user ? (
+          <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-sidebar-accent/40">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <img
+                src={getAvatarUrl(user.profile_photo || user.avatar, user.name || "User")}
+                alt={user.name}
+                className="w-8 h-8 rounded-full object-cover shrink-0 border border-border"
+              />
+              {!collapsed && (
+                <div className="min-w-0 text-left">
+                  <p className="text-xs font-bold text-sidebar-foreground truncate">{user.name}</p>
+                  <p className="text-[10px] text-sidebar-muted truncate">{user.role}</p>
+                </div>
+              )}
+            </div>
+            {!collapsed && (
+              <button
+                onClick={logout}
+                title="Sign Out"
+                className="p-1.5 text-sidebar-muted hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            )}
           </div>
+        ) : (
+          <button
+            onClick={() => setShowLoginModal(true)}
+            className={cn(
+              "w-full flex items-center gap-2.5 p-2 rounded-xl text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 transition-all",
+              collapsed ? "justify-center" : "justify-between"
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <LogIn className="w-4 h-4 shrink-0" />
+              {!collapsed && <span>Sign In</span>}
+            </div>
+          </button>
         )}
-      </button>
+      </div>
     </>
   );
 }

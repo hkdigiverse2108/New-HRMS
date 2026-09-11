@@ -10,6 +10,7 @@ export interface Employee {
   phone: string;
   joinDate: string;
   avatar: string;
+  profile_photo?: string;
   performanceScore: number; // Out of 100
   
   // Extended HRMS-1 fields (optional for backward compatibility with mock data)

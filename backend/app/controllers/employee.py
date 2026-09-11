@@ -1,5 +1,8 @@
-from fastapi import APIRouter, Depends, status, Query
+import shutil
+import uuid
+from pathlib import Path
 from typing import List, Dict, Optional
+from fastapi import APIRouter, Depends, status, Query, UploadFile, File, HTTPException
 from app.schemas.enums import SystemRole, GenderEnum, RelationEnum, WorkModeEnum
 from app.schemas.employee import EmployeeCreate, EmployeeOut, EmployeeUpdate
 from app.schemas.pagination import PaginatedResponse
@@ -12,8 +15,50 @@ from app.redis.service import (
     clear_pattern,
     make_list_key
 )
+from app.config import ROOT_DIR
+
+# Root images folder (outside frontend and backend)
+IMAGES_DIR = ROOT_DIR / "images"
+IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"}
 
 router = APIRouter(prefix="/employees", tags=["Employees"])
+
+@router.post("/upload-photo")
+@router.post("/upload-image")
+async def upload_employee_image(file: UploadFile = File(...)):
+    """Uploads employee image, stores it in ROOT/images/employee, and returns accessible URL."""
+    emp_dir = IMAGES_DIR / "employee"
+    emp_dir.mkdir(parents=True, exist_ok=True)
+
+    file_ext = Path(file.filename or "").suffix.lower()
+    if not file_ext or file_ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid image format. Allowed formats: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
+        )
+
+    unique_filename = f"emp_{uuid.uuid4().hex[:12]}{file_ext}"
+    dest_path = emp_dir / unique_filename
+
+    try:
+        with open(dest_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to save image: {str(e)}"
+        )
+    finally:
+        file.file.close()
+
+    image_url = f"/images/employee/{unique_filename}"
+    return {
+        "status": "success",
+        "url": image_url,
+        "profile_photo": image_url,
+        "filename": unique_filename
+    }
 
 @router.get("/form-options")
 async def get_employee_form_options(current_user: str = Depends(get_current_user)) -> Dict[str, List[dict]]:
@@ -28,6 +73,7 @@ async def get_employee_form_options(current_user: str = Depends(get_current_user
 # ==============================================================================
 # 1. ADD EMPLOYEE
 # ==============================================================================
+@router.post("", response_model=EmployeeOut, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=EmployeeOut, status_code=status.HTTP_201_CREATED)
 async def create_employee(employee: EmployeeCreate, current_user: dict = Depends(RoleChecker(["Admin"]))):
     result = await EmployeeService.create_employee(employee)
@@ -44,6 +90,7 @@ async def create_employee(employee: EmployeeCreate, current_user: dict = Depends
 # ==============================================================================
 # 2. GET ALL EMPLOYEES (With Pagination & Filters)
 # ==============================================================================
+@router.get("", response_model=PaginatedResponse[EmployeeOut])
 @router.get("/", response_model=PaginatedResponse[EmployeeOut])
 async def get_all_employees(
     page: int = Query(1, ge=1),
