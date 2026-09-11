@@ -8,36 +8,36 @@ export function FinanceOverview() {
       <CollapsibleSection section="Section 08" title="Finance Overview">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Metrics */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-emerald-50 border border-emerald-100 rounded-3xl p-5 shadow-sm flex flex-col justify-between">
+        <div className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-3 sm:gap-4">
+          <div className="bg-emerald-50 border border-emerald-100 rounded-3xl p-5 shadow-sm flex flex-col justify-between min-w-0">
             <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider mb-2">Today's Income</p>
             <p className="text-[26px] font-black text-emerald-700 leading-none">{FINANCE_METRICS.todayIncome}</p>
           </div>
-          <div className="bg-rose-50 border border-rose-100 rounded-3xl p-5 shadow-sm flex flex-col justify-between">
+          <div className="bg-rose-50 border border-rose-100 rounded-3xl p-5 shadow-sm flex flex-col justify-between min-w-0">
             <p className="text-[11px] font-bold text-rose-600 uppercase tracking-wider mb-2">Today's Expense</p>
             <p className="text-[26px] font-black text-rose-700 leading-none">{FINANCE_METRICS.todayExpense}</p>
           </div>
-          <div className="bg-white border border-border/60 rounded-3xl p-5 shadow-sm flex flex-col justify-between col-span-2">
+          <div className="bg-white border border-border/60 rounded-3xl p-5 shadow-sm flex flex-col justify-between min-[360px]:col-span-2 min-w-0">
             <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Outstanding Payments</p>
             <p className="text-3xl font-black text-foreground">{FINANCE_METRICS.outstanding}</p>
           </div>
-          <div className="bg-white border border-border/60 rounded-3xl p-5 shadow-sm flex flex-col justify-between">
+          <div className="bg-white border border-border/60 rounded-3xl p-5 shadow-sm flex flex-col justify-between min-w-0">
             <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-2 leading-tight">Pending Client Payments</p>
             <p className="text-[22px] font-black text-blue-500 mt-2">{FINANCE_METRICS.pendingClient}</p>
           </div>
-          <div className="bg-white border border-border/60 rounded-3xl p-5 shadow-sm flex flex-col justify-between">
+          <div className="bg-white border border-border/60 rounded-3xl p-5 shadow-sm flex flex-col justify-between min-w-0">
             <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-2 leading-tight">Pending Vendor Payments</p>
             <p className="text-[22px] font-black text-amber-500 mt-2">{FINANCE_METRICS.pendingVendor}</p>
           </div>
         </div>
 
         {/* Cash Flow */}
-        <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm">
+        <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm min-w-0 overflow-hidden">
           <div className="mb-6">
             <h3 className="font-bold text-foreground">Cash Flow</h3>
             <p className="text-[11px] text-muted-foreground">Revenue vs expense (₹ thousands)</p>
           </div>
-          <div className="h-[200px]">
+          <div className="h-[200px] w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={CASH_FLOW} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
                 <defs>
@@ -65,12 +65,12 @@ export function FinanceOverview() {
         </div>
 
         {/* Profit Trend */}
-        <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm">
+        <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm min-w-0 overflow-hidden">
           <div className="mb-6">
             <h3 className="font-bold text-foreground">Profit Trend</h3>
             <p className="text-[11px] text-muted-foreground">Net profit per month</p>
           </div>
-          <div className="h-[200px]">
+          <div className="h-[200px] w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={PROFIT_TREND} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
                 <defs>

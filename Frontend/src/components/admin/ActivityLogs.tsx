@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Search, ShieldAlert, Activity, Users, IndianRupee, Settings, TerminalSquare, AlertTriangle, Key } from "lucide-react";
+import { ShieldAlert, Activity, Users, IndianRupee, Settings, TerminalSquare, AlertTriangle, Key } from "lucide-react";
+import { SearchInput } from "@/components/common/SearchInput";
 import { cn } from "@/lib/utils";
 
 type LogCategory = "All" | "Auth" | "People" | "Payroll" | "System";
@@ -105,39 +106,39 @@ export function ActivityLogs() {
   });
 
   return (
-    <div className="space-y-5 h-[calc(100vh-4rem)] flex flex-col overflow-hidden pb-0">
+    <div className="space-y-5 min-h-[calc(100vh-4rem)] h-auto lg:h-[calc(100vh-4rem)] flex flex-col overflow-hidden pb-0">
       {/* Header & Stats */}
-      <div className="shrink-0 bg-card border border-border rounded-3xl p-6 shadow-sm relative overflow-hidden">
+      <div className="shrink-0 bg-card border border-border rounded-3xl p-4 sm:p-6 shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
           <TerminalSquare className="w-64 h-64 text-foreground" />
         </div>
         
-        <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+        <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-4 sm:gap-6">
           <div>
-            <h1 className="text-2xl font-black text-foreground tracking-tight mb-2">Activity Logs</h1>
-            <p className="text-sm text-muted-foreground max-w-xl">
+            <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight mb-1 sm:mb-2">Activity Logs</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground max-w-xl">
               System-wide audit trail. Monitor logins, configuration changes, and critical administrative actions.
             </p>
           </div>
           
-          <div className="flex gap-4">
-            <div className="bg-muted/50 border border-border rounded-2xl p-4 flex items-center gap-4 min-w-[160px]">
-              <div className="w-10 h-10 bg-background rounded-xl shadow-sm flex items-center justify-center text-muted-foreground shrink-0">
-                <Activity className="w-5 h-5" />
+          <div className="flex flex-wrap sm:flex-nowrap gap-3 sm:gap-4">
+            <div className="bg-muted/50 border border-border rounded-2xl p-3 sm:p-4 flex items-center gap-3 sm:gap-4 min-w-[130px] sm:min-w-[160px] flex-1">
+              <div className="w-9 sm:w-10 h-9 sm:h-10 bg-background rounded-xl shadow-sm flex items-center justify-center text-muted-foreground shrink-0">
+                <Activity className="w-4 sm:w-5 h-4 sm:h-5" />
               </div>
               <div>
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Events Today</p>
-                <p className="text-2xl font-black text-foreground leading-none">1,248</p>
+                <p className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Events Today</p>
+                <p className="text-xl sm:text-2xl font-black text-foreground leading-none">1,248</p>
               </div>
             </div>
             
-            <div className="bg-destructive/10 border border-destructive/20 rounded-2xl p-4 flex items-center gap-4 min-w-[160px]">
-              <div className="w-10 h-10 bg-background rounded-xl shadow-sm flex items-center justify-center text-destructive shrink-0">
-                <ShieldAlert className="w-5 h-5" />
+            <div className="bg-destructive/10 border border-destructive/20 rounded-2xl p-3 sm:p-4 flex items-center gap-3 sm:gap-4 min-w-[130px] sm:min-w-[160px] flex-1">
+              <div className="w-9 sm:w-10 h-9 sm:h-10 bg-background rounded-xl shadow-sm flex items-center justify-center text-destructive shrink-0">
+                <ShieldAlert className="w-4 sm:w-5 h-4 sm:h-5" />
               </div>
               <div>
-                <p className="text-xs font-bold text-rose-600/70 uppercase tracking-wider mb-0.5">Critical Alerts</p>
-                <p className="text-2xl font-black text-rose-700 leading-none">3</p>
+                <p className="text-[10px] sm:text-xs font-bold text-rose-600/70 uppercase tracking-wider mb-0.5">Critical Alerts</p>
+                <p className="text-xl sm:text-2xl font-black text-rose-700 leading-none">3</p>
               </div>
             </div>
           </div>
@@ -148,14 +149,14 @@ export function ActivityLogs() {
       <div className="flex-1 flex flex-col min-h-0 bg-card border border-border rounded-3xl shadow-sm overflow-hidden">
         
         {/* Toolbar */}
-        <div className="p-4 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-muted/30 shrink-0">
+        <div className="p-3 sm:p-4 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 bg-muted/30 shrink-0">
           <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 scrollbar-hide">
             {(["All", "Auth", "People", "Payroll", "System"] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className={cn(
-                  "px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all duration-200 border flex items-center gap-2",
+                  "px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all duration-200 border flex items-center gap-1.5 sm:gap-2",
                   activeTab === tab 
                     ? "bg-primary text-primary-foreground border-primary shadow-md" 
                     : "bg-background text-muted-foreground border-border hover:border-border/80 hover:bg-muted/50"
@@ -167,15 +168,13 @@ export function ActivityLogs() {
             ))}
           </div>
           
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <input 
-                type="text" 
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="w-full sm:w-64">
+              <SearchInput 
                 placeholder="Search logs..." 
                 value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="w-full sm:w-64 pl-9 pr-4 py-2.5 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                onChange={setSearchQuery}
+                className="w-full"
               />
             </div>
           </div>

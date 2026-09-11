@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Search, Plus, Hash, Settings, Bell, Info, Send, Smile, Paperclip, MoreVertical, Image as ImageIcon, X, Trash2 } from "lucide-react";
+import { Search, Plus, Hash, Settings, Bell, Info, Send, Smile, Paperclip, MoreVertical, Image as ImageIcon, X, Trash2, Menu } from "lucide-react";
+import { SearchInput } from "@/components/common/SearchInput";
 import { cn } from "@/lib/utils";
 
 interface Message {
@@ -34,6 +35,7 @@ const MOCK_MESSAGES: Message[] = [
 
 export function Chat() {
   const [activeChannel, setActiveChannel] = useState("engineering");
+  const [isMobileChannelsOpen, setIsMobileChannelsOpen] = useState(false);
   const [channels, setChannels] = useState([
     { id: "1", name: "general", unread: 0 },
     { id: "2", name: "engineering", unread: 3 },
@@ -100,7 +102,7 @@ export function Chat() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+    <div className="flex h-[calc(100vh-4rem)] bg-card rounded-2xl border border-border overflow-hidden shadow-sm relative">
       {/* Sidebar */}
       <div className="w-64 border-r border-border bg-muted/10 flex flex-col hidden md:flex">
         <div className="p-4 border-b border-border flex items-center justify-between">
@@ -193,13 +195,101 @@ export function Chat() {
         </div>
       </div>
       
+      {/* Mobile Channel Drawer */}
+      {isMobileChannelsOpen && (
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm md:hidden" onClick={() => setIsMobileChannelsOpen(false)}>
+          <div className="w-72 h-full bg-card border-r border-border p-4 flex flex-col shadow-2xl animate-in slide-in-from-left duration-200" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <h2 className="font-bold text-foreground tracking-tight">Messages</h2>
+              <button onClick={() => setIsMobileChannelsOpen(false)} className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto pt-3 space-y-6">
+              <div>
+                <div className="px-2 mb-2 flex items-center justify-between text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                  <span>Channels</span>
+                  {canCreateChannels && (
+                    <Plus className="w-3.5 h-3.5 cursor-pointer hover:text-foreground" onClick={() => { setIsMobileChannelsOpen(false); setIsNewChannelOpen(true); }} />
+                  )}
+                </div>
+                <div className="space-y-0.5">
+                  {channels.map(channel => (
+                    <button
+                      key={channel.id}
+                      onClick={() => { setActiveChannel(channel.name); setIsMobileChannelsOpen(false); }}
+                      className={cn(
+                        "w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-sm transition-colors",
+                        activeChannel === channel.name 
+                          ? "bg-primary/10 text-primary font-bold" 
+                          : "text-muted-foreground hover:bg-muted font-medium"
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Hash className="w-4 h-4 opacity-70" />
+                        {channel.name}
+                      </div>
+                      {channel.unread > 0 && (
+                        <span className="bg-primary text-primary-foreground text-[10px] font-bold px-1.5 rounded-full">
+                          {channel.unread}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="px-2 mb-2 flex items-center justify-between text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                  <span>Direct Messages</span>
+                </div>
+                <div className="space-y-0.5">
+                  {DIRECT_MESSAGES.map(dm => (
+                    <button
+                      key={dm.id}
+                      onClick={() => { setActiveChannel(dm.name); setIsMobileChannelsOpen(false); }}
+                      className={cn(
+                        "w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-sm transition-colors",
+                        activeChannel === dm.name 
+                          ? "bg-primary/10 text-primary font-bold" 
+                          : "text-muted-foreground hover:bg-muted font-medium"
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="relative">
+                          <img src={dm.avatar} alt={dm.name} className="w-5 h-5 rounded-full" />
+                          {dm.online && <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-emerald-500 border border-background rounded-full"></div>}
+                        </div>
+                        {dm.name}
+                      </div>
+                      {dm.unread > 0 && (
+                        <span className="bg-primary text-primary-foreground text-[10px] font-bold px-1.5 rounded-full">
+                          {dm.unread}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col bg-card">
+      <div className="flex-1 flex flex-col bg-card min-w-0">
         {/* Chat Header */}
-        <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-card shrink-0">
-          <div className="flex items-center gap-3">
-            <h2 className="font-bold text-foreground text-lg tracking-tight flex items-center gap-1">
-              {activeChannel.toLowerCase() === activeChannel ? <Hash className="w-5 h-5 text-muted-foreground" /> : null}
+        <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-border flex items-center justify-between bg-card shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button 
+              onClick={() => setIsMobileChannelsOpen(true)}
+              className="p-1.5 -ml-1 text-muted-foreground hover:text-foreground md:hidden rounded-lg hover:bg-muted transition-colors"
+              title="Open channels"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <h2 className="font-bold text-foreground text-base sm:text-lg tracking-tight flex items-center gap-1">
+              {activeChannel.toLowerCase() === activeChannel ? <Hash className="w-4 sm:w-5 h-4 sm:h-5 text-muted-foreground" /> : null}
               {activeChannel}
             </h2>
           </div>
@@ -212,18 +302,18 @@ export function Chat() {
         </div>
         
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
           {messages.map(msg => (
-            <div key={msg.id} className={cn("flex gap-4 max-w-3xl", msg.isMe ? "ml-auto flex-row-reverse" : "")}>
-              <img src={msg.avatar} alt={msg.sender} className="w-10 h-10 rounded-full shrink-0 shadow-sm" />
+            <div key={msg.id} className={cn("flex gap-3 sm:gap-4 max-w-3xl", msg.isMe ? "ml-auto flex-row-reverse" : "")}>
+              <img src={msg.avatar} alt={msg.sender} className="w-8 sm:w-10 h-8 sm:h-10 rounded-full shrink-0 shadow-sm" />
               <div className={cn("flex flex-col gap-1", msg.isMe ? "items-end" : "items-start")}>
                 <div className="flex items-baseline gap-2">
-                  <span className="font-bold text-sm text-foreground">{msg.sender}</span>
-                  <span className="text-xs font-medium text-muted-foreground">{msg.time}</span>
+                  <span className="font-bold text-xs sm:text-sm text-foreground">{msg.sender}</span>
+                  <span className="text-[10px] sm:text-xs font-medium text-muted-foreground">{msg.time}</span>
                 </div>
                 <div className="relative group flex items-center gap-2">
                   <div className={cn(
-                    "px-4 py-2.5 rounded-2xl text-sm leading-relaxed",
+                    "px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl text-xs sm:text-sm leading-relaxed",
                     msg.isMe 
                       ? "bg-primary text-primary-foreground rounded-tr-none" 
                       : "bg-muted text-foreground rounded-tl-none"
@@ -234,7 +324,7 @@ export function Chat() {
                     <button
                       onClick={() => handleDeleteMessage(msg.id)}
                       title="Delete message"
-                      className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-destructive transition-all rounded-lg"
+                      className="opacity-100 md:opacity-0 md:group-hover:opacity-100 p-1 text-muted-foreground hover:text-destructive transition-all rounded-lg"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>

@@ -39,9 +39,9 @@ export function EmployeePerformance() {
   return (
     <div className="mb-12">
       <CollapsibleSection section="Section 03" title="Employee Performance">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Top 5 Performers */}
-        <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm">
+        <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm min-w-0">
           <div className="mb-4">
             <h3 className="font-bold text-foreground">Top 5 Performers</h3>
             <p className="text-[11px] text-muted-foreground">Ranked by weighted productivity score</p>

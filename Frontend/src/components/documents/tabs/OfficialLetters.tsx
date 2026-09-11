@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Search, Plus, Filter, FileText, CheckCircle2, Clock, X, Download, Eye, Upload, Printer, Mail, FilePlus, Send, ChevronDown } from "lucide-react";
+import { Plus, Filter, FileText, CheckCircle2, Clock, X, Download, Eye, Upload, Printer, Mail, FilePlus, Send, ChevronDown } from "lucide-react";
 import { DialogClose,  Dialog, DialogContent  } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { EMPLOYEES } from "@/components/employees/employee-data";
 import { SearchableSelect } from "@/components/ui/select";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";
+import { SearchInput } from "@/components/common/SearchInput";
 
 type RequestStatus = "Pending" | "Approved" | "Sent" | "Rejected";
 
@@ -75,19 +76,15 @@ export function OfficialLetters({ onNavigate }: { onNavigate?: ((path: string) =
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
-        <div className="relative w-full sm:max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search requests..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 bg-card border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium"
-          />
-        </div>
+        <SearchInput
+          placeholder="Search requests..."
+          value={search}
+          onChange={setSearch}
+          className="w-full sm:max-w-md"
+        />
         <button 
           onClick={() => setIsAddMode(true)}
-          className="w-full sm:w-auto px-4 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm"
+          className="w-full sm:w-auto px-4 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm shrink-0"
         >
           <Plus className="w-4 h-4" />
           New Request
@@ -176,8 +173,8 @@ export function OfficialLetters({ onNavigate }: { onNavigate?: ((path: string) =
       </Dialog>
 
       <div className="bg-card border border-border/50 rounded-3xl overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+        <div className="overflow-x-auto min-w-0">
+          <table className="w-full text-left border-collapse min-w-[700px]">
             <thead>
               <tr className="border-b border-border/50 bg-muted/30">
                 <SortableHeader label="Employee" sortKey="employeeName" currentSort={sortConfig} onSort={requestSort} className="p-4 text-xs font-bold text-muted-foreground uppercase tracking-widest whitespace-nowrap" />

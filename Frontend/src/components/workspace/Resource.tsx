@@ -958,8 +958,8 @@ export default function ResourceManagementPage() {
               </h3>
             </div>
             <div className="bg-white border border-border rounded-2xl shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left whitespace-nowrap">
+              <div className="overflow-x-auto min-w-0">
+                <table className="w-full text-sm text-left whitespace-nowrap min-w-[700px]">
                   <thead className="text-xs text-muted-foreground font-semibold border-b border-border bg-gray-50/50 uppercase tracking-wider">
                     <tr>
                       <SortableHeader label="Category Name" sortKey="name" currentSort={sortConfigCategories} onSort={requestSortCategories} className="px-6 py-4" />
@@ -1082,8 +1082,8 @@ export default function ResourceManagementPage() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left whitespace-nowrap">
+          <div className="overflow-x-auto min-w-0">
+            <table className="w-full text-sm text-left whitespace-nowrap min-w-[700px]">
               <thead className="text-xs text-muted-foreground font-semibold border-b border-border bg-gray-50/50 uppercase tracking-wider">
                 <tr>
                   <SortableHeader label="Resource ID" sortKey="assetId" currentSort={sortConfigResources} onSort={requestSortResources} className="px-6 py-4" />
@@ -1360,8 +1360,8 @@ export default function ResourceManagementPage() {
                 </Button>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left whitespace-nowrap">
+              <div className="overflow-x-auto min-w-0">
+                <table className="w-full text-sm text-left whitespace-nowrap min-w-[650px]">
                   <thead className="text-xs text-muted-foreground font-semibold border-b border-border bg-gray-50/50 uppercase tracking-wider">
                     <tr>
                       <SortableHeader label="Category" sortKey="name" currentSort={sortConfigCategories} onSort={requestSortCategories} className="px-6 py-4" />

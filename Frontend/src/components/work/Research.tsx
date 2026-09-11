@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { X,  Search, BookOpen, Clock, TrendingUp, Sparkles, Filter, Bookmark, Plus, BarChart2  } from "lucide-react";
-import { DialogClose,  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger  } from "@/components/ui/dialog";
+import { X, BookOpen, Clock, TrendingUp, Sparkles, Filter, Bookmark, Plus, BarChart2, Search } from "lucide-react";
+import { SearchInput } from "@/components/common/SearchInput";
+import { DialogClose, Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { SearchableSelect } from "@/components/ui/select";
@@ -179,39 +180,37 @@ export function Research() {
   };
 
   return (
-    <div className="space-y-5 h-[calc(100vh-4rem)] flex flex-col overflow-hidden pb-0 animate-in fade-in duration-300">
+    <div className="space-y-5 min-h-[calc(100vh-4rem)] h-auto lg:h-[calc(100vh-4rem)] flex flex-col overflow-hidden pb-0 animate-in fade-in duration-300">
       {/* Clean Header Section */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0">
         <div>
-          <h1 className="text-2xl font-black text-foreground tracking-tight">Knowledge & Research Hub</h1>
+          <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">Knowledge & Research Hub</h1>
           <p className="text-xs text-muted-foreground mt-1 font-semibold">Discover internal documentation, market intelligence, and deep-dives from across the company</p>
         </div>
         
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <div className="relative flex-1 sm:w-64">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input 
-              type="text" 
+        <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
+          <div className="flex-1 sm:w-64">
+            <SearchInput 
               placeholder="Search articles, policies..." 
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-muted/40 border border-border/60 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
+              onChange={setSearchQuery}
+              className="w-full"
             />
           </div>
           <Dialog open={isNewDocOpen} onOpenChange={setIsNewDocOpen}>
             <DialogTrigger asChild>
-              <button className="px-4 py-2 bg-primary hover:bg-primary/95 text-primary-foreground font-bold text-xs rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 shrink-0">
+              <button className="px-3 sm:px-4 py-2 bg-primary hover:bg-primary/95 text-primary-foreground font-bold text-xs rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 shrink-0">
                 <Plus className="w-4 h-4" />
                 <span>New Document</span>
               </button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
-              <div className="flex items-center justify-between px-6 md:px-8 py-6 border-b border-border/50 bg-muted/30">
+            <DialogContent className="w-[calc(100vw-24px)] sm:w-full sm:max-w-[500px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+              <div className="flex items-center justify-between px-4 sm:px-8 py-4 sm:py-6 border-b border-border/50 bg-muted/30">
                 <div>
-                  <h2 className="text-xl md:text-2xl font-black tracking-tight">Create New Document</h2>
+                  <h2 className="text-lg sm:text-2xl font-black tracking-tight">Create New Document</h2>
                 </div>
                 <DialogClose asChild>
-                  <button className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
+                  <button className="p-1.5 sm:p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors shrink-0">
                     <X className="w-5 h-5" />
                   </button>
                 </DialogClose>
@@ -250,17 +249,17 @@ export function Research() {
                     />
                   </div>
                 </div>
-                <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
+                <div className="px-4 sm:px-8 py-3.5 sm:py-6 bg-muted/30 border-t border-border/50 flex items-center justify-end gap-2 sm:gap-3 mt-auto shrink-0">
                   <button 
                     type="button" 
                     onClick={() => setIsNewDocOpen(false)}
-                    className="px-4 py-2 bg-white border border-border text-foreground/80 hover:bg-muted/50 font-bold text-sm rounded-xl transition-colors"
+                    className="px-3.5 sm:px-4 py-2 bg-white border border-border text-foreground/80 hover:bg-muted/50 font-bold text-xs sm:text-sm rounded-xl transition-colors shrink-0"
                   >
                     Cancel
                   </button>
                   <button 
                     type="submit"
-                    className="px-4 py-2 bg-primary hover:bg-primary text-primary-foreground font-bold text-sm rounded-xl transition-colors"
+                    className="px-4 py-2 bg-primary hover:bg-primary text-primary-foreground font-bold text-xs sm:text-sm rounded-xl transition-colors shrink-0"
                   >
                     Publish Document
                   </button>

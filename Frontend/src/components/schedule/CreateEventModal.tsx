@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Clock, MapPin, AlignLeft, Calendar, Users, Type } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DatePicker } from "@/components/ui/date-picker";
 
 interface CreateEventModalProps {
   isOpen: boolean;
@@ -44,7 +45,7 @@ export function CreateEventModal({ isOpen, onClose, onSave, selectedDate = new D
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-[480px] p-0 overflow-hidden border-none shadow-2xl rounded-2xl">
+      <DialogContent className="w-[calc(100vw-24px)] sm:w-full max-w-[480px] p-0 overflow-hidden border-none shadow-2xl rounded-2xl">
         <div className="bg-white flex flex-col">
           {/* Header */}
           <div className="pt-6 pb-2 border-b border-border/50 relative pr-12">
@@ -87,11 +88,11 @@ export function CreateEventModal({ isOpen, onClose, onSave, selectedDate = new D
               </div>
               <div className="flex-1 space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    type="date"
+                  <DatePicker
                     value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="flex h-8 rounded hover:bg-muted bg-transparent px-2 py-1 text-[13px] transition-colors border-none outline-none focus:ring-0 cursor-pointer"
+                    onChange={(val) => setDate(val)}
+                    className="w-auto h-8 px-2.5 py-1 text-[13px] bg-muted/40 hover:bg-muted border border-border/50 rounded-lg shrink-0"
+                    placeholder="Select date"
                   />
                   <input
                     type="time"

@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Search, Filter, History, CalendarDays, AlertCircle, Activity, CheckCircle2, XCircle, FileText } from "lucide-react";
+import { Filter, History, CalendarDays, AlertCircle, Activity, CheckCircle2, XCircle, FileText } from "lucide-react";
 import { SearchableSelect } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { SearchInput } from "@/components/common/SearchInput";
 
 type ApprovalType = "Leave Request" | "Penalty" | "Daily Progress" | "Invoice";
 type ActionType = "Approved" | "Rejected" | "Verified";
@@ -124,16 +125,12 @@ export function ApprovalHistory() {
 
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-card border border-border/50 p-4 rounded-2xl shadow-sm">
-        <div className="relative w-full sm:max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search by name or details..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium"
-          />
-        </div>
+        <SearchInput
+          placeholder="Search by name or details..."
+          value={search}
+          onChange={setSearch}
+          className="w-full sm:max-w-md"
+        />
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
           <div className="relative w-full sm:w-auto">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />
@@ -147,7 +144,7 @@ export function ApprovalHistory() {
                 { label: "Daily Progress", value: "Daily Progress" },
                 { label: "Invoices", value: "Invoice" }
               ]}
-              className="w-[200px] h-[42px] pl-9 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-bold cursor-pointer"
+              className="w-full sm:w-[200px] h-[42px] pl-9 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-bold cursor-pointer"
             />
           </div>
           <div className="relative w-full sm:w-auto">
@@ -160,7 +157,7 @@ export function ApprovalHistory() {
                 { label: "Verified", value: "Verified" },
                 { label: "Rejected", value: "Rejected" }
               ]}
-              className="w-[180px] h-[42px] px-4 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-bold cursor-pointer"
+              className="w-full sm:w-[180px] h-[42px] px-4 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-bold cursor-pointer"
             />
           </div>
         </div>

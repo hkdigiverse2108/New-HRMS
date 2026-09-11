@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
-import { Search, Download, Plus, RefreshCw, Wallet, Building2, Calendar, Filter, ArrowDownLeft, ArrowUpRight, ArrowRight, Edit3, Trash2, X } from "lucide-react";
+import { Download, Plus, RefreshCw, Wallet, Building2, Filter, ArrowDownLeft, ArrowUpRight, ArrowRight, Edit3, Trash2, X } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
-import { DialogClose,  Dialog, DialogContent  } from "@/components/ui/dialog";
+import { Dialog, DialogContent  } from "@/components/ui/dialog";
 import { moveToRecycleBin } from "@/lib/recycle-bin";
 import { SearchableSelect } from "@/components/ui/select";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";
+import { DateRangeFilter } from "@/components/common/DateRangeFilter";
+import { SearchInput } from "@/components/common/SearchInput";
 
 const MOCK_CREDIT_TRANSACTIONS = [
   { id: 'INV-001', date: '15/6/2026', amount: 1234.00, category: 'Sales', description: 'test', service: 'fgh', remarks: '1. Payment is due w...' },
@@ -55,6 +57,10 @@ export function Transactions() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeAccountTab, setActiveAccountTab] = useState<"bank" | "cash">("cash");
 
+  const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
+    from: undefined,
+    to: undefined,
+  });
   const [filterCategory, setFilterCategory] = useState("All Categories");
   const [filterSyncStatus, setFilterSyncStatus] = useState("All Entries");
   const [addCreditCategory, setAddCreditCategory] = useState("Sales");
@@ -79,48 +85,48 @@ export function Transactions() {
   };
 
   return (
-    <div className="w-full space-y-6 animate-in fade-in duration-500 pb-12 relative">
+    <div className="w-full space-y-6 animate-in fade-in duration-500 pb-12 relative min-w-0">
       
       {/* Header */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-black tracking-tight text-foreground">
+          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-foreground">
             Financial Ledger Management
           </h1>
-          <p className="text-muted-foreground mt-1 text-sm font-medium">
+          <p className="text-muted-foreground mt-1 text-xs sm:text-sm font-medium">
             Track Credit (Invoices) and Debt (Expenses) with dynamic balance calculations
           </p>
         </div>
-        <div className="flex flex-wrap gap-2.5">
-          <button className="px-4 py-2 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center gap-2 text-sm">
-            <RefreshCw className="w-4 h-4 text-emerald-500" /> Sync Invoices
+        <div className="flex flex-wrap gap-2 sm:gap-2.5 w-full xl:w-auto">
+          <button className="px-3 sm:px-4 py-2 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center gap-2 text-xs sm:text-sm">
+            <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-500" /> Sync Invoices
           </button>
-          <button className="px-4 py-2 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center gap-2 text-sm">
-            <Wallet className="w-4 h-4 text-amber-500" /> Opening Balances
+          <button className="px-3 sm:px-4 py-2 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center gap-2 text-xs sm:text-sm">
+            <Wallet className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-500" /> Opening Balances
           </button>
-          <button className="px-4 py-2 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center gap-2 text-sm">
-            <Download className="w-4 h-4 text-indigo-500" /> Export Ledger
+          <button className="px-3 sm:px-4 py-2 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center gap-2 text-xs sm:text-sm">
+            <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-500" /> Export Ledger
           </button>
           <button 
             onClick={() => setIsAddCreditOpen(true)}
-            className="px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-colors shadow-sm flex items-center gap-2 text-sm"
+            className="px-3 sm:px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-colors shadow-sm flex items-center gap-2 text-xs sm:text-sm"
           >
-            <Plus className="w-4 h-4" /> Add Credit (Invoice)
+            <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Add Credit (Invoice)
           </button>
           <button 
             onClick={() => setIsAddDebtOpen(true)}
-            className="px-4 py-2 bg-rose-600 text-white font-bold rounded-lg hover:bg-rose-700 transition-colors shadow-sm flex items-center gap-2 text-sm"
+            className="px-3 sm:px-4 py-2 bg-rose-600 text-white font-bold rounded-lg hover:bg-rose-700 transition-colors shadow-sm flex items-center gap-2 text-xs sm:text-sm"
           >
-            <Plus className="w-4 h-4" /> Add Debt (Expense)
+            <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Add Debt (Expense)
           </button>
         </div>
       </div>
 
       {/* Account Tabs & Search */}
-      <div className="flex flex-col md:flex-row justify-between gap-4 bg-muted/30 p-2 rounded-2xl border border-border/50">
-        <div className="flex gap-2">
+      <div className="flex flex-col md:flex-row justify-between gap-3 sm:gap-4 bg-muted/30 p-2 rounded-2xl border border-border/50">
+        <div className="flex flex-wrap sm:flex-nowrap gap-2">
           <button
-            className={`px-6 py-2.5 text-sm font-bold rounded-xl transition-all flex items-center gap-2 ${
+            className={`flex-1 sm:flex-initial px-4 sm:px-6 py-2 sm:py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 ${
               activeAccountTab === "bank"
                 ? "bg-background shadow-sm text-foreground"
                 : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
@@ -130,7 +136,7 @@ export function Transactions() {
             <Building2 className="w-4 h-4 text-emerald-600" /> Bank Acc Management
           </button>
           <button
-            className={`px-6 py-2.5 text-sm font-bold rounded-xl transition-all flex items-center gap-2 ${
+            className={`flex-1 sm:flex-initial px-4 sm:px-6 py-2 sm:py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 ${
               activeAccountTab === "cash"
                 ? "bg-background shadow-sm text-foreground"
                 : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
@@ -140,38 +146,28 @@ export function Transactions() {
             <Wallet className="w-4 h-4 text-amber-600" /> Cash Transaction
           </button>
         </div>
-        <div className="relative w-full md:w-80">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search invoices, expenses, narratives..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium shadow-sm"
-          />
-        </div>
+        <SearchInput
+          placeholder="Search invoices, expenses, narratives..."
+          value={searchQuery}
+          onChange={setSearchQuery}
+          className="w-full md:w-80"
+        />
       </div>
 
       {/* Filters */}
-      <div className="bg-background border border-border/50 rounded-2xl p-3 flex flex-wrap items-center gap-4 shadow-sm">
-        <div className="flex items-center gap-2 text-sm font-bold text-muted-foreground pl-2">
+      <div className="bg-background border border-border/50 rounded-2xl p-3 flex flex-wrap items-center gap-3 sm:gap-4 shadow-sm">
+        <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-muted-foreground pl-1 sm:pl-2">
           <Filter className="w-4 h-4" /> Filters:
         </div>
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-muted-foreground font-medium">From:</span>
-          <div className="relative">
-            <input type="text" placeholder="dd/mm/yyyy" className="pl-3 pr-8 py-1.5 bg-background border border-border/50 rounded-lg text-sm w-32 focus:outline-none focus:ring-2 focus:ring-primary/20" />
-            <Calendar className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-          </div>
-        </div>
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-muted-foreground font-medium">To:</span>
-          <div className="relative">
-            <input type="text" placeholder="dd/mm/yyyy" className="pl-3 pr-8 py-1.5 bg-background border border-border/50 rounded-lg text-sm w-32 focus:outline-none focus:ring-2 focus:ring-primary/20" />
-            <Calendar className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-          </div>
-        </div>
-        <div className="flex items-center gap-2 text-sm">
+        
+        <DateRangeFilter
+          dateRange={dateRange}
+          onChange={setDateRange}
+          placeholder="Filter by transaction date"
+          className="w-full sm:w-auto"
+        />
+
+        <div className="flex items-center gap-2 text-xs sm:text-sm">
           <span className="text-muted-foreground font-medium">Category:</span>
           <SearchableSelect
             value={filterCategory}
@@ -181,7 +177,7 @@ export function Transactions() {
           />
         </div>
         {activeAccountTab === "bank" && (
-          <div className="flex items-center gap-2 text-sm ml-2 border-l border-border/50 pl-4">
+          <div className="flex items-center gap-2 text-xs sm:text-sm border-t sm:border-t-0 sm:border-l border-border/50 pt-2 sm:pt-0 sm:pl-4">
             <span className="text-muted-foreground font-medium">Sync Status:</span>
             <SearchableSelect
               value={filterSyncStatus}
@@ -406,8 +402,8 @@ export function Transactions() {
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[70vh]">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 overflow-y-auto max-h-[70vh]">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-muted-foreground">Invoice Number / Ref</label>
                   <input type="text" placeholder="e.g. INV-001" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
@@ -417,7 +413,7 @@ export function Transactions() {
                   <input type="date" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-muted-foreground">Amount (₹) *</label>
                   <input type="number" placeholder="0.00" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
@@ -449,7 +445,7 @@ export function Transactions() {
                 <textarea rows={2} placeholder="Any additional notes" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
               </div>
             </div>
-            <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
+            <div className="px-4 sm:px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
               <button onClick={() => setIsAddCreditOpen(false)} className="px-4 py-2 font-bold text-sm bg-background border border-border/50 rounded-lg hover:bg-muted transition-colors">Cancel</button>
               <button onClick={() => setIsAddCreditOpen(false)} className="px-4 py-2 font-bold text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors">Save Credit</button>
             </div>
@@ -468,8 +464,8 @@ export function Transactions() {
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[70vh]">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 overflow-y-auto max-h-[70vh]">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-muted-foreground">Expense No. / Ref</label>
                   <input type="text" placeholder="Auto-generated if empty" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
@@ -479,7 +475,7 @@ export function Transactions() {
                   <input type="date" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-muted-foreground">Amount (₹) *</label>
                   <input type="number" placeholder="0.00" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
@@ -507,7 +503,7 @@ export function Transactions() {
                 <textarea rows={2} placeholder="Expense description or narrative" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
               </div>
             </div>
-            <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
+            <div className="px-4 sm:px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
               <button onClick={() => setIsAddDebtOpen(false)} className="px-4 py-2 font-bold text-sm bg-background border border-border/50 rounded-lg hover:bg-muted transition-colors">Cancel</button>
               <button onClick={() => setIsAddDebtOpen(false)} className="px-4 py-2 font-bold text-sm bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors">Save Expense</button>
             </div>
@@ -525,8 +521,8 @@ export function Transactions() {
             <button onClick={() => setEditCredit(null)} className="p-2 hover:bg-muted rounded-full transition-colors"><X className="w-4 h-4" /></button>
           </div>
           {editCredit && (
-            <div className="p-6 md:p-8 space-y-4 overflow-y-auto max-h-[70vh]">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 sm:p-6 md:p-8 space-y-4 overflow-y-auto max-h-[70vh]">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-muted-foreground">Invoice No.</label>
                   <input type="text" value={editCredit.id} onChange={(e) => setEditCredit((p: any) => ({ ...p, id: e.target.value }))} className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
@@ -558,7 +554,7 @@ export function Transactions() {
               </div>
             </div>
           )}
-          <div className="px-6 md:px-8 py-4 border-t border-border/50 flex justify-end gap-3">
+          <div className="px-4 sm:px-6 md:px-8 py-4 border-t border-border/50 flex justify-end gap-3">
             <button onClick={() => setEditCredit(null)} className="px-4 py-2 font-bold text-sm bg-background border border-border/50 rounded-lg hover:bg-muted transition-colors">Cancel</button>
             <button onClick={saveEditCredit} className="px-4 py-2 font-bold text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors">Save Changes</button>
           </div>
@@ -576,8 +572,8 @@ export function Transactions() {
             <button onClick={() => setEditDebit(null)} className="p-2 hover:bg-muted rounded-full transition-colors"><X className="w-4 h-4" /></button>
           </div>
           {editDebit && (
-            <div className="p-6 md:p-8 space-y-4 overflow-y-auto max-h-[70vh]">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 sm:p-6 md:p-8 space-y-4 overflow-y-auto max-h-[70vh]">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-muted-foreground">Expense No.</label>
                   <input type="text" value={editDebit.id} onChange={(e) => setEditDebit((p: any) => ({ ...p, id: e.target.value }))} className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />

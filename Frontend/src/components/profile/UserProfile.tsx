@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { User, Briefcase, CreditCard, FileText, Mail, Phone, MapPin, Building, Calendar, Key, Shield, CheckCircle2, ChevronRight, Edit2 } from "lucide-react";
+import { User, Briefcase, CreditCard, FileText, Mail, Phone, MapPin, Building, Calendar, Key, Shield, CheckCircle2, ChevronRight, Edit2, Eye, EyeOff } from "lucide-react";
 import { cn, formatDate } from "@/lib/utils";
 import { useEmployeesContext } from "@/components/employees/EmployeeContext";
 import { EmployeeFormModal } from "@/components/employees/EmployeeFormModal";
@@ -13,6 +13,7 @@ export function UserProfile() {
   const user = employees.find(e => e.id === "EMP-002") || employees[0];
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [showProfilePassword, setShowProfilePassword] = useState(false);
 
   if (!user) {
     return <div className="p-8 text-center text-muted-foreground">User not found</div>;
@@ -62,32 +63,32 @@ export function UserProfile() {
       <div className="bg-white border border-border/60 rounded-3xl overflow-hidden mb-6 shadow-sm relative shrink-0">
         <div className="h-32 bg-gradient-to-r from-emerald-500 to-teal-600 relative w-full" />
         
-        <div className="px-8 pb-8">
+        <div className="px-4 sm:px-8 pb-6 sm:pb-8">
           <div className="flex flex-col md:flex-row gap-6 items-start md:items-end -mt-12 relative z-10">
             <div className="relative">
               <img 
                 src={profileData.avatar} 
                 alt={profileData.name} 
-                className="w-28 h-28 rounded-2xl object-cover border-4 border-white shadow-md bg-white" 
+                className="w-24 sm:w-28 h-24 sm:h-28 rounded-2xl object-cover border-4 border-white shadow-md bg-white" 
               />
               <span className="absolute -bottom-2 -right-2 px-3 py-1 bg-emerald-500 text-white rounded-xl text-[10px] font-bold border-2 border-white shadow-sm">
                 {profileData.status}
               </span>
             </div>
             
-            <div className="flex-1 mt-14 md:mt-0">
-              <h1 className="text-3xl font-black text-foreground tracking-tight">{profileData.name}</h1>
-              <p className="text-[15px] font-medium text-muted-foreground mt-1 flex items-center gap-2">
+            <div className="flex-1 mt-6 md:mt-0 min-w-0">
+              <h1 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight truncate">{profileData.name}</h1>
+              <p className="text-sm sm:text-[15px] font-medium text-muted-foreground mt-1 flex flex-wrap items-center gap-2">
                 {profileData.designation || profileData.role} 
                 <span>·</span> 
                 <span className="text-primary font-bold">{profileData.department}</span>
               </p>
             </div>
             
-            <div className="flex gap-3 w-full md:w-auto mt-4 md:mt-0">
+            <div className="flex gap-3 w-full md:w-auto mt-2 md:mt-0">
               <button 
                 onClick={() => setIsEditModalOpen(true)}
-                className="flex items-center gap-2 bg-muted hover:bg-muted/80 text-foreground/80 px-4 py-2.5 rounded-xl font-bold transition-colors text-sm"
+                className="flex items-center justify-center gap-2 bg-muted hover:bg-muted/80 text-foreground/80 px-4 py-2.5 rounded-xl font-bold transition-colors text-sm w-full md:w-auto"
               >
                 <Edit2 className="w-4 h-4" /> Edit Profile
               </button>
@@ -99,7 +100,7 @@ export function UserProfile() {
       <div className="flex flex-col lg:flex-row gap-6 flex-1 min-h-0">
         
         {/* Sidebar Tabs */}
-        <div className="w-full lg:w-72 shrink-0 space-y-2">
+        <div className="w-full lg:w-72 shrink-0 flex flex-row lg:flex-col overflow-x-auto lg:overflow-visible gap-2 pb-2 lg:pb-0 scrollbar-hide">
           {tabs.map(tab => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -108,7 +109,7 @@ export function UserProfile() {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as TabType)}
                 className={cn(
-                  "w-full flex items-center gap-3 px-5 py-4 rounded-2xl text-sm font-bold transition-all border",
+                  "flex items-center gap-3 px-4 sm:px-5 py-3 sm:py-4 rounded-2xl text-sm font-bold transition-all border whitespace-nowrap lg:w-full",
                   isActive 
                     ? "bg-white border-border shadow-sm text-foreground" 
                     : "bg-transparent border-transparent text-muted-foreground hover:bg-white/50"
@@ -118,14 +119,14 @@ export function UserProfile() {
                   <Icon className="w-4 h-4" />
                 </div>
                 {tab.label}
-                {isActive && <ChevronRight className="w-4 h-4 ml-auto opacity-50" />}
+                {isActive && <ChevronRight className="w-4 h-4 ml-auto opacity-50 hidden lg:block" />}
               </button>
             )
           })}
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 bg-white border border-border/60 rounded-3xl p-8 overflow-y-auto shadow-sm pb-20">
+        <div className="flex-1 bg-white border border-border/60 rounded-3xl p-4 sm:p-6 md:p-8 overflow-y-auto shadow-sm pb-20 min-w-0">
           
           {/* OVERVIEW TAB */}
           {activeTab === 'overview' && (
@@ -217,9 +218,21 @@ export function UserProfile() {
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <p className="text-[11px] text-muted-foreground font-bold uppercase tracking-wider">Password Setup</p>
-                  <div className="flex items-center gap-3 p-3 bg-muted/20 border border-border/50 rounded-xl">
-                    <Key className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm font-semibold tracking-widest text-muted-foreground">{profileData.password || "Not set"}</span>
+                  <div className="flex items-center justify-between p-3 bg-muted/20 border border-border/50 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <Key className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-sm font-semibold tracking-widest text-muted-foreground">
+                        {showProfilePassword ? (profileData.password || "Not set") : "••••••••"}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowProfilePassword(!showProfilePassword)}
+                      className="p-1 text-muted-foreground hover:text-foreground rounded-lg transition-colors focus:outline-none"
+                      title={showProfilePassword ? "Hide password" : "Show password"}
+                    >
+                      {showProfilePassword ? <EyeOff className="w-4 h-4 text-primary" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
                 </div>
               </div>

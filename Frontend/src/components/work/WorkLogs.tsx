@@ -1,11 +1,14 @@
 import { useState, useMemo, useEffect } from "react";
 import { Search, Plus, Filter, Clock, CheckCircle2, XCircle, MoreHorizontal, FileText, ScrollText, User, ChevronDown, ChevronUp, Calendar } from "lucide-react";
 import { format } from "date-fns";
+import { DateRange } from "react-day-picker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";
+import { DateRangeFilter } from "@/components/common/DateRangeFilter";
+import { SearchInput } from "@/components/common/SearchInput";
 
 type WorkLog = {
   id: string;
@@ -39,7 +42,8 @@ export function WorkLogs() {
     }
     return MOCK_LOGS;
   });
-  
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+
   useEffect(() => {
     localStorage.setItem("hrms_work_logs", JSON.stringify(logs));
   }, [logs]);
@@ -168,12 +172,20 @@ export function WorkLogs() {
   };
 
   const filteredLogs = useMemo(() => {
-    return logs.filter(log => 
-      log.employee.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      log.project.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.task.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [logs, searchQuery]);
+    return logs.filter(log => {
+      const q = searchQuery.toLowerCase().trim();
+      const matchesSearch = !q || 
+        log.employee.toLowerCase().includes(q) || 
+        log.project.toLowerCase().includes(q) ||
+        log.task.toLowerCase().includes(q);
+
+      const logDate = new Date(log.date);
+      const matchesFrom = dateRange?.from ? logDate >= dateRange.from : true;
+      const matchesTo = dateRange?.to ? logDate <= dateRange.to : true;
+
+      return matchesSearch && matchesFrom && matchesTo;
+    });
+  }, [logs, searchQuery, dateRange]);
 
   const { items: sortedLogs, requestSort, sortConfig } = useSortableData(filteredLogs);
 
@@ -200,25 +212,27 @@ export function WorkLogs() {
     <div className="space-y-6 animate-in fade-in duration-300">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-black text-foreground tracking-tight">Work Logs</h1>
+          <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">Work Logs</h1>
           <p className="text-xs text-muted-foreground mt-1 font-semibold">Track developer hours and timeline activity logs</p>
         </div>
         
-        <div className="flex items-center gap-3 w-full sm:w-auto shrink-0">
-          <div className="relative flex-1 sm:w-64">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input 
-              type="text" 
-              placeholder="Search by dev, project or task..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-muted/30 border border-border rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </div>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto shrink-0">
+          <SearchInput
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Search dev, project or task..."
+            containerClassName="w-full sm:w-60"
+          />
+
+          <DateRangeFilter
+            value={dateRange}
+            onChange={setDateRange}
+            className="w-full sm:w-auto"
+          />
 
           <button 
             onClick={() => setIsAddOpen(true)}
-            className="px-3 py-2 bg-primary text-primary-foreground hover:bg-primary/95 text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md shadow-primary/10 transition-colors shrink-0"
+            className="px-3.5 py-2 bg-primary text-primary-foreground hover:bg-primary/95 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-primary/10 transition-colors shrink-0"
           >
             <Plus className="w-4 h-4" /> Add Log
           </button>
@@ -424,17 +438,17 @@ export function WorkLogs() {
 
       {/* Add Work Log Modal - plain overlay */}
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-        <DialogContent className="sm:max-w-[450px] bg-card border border-border/60 rounded-[2.5rem] p-0 overflow-hidden shadow-2xl flex flex-col">
+        <DialogContent className="w-full max-w-[calc(100vw-24px)] sm:max-w-[480px] bg-card border border-border/60 rounded-2xl sm:rounded-[2rem] p-0 overflow-hidden shadow-2xl flex flex-col">
           {/* Header */}
-          <div className="flex items-center justify-between px-8 py-6 border-b border-border/50 bg-muted/30 shrink-0">
+          <div className="flex items-center justify-between px-5 sm:px-8 py-4 sm:py-6 border-b border-border/50 bg-muted/30 shrink-0">
             <div>
               <DialogTitle className="text-lg font-black tracking-tight">Add Work Log</DialogTitle>
-              <p className="text-xs text-muted-foreground mt-1">Submit today's completed task timeline hours</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Submit today's completed task timeline hours</p>
             </div>
           </div>
 
           <form onSubmit={handleCreateLog}>
-            <div className="p-8 space-y-4 max-h-[60vh] overflow-y-auto">
+            <div className="p-5 sm:p-8 space-y-4 max-h-[70vh] overflow-y-auto">
               <div>
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Employee Name</label>
                 <select 
@@ -448,15 +462,22 @@ export function WorkLogs() {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Date</label>
-                  <input 
-                    type="date" 
-                    required
-                    value={newLog.date} 
-                    onChange={(e) => setNewLog({ ...newLog, date: e.target.value })} 
-                    className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-bold text-center" 
+                  <DateRangeFilter
+                    value={{
+                      from: newLog.date ? new Date(newLog.date) : undefined,
+                      to: newLog.date ? new Date(newLog.date) : undefined,
+                    }}
+                    onChange={(r) => {
+                      if (r?.from) {
+                        setNewLog({ ...newLog, date: r.from.toISOString().split("T")[0] });
+                      }
+                    }}
+                    placeholder="Pick date"
+                    showPresets={false}
+                    className="w-full justify-between"
                   />
                 </div>
                 <div>
@@ -571,17 +592,17 @@ export function WorkLogs() {
             </div>
 
             {/* Footer */}
-            <div className="px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
+            <div className="px-4 sm:px-8 py-3 sm:py-4 bg-muted/30 border-t border-border/50 flex items-center justify-end gap-2 sm:gap-3 shrink-0">
               <button 
                 type="button"
                 onClick={() => setIsAddOpen(false)} 
-                className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors"
+                className="px-3.5 sm:px-4 py-2 rounded-xl font-bold text-xs sm:text-sm text-muted-foreground hover:bg-muted transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-5 py-2 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/95 transition-all text-sm"
+                className="px-4 sm:px-5 py-2 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/95 transition-all text-xs sm:text-sm shrink-0"
               >
                 Submit Log
               </button>

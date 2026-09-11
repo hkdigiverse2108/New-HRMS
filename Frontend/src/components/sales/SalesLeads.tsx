@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
-import { Search, Plus, Filter, Download, MoreVertical, X, Calendar, Phone, Mail, MessageSquare } from "lucide-react";
+import { Plus, Filter, Download, MoreVertical, X, Calendar, Phone, Mail, MessageSquare } from "lucide-react";
+import { SearchInput } from "@/components/common/SearchInput";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -144,19 +145,18 @@ export function SalesLeads({ onAction, isNew }: { onAction?: (action: string) =>
       </div>
 
       {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <input
+      <div className="w-full max-w-md">
+        <SearchInput
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={setSearch}
           placeholder="Search leads…"
-          className="h-10 w-full rounded-xl border border-border bg-background pl-9 pr-4 text-sm outline-none focus:ring-2 focus:ring-emerald-500/30"
+          className="w-full"
         />
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto rounded-2xl border border-border">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto min-w-0 rounded-2xl border border-border">
+        <table className="w-full text-sm min-w-[850px]">
           <thead>
             <tr className="border-b border-border bg-muted/50 text-xs font-bold uppercase tracking-wider text-muted-foreground">
               <SortableHeader label="Company" sortKey="company" currentSort={sortConfig} onSort={requestSort} className="px-4 py-3" />
@@ -226,7 +226,7 @@ export function SalesLeads({ onAction, isNew }: { onAction?: (action: string) =>
 
       {/* Side Drawer */}
       <Sheet open={selectedLead !== null} onOpenChange={(open) => !open && setSelectedLead(null)}>
-        <SheetContent className="w-full max-w-md p-6 overflow-y-auto bg-background border-l border-border [&>button]:hidden shadow-2xl">
+        <SheetContent className="w-full max-w-full sm:max-w-md p-4 sm:p-6 overflow-y-auto bg-background border-l border-border [&>button]:hidden shadow-2xl">
           <button onClick={() => setSelectedLead(null)} className="absolute right-4 top-4 rounded-lg p-1 hover:bg-accent z-10">
             <X className="h-5 w-5" />
           </button>

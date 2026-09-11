@@ -189,24 +189,19 @@ export function SeatingArrangement() {
 
       {/* Desk Assignment Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
-          <div className="p-6 pb-4">
-            <div className="flex items-center justify-between px-6 md:px-8 py-6 border-b border-border/50 bg-muted/30">
-          <div>
-            <h2 className="text-xl md:text-2xl font-black tracking-tight">
-                Desk Assignment
-                <span className="text-sm font-bold bg-muted text-muted-foreground px-2 py-1 rounded-md ml-auto">
-                  {selectedDesk?.id.toUpperCase()}
-                </span>
-              </h2>
-            
-          </div>
-          <DialogClose asChild>
-            <button className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
-              <X className="w-5 h-5" />
-            </button>
-          </DialogClose>
-        </div>
+        <DialogContent className="w-[calc(100vw-24px)] sm:w-full sm:max-w-[400px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+          <div className="flex items-center justify-between px-4 sm:px-8 py-4 sm:py-6 border-b border-border/50 bg-muted/30">
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg sm:text-2xl font-black tracking-tight">Desk Assignment</h2>
+              <span className="text-xs font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-md">
+                {selectedDesk?.id.toUpperCase()}
+              </span>
+            </div>
+            <DialogClose asChild>
+              <button className="p-1.5 sm:p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors shrink-0">
+                <X className="w-5 h-5" />
+              </button>
+            </DialogClose>
           </div>
           
           <div className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[70vh]">
@@ -255,27 +250,27 @@ export function SeatingArrangement() {
             )}
           </div>
           
-          <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
+          <div className="px-4 sm:px-8 py-3.5 sm:py-6 bg-muted/30 border-t border-border/50 flex items-center justify-end gap-2 sm:gap-3 mt-auto shrink-0">
             <button 
               onClick={() => setIsModalOpen(false)}
-              className="px-5 py-2.5 rounded-xl font-bold text-muted-foreground hover:bg-muted transition-colors"
+              className="px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm text-muted-foreground hover:bg-muted transition-colors shrink-0"
             >
               Cancel
             </button>
             {selectedDesk?.isOccupied ? (
               <button 
                 onClick={handleUnassignDesk}
-                className="px-6 py-2.5 bg-rose-500 text-white font-bold rounded-xl shadow-md hover:bg-rose-600 transition-all flex items-center gap-2"
+                className="px-4 sm:px-6 py-2 sm:py-2.5 bg-rose-500 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md hover:bg-rose-600 transition-all flex items-center gap-2 shrink-0"
               >
-                <UserMinus className="w-4 h-4" /> Unassign
+                <UserMinus className="w-4 h-4" /> <span>Unassign</span>
               </button>
             ) : (
               <button 
                 onClick={handleAssignDesk}
                 disabled={!newAssigneeName.trim()}
-                className="px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center gap-2"
+                className="px-4 sm:px-6 py-2 sm:py-2.5 bg-primary text-primary-foreground font-bold text-xs sm:text-sm rounded-xl shadow-md hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center gap-2 shrink-0"
               >
-                <UserPlus className="w-4 h-4" /> Assign Desk
+                <UserPlus className="w-4 h-4" /> <span>Assign Desk</span>
               </button>
             )}
           </div>

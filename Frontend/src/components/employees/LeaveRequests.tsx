@@ -1,11 +1,13 @@
 import { useState, useMemo } from "react";
-import { Check, X, Calendar, Clock, ChevronDown, Filter, CalendarDays, Activity, Plus, Edit2 } from "lucide-react";
-import { DialogClose,  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger  } from "@/components/ui/dialog";
+import { Check, X, Calendar, Clock, ChevronDown, CalendarDays, Activity, Plus, Edit2 } from "lucide-react";
+import { DialogClose, Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { SearchableSelect } from "@/components/ui/select";
 import { useSettingsContext } from "../payroll/SettingsContext";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { DateRangeFilter } from "@/components/common/DateRangeFilter";
+import { SearchInput } from "@/components/common/SearchInput";
 
 type LeaveStatus = "Pending" | "Approved" | "Rejected";
 
@@ -227,32 +229,24 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
           <h1 className="text-2xl font-black text-foreground tracking-tight">Leave Requests</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage and review employee time off</p>
         </div>
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <div className="relative flex-1 sm:flex-none">
-            <input 
-              type="text" 
-              placeholder="Search employee..." 
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="w-full sm:w-64 pl-10 pr-4 py-2 bg-white border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm"
-            />
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          </div>
-          <button className="px-4 py-2 bg-white border border-border rounded-xl text-sm font-bold text-foreground/80 hover:bg-muted/50 shadow-sm flex items-center gap-2">
-            Filter <ChevronDown className="w-4 h-4" />
-          </button>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+          <SearchInput
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Search employee or department..."
+            containerClassName="w-full sm:w-64"
+          />
           
           <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
             <DialogTrigger asChild>
-              <button className="px-4 py-2 bg-primary hover:bg-primary text-primary-foreground rounded-xl text-sm font-bold shadow-sm flex items-center gap-2 transition-colors">
+              <button className="px-4 py-2 bg-primary hover:bg-primary text-primary-foreground rounded-xl text-sm font-bold shadow-sm flex items-center justify-center gap-2 transition-colors shrink-0">
                 <Plus className="w-4 h-4" /> Add Leave
               </button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px] md:max-w-[500px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
-              <div className="flex items-center justify-between px-6 md:px-8 py-6 border-b border-border/50 bg-muted/30">
+            <DialogContent className="w-full max-w-[calc(100vw-24px)] sm:max-w-[480px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+              <div className="flex items-center justify-between px-6 py-5 border-b border-border/50 bg-muted/30">
           <div>
             <h2 className="text-xl md:text-2xl font-black tracking-tight">Request Leave</h2>
-            
           </div>
           <DialogClose asChild>
             <button className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
@@ -260,8 +254,8 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
             </button>
           </DialogClose>
         </div>
-              <form onSubmit={handleAddLeave} className="flex flex-col max-h-[70vh]">
-                <div className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[70vh]">
+              <form onSubmit={handleAddLeave} className="flex flex-col max-h-[80vh]">
+                <div className="p-5 sm:p-6 md:p-8 space-y-5 overflow-y-auto max-h-[70vh]">
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Leave Type</label>
                     <SearchableSelect 
@@ -272,27 +266,23 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                     />
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Start Date</label>
-                      <input 
-                        type="date" 
-                        required
-                        value={newStartDate}
-                        onChange={e => setNewStartDate(e.target.value)}
-                        className="w-full px-4 py-3 bg-muted/50 border border-border/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">End Date</label>
-                      <input 
-                        type="date" 
-                        required
-                        value={newEndDate}
-                        onChange={e => setNewEndDate(e.target.value)}
-                        className="w-full px-4 py-3 bg-muted/50 border border-border/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium"
-                      />
-                    </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Leave Dates</label>
+                    <DateRangeFilter
+                      value={{
+                        from: newStartDate ? new Date(newStartDate) : undefined,
+                        to: newEndDate ? new Date(newEndDate) : undefined,
+                      }}
+                      onChange={(range) => {
+                        const fromStr = range?.from ? range.from.toISOString().split("T")[0] || "" : "";
+                        const toStr = range?.to ? range.to.toISOString().split("T")[0] || "" : fromStr;
+                        setNewStartDate(fromStr);
+                        setNewEndDate(toStr);
+                      }}
+                      placeholder="Select start and end date"
+                      className="w-full h-[46px] justify-between"
+                      align="start"
+                    />
                   </div>
 
                   <div className="space-y-2">

@@ -73,18 +73,18 @@ export function DashboardHeader({ setActive, onAction }: { setActive?: ((url: st
   const activeActions = DASHBOARD_QUICK_ACTIONS.filter(a => selectedActionIds.includes(a.id));
   return (
     <>
-      <div className="bg-white rounded-[32px] p-8 border border-border/60 shadow-sm relative overflow-hidden mb-12">
-      <div className="flex justify-between items-start">
+      <div className="bg-white rounded-2xl sm:rounded-[32px] p-4 sm:p-6 md:p-8 border border-border/60 shadow-sm relative overflow-hidden mb-8 sm:mb-12">
+      <div className="flex flex-col lg:flex-row justify-between items-start gap-6">
         <div>
           <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-2">CEO Command Center</p>
-          <h1 className="text-[34px] font-black text-foreground tracking-tight flex items-center gap-2 mb-2 leading-none">
-            Good Evening, Het <span className="text-3xl">👋</span>
+          <h1 className="text-2xl sm:text-3xl md:text-[34px] font-black text-foreground tracking-tight flex items-center gap-2 mb-2 leading-tight">
+            Good Evening, Het <span className="text-2xl sm:text-3xl">👋</span>
           </h1>
-          <p className="text-[14px] text-muted-foreground">Today's overview for HK DigiVerse — everything moving across the company, in one screen.</p>
+          <p className="text-xs sm:text-[14px] text-muted-foreground">Today's overview for HK DigiVerse — everything moving across the company, in one screen.</p>
         </div>
-        <div className="flex flex-wrap gap-3 justify-end max-w-xl">
+        <div className="flex flex-wrap gap-2 sm:gap-3 justify-start lg:justify-end w-full lg:max-w-xl">
           {activeActions.map(action => (
-            <button key={action.id} onClick={() => setActive?.(action.url)} className="flex items-center gap-1.5 px-4 py-2 bg-white border border-border/80 rounded-full text-[12px] font-bold text-foreground/80 shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:bg-muted/50 transition-colors cursor-pointer group">
+            <button key={action.id} onClick={() => setActive?.(action.url)} className="flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-white border border-border/80 rounded-full text-[12px] font-bold text-foreground/80 shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:bg-muted/50 transition-colors cursor-pointer group">
               <action.icon className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors" /> {action.title}
             </button>
           ))}
@@ -98,22 +98,22 @@ export function DashboardHeader({ setActive, onAction }: { setActive?: ((url: st
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-4 mt-8">
-        <div className="bg-muted/50/40 rounded-2xl p-5 border border-border/40">
+      <div className="grid grid-cols-1 min-[360px]:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-6 sm:mt-8">
+        <div className="bg-muted/50/40 rounded-2xl p-4 sm:p-5 border border-border/40">
           <p className="text-[10px] font-bold text-muted-foreground mb-1">Current Time</p>
-          <p className="text-[22px] font-black text-primary">05:28:41 PM</p>
+          <p className="text-xl sm:text-[22px] font-black text-primary truncate">05:28:41 PM</p>
         </div>
-        <div className="bg-muted/50/40 rounded-2xl p-5 border border-border/40">
+        <div className="bg-muted/50/40 rounded-2xl p-4 sm:p-5 border border-border/40">
           <p className="text-[10px] font-bold text-muted-foreground mb-1">Today's Date</p>
-          <p className="text-[22px] font-black text-blue-500">{formatDate(new Date())}</p>
+          <p className="text-xl sm:text-[22px] font-black text-blue-500 truncate">{formatDate(new Date())}</p>
         </div>
-        <div className="bg-muted/50/40 rounded-2xl p-5 border border-border/40">
+        <div className="bg-muted/50/40 rounded-2xl p-4 sm:p-5 border border-border/40">
           <p className="text-[10px] font-bold text-muted-foreground mb-1">Working Day</p>
-          <p className="text-[22px] font-black text-amber-500">Day 22 of 26</p>
+          <p className="text-xl sm:text-[22px] font-black text-amber-500 truncate">Day 22 of 26</p>
         </div>
-        <div className="bg-muted/50/40 rounded-2xl p-5 border border-border/40">
+        <div className="bg-muted/50/40 rounded-2xl p-4 sm:p-5 border border-border/40">
           <p className="text-[10px] font-bold text-muted-foreground mb-1">Financial Month</p>
-          <p className="text-[22px] font-black text-primary">August</p>
+          <p className="text-xl sm:text-[22px] font-black text-primary truncate">August</p>
         </div>
       </div>
     </div>

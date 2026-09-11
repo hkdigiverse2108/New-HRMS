@@ -8,12 +8,12 @@ export function CompanyHealth() {
     <div className="mb-12">
       <CollapsibleSection section="Section 02" title="Company Health">
 
-      <div className="grid grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 min-[360px]:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         {TOP_METRICS.map((metric, i) => {
           const isUp = metric.trend === 'up';
           
           return (
-            <div key={i} className="bg-white border border-border/60 rounded-3xl p-5 shadow-[0_2px_15px_rgba(0,0,0,0.03)] relative overflow-hidden flex flex-col h-[140px]">
+            <div key={i} className="bg-white border border-border/60 rounded-3xl p-5 shadow-[0_2px_15px_rgba(0,0,0,0.03)] relative overflow-hidden flex flex-col h-[140px] min-w-0">
               <div className="flex justify-between items-start z-10">
                 <div className="flex items-center gap-1.5">
                   <span className="text-[14px] leading-none">{metric.emoji}</span>

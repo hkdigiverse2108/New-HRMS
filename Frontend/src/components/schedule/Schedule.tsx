@@ -71,8 +71,8 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-border">
-        <div className="flex items-center gap-4">
+      <header className="flex flex-col md:flex-row md:items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-border gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-4">
           <div className="flex items-center gap-2">
             <div className="p-2 bg-primary rounded-lg text-primary-foreground">
               <CalendarIcon className="w-5 h-5" />
@@ -80,9 +80,9 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
             <h1 className="text-xl font-bold text-foreground tracking-tight">Calendar</h1>
           </div>
           
-          <div className="h-6 w-px bg-slate-200 mx-2"></div>
+          <div className="h-6 w-px bg-slate-200 mx-1 sm:mx-2 hidden min-[400px]:block"></div>
           
-          <button onClick={today} className="px-4 py-1.5 text-sm font-semibold border border-border rounded-md hover:bg-muted/50 transition-colors">
+          <button onClick={today} className="px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-semibold border border-border rounded-md hover:bg-muted/50 transition-colors">
             Today
           </button>
           
@@ -95,28 +95,19 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
             </button>
           </div>
           
-          <h2 className="text-xl font-medium text-foreground/80 w-64">
+          <h2 className="text-base sm:text-xl font-medium text-foreground/80 min-w-fit">
             {view === "Day" ? format(currentDate, "dd/MM/yyyy") : format(currentDate, "MMMM yyyy")}
           </h2>
         </div>
         
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input 
-              type="text" 
-              placeholder="Search..." 
-              className="pl-9 pr-4 py-1.5 bg-muted border-none rounded-lg text-sm focus:ring-2 focus:ring-primary/20 outline-none w-48"
-            />
-          </div>
-          
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 justify-between sm:justify-end w-full md:w-auto">
           <div className="flex items-center gap-1 bg-muted p-1 rounded-lg">
             {(["Month", "Week", "Day"] as ViewType[]).map(v => (
               <button
                 key={v}
                 onClick={() => setView(v)}
                 className={cn(
-                  "px-3 py-1 text-sm font-medium rounded-md transition-all",
+                  "px-2.5 sm:px-3 py-1 text-xs sm:text-sm font-medium rounded-md transition-all",
                   view === v ? "bg-white text-primary shadow-sm" : "text-foreground/80 hover:text-foreground"
                 )}
               >
@@ -130,7 +121,7 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
               setSelectedDateForCreate(currentDate);
               setIsCreateModalOpen(true);
             }}
-            className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground text-sm font-semibold rounded-lg hover:bg-primary transition-colors shadow-sm ml-2">
+            className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 bg-primary text-primary-foreground text-xs sm:text-sm font-semibold rounded-lg hover:bg-primary transition-colors shadow-sm">
             <Plus className="w-4 h-4" /> Create
           </button>
         </div>
@@ -173,89 +164,92 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
         </aside>
         
         {/* Main Calendar Area */}
-        <main className="flex-1 overflow-y-auto flex flex-col bg-white">
+        <main className="flex-1 overflow-y-auto flex flex-col bg-white min-w-0">
           {view === "Month" && (
-            <div className="flex-1 flex flex-col min-h-[600px]">
-              {/* Days Header */}
-              <div className="grid grid-cols-7 border-b border-border">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                  <div key={day} className="py-2 text-center text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                    {day}
-                  </div>
-                ))}
-              </div>
-              
-              {/* Month Grid */}
-              <div className="flex-1 grid grid-cols-7 border-l border-border auto-rows-fr">
-                {monthDays.map((day, idx) => {
-                  const dateStr = format(day, "yyyy-MM-dd");
-                  const dayEvents = getEventsForDay(dateStr);
-                  
-                  return (
-                    <div 
-                      key={day.toString()} 
-                      className={cn(
-                        "p-1 border-r border-b border-border transition-colors hover:bg-muted/50 cursor-pointer overflow-hidden",
-                        !isSameMonth(day, monthStart) && "bg-muted/50/50 text-muted-foreground"
-                      )}
-                      onClick={() => {
-                        setCurrentDate(day);
-                        setView("Day");
-                      }}
-                    >
-                      <div className="flex justify-center mb-1">
-                        <span className={cn(
-                          "w-7 h-7 flex items-center justify-center text-sm font-medium rounded-full",
-                          isToday(day) ? "bg-primary text-primary-foreground" : 
-                          isSameDay(day, currentDate) ? "bg-primary/10 text-primary" :
-                          "text-foreground/80"
-                        )}>
-                          {format(day, "d")}
-                        </span>
-                      </div>
-                      
-                      <div className="space-y-1 overflow-y-auto max-h-[80px] hide-scrollbar px-1">
-                        {dayEvents.map(event => (
-                          <div 
-                            key={event.id}
-                            className={cn(
-                              "text-[10px] px-1.5 py-0.5 rounded truncate text-white font-medium shadow-sm",
-                              event.color
-                            )}
-                          >
-                            {event.startTime} {event.title}
-                          </div>
-                        ))}
-                      </div>
+            <div className="flex-1 flex flex-col min-h-[600px] overflow-x-auto min-w-0">
+              <div className="min-w-[600px] flex-1 flex flex-col">
+                {/* Days Header */}
+                <div className="grid grid-cols-7 border-b border-border">
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                    <div key={day} className="py-2 text-center text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                      {day}
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
+                
+                {/* Month Grid */}
+                <div className="flex-1 grid grid-cols-7 border-l border-border auto-rows-fr">
+                  {monthDays.map((day, idx) => {
+                    const dateStr = format(day, "yyyy-MM-dd");
+                    const dayEvents = getEventsForDay(dateStr);
+                    
+                    return (
+                      <div 
+                        key={day.toString()} 
+                        className={cn(
+                          "p-1 border-r border-b border-border transition-colors hover:bg-muted/50 cursor-pointer overflow-hidden",
+                          !isSameMonth(day, monthStart) && "bg-muted/50/50 text-muted-foreground"
+                        )}
+                        onClick={() => {
+                          setCurrentDate(day);
+                          setView("Day");
+                        }}
+                      >
+                        <div className="flex justify-center mb-1">
+                          <span className={cn(
+                            "w-7 h-7 flex items-center justify-center text-sm font-medium rounded-full",
+                            isToday(day) ? "bg-primary text-primary-foreground" : 
+                            isSameDay(day, currentDate) ? "bg-primary/10 text-primary" :
+                            "text-foreground/80"
+                          )}>
+                            {format(day, "d")}
+                          </span>
+                        </div>
+                        
+                        <div className="space-y-1 overflow-y-auto max-h-[80px] hide-scrollbar px-1">
+                          {dayEvents.map(event => (
+                            <div 
+                              key={event.id}
+                              className={cn(
+                                "text-[10px] px-1.5 py-0.5 rounded truncate text-white font-medium shadow-sm",
+                                event.color
+                              )}
+                            >
+                              {event.startTime} {event.title}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}
           
           {view === "Week" && (
-            <div className="flex-1 flex flex-col min-h-[600px] relative">
-              {/* Week Header */}
-              <div className="flex border-b border-border sticky top-0 bg-white z-20 ml-16">
-                {weekDays.map(day => (
-                  <div key={day.toString()} className="flex-1 flex flex-col items-center justify-center py-3 border-l border-border">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-1">{format(day, "EEE")}</span>
-                    <span className={cn(
-                      "text-xl flex items-center justify-center rounded-full w-10 h-10 transition-colors",
-                      isToday(day) ? "bg-primary text-primary-foreground font-bold" : 
-                      isSameDay(day, currentDate) ? "bg-primary/10 text-primary font-bold" :
-                      "text-foreground font-medium"
-                    )}>
-                      {format(day, "d")}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              
-              {/* Time Grid */}
-              <div className="flex-1 overflow-y-auto relative bg-muted/50/30">
-                <div className="flex min-h-[960px]"> {/* 12 hours * 80px */}
+            <div className="flex-1 flex flex-col min-h-[600px] overflow-x-auto min-w-0 relative">
+              <div className="min-w-[600px] flex-1 flex flex-col">
+                {/* Week Header */}
+                <div className="flex border-b border-border sticky top-0 bg-white z-20 ml-16">
+                  {weekDays.map(day => (
+                    <div key={day.toString()} className="flex-1 flex flex-col items-center justify-center py-3 border-l border-border">
+                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-1">{format(day, "EEE")}</span>
+                      <span className={cn(
+                        "text-xl flex items-center justify-center rounded-full w-10 h-10 transition-colors",
+                        isToday(day) ? "bg-primary text-primary-foreground font-bold" : 
+                        isSameDay(day, currentDate) ? "bg-primary/10 text-primary font-bold" :
+                        "text-foreground font-medium"
+                      )}>
+                        {format(day, "d")}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Time Grid */}
+                <div className="flex-1 overflow-y-auto relative bg-muted/50/30">
+                  <div className="flex min-h-[960px]"> {/* 12 hours * 80px */}
                   {/* Time Axis */}
                   <div className="w-16 flex-shrink-0 border-r border-border bg-white relative z-10">
                     {hours.map(hour => (
@@ -316,6 +310,7 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
                 </div>
               </div>
             </div>
+          </div>
           )}
           
           {view === "Day" && (

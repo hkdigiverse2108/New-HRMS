@@ -8,7 +8,7 @@ export function DepartmentStatus() {
       <CollapsibleSection section="Section 05" title="Department Status">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {DEPARTMENTS.map((dept, i) => (
-          <div key={i} className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm">
+          <div key={i} className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm min-w-0">
             <div className="mb-6">
               <h3 className="text-lg font-black text-foreground mb-1">{dept.name}</h3>
               <p className="text-[11px] text-muted-foreground">{dept.total} Employees</p>

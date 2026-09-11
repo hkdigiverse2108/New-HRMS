@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Search, Filter, FileText, CheckCircle2, Clock, AlertCircle, Eye, Download } from "lucide-react";
+import { Filter, FileText, CheckCircle2, Clock, AlertCircle, Eye, Download } from "lucide-react";
 import { cn, formatDate } from "@/lib/utils";
 import { SearchableSelect } from "@/components/ui/select";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";
+import { SearchInput } from "@/components/common/SearchInput";
 
 type DocStatus = "Accepted" | "Pending Review" | "Pending Submission" | "Rejected";
 
@@ -57,16 +58,12 @@ export function SubmittedDocuments() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row gap-4 justify-between">
-        <div className="relative w-full sm:max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search employees or documents..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 bg-card border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium"
-          />
-        </div>
+        <SearchInput
+          placeholder="Search employees or documents..."
+          value={search}
+          onChange={setSearch}
+          className="w-full sm:max-w-md"
+        />
         <div className="flex items-center gap-2">
           <div className="relative">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -87,8 +84,8 @@ export function SubmittedDocuments() {
       </div>
 
       <div className="bg-card border border-border/50 rounded-3xl overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+        <div className="overflow-x-auto min-w-0">
+          <table className="w-full text-left border-collapse min-w-[650px]">
             <thead>
               <tr className="border-b border-border/50 bg-muted/30">
                 <SortableHeader label="Employee" sortKey="employeeName" currentSort={sortConfig} onSort={requestSort} className="p-4 text-xs font-bold text-muted-foreground uppercase tracking-widest whitespace-nowrap" />

@@ -9,11 +9,11 @@ export function OverallKPIs() {
       <div className="mb-12">
         <CollapsibleSection section="Section 16" title="Overall KPIs">
 
-      <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm mb-12">
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-x-6 gap-y-8">
+      <div className="bg-white border border-border/60 rounded-3xl p-4 sm:p-6 shadow-sm mb-12">
+        <div className="grid grid-cols-1 min-[360px]:grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-x-4 sm:gap-x-6 gap-y-6 sm:gap-y-8">
           {OVERALL_KPIS.map((kpi, i) => (
-            <div key={i}>
-              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-2">{kpi.label}</p>
+            <div key={i} className="min-w-0">
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-2 truncate">{kpi.label}</p>
               <p className="text-xl font-black text-foreground leading-none">{kpi.value}</p>
               {kpi.value.includes('%') && (
                 <div className="h-1 w-full bg-muted rounded-full mt-3 overflow-hidden">
@@ -34,28 +34,28 @@ export function OverallKPIs() {
       <div>
         <CollapsibleSection section="Section 17" title="Status & Targets">
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm flex items-center gap-4">
-          <div className="p-3 bg-amber-50 text-amber-500 rounded-2xl">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm flex items-center gap-4 min-w-0">
+          <div className="p-3 bg-amber-50 text-amber-500 rounded-2xl shrink-0">
             <CloudSun className="h-6 w-6" />
           </div>
-          <div>
-            <p className="text-[15px] font-bold text-foreground">31°C · Ahmedabad</p>
-            <p className="text-[11px] text-muted-foreground">Partly cloudy · humidity 68%</p>
+          <div className="min-w-0">
+            <p className="text-[15px] font-bold text-foreground truncate">31°C · Ahmedabad</p>
+            <p className="text-[11px] text-muted-foreground truncate">Partly cloudy · humidity 68%</p>
           </div>
         </div>
 
-        <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm flex items-center gap-4">
-          <div className="p-3 bg-blue-50 text-blue-500 rounded-2xl">
+        <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm flex items-center gap-4 min-w-0">
+          <div className="p-3 bg-blue-50 text-blue-500 rounded-2xl shrink-0">
             <Clock className="h-6 w-6" />
           </div>
-          <div>
-            <p className="text-[15px] font-bold text-foreground">07:13:03</p>
-            <p className="text-[11px] text-muted-foreground">Until office closes at 7:00 PM</p>
+          <div className="min-w-0">
+            <p className="text-[15px] font-bold text-foreground truncate">07:13:03</p>
+            <p className="text-[11px] text-muted-foreground truncate">Until office closes at 7:00 PM</p>
           </div>
         </div>
 
-        <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm flex items-center gap-4 md:col-span-2">
+        <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm flex items-center gap-4 sm:col-span-2 min-w-0">
           <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl">
             <Target className="h-6 w-6" />
           </div>

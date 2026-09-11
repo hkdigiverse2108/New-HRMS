@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Search, Filter, CheckCircle2, Clock, Check, X, FileText, Download, Building2 } from "lucide-react";
+import { Filter, CheckCircle2, Clock, Check, X, FileText, Download, Building2 } from "lucide-react";
 import { DialogClose,  Dialog, DialogContent  } from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { SearchInput } from "@/components/common/SearchInput";
 
 type ApprovalStatus = "Pending" | "Approved" | "Rejected";
 
@@ -98,16 +99,12 @@ export function InvoiceApprovals() {
 
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-card border border-border/50 p-4 rounded-2xl shadow-sm">
-        <div className="relative w-full sm:max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search by client or invoice number..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium"
-          />
-        </div>
+        <SearchInput
+          placeholder="Search by client or invoice number..."
+          value={search}
+          onChange={setSearch}
+          className="w-full sm:max-w-md"
+        />
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <div className="relative w-full sm:w-auto">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />
@@ -120,16 +117,16 @@ export function InvoiceApprovals() {
                 { label: "Approved", value: "Approved" },
                 { label: "Rejected", value: "Rejected" }
               ]}
-              className="w-[200px] h-[42px] pl-9 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-bold cursor-pointer"
+              className="w-full sm:w-[200px] h-[42px] pl-9 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-bold cursor-pointer"
             />
           </div>
         </div>
       </div>
 
       {/* Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
         {filteredApprovals.map((invoice) => (
-          <div key={invoice.id} className="bg-card border border-border/50 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all group flex flex-col">
+          <div key={invoice.id} className="bg-card border border-border/50 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all group flex flex-col min-w-0">
             <div className="p-5 border-b border-border/50 bg-muted/10">
               <div className="flex justify-between items-start mb-3">
                 <div className="flex items-center gap-3">

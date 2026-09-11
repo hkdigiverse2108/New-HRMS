@@ -10,6 +10,8 @@ import { cn } from "@/lib/utils";
 import { getAvatarUrl, API_URL } from "@/lib/config";
 import { api } from "@/lib/api";
 import { Camera, Loader2, Image as ImageIcon, FolderOpen } from "lucide-react";
+import { DatePicker } from "@/components/ui/date-picker";
+import { PasswordInput } from "@/components/ui/password-input";
 
 interface EmployeeFormModalProps {
   isOpen: boolean;
@@ -254,50 +256,75 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
   return (
     <>
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-5xl p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
-        {/* Header */}
-        <div className="flex items-center justify-between px-8 py-6 border-b border-border/50 bg-muted/30">
-          <div>
-            <h2 className="text-2xl font-black tracking-tight">{initialData ? 'Edit Employee Profile' : 'Add New Employee'}</h2>
-            <p className="text-sm text-muted-foreground mt-1">Complete all sections to register a new member in the organization.</p>
+      <DialogContent className="w-[calc(100vw-16px)] sm:w-full max-w-5xl p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card h-[92dvh] sm:h-[85vh] max-h-[850px] flex flex-col">
+        {/* Header - Fixed Height */}
+        <div className="flex items-center justify-between px-4 sm:px-8 py-3.5 sm:py-5 border-b border-border/50 bg-muted/30 shrink-0">
+          <div className="min-w-0 pr-2">
+            <h2 className="text-base sm:text-2xl font-black tracking-tight truncate">{initialData ? 'Edit Employee Profile' : 'Add New Employee'}</h2>
+            <p className="text-[11px] sm:text-sm text-muted-foreground mt-0.5 line-clamp-1 sm:line-clamp-none">Complete all sections to register a new member in the organization.</p>
           </div>
           <button 
             onClick={onClose}
-            className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
+            className="p-1.5 sm:p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-          <div className="flex flex-col md:flex-row h-[70vh] max-h-[800px]">
-            {/* Sidebar Tabs */}
-            <div className="w-full md:w-64 bg-muted/20 border-r border-border/50 p-4 space-y-2 overflow-y-auto shrink-0">
-              {tabs.map(tab => {
-                const Icon = tab.icon;
-                const isActive = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setActiveTab(tab.id as TabType)}
-                    className={cn(
-                      "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all",
-                      isActive 
-                        ? "bg-primary text-primary-foreground shadow-md" 
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                    )}
-                  >
-                    <Icon className="w-4 h-4" />
-                    {tab.label}
-                    {isActive && <ChevronRight className="w-4 h-4 ml-auto" />}
-                  </button>
-                )
-              })}
-            </div>
+        {/* Middle Body - Flex 1, Scrolls Internally */}
+        <div className="flex flex-col md:flex-row flex-1 min-h-0 overflow-hidden">
+          {/* Mobile Tabs: 2x2 Grid (All 4 tabs 100% visible, never cut off!) */}
+          <div className="grid grid-cols-2 gap-1.5 p-2 bg-muted/20 border-b border-border/50 shrink-0 md:hidden">
+            {tabs.map(tab => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id as TabType)}
+                  className={cn(
+                    "flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold transition-all text-center",
+                    isActive 
+                      ? "bg-primary text-primary-foreground shadow-sm" 
+                      : "bg-background text-muted-foreground hover:bg-muted hover:text-foreground border border-border/60"
+                  )}
+                >
+                  <Icon className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Desktop/Tablet Sidebar Tabs */}
+          <div className="hidden md:flex md:w-64 bg-muted/20 border-r border-border/50 p-4 flex-col gap-2 overflow-y-auto shrink-0">
+            {tabs.map(tab => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id as TabType)}
+                  className={cn(
+                    "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all w-full text-left",
+                    isActive 
+                      ? "bg-primary text-primary-foreground shadow-md" 
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  <Icon className="w-4 h-4 shrink-0" />
+                  <span>{tab.label}</span>
+                  {isActive && <ChevronRight className="w-4 h-4 ml-auto" />}
+                </button>
+              );
+            })}
+          </div>
 
             {/* Form Content */}
-            <div className="flex-1 overflow-y-auto p-8 relative">
-              <form id="employee-form" onSubmit={handleSubmit} className="space-y-8">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-8 relative">
+              <form id="employee-form" onSubmit={handleSubmit} className="space-y-6 sm:space-y-8">
                 
                 {/* 1. PERSONAL INFO */}
                 <div className={cn("space-y-6 animate-in fade-in slide-in-from-right-4 duration-300", activeTab === 'personal' ? 'block' : 'hidden')}>
@@ -308,22 +335,29 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                     </div>
 
                     {/* Photo Upload, Gallery Selector & Preview */}
-                    <div className="flex items-center gap-4 bg-muted/30 p-2.5 px-4 rounded-2xl border border-border/50">
-                      <div className="relative group w-14 h-14 rounded-full overflow-hidden bg-muted border-2 border-border/80 flex items-center justify-center shrink-0 shadow-inner">
-                        <img 
-                          src={getAvatarUrl(formData.avatar || formData.profile_photo || '', formData.name || 'Employee')} 
-                          alt="Employee"
-                          className="w-full h-full object-cover"
-                        />
-                        {isUploadingPhoto && (
-                          <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                            <Loader2 className="w-5 h-5 text-white animate-spin" />
-                          </div>
-                        )}
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 bg-muted/30 p-2.5 sm:p-3 px-3 sm:px-4 rounded-2xl border border-border/50 w-full">
+                      <div className="flex items-center gap-3 shrink-0">
+                        <div className="relative group w-12 h-12 sm:w-14 sm:h-14 rounded-full overflow-hidden bg-muted border-2 border-border/80 flex items-center justify-center shrink-0 shadow-inner">
+                          <img 
+                            src={getAvatarUrl(formData.avatar || formData.profile_photo || '', formData.name || 'Employee')} 
+                            alt="Employee"
+                            className="w-full h-full object-cover"
+                          />
+                          {isUploadingPhoto && (
+                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                              <Loader2 className="w-5 h-5 text-white animate-spin" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="sm:hidden flex flex-col">
+                          <span className="text-xs font-bold text-foreground">Profile Photo</span>
+                          <span className="text-[10px] text-muted-foreground">JPG, PNG, WebP</span>
+                        </div>
                       </div>
-                      <div className="flex flex-col gap-1.5">
-                        <div className="flex items-center gap-2">
-                          <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold rounded-lg cursor-pointer transition-all shadow-sm">
+
+                      <div className="flex flex-col gap-1.5 min-w-0 flex-1 w-full sm:w-auto">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <label className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold rounded-lg cursor-pointer transition-all shadow-sm">
                             <Camera className="w-3.5 h-3.5" />
                             <span>{isUploadingPhoto ? "Uploading..." : "Upload New"}</span>
                             <input 
@@ -341,13 +375,13 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                           <button
                             type="button"
                             onClick={handleOpenGallery}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-muted hover:bg-muted/80 text-foreground text-xs font-bold rounded-lg border border-border/80 transition-all shadow-sm"
+                            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-muted hover:bg-muted/80 text-foreground text-xs font-bold rounded-lg border border-border/80 transition-all shadow-sm"
                           >
                             <FolderOpen className="w-3.5 h-3.5 text-primary" />
                             <span>Choose Existing</span>
                           </button>
                         </div>
-                        <span className="text-[10px] text-muted-foreground">Stored in root: /images/employee</span>
+                        <span className="text-[10px] text-muted-foreground hidden sm:block">Stored in root: /images/employee</span>
                       </div>
                     </div>
                   </div>
@@ -396,9 +430,12 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                     </div>
                     <div className="space-y-2">
                       <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Date of Birth</label>
-                      <input 
-                        type="date" value={formData.dob || ''} onChange={(e) => handleInputChange('dob', e.target.value)}
-                        className="w-full px-4 py-2.5 bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
+                      <DatePicker 
+                        value={formData.dob || ''} 
+                        onChange={(val) => handleInputChange('dob', val)}
+                        placeholder="Select date of birth"
+                        fromYear={1940}
+                        toYear={new Date().getFullYear()}
                       />
                     </div>
 
@@ -417,11 +454,14 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
 
                     <div className="space-y-2 col-span-1 md:col-span-2">
                       <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Password</label>
-                      <input 
-                        type="password" value={formData.password || ''} onChange={(e) => handleInputChange('password', e.target.value)}
-                        className="w-full px-4 py-2.5 bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
+                      <PasswordInput 
+                        disabled={isSelfEdit}
+                        value={formData.password || ''} 
+                        onChange={(e) => handleInputChange('password', e.target.value)}
                         placeholder={initialData ? "Leave blank to keep current" : "Set login password"}
+                        className={cn(isSelfEdit && "opacity-60 cursor-not-allowed")}
                       />
+                      {initialData && <p className="text-[11px] text-muted-foreground">Only enter a new password if you wish to reset it.</p>}
                     </div>
                   </div>
 
@@ -544,9 +584,12 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 border-t border-border/50">
                     <div className="space-y-2">
                       <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Joining Date</label>
-                      <input 
-                        type="date" value={formData.joinDate || ''} onChange={(e) => handleInputChange('joinDate', e.target.value)}
-                        className="w-full px-4 py-2.5 bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
+                      <DatePicker 
+                        value={formData.joinDate || ''} 
+                        onChange={(val) => handleInputChange('joinDate', val)}
+                        placeholder="Select joining date"
+                        fromYear={2000}
+                        toYear={2040}
                       />
                     </div>
                     <div className="space-y-2">
@@ -701,16 +744,20 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in zoom-in-95 duration-200 pt-2 border-t border-border/50">
                         <div className="space-y-2">
                           <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Bond Start Date</label>
-                          <input 
-                            type="date" value={formData.bondStartDate || ''} onChange={(e) => handleInputChange('bondStartDate', e.target.value)}
-                            className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
+                          <DatePicker 
+                            value={formData.bondStartDate || ''} 
+                            onChange={(val) => handleInputChange('bondStartDate', val)}
+                            placeholder="Select bond start date"
+                            className="bg-background"
                           />
                         </div>
                         <div className="space-y-2">
                           <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Bond End Date</label>
-                          <input 
-                            type="date" value={formData.bondEndDate || ''} onChange={(e) => handleInputChange('bondEndDate', e.target.value)}
-                            className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
+                          <DatePicker 
+                            value={formData.bondEndDate || ''} 
+                            onChange={(val) => handleInputChange('bondEndDate', val)}
+                            placeholder="Select bond end date"
+                            className="bg-background"
                           />
                         </div>
                       </div>
@@ -747,12 +794,13 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                         </div>
                         <div className="space-y-2">
                           <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Notice Start Date</label>
-                          <input 
-                            type="date" value={formData.noticePeriodStartDate || ''} 
-                            onChange={(e) => {
-                              handleInputChange('noticePeriodStartDate', e.target.value);
+                          <DatePicker 
+                            value={formData.noticePeriodStartDate || ''} 
+                            onChange={(val) => {
+                              handleInputChange('noticePeriodStartDate', val);
                             }}
-                            className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
+                            placeholder="Select notice start date"
+                            className="bg-background"
                           />
                         </div>
                       </div>
@@ -775,9 +823,11 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                       <div className="animate-in fade-in zoom-in-95 duration-200 pt-2 border-t border-border/50">
                         <div className="space-y-2">
                           <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Calculated Exit Date</label>
-                          <input 
-                            type="date" value={formData.resignationDate || ''} onChange={(e) => handleInputChange('resignationDate', e.target.value)}
-                            className="w-full md:w-1/2 px-4 py-2.5 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
+                          <DatePicker 
+                            value={formData.resignationDate || ''} 
+                            onChange={(val) => handleInputChange('resignationDate', val)}
+                            placeholder="Select exit date"
+                            className="w-full md:w-1/2 bg-background"
                           />
                           <p className="text-xs text-muted-foreground mt-1">If notice period is provided, this date should be calculated automatically.</p>
                         </div>
@@ -792,26 +842,56 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
             </div>
           </div>
           
-          {/* Footer Actions */}
-          <div className="p-6 border-t border-border/50 bg-muted/30 flex items-center justify-between">
-            <div className="text-sm text-muted-foreground hidden sm:block">
+          {/* Footer Actions - Fixed Height */}
+          <div className="p-3 sm:p-5 border-t border-border/50 bg-muted/30 flex items-center justify-between shrink-0 gap-2">
+            <div className="text-xs text-muted-foreground hidden md:block">
               Tip: Navigate between sections using the tabs on the left.
             </div>
-            <div className="flex gap-3 ml-auto">
+            <div className="flex items-center gap-2 sm:gap-3 ml-auto w-full sm:w-auto justify-end">
               <button 
                 type="button"
                 onClick={onClose}
-                className="px-6 py-2.5 text-sm font-bold text-foreground/80 hover:bg-muted rounded-xl transition-colors"
+                className="px-3 sm:px-6 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-foreground/80 hover:bg-muted rounded-xl transition-colors shrink-0"
               >
                 Cancel
               </button>
+
+              {/* Quick Mobile Next Button */}
+              {activeTab === 'personal' && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('work')}
+                  className="md:hidden px-2.5 py-2 text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-xl transition-colors shrink-0"
+                >
+                  Next: Work →
+                </button>
+              )}
+              {activeTab === 'work' && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('bank')}
+                  className="md:hidden px-2.5 py-2 text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-xl transition-colors shrink-0"
+                >
+                  Next: Bank →
+                </button>
+              )}
+              {activeTab === 'bank' && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('offboarding')}
+                  className="md:hidden px-2.5 py-2 text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-xl transition-colors shrink-0"
+                >
+                  Next: Exit →
+                </button>
+              )}
+
               <button 
                 type="submit"
                 form="employee-form"
-                className="px-6 py-2.5 text-sm font-bold text-primary-foreground bg-primary hover:bg-primary/90 rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-2"
+                className="px-3.5 sm:px-6 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-primary-foreground bg-primary hover:bg-primary/90 rounded-xl transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1.5 sm:gap-2 shrink-0 whitespace-nowrap"
               >
                 <Check className="w-4 h-4" />
-                {initialData ? 'Save Changes' : 'Create Employee'}
+                <span>{initialData ? 'Save Changes' : 'Create Employee'}</span>
               </button>
             </div>
           </div>

@@ -2,6 +2,7 @@ import { IndianRupee, TrendingUp, TrendingDown, Landmark, Building2, Wallet } fr
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, Cell, ComposedChart, Line } from 'recharts';
 import { useState } from 'react';
 import { SearchableSelect } from '@/components/ui/select';
+import { DateRangeFilter } from '@/components/common/DateRangeFilter';
 
 const payrollTrend = [
   { name: 'Jan', Base: 950000, Bonuses: 120000, Deductions: -45000 },
@@ -23,22 +24,32 @@ const COLORS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--cha
 
 export function PayrollReport() {
   const [timeRange, setTimeRange] = useState("Last 6 Months");
+  const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
+    from: undefined,
+    to: undefined,
+  });
 
   return (
-    <div className="w-full space-y-8 animate-in fade-in duration-500">
+    <div className="w-full space-y-6 sm:space-y-8 animate-in fade-in duration-500 min-w-0">
       
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-foreground flex items-center gap-2">
-            <IndianRupee className="w-8 h-8 text-primary" />
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground flex items-center gap-2">
+            <IndianRupee className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
             Payroll Cost Analytics
           </h1>
-          <p className="text-muted-foreground mt-1 text-sm font-medium">
+          <p className="text-muted-foreground mt-1 text-xs sm:text-sm font-medium">
             Analyze HR expenses, salary distributions, and department-wise payroll costs.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full md:w-auto">
+          <DateRangeFilter
+            dateRange={dateRange}
+            onChange={setDateRange}
+            placeholder="Custom date range"
+            className="w-full sm:w-auto"
+          />
           <SearchableSelect
             value={timeRange}
             onChange={setTimeRange}
@@ -47,70 +58,70 @@ export function PayrollReport() {
               { label: "This Year", value: "This Year" },
               { label: "Last Year", value: "Last Year" }
             ]}
-            className="w-[180px] h-[44px] bg-card border border-border/50 text-foreground font-bold rounded-xl shadow-sm outline-none"
+            className="w-full sm:w-[160px] h-[40px] bg-card border border-border/50 text-foreground font-bold rounded-xl shadow-sm outline-none"
           />
         </div>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
-              <Landmark className="w-5 h-5" />
+      <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 sm:p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+              <Landmark className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <span className="text-xs font-bold text-emerald-600 bg-emerald-500/10 px-2 py-1 rounded-md flex items-center gap-1">
               <TrendingUp className="w-3 h-3" /> YTD
             </span>
           </div>
           <div className="text-emerald-600 font-bold text-xs uppercase tracking-wider mb-1">Total Gross Pay</div>
-          <div className="text-3xl font-black text-emerald-700">₹ 8.24M</div>
+          <div className="text-2xl sm:text-3xl font-black text-emerald-700">₹ 8.24M</div>
         </div>
 
-        <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center">
-              <Wallet className="w-5 h-5" />
+        <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-4 sm:p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center">
+              <Wallet className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <span className="text-xs font-bold text-emerald-600 bg-emerald-500/10 px-2 py-1 rounded-md flex items-center gap-1">
               <TrendingUp className="w-3 h-3" /> YTD
             </span>
           </div>
           <div className="text-blue-600 font-bold text-xs uppercase tracking-wider mb-1">Total Net Pay</div>
-          <div className="text-3xl font-black text-blue-700">₹ 7.82M</div>
+          <div className="text-2xl sm:text-3xl font-black text-blue-700">₹ 7.82M</div>
         </div>
 
-        <div className="bg-rose-500/5 border border-rose-500/20 rounded-2xl p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-600 flex items-center justify-center">
-              <TrendingDown className="w-5 h-5" />
+        <div className="bg-rose-500/5 border border-rose-500/20 rounded-2xl p-4 sm:p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-rose-500/10 text-rose-600 flex items-center justify-center">
+              <TrendingDown className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
           <div className="text-rose-600 font-bold text-xs uppercase tracking-wider mb-1">Total Deductions</div>
-          <div className="text-3xl font-black text-rose-700">₹ 420K</div>
+          <div className="text-2xl sm:text-3xl font-black text-rose-700">₹ 420K</div>
         </div>
 
-        <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center">
-              <TrendingUp className="w-5 h-5" />
+        <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-4 sm:p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center">
+              <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
           <div className="text-amber-600 font-bold text-xs uppercase tracking-wider mb-1">Total Bonuses</div>
-          <div className="text-3xl font-black text-amber-700">₹ 960K</div>
+          <div className="text-2xl sm:text-3xl font-black text-amber-700">₹ 960K</div>
         </div>
       </div>
 
       {/* Charts Grid */}
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-3 min-w-0">
         
         {/* Payroll Trend */}
-        <div className="bg-card border border-border/50 rounded-3xl p-6 shadow-sm lg:col-span-2">
-          <h3 className="font-bold flex items-center gap-2 mb-6">
-            <IndianRupee className="w-5 h-5 text-primary" />
+        <div className="bg-card border border-border/50 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm lg:col-span-2 overflow-hidden min-w-0">
+          <h3 className="font-bold flex items-center gap-2 mb-4 sm:mb-6 text-sm sm:text-base">
+            <IndianRupee className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
             Payroll Cost Breakdown (Monthly)
           </h3>
-          <div className="h-[350px] w-full">
+          <div className="h-[280px] sm:h-[350px] w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={payrollTrend} margin={{ top: 20, right: 30, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.5} />
@@ -137,12 +148,12 @@ export function PayrollReport() {
         </div>
 
         {/* Dept Breakdown */}
-        <div className="bg-card border border-border/50 rounded-3xl p-6 shadow-sm">
-          <h3 className="font-bold flex items-center gap-2 mb-6">
-            <Building2 className="w-5 h-5 text-blue-500" />
+        <div className="bg-card border border-border/50 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm overflow-hidden min-w-0">
+          <h3 className="font-bold flex items-center gap-2 mb-4 sm:mb-6 text-sm sm:text-base">
+            <Building2 className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
             Cost by Department
           </h3>
-          <div className="h-[350px] w-full">
+          <div className="h-[280px] sm:h-[350px] w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={departmentCost} layout="vertical" margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.5} />

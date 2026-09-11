@@ -78,7 +78,7 @@ export function SalesReports({ onAction }: { onAction?: (action: string) => void
             ))}
           </div>
 
-          <div className="mt-8 rounded-2xl border border-border bg-card p-6">
+          <div className="mt-8 rounded-2xl border border-border bg-card p-4 sm:p-6">
             <h3 className="mb-4 text-sm font-bold flex items-center gap-2">
               <PieChart className="h-4 w-4 text-emerald-600" /> Recent Reports
             </h3>
@@ -90,15 +90,15 @@ export function SalesReports({ onAction }: { onAction?: (action: string) => void
               ].map((file, i) => (
                 <div key={i} className="flex items-center justify-between rounded-xl border border-border p-3 transition-colors hover:bg-accent">
                   <div className="flex items-center gap-3">
-                    <div className="grid h-8 w-8 place-items-center rounded-lg bg-muted text-muted-foreground">
+                    <div className="grid h-8 w-8 place-items-center rounded-lg bg-muted text-muted-foreground shrink-0">
                       <FileText className="h-4 w-4" />
                     </div>
-                    <div>
-                      <p className="text-sm font-semibold">{file.name}</p>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold truncate">{file.name}</p>
                       <p className="text-[11px] text-muted-foreground">{file.date} · {file.size}</p>
                     </div>
                   </div>
-                  <button onClick={() => onAction?.(`Export ${file.name.endsWith(".csv") ? "Excel" : "PDF"}`)} className="text-emerald-600 hover:text-emerald-700">
+                  <button onClick={() => onAction?.(`Export ${file.name.endsWith(".csv") ? "Excel" : "PDF"}`)} className="text-emerald-600 hover:text-emerald-700 shrink-0 ml-2">
                     <Download className="h-4 w-4" />
                   </button>
                 </div>
@@ -108,7 +108,7 @@ export function SalesReports({ onAction }: { onAction?: (action: string) => void
         </div>
 
         {/* Right Column: Configuration */}
-        <div className="rounded-2xl border border-border bg-card p-6 h-fit sticky top-6">
+        <div className="rounded-2xl border border-border bg-card p-4 sm:p-6 h-fit static lg:sticky lg:top-6">
           <h2 className="text-lg font-bold">Configuration</h2>
           <p className="mb-6 mt-1 text-xs text-muted-foreground">Customize your report output</p>
 
@@ -116,7 +116,7 @@ export function SalesReports({ onAction }: { onAction?: (action: string) => void
             {/* Date Range */}
             <div>
               <label className="mb-2 block text-xs font-bold uppercase text-muted-foreground">Date Range</label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 min-[400px]:grid-cols-3 lg:grid-cols-2 gap-2">
                 {["Today", "This Week", "This Month", "Last Month", "This Quarter", "Custom"].map((range) => (
                   <button
                     key={range}

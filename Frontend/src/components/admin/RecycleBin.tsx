@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { Trash2, RotateCcw, AlertTriangle, Info, Search } from "lucide-react";
+import { Trash2, RotateCcw, AlertTriangle, Info } from "lucide-react";
+import { SearchInput } from "@/components/common/SearchInput";
 import { getRecycleBinItems, restoreItem, permanentlyDeleteItem, cleanupOldItems, RecycleBinItem, RECYCLE_BIN_DAYS_LIMIT } from "@/lib/recycle-bin";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { formatDistanceToNow, format } from "date-fns";
@@ -49,29 +50,27 @@ export function RecycleBin() {
     <div className="w-full space-y-6 animate-in fade-in duration-500 pb-12 relative">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-4xl font-black tracking-tight text-foreground flex items-center gap-3">
-            <Trash2 className="w-8 h-8 text-rose-500" />
+          <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-foreground flex items-center gap-2 sm:gap-3">
+            <Trash2 className="w-6 sm:w-8 h-6 sm:h-8 text-rose-500 shrink-0" />
             Recycle Bin
           </h1>
-          <p className="text-muted-foreground mt-2 font-medium">
+          <p className="text-muted-foreground mt-1 sm:mt-2 text-xs sm:text-sm font-medium">
             Restore deleted items within {RECYCLE_BIN_DAYS_LIMIT} days. Items older than this will be permanently removed.
           </p>
         </div>
       </div>
 
       <div className="bg-card border border-border/50 rounded-2xl shadow-sm overflow-hidden flex flex-col min-h-[500px]">
-        <div className="p-4 md:p-6 border-b border-border/50 flex flex-col sm:flex-row justify-between gap-4 items-center bg-muted/10">
-          <div className="relative w-full sm:max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <input 
-              type="text"
+        <div className="p-3 sm:p-4 md:p-6 border-b border-border/50 flex flex-col sm:flex-row justify-between gap-3 sm:gap-4 items-stretch sm:items-center bg-muted/10">
+          <div className="w-full sm:max-w-md">
+            <SearchInput 
               placeholder="Search deleted items..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-background border border-border/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+              onChange={setSearchQuery}
+              className="w-full"
             />
           </div>
-          <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-lg border border-border/50">
+          <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-lg border border-border/50 shrink-0 self-start sm:self-auto">
             <Info className="w-4 h-4" />
             <span>{items.length} items in bin</span>
           </div>
