@@ -64,7 +64,7 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(isNew || false);
-  const [selectedDept, setSelectedDept] = useState<string | null>(null);
+  const [selectedDept, setSelectedDept] = useState<string>("All");
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
@@ -99,16 +99,13 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
     return list;
   }, [departments, employees]);
 
-  // Set default selection to the first department dynamically
+  // Default selection is "All", validate if department disappears
   useEffect(() => {
-    if (allDepartments.length > 0) {
-      const firstDept = allDepartments[0] ?? null;
-      setSelectedDept((prev: string | null): string | null => {
-        if (!prev) return firstDept;
-        const exists = allDepartments.some(d => d.toLowerCase() === prev.toLowerCase()) || prev === "All";
-        return exists ? prev : firstDept;
-      });
-    }
+    setSelectedDept((prev: string): string => {
+      if (!prev || prev === "All") return "All";
+      const exists = allDepartments.some(d => d.toLowerCase() === prev.toLowerCase());
+      return exists ? prev : "All";
+    });
   }, [allDepartments]);
 
   const renderCell = (emp: Employee, colKey: string) => {
@@ -310,13 +307,35 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
             )}
           </div>
           
-          {/* Dynamic Department Tabs */}
+          {/* Dynamic Department Tabs with 'All' First */}
           <div className="flex items-center gap-2 overflow-x-auto min-w-0 flex-1 max-w-full pb-1 lg:pb-0 scrollbar-none">
+            {/* All Filter Option - FIRST */}
+            <button 
+              type="button"
+              onClick={() => setSelectedDept("All")}
+              className={cn(
+                "px-3.5 py-2 rounded-xl text-[12px] font-bold transition-all border whitespace-nowrap flex items-center gap-1.5 flex-shrink-0 active:scale-95 shadow-sm",
+                selectedDept === "All"
+                  ? "bg-primary text-primary-foreground border-primary shadow-primary/20" 
+                  : "bg-white text-foreground/80 border-border/80 hover:bg-muted/50"
+              )}
+            >
+              <span>All</span>
+              <span className={cn(
+                "text-[10px] px-1.5 py-0.5 rounded-full font-bold",
+                selectedDept === "All" ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+              )}>
+                {employees.length}
+              </span>
+            </button>
+
+            {/* Department Options */}
             {allDepartments.map(dept => {
               const isSelected = selectedDept?.toLowerCase() === dept.toLowerCase();
               const count = employees.filter(e => (e.department || "").trim().toLowerCase() === dept.toLowerCase()).length;
               return (
                 <button 
+                  type="button"
                   key={dept}
                   onClick={() => setSelectedDept(dept)}
                   className={cn(
@@ -336,25 +355,6 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
                 </button>
               );
             })}
-
-            {/* All Filter Option */}
-            <button 
-              onClick={() => setSelectedDept("All")}
-              className={cn(
-                "px-3.5 py-2 rounded-xl text-[12px] font-bold transition-all border whitespace-nowrap flex items-center gap-1.5 flex-shrink-0 active:scale-95",
-                selectedDept === "All"
-                  ? "bg-primary text-primary-foreground border-primary shadow-sm shadow-primary/20" 
-                  : "bg-white text-muted-foreground border-dashed border-border/80 hover:bg-muted/50"
-              )}
-            >
-              <span>All</span>
-              <span className={cn(
-                "text-[10px] px-1.5 py-0.5 rounded-full font-bold",
-                selectedDept === "All" ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
-              )}>
-                {employees.length}
-              </span>
-            </button>
           </div>
         </div>
 

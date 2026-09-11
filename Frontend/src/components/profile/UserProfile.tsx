@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { User, Briefcase, CreditCard, FileText, Mail, Phone, MapPin, Building, Calendar, Key, Shield, CheckCircle2, ChevronRight, Edit2 } from "lucide-react";
+import { User, Briefcase, CreditCard, FileText, Mail, Phone, MapPin, Building, Calendar, Key, Shield, CheckCircle2, ChevronRight, Edit2, Eye, EyeOff } from "lucide-react";
 import { cn, formatDate } from "@/lib/utils";
 import { useEmployeesContext } from "@/components/employees/EmployeeContext";
 import { EmployeeFormModal } from "@/components/employees/EmployeeFormModal";
@@ -13,6 +13,7 @@ export function UserProfile() {
   const user = employees.find(e => e.id === "EMP-002") || employees[0];
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [showProfilePassword, setShowProfilePassword] = useState(false);
 
   if (!user) {
     return <div className="p-8 text-center text-muted-foreground">User not found</div>;
@@ -217,9 +218,21 @@ export function UserProfile() {
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <p className="text-[11px] text-muted-foreground font-bold uppercase tracking-wider">Password Setup</p>
-                  <div className="flex items-center gap-3 p-3 bg-muted/20 border border-border/50 rounded-xl">
-                    <Key className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm font-semibold tracking-widest text-muted-foreground">{profileData.password || "Not set"}</span>
+                  <div className="flex items-center justify-between p-3 bg-muted/20 border border-border/50 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <Key className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-sm font-semibold tracking-widest text-muted-foreground">
+                        {showProfilePassword ? (profileData.password || "Not set") : "••••••••"}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowProfilePassword(!showProfilePassword)}
+                      className="p-1 text-muted-foreground hover:text-foreground rounded-lg transition-colors focus:outline-none"
+                      title={showProfilePassword ? "Hide password" : "Show password"}
+                    >
+                      {showProfilePassword ? <EyeOff className="w-4 h-4 text-primary" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
                 </div>
               </div>

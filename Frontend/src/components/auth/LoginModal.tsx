@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useAuth } from "./AuthContext";
 import { Lock, Mail, Loader2, ArrowRight, ShieldCheck, KeyRound, ArrowLeft, RefreshCw, X } from "lucide-react";
+import { PasswordInput } from "@/components/ui/password-input";
 
 export const LoginModal: React.FC<{ isOpen: boolean; onClose?: () => void }> = ({ isOpen, onClose }) => {
   const { login, verifyOtp } = useAuth();
@@ -96,17 +97,14 @@ export const LoginModal: React.FC<{ isOpen: boolean; onClose?: () => void }> = (
 
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-foreground/80 uppercase tracking-wider">Password</label>
-              <div className="relative flex items-center">
-                <Lock className="w-4 h-4 text-muted-foreground absolute left-3.5" />
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full pl-10 pr-4 py-2.5 bg-muted/40 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                />
-              </div>
+              <PasswordInput
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                leftIcon={<Lock className="w-4 h-4 text-muted-foreground" />}
+                className="bg-muted/40 border-border rounded-xl focus:ring-primary/30 font-medium"
+              />
             </div>
 
             <button

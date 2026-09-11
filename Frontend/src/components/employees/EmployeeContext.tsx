@@ -164,7 +164,7 @@ export function EmployeeProvider({ children }: { children: React.ReactNode }) {
 
     try {
       setIsLoading(true);
-      const json = await api.get<{ data?: any[]; total?: number }>('/employees?page=1&limit=100', {
+      const json = await api.get<{ data?: any[]; total?: number }>('/employees', {
         showLoader: true,
         showErrorToast: false,
       });

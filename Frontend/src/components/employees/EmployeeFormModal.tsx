@@ -11,6 +11,7 @@ import { getAvatarUrl, API_URL } from "@/lib/config";
 import { api } from "@/lib/api";
 import { Camera, Loader2, Image as ImageIcon, FolderOpen } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
+import { PasswordInput } from "@/components/ui/password-input";
 
 interface EmployeeFormModalProps {
   isOpen: boolean;
@@ -453,11 +454,14 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
 
                     <div className="space-y-2 col-span-1 md:col-span-2">
                       <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Password</label>
-                      <input 
-                        type="password" value={formData.password || ''} onChange={(e) => handleInputChange('password', e.target.value)}
-                        className="w-full px-4 py-2.5 bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
+                      <PasswordInput 
+                        disabled={isSelfEdit}
+                        value={formData.password || ''} 
+                        onChange={(e) => handleInputChange('password', e.target.value)}
                         placeholder={initialData ? "Leave blank to keep current" : "Set login password"}
+                        className={cn(isSelfEdit && "opacity-60 cursor-not-allowed")}
                       />
+                      {initialData && <p className="text-[11px] text-muted-foreground">Only enter a new password if you wish to reset it.</p>}
                     </div>
                   </div>
 
