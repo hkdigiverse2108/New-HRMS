@@ -38,9 +38,9 @@ export function EmployeeProfileModal({ employee, onClose }: EmployeeProfileModal
 
   return (
     <Dialog open={!!employee} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-3xl p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+      <DialogContent className="w-full max-w-[calc(100vw-16px)] sm:max-w-3xl p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card max-h-[90vh] overflow-y-auto">
         {/* Header Background */}
-        <div className="h-32 shrink-0 bg-gradient-to-r from-emerald-500 to-teal-600 relative">
+        <div className="h-28 sm:h-32 shrink-0 bg-gradient-to-r from-emerald-500 to-teal-600 relative">
           <button 
             onClick={onClose}
             className="absolute top-4 right-4 p-2 bg-black/20 hover:bg-black/30 text-white rounded-full transition-colors backdrop-blur-md"
@@ -50,7 +50,7 @@ export function EmployeeProfileModal({ employee, onClose }: EmployeeProfileModal
         </div>
 
         {/* Profile Content */}
-        <div className="px-8 pb-8 pt-0 relative flex-1">
+        <div className="px-4 sm:px-8 pb-6 sm:pb-8 pt-0 relative flex-1">
           {/* Avatar & Basic Info */}
           <div className="flex flex-col md:flex-row gap-4 md:gap-6 items-start md:items-end mb-8">
             <div className="relative -mt-12">

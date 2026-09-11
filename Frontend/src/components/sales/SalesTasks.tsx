@@ -101,7 +101,7 @@ export function SalesTasks({ onAction }: { onAction?: (action: string) => void }
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-4 gap-3">
         {([
           { label: "Due Today", value: counts.today, color: "amber", icon: Clock },
           { label: "Overdue", value: counts.overdue, color: "rose", icon: AlertTriangle },

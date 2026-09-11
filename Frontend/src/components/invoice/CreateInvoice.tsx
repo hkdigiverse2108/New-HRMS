@@ -93,44 +93,44 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
   const totalAmount = taxableAmount + taxAmount + shippingCharges;
 
   return (
-    <div className="w-full space-y-8 animate-in fade-in duration-500">
+    <div className="w-full space-y-6 sm:space-y-8 animate-in fade-in duration-500 min-w-0">
       
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
           {onBack && (
             <button 
               onClick={onBack}
-              className="p-2.5 bg-card border border-border/50 rounded-xl hover:bg-muted/50 transition-colors shadow-sm"
+              className="p-2 sm:p-2.5 bg-card border border-border/50 rounded-xl hover:bg-muted/50 transition-colors shadow-sm shrink-0"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           )}
           <div>
-            <h1 className="text-3xl font-black tracking-tight text-foreground flex items-center gap-2">
-              <FileText className="w-8 h-8 text-primary" />
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground flex items-center gap-2">
+              <FileText className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
               {isProforma ? "Create Proforma Invoice" : "Create Invoice"}
             </h1>
-            <p className="text-muted-foreground mt-1 text-sm font-medium">
+            <p className="text-muted-foreground mt-1 text-xs sm:text-sm font-medium">
               {isProforma 
                 ? "Generate a preliminary bill of sale in advance of a delivery." 
                 : "Generate a new standard invoice for a client."}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <button className="px-4 py-2.5 bg-card border border-border/50 text-foreground font-bold rounded-xl hover:bg-muted/50 transition-colors flex items-center gap-2 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto">
+          <button className="flex-1 sm:flex-initial px-4 py-2 sm:py-2.5 bg-card border border-border/50 text-foreground font-bold rounded-xl hover:bg-muted/50 transition-colors flex items-center justify-center gap-2 shadow-sm text-xs sm:text-sm">
             <Save className="w-4 h-4" />
             Save Draft
           </button>
-          <button className="px-5 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 font-bold rounded-xl transition-colors flex items-center gap-2 shadow-sm">
+          <button className="flex-1 sm:flex-initial px-4 sm:px-5 py-2 sm:py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm text-xs sm:text-sm">
             <Send className="w-4 h-4" />
             {isProforma ? "Generate Proforma" : "Generate Invoice"}
           </button>
         </div>
       </div>
 
-      <div className="bg-card border border-border/50 rounded-3xl p-6 md:p-8 shadow-sm space-y-8 relative overflow-hidden">
+      <div className="bg-card border border-border/50 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 shadow-sm space-y-6 sm:space-y-8 relative overflow-hidden">
         
         {/* Badging for Proforma */}
         {isProforma && (
@@ -140,7 +140,7 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
         )}
 
         {/* Invoice Details section */}
-        <div className="grid md:grid-cols-2 gap-8">
+        <div className="grid md:grid-cols-2 gap-6 sm:gap-8">
           <div className="space-y-4">
             <h3 className="font-bold flex items-center gap-2 text-foreground mb-2">
               <Building2 className="w-4 h-4 text-primary" />
@@ -201,11 +201,11 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
                 className="w-full px-4 py-2.5 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-bold"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5 block">Invoice Date</label>
                 <input 
-                  type="date"
+                  type="date" 
                   value={invoiceDate}
                   onChange={(e) => setInvoiceDate(e.target.value)}
                   className="w-full px-4 py-2.5 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium"
@@ -214,18 +214,18 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
               <div>
                 <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5 block">Due Date</label>
                 <input 
-                  type="date"
+                  type="date" 
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
                   className="w-full px-4 py-2.5 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium"
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5 block">PO Number / Reference</label>
                 <input 
-                  type="text"
+                  type="text" 
                   placeholder="e.g. PO-98765"
                   className="w-full px-4 py-2.5 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium"
                 />
@@ -271,59 +271,61 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
             Line Items
           </h3>
           
-          <div className="space-y-3">
-            {/* Table Header */}
-            <div className="grid grid-cols-12 gap-4 px-4 py-2 bg-muted/30 rounded-xl border border-border/50">
-              <div className="col-span-6 text-xs font-bold text-muted-foreground uppercase tracking-wider">Description</div>
-              <div className="col-span-2 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Qty</div>
-              <div className="col-span-2 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Rate (₹)</div>
-              <div className="col-span-2 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Amount (₹)</div>
-            </div>
-
-            {/* Line Item Rows */}
-            {items.map((item, index) => (
-              <div key={item.id} className="grid grid-cols-12 gap-4 items-center px-4 group">
-                <div className="col-span-6 relative">
-                  <input 
-                    type="text"
-                    value={item.description}
-                    onChange={(e) => updateItem(item.id, 'description', e.target.value)}
-                    placeholder="Item description..."
-                    className="w-full px-4 py-2.5 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium"
-                  />
-                  {items.length > 1 && (
-                    <button 
-                      onClick={() => handleRemoveItem(item.id)}
-                      className="absolute -left-8 top-1/2 -translate-y-1/2 p-1.5 text-rose-500 hover:bg-rose-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-                      title="Remove Item"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-                <div className="col-span-2">
-                  <input 
-                    type="number"
-                    min="1"
-                    value={item.quantity || ""}
-                    onChange={(e) => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                    className="w-full px-4 py-2.5 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium text-right"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <input 
-                    type="number"
-                    min="0"
-                    value={item.rate || ""}
-                    onChange={(e) => updateItem(item.id, 'rate', parseFloat(e.target.value) || 0)}
-                    className="w-full px-4 py-2.5 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium text-right"
-                  />
-                </div>
-                <div className="col-span-2 text-right font-bold text-sm text-foreground">
-                  {(item.quantity * item.rate).toLocaleString()}
-                </div>
+          <div className="overflow-x-auto min-w-0 pb-2">
+            <div className="min-w-[550px] space-y-3">
+              {/* Table Header */}
+              <div className="grid grid-cols-12 gap-4 px-4 py-2 bg-muted/30 rounded-xl border border-border/50">
+                <div className="col-span-6 text-xs font-bold text-muted-foreground uppercase tracking-wider">Description</div>
+                <div className="col-span-2 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Qty</div>
+                <div className="col-span-2 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Rate (₹)</div>
+                <div className="col-span-2 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Amount (₹)</div>
               </div>
-            ))}
+
+              {/* Line Item Rows */}
+              {items.map((item, index) => (
+                <div key={item.id} className="grid grid-cols-12 gap-4 items-center px-4 group">
+                  <div className="col-span-6 relative">
+                    <input 
+                      type="text" 
+                      value={item.description}
+                      onChange={(e) => updateItem(item.id, 'description', e.target.value)}
+                      placeholder="Item description..."
+                      className="w-full px-4 py-2.5 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium"
+                    />
+                    {items.length > 1 && (
+                      <button 
+                        onClick={() => handleRemoveItem(item.id)}
+                        className="absolute -left-8 top-1/2 -translate-y-1/2 p-1.5 text-rose-500 hover:bg-rose-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                        title="Remove Item"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="col-span-2">
+                    <input 
+                      type="number" 
+                      min="1"
+                      value={item.quantity || ""}
+                      onChange={(e) => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                      className="w-full px-4 py-2.5 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium text-right"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <input 
+                      type="number" 
+                      min="0"
+                      value={item.rate || ""}
+                      onChange={(e) => updateItem(item.id, 'rate', parseFloat(e.target.value) || 0)}
+                      className="w-full px-4 py-2.5 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium text-right"
+                    />
+                  </div>
+                  <div className="col-span-2 text-right font-bold text-sm text-foreground">
+                    {(item.quantity * item.rate).toLocaleString()}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           <button 
@@ -377,9 +379,9 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
 
         {/* Totals Section */}
         <div className="grid md:grid-cols-2 gap-8 items-start">
-          <div className="space-y-4 bg-muted/20 p-6 rounded-2xl border border-border/50">
+          <div className="space-y-4 bg-muted/20 p-4 sm:p-6 rounded-2xl border border-border/50">
             <h4 className="text-xs font-black uppercase tracking-wider text-foreground mb-2">Discount & Shipping</h4>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Discount</label>

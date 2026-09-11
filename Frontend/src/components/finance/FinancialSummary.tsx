@@ -21,21 +21,21 @@ export function FinancialSummary() {
   const [selectedMonth, setSelectedMonth] = useState("Oct 2023");
 
   return (
-    <div className="w-full space-y-6 animate-in fade-in duration-500 pb-12">
+    <div className="w-full space-y-6 animate-in fade-in duration-500 pb-12 min-w-0">
       
       {/* Header */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
-            <FileText className="w-6 h-6 text-primary" />
+          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
+            <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
             Financial Summary & Actuals
           </h1>
-          <p className="text-muted-foreground mt-1 text-sm font-medium">
+          <p className="text-muted-foreground mt-1 text-xs sm:text-sm font-medium">
             Compare planned budgets against actual spending and revenue across all categories.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2.5">
-          <button className="px-4 py-2 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center gap-2 text-sm">
+        <div className="flex flex-wrap gap-2 sm:gap-2.5 w-full xl:w-auto">
+          <button className="px-3 sm:px-4 py-2 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center gap-2 text-xs sm:text-sm">
             <Download className="w-4 h-4 text-indigo-500" /> Export Summary
           </button>
         </div>

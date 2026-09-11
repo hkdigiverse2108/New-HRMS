@@ -18,7 +18,7 @@ import {
 
 function ChartCard({ title, subtitle, children, className }: { title: string; subtitle?: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className={cn("rounded-2xl border border-border bg-card p-5", className)}>
+    <div className={cn("rounded-2xl border border-border bg-card p-4 sm:p-5 min-w-0 overflow-hidden", className)}>
       <div className="mb-4">
         <h3 className="text-sm font-bold">{title}</h3>
         {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
@@ -46,7 +46,7 @@ export function SalesAnalytics({ onAction }: { onAction?: (action: string) => vo
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Revenue Trend */}
         <ChartCard title="Revenue Trend" subtitle="12-month actual vs target">
-          <div className="h-72">
+          <div className="h-72 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={revenueVsTarget}>
                 <defs>
@@ -102,7 +102,7 @@ export function SalesAnalytics({ onAction }: { onAction?: (action: string) => vo
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Lead Source */}
         <ChartCard title="Lead Source Analysis" subtitle="Leads vs won by channel">
-          <div className="h-72">
+          <div className="h-72 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={leadSourceData} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -119,7 +119,7 @@ export function SalesAnalytics({ onAction }: { onAction?: (action: string) => vo
 
         {/* Category Analysis */}
         <ChartCard title="Lead Category Analysis" subtitle="Volume share by business category">
-          <div className="h-72">
+          <div className="h-72 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie data={categoryMix} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={3} dataKey="value">
@@ -146,7 +146,7 @@ export function SalesAnalytics({ onAction }: { onAction?: (action: string) => vo
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Salesperson Performance */}
         <ChartCard title="Salesperson Performance" subtitle="Revenue vs target achievement">
-          <div className="h-72">
+          <div className="h-72 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={salespersonPerformance}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -163,7 +163,7 @@ export function SalesAnalytics({ onAction }: { onAction?: (action: string) => vo
 
         {/* Quarterly Growth */}
         <ChartCard title="Quarterly Growth" subtitle="Revenue by quarter with growth %">
-          <div className="h-72">
+          <div className="h-72 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={quarterlyGrowth}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -185,7 +185,7 @@ export function SalesAnalytics({ onAction }: { onAction?: (action: string) => vo
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Revenue Forecast */}
         <ChartCard title="Revenue Forecast" subtitle="AI projected vs actual, next 6 months">
-          <div className="h-64">
+          <div className="h-64 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={revenueForecast}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -200,7 +200,7 @@ export function SalesAnalytics({ onAction }: { onAction?: (action: string) => vo
 
         {/* Avg Deal Size */}
         <ChartCard title="Average Deal Size" subtitle="Trending upward 5.7% MoM">
-          <div className="h-64">
+          <div className="h-64 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={avgDealSizeTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />

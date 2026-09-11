@@ -28,15 +28,15 @@ export function PayrollDashboard() {
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Header */}
       <div>
-        <div className="flex items-center gap-3">
-          <h1 className="text-3xl font-black tracking-tight">Payroll Dashboard</h1>
-          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">July 2026</span>
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight">Payroll Dashboard</h1>
+          <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-700">July 2026</span>
         </div>
-        <p className="mt-1 text-sm text-muted-foreground">Track salary expense, pending approvals and payroll analytics.</p>
+        <p className="mt-1 text-xs sm:text-sm text-muted-foreground">Track salary expense, pending approvals and payroll analytics.</p>
       </div>
 
       {/* Main Metrics */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         {/* Metric 1 */}
         <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-emerald-100/50 p-5 shadow-sm">
           <div className="flex items-center justify-between">
@@ -46,7 +46,7 @@ export function PayrollDashboard() {
             </div>
           </div>
           <div className="mt-4">
-            <p className="text-3xl font-black text-emerald-950">₹4,16,981</p>
+            <p className="text-2xl sm:text-3xl font-black text-emerald-950">₹4,16,981</p>
             <p className="mt-1 text-xs font-medium text-emerald-700">Net payable · July 2026</p>
           </div>
         </div>
@@ -60,7 +60,7 @@ export function PayrollDashboard() {
             </div>
           </div>
           <div className="mt-4">
-            <p className="text-3xl font-black">₹4,22,000</p>
+            <p className="text-2xl sm:text-3xl font-black">₹4,22,000</p>
             <p className="mt-1 text-xs font-medium text-muted-foreground">Gross of all employees</p>
           </div>
         </div>
@@ -74,7 +74,7 @@ export function PayrollDashboard() {
             </div>
           </div>
           <div className="mt-4">
-            <p className="text-3xl font-black">6 <span className="text-lg text-muted-foreground font-medium">/ 8</span></p>
+            <p className="text-2xl sm:text-3xl font-black">6 <span className="text-lg text-muted-foreground font-medium">/ 8</span></p>
             <p className="mt-1 text-xs font-medium text-amber-600">2 pending approval</p>
           </div>
         </div>
@@ -88,14 +88,14 @@ export function PayrollDashboard() {
             </div>
           </div>
           <div className="mt-4">
-            <p className="text-3xl font-black">2</p>
+            <p className="text-2xl sm:text-3xl font-black">2</p>
             <p className="mt-1 text-xs font-medium text-muted-foreground">Awaiting CEO approval</p>
           </div>
         </div>
       </div>
 
       {/* Secondary Metrics */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         {[
           { label: "Average Salary", value: "₹52,750", sub: "Company average", icon: IndianRupee },
           { label: "Highest Salary", value: "₹92,000", sub: "HKD-001 · Engineering", icon: ArrowUpRight, color: "text-emerald-600" },
@@ -108,7 +108,7 @@ export function PayrollDashboard() {
             </div>
             <div>
               <p className="text-xs font-bold uppercase text-muted-foreground">{stat.label}</p>
-              <p className="text-lg font-black leading-none mt-1">{stat.value}</p>
+              <p className="text-base sm:text-lg font-black leading-none mt-1">{stat.value}</p>
               <p className="mt-1 text-[10px] text-muted-foreground">{stat.sub}</p>
             </div>
           </div>
@@ -118,16 +118,16 @@ export function PayrollDashboard() {
       {/* Charts & Audit Log */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Charts Column */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-6 min-w-0">
           {/* Trend Chart */}
-          <div className="rounded-2xl border border-border bg-white p-6 shadow-sm">
+          <div className="rounded-2xl border border-border bg-white p-4 sm:p-6 shadow-sm min-w-0 overflow-hidden">
             <div className="mb-6 flex items-center justify-between">
               <div>
                 <h3 className="font-bold">Payroll Cost Trend</h3>
                 <p className="text-xs text-muted-foreground">Monthly payroll expense in ₹ lakhs</p>
               </div>
             </div>
-            <div className="h-[240px] w-full">
+            <div className="h-[240px] w-full min-w-0">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={MOCK_PAYROLL_TRENDS} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.5} />
@@ -151,14 +151,14 @@ export function PayrollDashboard() {
           </div>
 
           {/* Department Chart */}
-          <div className="rounded-2xl border border-border bg-white p-6 shadow-sm">
+          <div className="rounded-2xl border border-border bg-white p-4 sm:p-6 shadow-sm min-w-0 overflow-hidden">
             <div className="mb-6 flex items-center justify-between">
               <div>
                 <h3 className="font-bold">Department Salary Cost</h3>
                 <p className="text-xs text-muted-foreground">Gross monthly cost in ₹ thousands</p>
               </div>
             </div>
-            <div className="h-[240px] w-full">
+            <div className="h-[240px] w-full min-w-0">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={MOCK_DEPARTMENT_COSTS} margin={{ top: 5, right: 10, left: 0, bottom: 0 }} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.5} />
@@ -181,8 +181,8 @@ export function PayrollDashboard() {
         </div>
 
         {/* Quick Stats & Audit Log */}
-        <div className="space-y-6">
-          <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-6 min-w-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div className="rounded-xl border border-border bg-white p-4">
               <p className="text-xs text-muted-foreground">Bonus Given</p>
               <p className="mt-1 text-xl font-bold text-emerald-600">₹31,000</p>
@@ -205,7 +205,7 @@ export function PayrollDashboard() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-border bg-white p-6 shadow-sm">
+          <div className="rounded-2xl border border-border bg-white p-4 sm:p-6 shadow-sm">
             <div className="mb-6 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <History className="h-5 w-5 text-emerald-600" />

@@ -52,12 +52,12 @@ export function AttendanceAnalytics() {
       <CollapsibleSection section="Section 04" title="Attendance Analytics">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Weekly Attendance */}
-        <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm md:col-span-2">
+        <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm md:col-span-2 min-w-0 overflow-hidden">
           <div className="mb-6">
             <h3 className="font-bold text-foreground">Weekly Attendance</h3>
             <p className="text-[11px] text-muted-foreground">Present vs late vs WFH vs absent</p>
           </div>
-          <div className="h-[250px] mt-4">
+          <div className="h-[250px] mt-4 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={WEEKLY_ATTENDANCE} margin={{ top: 10, right: 0, left: -20, bottom: 0 }} barGap={2}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.5} />
@@ -84,7 +84,7 @@ export function AttendanceAnalytics() {
 
         {/* Small stats */}
         <div className="space-y-6">
-          <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm">
+          <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm min-w-0">
             <h3 className="font-bold text-foreground mb-1">Work From Home</h3>
             <p className="text-[11px] text-muted-foreground mb-4">26 employees remote today</p>
             <div className="flex items-end gap-2">
@@ -95,7 +95,7 @@ export function AttendanceAnalytics() {
             </div>
           </div>
           
-          <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm">
+          <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm min-w-0">
             <h3 className="font-bold text-foreground mb-1">Late Analysis</h3>
             <p className="text-[11px] text-muted-foreground mb-4">Avg delay 18 min · peak on Wednesdays</p>
             <div className="flex items-end gap-2">
@@ -109,7 +109,7 @@ export function AttendanceAnalytics() {
         </div>
 
         {/* Heatmap Calendar */}
-        <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm md:col-span-3">
+        <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm md:col-span-3 min-w-0 overflow-hidden">
           <div className="mb-6 flex justify-between items-center">
             <div>
               <h3 className="font-bold text-foreground">Heatmap Calendar</h3>
@@ -130,34 +130,36 @@ export function AttendanceAnalytics() {
               </button>
             </div>
           </div>
-          <div className="flex flex-col gap-2">
-            {/* Days Header */}
-            <div className="flex gap-2 mb-1">
-              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day, i) => (
-                <div key={i} className="flex-1 text-center text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                  {day}
-                </div>
-              ))}
-            </div>
-            
-            {/* Calendar Grid */}
-            {heatmap.map((week, w) => (
-              <div key={w} className="flex gap-2">
-                {week.map((day, d) => (
-                  <div 
-                    key={d} 
-                    className={`flex-1 h-10 flex items-center justify-center rounded-lg text-[12px] font-medium transition-all cursor-default ${!day.date ? 'opacity-0' : 'hover:scale-[1.02]'} ${
-                      day.val === 0 ? 'bg-muted/50 text-muted-foreground' : 
-                      day.val === 1 ? 'bg-emerald-100 text-emerald-800' :
-                      day.val === 2 ? 'bg-emerald-300 text-emerald-900' :
-                      day.val === 3 ? 'bg-emerald-500 text-white' : 'bg-emerald-700 text-white'
-                    }`}
-                  >
-                    {day.date}
+          <div className="overflow-x-auto min-w-0">
+            <div className="flex flex-col gap-2 min-w-[320px]">
+              {/* Days Header */}
+              <div className="flex gap-2 mb-1">
+                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day, i) => (
+                  <div key={i} className="flex-1 text-center text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                    {day}
                   </div>
                 ))}
               </div>
-            ))}
+              
+              {/* Calendar Grid */}
+              {heatmap.map((week, w) => (
+                <div key={w} className="flex gap-2">
+                  {week.map((day, d) => (
+                    <div 
+                      key={d} 
+                      className={`flex-1 h-10 flex items-center justify-center rounded-lg text-[12px] font-medium transition-all cursor-default ${!day.date ? 'opacity-0' : 'hover:scale-[1.02]'} ${
+                        day.val === 0 ? 'bg-muted/50 text-muted-foreground' : 
+                        day.val === 1 ? 'bg-emerald-100 text-emerald-800' :
+                        day.val === 2 ? 'bg-emerald-300 text-emerald-900' :
+                        day.val === 3 ? 'bg-emerald-500 text-white' : 'bg-emerald-700 text-white'
+                      }`}
+                    >
+                      {day.date}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
           </div>
           <div className="flex justify-end items-center gap-2 mt-4 text-[10px] text-muted-foreground">
             <span>Low</span>

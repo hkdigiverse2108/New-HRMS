@@ -3,6 +3,7 @@ import { X, Plus, ChevronDown, CalendarPlus, UserPlus, Briefcase, ListPlus } fro
 import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DatePicker } from "@/components/ui/date-picker";
 import { EmployeeFormModal } from "@/components/employees/EmployeeFormModal";
 import { CreateEventModal } from "@/components/schedule/CreateEventModal";
 import { useGlobalModal } from "./GlobalModalContext";
@@ -107,9 +108,11 @@ function NewTaskModal({ open, onClose }: { open: boolean; onClose: () => void })
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Due Date</label>
-                <input
-                  type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-primary font-bold"
+                <DatePicker
+                  value={dueDate}
+                  onChange={val => setDueDate(val)}
+                  placeholder="Select due date"
+                  className="h-[38px] px-3 font-bold"
                 />
               </div>
             </div>
@@ -221,11 +224,21 @@ function ApplyLeaveModal({ open, onClose }: { open: boolean; onClose: () => void
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Start Date *</label>
-                <input type="date" required value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full px-4 py-3 bg-muted/50 border border-border/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 font-medium" />
+                <DatePicker
+                  value={startDate}
+                  onChange={val => setStartDate(val)}
+                  placeholder="Select start date"
+                  className="h-[46px] px-4 font-medium"
+                />
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">End Date *</label>
-                <input type="date" required value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full px-4 py-3 bg-muted/50 border border-border/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 font-medium" />
+                <DatePicker
+                  value={endDate}
+                  onChange={val => setEndDate(val)}
+                  placeholder="Select end date"
+                  className="h-[46px] px-4 font-medium"
+                />
               </div>
             </div>
             <div className="space-y-2">
@@ -339,7 +352,12 @@ function NewProjectModal({ open, onClose }: { open: boolean; onClose: () => void
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Due Date</label>
-                <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="w-full px-4 h-[42px] bg-muted/50 border border-border/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 font-semibold" />
+                <DatePicker
+                  value={dueDate}
+                  onChange={val => setDueDate(val)}
+                  placeholder="Select due date"
+                  className="h-[42px] px-4 font-semibold"
+                />
               </div>
             </div>
           </div>

@@ -245,19 +245,16 @@ export function ResourceManagement() {
 
       {/* Add Resource Modal */}
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-        <DialogContent className="sm:max-w-[425px] md:max-w-[500px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
-          <div className="p-6 pb-4">
-            <div className="flex items-center justify-between px-6 md:px-8 py-6 border-b border-border/50 bg-muted/30">
-          <div>
-            <h2 className="text-xl md:text-2xl font-black tracking-tight">Add Resource</h2>
-            
-          </div>
-          <DialogClose asChild>
-            <button className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
-              <X className="w-5 h-5" />
-            </button>
-          </DialogClose>
-        </div>
+        <DialogContent className="w-[calc(100vw-24px)] sm:w-full sm:max-w-[425px] md:max-w-[500px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+          <div className="flex items-center justify-between px-4 sm:px-8 py-4 sm:py-6 border-b border-border/50 bg-muted/30">
+            <div>
+              <h2 className="text-lg sm:text-2xl font-black tracking-tight">Add Resource</h2>
+            </div>
+            <DialogClose asChild>
+              <button className="p-1.5 sm:p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors shrink-0">
+                <X className="w-5 h-5" />
+              </button>
+            </DialogClose>
           </div>
           
           <div className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[70vh]">
@@ -315,17 +312,17 @@ export function ResourceManagement() {
             </div>
           </div>
           
-          <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
+          <div className="px-4 sm:px-8 py-3.5 sm:py-6 bg-muted/30 border-t border-border/50 flex items-center justify-end gap-2 sm:gap-3 mt-auto shrink-0">
             <button 
               onClick={() => setIsAddModalOpen(false)}
-              className="px-5 py-2.5 rounded-xl font-bold text-muted-foreground hover:bg-muted transition-colors"
+              className="px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm text-muted-foreground hover:bg-muted transition-colors shrink-0"
             >
               Cancel
             </button>
             <button 
               onClick={handleAddResource}
               disabled={!newName.trim()}
-              className="px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all disabled:opacity-50"
+              className="px-4 sm:px-6 py-2 sm:py-2.5 bg-primary text-primary-foreground font-bold text-xs sm:text-sm rounded-xl shadow-md hover:bg-primary/90 transition-all disabled:opacity-50 shrink-0"
             >
               Save Resource
             </button>
@@ -335,29 +332,26 @@ export function ResourceManagement() {
 
       {/* Manage Types Modal */}
       <Dialog open={isManageTypesModalOpen} onOpenChange={setIsManageTypesModalOpen}>
-        <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
-          <div className="p-6 pb-4">
-            <div className="flex items-center justify-between px-6 md:px-8 py-6 border-b border-border/50 bg-muted/30">
-          <div>
-            <h2 className="text-xl md:text-2xl font-black tracking-tight">Manage Resource Types</h2>
-            
-          </div>
-          <DialogClose asChild>
-            <button className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
-              <X className="w-5 h-5" />
-            </button>
-          </DialogClose>
-        </div>
+        <DialogContent className="w-[calc(100vw-24px)] sm:w-full sm:max-w-[400px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+          <div className="flex items-center justify-between px-4 sm:px-8 py-4 sm:py-6 border-b border-border/50 bg-muted/30">
+            <div>
+              <h2 className="text-lg sm:text-2xl font-black tracking-tight">Manage Resource Types</h2>
+            </div>
+            <DialogClose asChild>
+              <button className="p-1.5 sm:p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors shrink-0">
+                <X className="w-5 h-5" />
+              </button>
+            </DialogClose>
           </div>
           
-          <div className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[70vh]">
+          <div className="p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 overflow-y-auto max-h-[70vh]">
             <div className="flex gap-2">
               <input 
                 type="text" 
                 value={newTypeName}
                 onChange={(e) => setNewTypeName(e.target.value)}
                 placeholder="e.g. Vehicle"
-                className="flex-1 px-4 py-2.5 bg-muted/50 border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium"
+                className="flex-1 min-w-0 px-3.5 py-2 bg-muted/50 border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium text-xs sm:text-sm"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleAddType();
                 }}
@@ -365,7 +359,7 @@ export function ResourceManagement() {
               <button 
                 onClick={handleAddType}
                 disabled={!newTypeName.trim()}
-                className="px-4 py-2.5 bg-foreground text-background font-bold rounded-xl shadow-md hover:bg-foreground/90 transition-all disabled:opacity-50"
+                className="px-4 py-2 bg-foreground text-background font-bold text-xs sm:text-sm rounded-xl shadow-md hover:bg-foreground/90 transition-all disabled:opacity-50 shrink-0"
               >
                 Add
               </button>
@@ -373,26 +367,26 @@ export function ResourceManagement() {
             
             <div className="space-y-2 mt-4 max-h-[250px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-muted">
               {resourceTypes.map(type => (
-                <div key={type} className="flex items-center justify-between p-3 bg-muted/30 border border-border/50 rounded-xl">
-                  <span className="font-bold text-sm">{type}</span>
+                <div key={type} className="flex items-center justify-between p-2.5 sm:p-3 bg-muted/30 border border-border/50 rounded-xl">
+                  <span className="font-bold text-xs sm:text-sm truncate">{type}</span>
                   <button 
                     onClick={() => confirmDeleteType(type)}
-                    className="p-1.5 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors"
+                    className="p-1.5 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors shrink-0"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               ))}
               {resourceTypes.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-4">No custom types defined.</p>
+                <p className="text-xs sm:text-sm text-muted-foreground text-center py-4">No custom types defined.</p>
               )}
             </div>
           </div>
           
-          <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
+          <div className="px-4 sm:px-8 py-3.5 sm:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
             <button 
               onClick={() => setIsManageTypesModalOpen(false)}
-              className="px-5 py-2.5 bg-foreground text-background font-bold rounded-xl hover:bg-foreground/90 transition-colors"
+              className="px-4 sm:px-5 py-2 sm:py-2.5 bg-foreground text-background font-bold text-xs sm:text-sm rounded-xl hover:bg-foreground/90 transition-colors"
             >
               Done
             </button>

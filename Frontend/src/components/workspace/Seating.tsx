@@ -726,8 +726,8 @@ export default function SeatingArrangementPage() {
         )}
       </div>
       </div>
-
-      <div className="flex-1 bg-[#e4dfcd] rounded-xl overflow-hidden shadow-sm relative min-h-[600px] border border-border">
+      <div className="flex-1 overflow-x-auto min-w-0">
+        <div className="bg-[#e4dfcd] rounded-xl overflow-hidden shadow-sm relative min-h-[600px] min-w-[850px] border border-border">
         {!isMounted ? (
           <div className="w-full h-full flex items-center justify-center bg-[#e4dfcd]">
             <div className="flex flex-col items-center gap-3">
@@ -1094,6 +1094,7 @@ export default function SeatingArrangementPage() {
             </div>
           </>
         )}
+        </div>
       </div>
 
       {/* Manage Seat Modal */}

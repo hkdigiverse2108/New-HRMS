@@ -43,35 +43,35 @@ export function ConfirmModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-md p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
-          <div className={`flex items-center justify-between px-6 py-5 border-b border-border/50 ${headerBgClass}`}>
-            <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-xl ${iconBgClass}`}>
+      <DialogContent className="w-[calc(100vw-24px)] sm:w-full max-w-md p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+          <div className={`flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-5 border-b border-border/50 ${headerBgClass}`}>
+            <div className="flex items-center gap-3 min-w-0 pr-2">
+              <div className={`p-2 rounded-xl shrink-0 ${iconBgClass}`}>
                 {isRestore ? <RotateCcw className="w-5 h-5" /> : isInfo ? <Info className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
               </div>
-              <div>
-                <h2 className="text-xl font-black text-foreground">{title}</h2>
-                {itemName && <p className="text-sm text-muted-foreground mt-1">Confirm {actionNoun} of {itemName}</p>}
+              <div className="min-w-0">
+                <h2 className="text-base sm:text-xl font-black text-foreground truncate">{title}</h2>
+                {itemName && <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 truncate">Confirm {actionNoun} of {itemName}</p>}
               </div>
             </div>
             <button 
               onClick={onClose}
-              className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
+              className="p-1.5 sm:p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors shrink-0"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
-          <div className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[70vh]">
-            <p className="text-foreground/80 text-sm leading-relaxed">
+          <div className="p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 overflow-y-auto max-h-[70vh]">
+            <p className="text-foreground/80 text-xs sm:text-sm leading-relaxed">
               {description}
             </p>
 
-            <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
+            <div className="pt-4 border-t border-border/50 flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 mt-auto shrink-0">
               <button 
                 type="button"
                 onClick={onClose}
-                className="px-5 py-2.5 rounded-xl font-bold text-muted-foreground hover:bg-muted transition-colors"
+                className="w-full sm:w-auto px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold text-muted-foreground hover:bg-muted transition-colors text-center"
               >Cancel</button>
               <button 
                 type="button"
@@ -79,7 +79,7 @@ export function ConfirmModal({
                   onConfirm();
                   onClose();
                 }}
-                className={`px-6 py-2.5 text-sm font-bold text-white rounded-xl transition-all shadow-sm active:scale-95 ${buttonClass}`}
+                className={`w-full sm:w-auto px-5 sm:px-6 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-white rounded-xl transition-all shadow-sm active:scale-95 text-center ${buttonClass}`}
               >
                 {finalConfirmText}
               </button>

@@ -66,26 +66,26 @@ export function FinancialPlan() {
   };
 
   return (
-    <div className="w-full space-y-6 animate-in fade-in duration-500 pb-12 relative">
+    <div className="w-full space-y-6 animate-in fade-in duration-500 pb-12 relative min-w-0">
       
       {/* Header */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
-            <Target className="w-6 h-6 text-primary" />
+          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
+            <Target className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
             Financial Planning & Targets
           </h1>
-          <p className="text-muted-foreground mt-1 text-sm font-medium">
+          <p className="text-muted-foreground mt-1 text-xs sm:text-sm font-medium">
             Set and track categorical budgets and financial targets for the fiscal year.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2.5">
-          <button className="px-4 py-2 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center gap-2 text-sm">
+        <div className="flex flex-wrap gap-2 sm:gap-2.5 w-full xl:w-auto">
+          <button className="px-3 sm:px-4 py-2 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center gap-2 text-xs sm:text-sm">
             <Download className="w-4 h-4 text-indigo-500" /> Export Plan
           </button>
           <button 
             onClick={() => setIsAddCategoryOpen(true)}
-            className="px-4 py-2 bg-primary text-primary-foreground font-bold rounded-lg hover:opacity-90 transition-opacity shadow-sm flex items-center gap-2 text-sm"
+            className="px-3 sm:px-4 py-2 bg-primary text-primary-foreground font-bold rounded-lg hover:opacity-90 transition-opacity shadow-sm flex items-center gap-2 text-xs sm:text-sm"
           >
             <Plus className="w-4 h-4" /> Add Category
           </button>
@@ -216,7 +216,7 @@ export function FinancialPlan() {
                 <X className="w-4 h-4 text-muted-foreground" />
               </button>
             </div>
-            <div className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[70vh]">
+            <div className="p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 overflow-y-auto max-h-[70vh]">
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Sub-Category</label>
                 <input type="text" placeholder="e.g. Headcount" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20" />
@@ -225,7 +225,7 @@ export function FinancialPlan() {
                 <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Metric Name</label>
                 <input type="text" placeholder="e.g. Developers" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Unit</label>
                   <SearchableSelect
@@ -245,7 +245,7 @@ export function FinancialPlan() {
                 </div>
               </div>
             </div>
-            <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
+            <div className="px-4 sm:px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
               <button onClick={() => { setIsAddRowOpen(false); setIsEditRowOpen(false); }} className="px-4 py-2 font-bold text-sm bg-background border border-border/50 rounded-lg hover:bg-muted transition-colors text-muted-foreground">Cancel</button>
               <button onClick={() => { setIsAddRowOpen(false); setIsEditRowOpen(false); }} className="px-4 py-2 font-bold text-sm bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity shadow-sm">Save Row</button>
             </div>

@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
-import { Download, Plus, Edit3, Trash2, ArrowUpRight, ArrowDownRight, Search, FileText, ChevronRight, Briefcase, Calendar, Info, X, Users, Filter, ChevronDown, Landmark } from "lucide-react";
-import { DialogClose,  Dialog, DialogContent  } from "@/components/ui/dialog";
+import { Download, Plus, Edit3, Trash2, ChevronRight, X, Users, Filter, ChevronDown, Landmark, Calendar } from "lucide-react";
+import { Dialog, DialogContent  } from "@/components/ui/dialog";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { moveToRecycleBin } from "@/lib/recycle-bin";
 import { SearchableSelect } from "@/components/ui/select";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";
+import { DateRangeFilter } from "@/components/common/DateRangeFilter";
+import { SearchInput } from "@/components/common/SearchInput";
 
 const mockClientData = [
   {
@@ -39,6 +41,10 @@ export function OtherTransactions() {
 
   const [deleteConfirm, setDeleteConfirm] = useState<{isOpen: boolean, clientId: string, txId: string, desc: string}>({isOpen: false, clientId: "", txId: "", desc: ""});
   const [searchQuery, setSearchQuery] = useState("");
+  const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
+    from: undefined,
+    to: undefined,
+  });
   const [expandedClients, setExpandedClients] = useState<string[]>(["Acme Corp"]);
 
   // Sorting for clients
@@ -99,32 +105,32 @@ export function OtherTransactions() {
   };
 
   return (
-    <div className="w-full space-y-6 animate-in fade-in duration-500 pb-12 relative">
+    <div className="w-full space-y-6 animate-in fade-in duration-500 pb-12 relative min-w-0">
       
       {/* Header */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
-            <Users className="w-6 h-6 text-primary" />
+          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
+            <Users className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
             Client & External Transactions
           </h1>
-          <p className="text-muted-foreground mt-1 text-sm font-medium">
+          <p className="text-muted-foreground mt-1 text-xs sm:text-sm font-medium">
             Manage ledgers, track total inflows/outflows, and net balances per client or external entity.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2.5">
+        <div className="flex flex-wrap gap-2 sm:gap-2.5 w-full xl:w-auto">
           <button 
             onClick={() => setIsManageBanksOpen(true)}
-            className="px-4 py-2 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center gap-2 text-sm"
+            className="px-3 sm:px-4 py-2 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center gap-2 text-xs sm:text-sm"
           >
             <Landmark className="w-4 h-4 text-emerald-500" /> Manage Banks
           </button>
-          <button className="px-4 py-2 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center gap-2 text-sm">
+          <button className="px-3 sm:px-4 py-2 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center gap-2 text-xs sm:text-sm">
             <Download className="w-4 h-4 text-indigo-500" /> Export Ledgers
           </button>
           <button 
             onClick={() => setIsAddTxOpen(true)}
-            className="px-4 py-2 bg-primary text-primary-foreground font-bold rounded-lg hover:opacity-90 transition-opacity shadow-sm flex items-center gap-2 text-sm"
+            className="px-3 sm:px-4 py-2 bg-primary text-primary-foreground font-bold rounded-lg hover:opacity-90 transition-opacity shadow-sm flex items-center gap-2 text-xs sm:text-sm"
           >
             <Plus className="w-4 h-4" /> Add Transaction
           </button>
@@ -132,37 +138,25 @@ export function OtherTransactions() {
       </div>
 
       {/* Filters & Search */}
-      <div className="bg-background border border-border/50 rounded-2xl p-3 flex flex-wrap items-center gap-4 shadow-sm justify-between">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 text-sm font-bold text-muted-foreground pl-2">
+      <div className="bg-background border border-border/50 rounded-2xl p-3 flex flex-wrap items-center gap-3 sm:gap-4 shadow-sm justify-between">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-4 w-full md:w-auto">
+          <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-muted-foreground pl-1 sm:pl-2">
             <Filter className="w-4 h-4" /> Filters:
           </div>
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-muted-foreground font-medium">From:</span>
-            <div className="relative">
-              <input type="text" placeholder="dd/mm/yyyy" className="pl-3 pr-8 py-1.5 bg-background border border-border/50 rounded-lg text-sm w-32 focus:outline-none focus:ring-2 focus:ring-primary/20" />
-              <Calendar className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            </div>
-          </div>
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-muted-foreground font-medium">To:</span>
-            <div className="relative">
-              <input type="text" placeholder="dd/mm/yyyy" className="pl-3 pr-8 py-1.5 bg-background border border-border/50 rounded-lg text-sm w-32 focus:outline-none focus:ring-2 focus:ring-primary/20" />
-              <Calendar className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            </div>
-          </div>
-        </div>
-        
-        <div className="relative w-full md:w-80">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search clients or entities..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-1.5 bg-background border border-border/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium"
+          <DateRangeFilter
+            dateRange={dateRange}
+            onChange={setDateRange}
+            placeholder="Filter by date range"
+            className="w-full sm:w-auto"
           />
         </div>
+        
+        <SearchInput
+          placeholder="Search clients or entities..."
+          value={searchQuery}
+          onChange={setSearchQuery}
+          className="w-full md:w-80"
+        />
       </div>
 
       {/* Expandable Data Table */}
@@ -349,12 +343,12 @@ export function OtherTransactions() {
                 <X className="w-4 h-4 text-muted-foreground" />
               </button>
             </div>
-            <div className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[70vh]">
+            <div className="p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 overflow-y-auto max-h-[70vh]">
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Category *</label>
                 <input type="text" placeholder="e.g. Software Sales" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Date *</label>
                   <input type="date" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20" />
@@ -372,7 +366,7 @@ export function OtherTransactions() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Amount (₹) *</label>
                   <input type="number" placeholder="0.00" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20" />
@@ -392,7 +386,7 @@ export function OtherTransactions() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Bank Account *</label>
                   <SearchableSelect
@@ -412,7 +406,7 @@ export function OtherTransactions() {
                 <textarea rows={2} placeholder="Any additional notes" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20" />
               </div>
             </div>
-            <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
+            <div className="px-4 sm:px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
               <button onClick={() => setIsAddTxOpen(false)} className="px-4 py-2 font-bold text-sm bg-background border border-border/50 rounded-lg hover:bg-muted transition-colors text-muted-foreground">Cancel</button>
               <button onClick={() => setIsAddTxOpen(false)} className="px-4 py-2 font-bold text-sm bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity shadow-sm">Save Transaction</button>
             </div>
@@ -432,20 +426,20 @@ export function OtherTransactions() {
               </button>
             </div>
             
-            <div className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[70vh]">
+            <div className="p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 overflow-y-auto max-h-[70vh]">
               {/* Summary Cards */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 sm:p-4">
                   <div className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-500 mb-1">Total Inflow</div>
-                  <div className="text-xl font-black text-emerald-700 dark:text-emerald-400">₹150,000</div>
+                  <div className="text-lg sm:text-xl font-black text-emerald-700 dark:text-emerald-400">₹150,000</div>
                 </div>
-                <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4">
+                <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-3 sm:p-4">
                   <div className="text-[10px] font-black uppercase tracking-widest text-rose-600 dark:text-rose-500 mb-1">Total Outflow</div>
-                  <div className="text-xl font-black text-rose-700 dark:text-rose-400">₹10,000</div>
+                  <div className="text-lg sm:text-xl font-black text-rose-700 dark:text-rose-400">₹10,000</div>
                 </div>
-                <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-4">
+                <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-3 sm:p-4">
                   <div className="text-[10px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400 mb-1">Net Balance</div>
-                  <div className="text-xl font-black text-indigo-700 dark:text-indigo-300">₹140,000</div>
+                  <div className="text-lg sm:text-xl font-black text-indigo-700 dark:text-indigo-300">₹140,000</div>
                 </div>
               </div>
 
@@ -454,7 +448,7 @@ export function OtherTransactions() {
               {/* Quick Add Form */}
               <div className="space-y-4">
                 <h4 className="text-sm font-bold text-foreground">Add New Transaction</h4>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Date *</label>
                     <input type="date" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
@@ -472,7 +466,7 @@ export function OtherTransactions() {
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Amount (₹) *</label>
                     <input type="number" placeholder="0.00" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
@@ -492,7 +486,7 @@ export function OtherTransactions() {
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Bank Account *</label>
                     <SearchableSelect
@@ -510,7 +504,7 @@ export function OtherTransactions() {
               </div>
             </div>
 
-            <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
+            <div className="px-4 sm:px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
               <button onClick={() => setIsManageClientOpen(false)} className="px-4 py-2 font-bold text-sm bg-background border border-border/50 rounded-lg hover:bg-muted transition-colors text-muted-foreground">Close</button>
               <button onClick={() => setIsManageClientOpen(false)} className="px-4 py-2 font-bold text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm">Save Transaction</button>
             </div>

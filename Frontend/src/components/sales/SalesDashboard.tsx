@@ -201,9 +201,9 @@ function QuickActions({ onAction }: { onAction: (label: string) => void }) {
 
 function RevenueChart() {
   return (
-    <div className="rounded-2xl border border-border bg-card p-5">
+    <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 min-w-0 overflow-hidden">
       <SectionTitle title="Revenue vs Target" subtitle="Rolling 12 months" />
-      <div className="mt-4 h-64">
+      <div className="mt-4 h-64 w-full min-w-0">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={revenueVsTarget}>
             <defs>
@@ -227,16 +227,16 @@ function RevenueChart() {
 
 function FunnelChartSection() {
   return (
-    <div className="rounded-2xl border border-border bg-card p-5">
+    <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 min-w-0 overflow-hidden">
       <SectionTitle title="Conversion Funnel" subtitle="Lead to won journey" />
       <div className="mt-4 space-y-2">
         {conversionFunnel.map((item, i) => {
           const maxVal = conversionFunnel[0]?.value || 1;
           const pct = (item.value / maxVal) * 100;
           return (
-            <div key={item.stage} className="flex items-center gap-3">
-              <span className="w-20 text-right text-xs font-medium text-muted-foreground">{item.stage}</span>
-              <div className="flex-1">
+            <div key={item.stage} className="flex items-center gap-2 sm:gap-3">
+              <span className="w-16 sm:w-20 text-right text-xs font-medium text-muted-foreground truncate">{item.stage}</span>
+              <div className="flex-1 min-w-0">
                 <div className="h-7 overflow-hidden rounded-lg bg-muted/50" style={{ width: "100%" }}>
                   <div
                     className="flex h-full items-center rounded-lg px-2 text-[11px] font-bold text-white transition-all duration-700"
@@ -247,7 +247,7 @@ function FunnelChartSection() {
                 </div>
               </div>
               {i > 0 && (
-                <span className="text-[10px] text-muted-foreground">
+                <span className="text-[10px] text-muted-foreground w-8 text-right shrink-0">
                   {((item.value / (conversionFunnel[i - 1]?.value || 1)) * 100).toFixed(0)}%
                 </span>
               )}
@@ -261,9 +261,9 @@ function FunnelChartSection() {
 
 function LeadSourceChart() {
   return (
-    <div className="rounded-2xl border border-border bg-card p-5">
+    <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 min-w-0 overflow-hidden">
       <SectionTitle title="Lead Source Analysis" />
-      <div className="mt-4 h-64">
+      <div className="mt-4 h-64 w-full min-w-0">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={leadSourceData} layout="vertical">
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -281,9 +281,9 @@ function LeadSourceChart() {
 
 function CategoryPieChart() {
   return (
-    <div className="rounded-2xl border border-border bg-card p-5">
+    <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 min-w-0 overflow-hidden">
       <SectionTitle title="Category Mix" />
-      <div className="mt-4 h-64">
+      <div className="mt-4 h-64 w-full min-w-0">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie data={categoryMix} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={3} dataKey="value">
@@ -309,9 +309,9 @@ function CategoryPieChart() {
 
 function MonthlyGrowthChart() {
   return (
-    <div className="rounded-2xl border border-border bg-card p-5">
+    <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 min-w-0 overflow-hidden">
       <SectionTitle title="Monthly Growth" />
-      <div className="mt-4 h-64">
+      <div className="mt-4 h-64 w-full min-w-0">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={monthlyGrowth}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -461,7 +461,7 @@ export function SalesDashboard({ setActive, onAction }: { setActive?: (path: str
             {new Date().toLocaleDateString("en-GB", { day: '2-digit', month: '2-digit', year: 'numeric' })} · Complete sales operating system for HK DigiVerse
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="relative z-50">
             <button 
               onClick={() => setIsQuickActionsOpen(!isQuickActionsOpen)}
@@ -489,17 +489,17 @@ export function SalesDashboard({ setActive, onAction }: { setActive?: (path: str
               </div>
             )}
           </div>
-          <button onClick={() => setActive?.("/work/sales/analytics")} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold transition-colors hover:bg-accent">Analytics</button>
-          <button onClick={() => setActive?.("/work/sales/pipeline")} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold transition-colors hover:bg-accent">Pipeline</button>
+          <button onClick={() => setActive?.("/work/sales/analytics")} className="rounded-lg border border-border px-3 sm:px-4 py-2 text-sm font-semibold transition-colors hover:bg-accent">Analytics</button>
+          <button onClick={() => setActive?.("/work/sales/pipeline")} className="rounded-lg border border-border px-3 sm:px-4 py-2 text-sm font-semibold transition-colors hover:bg-accent">Pipeline</button>
         </div>
       </div>
 
       {/* Morning Brief + Health */}
       <div className="grid gap-4 lg:grid-cols-[1fr_240px]">
-        <div className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-white p-6">
+        <div className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-white p-4 sm:p-6 min-w-0">
           <h2 className="text-xl font-bold">Good Morning, Het 👋</h2>
           <p className="text-sm text-muted-foreground">Here is today's sales summary.</p>
-          <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
+          <div className="mt-4 grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-2">
             {[
               ["42", "follow-ups due today"],
               ["8", "meetings scheduled"],
@@ -521,7 +521,7 @@ export function SalesDashboard({ setActive, onAction }: { setActive?: (path: str
       </div>
 
       {/* Stat Grid — 20 metrics */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+      <div className="grid grid-cols-1 min-[360px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
         <StatCard label="Today's Revenue" value="₹1.42 L" icon={IndianRupee} color="emerald" trend="up" />
         <StatCard label="Monthly Revenue" value="₹34.10 L" sub="68% of target" icon={IndianRupee} color="blue" trend="up" />
         <StatCard label="Monthly Target" value="₹50.00 L" sub="68% of target" icon={Target} color="amber" />

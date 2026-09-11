@@ -64,7 +64,7 @@ export function CEODashboard({ active = "/ceo-dashboard" }: { active?: string })
           <h1 className="text-3xl md:text-4xl font-black tracking-tight text-foreground">Good Morning, Het 👋</h1>
           <p className="text-muted-foreground mt-2 font-medium">Here's what is happening across HK DigiVerse today.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 w-full sm:w-auto">
           <SearchableSelect 
             value={timeRange}
             onChange={(val) => setTimeRange(val)}
@@ -74,22 +74,22 @@ export function CEODashboard({ active = "/ceo-dashboard" }: { active?: string })
               { label: "This Month", value: "This Month" },
               { label: "This Quarter", value: "This Quarter" }
             ]}
-            className="w-[140px] h-[38px] px-4 bg-card border border-border/50 rounded-xl text-sm font-bold shadow-sm outline-none"
+            className="w-full sm:w-[140px] h-[38px] px-4 bg-card border border-border/50 rounded-xl text-sm font-bold shadow-sm outline-none"
           />
         </div>
       </div>
 
       {/* Metrics Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-4 gap-4">
         {metrics.map((metric, i) => (
-          <div key={i} className="bg-card border border-border/50 rounded-2xl p-5 shadow-sm flex flex-col justify-between group hover:border-primary/50 transition-colors">
+          <div key={i} className="bg-card border border-border/50 rounded-2xl p-5 shadow-sm flex flex-col justify-between group hover:border-primary/50 transition-colors min-w-0">
             <div className="flex justify-between items-start mb-4">
               <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0", metric.bg, metric.color)}>
                 <metric.icon className="w-5 h-5" />
               </div>
               {metric.trend !== "neutral" && (
                 <div className={cn(
-                  "flex items-center gap-0.5 text-[10px] font-black uppercase px-2 py-1 rounded-md",
+                  "flex items-center gap-0.5 text-[10px] font-black uppercase px-2 py-1 rounded-md shrink-0",
                   metric.trend === "up" ? "text-emerald-600 bg-emerald-500/10" : "text-rose-600 bg-rose-500/10"
                 )}>
                   {metric.trend === "up" ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
@@ -111,10 +111,10 @@ export function CEODashboard({ active = "/ceo-dashboard" }: { active?: string })
       </div>
 
       <div className="grid lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-8">
+        <div className="lg:col-span-2 space-y-8 min-w-0">
           
           {/* Main Chart Area Placeholder */}
-          <div className="bg-card border border-border/50 rounded-3xl p-6 shadow-sm min-h-[400px] flex flex-col items-center justify-center relative overflow-hidden">
+          <div className="bg-card border border-border/50 rounded-3xl p-6 shadow-sm min-h-[400px] flex flex-col items-center justify-center relative overflow-hidden min-w-0">
             <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
             <Activity className="w-16 h-16 text-muted-foreground/20 mb-4" />
             <h3 className="text-xl font-black text-foreground mb-2">Growth Analytics</h3>
@@ -136,12 +136,12 @@ export function CEODashboard({ active = "/ceo-dashboard" }: { active?: string })
             </h3>
             <div className="bg-amber-500/5 border border-amber-500/20 rounded-3xl p-2 shadow-sm space-y-1">
               {attentionItems.map((item, i) => (
-                <div key={i} className="flex items-center justify-between p-4 bg-background/50 hover:bg-background rounded-2xl transition-colors border border-transparent hover:border-border/50">
-                  <div className="flex items-center gap-4">
+                <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-background/50 hover:bg-background rounded-2xl transition-colors border border-transparent hover:border-border/50">
+                  <div className="flex items-center gap-4 min-w-0">
                     <div className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
-                    <p className="font-bold text-sm text-foreground">{item.title}</p>
+                    <p className="font-bold text-sm text-foreground truncate">{item.title}</p>
                   </div>
-                  <button onClick={() => toast.info(`Action triggered: ${item.action} for ${item.title}`)} className="flex items-center gap-1 text-xs font-black uppercase text-amber-600 hover:text-amber-700 transition-colors px-3 py-1.5 bg-amber-500/10 rounded-lg shrink-0">
+                  <button onClick={() => toast.info(`Action triggered: ${item.action} for ${item.title}`)} className="flex items-center gap-1 text-xs font-black uppercase text-amber-600 hover:text-amber-700 transition-colors px-3 py-1.5 bg-amber-500/10 rounded-lg shrink-0 self-end sm:self-auto">
                     {item.action} <ArrowRight className="w-3 h-3" />
                   </button>
                 </div>

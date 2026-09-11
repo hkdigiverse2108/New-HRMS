@@ -2,7 +2,8 @@ import { useState } from "react";
 import { formatCurrency, MOCK_PAYROLL_RUNS, type PayrollRun } from "./payroll-data";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";
-import { Users, Gift, MinusCircle, PlayCircle, CheckCircle2, Lock, FileSpreadsheet, FileText, Send, Search, Filter } from "lucide-react";
+import { Users, Gift, MinusCircle, PlayCircle, CheckCircle2, Lock, FileSpreadsheet, FileText, Send, Filter } from "lucide-react";
+import { SearchInput } from "@/components/common/SearchInput";
 import { SearchableSelect } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -85,13 +86,13 @@ export function PayrollProcessing() {
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-[1400px]">
       
       {/* Header */}
-      <div className="mb-8 flex items-end justify-between border-b border-border pb-6">
+      <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 border-b border-border pb-5 sm:pb-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Payroll Processing</h1>
-          <p className="mt-1 text-[14px] text-muted-foreground">{month} {year} · Attendance, leave, OT, bonuses and recoveries fetched automatically</p>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Payroll Processing</h1>
+          <p className="mt-1 text-xs sm:text-[14px] text-muted-foreground">{month} {year} · Attendance, leave, OT, bonuses and recoveries fetched automatically</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="relative">
+        <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
+          <div className="relative flex-1 sm:flex-initial">
             <SearchableSelect
               value={month}
               onChange={(val) => { setMonth(val); setStage("not_generated"); }}
@@ -99,10 +100,10 @@ export function PayrollProcessing() {
                 { label: "July", value: "July" },
                 { label: "August", value: "August" }
               ]}
-              className="w-[120px] bg-white border border-border/80 rounded-lg text-[13px] font-semibold text-foreground/80 focus:border-emerald-500 shadow-sm"
+              className="w-full sm:w-[120px] bg-white border border-border/80 rounded-lg text-[13px] font-semibold text-foreground/80 focus:border-emerald-500 shadow-sm"
             />
           </div>
-          <div className="relative">
+          <div className="relative flex-1 sm:flex-initial">
             <SearchableSelect
               value={year}
               onChange={(val) => { setYear(val); setStage("not_generated"); }}
@@ -110,20 +111,20 @@ export function PayrollProcessing() {
                 { label: "2026", value: "2026" },
                 { label: "2027", value: "2027" }
               ]}
-              className="w-[100px] bg-white border border-border/80 rounded-lg text-[13px] font-semibold text-foreground/80 focus:border-emerald-500 shadow-sm"
+              className="w-full sm:w-[100px] bg-white border border-border/80 rounded-lg text-[13px] font-semibold text-foreground/80 focus:border-emerald-500 shadow-sm"
             />
           </div>
         </div>
       </div>
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
         <div className="bg-[#0b6c4b] rounded-2xl p-5 shadow-sm relative text-white">
           <div className="flex justify-between items-start mb-2">
             <p className="text-[12px] font-medium text-emerald-50">Company Payroll Expense</p>
             <span className="text-[14px] font-bold text-emerald-100">₹</span>
           </div>
-          <p className="text-[32px] font-black">₹4,69,330</p>
+          <p className="text-2xl sm:text-[32px] font-black">₹4,69,330</p>
           <p className="text-[12px] text-emerald-100 mt-1">Gross + OT + bonus</p>
         </div>
         <div className="bg-white border border-border/60 rounded-2xl p-5 shadow-sm relative">
@@ -131,7 +132,7 @@ export function PayrollProcessing() {
             <p className="text-[12px] font-medium text-muted-foreground">Employees Processed</p>
             <Users className="h-4 w-4 text-[#0b6c4b]" />
           </div>
-          <p className="text-[32px] font-black text-foreground">{processedCount}</p>
+          <p className="text-2xl sm:text-[32px] font-black text-foreground">{processedCount}</p>
           <p className="text-[12px] text-muted-foreground mt-1">{MOCK_PAYROLL_RUNS.length} eligible</p>
         </div>
         <div className="bg-white border border-border/60 rounded-2xl p-5 shadow-sm relative">
@@ -139,20 +140,20 @@ export function PayrollProcessing() {
             <p className="text-[12px] font-medium text-muted-foreground">Total Bonus</p>
             <Gift className="h-4 w-4 text-[#0b6c4b]" />
           </div>
-          <p className="text-[32px] font-black text-foreground">₹31,000</p>
+          <p className="text-2xl sm:text-[32px] font-black text-foreground">₹31,000</p>
         </div>
         <div className="bg-white border border-border/60 rounded-2xl p-5 shadow-sm relative">
           <div className="flex justify-between items-start mb-2">
             <p className="text-[12px] font-medium text-muted-foreground">Total Deduction</p>
             <MinusCircle className="h-4 w-4 text-[#0b6c4b]" />
           </div>
-          <p className="text-[32px] font-black text-foreground">₹52,349</p>
+          <p className="text-2xl sm:text-[32px] font-black text-foreground">₹52,349</p>
         </div>
       </div>
 
       {/* Action Bar */}
-      <div className="flex flex-wrap items-center gap-3 mb-6 bg-white border border-border/60 p-2 rounded-2xl shadow-sm">
-        <div className={cn("px-4 py-1.5 rounded-full text-[12px] font-bold whitespace-nowrap ml-2", statusColor[stage])}>
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-6 bg-white border border-border/60 p-3 rounded-2xl shadow-sm overflow-x-auto">
+        <div className={cn("px-4 py-1.5 rounded-full text-[12px] font-bold whitespace-nowrap", statusColor[stage])}>
           Status: {statusLabel[stage]}
         </div>
         <div className="w-px h-6 bg-border/60 mx-1 hidden sm:block"></div>
@@ -201,19 +202,19 @@ export function PayrollProcessing() {
 
         <button
           onClick={handleExcelExport}
-          className="flex items-center gap-2 bg-white border border-border/80 px-4 py-2 rounded-lg text-foreground/80 text-[13px] font-semibold hover:bg-muted/50 transition-colors shadow-sm whitespace-nowrap"
+          className="flex items-center gap-2 bg-white border border-border/80 px-3 sm:px-4 py-2 rounded-lg text-foreground/80 text-[13px] font-semibold hover:bg-muted/50 transition-colors shadow-sm whitespace-nowrap"
         >
           <FileSpreadsheet className="h-4 w-4" /> Export Excel
         </button>
         <button
           onClick={handlePdfExport}
-          className="flex items-center gap-2 bg-white border border-border/80 px-4 py-2 rounded-lg text-foreground/80 text-[13px] font-semibold hover:bg-muted/50 transition-colors shadow-sm whitespace-nowrap"
+          className="flex items-center gap-2 bg-white border border-border/80 px-3 sm:px-4 py-2 rounded-lg text-foreground/80 text-[13px] font-semibold hover:bg-muted/50 transition-colors shadow-sm whitespace-nowrap"
         >
           <FileText className="h-4 w-4" /> Export PDF
         </button>
         <button
           onClick={handleSendPayslips}
-          className="flex items-center gap-2 bg-white border border-border/80 px-4 py-2 rounded-lg text-foreground/80 text-[13px] font-semibold hover:bg-muted/50 transition-colors shadow-sm whitespace-nowrap"
+          className="flex items-center gap-2 bg-white border border-border/80 px-3 sm:px-4 py-2 rounded-lg text-foreground/80 text-[13px] font-semibold hover:bg-muted/50 transition-colors shadow-sm whitespace-nowrap"
         >
           <Send className="h-4 w-4" /> Send Payslips
         </button>
@@ -221,30 +222,28 @@ export function PayrollProcessing() {
 
       {/* Table */}
       <div className="bg-white border border-border/60 rounded-2xl shadow-sm overflow-hidden flex flex-col">
-        <div className="p-5 border-b border-border/60 bg-white flex justify-between items-center">
+        <div className="p-4 sm:p-5 border-b border-border/60 bg-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
             <h2 className="text-[15px] font-bold text-foreground">Payroll Preview</h2>
             <p className="text-[12px] text-muted-foreground mt-0.5">Computed from effective salary as on 01 {month} {year}</p>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <input 
-                type="text" 
+          <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
+            <div className="flex-1 sm:w-64">
+              <SearchInput 
                 placeholder="Search employees..." 
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 pr-4 py-1.5 border border-border/80 rounded-lg text-[13px] w-64 outline-none focus:border-emerald-500 bg-muted/50 focus:bg-white transition-colors"
+                onChange={setSearchTerm}
+                className="w-full"
               />
             </div>
-            <button className="flex items-center gap-2 border border-border/80 bg-white px-3 py-1.5 rounded-lg text-[13px] font-semibold text-foreground/80 hover:bg-muted/50 transition-colors">
+            <button className="flex items-center gap-2 border border-border/80 bg-white px-3 py-2 rounded-lg text-[13px] font-semibold text-foreground/80 hover:bg-muted/50 transition-colors shadow-sm shrink-0">
               <Filter className="h-4 w-4" /> Filter
             </button>
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+        <div className="overflow-x-auto min-w-0">
+          <table className="w-full text-left border-collapse min-w-[850px]">
             <thead>
               <tr className="border-b border-border/60 bg-muted/50/50">
                 <SortableHeader label="Employee" sortKey="employee" currentSort={sortConfig} onSort={requestSort} className="py-4 px-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest" />

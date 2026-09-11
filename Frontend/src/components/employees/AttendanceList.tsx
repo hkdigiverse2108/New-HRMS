@@ -1,16 +1,15 @@
 import { useState, useMemo } from "react";
-import { X,  Search, Filter, Download, MoreHorizontal, CheckCircle2, XCircle, Clock, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Coffee, Briefcase, Award } from "lucide-react";
-import { format } from "date-fns";
+import { X, Download, MoreHorizontal, Clock, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Coffee, Briefcase, Award } from "lucide-react";
 import { DateRange } from "react-day-picker";
 import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { DialogClose,  Dialog, DialogContent, DialogHeader, DialogTitle  } from "@/components/ui/dialog";
-import { cn, formatDate } from "@/lib/utils";
+import { DialogClose, Dialog, DialogContent} from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import { useEmployeesContext } from "./EmployeeContext";
-import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";
+import { DateRangeFilter } from "@/components/common/DateRangeFilter";
+import { SearchInput } from "@/components/common/SearchInput";
+import { StatusBadge } from "@/components/common/StatusBadge";
 
 type AttendanceStatus = "Present" | "Absent" | "Late" | "On Leave";
 
@@ -169,23 +168,18 @@ export function AttendanceList() {
   }, [filteredData]);
 
   const getStatusBadge = (status: AttendanceStatus) => {
-    switch (status) {
-      case "Present": return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/50"><CheckCircle2 className="w-3.5 h-3.5" /> Present</span>;
-      case "Absent": return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200/50"><XCircle className="w-3.5 h-3.5" /> Absent</span>;
-      case "Late": return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200/50"><Clock className="w-3.5 h-3.5" /> Late</span>;
-      case "On Leave": return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200/50"><Clock className="w-3.5 h-3.5" /> On Leave</span>;
-    }
+    return <StatusBadge status={status} />;
   };
 
   return (
     <div className="h-full flex flex-col space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-black text-foreground tracking-tight">Daily Attendance</h1>
-          <p className="text-sm text-muted-foreground mt-1">Past 7 Days</p>
+          <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">Daily Attendance</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">Past 7 Days</p>
         </div>
-        <div className="flex items-center gap-3">
-          <button className="px-4 py-2 bg-white border border-border rounded-xl text-sm font-bold text-foreground/80 hover:bg-muted/50 shadow-sm flex items-center gap-2">
+        <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+          <button className="px-4 py-2 bg-white border border-border rounded-xl text-xs sm:text-sm font-bold text-foreground/80 hover:bg-muted/50 shadow-sm flex items-center gap-2">
             <Download className="w-4 h-4" /> Export
           </button>
         </div>
@@ -197,7 +191,7 @@ export function AttendanceList() {
         {/* Left Column: KPI Cards */}
         <div className="xl:col-span-2 flex flex-col gap-6">
           {/* Overall Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             {[
               { label: "Total Present", value: stats.present, color: "text-emerald-600", bg: "bg-emerald-50" },
               { label: "Total Absent", value: stats.absent, color: "text-rose-600", bg: "bg-rose-50" },
@@ -288,61 +282,28 @@ export function AttendanceList() {
       {/* Main Content Area */}
       <div className="flex-1 bg-white border border-border rounded-3xl shadow-sm overflow-hidden flex flex-col min-h-[500px]">
         {/* Toolbar */}
-        <div className="p-4 border-b border-border flex flex-col sm:flex-row justify-between items-center gap-4 bg-muted/50/50">
-          <div className="relative w-full sm:w-72">
-            <input 
-              type="text" 
-              placeholder="Search by name or role..." 
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-white border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm"
-            />
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          </div>
+        <div className="p-3 sm:p-4 border-b border-border flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-3 sm:gap-4 bg-muted/50/50">
+          <SearchInput
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Search by name or role..."
+            containerClassName="w-full lg:w-72"
+          />
           
-          <div className="flex items-center gap-4 w-full sm:w-auto">
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-2 bg-white border border-border rounded-xl text-sm font-medium text-foreground/80 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/20 hover:bg-muted/50 transition-colors",
-                    !dateRange && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-1 h-4 w-4" />
-                  {dateRange?.from ? (
-                    dateRange.to ? (
-                      <>
-                        {formatDate(dateRange.from)} -{" "}
-                        {formatDate(dateRange.to)}
-                      </>
-                    ) : (
-                      formatDate(dateRange.from)
-                    )
-                  ) : (
-                    <span>Pick a date range</span>
-                  )}
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="end">
-                <Calendar
-                  initialFocus
-                  mode="range"
-                  defaultMonth={dateRange?.from || new Date()}
-                  selected={dateRange}
-                  onSelect={setDateRange}
-                  numberOfMonths={2}
-                />
-              </PopoverContent>
-            </Popover>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
+            <DateRangeFilter
+              value={dateRange}
+              onChange={setDateRange}
+              className="w-full sm:w-auto"
+            />
             
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 hide-scrollbar">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
               {(["All", "Present", "Absent", "Late", "On Leave"] as const).map(status => (
                 <button
                   key={status}
                   onClick={() => setStatusFilter(status)}
                   className={cn(
-                    "px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all duration-200",
+                    "px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-200 shrink-0",
                     statusFilter === status 
                       ? "bg-primary text-primary-foreground shadow-md" 
                       : "bg-white text-foreground/80 border border-border hover:bg-muted/50 hover:text-foreground"

@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { Shield, Search, Filter, History, Download, ArrowUpDown } from "lucide-react";
+import { Shield, History, Download, ArrowUpDown } from "lucide-react";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";
+import { SearchInput } from "@/components/common/SearchInput";
+import { DateRangeFilter } from "@/components/common/DateRangeFilter";
 
 const mockAuditLogs = [
   { id: 'AUD-001', date: 'Oct 24, 2023 10:45 AM', user: 'Admin System', action: 'Approved Payroll Run', ip: '192.168.1.1' },
@@ -14,6 +16,10 @@ const mockAuditLogs = [
 
 export function AuditLogs() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
+    from: undefined,
+    to: undefined,
+  });
 
   const filteredLogs = mockAuditLogs.filter(log => 
     log.user.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -22,54 +28,53 @@ export function AuditLogs() {
   const { items: sortedLogs, requestSort, sortConfig } = useSortableData(filteredLogs);
 
   return (
-    <div className="w-full space-y-8 animate-in fade-in duration-500">
+    <div className="w-full space-y-6 sm:space-y-8 animate-in fade-in duration-500 min-w-0">
       
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-foreground flex items-center gap-2">
-            <Shield className="w-8 h-8 text-primary" />
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground flex items-center gap-2">
+            <Shield className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
             Financial Audit Logs
           </h1>
-          <p className="text-muted-foreground mt-1 text-sm font-medium">
+          <p className="text-muted-foreground mt-1 text-xs sm:text-sm font-medium">
             Immutable history log of all financial modifications and access events.
           </p>
         </div>
-        <div className="flex gap-3">
-          <button className="px-4 py-2.5 bg-primary/10 text-primary font-bold rounded-xl hover:bg-primary/20 transition-colors shadow-sm flex items-center gap-2">
+        <div className="flex gap-3 w-full sm:w-auto">
+          <button className="w-full sm:w-auto px-4 py-2 sm:py-2.5 bg-primary/10 text-primary font-bold rounded-xl hover:bg-primary/20 transition-colors shadow-sm flex items-center justify-center gap-2 text-xs sm:text-sm">
             <Download className="w-4 h-4" /> Export Logs
           </button>
         </div>
       </div>
 
-      <div className="bg-amber-500/10 border border-amber-500/20 rounded-3xl p-4 flex gap-4 text-amber-700/90 dark:text-amber-500">
-        <Shield className="w-6 h-6 shrink-0 mt-0.5" />
-        <div className="text-sm">
+      <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl sm:rounded-3xl p-3 sm:p-4 flex gap-3 sm:gap-4 text-amber-700/90 dark:text-amber-500">
+        <Shield className="w-5 h-5 sm:w-6 sm:h-6 shrink-0 mt-0.5" />
+        <div className="text-xs sm:text-sm">
           <strong className="font-black">Compliance Notice:</strong> These records are immutable and cannot be deleted or modified. They are maintained for SOX and internal compliance auditing purposes.
         </div>
       </div>
 
       {/* Logs Table */}
-      <div className="bg-card border border-border/50 rounded-3xl overflow-hidden shadow-sm">
-        <div className="p-6 border-b border-border/50 flex flex-col md:flex-row justify-between items-center gap-4">
-          <h3 className="font-bold text-lg flex items-center gap-2">
+      <div className="bg-card border border-border/50 rounded-2xl sm:rounded-3xl overflow-hidden shadow-sm">
+        <div className="p-4 sm:p-6 border-b border-border/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 sm:gap-4">
+          <h3 className="font-bold text-base sm:text-lg flex items-center gap-2">
             <History className="w-5 h-5 text-indigo-500" />
             System Events
           </h3>
-          <div className="flex gap-2 w-full md:w-auto">
-            <div className="relative flex-1 md:w-72">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="Search logs by action or user..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-background border border-border/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium"
-              />
-            </div>
-            <button className="p-2 border border-border/50 rounded-lg hover:bg-muted/50 text-muted-foreground transition-colors">
-              <Filter className="w-4 h-4" />
-            </button>
+          <div className="flex flex-col sm:flex-row gap-2.5 w-full md:w-auto items-stretch sm:items-center">
+            <DateRangeFilter
+              dateRange={dateRange}
+              onChange={setDateRange}
+              placeholder="Filter events by date"
+              className="w-full sm:w-auto"
+            />
+            <SearchInput
+              placeholder="Search logs by action or user..."
+              value={searchQuery}
+              onChange={setSearchQuery}
+              className="w-full sm:w-72"
+            />
           </div>
         </div>
         <div className="overflow-x-auto">

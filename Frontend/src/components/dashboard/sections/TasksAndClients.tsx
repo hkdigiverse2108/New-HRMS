@@ -36,12 +36,12 @@ export function TasksAndClients() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-rose-50 border border-rose-100 rounded-3xl p-5 shadow-sm">
+        <div className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-3 sm:gap-4">
+          <div className="bg-rose-50 border border-rose-100 rounded-3xl p-5 shadow-sm min-w-0">
             <p className="text-[11px] font-bold text-rose-600 uppercase tracking-wider mb-1">Overdue</p>
             <p className="text-[26px] font-black text-rose-700 leading-none">14</p>
           </div>
-          <div className="bg-emerald-50 border border-emerald-100 rounded-3xl p-5 shadow-sm">
+          <div className="bg-emerald-50 border border-emerald-100 rounded-3xl p-5 shadow-sm min-w-0">
             <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider mb-1">Completed Today</p>
             <p className="text-[26px] font-black text-emerald-700 leading-none">38</p>
           </div>
@@ -53,20 +53,20 @@ export function TasksAndClients() {
       <div>
         <CollapsibleSection section="Section 10" title="Client Management">
 
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div className="bg-white border border-border/60 rounded-3xl p-5 shadow-sm">
+        <div className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-3 sm:gap-4 mb-6">
+          <div className="bg-white border border-border/60 rounded-3xl p-5 shadow-sm min-w-0">
             <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Total Clients</p>
             <p className="text-[26px] font-black text-foreground leading-none">78</p>
           </div>
-          <div className="bg-white border border-border/60 rounded-3xl p-5 shadow-sm">
+          <div className="bg-white border border-border/60 rounded-3xl p-5 shadow-sm min-w-0">
             <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Active Clients</p>
             <p className="text-[26px] font-black text-primary leading-none">64</p>
           </div>
-          <div className="bg-white border border-border/60 rounded-3xl p-5 shadow-sm">
+          <div className="bg-white border border-border/60 rounded-3xl p-5 shadow-sm min-w-0">
             <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1">New This Month</p>
             <p className="text-[26px] font-black text-blue-500 leading-none">6</p>
           </div>
-          <div className="bg-white border border-border/60 rounded-3xl p-5 shadow-sm">
+          <div className="bg-white border border-border/60 rounded-3xl p-5 shadow-sm min-w-0">
             <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Satisfaction</p>
             <p className="text-[26px] font-black text-amber-500 leading-none">4.6<span className="text-[14px] text-muted-foreground">/5</span></p>
           </div>

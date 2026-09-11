@@ -681,7 +681,7 @@ export function AppSidebar({ active = "/dashboard", setActive }: { active?: stri
         >
           <Menu className="h-5 w-5" />
         </button>
-        <p className="text-sm font-bold">{companyName}</p>
+        <p className="text-sm font-bold truncate flex-1 min-w-0">{companyName}</p>
       </header>
 
       {/* Mobile drawer */}
@@ -717,18 +717,18 @@ export function AppSidebar({ active = "/dashboard", setActive }: { active?: stri
       </div>
 
       {/* Mobile bottom bar */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-sidebar-border bg-sidebar text-sidebar-foreground md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-sidebar-border bg-sidebar text-sidebar-foreground md:hidden pb-[max(0.25rem,env(safe-area-inset-bottom))] shadow-lg">
         {mobileBarItems.map((item) => (
           <button
             key={item.url}
             onClick={() => handleSetActive(item.url)}
             className={cn(
-              "flex flex-1 flex-col items-center gap-1 py-2 text-[10px] font-medium",
-              currentActive === item.url ? "text-sidebar-primary" : "text-sidebar-muted",
+              "flex flex-1 flex-col items-center justify-center gap-0.5 py-2 px-1 text-[10px] font-semibold min-w-0 transition-colors active:scale-95",
+              currentActive === item.url ? "text-sidebar-primary font-bold" : "text-sidebar-muted hover:text-sidebar-foreground",
             )}
           >
-            <item.icon className="h-5 w-5" />
-            {item.title}
+            <item.icon className="h-4.5 w-4.5 shrink-0" />
+            <span className="truncate max-w-[60px] text-center block leading-tight">{item.title}</span>
           </button>
         ))}
       </nav>

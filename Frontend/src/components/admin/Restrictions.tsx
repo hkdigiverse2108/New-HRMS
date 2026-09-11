@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-import { Shield, ShieldAlert, CheckCircle, Monitor, Send, ShieldCheck, AlertTriangle, Search, Plus, Trash2, RefreshCw } from "lucide-react";
+import { Shield, ShieldAlert, CheckCircle, Monitor, Send, ShieldCheck, AlertTriangle, Plus, Trash2, RefreshCw } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { moveToRecycleBin } from "@/lib/recycle-bin";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";
+import { SearchInput } from "@/components/common/SearchInput";
 
 const mockPcs = [
   { id: 1, hostname: 'DESKTOP-DEV-01', user: 'Sarah Jenkins', ip: '192.168.1.105', os: 'Windows 11', restricted: true },
@@ -83,9 +84,9 @@ export function Restrictions() {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-border/50 gap-6">
+      <div className="flex border-b border-border/50 gap-6 overflow-x-auto scrollbar-hide">
         <button
-          className={`pb-3 text-sm font-bold border-b-2 transition-all ${
+          className={`pb-3 text-sm font-bold border-b-2 transition-all whitespace-nowrap ${
             activeTab === "pcs"
               ? "border-primary text-primary"
               : "border-transparent text-muted-foreground hover:text-foreground"
@@ -95,7 +96,7 @@ export function Restrictions() {
           PC Restrictions (4)
         </button>
         <button
-          className={`pb-3 text-sm font-bold border-b-2 transition-all ${
+          className={`pb-3 text-sm font-bold border-b-2 transition-all whitespace-nowrap ${
             activeTab === "broadcast"
               ? "border-primary text-primary"
               : "border-transparent text-muted-foreground hover:text-foreground"
@@ -105,7 +106,7 @@ export function Restrictions() {
           Live Broadcast
         </button>
         <button
-          className={`pb-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${
+          className={`pb-3 text-sm font-bold border-b-2 transition-all whitespace-nowrap flex items-center gap-2 ${
             activeTab === "alerts"
               ? "border-red-500 text-red-500"
               : "border-transparent text-muted-foreground hover:text-foreground"
@@ -123,30 +124,26 @@ export function Restrictions() {
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           
           {/* PC List */}
-          <div className="xl:col-span-2 bg-card border border-border/50 rounded-3xl overflow-hidden shadow-sm">
+          <div className="xl:col-span-2 bg-card border border-border/50 rounded-3xl overflow-hidden shadow-sm min-w-0">
             <div className="p-6 border-b border-border/50 flex flex-col sm:flex-row items-center justify-between gap-4">
               <h3 className="font-bold flex items-center gap-2">
                 <Monitor className="w-5 h-5 text-primary" />
                 Registered PC Devices
               </h3>
               <div className="flex gap-2 w-full sm:w-auto">
-                <div className="relative w-full sm:w-64">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <input
-                    type="text"
-                    placeholder="Search PC / IP..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 bg-background border border-border/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium"
-                  />
-                </div>
-                <button className="p-2 bg-muted/50 hover:bg-muted border border-border/50 rounded-lg transition-colors">
+                <SearchInput
+                  placeholder="Search PC / IP..."
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  className="w-full sm:w-64"
+                />
+                <button className="p-2 bg-muted/50 hover:bg-muted border border-border/50 rounded-lg transition-colors shrink-0">
                   <RefreshCw className="w-4 h-4 text-muted-foreground" />
                 </button>
               </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+            <div className="overflow-x-auto min-w-0">
+              <table className="w-full text-left border-collapse min-w-[650px]">
                 <thead>
                   <tr className="bg-muted/30 border-b border-border/50 text-muted-foreground font-bold text-xs uppercase tracking-wider">
                     <SortableHeader label="Hostname" sortKey="hostname" currentSort={sortConfig} onSort={requestSort} className="p-4 pl-6" />

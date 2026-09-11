@@ -40,22 +40,22 @@ export function Payslips() {
   const initials = selectedEmp.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 pb-12">
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 pb-12 min-w-0">
       
       {/* Top Page Header */}
-      <div className="mb-8 flex flex-col xl:flex-row xl:items-end justify-between gap-4 border-b border-border pb-6">
+      <div className="mb-6 sm:mb-8 flex flex-col xl:flex-row xl:items-end justify-between gap-4 border-b border-border pb-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Payslip</h1>
-          <p className="mt-1 text-[14px] text-muted-foreground">Pay period: {selectedPeriod.period}</p>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Payslip</h1>
+          <p className="mt-1 text-xs sm:text-[14px] text-muted-foreground">Pay period: {selectedPeriod.period}</p>
         </div>
         
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full xl:w-auto">
           <SearchableSelect 
             value={selectedPeriodId} 
             onChange={setSelectedPeriodId}
             options={PAY_PERIODS.map(p => ({ label: p.label, value: p.id }))}
             placeholder="Select month"
-            className="w-[160px] bg-white border border-border/80 text-[13px] font-semibold text-foreground/80 rounded-lg h-[38px] shadow-sm focus:ring-emerald-500"
+            className="w-full sm:w-[160px] bg-white border border-border/80 text-[13px] font-semibold text-foreground/80 rounded-lg h-[38px] shadow-sm focus:ring-emerald-500"
           />
 
           <SearchableSelect 
@@ -63,53 +63,55 @@ export function Payslips() {
             onChange={setSelectedEmpId}
             options={MOCK_EMPLOYEES.map(emp => ({ label: emp.name, value: emp.id }))}
             placeholder="Select employee"
-            className="w-[220px] bg-white border border-border/80 text-[13px] font-semibold text-foreground/80 rounded-lg h-[38px] shadow-sm focus:ring-emerald-500"
+            className="w-full sm:w-[220px] bg-white border border-border/80 text-[13px] font-semibold text-foreground/80 rounded-lg h-[38px] shadow-sm focus:ring-emerald-500"
           />
           
-          <button className="flex items-center gap-2 bg-white border border-border/80 px-4 py-2 rounded-lg text-foreground/80 text-[13px] font-semibold hover:bg-muted/50 transition-colors shadow-sm">
-            <FileText className="h-4 w-4" /> PDF
-          </button>
-          <button className="flex items-center gap-2 bg-white border border-border/80 px-4 py-2 rounded-lg text-foreground/80 text-[13px] font-semibold hover:bg-muted/50 transition-colors shadow-sm">
-            <Mail className="h-4 w-4" /> Email
-          </button>
-          <button className="flex items-center gap-2 bg-white border border-border/80 px-4 py-2 rounded-lg text-foreground/80 text-[13px] font-semibold hover:bg-muted/50 transition-colors shadow-sm">
-            <MessageCircle className="h-4 w-4" /> WhatsApp
-          </button>
-          <button className="flex items-center gap-2 bg-white border border-border/80 px-4 py-2 rounded-lg text-foreground/80 text-[13px] font-semibold hover:bg-muted/50 transition-colors shadow-sm">
-            <Printer className="h-4 w-4" /> Print
-          </button>
-          <button className="flex items-center gap-2 bg-[#0c7851] hover:bg-[#00925e] text-white px-5 py-2 rounded-lg text-[13px] font-semibold shadow-sm transition-colors">
-            <Download className="h-4 w-4" /> Download
-          </button>
+          <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+            <button className="flex-1 sm:flex-initial flex items-center justify-center gap-2 bg-white border border-border/80 px-3 sm:px-4 py-2 rounded-lg text-foreground/80 text-xs sm:text-[13px] font-semibold hover:bg-muted/50 transition-colors shadow-sm">
+              <FileText className="h-4 w-4" /> PDF
+            </button>
+            <button className="flex-1 sm:flex-initial flex items-center justify-center gap-2 bg-white border border-border/80 px-3 sm:px-4 py-2 rounded-lg text-foreground/80 text-xs sm:text-[13px] font-semibold hover:bg-muted/50 transition-colors shadow-sm">
+              <Mail className="h-4 w-4" /> Email
+            </button>
+            <button className="flex-1 sm:flex-initial flex items-center justify-center gap-2 bg-white border border-border/80 px-3 sm:px-4 py-2 rounded-lg text-foreground/80 text-xs sm:text-[13px] font-semibold hover:bg-muted/50 transition-colors shadow-sm">
+              <MessageCircle className="h-4 w-4" /> WhatsApp
+            </button>
+            <button className="flex-1 sm:flex-initial flex items-center justify-center gap-2 bg-white border border-border/80 px-3 sm:px-4 py-2 rounded-lg text-foreground/80 text-xs sm:text-[13px] font-semibold hover:bg-muted/50 transition-colors shadow-sm">
+              <Printer className="h-4 w-4" /> Print
+            </button>
+            <button className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#0c7851] hover:bg-[#00925e] text-white px-4 sm:px-5 py-2 rounded-lg text-xs sm:text-[13px] font-semibold shadow-sm transition-colors">
+              <Download className="h-4 w-4" /> Download
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Payslip Document */}
-      <div className="bg-white rounded-t-3xl rounded-b-2xl shadow-[0_4px_20px_rgba(0,0,0,0.05)] overflow-hidden mx-auto border border-border/40">
+      <div className="bg-white rounded-t-3xl rounded-b-2xl shadow-[0_4px_20px_rgba(0,0,0,0.05)] overflow-hidden mx-auto border border-border/40 min-w-0">
         
         {/* Document Header (Green) */}
-        <div className="bg-[#0c7851] px-8 py-6 text-white flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-full border border-white/30 flex items-center justify-center bg-white/10 shrink-0">
-              <ShieldCheck className="h-6 w-6 text-white" />
+        <div className="bg-[#0c7851] px-4 sm:px-8 py-4 sm:py-6 text-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border border-white/30 flex items-center justify-center bg-white/10 shrink-0">
+              <ShieldCheck className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
             </div>
             <div>
-              <h2 className="text-[22px] font-bold tracking-tight">HK DigiVerse Pvt. Ltd.</h2>
-              <p className="text-[12px] text-white/80 mt-0.5">3rd Floor, Cyber Park, Pune 411045 · GSTIN 27AABCH1234K1Z9</p>
+              <h2 className="text-lg sm:text-[22px] font-bold tracking-tight">HK DigiVerse Pvt. Ltd.</h2>
+              <p className="text-[11px] sm:text-[12px] text-white/80 mt-0.5">3rd Floor, Cyber Park, Pune 411045 · GSTIN 27AABCH1234K1Z9</p>
             </div>
           </div>
-          <div className="text-right">
+          <div className="text-left sm:text-right">
             <p className="text-[10px] font-bold uppercase tracking-widest text-white/80 mb-0.5">PAYSLIP</p>
-            <h3 className="text-2xl font-bold">{selectedPeriod.label}</h3>
+            <h3 className="text-xl sm:text-2xl font-bold">{selectedPeriod.label}</h3>
           </div>
         </div>
 
         {/* Employee Details Grid */}
-        <div className="px-8 py-8 flex gap-8 border-b border-border/60">
-          <div className="w-16 h-16 rounded-full bg-[#0c7851] text-white flex items-center justify-center text-xl font-bold shrink-0">
+        <div className="px-4 sm:px-8 py-6 sm:py-8 flex flex-col sm:flex-row gap-4 sm:gap-8 border-b border-border/60">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-[#0c7851] text-white flex items-center justify-center text-lg sm:text-xl font-bold shrink-0">
             {initials}
           </div>
-          <div className="flex-1 grid grid-cols-3 gap-y-6 gap-x-8">
+          <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-4 sm:gap-y-6 gap-x-4 sm:gap-x-8">
             <div>
               <p className="text-[12px] text-muted-foreground mb-1">Employee Name</p>
               <p className="text-[14px] font-semibold text-foreground">{selectedEmp.name}</p>
@@ -150,12 +152,12 @@ export function Payslips() {
         </div>
 
         {/* Salary Breakdown */}
-        <div className="px-8 py-8 grid grid-cols-2 gap-16">
+        <div className="px-4 sm:px-8 py-6 sm:py-8 grid grid-cols-1 md:grid-cols-2 gap-8 sm:gap-16">
           
           {/* Earnings */}
           <div>
-            <h4 className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wider mb-6">Earnings & Allowances</h4>
-            <div className="space-y-4 mb-6">
+            <h4 className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wider mb-4 sm:mb-6">Earnings & Allowances</h4>
+            <div className="space-y-3 sm:space-y-4 mb-6">
               <div className="flex justify-between text-[14px]">
                 <span className="text-muted-foreground">Basic Salary</span>
                 <span className="font-semibold text-foreground">₹36,800</span>
@@ -205,8 +207,8 @@ export function Payslips() {
 
           {/* Deductions */}
           <div>
-            <h4 className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wider mb-6">Deductions</h4>
-            <div className="space-y-4 mb-6">
+            <h4 className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wider mb-4 sm:mb-6">Deductions</h4>
+            <div className="space-y-3 sm:space-y-4 mb-6">
               <div className="flex justify-between text-[14px]">
                 <span className="text-muted-foreground">Professional Tax</span>
                 <span className="font-semibold text-foreground">₹200</span>
@@ -257,7 +259,7 @@ export function Payslips() {
         </div>
 
         {/* Totals Border Row */}
-        <div className="px-8 pb-8 pt-4 grid grid-cols-2 gap-16 border-t border-border/40 mt-auto">
+        <div className="px-4 sm:px-8 pb-6 sm:pb-8 pt-4 grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-16 border-t border-border/40 mt-auto">
           <div className="flex justify-between items-center">
             <span className="text-[14px] font-bold text-foreground">Total Earnings</span>
             <span className="text-[14px] font-bold text-foreground">{formatCurrency(totalEarnings)}</span>
@@ -269,12 +271,12 @@ export function Payslips() {
         </div>
 
         {/* Footer Area: Net Salary (Green) */}
-        <div className="mx-6 mb-6 mt-2 bg-[#0c7851] rounded-2xl p-6 text-white flex items-center justify-between shadow-sm">
+        <div className="mx-3 sm:mx-6 mb-4 sm:mb-6 mt-2 bg-[#0c7851] rounded-2xl p-4 sm:p-6 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
           <div>
-            <p className="text-[12px] font-semibold text-white/80 uppercase tracking-wider mb-1">NET SALARY PAYABLE</p>
-            <p className="text-[32px] font-black leading-none">{formatCurrency(netPayable)}</p>
+            <p className="text-[11px] sm:text-[12px] font-semibold text-white/80 uppercase tracking-wider mb-1">NET SALARY PAYABLE</p>
+            <p className="text-2xl sm:text-[32px] font-black leading-none">{formatCurrency(netPayable)}</p>
           </div>
-          <div className="bg-white px-4 py-2 rounded-full text-[#0c7851] text-[13px] font-bold shadow-sm">
+          <div className="bg-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[#0c7851] text-xs sm:text-[13px] font-bold shadow-sm">
             Credited to HDFC Bank ••••4821
           </div>
         </div>

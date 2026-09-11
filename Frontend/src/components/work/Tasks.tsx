@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
-import { X, Search, Plus, Filter, LayoutGrid, List as ListIcon, MoreHorizontal, Calendar, Clock, CheckCircle2, MessageSquare, Paperclip, FileText, ChevronDown, Zap, Trash2 } from "lucide-react";
+import { X, Plus, Filter, LayoutGrid, List as ListIcon, MoreHorizontal, Calendar, Clock, CheckCircle2, MessageSquare, Paperclip, FileText, ChevronDown, Zap, Trash2, Search } from "lucide-react";
+import { SearchInput } from "@/components/common/SearchInput";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DatePicker } from "@/components/ui/date-picker";
 import { cn } from "@/lib/utils";
 import { DialogClose, Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/select";
@@ -578,22 +580,20 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   };
 
   return (
-    <div className="space-y-5 h-[calc(100vh-4rem)] flex flex-col pb-0 animate-in fade-in duration-300">
+    <div className="space-y-5 min-h-[calc(100vh-4rem)] h-auto lg:h-[calc(100vh-4rem)] flex flex-col pb-0 animate-in fade-in duration-300">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0">
         <div>
-          <h1 className="text-2xl font-black text-foreground tracking-tight">Tasks</h1>
+          <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">Tasks</h1>
           <p className="text-xs text-muted-foreground mt-1 font-semibold">Unified dashboard mapping direct tasks and client project tasks</p>
         </div>
 
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <div className="relative flex-1 sm:w-64">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input 
-              type="text" 
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
+          <div className="flex-1 sm:w-64 min-w-[180px]">
+            <SearchInput 
               placeholder="Search tasks..." 
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-muted/40 border border-border/60 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
+              onChange={setSearchQuery}
+              className="w-full"
             />
           </div>
 
@@ -679,79 +679,84 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                 <span>Quick Assign</span>
               </button>
             </DialogTrigger>
-            <DialogContent className="max-w-[820px] w-[95vw] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
-              <div className="flex items-center justify-between px-6 md:px-8 py-5 border-b border-border/50 bg-muted/30">
-                <div>
-                  <h2 className="text-lg font-black tracking-tight">Quick Assign Tasks</h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">
+            <DialogContent className="w-[calc(100vw-24px)] sm:w-full max-w-[820px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card flex flex-col max-h-[90dvh]">
+              <div className="flex items-center justify-between px-4 sm:px-8 py-3.5 sm:py-5 border-b border-border/50 bg-muted/30 shrink-0">
+                <div className="min-w-0 pr-2">
+                  <h2 className="text-base sm:text-lg font-black tracking-tight truncate">Quick Assign Tasks</h2>
+                  <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 line-clamp-1 sm:line-clamp-none">
                     Press <kbd className="bg-muted px-1 py-0.5 rounded border text-[10px] font-bold">Enter</kbd> in a title field to add a new row. Assignee &amp; date propagate down.
                   </p>
                 </div>
                 <DialogClose asChild>
-                  <button className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
+                  <button className="p-1.5 sm:p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors shrink-0">
                     <X className="w-5 h-5" />
                   </button>
                 </DialogClose>
               </div>
 
               <div className="flex flex-col max-h-[65vh] overflow-hidden">
-                {/* Column Headers */}
-                <div className="grid grid-cols-12 gap-3 px-6 md:px-8 py-3 border-b border-border/40 bg-muted/10">
-                  <div className="col-span-5 text-[10px] font-black text-muted-foreground uppercase tracking-wider">Task Title *</div>
-                  <div className="col-span-4 text-[10px] font-black text-muted-foreground uppercase tracking-wider">Assignee</div>
-                  <div className="col-span-2 text-[10px] font-black text-muted-foreground uppercase tracking-wider">Due Date</div>
-                  <div className="col-span-1 text-center text-[10px] font-black text-muted-foreground uppercase tracking-wider">Del</div>
-                </div>
-
-                {/* Task Rows */}
-                <div className="p-4 md:px-8 space-y-2 overflow-y-auto flex-1">
-                  {quickTasks.map((task, idx) => (
-                    <div key={idx} className="grid grid-cols-12 gap-2 items-center p-1.5 rounded-xl hover:bg-muted/30 border border-transparent hover:border-border/40 transition-all">
-                      <div className="col-span-5">
-                        <input
-                          id={`qt-title-${idx}`}
-                          type="text"
-                          placeholder="Enter task name..."
-                          value={task.title}
-                          onChange={e => updateQuickField(idx, "title", e.target.value)}
-                          onKeyDown={e => handleQuickTitleKeyDown(e, idx)}
-                          className="w-full px-3 py-2 bg-muted/40 border border-border/60 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary/50 transition-all"
-                        />
-                      </div>
-                      <div className="col-span-4">
-                        <SearchableSelect
-                          value={task.assignee}
-                          onChange={val => updateQuickField(idx, "assignee", val)}
-                          options={[
-                            { label: "Unassigned", value: "" },
-                            ...(employees.length > 0
-                              ? employees.map((e: any) => ({ label: e.name || `${e.firstName} ${e.lastName}`.trim(), value: e.name || `${e.firstName} ${e.lastName}`.trim() }))
-                              : [{label: "Alex Johnson", value: "Alex Johnson"}, {label: "Sarah Connor", value: "Sarah Connor"}, {label: "Mike Peters", value: "Mike Peters"}]
-                            )
-                          ]}
-                          placeholder="Select assignee"
-                          className="w-full h-[34px] px-3 bg-muted/40 border border-border/60 rounded-xl text-xs font-semibold focus:outline-none"
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <input
-                          type="date"
-                          value={task.dueDate}
-                          onChange={e => updateQuickField(idx, "dueDate", e.target.value)}
-                          className="w-full px-2 py-2 bg-muted/40 border border-border/60 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-primary transition-all"
-                        />
-                      </div>
-                      <div className="col-span-1 flex justify-center">
-                        <button
-                          type="button"
-                          onClick={() => removeQuickRow(idx)}
-                          className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                <div className="overflow-x-auto min-w-0 flex-1 flex flex-col">
+                  <div className="min-w-[550px] flex flex-col flex-1">
+                    {/* Column Headers */}
+                    <div className="grid grid-cols-12 gap-3 px-6 md:px-8 py-3 border-b border-border/40 bg-muted/10 shrink-0">
+                      <div className="col-span-5 text-[10px] font-black text-muted-foreground uppercase tracking-wider">Task Title *</div>
+                      <div className="col-span-4 text-[10px] font-black text-muted-foreground uppercase tracking-wider">Assignee</div>
+                      <div className="col-span-2 text-[10px] font-black text-muted-foreground uppercase tracking-wider">Due Date</div>
+                      <div className="col-span-1 text-center text-[10px] font-black text-muted-foreground uppercase tracking-wider">Del</div>
                     </div>
-                  ))}
+
+                    {/* Task Rows */}
+                    <div className="p-4 md:px-8 space-y-2 overflow-y-auto flex-1">
+                      {quickTasks.map((task, idx) => (
+                        <div key={idx} className="grid grid-cols-12 gap-2 items-center p-1.5 rounded-xl hover:bg-muted/30 border border-transparent hover:border-border/40 transition-all">
+                          <div className="col-span-5">
+                            <input
+                              id={`qt-title-${idx}`}
+                              type="text"
+                              placeholder="Enter task name..."
+                              value={task.title}
+                              onChange={e => updateQuickField(idx, "title", e.target.value)}
+                              onKeyDown={e => handleQuickTitleKeyDown(e, idx)}
+                              className="w-full px-3 py-2 bg-muted/40 border border-border/60 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary/50 transition-all"
+                            />
+                          </div>
+                          <div className="col-span-4">
+                            <SearchableSelect
+                              value={task.assignee}
+                              onChange={val => updateQuickField(idx, "assignee", val)}
+                              options={[
+                                { label: "Unassigned", value: "" },
+                                ...(employees.length > 0
+                                  ? employees.map((e: any) => ({ label: e.name || `${e.firstName} ${e.lastName}`.trim(), value: e.name || `${e.firstName} ${e.lastName}`.trim() }))
+                                  : [{label: "Alex Johnson", value: "Alex Johnson"}, {label: "Sarah Connor", value: "Sarah Connor"}, {label: "Mike Peters", value: "Mike Peters"}]
+                                )
+                              ]}
+                              placeholder="Select assignee"
+                              className="w-full h-[34px] px-3 bg-muted/40 border border-border/60 rounded-xl text-xs font-semibold focus:outline-none"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <DatePicker
+                              value={task.dueDate}
+                              onChange={val => updateQuickField(idx, "dueDate", val)}
+                              placeholder="Due date"
+                              className="h-[34px] px-2 text-xs font-bold bg-muted/40"
+                            />
+                          </div>
+                          <div className="col-span-1 flex justify-center">
+                            <button
+                              type="button"
+                              onClick={() => removeQuickRow(idx)}
+                              className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
 
                   {/* Add Row Button */}
                   <button
@@ -763,18 +768,17 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                     Add Row
                   </button>
                 </div>
-              </div>
 
               {/* Footer */}
-              <div className="px-6 md:px-8 py-4 border-t border-border/50 bg-muted/30 flex items-center justify-between gap-3">
+              <div className="px-4 sm:px-8 py-3 sm:py-4 border-t border-border/50 bg-muted/30 flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-3 shrink-0">
                 <p className="text-xs text-muted-foreground font-semibold">
                   {quickTasks.filter(t => t.title.trim()).length} task(s) ready to create
                 </p>
-                <div className="flex gap-3">
+                <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-end">
                   <button
                     type="button"
                     onClick={() => { setShowQuickAssign(false); setQuickTasks([{ title: "", assignee: "", dueDate: "" }]); }}
-                    className="px-4 py-2 bg-card border border-border text-foreground/80 hover:bg-muted font-bold text-xs rounded-xl transition-colors"
+                    className="px-3.5 sm:px-4 py-2 bg-card border border-border text-foreground/80 hover:bg-muted font-bold text-xs rounded-xl transition-colors shrink-0"
                   >
                     Cancel
                   </button>
@@ -782,10 +786,10 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                     type="button"
                     onClick={handleBulkQuickAssign}
                     disabled={isQuickSubmitting || quickTasks.filter(t => t.title.trim()).length === 0}
-                    className="px-4 py-2 bg-primary hover:bg-primary/95 text-primary-foreground font-bold text-xs rounded-xl transition-colors disabled:opacity-50 flex items-center gap-2"
+                    className="px-3.5 sm:px-4 py-2 bg-primary hover:bg-primary/95 text-primary-foreground font-bold text-xs rounded-xl transition-colors disabled:opacity-50 flex items-center gap-2 shrink-0"
                   >
                     <Zap className="w-3.5 h-3.5" />
-                    {isQuickSubmitting ? "Creating..." : `Assign ${quickTasks.filter(t => t.title.trim()).length} Task(s)`}
+                    <span>{isQuickSubmitting ? "Creating..." : `Assign ${quickTasks.filter(t => t.title.trim()).length} Task(s)`}</span>
                   </button>
                 </div>
               </div>
@@ -808,13 +812,13 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                 <span>New Task</span>
               </button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px] md:max-w-[500px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
-              <div className="flex items-center justify-between px-6 md:px-8 py-6 border-b border-border/50 bg-muted/30">
+            <DialogContent className="w-[calc(100vw-24px)] sm:w-full sm:max-w-[425px] md:max-w-[500px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+              <div className="flex items-center justify-between px-4 sm:px-8 py-4 sm:py-6 border-b border-border/50 bg-muted/30">
                 <div>
-                  <h2 className="text-lg font-black tracking-tight">{editingTaskId ? "Edit Task" : "Create New Task"}</h2>
+                  <h2 className="text-base sm:text-lg font-black tracking-tight">{editingTaskId ? "Edit Task" : "Create New Task"}</h2>
                 </div>
                 <DialogClose asChild>
-                  <button className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
+                  <button className="p-1.5 sm:p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors shrink-0">
                     <X className="w-5 h-5" />
                   </button>
                 </DialogClose>
@@ -842,7 +846,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                       className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold resize-none"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Priority</label>
                       <SearchableSelect
@@ -858,11 +862,11 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Due Date</label>
-                      <input 
-                        type="date" 
+                      <DatePicker 
                         value={newTaskDueDate}
-                        onChange={e => setNewTaskDueDate(e.target.value)}
-                        className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-bold text-center"
+                        onChange={val => setNewTaskDueDate(val)}
+                        placeholder="Select due date"
+                        className="h-[38px] px-3 font-bold text-xs"
                       />
                     </div>
                   </div>
@@ -916,17 +920,17 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                     </Popover>
                   </div>
                 </div>
-                <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
+                <div className="px-4 sm:px-8 py-3 sm:py-6 bg-muted/30 border-t border-border/50 flex items-center justify-end gap-2 sm:gap-3 mt-auto shrink-0">
                   <button 
                     type="button" 
                     onClick={() => setIsNewTaskOpen(false)}
-                    className="px-4 py-2 bg-card border border-border text-foreground/80 hover:bg-muted font-bold text-xs rounded-xl transition-colors"
+                    className="px-3.5 sm:px-4 py-2 bg-card border border-border text-foreground/80 hover:bg-muted font-bold text-xs rounded-xl transition-colors shrink-0"
                   >
                     Cancel
                   </button>
                   <button 
                     type="submit"
-                    className="px-4 py-2 bg-primary hover:bg-primary/95 text-primary-foreground font-bold text-xs rounded-xl transition-colors"
+                    className="px-4 py-2 bg-primary hover:bg-primary/95 text-primary-foreground font-bold text-xs rounded-xl transition-colors shrink-0"
                   >
                     {editingTaskId ? "Save Changes" : "Create Task"}
                   </button>
@@ -938,7 +942,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
       </div>
 
       {/* KPI Cards / Filters */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 shrink-0 text-left">
+      <div className="grid grid-cols-2 min-[420px]:grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-3 shrink-0 text-left">
         {[
           { label: "Total Tasks", count: stats.total, filterVal: "All" as const, color: "bg-muted/10 border-border/80 text-foreground" },
           { label: "To Do", count: stats.todo, filterVal: "Todo" as const, color: "bg-blue-500/10 border-blue-500/20 text-blue-700" },
@@ -1059,8 +1063,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
         </div>
       ) : (
         <div className="flex-1 bg-card rounded-[2.5rem] border border-border/50 overflow-hidden shadow-sm flex flex-col">
-          <div className="overflow-x-auto flex-1">
-            <table className="w-full text-left border-collapse">
+          <div className="overflow-x-auto min-w-0 flex-1">
+            <table className="w-full text-left border-collapse min-w-[800px]">
               <thead className="bg-muted/30 border-b border-border sticky top-0">
                 <tr>
                   <SortableHeader label="Task Details" sortKey="title" currentSort={sortConfig} onSort={requestSort} className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider" />

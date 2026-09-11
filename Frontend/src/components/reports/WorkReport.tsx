@@ -2,6 +2,7 @@ import { Briefcase, CheckCircle2, Clock, CheckCircle, Activity, LayoutList } fro
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, Cell, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
 import { useState } from 'react';
 import { SearchableSelect } from '@/components/ui/select';
+import { DateRangeFilter } from '@/components/common/DateRangeFilter';
 
 const taskCompletion = [
   { name: 'Mon', completed: 145, overdue: 12 },
@@ -22,22 +23,32 @@ const projectAllocation = [
 
 export function WorkReport() {
   const [timeRange, setTimeRange] = useState("This Week");
+  const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
+    from: undefined,
+    to: undefined,
+  });
 
   return (
-    <div className="w-full space-y-8 animate-in fade-in duration-500">
+    <div className="w-full space-y-6 sm:space-y-8 animate-in fade-in duration-500 min-w-0">
       
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-foreground flex items-center gap-2">
-            <Briefcase className="w-8 h-8 text-primary" />
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground flex items-center gap-2">
+            <Briefcase className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
             Project & Work Analytics
           </h1>
-          <p className="text-muted-foreground mt-1 text-sm font-medium">
+          <p className="text-muted-foreground mt-1 text-xs sm:text-sm font-medium">
             Analyze operational efficiency, task completion rates, and project time allocation.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full md:w-auto">
+          <DateRangeFilter
+            dateRange={dateRange}
+            onChange={setDateRange}
+            placeholder="Custom date range"
+            className="w-full sm:w-auto"
+          />
           <SearchableSelect
             value={timeRange}
             onChange={setTimeRange}
@@ -46,64 +57,64 @@ export function WorkReport() {
               { label: "Last Week", value: "Last Week" },
               { label: "This Month", value: "This Month" }
             ]}
-            className="w-[180px] h-[44px] bg-card border border-border/50 text-foreground font-bold rounded-xl shadow-sm outline-none"
+            className="w-full sm:w-[160px] h-[40px] bg-card border border-border/50 text-foreground font-bold rounded-xl shadow-sm outline-none"
           />
         </div>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
-              <CheckCircle className="w-5 h-5" />
+      <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 sm:p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+              <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
           <div className="text-emerald-600 font-bold text-xs uppercase tracking-wider mb-1">Tasks Completed</div>
-          <div className="text-3xl font-black text-emerald-700">778</div>
+          <div className="text-2xl sm:text-3xl font-black text-emerald-700">778</div>
         </div>
 
-        <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center">
-              <Activity className="w-5 h-5" />
+        <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-4 sm:p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center">
+              <Activity className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
           <div className="text-blue-600 font-bold text-xs uppercase tracking-wider mb-1">Completion Rate</div>
-          <div className="text-3xl font-black text-blue-700">94%</div>
+          <div className="text-2xl sm:text-3xl font-black text-blue-700">94%</div>
         </div>
 
-        <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center">
-              <Clock className="w-5 h-5" />
+        <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-4 sm:p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center">
+              <Clock className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
           <div className="text-amber-600 font-bold text-xs uppercase tracking-wider mb-1">Total Billable Hours</div>
-          <div className="text-3xl font-black text-amber-700">1,240</div>
+          <div className="text-2xl sm:text-3xl font-black text-amber-700">1,240</div>
         </div>
 
-        <div className="bg-rose-500/5 border border-rose-500/20 rounded-2xl p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-600 flex items-center justify-center">
-              <LayoutList className="w-5 h-5" />
+        <div className="bg-rose-500/5 border border-rose-500/20 rounded-2xl p-4 sm:p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-rose-500/10 text-rose-600 flex items-center justify-center">
+              <LayoutList className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
           <div className="text-rose-600 font-bold text-xs uppercase tracking-wider mb-1">Overdue Tasks</div>
-          <div className="text-3xl font-black text-rose-700">50</div>
+          <div className="text-2xl sm:text-3xl font-black text-rose-700">50</div>
         </div>
       </div>
 
       {/* Charts Grid */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2 min-w-0">
         
         {/* Task Completion Trend */}
-        <div className="bg-card border border-border/50 rounded-3xl p-6 shadow-sm">
-          <h3 className="font-bold flex items-center gap-2 mb-6">
-            <CheckCircle2 className="w-5 h-5 text-primary" />
+        <div className="bg-card border border-border/50 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm overflow-hidden min-w-0">
+          <h3 className="font-bold flex items-center gap-2 mb-4 sm:mb-6 text-sm sm:text-base">
+            <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
             Daily Task Completion
           </h3>
-          <div className="h-[350px] w-full">
+          <div className="h-[280px] sm:h-[350px] w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={taskCompletion} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
@@ -134,12 +145,12 @@ export function WorkReport() {
         </div>
 
         {/* Project Allocation Radar */}
-        <div className="bg-card border border-border/50 rounded-3xl p-6 shadow-sm flex flex-col">
-          <h3 className="font-bold flex items-center gap-2 mb-2">
-            <Clock className="w-5 h-5 text-blue-500" />
+        <div className="bg-card border border-border/50 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm flex flex-col overflow-hidden min-w-0">
+          <h3 className="font-bold flex items-center gap-2 mb-2 text-sm sm:text-base">
+            <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
             Hours by Project
           </h3>
-          <div className="flex-grow h-[350px] w-full flex items-center justify-center">
+          <div className="flex-grow h-[280px] sm:h-[350px] w-full min-w-0 flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
               <RadarChart cx="50%" cy="50%" outerRadius="70%" data={projectAllocation}>
                 <PolarGrid stroke="var(--border)" />

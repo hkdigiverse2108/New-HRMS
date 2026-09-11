@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Activity, MousePointerClick, Keyboard, TrendingUp, Monitor, Globe, Search, Download, ArrowUpDown, Filter } from "lucide-react";
+import { Activity, MousePointerClick, Keyboard, TrendingUp, Monitor, Globe, Download, ArrowUpDown, Filter } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { SearchableSelect } from "@/components/ui/select";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";
+import { SearchInput } from "@/components/common/SearchInput";
 
 const trendData = [
   { date: 'Mon', clicks: 12500, keystrokes: 45000 },
@@ -69,17 +70,13 @@ export function ActivityTracker() {
             Monitor user input statistics such as keyboard keypresses and mouse clicks.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative w-full sm:w-48">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search employee..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 bg-card border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium"
-            />
-          </div>
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+          <SearchInput
+            placeholder="Search employee..."
+            value={searchQuery}
+            onChange={setSearchQuery}
+            className="w-full sm:w-48"
+          />
           <SearchableSelect 
             value="Today"
             onChange={() => {}}
@@ -88,9 +85,9 @@ export function ActivityTracker() {
               { label: "This Week", value: "This Week" },
               { label: "This Month", value: "This Month" }
             ]}
-            className="w-[120px] h-[42px] px-4 bg-card border border-border/50 text-foreground font-bold rounded-xl hover:bg-muted/50 transition-colors shadow-sm outline-none cursor-pointer"
+            className="w-full sm:w-[120px] h-[42px] px-4 bg-card border border-border/50 text-foreground font-bold rounded-xl hover:bg-muted/50 transition-colors shadow-sm outline-none cursor-pointer"
           />
-          <button className="px-4 py-2.5 bg-primary/10 text-primary font-bold rounded-xl hover:bg-primary/20 transition-colors shadow-sm flex items-center gap-2">
+          <button className="px-4 py-2.5 bg-primary/10 text-primary font-bold rounded-xl hover:bg-primary/20 transition-colors shadow-sm flex items-center justify-center gap-2 w-full sm:w-auto">
             <Download className="w-4 h-4" />
             Export
           </button>
@@ -98,7 +95,7 @@ export function ActivityTracker() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
         <div className="bg-card border border-border/50 rounded-2xl p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center">
@@ -123,12 +120,12 @@ export function ActivityTracker() {
       {/* Main Charts & Leaderboard */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Trend Chart */}
-        <div className="bg-card border border-border/50 rounded-3xl p-6 shadow-sm lg:col-span-2">
+        <div className="bg-card border border-border/50 rounded-3xl p-6 shadow-sm lg:col-span-2 min-w-0 overflow-hidden">
           <h3 className="font-bold flex items-center gap-2 mb-6">
             <TrendingUp className="w-5 h-5 text-primary" />
             Input Activity Trend
           </h3>
-          <div className="h-[300px] w-full">
+          <div className="h-[300px] w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={trendData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
                 <defs>
@@ -253,8 +250,8 @@ export function ActivityTracker() {
             Detailed Activity Logs
           </h3>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+        <div className="overflow-x-auto min-w-0">
+          <table className="w-full text-left border-collapse min-w-[500px]">
             <thead>
               <tr className="bg-muted/30 border-b border-border/50 text-muted-foreground font-bold text-xs uppercase tracking-wider">
                 <SortableHeader label="Date" sortKey="date" currentSort={sortConfig} onSort={requestSort} className="p-4 pl-6" />

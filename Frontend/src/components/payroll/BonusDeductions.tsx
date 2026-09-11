@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { formatCurrency, MOCK_BONUS_DEDUCTIONS } from "./payroll-data";
-import { Search, Plus, Filter, Gift, MinusCircle } from "lucide-react";
+import { Plus, Filter, Gift, MinusCircle } from "lucide-react";
+import { SearchInput } from "@/components/common/SearchInput";
 import { cn } from "@/lib/utils";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";
@@ -28,55 +29,55 @@ export function BonusDeductions() {
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-[1400px]">
       
-      {/* We keep the header for consistency, though it's scrolled out in the screenshot */}
-      <div className="mb-8 flex items-end justify-between">
+      {/* Header */}
+      <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Bonus & Deductions</h1>
-          <p className="mt-1.5 text-[13px] text-muted-foreground/80">Apply to an individual, a department or the entire company</p>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Bonus & Deductions</h1>
+          <p className="mt-1 sm:mt-1.5 text-xs sm:text-[13px] text-muted-foreground/80">Apply to an individual, a department or the entire company</p>
         </div>
-        <button className="flex items-center gap-2 bg-card hover:bg-primary text-primary-foreground px-5 py-2 rounded-lg text-[13px] font-bold shadow-sm transition-colors">
+        <button className="flex items-center gap-2 bg-card hover:bg-primary text-primary-foreground px-4 sm:px-5 py-2 rounded-lg text-[13px] font-bold shadow-sm transition-colors shrink-0">
           <Plus className="h-4 w-4" /> Add Entry
         </button>
       </div>
 
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
         <div className="bg-[#0b6c4b] rounded-2xl p-5 shadow-sm relative text-white">
           <div className="flex justify-between items-start mb-2">
             <p className="text-[12px] font-medium text-emerald-50">Total Bonus (July)</p>
             <Gift className="h-4 w-4 text-emerald-100" />
           </div>
-          <p className="text-[32px] font-black">₹36,000</p>
+          <p className="text-2xl sm:text-[32px] font-black">₹36,000</p>
         </div>
         <div className="bg-white border border-border/60 rounded-2xl p-5 shadow-sm relative">
           <div className="flex justify-between items-start mb-2">
             <p className="text-[12px] font-medium text-muted-foreground">Total Deduction (July)</p>
             <MinusCircle className="h-4 w-4 text-[#0b6c4b]" />
           </div>
-          <p className="text-[32px] font-black text-foreground">₹6,000</p>
+          <p className="text-2xl sm:text-[32px] font-black text-foreground">₹6,000</p>
         </div>
         <div className="bg-white border border-border/60 rounded-2xl p-5 shadow-sm relative">
           <div className="flex justify-between items-start mb-2">
             <p className="text-[12px] font-medium text-muted-foreground">Entries This Cycle</p>
           </div>
-          <p className="text-[32px] font-black text-foreground">8</p>
+          <p className="text-2xl sm:text-[32px] font-black text-foreground">8</p>
         </div>
         <div className="bg-white border border-border/60 rounded-2xl p-5 shadow-sm relative">
           <div className="flex justify-between items-start mb-2">
             <p className="text-[12px] font-medium text-muted-foreground">Pending Approval</p>
           </div>
-          <p className="text-[32px] font-black text-foreground">1</p>
+          <p className="text-2xl sm:text-[32px] font-black text-foreground">1</p>
           <p className="text-[12px] text-muted-foreground mt-1">Requires CEO sign-off</p>
         </div>
       </div>
 
-      <div className="flex justify-between items-center mb-6">
-        <div className="inline-flex bg-muted/50 border border-border/60 p-1 rounded-full gap-1">
+      <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 mb-6">
+        <div className="inline-flex bg-muted/50 border border-border/60 p-1 rounded-full gap-1 overflow-x-auto">
           {(["All", "Bonuses", "Deductions"] as const).map(tab => (
             <button 
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={cn(
-                "px-4 py-1.5 text-[13px] font-semibold rounded-full transition-colors",
+                "px-3 sm:px-4 py-1.5 text-xs sm:text-[13px] font-semibold rounded-full transition-colors whitespace-nowrap",
                 activeTab === tab 
                   ? "bg-white text-foreground shadow-sm" 
                   : "text-muted-foreground hover:text-foreground"
@@ -87,26 +88,24 @@ export function BonusDeductions() {
           ))}
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <input 
-              type="text" 
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex-1 sm:w-64">
+            <SearchInput 
               placeholder="Search entries..." 
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 pr-4 py-1.5 border border-border/80 rounded-lg text-[13px] w-64 outline-none focus:border-emerald-500 bg-white shadow-sm"
+              onChange={setSearchTerm}
+              className="w-full"
             />
           </div>
-          <button className="flex items-center gap-2 border border-border/80 bg-white px-3 py-1.5 rounded-lg text-[13px] font-semibold text-foreground/80 hover:bg-muted/50 shadow-sm transition-colors">
+          <button className="flex items-center gap-2 border border-border/80 bg-white px-3 py-2 rounded-lg text-[13px] font-semibold text-foreground/80 hover:bg-muted/50 shadow-sm transition-colors shrink-0">
             <Filter className="h-4 w-4" /> Filter
           </button>
         </div>
       </div>
 
       <div className="bg-white border border-border/60 rounded-2xl shadow-sm overflow-hidden flex flex-col">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+        <div className="overflow-x-auto min-w-0">
+          <table className="w-full text-left border-collapse min-w-[850px]">
             <thead>
               <tr className="border-b border-border/60">
                 <SortableHeader label="Ref" sortKey="ref" currentSort={sortConfig} onSort={requestSort} className="py-4 px-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest" />

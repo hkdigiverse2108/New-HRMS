@@ -8,7 +8,7 @@ export function SalesOverview() {
       <CollapsibleSection section="Section 07" title="Sales Overview">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Main Sales Metrics */}
-        <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
+        <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm flex flex-col justify-between min-w-0">
           <div>
             <div className="flex justify-between items-start mb-6">
               <div>
@@ -49,7 +49,7 @@ export function SalesOverview() {
         </div>
 
         {/* Top Salesperson */}
-        <div className="bg-card rounded-3xl p-6 text-white shadow-sm relative overflow-hidden flex flex-col justify-between">
+        <div className="bg-card rounded-3xl p-6 text-white shadow-sm relative overflow-hidden flex flex-col justify-between min-w-0">
           <div className="absolute top-0 right-0 p-4 opacity-10">
             <Trophy className="h-32 w-32" />
           </div>
@@ -61,7 +61,7 @@ export function SalesOverview() {
         </div>
 
         {/* Upcoming Follow Ups */}
-        <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm">
+        <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm min-w-0">
           <div className="mb-6">
             <h3 className="font-bold text-foreground">Upcoming Follow Ups</h3>
             <p className="text-[11px] text-muted-foreground">Scheduled client interactions</p>

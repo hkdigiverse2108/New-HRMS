@@ -115,7 +115,7 @@ export function QuickActionModals({ activeAction, onClose }: { activeAction: str
                 <Label htmlFor="company">Company</Label>
                 <Input id="company" placeholder="Acme Corp" required />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="email">Email</Label>
                   <Input id="email" type="email" placeholder="john@acme.com" />
@@ -162,7 +162,7 @@ export function QuickActionModals({ activeAction, onClose }: { activeAction: str
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="date">Date</Label>
                   <Input id="date" type="date" required />

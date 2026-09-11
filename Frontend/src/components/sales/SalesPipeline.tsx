@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import { Search, Plus, Filter, LayoutGrid, Table2, Clock } from "lucide-react";
+import { Plus, LayoutGrid, Table2, Clock } from "lucide-react";
+import { SearchInput } from "@/components/common/SearchInput";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { formatCurrency, type Lead, type LeadStage } from "./sales-data";
+import { formatCurrency, type Lead, } from "./sales-data";
 import { useSales } from "./SalesContext";
 import { SearchableSelect } from "@/components/ui/select";
 import { useSortableData } from "@/hooks/useSortableData";
@@ -89,8 +90,8 @@ function TableView({ data, onStageChange, activeStages }: { data: Lead[]; onStag
   const { items: sortedData, requestSort, sortConfig } = useSortableData(data);
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-border">
-      <table className="w-full text-sm">
+    <div className="overflow-x-auto min-w-0 rounded-2xl border border-border">
+      <table className="w-full text-sm min-w-[700px]">
         <thead>
           <tr className="border-b border-border bg-muted/50 text-xs font-bold uppercase tracking-wider text-muted-foreground">
             <SortableHeader label="Company" sortKey="company" currentSort={sortConfig} onSort={requestSort} className="px-4 py-3" />
@@ -217,18 +218,17 @@ export function SalesPipeline({ onAction }: { onAction?: (action: string) => voi
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+        <div className="flex-1 max-w-sm">
+          <SearchInput
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={setSearch}
             placeholder="Search deals…"
-            className="h-10 w-full max-w-sm rounded-xl border border-border bg-background pl-9 pr-4 text-sm outline-none focus:ring-2 focus:ring-emerald-500/30"
+            className="w-full"
           />
         </div>
 
-        <div className="flex rounded-xl border border-border bg-muted/40 p-0.5">
+        <div className="flex rounded-xl border border-border bg-muted/40 p-0.5 self-start sm:self-auto overflow-x-auto">
           {([
             ["kanban", LayoutGrid, "Kanban"],
             ["table", Table2, "Table"],
@@ -238,7 +238,7 @@ export function SalesPipeline({ onAction }: { onAction?: (action: string) => voi
               key={v}
               onClick={() => setView(v)}
               className={cn(
-                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors",
+                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap",
                 view === v ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
               )}
             >
@@ -247,14 +247,14 @@ export function SalesPipeline({ onAction }: { onAction?: (action: string) => voi
           ))}
         </div>
 
-        <button onClick={() => onAction?.("Add Lead")} className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700">
+        <button onClick={() => onAction?.("Add Lead")} className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 shrink-0 self-start sm:self-auto">
           <Plus className="h-4 w-4" /> Add Deal
         </button>
       </div>
 
       {/* Content */}
       {view === "kanban" && (
-        <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
+        <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide touch-pan-x min-w-0">
           {activeStages.map((stage) => {
             // Pick color dynamically if not in original pipelineStages
             const predefinedColor = ["#6366f1", "#8b5cf6", "#3b82f6", "#06b6d4", "#f59e0b", "#f97316", "#10b981", "#f43f5e"];

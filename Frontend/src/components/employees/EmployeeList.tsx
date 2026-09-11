@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Search, Filter, LayoutGrid, List, MoreVertical, Phone, Mail, Plus, MapPin, Edit2, Trash2, Key, UserMinus, UserCheck, Shield, FileText, LogOut, Clock, Columns, Eye } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { Search, X, Filter, LayoutGrid, List, MoreVertical, Phone, Mail, Plus, MapPin, Edit2, Trash2, Key, UserMinus, UserCheck, Shield, FileText, LogOut, Clock, Columns, Eye, Users } from "lucide-react";
 import { EMPLOYEES, Employee } from "./employee-data";
 import { useDepartments } from "./DepartmentContext";
 import { EmployeeProfileModal } from "./EmployeeProfileModal";
@@ -60,6 +60,7 @@ const COLUMN_OPTIONS = [
 
 export function EmployeeList({ isNew }: { isNew?: boolean }) {
   const { employees, addEmployee, updateEmployee, deleteEmployee } = useEmployeesContext();
+  const { departments } = useDepartments();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(isNew || false);
@@ -73,6 +74,42 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
     return initial;
   });
 
+  // Dynamically compute all unique departments from DB/context and existing employees
+  const allDepartments = useMemo(() => {
+    const list: string[] = [];
+    const set = new Set<string>();
+
+    departments.forEach(dept => {
+      const trimmed = dept?.trim();
+      if (trimmed && !set.has(trimmed.toLowerCase())) {
+        set.add(trimmed.toLowerCase());
+        list.push(trimmed);
+      }
+    });
+
+    // Also include any department from employee data not yet in the list
+    employees.forEach(emp => {
+      const dept = emp.department?.trim();
+      if (dept && !set.has(dept.toLowerCase())) {
+        set.add(dept.toLowerCase());
+        list.push(dept);
+      }
+    });
+
+    return list;
+  }, [departments, employees]);
+
+  // Set default selection to the first department dynamically
+  useEffect(() => {
+    if (allDepartments.length > 0) {
+      const firstDept = allDepartments[0] ?? null;
+      setSelectedDept((prev: string | null): string | null => {
+        if (!prev) return firstDept;
+        const exists = allDepartments.some(d => d.toLowerCase() === prev.toLowerCase()) || prev === "All";
+        return exists ? prev : firstDept;
+      });
+    }
+  }, [allDepartments]);
 
   const renderCell = (emp: Employee, colKey: string) => {
     switch (colKey) {
@@ -129,14 +166,14 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
               >
                 <Edit2 className="w-3.5 h-3.5" />
               </button>
-              <button
+              <button 
                 onClick={() => toast.success("Permissions management coming soon!")}
                 className="p-1.5 text-muted-foreground hover:bg-indigo-50 hover:text-indigo-600 rounded-md transition-all active:scale-95"
                 title="Manage Permissions"
               >
                 <Shield className="w-3.5 h-3.5" />
               </button>
-              <button
+              <button 
                 onClick={() => {
                   const newStatus = emp.status === 'Inactive' ? 'Active' : 'Inactive';
                   updateEmployee(emp.id, { status: newStatus as any });
@@ -163,18 +200,21 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
     }
   };
 
-  
   // Form modal state
-  // The form state is now declared at the top as isFormOpen
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{isOpen: boolean, id: string | null, name: string}>({isOpen: false, id: null, name: ""});
 
-  const { departments } = useDepartments();
-
   const filteredEmployees = employees.filter(emp => {
-    const matchesSearch = emp.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          emp.role.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesDept = selectedDept ? emp.department === selectedDept : true;
+    const query = searchQuery.trim().toLowerCase();
+    const matchesSearch = !query || 
+      emp.name.toLowerCase().includes(query) || 
+      emp.role.toLowerCase().includes(query) ||
+      (emp.email && emp.email.toLowerCase().includes(query));
+
+    const matchesDept = selectedDept && selectedDept !== "All"
+      ? (emp.department || "").trim().toLowerCase() === selectedDept.trim().toLowerCase()
+      : true;
+
     return matchesSearch && matchesDept;
   });
 
@@ -247,38 +287,78 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
       </div>
 
       {/* Filters Bar */}
-      <div className="bg-white border border-border/60 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center mb-8">
-        <div className="flex w-full md:w-auto flex-1 gap-4">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+      <div className="bg-white border border-border/60 rounded-2xl p-4 shadow-sm flex flex-col lg:flex-row gap-4 justify-between items-stretch lg:items-center mb-8">
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center flex-1 gap-3 sm:gap-4 min-w-0">
+          <div className="relative w-full lg:w-72 min-w-[220px] flex-shrink-0">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             <input 
               type="text" 
               placeholder="Search by name or role..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-muted/50 border-none rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium"
+              className="w-full min-w-0 pl-10 pr-9 py-2.5 bg-muted/50 border border-border/50 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all font-medium text-foreground placeholder:text-muted-foreground"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
           
-          <div className="flex gap-2">
-            {departments.map(dept => (
-              <button 
-                key={dept}
-                onClick={() => setSelectedDept(selectedDept === dept ? null : dept)}
-                className={cn(
-                  "px-4 py-2 rounded-xl text-[12px] font-bold transition-all border",
-                  selectedDept === dept 
-                    ? "bg-primary text-primary-foreground border-primary" 
-                    : "bg-white text-foreground/80 border-border hover:bg-muted/50"
-                )}
-              >
-                {dept}
-              </button>
-            ))}
+          {/* Dynamic Department Tabs */}
+          <div className="flex items-center gap-2 overflow-x-auto min-w-0 flex-1 max-w-full pb-1 lg:pb-0 scrollbar-none">
+            {allDepartments.map(dept => {
+              const isSelected = selectedDept?.toLowerCase() === dept.toLowerCase();
+              const count = employees.filter(e => (e.department || "").trim().toLowerCase() === dept.toLowerCase()).length;
+              return (
+                <button 
+                  key={dept}
+                  onClick={() => setSelectedDept(dept)}
+                  className={cn(
+                    "px-3.5 py-2 rounded-xl text-[12px] font-bold transition-all border whitespace-nowrap flex items-center gap-1.5 flex-shrink-0 active:scale-95 shadow-sm",
+                    isSelected 
+                      ? "bg-primary text-primary-foreground border-primary shadow-primary/20" 
+                      : "bg-white text-foreground/80 border-border/80 hover:bg-muted/50"
+                  )}
+                >
+                  <span>{dept}</span>
+                  <span className={cn(
+                    "text-[10px] px-1.5 py-0.5 rounded-full font-bold",
+                    isSelected ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+                  )}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+
+            {/* All Filter Option */}
+            <button 
+              onClick={() => setSelectedDept("All")}
+              className={cn(
+                "px-3.5 py-2 rounded-xl text-[12px] font-bold transition-all border whitespace-nowrap flex items-center gap-1.5 flex-shrink-0 active:scale-95",
+                selectedDept === "All"
+                  ? "bg-primary text-primary-foreground border-primary shadow-sm shadow-primary/20" 
+                  : "bg-white text-muted-foreground border-dashed border-border/80 hover:bg-muted/50"
+              )}
+            >
+              <span>All</span>
+              <span className={cn(
+                "text-[10px] px-1.5 py-0.5 rounded-full font-bold",
+                selectedDept === "All" ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+              )}>
+                {employees.length}
+              </span>
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0 self-end lg:self-auto">
           {viewMode === 'list' && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -328,8 +408,29 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
 
       {/* Grid View */}
       {viewMode === 'grid' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {sortedEmployees.map((emp) => (
+        sortedEmployees.length === 0 ? (
+          <div className="bg-white border border-border/60 rounded-3xl p-12 text-center flex flex-col items-center justify-center my-6 shadow-sm">
+            <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center text-muted-foreground mb-4">
+              <Users className="w-8 h-8 opacity-60" />
+            </div>
+            <h3 className="text-lg font-bold text-foreground mb-1">No employees found</h3>
+            <p className="text-sm text-muted-foreground max-w-sm mb-4">
+              {selectedDept && selectedDept !== "All"
+                ? `There are currently no team members in the "${selectedDept}" department.`
+                : "No employees match your search criteria."}
+            </p>
+            {selectedDept && selectedDept !== "All" && (
+              <button 
+                onClick={() => setSelectedDept("All")}
+                className="text-xs font-bold text-primary hover:underline"
+              >
+                View all employees ({employees.length})
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {sortedEmployees.map((emp) => (
             <div key={emp.id} className="group bg-white border border-border/50 rounded-3xl p-6 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 relative">
               <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button 
@@ -434,7 +535,7 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
             </div>
           ))}
         </div>
-      )}
+      ))}
 
       {/* List View */}
       {viewMode === 'list' && (
@@ -467,15 +568,25 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
                 </tr>
               </thead>
               <tbody>
-                {sortedEmployees.map((emp) => (
-                  <tr key={emp.id} className="border-b border-slate-50 hover:bg-muted/50/50 transition-colors group">
-                    {COLUMN_OPTIONS.map(col => visibleColumns[col.key] && (
-                      <td key={col.key} className={cn("px-6 py-4", col.key === 'actions' ? 'text-right w-[1%] whitespace-nowrap' : '')}>
-                        {renderCell(emp, col.key)}
-                      </td>
-                    ))}
+                {sortedEmployees.length === 0 ? (
+                  <tr>
+                    <td colSpan={COLUMN_OPTIONS.filter(c => visibleColumns[c.key]).length} className="px-6 py-12 text-center text-muted-foreground text-sm">
+                      {selectedDept && selectedDept !== "All"
+                        ? `No employees found in the "${selectedDept}" department.`
+                        : "No employees match your search criteria."}
+                    </td>
                   </tr>
-                ))}
+                ) : (
+                  sortedEmployees.map((emp) => (
+                    <tr key={emp.id} className="border-b border-slate-50 hover:bg-muted/50/50 transition-colors group">
+                      {COLUMN_OPTIONS.map(col => visibleColumns[col.key] && (
+                        <td key={col.key} className={cn("px-6 py-4", col.key === 'actions' ? 'text-right w-[1%] whitespace-nowrap' : '')}>
+                          {renderCell(emp, col.key)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
