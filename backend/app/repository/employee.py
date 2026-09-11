@@ -1,7 +1,7 @@
 from app.database.db import get_database
 from bson import ObjectId
 from app.schemas.enums import GenderEnum, SystemRole, WorkModeEnum
-from typing import Optional
+from typing import Optional, List
 
 class EmployeeRepository:
     collection_name = "employees"
@@ -81,6 +81,32 @@ class EmployeeRepository:
             return employee
         except Exception:
             return None
+
+    @classmethod
+    async def get_employees_by_dept_and_desig(cls, department_id: str, designation_id: str) -> List[dict]:
+        from app.repository.access_control import resolve_department_values, resolve_designation_values
+        collection = await cls.get_collection()
+        employees = []
+        
+        dept_vals = await resolve_department_values(department_id)
+        desig_vals = await resolve_designation_values(designation_id)
+        
+        dept_or = [{"work_details.department": v} for v in dept_vals]
+        desig_or = [{"work_details.designation": v} for v in desig_vals]
+
+        async for emp in collection.find({
+            "$and": [
+                {"$or": dept_or},
+                {"$or": desig_or}
+            ]
+        }):
+            if emp.get("work_details", {}).get("is_delete") is True:
+                continue
+            emp["_id"] = str(emp["_id"])
+            employees.append(emp)
+        return employees
+
+
 
     @classmethod
     async def get_employee_by_email(cls, email: str):

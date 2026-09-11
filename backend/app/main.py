@@ -7,6 +7,7 @@ from app.controllers.auth import router as auth_router
 from app.controllers.department import router as department_router
 from app.controllers.sub_department import router as sub_department_router
 from app.controllers.designation import router as designation_router
+from app.controllers.access_control import router as access_control_router
 from app.controllers.image import router as image_router, upload_router
 from app.models.employee import setup_employee_indexes
 from app.models.department import setup_department_indexes
@@ -69,6 +70,7 @@ app.include_router(employee_router)
 app.include_router(department_router)
 app.include_router(sub_department_router)
 app.include_router(designation_router)
+app.include_router(access_control_router)
 app.include_router(image_router)
 app.include_router(upload_router)
 

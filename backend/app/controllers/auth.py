@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from app.repository.employee import EmployeeRepository
+from app.repository.access_control import UserPermissionRepository, PresetPermissionRepository, has_manual_permissions
 import bcrypt
 # Patch passlib compatibility with bcrypt >= 4.1.0
 if not hasattr(bcrypt, "__about__"):
@@ -134,6 +135,61 @@ class RoleChecker:
                 detail="Operation not permitted for this role"
             )
         return True
+
+class DynamicPermissionChecker:
+    async def __call__(self, request: Request, employee: dict = Depends(get_current_employee)):
+        if not employee:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+            
+        role = employee.get("work_details", {}).get("system_role", "Employee")
+        if role == "Admin":
+            return employee
+            
+        # Extract base module ID from the request URL path (e.g., "/employees/123" -> "/employees")
+        path_parts = request.url.path.strip("/").split("/")
+        module_id = "/" + path_parts[0] if path_parts and path_parts[0] else "/"
+        
+        # Map HTTP methods to CRUD operations
+        method_map = {
+            "GET": "read",
+            "POST": "create",
+            "PUT": "update",
+            "PATCH": "update",
+            "DELETE": "delete"
+        }
+        required_permission = method_map.get(request.method, "read")
+        
+        employee_id = str(employee.get("_id"))
+        
+        # 1. Fetch Manual Permissions
+        user_permission = await UserPermissionRepository.get_user_permission(employee_id)
+        module_perms = {}
+        if user_permission:
+            user_module_perms = user_permission.get("module_permissions", {})
+            if has_manual_permissions(user_module_perms):
+                module_perms = user_module_perms.get(module_id, {})
+            
+        # 2. Fallback to Presets if manual permissions don't exist or all are false
+        if not module_perms:
+            dept_id = employee.get("work_details", {}).get("department")
+            desig_id = employee.get("work_details", {}).get("designation")
+            
+            if dept_id and desig_id:
+                preset = await PresetPermissionRepository.get_preset(dept_id, desig_id)
+                if preset:
+                    module_perms = preset.get("module_permissions", {}).get(module_id, {})
+
+        # If no permissions are found at all, deny access
+        if not module_perms:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied. No permissions set.")
+        
+        has_all = module_perms.get("all", False)
+        has_required = module_perms.get(required_permission, False)
+        
+        if has_all or has_required:
+            return employee
+            
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Operation '{required_permission}' not permitted on '{module_id}'")
 
 # --- Router & Endpoints ---
 router = APIRouter(tags=["Authentication"])
