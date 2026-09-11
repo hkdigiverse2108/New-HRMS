@@ -9,6 +9,8 @@ from app.controllers.sub_department import router as sub_department_router
 from app.controllers.designation import router as designation_router
 from app.controllers.access_control import router as access_control_router
 from app.controllers.image import router as image_router, upload_router
+from app.controllers.attendance import router as attendance_router
+from app.controllers.leave import router as leave_router
 from app.models.employee import setup_employee_indexes
 from app.models.department import setup_department_indexes
 from app.models.sub_department import setup_sub_department_indexes
@@ -73,6 +75,8 @@ app.include_router(designation_router)
 app.include_router(access_control_router)
 app.include_router(image_router)
 app.include_router(upload_router)
+app.include_router(attendance_router)
+app.include_router(leave_router)
 
 # Mount static image paths AFTER API routes
 app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
