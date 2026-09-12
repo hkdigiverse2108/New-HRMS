@@ -2,14 +2,24 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { api, getAuthToken, setAuthToken, removeAuthToken, getStoredUser, setStoredUser } from "@/lib/api";
 import { toast } from "sonner";
 
+export interface PermissionFlags {
+  read?: boolean;
+  create?: boolean;
+  update?: boolean;
+  delete?: boolean;
+  all?: boolean;
+}
+
 export interface UserProfile {
   id: string;
   email: string;
   name: string;
   role: string;
   department?: string;
+  designation?: string;
   profile_photo?: string;
   avatar?: string;
+  permissions?: Record<string, PermissionFlags>;
 }
 
 interface AuthContextType {

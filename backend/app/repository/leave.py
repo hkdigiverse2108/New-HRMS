@@ -83,7 +83,8 @@ class LeaveRepository:
         leave_type: Optional[str] = None,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
-        limit: int = 500
+        page: Optional[int] = None,
+        limit: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         collection = await cls.get_collection()
         query: Dict[str, Any] = {}
@@ -102,7 +103,12 @@ class LeaveRepository:
         elif end_date:
             query["start_date"] = {"$lte": end_date}
 
-        cursor = collection.find(query).sort("applied_on", -1).limit(limit)
+        cursor = collection.find(query).sort("applied_on", -1)
+        if limit is not None and limit > 0:
+            if page is not None and page > 1:
+                cursor = cursor.skip((page - 1) * limit)
+            cursor = cursor.limit(limit)
+
         results = []
         async for doc in cursor:
             results.append(serialize_mongo(doc))

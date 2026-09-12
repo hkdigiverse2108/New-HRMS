@@ -3,15 +3,8 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from app.repository.employee import EmployeeRepository
 from app.repository.access_control import UserPermissionRepository, PresetPermissionRepository, has_manual_permissions
 import bcrypt
-# Patch passlib compatibility with bcrypt >= 4.1.0
-if not hasattr(bcrypt, "__about__"):
-    class _BcryptAbout:
-        __version__ = getattr(bcrypt, "__version__", "4.0.1")
-    bcrypt.__about__ = _BcryptAbout()
-
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from pydantic import BaseModel
 from app.config import settings
 import random
@@ -19,11 +12,6 @@ import uuid
 from fastapi import BackgroundTasks
 from app.redis.service import redis_client
 from app.utils.email import send_otp_email
-
-# Temporary in-memory store for OTPs (to bypass Redis error)
-otp_store = {}
-forgot_password_otp_store = {}
-reset_token_store = {}
 
 # --- Schemas ---
 class Token(BaseModel):
@@ -34,14 +22,19 @@ class TokenData(BaseModel):
     email: str | None = None
 
 # --- Utilities ---
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login", auto_error=False)
 
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    try:
+        if not plain_password or not hashed_password:
+            return False
+        return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
+    except Exception:
+        return False
 
-def get_password_hash(password):
-    return pwd_context.hash(password)
+def get_password_hash(password: str) -> str:
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
@@ -136,6 +129,37 @@ class RoleChecker:
             )
         return True
 
+async def resolve_effective_permissions_for_employee(employee: dict) -> dict:
+    """Unified single source of truth for resolving dynamic employee permissions."""
+    emp_id = str(employee.get("_id", "")).strip()
+    work = employee.get("work_details", {})
+    role = work.get("system_role", "Employee")
+
+    if role == "Admin":
+        from app.database.default_presets import get_admin_full_permissions
+        return get_admin_full_permissions()
+
+    from app.redis.service import get_cache, set_cache
+    cached_perms = await get_cache(f"user_perms_resolved:{emp_id}")
+    if cached_perms:
+        return cached_perms
+
+    # 1. Check Custom Manual Permissions (only if is_custom is explicitly True)
+    user_perm_doc = await UserPermissionRepository.get_user_permission(emp_id)
+    if user_perm_doc and user_perm_doc.get("is_custom") is True and has_manual_permissions(user_perm_doc.get("module_permissions")):
+        perms = user_perm_doc["module_permissions"]
+    else:
+        # 2. Inherit dynamically from Role Preset (HR, Employee, Sub-Admin, Admin)
+        preset, _ = await PresetPermissionRepository.get_preset_for_employee(role)
+        if preset and "module_permissions" in preset:
+            perms = preset["module_permissions"]
+        else:
+            from app.database.default_presets import DEFAULT_EMPLOYEE_PERMISSIONS
+            perms = DEFAULT_EMPLOYEE_PERMISSIONS
+
+    await set_cache(f"user_perms_resolved:{emp_id}", perms, ttl=300)
+    return perms
+
 class DynamicPermissionChecker:
     async def __call__(self, request: Request, employee: dict = Depends(get_current_employee)):
         if not employee:
@@ -159,27 +183,10 @@ class DynamicPermissionChecker:
         }
         required_permission = method_map.get(request.method, "read")
         
-        employee_id = str(employee.get("_id"))
+        perms = await resolve_effective_permissions_for_employee(employee)
+        module_perms = perms.get(module_id, {})
         
-        # 1. Fetch Manual Permissions
-        user_permission = await UserPermissionRepository.get_user_permission(employee_id)
-        module_perms = {}
-        if user_permission:
-            user_module_perms = user_permission.get("module_permissions", {})
-            if has_manual_permissions(user_module_perms):
-                module_perms = user_module_perms.get(module_id, {})
-            
-        # 2. Fallback to Presets if manual permissions don't exist or all are false
-        if not module_perms:
-            dept_id = employee.get("work_details", {}).get("department")
-            desig_id = employee.get("work_details", {}).get("designation")
-            
-            if dept_id and desig_id:
-                preset = await PresetPermissionRepository.get_preset(dept_id, desig_id)
-                if preset:
-                    module_perms = preset.get("module_permissions", {}).get(module_id, {})
-
-        # If no permissions are found at all, deny access
+        # If still no permissions are found, deny access
         if not module_perms:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied. No permissions set.")
         
@@ -219,16 +226,23 @@ class ResetPasswordRequest(BaseModel):
 
 @router.get("/me")
 async def get_me(current_employee: dict = Depends(get_current_employee)):
-    """Returns the authenticated user details from token."""
+    """Returns authenticated user details along with their full dynamic permissions."""
     personal = current_employee.get("personal_info", {})
     work = current_employee.get("work_details", {})
+    role = work.get("system_role", "Employee")
+    emp_id = str(current_employee.get("_id", ""))
+
+    perms = await resolve_effective_permissions_for_employee(current_employee)
+
     return {
-        "id": str(current_employee.get("_id", "")),
+        "id": emp_id,
         "email": personal.get("email_address") or current_employee.get("email"),
         "name": f"{personal.get('first_name', '')} {personal.get('last_name', '')}".strip() or "Employee",
-        "role": work.get("system_role", "Employee"),
+        "role": role,
         "department": work.get("department", ""),
-        "profile_photo": personal.get("profile_photo", "") or current_employee.get("profile_photo", "")
+        "designation": work.get("designation", ""),
+        "profile_photo": personal.get("profile_photo", "") or current_employee.get("profile_photo", ""),
+        "permissions": perms
     }
 
 @router.post("/login")
@@ -328,12 +342,14 @@ async def verify_otp(verify_data: VerifyOTPRequest):
 async def forgot_password(request: ForgotPasswordRequest, background_tasks: BackgroundTasks):
     employee = await EmployeeRepository.get_employee_by_email(request.email)
     if not employee:
-        # We shouldn't reveal if the email exists for security reasons, but for simplicity we can return success anyway
         return {"message": "If your email is registered, you will receive an OTP."}
 
     # Generate 6 digit OTP
     otp = str(random.randint(100000, 999999))
-    forgot_password_otp_store[request.email] = otp
+    try:
+        await redis_client.set(f"forgot_otp:{request.email}", otp, ex=300)
+    except Exception as e:
+        print(f"Redis warning for forgot_otp: {e}")
     
     # Send OTP email
     background_tasks.add_task(send_otp_email, request.email, otp)
@@ -341,30 +357,46 @@ async def forgot_password(request: ForgotPasswordRequest, background_tasks: Back
 
 @router.post("/verify-forgot-password-otp")
 async def verify_forgot_password_otp(request: VerifyForgotPasswordRequest):
-    stored_otp = forgot_password_otp_store.get(request.email)
-    if not stored_otp or stored_otp != request.otp:
+    stored_otp = None
+    try:
+        stored_otp = await redis_client.get(f"forgot_otp:{request.email}")
+    except Exception as e:
+        print(f"Redis warning: {e}")
+
+    if not stored_otp or str(stored_otp).strip() != str(request.otp).strip():
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired OTP")
     
-    # OTP is valid, remove it
-    del forgot_password_otp_store[request.email]
+    # OTP is valid, remove it from Redis
+    try:
+        await redis_client.delete(f"forgot_otp:{request.email}")
+    except Exception:
+        pass
     
-    # Generate a secure reset token
+    # Generate a secure reset token and store in Redis with 15 min expiry
     reset_token = str(uuid.uuid4())
-    reset_token_store[request.email] = reset_token
+    try:
+        await redis_client.set(f"reset_token:{request.email}", reset_token, ex=900)
+    except Exception as e:
+        print(f"Redis warning: {e}")
     
     return {"message": "OTP verified successfully", "reset_token": reset_token}
 
 @router.post("/reset-password")
 async def reset_password(request: ResetPasswordRequest):
-    stored_token = reset_token_store.get(request.email)
-    if not stored_token or stored_token != request.reset_token:
+    stored_token = None
+    try:
+        stored_token = await redis_client.get(f"reset_token:{request.email}")
+    except Exception as e:
+        print(f"Redis warning: {e}")
+
+    if not stored_token or str(stored_token).strip() != str(request.reset_token).strip():
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired reset token")
     
     employee = await EmployeeRepository.get_employee_by_email(request.email)
     if not employee:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found")
         
-    # Hash the new password
+    # Hash the new password with bcrypt
     hashed_password = get_password_hash(request.new_password)
     
     # Update employee document in DB
@@ -372,7 +404,10 @@ async def reset_password(request: ResetPasswordRequest):
     if not updated:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update password")
         
-    # Remove the reset token so it can't be used again
-    del reset_token_store[request.email]
+    # Invalidate reset token from Redis
+    try:
+        await redis_client.delete(f"reset_token:{request.email}")
+    except Exception:
+        pass
     
     return {"message": "Password reset successfully. You can now login."}

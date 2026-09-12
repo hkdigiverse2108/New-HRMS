@@ -37,6 +37,7 @@ import { useAuth } from "./auth/AuthContext";
 import { LoginModal } from "./auth/LoginModal";
 import { getAvatarUrl } from "@/lib/config";
 import { LogIn, LogOut } from "lucide-react";
+import { filterNavigationForUser, hasModulePermission } from "@/lib/permissions";
 
 
 function Badge({ count }: { count: number }) {
@@ -61,9 +62,14 @@ const ALL_CREATE_ACTIONS: QuickAction[] = [
 ];
 
 function CreateMenu({ collapsed, onNavigate }: { collapsed: boolean; onNavigate: (url: string) => void }) {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
   
+  const allowedCreateActions = useMemo(() => {
+    return ALL_CREATE_ACTIONS.filter(a => hasModulePermission(user, a.url, "create"));
+  }, [user]);
+
   const [selectedUrls, setSelectedUrls] = useState<string[]>(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("hrms_custom_create_actions");
@@ -73,8 +79,8 @@ function CreateMenu({ collapsed, onNavigate }: { collapsed: boolean; onNavigate:
   });
 
   const activeActions = useMemo(() => {
-    return ALL_CREATE_ACTIONS.filter(a => selectedUrls.includes(a.url));
-  }, [selectedUrls]);
+    return allowedCreateActions.filter(a => selectedUrls.includes(a.url));
+  }, [allowedCreateActions, selectedUrls]);
 
   const toggleAction = (url: string) => {
     setSelectedUrls(prev => {
@@ -278,9 +284,14 @@ function SidebarBody({
     );
   };
 
+  const userAllowedNavItems = useMemo(() => {
+    return filterNavigationForUser(navItems, user);
+  }, [user]);
+
   const filtered = useMemo(() => {
-    if (!q) return navItems;
-    return navItems
+    const baseItems = userAllowedNavItems;
+    if (!q) return baseItems;
+    return baseItems
       .map((item) => {
         const selfMatch = item.title.toLowerCase().includes(q);
         const children = item.children?.filter((c) => c.title.toLowerCase().includes(q));
@@ -289,7 +300,7 @@ function SidebarBody({
         return null;
       })
       .filter(Boolean) as NavItem[];
-  }, [q]);
+  }, [userAllowedNavItems, q]);
 
   const grouped = useMemo(
     () =>
@@ -304,7 +315,7 @@ function SidebarBody({
 
   const pinnedLinks = useMemo(() => {
     const out: { title: string; url: string }[] = [];
-    for (const item of navItems) {
+    for (const item of userAllowedNavItems) {
       if (item.url && pinned.includes(item.title)) out.push({ title: item.title, url: item.url });
       for (const c of item.children ?? []) {
         const compoundTitle = `${item.title} — ${c.title}`;
@@ -312,7 +323,7 @@ function SidebarBody({
       }
     }
     return out;
-  }, [pinned]);
+  }, [userAllowedNavItems, pinned]);
 
   const toggleGroup = (title: string) => {
     const item = navItems.find((i) => i.title === title);

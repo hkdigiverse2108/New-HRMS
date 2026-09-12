@@ -63,10 +63,18 @@ def ensure_venv(reexec=True):
             if Path(sys.executable).resolve() != venv_python.resolve():
                 print(f"\033[94m[Auto-Venv] Automatically activating virtualenv: {venv_python}\033[0m")
                 if os.name == "nt":
-                    code = subprocess.call([str(venv_python), str(Path(__file__).resolve())] + sys.argv[1:])
-                    sys.exit(code)
+                    try:
+                        code = subprocess.call([str(venv_python), str(Path(__file__).resolve())] + sys.argv[1:])
+                        sys.exit(code)
+                    except KeyboardInterrupt:
+                        sys.exit(0)
                 else:
-                    os.execv(str(venv_python), [str(venv_python), str(Path(__file__).resolve())] + sys.argv[1:])
+                    try:
+                        os.execv(str(venv_python), [str(venv_python), str(Path(__file__).resolve())] + sys.argv[1:])
+                    except Exception:
+                        pass
+        except KeyboardInterrupt:
+            sys.exit(0)
         except Exception as e:
             print(f"[Auto-Venv] Notice: Continuing with current Python ({e})")
 
@@ -155,51 +163,69 @@ def wait_for_backend(port, timeout=12):
     print("\033[93mTIMED OUT\033[0m")
     return False
 
+def is_port_in_use(port, host="127.0.0.1"):
+    """Check if a TCP port is currently accepting connections."""
+    try:
+        import socket
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.3)
+            return s.connect_ex((host, port)) == 0
+    except Exception:
+        return False
+
 def free_ports(*ports):
-    """Free up listening ports on both Windows and Linux/Ubuntu."""
+    """Free up listening ports on both Windows and Linux/Ubuntu with retry verification."""
     for port in ports:
         if not port:
             continue
-        if os.name == "nt":
-            # Pass 1: netstat -ano & taskkill with process tree (/T)
-            try:
-                out = subprocess.check_output(f'netstat -ano | findstr :{port}', shell=True, text=True, stderr=subprocess.DEVNULL)
-                for line in out.splitlines():
-                    parts = line.strip().split()
-                    if len(parts) >= 5 and "LISTENING" in parts:
-                        pid = parts[-1]
-                        if pid.isdigit() and int(pid) != os.getpid():
-                            subprocess.call(["taskkill", "/F", "/T", "/PID", pid], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            except Exception:
-                pass
+        for attempt in range(3):
+            if not is_port_in_use(port):
+                break
+            if os.name == "nt":
+                # Pass 1: netstat -ano & taskkill with process tree (/T)
+                try:
+                    out = subprocess.check_output(f'netstat -ano -p tcp | findstr :{port}', shell=True, text=True, stderr=subprocess.DEVNULL)
+                    pids_to_kill = set()
+                    for line in out.splitlines():
+                        parts = line.strip().split()
+                        if len(parts) >= 5 and "LISTENING" in parts:
+                            local_addr = parts[1]
+                            if local_addr.endswith(f":{port}"):
+                                pid = parts[-1]
+                                if pid.isdigit() and int(pid) != os.getpid() and int(pid) != 0:
+                                    pids_to_kill.add(pid)
+                    for pid in pids_to_kill:
+                        subprocess.call(["taskkill", "/F", "/T", "/PID", pid], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                except Exception:
+                    pass
 
-            # Pass 2: PowerShell Get-NetTCPConnection with tree kill
-            try:
-                ps_cmd = f'Get-NetTCPConnection -LocalPort {port} -ErrorAction SilentlyContinue | ForEach-Object {{ $pid = $_.OwningProcess; taskkill /F /T /PID $pid; Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue }}'
-                subprocess.call(["powershell", "-NoProfile", "-Command", ps_cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            except Exception:
-                pass
-        else:
-            # Linux / Ubuntu / macOS
-            # 1. fuser
-            try:
-                subprocess.call(["fuser", "-k", f"{port}/tcp"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            except Exception:
-                pass
-            # 2. lsof + kill
-            try:
-                subprocess.call(f"lsof -ti :{port} | xargs -r kill -9 2>/dev/null", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            except Exception:
-                pass
-            # 3. ss fallback
-            try:
-                subprocess.call(f"kill -9 $(ss -lptn 'sport = :{port}' | grep -oP 'pid=\\K[0-9]+') 2>/dev/null", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            except Exception:
-                pass
+                # Pass 2: PowerShell Get-NetTCPConnection
+                try:
+                    ps_cmd = f'Get-NetTCPConnection -LocalPort {port} -ErrorAction SilentlyContinue | ForEach-Object {{ $p = $_.OwningProcess; if ($p -and $p -ne 0 -and $p -ne {os.getpid()}) {{ Stop-Process -Id $p -Force -ErrorAction SilentlyContinue }} }}'
+                    subprocess.call(["powershell", "-NoProfile", "-Command", ps_cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                except Exception:
+                    pass
+            else:
+                # Linux / Ubuntu / macOS
+                try:
+                    subprocess.call(["fuser", "-k", f"{port}/tcp"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                except Exception:
+                    pass
+                try:
+                    subprocess.call(f"lsof -ti :{port} | xargs -r kill -9 2>/dev/null", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                except Exception:
+                    pass
+
+            if is_port_in_use(port):
+                time.sleep(0.3)
 
 def main():
     global VENV_PYTHON
-    VENV_PYTHON = ensure_venv(reexec=True)
+    try:
+        VENV_PYTHON = ensure_venv(reexec=True)
+    except KeyboardInterrupt:
+        sys.exit(0)
+
     os.system("color" if os.name == "nt" else "")
     print_banner(f"NEW-HRMS FULLSTACK LAUNCHER ({'UBUNTU/LINUX' if os.name != 'nt' else 'WINDOWS'})")
 
@@ -240,11 +266,21 @@ def main():
             print(f"\033[91m[CRITICAL] Backend crashed immediately with exit code {backend_proc.returncode}!\033[0m")
             return
 
-        # Start Frontend (Production Preview)
-        print(f"[4/4] Starting Frontend (npm run preview) on port {frontend_port} ...")
-        npm_cmd = "npm.cmd" if os.name == "nt" else "npm"
-        frontend_cmd = [npm_cmd, "run", "preview"]
-        frontend_proc = subprocess.Popen(frontend_cmd, cwd=str(FRONTEND_DIR), **popen_kwargs)
+        # Ensure Frontend is built
+        dist_dir = FRONTEND_DIR / ".vercel" / "output"
+        if not dist_dir.exists():
+            print(f"[4/4] Building Frontend bundle...")
+            npm_cmd = "npm.cmd" if os.name == "nt" else "npm"
+            subprocess.check_call([npm_cmd, "run", "build"], cwd=str(FRONTEND_DIR))
+
+        # Start Frontend using node directly (completely eliminates cmd.exe and 'Terminate batch job (Y/N)?' prompt)
+        print(f"[4/4] Starting Frontend on port {frontend_port} ...")
+        frontend_cmd = ["node", "run-preview.mjs"]
+        frontend_proc = subprocess.Popen(
+            frontend_cmd,
+            cwd=str(FRONTEND_DIR),
+            **popen_kwargs
+        )
         processes.append(frontend_proc)
 
         print("\n\033[92m" + "=" * 65)
@@ -291,4 +327,12 @@ def main():
         print("\033[92mAll servers stopped and all ports freed cleanly.\033[0m")
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        try:
+            f_port, b_port, _ = get_config()
+            free_ports(b_port, f_port)
+        except Exception:
+            pass
+        sys.exit(0)

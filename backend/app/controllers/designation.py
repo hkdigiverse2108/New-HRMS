@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, status, Query
-from typing import List
+from typing import List, Optional
 from app.schemas.designation import DesignationCreate, DesignationUpdate, DesignationOut
 from app.schemas.pagination import PaginatedResponse
 from app.services.designation import DesignationService
@@ -23,8 +23,8 @@ async def create_designation(data: DesignationCreate, current_user: dict = Depen
 
 @router.get("", response_model=PaginatedResponse[DesignationOut])
 async def get_all_designations(
-    page: int = Query(1, ge=1),
-    limit: int = Query(10, ge=1, le=100),
+    page: Optional[int] = Query(None, ge=1),
+    limit: Optional[int] = Query(None, ge=1),
     current_user: str = Depends(get_current_user)
 ):
     cache_key = make_list_key("designations", page=page, limit=limit)
@@ -35,7 +35,7 @@ async def get_all_designations(
         return cached
 
     # 2. Fetch from DB
-    response = await DesignationService.get_all(page, limit)
+    response = await DesignationService.get_all(page=page, limit=limit)
 
     # 3. Store in Redis without time expiry
     await set_cache(cache_key, response)

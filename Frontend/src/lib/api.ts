@@ -48,6 +48,7 @@ export const setStoredUser = (user: any): void => {
 type LoaderListener = (loadingCount: number) => void;
 let activeRequestsCount = 0;
 const loaderListeners = new Set<LoaderListener>();
+const inFlightRequests = new Map<string, Promise<any>>();
 
 export const subscribeLoader = (listener: LoaderListener): (() => void) => {
   loaderListeners.add(listener);
@@ -104,49 +105,68 @@ async function apiRequest<T = any>(endpoint: string, options: RequestOptions = {
   }
   const url = `${API_URL}${cleanEndpoint}`;
 
-  try {
-    const response = await fetch(url, {
-      headers,
-      ...rest,
-    });
+  const method = (rest.method || "GET").toUpperCase();
+  const isGet = method === "GET";
+  const inFlightKey = isGet ? `${url}::${token || ""}` : null;
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      const message =
-        typeof errorData.detail === "string"
-          ? errorData.detail
-          : errorData.message || (Array.isArray(errorData.detail) ? errorData.detail[0]?.msg : null) || `Request failed with status ${response.status}`;
-
-      if (response.status === 401 && !skipAuth) {
-        removeAuthToken();
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new Event("hrms:unauthorized"));
-        }
-      }
-
-      if (showErrorToast && response.status !== 401) {
-        toast.error(message);
-      }
-
-      throw new Error(message);
-    }
-
-    if (response.status === 204) {
-      return null as T;
-    }
-
-    return (await response.json()) as T;
-  } catch (error: any) {
-    if (showErrorToast && !error.message) {
-      toast.error("Network error. Please check backend connection.");
-    }
-    throw error;
-  } finally {
-    if (showLoader) {
-      activeRequestsCount = Math.max(0, activeRequestsCount - 1);
-      notifyLoader();
-    }
+  if (inFlightKey && inFlightRequests.has(inFlightKey)) {
+    return inFlightRequests.get(inFlightKey) as Promise<T>;
   }
+
+  const execute = async (): Promise<T> => {
+    try {
+      const response = await fetch(url, {
+        headers,
+        ...rest,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const message =
+          typeof errorData.detail === "string"
+            ? errorData.detail
+            : errorData.message || (Array.isArray(errorData.detail) ? errorData.detail[0]?.msg : null) || `Request failed with status ${response.status}`;
+
+        if (response.status === 401 && !skipAuth) {
+          removeAuthToken();
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new Event("hrms:unauthorized"));
+          }
+        }
+
+        if (showErrorToast && response.status !== 401) {
+          toast.error(message);
+        }
+
+        throw new Error(message);
+      }
+
+      if (response.status === 204) {
+        return null as T;
+      }
+
+      return (await response.json()) as T;
+    } catch (error: any) {
+      if (showErrorToast && !error.message) {
+        toast.error("Network error. Please check backend connection.");
+      }
+      throw error;
+    } finally {
+      if (inFlightKey) {
+        inFlightRequests.delete(inFlightKey);
+      }
+      if (showLoader) {
+        activeRequestsCount = Math.max(0, activeRequestsCount - 1);
+        notifyLoader();
+      }
+    }
+  };
+
+  const reqPromise = execute();
+  if (inFlightKey) {
+    inFlightRequests.set(inFlightKey, reqPromise);
+  }
+  return reqPromise;
 }
 
 /**

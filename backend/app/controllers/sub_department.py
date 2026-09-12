@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, status, Query
-from typing import List
+from typing import List, Optional
 from app.schemas.sub_department import SubDepartmentCreate, SubDepartmentUpdate, SubDepartmentOut
 from app.schemas.pagination import PaginatedResponse
 from app.services.sub_department import SubDepartmentService
@@ -23,8 +23,8 @@ async def create_sub_department(data: SubDepartmentCreate, current_user: dict = 
 
 @router.get("", response_model=PaginatedResponse[SubDepartmentOut])
 async def get_all_sub_departments(
-    page: int = Query(1, ge=1),
-    limit: int = Query(10, ge=1, le=100),
+    page: Optional[int] = Query(None, ge=1),
+    limit: Optional[int] = Query(None, ge=1),
     current_user: str = Depends(get_current_user)
 ):
     cache_key = make_list_key("sub_departments", page=page, limit=limit)
@@ -35,7 +35,7 @@ async def get_all_sub_departments(
         return cached
 
     # 2. Fetch from DB
-    response = await SubDepartmentService.get_all(page, limit)
+    response = await SubDepartmentService.get_all(page=page, limit=limit)
 
     # 3. Store in Redis without time expiry
     await set_cache(cache_key, response)
@@ -62,8 +62,8 @@ async def get_sub_department(item_id: str, current_user: str = Depends(get_curre
 @router.get("/department/{department_id}", response_model=PaginatedResponse[SubDepartmentOut])
 async def get_sub_departments_by_department(
     department_id: str, 
-    page: int = Query(1, ge=1),
-    limit: int = Query(10, ge=1, le=100),
+    page: Optional[int] = Query(None, ge=1),
+    limit: Optional[int] = Query(None, ge=1),
     current_user: str = Depends(get_current_user)
 ):
     cache_key = make_list_key("sub_departments", department_id=department_id, page=page, limit=limit)
@@ -74,7 +74,7 @@ async def get_sub_departments_by_department(
         return cached
 
     # 2. Fetch from DB
-    response = await SubDepartmentService.get_by_department_id(department_id, page, limit)
+    response = await SubDepartmentService.get_by_department_id(department_id, page=page, limit=limit)
 
     # 3. Store in Redis
     await set_cache(cache_key, response)

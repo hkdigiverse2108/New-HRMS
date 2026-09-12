@@ -1,5 +1,6 @@
 from app.database.db import get_database
 from bson import ObjectId
+from typing import Optional
 
 class DesignationRepository:
     collection_name = "designations"
@@ -17,21 +18,34 @@ class DesignationRepository:
         return data
 
     @classmethod
-    async def get_all(cls, page: int = 1, limit: int = 10):
+    async def get_all(cls, page: Optional[int] = None, limit: Optional[int] = None):
         collection = await cls.get_collection()
-        skip = (page - 1) * limit
         total = await collection.count_documents({})
         items = []
-        async for item in collection.find().skip(skip).limit(limit):
-            item["_id"] = str(item["_id"])
-            items.append(item)
-        return {
-            "data": items,
-            "total": total,
-            "page": page,
-            "limit": limit,
-            "total_pages": (total + limit - 1) // limit if limit > 0 else 1
-        }
+        if limit is None or limit <= 0 or page is None:
+            async for item in collection.find():
+                item["_id"] = str(item["_id"])
+                items.append(item)
+            return {
+                "data": items,
+                "total": total,
+                "page": 1,
+                "limit": total,
+                "total_pages": 1
+            }
+        else:
+            p = page
+            skip = (p - 1) * limit
+            async for item in collection.find().skip(skip).limit(limit):
+                item["_id"] = str(item["_id"])
+                items.append(item)
+            return {
+                "data": items,
+                "total": total,
+                "page": p,
+                "limit": limit,
+                "total_pages": (total + limit - 1) // limit if limit > 0 else 1
+            }
 
     @classmethod
     async def get_by_id(cls, item_id: str):

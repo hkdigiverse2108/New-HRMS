@@ -80,7 +80,8 @@ class AttendanceRepository:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         status: Optional[str] = None,
-        limit: int = 1000
+        page: Optional[int] = None,
+        limit: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         collection = await cls.get_collection()
         query: Dict[str, Any] = {}
@@ -95,7 +96,12 @@ class AttendanceRepository:
         if status and status != "All":
             query["status"] = status
 
-        cursor = collection.find(query).sort("date", -1).limit(limit)
+        cursor = collection.find(query).sort("date", -1)
+        if limit is not None and limit > 0:
+            if page is not None and page > 1:
+                cursor = cursor.skip((page - 1) * limit)
+            cursor = cursor.limit(limit)
+
         records = []
         async for doc in cursor:
             records.append(serialize_mongo(doc))

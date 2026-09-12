@@ -91,8 +91,8 @@ async def create_employee(employee: EmployeeCreate, current_user: dict = Depends
 # ==============================================================================
 @router.get("", response_model=PaginatedResponse[EmployeeOut])
 async def get_all_employees(
-    page: int = Query(1, ge=1),
-    limit: int = Query(10, ge=1, le=100),
+    page: Optional[int] = Query(None, ge=1),
+    limit: Optional[int] = Query(None, ge=1),
     gender: Optional[GenderEnum] = Query(None, description="Filter by Gender"),
     role_filter: Optional[SystemRole] = Query(None, alias="role", description="Filter by Role"),
     department: Optional[str] = Query(None, description="Filter by Department ID or Name"),
@@ -110,7 +110,7 @@ async def get_all_employees(
         return cached_data
 
     # 2. Cache miss: Fetch from DB / Service
-    response_data = await EmployeeService.get_employees(page, limit, gender, role_filter, department, is_delete, is_block, work_mode)
+    response_data = await EmployeeService.get_employees(page=page, limit=limit, gender=gender, role=role_filter, department=department, is_delete=is_delete, is_block=is_block, work_mode=work_mode)
 
     # 3. Store in Redis without time expiry (persists until Add, Edit, or Delete is called)
     await set_cache(cache_key, response_data)
@@ -146,6 +146,8 @@ async def update_employee(employee_id: str, employee: EmployeeUpdate, current_us
 
     # 1. Remove old single employee cache & clear all list caches
     await delete_cache(f"employee:{employee_id}")
+    await delete_cache(f"user_perms_resolved:{employee_id}")
+    await delete_cache(f"user_permission:{employee_id}")
     await clear_pattern("employees:list:*")
 
     # 2. Update employee cache with fresh data

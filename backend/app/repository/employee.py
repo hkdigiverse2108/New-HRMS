@@ -21,8 +21,8 @@ class EmployeeRepository:
     @classmethod
     async def get_all_employees(
         cls, 
-        page: int = 1, 
-        limit: int = 10,
+        page: Optional[int] = None, 
+        limit: Optional[int] = None,
         gender: Optional[GenderEnum] = None,
         role: Optional[SystemRole] = None,
         department: Optional[str] = None,
@@ -31,7 +31,6 @@ class EmployeeRepository:
         work_mode: Optional[WorkModeEnum] = None
     ):
         collection = await cls.get_collection()
-        skip = (page - 1) * limit
         
         query = {}
         if gender and hasattr(gender, "value"):
@@ -60,16 +59,30 @@ class EmployeeRepository:
             
         total = await collection.count_documents(query)
         employees = []
-        async for emp in collection.find(query).skip(skip).limit(limit):
-            emp["_id"] = str(emp["_id"])
-            employees.append(emp)
-        return {
-            "data": employees,
-            "total": total,
-            "page": page,
-            "limit": limit,
-            "total_pages": (total + limit - 1) // limit if limit > 0 else 1
-        }
+        if limit is None or limit <= 0 or page is None:
+            async for emp in collection.find(query):
+                emp["_id"] = str(emp["_id"])
+                employees.append(emp)
+            return {
+                "data": employees,
+                "total": total,
+                "page": 1,
+                "limit": total,
+                "total_pages": 1
+            }
+        else:
+            p = page
+            skip = (p - 1) * limit
+            async for emp in collection.find(query).skip(skip).limit(limit):
+                emp["_id"] = str(emp["_id"])
+                employees.append(emp)
+            return {
+                "data": employees,
+                "total": total,
+                "page": p,
+                "limit": limit,
+                "total_pages": (total + limit - 1) // limit if limit > 0 else 1
+            }
 
     @classmethod
     async def get_employee_by_id(cls, employee_id: str):

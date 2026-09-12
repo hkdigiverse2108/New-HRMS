@@ -1,4 +1,5 @@
 from fastapi import HTTPException, status
+from typing import Optional
 from app.repository.designation import DesignationRepository
 from app.schemas.designation import DesignationCreate, DesignationUpdate
 
@@ -8,7 +9,7 @@ class DesignationService:
         return await DesignationRepository.create(data.model_dump(exclude_unset=True))
 
     @staticmethod
-    async def get_all(page: int = 1, limit: int = 10):
+    async def get_all(page: Optional[int] = None, limit: Optional[int] = None):
         return await DesignationRepository.get_all(page, limit)
 
     @staticmethod

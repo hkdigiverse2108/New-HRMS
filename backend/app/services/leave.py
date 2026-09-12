@@ -125,6 +125,8 @@ class LeaveService:
         leave_type: Optional[str] = None,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
+        page: Optional[int] = None,
+        limit: Optional[int] = None,
         current_user_role: str = "Employee",
         current_user_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
@@ -143,7 +145,9 @@ class LeaveService:
             status=status,
             leave_type=leave_type,
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
+            page=page,
+            limit=limit
         )
         cached = await get_cache(cache_key)
         if cached is not None:
@@ -154,7 +158,9 @@ class LeaveService:
             status=status,
             leave_type=leave_type,
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
+            page=page,
+            limit=limit
         )
         await set_cache(cache_key, results, ttl=300)
         return results

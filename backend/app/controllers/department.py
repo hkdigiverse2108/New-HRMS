@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, status, Query
-from typing import List
+from typing import List, Optional
 from app.schemas.department import DepartmentCreate, DepartmentUpdate, DepartmentOut
 from app.schemas.pagination import PaginatedResponse
 from app.services.department import DepartmentService
@@ -23,8 +23,8 @@ async def create_department(data: DepartmentCreate, current_user: dict = Depends
 
 @router.get("", response_model=PaginatedResponse[DepartmentOut])
 async def get_all_departments(
-    page: int = Query(1, ge=1),
-    limit: int = Query(10, ge=1, le=100),
+    page: Optional[int] = Query(None, ge=1),
+    limit: Optional[int] = Query(None, ge=1),
     current_user: str = Depends(get_current_user)
 ):
     cache_key = make_list_key("departments", page=page, limit=limit)
@@ -35,7 +35,7 @@ async def get_all_departments(
         return cached
 
     # 2. Fetch from DB
-    response = await DepartmentService.get_all(page, limit)
+    response = await DepartmentService.get_all(page=page, limit=limit)
 
     # 3. Store in Redis without time expiry
     await set_cache(cache_key, response)

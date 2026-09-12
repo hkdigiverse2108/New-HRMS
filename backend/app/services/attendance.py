@@ -678,6 +678,8 @@ class AttendanceService:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         status: Optional[str] = None,
+        page: Optional[int] = None,
+        limit: Optional[int] = None,
         current_user_role: str = "Employee",
         current_user_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
@@ -696,7 +698,9 @@ class AttendanceService:
             employee_id=scoped_emp_id,
             start_date=start_date,
             end_date=end_date,
-            status=status
+            status=status,
+            page=page,
+            limit=limit
         )
         cached = await get_cache(cache_key)
         if cached is not None:
@@ -706,7 +710,9 @@ class AttendanceService:
             employee_id=scoped_emp_id,
             start_date=start_date,
             end_date=end_date,
-            status=status
+            status=status,
+            page=page,
+            limit=limit
         )
         for r in records:
             r["logs"] = build_timeline_logs(r)

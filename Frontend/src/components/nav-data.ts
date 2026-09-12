@@ -217,6 +217,7 @@ export const navItems: NavItem[] = [
       { title: "Elections", url: "/elections" },
     ],
   },
+  { title: "Access Control", url: "/access-control", icon: Shield, section: "Admin" },
   { title: "Settings", url: "/settings", icon: Settings, section: "Admin" },
   { title: "Restrictions", url: "/restrictions", icon: Shield, section: "Admin" },
   { title: "Activity Logs", url: "/activity-logs", icon: ScrollText, section: "Admin" },

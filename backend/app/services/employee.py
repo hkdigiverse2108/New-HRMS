@@ -29,8 +29,8 @@ class EmployeeService:
 
     @staticmethod
     async def get_employees(
-        page: int = 1, 
-        limit: int = 10,
+        page: Optional[int] = None, 
+        limit: Optional[int] = None,
         gender: Optional[GenderEnum] = None,
         role: Optional[SystemRole] = None,
         department: Optional[str] = None,

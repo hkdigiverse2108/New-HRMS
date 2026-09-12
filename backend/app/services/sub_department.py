@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import HTTPException, status
 from app.repository.sub_department import SubDepartmentRepository
 from app.schemas.sub_department import SubDepartmentCreate, SubDepartmentUpdate
@@ -8,7 +9,7 @@ class SubDepartmentService:
         return await SubDepartmentRepository.create(data.model_dump(exclude_unset=True))
 
     @staticmethod
-    async def get_all(page: int = 1, limit: int = 10):
+    async def get_all(page: Optional[int] = None, limit: Optional[int] = None):
         return await SubDepartmentRepository.get_all(page, limit)
 
     @staticmethod
@@ -19,7 +20,7 @@ class SubDepartmentService:
         return item
 
     @staticmethod
-    async def get_by_department_id(department_id: str, page: int = 1, limit: int = 10):
+    async def get_by_department_id(department_id: str, page: Optional[int] = None, limit: Optional[int] = None):
         return await SubDepartmentRepository.get_by_department_id(department_id, page, limit)
 
     @staticmethod

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from typing import List
+from typing import List, Dict, Any, Optional
 from app.schemas.access_control import (
     UserAccessControlCreate, UserAccessControlUpdate, UserAccessControlResponse,
     PermissionPresetCreate, PermissionPresetUpdate, PermissionPresetResponse
@@ -7,44 +7,104 @@ from app.schemas.access_control import (
 from app.repository.access_control import UserPermissionRepository, PresetPermissionRepository, has_manual_permissions
 from app.repository.employee import EmployeeRepository
 from app.controllers.auth import RoleChecker
+from app.redis.service import get_cache, set_cache, delete_cache, clear_pattern
+from app.database.default_presets import SYSTEM_MODULES, DEFAULT_EMPLOYEE_PERMISSIONS, DEFAULT_HR_PERMISSIONS, DEFAULT_SUB_ADMIN_PERMISSIONS, get_admin_full_permissions
+from app.database.db import get_database
 
 router = APIRouter(
     prefix="/permissions",
     tags=["Access Control"]
 )
 
-# Optional: Protect all endpoints so only Admins can manage the access control list
+# Protect all modification endpoints so only Admins can manage access control
 admin_role_checker = RoleChecker(["Admin", "CEO"])
 
 # ==========================================
-# Permission Presets API Endpoints
+# System Modules Definition
 # ==========================================
+@router.get("/modules", response_model=List[Dict[str, Any]])
+async def get_system_modules():
+    """Returns the list of all configurable system modules with sections."""
+    return SYSTEM_MODULES
+
+@router.get("/defaults", response_model=Dict[str, Any])
+async def get_default_permissions():
+    """Returns standard default permissions for general employee, HR, and admin."""
+    return {
+        "admin_permissions": get_admin_full_permissions(),
+        "hr_permissions": DEFAULT_HR_PERMISSIONS,
+        "default_employee_permissions": DEFAULT_EMPLOYEE_PERMISSIONS
+    }
+
+@router.get("/roles", response_model=List[str])
+async def get_available_roles():
+    """Returns list of distinct roles available in HRMS for Role Presets."""
+    return ["HR", "Employee", "Sub-Admin", "Admin"]
+
+# ==========================================
+# Permission Presets API Endpoints (Role-Wise)
+# ==========================================
+@router.get("/presets", response_model=List[PermissionPresetResponse])
+async def get_all_presets():
+    """Fetches all role presets from database with Redis caching."""
+    cache_key = "presets:list:all"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    presets = await PresetPermissionRepository.get_all_presets()
+    await set_cache(cache_key, presets)
+    return presets
+
 @router.post("/presets", response_model=PermissionPresetResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(admin_role_checker)])
 async def create_or_update_preset(item: PermissionPresetCreate):
     item_data = item.dict(exclude_unset=True)
     created_item = await PresetPermissionRepository.create_preset(item_data)
     
-    # Update permissions ONLY for employees with no manual permissions (or all false)
-    employees = await EmployeeRepository.get_employees_by_dept_and_desig(
-        item_data["department_id"], item_data["designation_id"]
-    )
-    for emp in employees:
-        emp_id = str(emp["_id"])
-        existing = await UserPermissionRepository.get_user_permission(emp_id)
-        existing_perms = existing.get("module_permissions", {}) if existing else {}
-        if not has_manual_permissions(existing_perms):
-            await UserPermissionRepository.create_user_permission({
-                "employee_id": emp_id,
-                "module_permissions": item_data["module_permissions"]
-            })
-        
+    # Invalidate Redis caches so all employees immediately reflect the updated preset
+    await clear_pattern("preset:*")
+    await clear_pattern("presets:list:*")
+    await clear_pattern("user_perms_resolved:*")
+    await clear_pattern("user_permission:*")
+    
+    # Clean up non-custom records in user_permissions so employees seamlessly inherit the preset
+    db = get_database()
+    await db["user_permissions"].delete_many({"$or": [{"is_custom": False}, {"is_custom": None}]})
+    
     return created_item
 
-@router.get("/presets/{department_id}/{designation_id}", response_model=PermissionPresetResponse)
-async def get_preset(department_id: str, designation_id: str):
-    item = await PresetPermissionRepository.get_preset(department_id, designation_id)
+@router.get("/presets/{role}", response_model=PermissionPresetResponse)
+async def get_preset_by_role(role: str):
+    """Fetches preset permissions for a specific role (e.g. HR, Employee, Sub-Admin, Admin)."""
+    clean_role = str(role).strip()
+    cache_key = f"preset:role:{clean_role}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    item = await PresetPermissionRepository.get_preset_by_role(clean_role)
     if not item:
-        return {"_id": "", "department_id": department_id, "designation_id": designation_id, "module_permissions": {}}
+        # Fallback to seeded defaults if not yet in DB
+        if clean_role == "HR":
+            perms = DEFAULT_HR_PERMISSIONS
+        elif clean_role == "Admin":
+            perms = get_admin_full_permissions()
+        elif clean_role == "Sub-Admin":
+            perms = DEFAULT_SUB_ADMIN_PERMISSIONS
+        else:
+            perms = DEFAULT_EMPLOYEE_PERMISSIONS
+
+        result = {
+            "_id": "",
+            "role": clean_role,
+            "department_id": "all",
+            "designation_id": "all",
+            "module_permissions": perms
+        }
+        await set_cache(cache_key, result)
+        return result
+
+    await set_cache(cache_key, item)
     return item
 
 @router.put("/presets/{preset_id}", response_model=dict, dependencies=[Depends(admin_role_checker)])
@@ -61,19 +121,15 @@ async def update_preset(preset_id: str, item: PermissionPresetUpdate):
     if not success:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update preset")
         
-    # Update permissions ONLY for employees with no manual permissions (or all false)
-    employees = await EmployeeRepository.get_employees_by_dept_and_desig(
-        preset["department_id"], preset["designation_id"]
-    )
-    for emp in employees:
-        emp_id = str(emp["_id"])
-        existing = await UserPermissionRepository.get_user_permission(emp_id)
-        existing_perms = existing.get("module_permissions", {}) if existing else {}
-        if not has_manual_permissions(existing_perms):
-            await UserPermissionRepository.create_user_permission({
-                "employee_id": emp_id,
-                "module_permissions": update_data["module_permissions"]
-            })
+    # Invalidate Redis caches
+    await clear_pattern("preset:*")
+    await clear_pattern("presets:list:*")
+    await clear_pattern("user_perms_resolved:*")
+    await clear_pattern("user_permission:*")
+
+    # Clean up non-custom records in user_permissions so employees seamlessly inherit the updated preset
+    db = get_database()
+    await db["user_permissions"].delete_many({"$or": [{"is_custom": False}, {"is_custom": None}]})
         
     return {"message": "Preset updated successfully"}
 
@@ -82,6 +138,11 @@ async def delete_preset(preset_id: str):
     success = await PresetPermissionRepository.delete_preset(preset_id)
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Preset not found")
+        
+    await clear_pattern("preset:*")
+    await clear_pattern("presets:list:*")
+    await clear_pattern("user_perms_resolved:*")
+    await clear_pattern("user_permission:*")
     return None
 
 # ==========================================
@@ -90,35 +151,77 @@ async def delete_preset(preset_id: str):
 @router.post("", response_model=UserAccessControlResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(admin_role_checker)])
 async def create_or_update_user_permission(item: UserAccessControlCreate):
     item_data = item.dict(exclude_unset=True)
-    created_item = await UserPermissionRepository.create_user_permission(item_data)
+    created_item = await UserPermissionRepository.create_user_permission(item_data, is_custom=True)
+    
+    emp_id = str(item_data["employee_id"]).strip()
+    await delete_cache(f"user_permission:{emp_id}")
+    await delete_cache(f"user_perms_resolved:{emp_id}")
+    await set_cache(f"user_permission:{emp_id}", created_item)
     return created_item
 
 @router.get("/{employee_id}", response_model=UserAccessControlResponse)
 async def get_user_permission(employee_id: str):
-    item = await UserPermissionRepository.get_user_permission(employee_id)
-    manual_perms = item.get("module_permissions", {}) if item else {}
+    cache_key = f"user_permission:{employee_id}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    # Fetch employee to know their work details and role
+    employee = await EmployeeRepository.get_employee_by_id(employee_id)
+    if not employee:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found")
+
+    work_details = employee.get("work_details", {})
+    system_role = work_details.get("system_role", "Employee")
     
-    # Fallback to Presets if manual permissions don't exist or all are false
-    if not has_manual_permissions(manual_perms):
-        employee = await EmployeeRepository.get_employee_by_id(employee_id)
-        if employee:
-            dept_id = employee.get("work_details", {}).get("department")
-            desig_id = employee.get("work_details", {}).get("designation")
-            
-            if dept_id and desig_id:
-                preset = await PresetPermissionRepository.get_preset(dept_id, desig_id)
-                if preset:
-                    preset_perms = preset.get("module_permissions", {})
-                    if preset_perms:
-                        manual_perms = preset_perms
+    # 1. If Admin, always return Admin full permissions
+    if system_role == "Admin":
+        admin_perms = get_admin_full_permissions()
+        res = {
+            "_id": "",
+            "employee_id": employee_id,
+            "module_permissions": admin_perms,
+            "is_custom": False,
+            "inherited_from": "Master Admin (Full Unrestricted Access)"
+        }
+        await set_cache(cache_key, res)
+        return res
 
-    if item:
-        item["module_permissions"] = manual_perms
-        return item
+    # 2. Check if employee has custom permissions explicitly configured
+    item = await UserPermissionRepository.get_user_permission(employee_id)
+    if item and item.get("is_custom") is True and has_manual_permissions(item.get("module_permissions")):
+        res = {
+            "_id": str(item["_id"]),
+            "employee_id": employee_id,
+            "module_permissions": item.get("module_permissions", {}),
+            "is_custom": True,
+            "inherited_from": None
+        }
+        await set_cache(cache_key, res)
+        return res
+
+    # 3. Inherit dynamically from Role Preset
+    preset, inherited_desc = await PresetPermissionRepository.get_preset_for_employee(system_role)
+    
+    if preset and "module_permissions" in preset:
+        res = {
+            "_id": "",
+            "employee_id": employee_id,
+            "module_permissions": preset["module_permissions"],
+            "is_custom": False,
+            "inherited_from": inherited_desc
+        }
     else:
-        # Return merged/preset permissions rather than 404 to avoid frontend errors
-        return {"_id": "", "employee_id": employee_id, "module_permissions": manual_perms}
+        res = {
+            "_id": "",
+            "employee_id": employee_id,
+            "module_permissions": DEFAULT_EMPLOYEE_PERMISSIONS,
+            "is_custom": False,
+            "inherited_from": f"Default System Permissions ({system_role})"
+        }
 
+    await set_cache(cache_key, res)
+    return res
 
 @router.put("/{employee_id}", response_model=dict, dependencies=[Depends(admin_role_checker)])
 async def update_user_permission(employee_id: str, item: UserAccessControlUpdate):
@@ -126,16 +229,20 @@ async def update_user_permission(employee_id: str, item: UserAccessControlUpdate
     if "module_permissions" not in update_data:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields provided for update")
         
-    success = await UserPermissionRepository.update_user_permission(employee_id, update_data["module_permissions"])
-    if not success:
-        # If user permission record does not exist yet, we could potentially create it, but for explicit PUT we fail
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User permission not found")
+    emp_id = str(employee_id).strip()
+    await UserPermissionRepository.create_user_permission({
+        "employee_id": emp_id,
+        "module_permissions": update_data["module_permissions"]
+    }, is_custom=True)
         
+    await delete_cache(f"user_permission:{emp_id}")
+    await delete_cache(f"user_perms_resolved:{emp_id}")
     return {"message": "User permission updated successfully"}
 
 @router.delete("/{employee_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(admin_role_checker)])
 async def delete_user_permission(employee_id: str):
-    success = await UserPermissionRepository.delete_user_permission(employee_id)
-    if not success:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User permission not found")
+    emp_id = str(employee_id).strip()
+    await UserPermissionRepository.delete_user_permission(emp_id)
+    await delete_cache(f"user_permission:{emp_id}")
+    await delete_cache(f"user_perms_resolved:{emp_id}")
     return None
