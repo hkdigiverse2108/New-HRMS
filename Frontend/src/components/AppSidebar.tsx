@@ -235,9 +235,17 @@ function SidebarBody({
   const { user, isAuthenticated, logout } = useAuth();
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [query, setQuery] = useState("");
-  const [openGroups, setOpenGroups] = useState<string[]>(
-    navItems.filter((i) => i.children?.length).map((i) => i.title),
-  );
+  const [openGroups, setOpenGroups] = useState<string[]>(() => {
+    const current = navItems.find((i) => i.children?.some((c) => c.url === active));
+    return current ? [current.title] : [];
+  });
+
+  useEffect(() => {
+    const current = navItems.find((i) => i.children?.some((c) => c.url === active));
+    if (current) {
+      setOpenGroups((prev) => (prev.includes(current.title) ? prev : [...prev, current.title]));
+    }
+  }, [active]);
   const [pinned, setPinned] = useState<string[]>(["Attendance"]);
   const [collapsedSections, setCollapsedSections] = useState<string[]>([]);
   const [recents, setRecents] = useState<{ title: string; url: string }[]>(() => {
@@ -326,20 +334,9 @@ function SidebarBody({
   }, [userAllowedNavItems, pinned]);
 
   const toggleGroup = (title: string) => {
-    const item = navItems.find((i) => i.title === title);
-    if (!item) return;
-
-    setOpenGroups((prev) => {
-      const isAlreadyOpen = prev.includes(title);
-      if (isAlreadyOpen) {
-        return prev.filter((t) => t !== title);
-      } else {
-        const siblingGroupTitles = navItems
-          .filter((i) => i.section === item.section && i.title !== title && i.children?.length)
-          .map((i) => i.title);
-        return [...prev.filter((t) => !siblingGroupTitles.includes(t)), title];
-      }
-    });
+    setOpenGroups((prev) =>
+      prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title]
+    );
   };
 
   const togglePin = (title: string) =>
@@ -492,123 +489,102 @@ function SidebarBody({
           </div>
         )}
 
-        {grouped.map((group) => {
-          const isSectionCollapsed = collapsedSections.includes(group.section);
+        {filtered.map((item) => {
+          const isOpen = openGroups.includes(item.title) || Boolean(q);
+          const hasChildren = Boolean(item.children?.length);
+          const selfActive = item.url === active;
+          const childActive = item.children?.some((c) => c.url === active);
+
           return (
-            <div key={group.section} className="mb-1">
-              {!collapsed && (
-                <button
-                  onClick={() => toggleSection(group.section)}
-                  className="flex w-full items-center justify-between px-2 pb-1 pt-3 text-[10px] font-bold uppercase tracking-wider text-sidebar-muted hover:text-sidebar-foreground"
-                >
-                  <span>{group.section}</span>
-                  <ChevronDown
-                    className={cn(
-                      "h-3.5 w-3.5 transition-transform",
-                      isSectionCollapsed ? "-rotate-90" : "",
-                    )}
-                  />
-                </button>
-              )}
-              {(!isSectionCollapsed || collapsed) &&
-                group.items.map((item) => {
-              const isOpen = openGroups.includes(item.title) || Boolean(q);
-              const hasChildren = Boolean(item.children?.length);
-              const selfActive = item.url === active;
-              const childActive = item.children?.some((c) => c.url === active);
-
-              return (
-                <div key={item.title}>
-                  <button
-                    title={collapsed ? item.title : undefined}
-                    onClick={() => (hasChildren ? toggleGroup(item.title) : item.url && go(item.url))}
-                    className={cn(
-                      "group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
-                      collapsed && "justify-center px-0",
-                      selfActive
-                        ? "bg-sidebar-primary font-semibold text-sidebar-primary-foreground"
-                        : childActive && !isOpen
-                          ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-                          : "hover:bg-sidebar-accent",
-                    )}
-                  >
-                    <item.icon className="h-4.5 w-4.5 shrink-0" />
-                    {!collapsed && (
-                      <>
-                        <span className="min-w-0 flex-1 truncate text-left">{item.title}</span>
-                        {item.badge ? <Badge count={item.badge} /> : null}
-                        {hasChildren && (
-                          <ChevronDown
-                            className={cn(
-                              "h-4 w-4 shrink-0 transition-transform",
-                              isOpen && "rotate-180",
-                            )}
-                          />
+            <div key={item.title} className="mb-0.5">
+              <button
+                title={collapsed ? item.title : undefined}
+                onClick={() => (hasChildren ? toggleGroup(item.title) : item.url && go(item.url))}
+                className={cn(
+                  "group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
+                  collapsed && "justify-center px-0",
+                  selfActive
+                    ? "bg-sidebar-primary font-semibold text-sidebar-primary-foreground"
+                    : childActive && !isOpen
+                      ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+                      : "hover:bg-sidebar-accent",
+                )}
+              >
+                <item.icon className="h-4.5 w-4.5 shrink-0" />
+                {!collapsed && (
+                  <>
+                    <span className="min-w-0 flex-1 truncate text-left">{item.title}</span>
+                    {item.badge ? <Badge count={item.badge} /> : null}
+                    {hasChildren && (
+                      <ChevronDown
+                        className={cn(
+                          "h-4 w-4 shrink-0 transition-transform",
+                          isOpen && "rotate-180",
                         )}
-                        {!hasChildren && (
-                          <span
-                            role="button"
-                            aria-label={`Pin ${item.title}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              togglePin(item.title);
-                            }}
-                            className="hidden shrink-0 text-sidebar-muted group-hover:block hover:text-sidebar-foreground"
-                          >
-                            <Pin className="h-3.5 w-3.5" />
-                          </span>
-                        )}
-                      </>
+                      />
                     )}
-                  </button>
+                    {!hasChildren && (
+                      <span
+                        role="button"
+                        aria-label={`Pin ${item.title}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          togglePin(item.title);
+                        }}
+                        className="hidden shrink-0 text-sidebar-muted group-hover:block hover:text-sidebar-foreground"
+                      >
+                        <Pin className="h-3.5 w-3.5" />
+                      </span>
+                    )}
+                  </>
+                )}
+              </button>
 
-                  {!collapsed && hasChildren && isOpen && (
-                    <div className="my-0.5 ml-[19px] border-l border-sidebar-border pl-2">
-                      {item.children!.map((child) => (
-                        <button
-                          key={child.url}
-                          onClick={() => go(child.url)}
+              {!collapsed && hasChildren && isOpen && (
+                <div className="my-0.5 ml-[19px] border-l border-sidebar-border pl-2">
+                  {item.children!.map((child) => (
+                    <button
+                      key={child.url}
+                      onClick={() => go(child.url)}
+                      className={cn(
+                        "group flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors",
+                        child.url === active
+                          ? "bg-sidebar-surface font-semibold text-sidebar-accent-foreground shadow-sm"
+                          : "text-sidebar-foreground/80 hover:bg-sidebar-accent",
+                      )}
+                    >
+                      {child.icon && (
+                        <child.icon
                           className={cn(
-                            "group flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors",
+                            "h-4 w-4 shrink-0 transition-colors",
                             child.url === active
-                              ? "bg-sidebar-surface font-semibold text-sidebar-accent-foreground shadow-sm"
-                              : "text-sidebar-foreground/80 hover:bg-sidebar-accent",
+                              ? "text-sidebar-accent-foreground"
+                              : "text-sidebar-muted group-hover:text-sidebar-accent-foreground",
                           )}
-                        >
-                          {child.icon && (
-                            <child.icon
-                              className={cn(
-                                "h-4 w-4 shrink-0 transition-colors",
-                                child.url === active
-                                  ? "text-sidebar-accent-foreground"
-                                  : "text-sidebar-muted group-hover:text-sidebar-accent-foreground",
-                              )}
-                            />
-                          )}
-                          <span className="min-w-0 flex-1 truncate text-left">{child.title}</span>
-                          {child.badge ? <Badge count={child.badge} /> : null}
-                          <span
-                            role="button"
-                            aria-label={`Pin ${child.title}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              togglePin(`${item.title} — ${child.title}`);
-                            }}
-                            className="hidden shrink-0 text-sidebar-muted group-hover:block"
-                          >
-                            <Pin className="h-3.5 w-3.5" />
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                        />
+                      )}
+                      <span className="min-w-0 flex-1 truncate text-left">{child.title}</span>
+                      {child.badge ? <Badge count={child.badge} /> : null}
+                      <span
+                        role="button"
+                        aria-label={`Pin ${child.title}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          togglePin(`${item.title} — ${child.title}`);
+                        }}
+                        className="hidden shrink-0 text-sidebar-muted group-hover:block"
+                      >
+                        <Pin className="h-3.5 w-3.5" />
+                      </span>
+                    </button>
+                  ))}
                 </div>
-              );
-            })}
-          </div>
-        )})}
+              )}
+            </div>
+          );
+        })}
 
-        {q && grouped.length === 0 && (
+        {q && filtered.length === 0 && (
           <p className="px-3 py-6 text-center text-sm text-sidebar-muted">No matches</p>
         )}
       </nav>
