@@ -8,9 +8,28 @@ import { useAuth } from "@/components/auth/AuthContext";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { DateRangeFilter } from "@/components/common/DateRangeFilter";
+import { DatePicker } from "@/components/ui/date-picker";
 import { SearchInput } from "@/components/common/SearchInput";
-import { formatISTDate } from "@/lib/timeUtils";
+import { formatISTDate, formatAppliedOnIST } from "@/lib/timeUtils";
 import { api } from "@/lib/api";
+
+const toLocalYMD = (d: Date | null | undefined): string => {
+  if (!d || isNaN(d.getTime())) return "";
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const parseYMDToDate = (str: string | null | undefined): Date | undefined => {
+  if (!str) return undefined;
+  const match = str.trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (!match || !match[1] || !match[2] || !match[3]) return undefined;
+  const year = parseInt(match[1], 10);
+  const month = parseInt(match[2], 10) - 1;
+  const day = parseInt(match[3], 10);
+  return new Date(year, month, day);
+};
 
 type LeaveStatus = "Pending" | "Approved" | "Rejected";
 type DayType = "Full Day" | "First Half" | "Second Half";
@@ -30,6 +49,7 @@ interface LeaveRequest {
   reason: string;
   status: LeaveStatus;
   appliedOn: string;
+  createdAt?: string | undefined;
   isConditional?: boolean | undefined;
   rejectionReason?: string | undefined;
 }
@@ -157,6 +177,7 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<LeaveStatus>("Pending");
+  const [pendingCount, setPendingCount] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddOpen, setIsAddOpen] = useState(isNew || false);
 
@@ -165,6 +186,11 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
   const [rejectionReasonText, setRejectionReasonText] = useState("");
 
   // New leave form state
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("");
+  const [employeeOptions, setEmployeeOptions] = useState<
+    Array<{ id: string; name: string; role: string; department: string; email: string }>
+  >([]);
+  const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
   const [newLeaveType, setNewLeaveType] = useState<string>("Sick Leave");
   const [newDayType, setNewDayType] = useState<DayType>("Full Day");
   const [newStartDate, setNewStartDate] = useState("");
@@ -175,80 +201,156 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
 
   const isAdminOrHR = user?.role === "Admin" || user?.role === "HR";
 
-  // Fetch leaves from backend
-  const fetchLeaves = useCallback(async () => {
+  // Fetch employees excluding Admin
+  const fetchEmployeeOptions = useCallback(async () => {
     try {
-      setIsLoading(true);
-      const params = new URLSearchParams();
-      if (!isAdminOrHR && user?.id) {
-        params.append("employee_id", user.id);
-      }
-
-      const queryString = params.toString() ? `?${params.toString()}` : "";
-      const data = await api.get<any[]>(`/leaves${queryString}`, {
+      setIsLoadingEmployees(true);
+      const res = await api.get<{ data?: any[] } | any[]>("/employees?exclude_role=Admin", {
         showLoader: false,
         showErrorToast: false,
       });
-
-      if (Array.isArray(data) && data.length > 0) {
-        const mapped: LeaveRequest[] = data.map((item) => ({
-          id: item.id || `LR-${Math.random()}`,
-          employeeId: item.employee_id || "",
-          employeeName: item.employee_name || "Employee",
-          avatar: item.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.employee_name || "E")}&background=random`,
-          role: item.role || "Staff",
-          department: item.department || "General",
-          type: item.leave_type || "Sick Leave",
-          dayType: (item.day_type as DayType) || "Full Day",
-          startDate: item.start_date || "",
-          endDate: item.end_date || "",
-          durationDays: item.duration_days ?? 1,
-          reason: item.reason || "",
-          status: (item.status as LeaveStatus) || "Pending",
-          appliedOn: item.applied_on ? item.applied_on.split("T")[0] : "",
-          isConditional: item.day_type === "First Half" || item.day_type === "Second Half",
-          rejectionReason: item.rejection_reason || undefined,
-        }));
-        setRequests(mapped);
-      } else {
-        // Fallback for demonstration if collection is empty
-        const fallback = !isAdminOrHR && user
-          ? FALLBACK_REQUESTS.filter((r) => r.employeeName.toLowerCase().includes("current") || r.employeeId === user.id)
-          : FALLBACK_REQUESTS;
-        setRequests(fallback.length > 0 ? fallback : FALLBACK_REQUESTS);
+      const rawList = Array.isArray(res) ? res : (res?.data || []);
+      const mapped = rawList.map((emp: any) => {
+        const personal = emp.personal_info || {};
+        const work = emp.work_details || {};
+        const name = `${personal.first_name || ""} ${personal.last_name || ""}`.trim() || emp.name || "Employee";
+        return {
+          id: String(emp.id || emp._id || ""),
+          name,
+          role: work.designation || work.system_role || emp.role || "Employee",
+          department: work.department || emp.department || "General",
+          email: personal.email_address || emp.email || "",
+        };
+      });
+      setEmployeeOptions(mapped);
+      if (mapped.length > 0) {
+        setSelectedEmployeeId((prev) => {
+          if (prev && mapped.some((m) => m.id === prev)) return prev;
+          const self = mapped.find((m) => m.id === user?.id || m.email === user?.email);
+          return self ? self.id : (mapped[0]?.id || "");
+        });
       }
-    } catch {
-      setRequests(FALLBACK_REQUESTS);
+    } catch (err) {
+      console.error("Failed to load employees for leave request", err);
     } finally {
-      setIsLoading(false);
+      setIsLoadingEmployees(false);
     }
-  }, [user?.id, user?.role, isAdminOrHR]);
+  }, [user?.id, user?.email]);
 
   useEffect(() => {
-    fetchLeaves();
-  }, [fetchLeaves]);
+    if (isAddOpen) {
+      fetchEmployeeOptions();
+    }
+  }, [isAddOpen, fetchEmployeeOptions]);
+
+  // Fetch leaves from backend filtered by status directly
+  const fetchLeaves = useCallback(
+    async (tabStatus: LeaveStatus = activeTab) => {
+      try {
+        setIsLoading(true);
+        const params = new URLSearchParams();
+        params.append("status", tabStatus);
+        if (!isAdminOrHR && user?.id) {
+          params.append("employee_id", user.id);
+        }
+
+        const data = await api.get<any[]>(`/leaves?${params.toString()}`, {
+          showLoader: false,
+          showErrorToast: false,
+        });
+
+        if (Array.isArray(data)) {
+          const mapped: LeaveRequest[] = data.map((item) => ({
+            id: item.id || `LR-${Math.random()}`,
+            employeeId: item.employee_id || "",
+            employeeName: item.employee_name || "Employee",
+            avatar: item.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.employee_name || "E")}&background=random`,
+            role: item.role || "Staff",
+            department: item.department || "General",
+            type: item.leave_type || "Sick Leave",
+            dayType: (item.day_type as DayType) || "Full Day",
+            startDate: item.start_date || "",
+            endDate: item.end_date || "",
+            durationDays: item.duration_days ?? 1,
+            reason: item.reason || "",
+            status: (item.status as LeaveStatus) || tabStatus,
+            appliedOn: item.applied_on ? item.applied_on.split("T")[0] : "",
+            createdAt: item.created_at || item.applied_on || "",
+            isConditional: item.day_type === "First Half" || item.day_type === "Second Half",
+            rejectionReason: item.rejection_reason || undefined,
+          }));
+          setRequests(mapped);
+          if (tabStatus === "Pending") {
+            setPendingCount(mapped.length);
+          }
+        } else {
+          const fallback = !isAdminOrHR && user
+            ? FALLBACK_REQUESTS.filter((r) => r.status === tabStatus && (r.employeeName.toLowerCase().includes("current") || r.employeeId === user.id))
+            : FALLBACK_REQUESTS.filter((r) => r.status === tabStatus);
+          setRequests(fallback);
+        }
+      } catch {
+        const fallback = FALLBACK_REQUESTS.filter((r) => r.status === tabStatus);
+        setRequests(fallback);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [user?.id, isAdminOrHR, activeTab]
+  );
+
+  const fetchPendingCount = useCallback(async () => {
+    try {
+      const params = new URLSearchParams({ status: "Pending" });
+      if (!isAdminOrHR && user?.id) {
+        params.append("employee_id", user.id);
+      }
+      const data = await api.get<any[]>(`/leaves?${params.toString()}`, {
+        showLoader: false,
+        showErrorToast: false,
+      });
+      if (Array.isArray(data)) {
+        setPendingCount(data.length);
+      }
+    } catch {
+      // ignore
+    }
+  }, [isAdminOrHR, user?.id]);
+
+  useEffect(() => {
+    fetchLeaves(activeTab);
+  }, [activeTab, fetchLeaves]);
+
+  useEffect(() => {
+    fetchPendingCount();
+  }, [fetchPendingCount]);
 
   // Handle status actions: Approved, Rejected, Pending
   const handleAction = async (id: string, action: "Approved" | "Rejected" | "Pending", isConditional?: boolean, reasonText?: string) => {
     try {
       await api.patch(`/leaves/${id}/status`, {
-        body: JSON.stringify({
-          status: action,
-          rejection_reason: action === "Rejected" ? (reasonText || "Not approved by management") : undefined,
-        }),
+        status: action,
+        rejection_reason: action === "Rejected" ? (reasonText || "Not approved by management") : undefined,
       });
 
-      setRequests((prev) =>
-        prev.map((r) => {
-          if (r.id !== id) return r;
-          return {
-            ...r,
-            status: action,
-            isConditional: isConditional !== undefined ? isConditional : r.isConditional,
-            rejectionReason: action === "Rejected" ? reasonText : undefined,
-          };
-        })
-      );
+      if (action !== activeTab) {
+        setRequests((prev) => prev.filter((r) => r.id !== id));
+      } else {
+        setRequests((prev) =>
+          prev.map((r) => {
+            if (r.id !== id) return r;
+            return {
+              ...r,
+              status: action,
+              isConditional: isConditional !== undefined ? isConditional : r.isConditional,
+              rejectionReason: action === "Rejected" ? reasonText : undefined,
+            };
+          })
+        );
+      }
+
+      fetchPendingCount();
+      fetchLeaves(activeTab);
 
       if (action === "Approved") {
         toast.success("Leave approved! Attendance records auto-synced to 'On Leave'.");
@@ -288,6 +390,11 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
       return;
     }
 
+    if (!selectedEmployeeId && employeeOptions.length > 0) {
+      toast.error("Please select an employee");
+      return;
+    }
+
     const effectiveEndDate = newDayType !== "Full Day" ? newStartDate : newEndDate || newStartDate;
 
     let durationDays = 1;
@@ -303,6 +410,7 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
     try {
       setIsSubmitting(true);
       const payload = {
+        employee_id: selectedEmployeeId || user?.id,
         leave_type: newLeaveType,
         day_type: newDayType,
         start_date: newStartDate,
@@ -312,22 +420,22 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
         remarks: newIsConditional ? "Work from home requested" : undefined,
       };
 
-      const res = await api.post<any>("/leaves", {
-        body: JSON.stringify(payload),
-      });
+      const res = await api.post<any>("/leaves", payload);
 
       toast.success("Leave request submitted successfully (Pending review)");
       setIsAddOpen(false);
-      fetchLeaves();
+      fetchLeaves(activeTab);
+      fetchPendingCount();
     } catch (err: any) {
       // Fallback optimistic addition
+      const targetEmp = employeeOptions.find((e) => e.id === selectedEmployeeId);
       const optimistic: LeaveRequest = {
         id: `LR-${Math.random().toString(36).substr(2, 9)}`,
-        employeeId: user?.id || "EMP-CURRENT",
-        employeeName: user?.name || "Current User",
-        avatar: user?.avatar || "https://i.pravatar.cc/150?u=current",
-        role: user?.role || "Software Engineer",
-        department: user?.department || "Engineering",
+        employeeId: selectedEmployeeId || user?.id || "EMP-CURRENT",
+        employeeName: targetEmp?.name || user?.name || "Current User",
+        avatar: user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(targetEmp?.name || "E")}&background=random`,
+        role: targetEmp?.role || user?.role || "Software Engineer",
+        department: targetEmp?.department || user?.department || "Engineering",
         type: newLeaveType,
         dayType: newDayType,
         startDate: newStartDate,
@@ -335,10 +443,14 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
         durationDays,
         reason: newReason,
         status: "Pending",
-        appliedOn: new Date().toISOString().split("T")[0] || "",
+        appliedOn: toLocalYMD(new Date()),
+        createdAt: new Date().toISOString(),
         isConditional: newIsConditional,
       };
-      setRequests((prev) => [optimistic, ...prev]);
+      if (activeTab === "Pending") {
+        setRequests((prev) => [optimistic, ...prev]);
+      }
+      setPendingCount((prev) => prev + 1);
       setIsAddOpen(false);
       toast.success("Leave request submitted successfully (Pending review)");
     } finally {
@@ -354,18 +466,15 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
   };
 
   const filteredRequests = useMemo(() => {
-    return requests
-      .filter((r) => r.status === activeTab)
-      .filter(
-        (r) =>
-          r.employeeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          r.department.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          r.type.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-      .sort((a, b) => new Date(b.appliedOn).getTime() - new Date(a.appliedOn).getTime());
-  }, [requests, activeTab, searchQuery]);
-
-  const pendingCount = requests.filter((r) => r.status === "Pending").length;
+    if (!searchQuery.trim()) return requests;
+    const q = searchQuery.toLowerCase();
+    return requests.filter(
+      (r) =>
+        r.employeeName.toLowerCase().includes(q) ||
+        r.department.toLowerCase().includes(q) ||
+        r.type.toLowerCase().includes(q)
+    );
+  }, [requests, searchQuery]);
 
   return (
     <div className="h-full flex flex-col space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -398,21 +507,38 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                 <Plus className="w-4 h-4" /> Apply Leave
               </button>
             </DialogTrigger>
-            <DialogContent className="w-full max-w-[calc(100vw-24px)] sm:max-w-[480px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
-              <div className="flex items-center justify-between px-6 py-5 border-b border-border/50 bg-muted/30">
-                <div>
-                  <h2 className="text-lg sm:text-xl font-black tracking-tight">Apply for Leave</h2>
-                  <p className="text-xs text-muted-foreground">Requests default to Pending review</p>
+            <DialogContent className="w-[calc(100vw-20px)] sm:w-full sm:max-w-[480px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card box-border">
+              <div className="flex items-center justify-between px-3.5 sm:px-6 py-3.5 sm:py-5 border-b border-border/50 bg-muted/30">
+                <div className="min-w-0 pr-2">
+                  <h2 className="text-base sm:text-xl font-black tracking-tight truncate">Apply for Leave</h2>
+                  <p className="text-[11px] sm:text-xs text-muted-foreground truncate">Requests default to Pending review</p>
                 </div>
                 <DialogClose asChild>
-                  <button className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
+                  <button className="p-1.5 sm:p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors shrink-0">
                     <X className="w-5 h-5" />
                   </button>
                 </DialogClose>
               </div>
 
               <form onSubmit={handleAddLeave} className="flex flex-col max-h-[80vh]">
-                <div className="p-5 sm:p-6 space-y-4 overflow-y-auto max-h-[65vh]">
+                <div className="p-3.5 sm:p-6 space-y-3 sm:space-y-4 overflow-y-auto max-h-[65vh]">
+                  {/* Select Employee */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
+                      Employee <span className="text-rose-500">*</span>
+                    </label>
+                    <SearchableSelect
+                      value={selectedEmployeeId}
+                      onChange={setSelectedEmployeeId}
+                      options={employeeOptions.map((emp) => ({
+                        label: `${emp.name} (${emp.role}${emp.department ? ` • ${emp.department}` : ""})`,
+                        value: emp.id,
+                      }))}
+                      placeholder={isLoadingEmployees ? "Loading non-admin employees..." : "Select Employee"}
+                      className="w-full px-3 sm:px-4 h-[42px] sm:h-[44px] bg-muted/50 border border-border/50 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium"
+                    />
+                  </div>
+
                   {/* Leave Type */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">Leave Type</label>
@@ -420,21 +546,21 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                       value={newLeaveType}
                       onChange={setNewLeaveType}
                       options={LEAVE_TYPE_OPTIONS.map((type) => ({ label: type, value: type }))}
-                      className="w-full px-4 h-[44px] bg-muted/50 border border-border/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium"
+                      className="w-full px-3 sm:px-4 h-[42px] sm:h-[44px] bg-muted/50 border border-border/50 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium"
                     />
                   </div>
 
                   {/* Day Type */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">Day Type</label>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-3 gap-1 sm:gap-2">
                       {(["Full Day", "First Half", "Second Half"] as DayType[]).map((dtype) => (
                         <button
                           key={dtype}
                           type="button"
                           onClick={() => setNewDayType(dtype)}
                           className={cn(
-                            "py-2 px-2 text-xs font-bold rounded-xl border transition-all text-center truncate",
+                            "py-2 px-0.5 sm:px-2 text-[10px] sm:text-xs font-bold rounded-xl border transition-all text-center whitespace-nowrap leading-tight",
                             newDayType === dtype
                               ? "bg-primary text-primary-foreground border-primary shadow-sm"
                               : "bg-muted/30 text-foreground/80 border-border hover:bg-muted/60"
@@ -454,29 +580,30 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                     {newDayType === "Full Day" ? (
                       <DateRangeFilter
                         value={{
-                          from: newStartDate ? new Date(newStartDate) : undefined,
-                          to: newEndDate ? new Date(newEndDate) : undefined,
+                          from: parseYMDToDate(newStartDate),
+                          to: parseYMDToDate(newEndDate),
                         }}
                         onChange={(range) => {
-                          const fromStr = range?.from ? range.from.toISOString().split("T")[0] : "";
-                          const toStr = range?.to ? range.to.toISOString().split("T")[0] : fromStr;
+                          const fromStr = range?.from ? toLocalYMD(range.from) : "";
+                          const toStr = range?.to ? toLocalYMD(range.to) : fromStr;
                           setNewStartDate(fromStr || "");
                           setNewEndDate(toStr || "");
                         }}
                         placeholder="Select start and end date"
-                        className="w-full h-[44px] justify-between"
-                        align="start"
+                        className="w-full h-[42px] sm:h-[44px] justify-between text-xs sm:text-sm px-3 sm:px-3.5"
+                        align="center"
                       />
                     ) : (
-                      <input
-                        type="date"
-                        required
+                      <DatePicker
                         value={newStartDate}
-                        onChange={(e) => {
-                          setNewStartDate(e.target.value);
-                          setNewEndDate(e.target.value);
+                        onChange={(dateStr) => {
+                          setNewStartDate(dateStr);
+                          setNewEndDate(dateStr);
                         }}
-                        className="w-full px-4 h-[44px] bg-muted/50 border border-border/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium text-foreground"
+                        placeholder="Select leave date"
+                        displayFormat="MMM dd, yyyy"
+                        className="w-full h-[42px] sm:h-[44px] text-xs sm:text-sm px-3 sm:px-3.5"
+                        align="center"
                       />
                     )}
                   </div>
@@ -489,7 +616,7 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                       value={newReason}
                       onChange={(e) => setNewReason(e.target.value)}
                       placeholder="Briefly describe the reason for taking leave..."
-                      className="w-full px-4 py-3 bg-muted/50 border border-border/50 rounded-xl text-sm min-h-[90px] resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium text-foreground"
+                      className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-muted/50 border border-border/50 rounded-xl text-xs sm:text-sm min-h-[80px] sm:min-h-[90px] resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium text-foreground"
                     />
                   </div>
 
@@ -500,28 +627,33 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                       id="conditionalLeave"
                       checked={newIsConditional}
                       onChange={(e) => setNewIsConditional(e.target.checked)}
-                      className="w-4 h-4 text-primary rounded border-border/50 focus:ring-primary/20 cursor-pointer"
+                      className="w-4 h-4 text-primary rounded border-border/50 focus:ring-primary/20 cursor-pointer shrink-0"
                     />
-                    <label htmlFor="conditionalLeave" className="text-xs font-bold text-muted-foreground cursor-pointer uppercase tracking-wider">
+                    <label htmlFor="conditionalLeave" className="text-[11px] sm:text-xs font-bold text-muted-foreground cursor-pointer uppercase tracking-wider select-none">
                       Work From Home request
                     </label>
                   </div>
                 </div>
 
-                <div className="px-6 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
+                <div className="px-3 sm:px-6 py-3 sm:py-4 bg-muted/30 border-t border-border/50 flex items-center justify-end gap-1.5 sm:gap-3 mt-auto shrink-0">
                   <button
                     type="button"
                     onClick={() => setIsAddOpen(false)}
-                    className="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-muted-foreground hover:bg-muted transition-colors"
+                    className="px-2.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-muted-foreground hover:bg-muted transition-colors shrink-0"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="px-5 py-2 bg-primary text-primary-foreground text-xs sm:text-sm font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all disabled:opacity-50"
+                    className="px-3 sm:px-5 py-2 bg-primary text-primary-foreground text-xs sm:text-sm font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all disabled:opacity-50 shrink-0 whitespace-nowrap"
                   >
-                    {isSubmitting ? "Submitting..." : "Submit Leave Request"}
+                    {isSubmitting ? "Submitting..." : (
+                      <>
+                        <span className="sm:hidden">Submit Request</span>
+                        <span className="hidden sm:inline">Submit Leave Request</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </form>
@@ -626,7 +758,7 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                 {/* Footer Controls */}
                 <div className="pt-3 border-t border-border/50 flex items-center justify-between gap-2">
                   <p className="text-[11px] text-muted-foreground font-medium">
-                    Applied on {formatISTDate(request.appliedOn, "DD MMM YYYY")}
+                    Applied on {formatAppliedOnIST(request.createdAt || request.appliedOn)}
                   </p>
 
                   {/* Role-based action buttons: Admin / HR can Approve or Reject */}

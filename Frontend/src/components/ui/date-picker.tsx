@@ -221,7 +221,8 @@ export function DatePicker({
       <PopoverContent
         align={align}
         sideOffset={6}
-        className="w-auto p-3 rounded-2xl shadow-2xl border border-border/70 bg-card z-[70] max-w-[calc(100vw-24px)] overflow-hidden"
+        collisionPadding={8}
+        className="w-[calc(100vw-20px)] sm:w-auto p-2.5 sm:p-3 rounded-2xl shadow-2xl border border-border/70 bg-card z-[70] max-w-[340px] sm:max-w-none overflow-hidden"
       >
         <div className="space-y-3">
           {/* Header with Month & Year Selectors */}

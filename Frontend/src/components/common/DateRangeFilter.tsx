@@ -184,11 +184,12 @@ export function DateRangeFilter({
       <PopoverContent
         align={align}
         sideOffset={6}
-        className="w-auto p-0 rounded-2xl shadow-2xl border border-border/70 bg-card overflow-hidden max-w-[calc(100vw-24px)] max-h-[85vh] overflow-y-auto z-[70]"
+        collisionPadding={8}
+        className="w-[calc(100vw-20px)] sm:w-auto p-0 rounded-2xl shadow-2xl border border-border/70 bg-card overflow-hidden max-w-[340px] sm:max-w-none max-h-[88vh] overflow-y-auto z-[70]"
       >
-        <div className="flex flex-col sm:flex-row">
+        <div className="flex flex-col sm:flex-row w-full max-w-full min-w-0">
           {showPresets && (
-            <div className="flex sm:flex-col gap-1 p-2 sm:p-3 border-b sm:border-b-0 sm:border-r border-border/50 bg-muted/20 overflow-x-auto sm:overflow-x-visible shrink-0">
+            <div className="flex sm:flex-col gap-1 p-2 sm:p-3 border-b sm:border-b-0 sm:border-r border-border/50 bg-muted/20 overflow-x-auto max-w-full shrink-0">
               <span className="hidden sm:block text-[10px] font-black uppercase tracking-wider text-muted-foreground px-2 py-1 mb-1">
                 Quick Ranges
               </span>
@@ -197,7 +198,7 @@ export function DateRangeFilter({
                   key={preset.label}
                   type="button"
                   onClick={() => handleApplyPreset(preset)}
-                  className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-left whitespace-nowrap text-foreground/80 hover:bg-primary/10 hover:text-primary transition-colors active:scale-95"
+                  className="px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold text-left whitespace-nowrap text-foreground/80 hover:bg-primary/10 hover:text-primary transition-colors active:scale-95 shrink-0"
                 >
                   {preset.label}
                 </button>
@@ -205,7 +206,7 @@ export function DateRangeFilter({
             </div>
           )}
 
-          <div className="p-2 sm:p-3 flex flex-col">
+          <div className="p-2 sm:p-3 flex flex-col min-w-0 flex-1 max-w-full overflow-hidden">
             <Calendar
               initialFocus
               mode="range"
@@ -218,16 +219,16 @@ export function DateRangeFilter({
                 if (maxDate && isAfter(date, maxDate)) return true;
                 return false;
               }}
-              className="p-0"
+              className="p-0 w-full flex justify-center"
             />
 
-            <div className="flex items-center justify-between pt-3 mt-2 border-t border-border/50 text-xs">
-              <span className="text-muted-foreground text-[11px] truncate pr-2">
+            <div className="flex items-center justify-between pt-2.5 mt-2 border-t border-border/50 text-xs gap-2 min-w-0">
+              <span className="text-muted-foreground text-[10px] sm:text-[11px] truncate flex-1 min-w-0">
                 {internalRange?.from && internalRange?.to
                   ? `${format(internalRange.from, "MMM dd, yyyy")} - ${format(internalRange.to, "MMM dd, yyyy")}`
                   : "Select start and end date"}
               </span>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-1.5 shrink-0">
                 {hasRange && (
                   <Button
                     variant="ghost"
@@ -236,7 +237,7 @@ export function DateRangeFilter({
                       setInternalRange(undefined);
                       onChange?.(undefined);
                     }}
-                    className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                    className="h-7 px-2 text-[11px] sm:text-xs text-muted-foreground hover:text-foreground"
                   >
                     Reset
                   </Button>
@@ -244,7 +245,7 @@ export function DateRangeFilter({
                 <Button
                   size="sm"
                   onClick={() => setIsOpen(false)}
-                  className="h-7 px-3 text-xs font-bold rounded-lg"
+                  className="h-7 px-2.5 sm:px-3 text-[11px] sm:text-xs font-bold rounded-lg"
                 >
                   Done
                 </Button>

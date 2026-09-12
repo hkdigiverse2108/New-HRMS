@@ -32,13 +32,14 @@ class EmployeeService:
         page: Optional[int] = None, 
         limit: Optional[int] = None,
         gender: Optional[GenderEnum] = None,
-        role: Optional[SystemRole] = None,
+        role: Optional[str] = None,
+        exclude_role: Optional[str] = None,
         department: Optional[str] = None,
         is_delete: Optional[bool] = None,
         is_block: Optional[bool] = None,
         work_mode: Optional[WorkModeEnum] = None
     ):
-        return await EmployeeRepository.get_all_employees(page, limit, gender, role, department, is_delete, is_block, work_mode)
+        return await EmployeeRepository.get_all_employees(page, limit, gender, role, exclude_role, department, is_delete, is_block, work_mode)
 
     @staticmethod
     async def get_employee(employee_id: str):

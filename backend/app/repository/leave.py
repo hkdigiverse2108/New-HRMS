@@ -34,8 +34,10 @@ class LeaveRepository:
     @classmethod
     async def create_leave(cls, leave_data: Dict[str, Any]) -> Dict[str, Any]:
         collection = await cls.get_collection()
-        leave_data["applied_on"] = leave_data.get("applied_on") or datetime.utcnow().strftime("%Y-%m-%d")
-        leave_data["created_at"] = datetime.utcnow().isoformat()
+        now_utc = datetime.utcnow()
+        now_iso = now_utc.isoformat() + "Z"
+        leave_data["applied_on"] = leave_data.get("applied_on") or now_utc.strftime("%Y-%m-%d")
+        leave_data["created_at"] = leave_data.get("created_at") or now_iso
         result = await collection.insert_one(leave_data)
         leave_data["id"] = str(result.inserted_id)
         leave_data["_id"] = str(result.inserted_id)
@@ -122,7 +124,7 @@ class LeaveRepository:
         elif end_date:
             query["start_date"] = {"$lte": end_date}
 
-        cursor = collection.find(query).sort("applied_on", -1)
+        cursor = collection.find(query).sort([("created_at", -1), ("_id", -1)])
         if limit is not None and limit > 0:
             if page is not None and page > 1:
                 cursor = cursor.skip((page - 1) * limit)
@@ -130,6 +132,11 @@ class LeaveRepository:
 
         results = []
         async for doc in cursor:
+            if not doc.get("created_at"):
+                if isinstance(doc.get("_id"), ObjectId):
+                    doc["created_at"] = doc["_id"].generation_time.isoformat()
+                else:
+                    doc["created_at"] = doc.get("applied_on") or datetime.utcnow().isoformat()
             results.append(serialize_mongo(doc))
         return results
 

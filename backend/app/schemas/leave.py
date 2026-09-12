@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field, model_validator
 from typing import Optional, List, Any
 
 class LeaveCreateRequest(BaseModel):
+    employee_id: Optional[str] = None
     type: Optional[str] = None
     leave_type: Optional[str] = None
     start_date: str  # YYYY-MM-DD
@@ -53,6 +54,7 @@ class LeaveOut(BaseModel):
     status: str = "Pending"  # Pending, Approved, Rejected
     rejection_reason: Optional[str] = None
     applied_on: str
+    created_at: Optional[str] = None
     decided_by: Optional[str] = None
     decided_at: Optional[str] = None
     is_conditional: Optional[bool] = False

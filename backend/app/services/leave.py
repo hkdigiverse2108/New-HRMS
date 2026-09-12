@@ -63,7 +63,8 @@ class LeaveService:
             "status": "Pending",
             "is_conditional": leave_data.get("is_conditional", False),
             "attachment": leave_data.get("attachment"),
-            "applied_on": datetime.utcnow().strftime("%Y-%m-%d")
+            "applied_on": datetime.utcnow().strftime("%Y-%m-%d"),
+            "created_at": datetime.utcnow().isoformat() + "Z"
         }
 
         res = await LeaveRepository.create_leave(doc)

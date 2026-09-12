@@ -24,13 +24,15 @@ class EmployeeRepository:
         page: Optional[int] = None, 
         limit: Optional[int] = None,
         gender: Optional[GenderEnum] = None,
-        role: Optional[SystemRole] = None,
+        role: Optional[str] = None,
+        exclude_role: Optional[str] = None,
         department: Optional[str] = None,
         is_delete: Optional[bool] = None,
         is_block: Optional[bool] = None,
         work_mode: Optional[WorkModeEnum] = None
     ):
         collection = await cls.get_collection()
+        import re
         
         query = {}
         if gender and hasattr(gender, "value"):
@@ -38,10 +40,14 @@ class EmployeeRepository:
         elif isinstance(gender, str):
             query["personal_info.gender"] = gender
 
-        if role and hasattr(role, "value"):
-            query["work_details.system_role"] = role.value
-        elif isinstance(role, str):
-            query["work_details.system_role"] = role
+        if role:
+            role_val = role.value if hasattr(role, "value") else str(role)
+            query["work_details.system_role"] = {"$regex": f"^{re.escape(role_val)}$", "$options": "i"}
+        elif exclude_role:
+            excluded_list = [r.strip() for r in exclude_role.split(",") if r.strip()]
+            if excluded_list:
+                regex_patterns = [re.compile(f"^{re.escape(r)}$", re.IGNORECASE) for r in excluded_list]
+                query["work_details.system_role"] = {"$nin": regex_patterns}
 
         if department and isinstance(department, str):
             query["work_details.department"] = department

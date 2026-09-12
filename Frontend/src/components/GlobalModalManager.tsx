@@ -11,6 +11,8 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { useSettingsContext } from "@/components/payroll/SettingsContext";
 import { useEmployeesContext } from "@/components/employees/EmployeeContext";
+import { api } from "@/lib/api";
+import { useAuth } from "./auth/AuthContext";
 
 type Priority = "High" | "Medium" | "Low";
 
@@ -157,44 +159,89 @@ function NewTaskModal({ open, onClose }: { open: boolean; onClose: () => void })
 // ─── Apply Leave Modal ────────────────────────────────────────────────────────
 function ApplyLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { leaveTypes } = useSettingsContext();
+  const { user } = useAuth();
   const [leaveType, setLeaveType] = useState(leaveTypes[0] || "Sick Leave");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [reason, setReason] = useState("");
   const [isConditional, setIsConditional] = useState(false);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("");
+  const [employeeOptions, setEmployeeOptions] = useState<
+    Array<{ id: string; name: string; role: string; department: string; email: string }>
+  >([]);
+  const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (!open) return;
+    const fetchEmployees = async () => {
+      try {
+        setIsLoadingEmployees(true);
+        const res = await api.get<{ data?: any[] } | any[]>("/employees?exclude_role=Admin", {
+          showLoader: false,
+          showErrorToast: false,
+        });
+        const rawList = Array.isArray(res) ? res : (res?.data || []);
+        const mapped = rawList.map((emp: any) => {
+          const personal = emp.personal_info || {};
+          const work = emp.work_details || {};
+          const name = `${personal.first_name || ""} ${personal.last_name || ""}`.trim() || emp.name || "Employee";
+          return {
+            id: String(emp.id || emp._id || ""),
+            name,
+            role: work.designation || work.system_role || emp.role || "Employee",
+            department: work.department || emp.department || "General",
+            email: personal.email_address || emp.email || "",
+          };
+        });
+        setEmployeeOptions(mapped);
+        if (mapped.length > 0) {
+          setSelectedEmployeeId((prev) => {
+            if (prev && mapped.some((m) => m.id === prev)) return prev;
+            const self = mapped.find((m) => m.id === user?.id || m.email === user?.email);
+            return self ? self.id : (mapped[0]?.id || "");
+          });
+        }
+      } catch (err) {
+        console.error("Failed to load employees for leave modal", err);
+      } finally {
+        setIsLoadingEmployees(false);
+      }
+    };
+    fetchEmployees();
+  }, [open, user?.id, user?.email]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!startDate || !endDate || !reason) { toast.error("Please fill all required fields"); return; }
+    if (!selectedEmployeeId && employeeOptions.length > 0) { toast.error("Please select an employee"); return; }
 
     const start = new Date(startDate);
     const end = new Date(endDate);
     const durationDays = Math.ceil(Math.abs(end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
-    const newRequest = {
-      id: `LR-${Math.random().toString(36).substr(2, 9)}`,
-      employeeId: "EMP-CURRENT",
-      employeeName: "Current User",
-      avatar: "https://i.pravatar.cc/150?u=current",
-      role: "Employee",
-      department: "Engineering",
-      type: leaveType,
-      startDate,
-      endDate,
-      durationDays,
-      reason,
-      status: "Pending",
-      appliedOn: new Date().toISOString().split("T")[0] || "",
-      isConditional,
-    };
+    try {
+      setIsSubmitting(true);
+      await api.post("/leaves", {
+        employee_id: selectedEmployeeId || user?.id,
+        leave_type: leaveType,
+        day_type: "Full Day",
+        start_date: startDate,
+        end_date: endDate,
+        duration_days: durationDays,
+        reason,
+        remarks: isConditional ? "Work from home requested" : undefined,
+      });
 
-    const existing = JSON.parse(localStorage.getItem("hrms_leave_requests") || "[]");
-    localStorage.setItem("hrms_leave_requests", JSON.stringify([newRequest, ...existing]));
-    window.dispatchEvent(new Event("storage"));
-    toast.success("Leave request submitted successfully!");
-
-    setLeaveType(leaveTypes[0] || "Sick Leave"); setStartDate(""); setEndDate(""); setReason(""); setIsConditional(false);
-    onClose();
+      toast.success("Leave request submitted successfully (Pending review)!");
+      window.dispatchEvent(new Event("storage"));
+      setLeaveType(leaveTypes[0] || "Sick Leave"); setStartDate(""); setEndDate(""); setReason(""); setIsConditional(false);
+      onClose();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to submit leave request");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -213,6 +260,23 @@ function ApplyLeaveModal({ open, onClose }: { open: boolean; onClose: () => void
         </div>
         <form onSubmit={handleSubmit} className="flex flex-col max-h-[75vh]">
           <div className="p-8 space-y-5 overflow-y-auto">
+            {/* Employee Selector */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">
+                Employee <span className="text-rose-500">*</span>
+              </label>
+              <SearchableSelect
+                value={selectedEmployeeId}
+                onChange={setSelectedEmployeeId}
+                options={employeeOptions.map((emp) => ({
+                  label: `${emp.name} (${emp.role}${emp.department ? ` • ${emp.department}` : ""})`,
+                  value: emp.id,
+                }))}
+                placeholder={isLoadingEmployees ? "Loading non-admin employees..." : "Select Employee"}
+                className="w-full px-4 h-[46px] bg-muted/50 border border-border/50 rounded-xl text-sm font-medium"
+              />
+            </div>
+
             <div className="space-y-2">
               <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Leave Type</label>
               <SearchableSelect

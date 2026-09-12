@@ -94,7 +94,8 @@ async def get_all_employees(
     page: Optional[int] = Query(None, ge=1),
     limit: Optional[int] = Query(None, ge=1),
     gender: Optional[GenderEnum] = Query(None, description="Filter by Gender"),
-    role_filter: Optional[SystemRole] = Query(None, alias="role", description="Filter by Role"),
+    role_filter: Optional[str] = Query(None, alias="role", description="Filter by Role"),
+    exclude_role: Optional[str] = Query(None, alias="exclude_role", description="Exclude Role(s), comma-separated (e.g. Admin)"),
     department: Optional[str] = Query(None, description="Filter by Department ID or Name"),
     is_delete: Optional[bool] = Query(None, description="Filter by is_delete"),
     is_block: Optional[bool] = Query(None, description="Filter by is_block"),
@@ -102,7 +103,18 @@ async def get_all_employees(
     current_user: dict = Depends(DynamicPermissionChecker())
 ):
     # Generate unique deterministic key based on all filters and pagination
-    cache_key = make_list_key("employees", page=page, limit=limit, gender=gender, role=role_filter, department=department, is_delete=is_delete, is_block=is_block, work_mode=work_mode)
+    cache_key = make_list_key(
+        "employees",
+        page=page,
+        limit=limit,
+        gender=gender,
+        role=role_filter,
+        exclude_role=exclude_role,
+        department=department,
+        is_delete=is_delete,
+        is_block=is_block,
+        work_mode=work_mode
+    )
 
     # 1. Check Redis Cache
     cached_data = await get_cache(cache_key)
@@ -110,7 +122,17 @@ async def get_all_employees(
         return cached_data
 
     # 2. Cache miss: Fetch from DB / Service
-    response_data = await EmployeeService.get_employees(page=page, limit=limit, gender=gender, role=role_filter, department=department, is_delete=is_delete, is_block=is_block, work_mode=work_mode)
+    response_data = await EmployeeService.get_employees(
+        page=page,
+        limit=limit,
+        gender=gender,
+        role=role_filter,
+        exclude_role=exclude_role,
+        department=department,
+        is_delete=is_delete,
+        is_block=is_block,
+        work_mode=work_mode
+    )
 
     # 3. Store in Redis without time expiry (persists until Add, Edit, or Delete is called)
     await set_cache(cache_key, response_data)

@@ -22,8 +22,16 @@ async def apply_leave(
     Apply for leave (Full Day, Half Day, First Half, Second Half).
     Status defaults to 'Pending'. Auto-notifies HR/Admin.
     """
-    employee_id = str(current_employee.get("_id") or current_employee.get("id") or current_employee.get("email") or "")
-    doc = await LeaveService.apply_leave(employee_id=employee_id, leave_data=payload.model_dump())
+    work = current_employee.get("work_details", {})
+    user_role = work.get("system_role", "Employee")
+
+    # If employee_id is specified in payload and current user is Admin or HR, apply for that employee.
+    if payload.employee_id and user_role in ("Admin", "HR"):
+        target_employee_id = payload.employee_id
+    else:
+        target_employee_id = str(current_employee.get("_id") or current_employee.get("id") or current_employee.get("email") or "")
+
+    doc = await LeaveService.apply_leave(employee_id=target_employee_id, leave_data=payload.model_dump())
     
     # Invalidate leave and attendance caches
     await clear_pattern("leaves:list:*")

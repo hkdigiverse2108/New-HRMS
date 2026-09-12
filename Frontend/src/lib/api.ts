@@ -169,6 +169,16 @@ async function apiRequest<T = any>(endpoint: string, options: RequestOptions = {
   return reqPromise;
 }
 
+function normalizeBody(body?: any): any {
+  if (body === undefined || body === null) return undefined;
+  if (body instanceof FormData) return body;
+  if (typeof body === "object" && "body" in body && Object.keys(body).length === 1) {
+    return normalizeBody(body.body);
+  }
+  if (typeof body === "string") return body;
+  return JSON.stringify(body);
+}
+
 /**
  * Common REST methods and helpers
  */
@@ -179,21 +189,21 @@ export const api = {
   post: <T = any>(endpoint: string, body?: any, options?: RequestOptions): Promise<T> =>
     apiRequest<T>(endpoint, {
       method: "POST",
-      body: body instanceof FormData ? body : JSON.stringify(body),
+      body: normalizeBody(body),
       ...options,
     }),
 
   put: <T = any>(endpoint: string, body?: any, options?: RequestOptions): Promise<T> =>
     apiRequest<T>(endpoint, {
       method: "PUT",
-      body: body instanceof FormData ? body : JSON.stringify(body),
+      body: normalizeBody(body),
       ...options,
     }),
 
   patch: <T = any>(endpoint: string, body?: any, options?: RequestOptions): Promise<T> =>
     apiRequest<T>(endpoint, {
       method: "PATCH",
-      body: body instanceof FormData ? body : JSON.stringify(body),
+      body: normalizeBody(body),
       ...options,
     }),
 

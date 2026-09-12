@@ -198,11 +198,11 @@ export function SearchableSelect({
           aria-expanded={open}
           disabled={disabled}
           className={cn(
-            "flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+            "flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 min-w-0",
             className
           )}
         >
-          <span className="truncate">
+          <span className="truncate min-w-0 text-left">
             {value
               ? options.find((option) => option.value === value)?.label || placeholder
               : placeholder}
@@ -210,7 +210,11 @@ export function SearchableSelect({
           <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </button>
       </PopoverTrigger>
-      <PopoverContentPrimitive className="w-[var(--radix-popover-trigger-width)] min-w-[200px] p-0 z-50" align="start">
+      <PopoverContentPrimitive
+        className="w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-24px)] min-w-[200px] p-0 z-50"
+        align="start"
+        collisionPadding={8}
+      >
         <Command>
           <CommandInput placeholder={`Search ${placeholder.toLowerCase()}...`} />
           <CommandList>

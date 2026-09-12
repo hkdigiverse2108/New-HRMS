@@ -126,6 +126,32 @@ export function formatISTDateTime(dateInput: string | number | Date | null | und
 }
 
 /**
+ * Formats date and time into 12-hour IST format: "12 Sep 2026 04:32 PM"
+ */
+export function formatAppliedOnIST(dateInput: string | number | Date | null | undefined): string {
+  if (!dateInput || dateInput === "--") return "--";
+  const d = toIST(dateInput);
+  if (!d) return "--";
+
+  const datePart = formatISTDate(d, "DD MMM YYYY");
+
+  // If input was purely a date string (YYYY-MM-DD) without time information
+  if (typeof dateInput === "string" && /^\d{4}-\d{1,2}-\d{1,2}$/.test(dateInput.trim())) {
+    return datePart;
+  }
+
+  const timeFormatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Kolkata",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+  const timePart = timeFormatter.format(d).toUpperCase();
+
+  return `${datePart} ${timePart}`;
+}
+
+/**
  * Formats duration in hours/minutes e.g. "8h 30m" or "0.5h".
  */
 export function formatDurationHours(hoursDec: number | null | undefined): string {
