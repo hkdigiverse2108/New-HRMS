@@ -135,7 +135,7 @@ function Index() {
   useEffect(() => {
     setIsClient(true);
   }, []);
-  
+
   const setActive = (val: string) => {
     setActiveState(val);
     if (typeof window !== 'undefined') {
@@ -173,154 +173,154 @@ function Index() {
 
   return (
     <GlobalModalProvider>
-    <SettingsProvider>
-      <DepartmentProvider>
-        <EmployeeProvider>
-          <SalesProvider>
-            <div className="flex h-screen overflow-hidden bg-gradient-to-br from-background via-background to-primary/5">
-          <AppSidebar active={active} setActive={setActive} />
-          <GlobalModalManager />
-          <main className="min-w-0 flex-1 overflow-x-hidden px-3.5 sm:px-6 md:px-8 lg:px-10 pb-24 pt-20 md:pb-8 md:pt-8">
-          {/* Main Dashboard */}
-          {basePath === "/dashboard" && <Dashboard setActive={setActive} onAction={handleQuickAction} />}
+      <SettingsProvider>
+        <DepartmentProvider>
+          <EmployeeProvider>
+            <SalesProvider>
+              <div className="flex h-screen overflow-hidden bg-gradient-to-br from-background via-background to-primary/5">
+                <AppSidebar active={active} setActive={setActive} />
+                <GlobalModalManager />
+                <main className="min-w-0 flex-1 overflow-x-hidden px-3.5 sm:px-6 md:px-8 lg:px-10 pb-24 pt-20 md:pb-8 md:pt-8">
+                  {/* Main Dashboard */}
+                  {basePath === "/dashboard" && <Dashboard setActive={setActive} onAction={handleQuickAction} />}
 
-          {/* Render the appropriate sales page based on state */}
-          {basePath === "/work/sales/dashboard" && <SalesDashboard setActive={setActive} onAction={handleQuickAction} />}
-          {basePath === "/work/sales/pipeline" && <SalesPipeline onAction={handleQuickAction} />}
-          {basePath === "/work/sales/leads" && <SalesLeads onAction={handleQuickAction} isNew={isNew} />}
-          {basePath === "/work/sales/tasks" && <SalesTasks onAction={handleQuickAction} />}
-          {basePath === "/work/sales/analytics" && <SalesAnalytics onAction={handleQuickAction} />}
-          {basePath === "/work/sales/team" && <SalesTeamPerformance onAction={handleQuickAction} />}
-          {basePath === "/work/sales/reports" && <SalesReports onAction={handleQuickAction} />}
-          {basePath === "/work/sales/settings" && <SalesSettings />}
+                  {/* Render the appropriate sales page based on state */}
+                  {basePath === "/work/sales/dashboard" && <SalesDashboard setActive={setActive} onAction={handleQuickAction} />}
+                  {basePath === "/work/sales/pipeline" && <SalesPipeline onAction={handleQuickAction} />}
+                  {basePath === "/work/sales/leads" && <SalesLeads onAction={handleQuickAction} isNew={isNew} />}
+                  {basePath === "/work/sales/tasks" && <SalesTasks onAction={handleQuickAction} />}
+                  {basePath === "/work/sales/analytics" && <SalesAnalytics onAction={handleQuickAction} />}
+                  {basePath === "/work/sales/team" && <SalesTeamPerformance onAction={handleQuickAction} />}
+                  {basePath === "/work/sales/reports" && <SalesReports onAction={handleQuickAction} />}
+                  {basePath === "/work/sales/settings" && <SalesSettings />}
 
-        {/* Render Payroll pages */}
-        {basePath === "/payroll/dashboard" && <PayrollDashboard />}
-        {basePath === "/payroll/structure" && <SalaryStructure />}
-        {basePath === "/payroll/settings" && <PayrollSettings />}
-        {basePath === "/payroll/processing" && <PayrollProcessing />}
-        {basePath === "/payroll/bonuses" && <BonusDeductions />}
-        {basePath === "/payroll/payslips" && <Payslips />}
+                  {/* Render Payroll pages */}
+                  {basePath === "/payroll/dashboard" && <PayrollDashboard />}
+                  {basePath === "/payroll/structure" && <SalaryStructure />}
+                  {basePath === "/payroll/settings" && <PayrollSettings />}
+                  {basePath === "/payroll/processing" && <PayrollProcessing />}
+                  {basePath === "/payroll/bonuses" && <BonusDeductions />}
+                  {basePath === "/payroll/payslips" && <Payslips />}
 
-        {/* Render Employee pages */}
-        {basePath === "/employees/list" && <EmployeeList isNew={isNew} />}
-        {basePath === "/employees/org" && <OrgStructure />}
-        {basePath === "/employees/attendance" && <AttendanceList />}
-        {basePath === "/employees/leave-requests" && <LeaveRequests isNew={isNew} />}
-        {basePath === "/employees/documents" && <Documents setActive={setActive} />}
-        {basePath === "/employees/documents/generate" && <DocumentGenerator onBack={() => setActive("/employees/documents")} />}
-        {(active === "/penalty" || active === "/approvals/penalties") && <Penalties />}
-        {basePath === "/approvals/daily-progress" && <DailyProgress />}
-        {basePath === "/approvals/history" && <ApprovalHistory />}
-        {basePath === "/approvals/invoices" && <InvoiceApprovals />}
-        {basePath === "/remarks" && <Remarks />}
-        
-        {/* Finance */}
-        {basePath === "/finance/transactions" && <Transactions />}
-        {basePath === "/finance/plan" && <FinancialPlan />}
-        {basePath === "/finance/summary" && <FinancialSummary />}
-        {basePath === "/finance/clients" && <OtherTransactions />}
-        {basePath === "/finance/audit" && <AuditLogs />}
-        {basePath === "/invoice/all" && <AllInvoices />}
-        {basePath === "/invoice/ledger" && <InvoiceLedger />}
-        {basePath === "/invoice/create" && <CreateInvoice onBack={() => setActive("/invoice/all")} />}
-        {basePath === "/invoice/proforma" && <CreateProforma onBack={() => setActive("/invoice/all")} />}
+                  {/* Render Employee pages */}
+                  {basePath === "/employees/list" && <EmployeeList isNew={isNew} />}
+                  {basePath === "/employees/org" && <OrgStructure />}
+                  {(basePath === "/employees/attendance" || basePath === "/attendance") && <AttendanceList />}
+                  {(basePath === "/employees/leave-requests" || basePath === "/leave") && <LeaveRequests isNew={isNew} />}
+                  {(basePath === "/employees/documents" || basePath === "/documents") && <Documents setActive={setActive} />}
+                  {(basePath === "/employees/documents/generate" || basePath === "/documents/generate") && <DocumentGenerator onBack={() => setActive("/employees/documents")} />}
+                  {(active === "/penalty" || active === "/approvals/penalties") && <Penalties />}
+                  {basePath === "/approvals/daily-progress" && <DailyProgress />}
+                  {basePath === "/approvals/history" && <ApprovalHistory />}
+                  {basePath === "/approvals/invoices" && <InvoiceApprovals />}
+                  {basePath === "/remarks" && <Remarks />}
 
-        {/* Reports */}
-        {basePath === "/reports" && <ReportsOverview />}
-        {basePath === "/reports/attendance" && <AttendanceReport />}
-        {basePath === "/reports/payroll" && <PayrollReport />}
-        {basePath === "/reports/hiring" && <HiringFunnel />}
-        {basePath === "/reports/work" && <WorkReport />}
+                  {/* Finance */}
+                  {basePath === "/finance/transactions" && <Transactions />}
+                  {basePath === "/finance/plan" && <FinancialPlan />}
+                  {basePath === "/finance/summary" && <FinancialSummary />}
+                  {basePath === "/finance/clients" && <OtherTransactions />}
+                  {basePath === "/finance/audit" && <AuditLogs />}
+                  {basePath === "/invoice/all" && <AllInvoices />}
+                  {basePath === "/invoice/ledger" && <InvoiceLedger />}
+                  {basePath === "/invoice/create" && <CreateInvoice onBack={() => setActive("/invoice/all")} />}
+                  {basePath === "/invoice/proforma" && <CreateProforma onBack={() => setActive("/invoice/all")} />}
 
-        {/* Recruitment */}
-        {basePath === "/recruitment/interviews" && <Interviews />}
-        {basePath === "/recruitment/hirings" && <Hirings />}
+                  {/* Reports */}
+                  {basePath === "/reports" && <ReportsOverview />}
+                  {basePath === "/reports/attendance" && <AttendanceReport />}
+                  {basePath === "/reports/payroll" && <PayrollReport />}
+                  {basePath === "/reports/hiring" && <HiringFunnel />}
+                  {basePath === "/reports/work" && <WorkReport />}
 
-        {/* Schedule */}
-        {basePath === "/schedule" && <Schedule isNew={isNew} />}
+                  {/* Recruitment */}
+                  {basePath === "/recruitment/interviews" && <Interviews />}
+                  {basePath === "/recruitment/hirings" && <Hirings />}
 
-        {/* Work */}
-        {basePath === "/work/logs" && <WorkLogs />}
-        {basePath === "/work/projects" && <Projects isNew={isNew} />}
-        {basePath === "/tasks" && <Tasks setActive={setActive} isNew={isNew} />}
-        {basePath === "/chat" && <Chat />}
-        {basePath === "/work/research" && <Research />}
+                  {/* Schedule */}
+                  {basePath === "/schedule" && <Schedule isNew={isNew} />}
 
-        {/* Workspace */}
-        {basePath === "/workspace/seating" && <SeatingArrangementPage />}
-        {basePath === "/workspace/resource" && <ResourceManagementPage />}
-        {basePath === "/workspace/gallery" && <Gallery />}
+                  {/* Work */}
+                  {basePath === "/work/logs" && <WorkLogs />}
+                  {basePath === "/work/projects" && <Projects isNew={isNew} />}
+                  {basePath === "/tasks" && <Tasks setActive={setActive} isNew={isNew} />}
+                  {basePath === "/chat" && <Chat />}
+                  {basePath === "/work/research" && <Research />}
+
+                  {/* Workspace */}
+                  {basePath === "/workspace/seating" && <SeatingArrangementPage />}
+                  {basePath === "/workspace/resource" && <ResourceManagementPage />}
+                  {basePath === "/workspace/gallery" && <Gallery />}
 
 
-        {/* Admin & Command Center */}
-        {basePath === "/ceo-dashboard" && <CEODashboard active={active} />}
-        {basePath.startsWith("/ceo-dashboard/b2b") && <B2BModule active={active} />}
-        {basePath === "/ceo-dashboard/collaboration" && <CollaborationModule />}
-        {basePath === "/ceo-dashboard/franchise" && <FranchiseModule />}
-        {basePath === "/ceo-dashboard/reports" && <ReportsModule />}
-        {basePath === "/ceo-dashboard/settings" && <SettingsModule />}
-        {basePath === "/activity-logs" && <ActivityLogs />}
-        {basePath === "/activity-tracker" && <ActivityTracker />}
-        {basePath === "/restrictions" && <Restrictions />}
-        {basePath === "/settings" && <AdminSettings />}
-        {basePath === "/access-control" && <AccessControl />}
-        {basePath === "/recycle-bin" && <RecycleBin />}
-        {basePath === "/elections" && <Elections />}
-        {basePath === "/recognitions" && <Recognitions />}
-        {basePath === "/team-leader-of-the-week" && <TeamLeaderOfWeek />}
+                  {/* Admin & Command Center */}
+                  {basePath === "/ceo-dashboard" && <CEODashboard active={active} />}
+                  {basePath.startsWith("/ceo-dashboard/b2b") && <B2BModule active={active} />}
+                  {basePath === "/ceo-dashboard/collaboration" && <CollaborationModule />}
+                  {basePath === "/ceo-dashboard/franchise" && <FranchiseModule />}
+                  {basePath === "/ceo-dashboard/reports" && <ReportsModule />}
+                  {basePath === "/ceo-dashboard/settings" && <SettingsModule />}
+                  {basePath === "/activity-logs" && <ActivityLogs />}
+                  {basePath === "/activity-tracker" && <ActivityTracker />}
+                  {basePath === "/restrictions" && <Restrictions />}
+                  {basePath === "/settings" && <AdminSettings />}
+                  {basePath === "/access-control" && <AccessControl />}
+                  {basePath === "/recycle-bin" && <RecycleBin />}
+                  {basePath === "/elections" && <Elections />}
+                  {basePath === "/recognitions" && <Recognitions />}
+                  {basePath === "/team-leader-of-the-week" && <TeamLeaderOfWeek />}
 
-        {/* User Profile */}
-        {basePath === "/profile" && <UserProfile />}
+                  {/* User Profile */}
+                  {basePath === "/profile" && <UserProfile />}
 
-        {/* Fallback original content for all other items */}
-        {basePath !== "/dashboard" && basePath !== "/profile" && basePath !== "/access-control" && basePath !== "/schedule" && basePath !== "/work/logs" && basePath !== "/work/projects" && basePath !== "/tasks" && basePath !== "/chat" && basePath !== "/work/research" && basePath !== "/penalty" && basePath !== "/approvals/penalties" && basePath !== "/remarks" && basePath !== "/activity-logs" && basePath !== "/activity-tracker" && basePath !== "/restrictions" && basePath !== "/settings" && basePath !== "/recycle-bin" && basePath !== "/elections" && basePath !== "/recognitions" && basePath !== "/team-leader-of-the-week" && !basePath.startsWith("/ceo-dashboard") && !basePath.startsWith("/work/sales") && !basePath.startsWith("/payroll") && !basePath.startsWith("/employees") && !basePath.startsWith("/recruitment") && !basePath.startsWith("/workspace") && !basePath.startsWith("/approvals") && !basePath.startsWith("/invoice") && !basePath.startsWith("/reports") && !basePath.startsWith("/finance") && (
-          <>
-            <header className="mb-8 max-w-3xl">
-              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                Navigation review
-              </p>
-              <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">
-                Your sidebar, reorganized
-              </h1>
-              <p className="mt-3 text-muted-foreground">
-                Same menu items from your screenshots — regrouped, searchable and collapsible. Click
-                around the sidebar to try it.
-              </p>
-            </header>
+                  {/* Fallback original content for all other items */}
+                  {basePath !== "/dashboard" && basePath !== "/profile" && basePath !== "/access-control" && basePath !== "/schedule" && basePath !== "/work/logs" && basePath !== "/work/projects" && basePath !== "/tasks" && basePath !== "/chat" && basePath !== "/work/research" && basePath !== "/penalty" && basePath !== "/approvals/penalties" && basePath !== "/remarks" && basePath !== "/activity-logs" && basePath !== "/activity-tracker" && basePath !== "/restrictions" && basePath !== "/settings" && basePath !== "/recycle-bin" && basePath !== "/elections" && basePath !== "/recognitions" && basePath !== "/team-leader-of-the-week" && !basePath.startsWith("/ceo-dashboard") && !basePath.startsWith("/work/sales") && !basePath.startsWith("/payroll") && !basePath.startsWith("/employees") && !basePath.startsWith("/recruitment") && !basePath.startsWith("/workspace") && !basePath.startsWith("/approvals") && !basePath.startsWith("/invoice") && !basePath.startsWith("/reports") && !basePath.startsWith("/finance") && (
+                    <>
+                      <header className="mb-8 max-w-3xl">
+                        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                          Navigation review
+                        </p>
+                        <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">
+                          Your sidebar, reorganized
+                        </h1>
+                        <p className="mt-3 text-muted-foreground">
+                          Same menu items from your screenshots — regrouped, searchable and collapsible. Click
+                          around the sidebar to try it.
+                        </p>
+                      </header>
 
-            <section className="mb-10">
-              <h2 className="mb-4 text-lg font-bold">What changed</h2>
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {improvements.map(([title, body]) => (
-                  <div key={title} className="rounded-xl border border-border bg-card p-4">
-                    <p className="font-semibold">{title}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">{body}</p>
-                  </div>
-                ))}
+                      <section className="mb-10">
+                        <h2 className="mb-4 text-lg font-bold">What changed</h2>
+                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                          {improvements.map(([title, body]) => (
+                            <div key={title} className="rounded-xl border border-border bg-card p-4">
+                              <p className="font-semibold">{title}</p>
+                              <p className="mt-1 text-sm text-muted-foreground">{body}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+
+                      <section className="max-w-5xl">
+                        <h2 className="mb-4 text-lg font-bold">Worth adding next</h2>
+                        <ul className="grid gap-3 sm:grid-cols-2">
+                          {suggestions.map(([title, body]) => (
+                            <li key={title} className="rounded-xl border border-dashed border-border p-4">
+                              <p className="font-semibold">{title}</p>
+                              <p className="mt-1 text-sm text-muted-foreground">{body}</p>
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
+                    </>
+                  )}
+                </main>
+                <QuickActionModals activeAction={activeAction} onClose={() => setActiveAction(null)} />
               </div>
-            </section>
-
-            <section className="max-w-5xl">
-              <h2 className="mb-4 text-lg font-bold">Worth adding next</h2>
-              <ul className="grid gap-3 sm:grid-cols-2">
-                {suggestions.map(([title, body]) => (
-                  <li key={title} className="rounded-xl border border-dashed border-border p-4">
-                    <p className="font-semibold">{title}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">{body}</p>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          </>
-        )}
-      </main>
-        <QuickActionModals activeAction={activeAction} onClose={() => setActiveAction(null)} />
-      </div>
-          </SalesProvider>
-        </EmployeeProvider>
-      </DepartmentProvider>
-    </SettingsProvider>
+            </SalesProvider>
+          </EmployeeProvider>
+        </DepartmentProvider>
+      </SettingsProvider>
     </GlobalModalProvider>
   );
 }
