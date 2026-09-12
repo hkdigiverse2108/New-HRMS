@@ -5,6 +5,7 @@ from app.schemas.attendance import (
     PunchInRequest,
     PunchOutRequest,
     BreakRequest,
+    BreakRecoveryRequest,
     PendingPunchOutResolveRequest,
     AttendanceOut,
     PendingPunchOutCheckResponse,
@@ -101,6 +102,20 @@ async def break_out(
 ):
     """Ends current break and recalculates break duration."""
     return await AttendanceService.break_out(employee_id)
+
+@router.post("/recover-break/{employee_id}")
+async def recover_break(
+    employee_id: str,
+    payload: BreakRecoveryRequest,
+    current_employee: dict = Depends(get_current_employee)
+):
+    """Recovers and corrects a missed break-out by specifying break start and actual break out times."""
+    return await AttendanceService.recover_break(
+        employee_id=employee_id,
+        date_str=payload.date,
+        break_start_time_str=payload.break_start_time,
+        actual_break_out_time_str=payload.actual_break_out_time
+    )
 
 @router.get("", response_model=List[AttendanceOut])
 async def get_attendance_list(

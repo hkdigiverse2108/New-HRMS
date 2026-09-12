@@ -295,6 +295,13 @@ class AttendanceService:
         today_record = await AttendanceRepository.get_by_employee_and_date(employee_id, today_str)
 
         if today_record:
+            current_status = today_record.get("status")
+            if current_status in ("Active", "On Break", "Late"):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="You are already punched in. Please punch out first before punching in again."
+                )
+
             # Resuming today's session
             punches = today_record.get("punches", [])
             punches.append({
@@ -303,16 +310,26 @@ class AttendanceService:
                 "duration_seconds": 0
             })
             remarks = today_record.get("remarks", [])
-            if late_remark and late_remark not in remarks:
-                remarks.append(late_remark)
             if leave_remark and leave_remark not in remarks:
                 remarks.append(leave_remark)
+                
+            # Re-evaluate is_late based on the first check-in to fix any corrupted states
+            original_check_in = today_record.get("check_in")
+            is_late_recalc = today_record.get("is_late", False)
+            if original_check_in and original_check_in != "--":
+                t_first = parse_time_str(original_check_in)
+                if t_first:
+                    is_late_recalc = t_first > office_start_buffer
+
+            if not is_late_recalc and "Late Punch-in Penalty Remark" in remarks:
+                remarks.remove("Late Punch-in Penalty Remark")
 
             update_data = {
                 "status": "Active",
                 "punches": punches,
-                "is_late": today_record.get("is_late", False) or is_late,
-                "remarks": remarks
+                "is_late": is_late_recalc,
+                "remarks": remarks,
+                "check_out": "--"
             }
             # Keep original check_in if already present
             if not today_record.get("check_in") or today_record.get("check_in") == "--":
@@ -385,10 +402,15 @@ class AttendanceService:
         today_str = format_date_ist(now)
         record = await AttendanceRepository.get_by_employee_and_date(employee_id, today_str)
 
-        if not record or record.get("status") not in ("Active", "Present", "Late"):
+        if not record or record.get("status") not in ("Active", "Late", "Present"):
+            if record and record.get("status") == "On Break":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="You are already on a break."
+                )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No active attendance session found to start a break."
+                detail="You must be actively punched in to take a break."
             )
 
         current_time_str = format_time_ist(now)
@@ -424,6 +446,12 @@ class AttendanceService:
 
         if not record:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No attendance record found.")
+
+        if record.get("status") != "On Break":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You are not currently on a break."
+            )
 
         current_time_str = format_time_ist(now)
         t_now = now.time()
@@ -463,6 +491,113 @@ class AttendanceService:
             "date": today_str
         }, ttl=86400)
         await clear_pattern("attendance:list:*")
+        return updated
+
+    @classmethod
+    async def recover_break(
+        cls,
+        employee_id: str,
+        date_str: str,
+        break_start_time_str: str,
+        actual_break_out_time_str: str
+    ) -> Dict[str, Any]:
+        """Recovers a missed break-out by updating the specific break's end time and recalculating net hours."""
+        record = await AttendanceRepository.get_by_employee_and_date(employee_id, date_str)
+        if not record:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attendance record not found for the given date.")
+
+        t_start = parse_time_str(break_start_time_str)
+        t_actual_out = parse_time_str(actual_break_out_time_str)
+
+        if not t_start or not t_actual_out:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid break start or actual break out time format.")
+
+        if t_actual_out <= t_start:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Actual break-out time must be after break start time.")
+
+        # Ensure the actual break out time doesn't exceed check_out time if it exists and session is closed
+        is_active_session = record.get("status") in ("Active", "On Break", "Late", "Present")
+        if not is_active_session and record.get("check_out") and record.get("check_out") != "--":
+            t_check_out = parse_time_str(record["check_out"])
+            if t_check_out and t_actual_out > t_check_out:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Actual break-out time cannot be after the session check-out time.")
+
+        breaks = record.get("breaks", [])
+        target_break = None
+        
+        # Find the break that matches the start time
+        for b in breaks:
+            b_start = parse_time_str(b.get("start_time"))
+            if b_start and b_start == t_start:
+                target_break = b
+                break
+
+        if not target_break:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No break found starting at {break_start_time_str}.")
+
+        # If the break already has an end_time, the user is likely correcting a late break-out.
+        # The new actual break-out time MUST be less than or equal to the existing end_time.
+        if target_break.get("end_time"):
+            t_existing_end = parse_time_str(target_break["end_time"])
+            if t_existing_end and t_actual_out > t_existing_end:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Actual break-out time ({actual_break_out_time_str}) cannot be after the existing break-out time ({target_break['end_time']})."
+                )
+
+        # Update the target break
+        fmt_actual_out = datetime.combine(datetime.today(), t_actual_out).strftime("%I:%M %p")
+        target_break["end_time"] = fmt_actual_out
+        target_break["duration_seconds"] = compute_duration_seconds(t_start, t_actual_out)
+
+        # Recalculate total break seconds
+        total_break_seconds = 0
+        for b in breaks:
+            b_sec = b.get("duration_seconds", 0)
+            total_break_seconds += b_sec
+
+        break_hours_str = format_seconds_to_hours(total_break_seconds)
+
+        # Recalculate net work seconds if gross_seconds > 0 (meaning punched out)
+        gross_seconds = record.get("gross_seconds", 0)
+        net_seconds = max(0, gross_seconds - total_break_seconds)
+        work_hours_str = format_seconds_to_hours(net_seconds) if gross_seconds > 0 else "--"
+        
+        # Determine status. If it was "On Break" and this was the active break today, change to "Active"
+        current_status = record.get("status")
+        today_str = format_date_ist(get_now_ist())
+        is_today = (date_str == today_str)
+
+        update_data = {
+            "breaks": breaks,
+            "break_seconds": total_break_seconds,
+            "break_hours": break_hours_str,
+            "net_work_seconds": net_seconds
+        }
+        
+        if gross_seconds > 0:
+            update_data["work_hours"] = work_hours_str
+            
+        if current_status == "On Break" and is_today:
+            # Check if there are any other open breaks
+            has_open_breaks = any(not bk.get("end_time") for bk in breaks)
+            if not has_open_breaks:
+                update_data["status"] = "Active"
+
+        await AttendanceRepository.update_record(record["id"], update_data)
+        updated = await AttendanceRepository.get_record_by_id(record["id"])
+
+        if is_today:
+            await set_cache(f"attendance:active:{employee_id}", {
+                "status": update_data.get("status", current_status),
+                "break_seconds": total_break_seconds,
+                "record_id": record["id"],
+                "date": date_str
+            }, ttl=86400)
+            
+        await clear_pattern("attendance:list:*")
+        await clear_pattern(f"attendance:summary:{employee_id}:*")
+        
         return updated
 
     @classmethod

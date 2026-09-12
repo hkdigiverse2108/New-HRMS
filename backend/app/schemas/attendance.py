@@ -11,6 +11,11 @@ class PunchOutRequest(BaseModel):
 class BreakRequest(BaseModel):
     reason: Optional[str] = None
 
+class BreakRecoveryRequest(BaseModel):
+    date: str
+    break_start_time: str
+    actual_break_out_time: str
+
 class PendingPunchOutResolveRequest(BaseModel):
     record_id: str
     date: str  # Fixed pending date (YYYY-MM-DD)
