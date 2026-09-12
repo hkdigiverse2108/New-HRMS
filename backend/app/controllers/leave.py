@@ -3,6 +3,7 @@ from typing import Optional, List, Dict, Any
 
 from app.schemas.leave import (
     LeaveCreateRequest,
+    LeaveUpdateRequest,
     LeaveStatusUpdateRequest,
     LeaveOut
 )
@@ -84,6 +85,26 @@ async def get_leaves(
     await set_cache(cache_key, result, ttl=180)
     return result
 
+@router.put("/{leave_id}", response_model=LeaveOut)
+async def update_leave(
+    leave_id: str,
+    payload: LeaveUpdateRequest,
+    current_employee: dict = Depends(get_current_employee)
+):
+    """
+    Update an existing leave request.
+    Restricted to the employee who created the leave.
+    Only allows updates if the leave is still in 'Pending' status.
+    """
+    employee_id = str(current_employee.get("_id") or current_employee.get("id") or current_employee.get("email") or "")
+    
+    updated_doc = await LeaveService.update_leave_details(
+        leave_id=leave_id,
+        employee_id=employee_id,
+        update_data=payload.model_dump(exclude_unset=True)
+    )
+    return updated_doc
+
 @router.patch("/{leave_id}/status", response_model=LeaveOut)
 async def update_leave_status(
     leave_id: str,
@@ -138,3 +159,28 @@ async def get_leave_by_id(
         
     await set_cache(cache_key, doc, ttl=300)
     return doc
+
+@router.delete("/{leave_id}", status_code=status.HTTP_200_OK)
+async def delete_leave(
+    leave_id: str,
+    current_employee: dict = Depends(get_current_employee)
+):
+    """
+    Delete a leave request.
+    - Admin can delete any.
+    - Employee can only delete their own 'Pending' leave.
+    """
+    employee_id = str(current_employee.get("_id") or current_employee.get("id") or current_employee.get("email") or "")
+    work = current_employee.get("work_details", {})
+    user_role = work.get("system_role", "Employee")
+    
+    deleted = await LeaveService.delete_leave(
+        leave_id=leave_id,
+        current_user_id=employee_id,
+        current_user_role=user_role
+    )
+    
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete leave request.")
+        
+    return {"message": "Leave request deleted successfully."}

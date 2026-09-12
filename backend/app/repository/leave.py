@@ -76,6 +76,25 @@ class LeaveRepository:
         return await cls.get_by_id(leave_id)
 
     @classmethod
+    async def update_leave_details(
+        cls,
+        leave_id: str,
+        update_data: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        collection = await cls.get_collection()
+        try:
+            filter_query = {"_id": ObjectId(leave_id)}
+        except Exception:
+            filter_query = {"_id": leave_id}
+
+        if not update_data:
+            return await cls.get_by_id(leave_id)
+
+        update_data["updated_at"] = datetime.utcnow().isoformat()
+        await collection.update_one(filter_query, {"$set": update_data})
+        return await cls.get_by_id(leave_id)
+
+    @classmethod
     async def get_leaves(
         cls,
         employee_id: Optional[str] = None,
@@ -124,4 +143,15 @@ class LeaveRepository:
             "end_date": {"$gte": date_str}
         })
         return serialize_mongo(doc)
+
+    @classmethod
+    async def delete_leave(cls, leave_id: str) -> bool:
+        collection = await cls.get_collection()
+        try:
+            filter_query = {"_id": ObjectId(leave_id)}
+        except Exception:
+            filter_query = {"_id": leave_id}
+            
+        result = await collection.delete_one(filter_query)
+        return result.deleted_count > 0
 

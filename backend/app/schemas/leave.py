@@ -11,6 +11,7 @@ class LeaveCreateRequest(BaseModel):
     reason: str
     is_conditional: Optional[bool] = False
     remarks: Optional[str] = None
+    attachment: Optional[str] = None
 
     @model_validator(mode="after")
     def populate_type(self):
@@ -19,6 +20,17 @@ class LeaveCreateRequest(BaseModel):
         elif not self.type:
             self.type = "Sick Leave"
         return self
+
+class LeaveUpdateRequest(BaseModel):
+    type: Optional[str] = None
+    leave_type: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    day_type: Optional[str] = None
+    duration_days: Optional[float] = None
+    reason: Optional[str] = None
+    remarks: Optional[str] = None
+    attachment: Optional[str] = None
 
 class LeaveStatusUpdateRequest(BaseModel):
     status: str  # Approved, Rejected, Pending
@@ -44,6 +56,7 @@ class LeaveOut(BaseModel):
     decided_by: Optional[str] = None
     decided_at: Optional[str] = None
     is_conditional: Optional[bool] = False
+    attachment: Optional[str] = None
 
     @model_validator(mode="after")
     def populate_leave_type(self):
