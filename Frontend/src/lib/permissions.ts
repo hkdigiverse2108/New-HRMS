@@ -1,4 +1,4 @@
-import { UserProfile, PermissionFlags } from "@/components/auth/AuthContext";
+import type { UserProfile, PermissionFlags } from "@/components/auth/AuthContext";
 import { NavItem, NavChild } from "@/components/nav-data";
 
 /**

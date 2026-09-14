@@ -4,6 +4,7 @@ import { EMPLOYEES, Employee } from "./employee-data";
 import { useDepartments } from "./DepartmentContext";
 import { EmployeeProfileModal } from "./EmployeeProfileModal";
 import { EmployeeFormModal } from "./EmployeeFormModal";
+import { EmployeePermissionsModal } from "./EmployeePermissionsModal";
 import { toast } from "sonner";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { cn, formatDate } from "@/lib/utils";
@@ -66,6 +67,7 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
   const [isFormOpen, setIsFormOpen] = useState(isNew || false);
   const [selectedDept, setSelectedDept] = useState<string>("All");
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [permissionEmployee, setPermissionEmployee] = useState<Employee | null>(null);
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     COLUMN_OPTIONS.forEach(col => {
@@ -164,7 +166,7 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
                 <Edit2 className="w-3.5 h-3.5" />
               </button>
               <button 
-                onClick={() => toast.success("Permissions management coming soon!")}
+                onClick={() => setPermissionEmployee(emp)}
                 className="p-1.5 text-muted-foreground hover:bg-indigo-50 hover:text-indigo-600 rounded-md transition-all active:scale-95"
                 title="Manage Permissions"
               >
@@ -455,9 +457,9 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
                   {emp.status === 'Inactive' ? <UserCheck className="w-4 h-4" /> : <UserMinus className="w-4 h-4" />}
                 </button>
                 <button
-                  onClick={() => toast.success("Permissions management coming soon!")}
+                  onClick={() => setPermissionEmployee(emp)}
                   className="p-2 text-muted-foreground hover:bg-blue-50 hover:text-blue-600 rounded-full transition-colors"
-                  title="Permissions"
+                  title="Manage Permissions"
                 >
                   <Shield className="w-4 h-4" />
                 </button>
@@ -617,6 +619,15 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
         description={`Are you sure you want to completely delete ${deleteConfirm.name} from the company records? This action cannot be undone.`}
         itemName={deleteConfirm.name}
       />
+
+      {/* Permissions Management Modal */}
+      {permissionEmployee && (
+        <EmployeePermissionsModal 
+          employee={permissionEmployee}
+          isOpen={Boolean(permissionEmployee)}
+          onClose={() => setPermissionEmployee(null)}
+        />
+      )}
     </div>
   );
 }

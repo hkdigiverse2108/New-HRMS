@@ -1,5 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi.responses import StreamingResponse
 from typing import List, Dict, Any, Optional
+import asyncio
+import json
+from datetime import datetime
+from jose import jwt
+from app.config import settings
 from app.schemas.access_control import (
     UserAccessControlCreate, UserAccessControlUpdate, UserAccessControlResponse,
     PermissionPresetCreate, PermissionPresetUpdate, PermissionPresetResponse
@@ -18,6 +24,28 @@ router = APIRouter(
 
 # Protect all modification endpoints so only Admins can manage access control
 admin_role_checker = RoleChecker(["Admin", "CEO"])
+
+# ==========================================
+# Real-Time SSE Listeners & Broadcast Helper
+# ==========================================
+active_permission_listeners: Dict[str, asyncio.Queue] = {}
+
+async def broadcast_permission_update(employee_id: Optional[str] = None, role: Optional[str] = None):
+    """Notify all connected SSE clients about permission changes immediately."""
+    event_payload = json.dumps({
+        "type": "PERMISSIONS_UPDATED",
+        "employee_id": employee_id,
+        "role": role,
+        "timestamp": datetime.utcnow().isoformat()
+    })
+    dead_clients = []
+    for cid, queue in list(active_permission_listeners.items()):
+        try:
+            await queue.put(event_payload)
+        except Exception:
+            dead_clients.append(cid)
+    for cid in dead_clients:
+        active_permission_listeners.pop(cid, None)
 
 # ==========================================
 # System Modules Definition
@@ -70,6 +98,9 @@ async def create_or_update_preset(item: PermissionPresetCreate):
     # Clean up non-custom records in user_permissions so employees seamlessly inherit the preset
     db = get_database()
     await db["user_permissions"].delete_many({"$or": [{"is_custom": False}, {"is_custom": None}]})
+    
+    # Broadcast live update to all connected clients
+    await broadcast_permission_update(role=item_data.get("role"))
     
     return created_item
 
@@ -131,6 +162,7 @@ async def update_preset(preset_id: str, item: PermissionPresetUpdate):
     db = get_database()
     await db["user_permissions"].delete_many({"$or": [{"is_custom": False}, {"is_custom": None}]})
         
+    await broadcast_permission_update()
     return {"message": "Preset updated successfully"}
 
 @router.delete("/presets/{preset_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(admin_role_checker)])
@@ -143,6 +175,7 @@ async def delete_preset(preset_id: str):
     await clear_pattern("presets:list:*")
     await clear_pattern("user_perms_resolved:*")
     await clear_pattern("user_permission:*")
+    await broadcast_permission_update()
     return None
 
 # ==========================================
@@ -157,6 +190,9 @@ async def create_or_update_user_permission(item: UserAccessControlCreate):
     await delete_cache(f"user_permission:{emp_id}")
     await delete_cache(f"user_perms_resolved:{emp_id}")
     await set_cache(f"user_permission:{emp_id}", created_item)
+    
+    # Broadcast live update to employee
+    await broadcast_permission_update(employee_id=emp_id)
     return created_item
 
 @router.get("/{employee_id}", response_model=UserAccessControlResponse)
@@ -237,6 +273,9 @@ async def update_user_permission(employee_id: str, item: UserAccessControlUpdate
         
     await delete_cache(f"user_permission:{emp_id}")
     await delete_cache(f"user_perms_resolved:{emp_id}")
+    
+    # Broadcast live update to employee
+    await broadcast_permission_update(employee_id=emp_id)
     return {"message": "User permission updated successfully"}
 
 @router.delete("/{employee_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(admin_role_checker)])
@@ -245,4 +284,67 @@ async def delete_user_permission(employee_id: str):
     await UserPermissionRepository.delete_user_permission(emp_id)
     await delete_cache(f"user_permission:{emp_id}")
     await delete_cache(f"user_perms_resolved:{emp_id}")
+    
+    # Broadcast live update to employee
+    await broadcast_permission_update(employee_id=emp_id)
     return None
+
+# ==========================================
+# Real-Time SSE Stream Endpoint
+# ==========================================
+@router.get("/stream")
+async def stream_permission_events(request: Request, token: Optional[str] = None):
+    """
+    Real-time Server-Sent Events (SSE) endpoint.
+    Streams permission revocation/updates directly to connected client browsers.
+    """
+    auth_token = token
+    if not auth_token:
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.startswith("Bearer "):
+            auth_token = auth_header.split(" ")[1]
+
+    client_email = None
+    if auth_token:
+        try:
+            payload = jwt.decode(auth_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+            client_email = payload.get("sub")
+        except Exception:
+            pass
+
+    async def event_generator():
+        queue: asyncio.Queue = asyncio.Queue()
+        client_id = f"{client_email or 'guest'}_{id(queue)}"
+        active_permission_listeners[client_id] = queue
+        try:
+            # Initial connection greeting
+            init_payload = json.dumps({
+                "type": "CONNECTED",
+                "email": client_email,
+                "timestamp": datetime.utcnow().isoformat()
+            })
+            yield f"data: {init_payload}\n\n"
+
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    data = await asyncio.wait_for(queue.get(), timeout=20.0)
+                    yield f"data: {data}\n\n"
+                except asyncio.TimeoutError:
+                    # Keep-alive heartbeat ping
+                    yield ": ping\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            active_permission_listeners.pop(client_id, None)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
