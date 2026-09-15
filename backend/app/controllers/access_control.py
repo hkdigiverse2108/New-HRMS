@@ -4,7 +4,7 @@ from typing import List, Dict, Any, Optional
 import asyncio
 import json
 from datetime import datetime
-from jose import jwt
+from jose import jwt, JWTError
 from app.config import settings
 from app.schemas.access_control import (
     UserAccessControlCreate, UserAccessControlUpdate, UserAccessControlResponse,
@@ -195,6 +195,97 @@ async def create_or_update_user_permission(item: UserAccessControlCreate):
     await broadcast_permission_update(employee_id=emp_id)
     return created_item
 
+# ==========================================
+# Real-Time SSE Stream Endpoint
+# (Declared BEFORE /{employee_id} so FastAPI matches /stream correctly)
+# ==========================================
+@router.get("/stream")
+async def stream_permission_events(request: Request, token: Optional[str] = None):
+    """
+    Real-time Server-Sent Events (SSE) endpoint.
+    Streams live permission updates and revocations to connected user browsers.
+    """
+    auth_token = token
+    if not auth_token:
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.startswith("Bearer "):
+            auth_token = auth_header.split(" ")[1]
+
+    if not auth_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication token is required for streaming permissions"
+        )
+
+    try:
+        payload = jwt.decode(auth_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        client_email = payload.get("sub")
+        if not client_email:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token payload: missing subject"
+            )
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired authentication token"
+        )
+
+    # Check employee details if not default admin
+    employee = await EmployeeRepository.get_employee_by_email(client_email)
+    emp_id = None
+    role = None
+    if employee:
+        work_details = employee.get("work_details", {})
+        if work_details.get("is_delete") is True or work_details.get("is_block") is True:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Account is deactivated")
+        emp_id = str(employee.get("_id", ""))
+        role = work_details.get("system_role", "Employee")
+    elif client_email == "admin@hrms.com":
+        emp_id = "default-admin-id"
+        role = "Admin"
+    else:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Employee not found")
+
+    async def event_generator():
+        queue: asyncio.Queue = asyncio.Queue()
+        client_id = f"{client_email}_{id(queue)}"
+        active_permission_listeners[client_id] = queue
+        try:
+            # Initial connection confirmation payload
+            init_payload = json.dumps({
+                "type": "CONNECTED",
+                "email": client_email,
+                "employee_id": emp_id,
+                "role": role,
+                "timestamp": datetime.utcnow().isoformat()
+            })
+            yield f"data: {init_payload}\n\n"
+
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    data = await asyncio.wait_for(queue.get(), timeout=20.0)
+                    yield f"data: {data}\n\n"
+                except asyncio.TimeoutError:
+                    # Keep-alive heartbeat ping comment
+                    yield ": ping\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            active_permission_listeners.pop(client_id, None)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
+
 @router.get("/{employee_id}", response_model=UserAccessControlResponse)
 async def get_user_permission(employee_id: str):
     cache_key = f"user_permission:{employee_id}"
@@ -288,63 +379,3 @@ async def delete_user_permission(employee_id: str):
     # Broadcast live update to employee
     await broadcast_permission_update(employee_id=emp_id)
     return None
-
-# ==========================================
-# Real-Time SSE Stream Endpoint
-# ==========================================
-@router.get("/stream")
-async def stream_permission_events(request: Request, token: Optional[str] = None):
-    """
-    Real-time Server-Sent Events (SSE) endpoint.
-    Streams permission revocation/updates directly to connected client browsers.
-    """
-    auth_token = token
-    if not auth_token:
-        auth_header = request.headers.get("authorization", "")
-        if auth_header.startswith("Bearer "):
-            auth_token = auth_header.split(" ")[1]
-
-    client_email = None
-    if auth_token:
-        try:
-            payload = jwt.decode(auth_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-            client_email = payload.get("sub")
-        except Exception:
-            pass
-
-    async def event_generator():
-        queue: asyncio.Queue = asyncio.Queue()
-        client_id = f"{client_email or 'guest'}_{id(queue)}"
-        active_permission_listeners[client_id] = queue
-        try:
-            # Initial connection greeting
-            init_payload = json.dumps({
-                "type": "CONNECTED",
-                "email": client_email,
-                "timestamp": datetime.utcnow().isoformat()
-            })
-            yield f"data: {init_payload}\n\n"
-
-            while True:
-                if await request.is_disconnected():
-                    break
-                try:
-                    data = await asyncio.wait_for(queue.get(), timeout=20.0)
-                    yield f"data: {data}\n\n"
-                except asyncio.TimeoutError:
-                    # Keep-alive heartbeat ping
-                    yield ": ping\n\n"
-        except asyncio.CancelledError:
-            pass
-        finally:
-            active_permission_listeners.pop(client_id, None)
-
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        }
-    )

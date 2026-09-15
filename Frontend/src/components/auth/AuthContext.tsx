@@ -48,8 +48,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     userRef.current = user;
   }, [user]);
 
-  // Sync profile from backend if token exists
-  const refreshProfile = useCallback(async (silent: boolean = false) => {
+  // Track in-flight profile fetch to avoid duplicate network calls
+  const inFlightPromiseRef = useRef<Promise<void> | null>(null);
+  const lastFetchedTimeRef = useRef<number>(0);
+
+  // Sync profile from backend if token exists (deduplicated & throttled)
+  const refreshProfile = useCallback(async (silent: boolean = false, force: boolean = false) => {
     const currentToken = getAuthToken();
     if (!currentToken) {
       setUser(null);
@@ -57,59 +61,99 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    try {
-      const data = await api.get<UserProfile>("/me", {
-        showLoader: false,
-        showErrorToast: false,
-      });
+    // If already in flight, return the existing promise so we don't fire duplicate requests
+    if (inFlightPromiseRef.current) {
+      return inFlightPromiseRef.current;
+    }
 
-      if (data && data.id) {
-        const prevPermsStr = JSON.stringify(userRef.current?.permissions || {});
-        const newPermsStr = JSON.stringify(data.permissions || {});
-        const permsChanged = prevPermsStr !== newPermsStr;
+    // Cooldown: If not forced (e.g., focus/visibility/heartbeat), don't refetch if fetched within last 15 seconds
+    const now = Date.now();
+    if (!force && now - lastFetchedTimeRef.current < 15000 && userRef.current) {
+      setIsLoading(false);
+      return;
+    }
 
-        setUser(data);
-        setStoredUser(data);
+    const fetchPromise = (async () => {
+      try {
+        const data = await api.get<UserProfile>("/me", {
+          showLoader: false,
+          showErrorToast: false,
+        });
 
-        // If permissions changed live for non-admin, verify if current page is still accessible
-        if (permsChanged && data.role !== "Admin" && typeof window !== "undefined") {
-          const currentPath = window.location.pathname;
-          const safeRoutes = ["/", "/dashboard", "/login", "/profile"];
-          if (currentPath && !safeRoutes.includes(currentPath)) {
-            const isStillAllowed = hasModulePermission(data, currentPath, "read");
-            if (!isStillAllowed) {
-              toast.error("Your permissions were updated. You no longer have access to this section.", {
-                id: "perm-revoked",
-                duration: 5000,
-              });
-              // Safely redirect to dashboard
-              window.location.href = "/dashboard";
-              return;
+        lastFetchedTimeRef.current = Date.now();
+
+        if (data && data.id) {
+          const prevPermsStr = JSON.stringify(userRef.current?.permissions || {});
+          const newPermsStr = JSON.stringify(data.permissions || {});
+          const permsChanged = prevPermsStr !== newPermsStr;
+
+          setUser(data);
+          setStoredUser(data);
+
+          // If permissions changed live for non-admin, verify if current page is still accessible
+          if (permsChanged && data.role !== "Admin" && typeof window !== "undefined") {
+            const currentPath = window.location.pathname;
+            const safeRoutes = ["/", "/dashboard", "/login", "/profile"];
+            if (currentPath && !safeRoutes.includes(currentPath)) {
+              const isStillAllowed = hasModulePermission(data, currentPath, "read");
+              if (!isStillAllowed) {
+                toast.error("Your permissions were updated. You no longer have access to this section.", {
+                  id: "perm-revoked",
+                  duration: 5000,
+                });
+                // Safely redirect to dashboard
+                window.location.href = "/dashboard";
+                return;
+              }
+            }
+
+            if (!silent) {
+              toast.info("Permissions updated in real-time.", { id: "perm-sync", duration: 3000 });
             }
           }
-
-          if (!silent) {
-            toast.info("Permissions updated in real-time.", { id: "perm-sync", duration: 3000 });
-          }
         }
+      } catch {
+        // If token expired, clear
+        removeAuthToken();
+        setToken(null);
+        setUser(null);
+      } finally {
+        setIsLoading(false);
+        inFlightPromiseRef.current = null;
       }
-    } catch {
-      // If token expired, clear
-      removeAuthToken();
-      setToken(null);
-      setUser(null);
-    } finally {
-      setIsLoading(false);
-    }
+    })();
+
+    inFlightPromiseRef.current = fetchPromise;
+    return fetchPromise;
   }, []);
 
   // 1. Initial Load & Unauthorized handler
   useEffect(() => {
+    const currentToken = getAuthToken();
+    if (currentToken) {
+      try {
+        const parts = currentToken.split(".");
+        if (parts[1]) {
+          const payload = JSON.parse(atob(parts[1]));
+          if (payload?.exp && payload.exp * 1000 < Date.now()) {
+            removeAuthToken();
+            setToken(null);
+            setUser(null);
+            setIsLoading(false);
+            toast.error("Your session has expired. Please log in again.", { id: "session-expired" });
+            return;
+          }
+        }
+      } catch {}
+    }
+
     refreshProfile(true);
 
     const handleUnauthorized = () => {
+      removeAuthToken();
       setToken(null);
       setUser(null);
+      toast.error("Your session has expired. Please log in again.", { id: "session-expired" });
     };
 
     window.addEventListener("hrms:unauthorized", handleUnauthorized);
@@ -183,15 +227,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     } catch {}
 
-    // Auto-sync when user returns to or focuses the window/tab
-    const onFocus = () => {
+    // Auto-sync when user returns to or focuses the window/tab (debounced)
+    let debounceTimer: any = null;
+    const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        refreshProfile(true);
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          refreshProfile(true);
+        }, 300);
       }
     };
 
-    window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onFocus);
+    window.addEventListener("focus", onVisibilityChange);
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     // Periodic heartbeat check (every 30 seconds)
     const interval = setInterval(() => {
@@ -202,8 +250,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return () => {
       if (bc) bc.close();
-      window.removeEventListener("focus", onFocus);
-      document.removeEventListener("visibilitychange", onFocus);
+      if (debounceTimer) clearTimeout(debounceTimer);
+      window.removeEventListener("focus", onVisibilityChange);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       clearInterval(interval);
     };
   }, [refreshProfile]);

