@@ -357,6 +357,30 @@ class AttendanceService:
 
         status_text = "Late" if is_late else "Active"
 
+        if is_late:
+            try:
+                from app.services.penalty import PenaltyService
+                from app.schemas.penalty import EmployeePenaltyCreate
+                late_penalty_id = await PenaltyService.ensure_late_punchin_penalty_type()
+                
+                # Check if penalty already exists for today to prevent duplicates
+                existing_penalties = await PenaltyService.get_all_penalties(
+                    employee_id=employee_id, 
+                    penalty_type_id=late_penalty_id, 
+                    start_date=today_str, 
+                    end_date=today_str
+                )
+                if not existing_penalties.get("data"):
+                    penalty_data = EmployeePenaltyCreate(
+                        employee_id=employee_id,
+                        penalty_type_id=late_penalty_id,
+                        reason="Automatic penalty for Late Punch-in",
+                        penalty_date=datetime.strptime(today_str, "%Y-%m-%d").date()
+                    )
+                    await PenaltyService.create_employee_penalty(penalty_data)
+            except Exception as e:
+                print(f"Failed to auto-assign late penalty: {e}")
+
         new_doc = {
             "employee_id": employee_id,
             "employee_name": emp_info["name"],

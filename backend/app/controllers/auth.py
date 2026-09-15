@@ -122,12 +122,12 @@ class RoleChecker:
         if not employee:
             return True
         role = employee.get("work_details", {}).get("system_role", "Admin")
-        if self.allowed_roles and role not in self.allowed_roles and "Admin" not in self.allowed_roles:
+        if self.allowed_roles and role not in self.allowed_roles and role != "Admin":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Operation not permitted for this role"
             )
-        return True
+        return employee
 
 async def resolve_effective_permissions_for_employee(employee: dict) -> dict:
     """Unified single source of truth for resolving dynamic employee permissions."""
