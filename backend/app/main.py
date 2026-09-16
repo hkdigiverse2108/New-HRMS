@@ -13,6 +13,8 @@ from app.controllers.attendance import router as attendance_router
 from app.controllers.leave import router as leave_router
 from app.controllers.penalty import router as penalty_router
 from app.controllers.task import router as task_router
+from app.controllers.client import router as client_router
+from app.controllers.project import router as project_router
 from app.models.employee import setup_employee_indexes
 from app.models.department import setup_department_indexes
 from app.models.sub_department import setup_sub_department_indexes
@@ -83,6 +85,8 @@ app.include_router(attendance_router)
 app.include_router(leave_router)
 app.include_router(penalty_router)
 app.include_router(task_router)
+app.include_router(client_router)
+app.include_router(project_router)
 
 # Mount static image paths AFTER API routes
 app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
