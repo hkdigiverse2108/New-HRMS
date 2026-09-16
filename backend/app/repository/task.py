@@ -46,35 +46,39 @@ class TaskRepository:
         return data_list
 
     @classmethod
-    async def get_all(cls, is_deleted: bool = False, assigned_to: Optional[str] = None, assigned_by: Optional[str] = None, status: Optional[str] = None, priority: Optional[str] = None, page: Optional[int] = None, limit: Optional[int] = None, involved_emp_id: Optional[str] = None):
+    async def get_all(
+        cls, 
+        is_deleted: bool = False, 
+        assigned_to: Optional[str] = None, 
+        assigned_by: Optional[str] = None, 
+        status: Optional[str] = None, 
+        priority: Optional[str] = None, 
+        page: Optional[int] = None, 
+        limit: Optional[int] = None, 
+        involved_emp_id: Optional[str] = None,
+        history_assigned_to: Optional[str] = None,
+        history_assigned_by: Optional[str] = None
+    ):
         collection = await cls.get_collection()
-        query = {"is_deleted": is_deleted}
+        and_conditions = [{"is_deleted": is_deleted}]
         
         if involved_emp_id:
-            # If filtering by a specific employee involvement, we want tasks where they are assigned_to OR assigned_by.
-            # We can also apply additional AND filters if assigned_to/by are provided within this context.
-            and_conditions = [{"is_deleted": is_deleted}]
             and_conditions.append({"$or": [{"assigned_to": involved_emp_id}, {"assigned_by": involved_emp_id}]})
             
-            if assigned_to:
-                and_conditions.append({"assigned_to": assigned_to})
-            if assigned_by:
-                and_conditions.append({"assigned_by": assigned_by})
-            if status:
-                and_conditions.append({"status": status})
-            if priority:
-                and_conditions.append({"priority": priority})
-                
-            query = {"$and": and_conditions}
-        else:
-            if assigned_to:
-                query["assigned_to"] = assigned_to
-            if assigned_by:
-                query["assigned_by"] = assigned_by
-            if status:
-                query["status"] = status
-            if priority:
-                query["priority"] = priority
+        if assigned_to:
+            and_conditions.append({"assigned_to": assigned_to})
+        if assigned_by:
+            and_conditions.append({"assigned_by": assigned_by})
+        if status:
+            and_conditions.append({"status": status})
+        if priority:
+            and_conditions.append({"priority": priority})
+        if history_assigned_to:
+            and_conditions.append({"transfer_history.to_employee": history_assigned_to})
+        if history_assigned_by:
+            and_conditions.append({"transfer_history.from_employee": history_assigned_by})
+            
+        query = {"$and": and_conditions} if len(and_conditions) > 1 else and_conditions[0]
             
         total = await collection.count_documents(query)
 
