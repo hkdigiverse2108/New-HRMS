@@ -129,14 +129,55 @@ class EmployeeRepository:
 
     @classmethod
     async def get_employee_by_email(cls, email: str):
+        if not email or not str(email).strip():
+            return None
         collection = await cls.get_collection()
-        clean_email = (email or "").strip()
+        clean_email = str(email).strip()
         import re
         regex = re.compile(f"^{re.escape(clean_email)}$", re.IGNORECASE)
         employee = await collection.find_one({
-            "$or": [
-                {"personal_info.email_address": regex},
-                {"email": regex}
+            "$and": [
+                {"work_details.is_delete": {"$ne": True}},
+                {
+                    "$or": [
+                        {"personal_info.email_address": regex},
+                        {"email": regex}
+                    ]
+                }
+            ]
+        })
+        if employee:
+            employee["_id"] = str(employee["_id"])
+        return employee
+
+    @classmethod
+    async def get_employee_by_phone(cls, phone: str):
+        if not phone or not str(phone).strip():
+            return None
+        collection = await cls.get_collection()
+        raw_phone = str(phone).strip()
+        import re
+        clean_digits = re.sub(r"\D", "", raw_phone)
+        if not clean_digits:
+            return None
+
+        last_digits = clean_digits[-10:] if len(clean_digits) >= 10 else clean_digits
+        regex_raw = re.compile(f"^{re.escape(raw_phone)}$", re.IGNORECASE)
+        regex_digits = re.compile(f"{re.escape(last_digits)}$")
+
+        employee = await collection.find_one({
+            "$and": [
+                {"work_details.is_delete": {"$ne": True}},
+                {
+                    "$or": [
+                        {"personal_info.phone_number": regex_raw},
+                        {"personal_info.phone_number": regex_digits},
+                        {"phone": regex_raw},
+                        {"phone": regex_digits},
+                        {"phone_number": regex_raw},
+                        {"phone_number": regex_digits}
+                    ]
+                }
             ]
         })
         if employee:

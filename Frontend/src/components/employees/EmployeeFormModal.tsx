@@ -1,12 +1,11 @@
 import { useState, useEffect } from "react";
-import { User, Briefcase, FileText, Check, ChevronRight, Upload, X, MapPin, Phone, Mail, Building2, CreditCard, ShieldAlert } from "lucide-react";
+import { User, Briefcase, FileText, Check, ChevronRight, Upload, X, MapPin, Phone, Mail, Building2, CreditCard, ShieldAlert, AlertCircle, Lock } from "lucide-react";
 import { DialogClose,  Dialog, DialogContent  } from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/select";
 import { Employee, EmployeeStatus } from "./employee-data";
 import { useDepartments } from "./DepartmentContext";
-import { toast } from "sonner";
+import { toast } from "react-toastify";
 import { cn } from "@/lib/utils";
-
 import { getAvatarUrl, API_URL } from "@/lib/config";
 import { api } from "@/lib/api";
 import { Camera, Loader2, Image as ImageIcon, FolderOpen } from "lucide-react";
@@ -16,7 +15,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 interface EmployeeFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (employee: Partial<Employee>) => void;
+  onSubmit: (employee: Partial<Employee>) => Promise<boolean | void> | void;
   initialData?: Employee | null;
   isSelfEdit?: boolean;
 }
@@ -63,6 +62,21 @@ const REQUIRED_DOCUMENTS_LIST = [
   "Bank Passbook / Cancelled Cheque"
 ];
 
+interface EmployeeFormErrors {
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  password?: string;
+  role?: string;
+  department?: string;
+  bankName?: string;
+  accountHolderName?: string;
+  accountNumber?: string;
+  ifscCode?: string;
+}
+
 export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSelfEdit }: EmployeeFormModalProps) {
   const { departments } = useDepartments();
   const [activeTab, setActiveTab] = useState<TabType>('personal');
@@ -70,6 +84,8 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
   const [showGallery, setShowGallery] = useState(false);
   const [galleryImages, setGalleryImages] = useState<Array<{ filename: string; url: string; folder: string }>>([]);
   const [isLoadingGallery, setIsLoadingGallery] = useState(false);
+  const [errors, setErrors] = useState<EmployeeFormErrors>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [formData, setFormData] = useState<Partial<Employee>>({
     name: "",
@@ -119,6 +135,8 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
   });
 
   useEffect(() => {
+    setErrors({});
+    setIsSubmitting(false);
     if (initialData) {
       setFormData(initialData);
     } else {
@@ -188,19 +206,179 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
     }
   }, [formData.hasNoticePeriod, formData.noticePeriodStartDate, formData.noticePeriodDays]);
   
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const fullName = formData.name || `${formData.firstName || ''} ${formData.lastName || ''}`.trim();
-    if (!fullName || !formData.email || !formData.role || !formData.phone) {
-      toast.error("Please fill in all required fields (Name, Email, Phone, System Role).");
-      return;
+  const validateForm = () => {
+    const newErrors: EmployeeFormErrors = {};
+
+    // 1. First Name *
+    const cleanFirstName = (formData.firstName || "").trim();
+    if (!cleanFirstName) {
+      newErrors.firstName = "First Name is required.";
     }
-    onSubmit({ ...formData, name: fullName });
-    onClose();
+
+    // 2. Middle Name *
+    const cleanMiddleName = (formData.middleName || "").trim();
+    if (!cleanMiddleName) {
+      newErrors.middleName = "Middle Name is required.";
+    }
+
+    // 3. Last Name *
+    const cleanLastName = (formData.lastName || "").trim();
+    if (!cleanLastName) {
+      newErrors.lastName = "Last Name is required.";
+    }
+
+    // 4. Email Address *
+    const cleanEmail = (formData.email || "").trim();
+    if (!cleanEmail) {
+      newErrors.email = "Email Address is required.";
+    } else {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(cleanEmail)) {
+        newErrors.email = "Please enter a valid email address.";
+      }
+    }
+
+    // 5. Phone Number *
+    const cleanPhone = (formData.phone || "").trim();
+    if (!cleanPhone) {
+      newErrors.phone = "Phone Number is required.";
+    } else {
+      const digits = cleanPhone.replace(/\D/g, "");
+      if (digits.length < 7) {
+        newErrors.phone = "Please enter a valid phone number (at least 7 digits).";
+      }
+    }
+
+    // 6. Password * (Required for new employee)
+    const cleanPassword = (formData.password || "").trim();
+    if (!initialData && !cleanPassword) {
+      newErrors.password = "Password is required.";
+    } else if (cleanPassword && cleanPassword.length < 6) {
+      newErrors.password = "Password must be at least 6 characters.";
+    }
+
+    // 7. System Role *
+    const cleanRole = (formData.role || "").trim();
+    if (!cleanRole) {
+      newErrors.role = "System Role is required.";
+    }
+
+    // 8. Department *
+    const cleanDept = (formData.department || "").trim();
+    if (!cleanDept) {
+      newErrors.department = "Department is required.";
+    }
+
+    // 9. Bank Name *
+    const cleanBankName = (formData.bankName || "").trim();
+    if (!cleanBankName) {
+      newErrors.bankName = "Bank Name is required.";
+    }
+
+    // 10. Account Holder Name *
+    const cleanAccountHolderName = (formData.accountHolderName || "").trim();
+    if (!cleanAccountHolderName) {
+      newErrors.accountHolderName = "Account Holder Name is required.";
+    }
+
+    // 11. Account Number *
+    const cleanAccountNumber = (formData.accountNumber || "").trim();
+    if (!cleanAccountNumber) {
+      newErrors.accountNumber = "Account Number is required.";
+    }
+
+    // 12. IFSC Code *
+    const cleanIfscCode = (formData.ifscCode || "").trim();
+    if (!cleanIfscCode) {
+      newErrors.ifscCode = "IFSC Code is required.";
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      // Automatically jump to the tab containing the first error
+      if (newErrors.firstName || newErrors.middleName || newErrors.lastName || newErrors.email || newErrors.phone || newErrors.password) {
+        setActiveTab('personal');
+      } else if (newErrors.role || newErrors.department) {
+        setActiveTab('work');
+      } else if (newErrors.bankName || newErrors.accountHolderName || newErrors.accountNumber || newErrors.ifscCode) {
+        setActiveTab('bank');
+      }
+      toast.error("Please fill in all required fields marked with * across Personal Info, Work Details, and Bank & Docs.");
+      return false;
+    }
+
+    setErrors({});
+    return true;
+  };
+
+  const isFormValid = Boolean(
+    // 1. Personal Info
+    (formData.firstName || "").trim() &&
+    (formData.middleName || "").trim() &&
+    (formData.lastName || "").trim() &&
+    (formData.email || "").trim() &&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((formData.email || "").trim()) &&
+    (formData.phone || "").trim().replace(/\D/g, "").length >= 7 &&
+    (initialData ? true : (formData.password || "").trim().length >= 6) &&
+    // 2. Work Details
+    (formData.role || "").trim() &&
+    (formData.department || "").trim() &&
+    // 3. Bank & Docs
+    (formData.bankName || "").trim() &&
+    (formData.accountHolderName || "").trim() &&
+    (formData.accountNumber || "").trim() &&
+    (formData.ifscCode || "").trim()
+  );
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateForm()) return;
+
+    const fullName = `${(formData.firstName || "").trim()} ${(formData.lastName || "").trim()}`.trim() || formData.name || "";
+    const cleanPayload: Partial<Employee> = {
+      ...formData,
+      name: fullName,
+      firstName: (formData.firstName || "").trim(),
+      middleName: (formData.middleName || "").trim(),
+      lastName: (formData.lastName || "").trim(),
+      email: (formData.email || "").trim(),
+      phone: (formData.phone || "").trim(),
+      role: formData.role || "Employee",
+      department: formData.department || "Development",
+    };
+
+    try {
+      setIsSubmitting(true);
+      const res = await onSubmit(cleanPayload);
+      if (res === false) {
+        return;
+      }
+      onClose();
+    } catch (err: any) {
+      const msg = err?.message || "Failed to save employee.";
+      // Error toast is displayed automatically by the centralized api.ts client
+      if (msg.toLowerCase().includes("email")) {
+        setErrors(prev => ({ ...prev, email: msg }));
+        setActiveTab('personal');
+      } else if (msg.toLowerCase().includes("phone") || msg.toLowerCase().includes("mobile")) {
+        setErrors(prev => ({ ...prev, phone: msg }));
+        setActiveTab('personal');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleInputChange = (field: keyof Employee, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    const errorKey = field as keyof EmployeeFormErrors;
+    if (errors[errorKey]) {
+      setErrors(prev => {
+        const next = { ...prev };
+        delete next[errorKey];
+        return next;
+      });
+    }
   };
 
   const fetchGallery = async () => {
@@ -278,20 +456,27 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
             {tabs.map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
+              const hasError = (tab.id === 'personal' && (errors.firstName || errors.middleName || errors.lastName || errors.email || errors.phone || errors.password)) ||
+                               (tab.id === 'work' && (errors.role || errors.department)) ||
+                               (tab.id === 'bank' && (errors.bankName || errors.accountHolderName || errors.accountNumber || errors.ifscCode));
               return (
                 <button
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id as TabType)}
                   className={cn(
-                    "flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold transition-all text-center",
+                    "flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold transition-all text-center relative",
                     isActive 
                       ? "bg-primary text-primary-foreground shadow-sm" 
-                      : "bg-background text-muted-foreground hover:bg-muted hover:text-foreground border border-border/60"
+                      : "bg-background text-muted-foreground hover:bg-muted hover:text-foreground border border-border/60",
+                    hasError && !isActive && "border-destructive/60 text-destructive"
                   )}
                 >
                   <Icon className="w-3.5 h-3.5 shrink-0" />
                   <span className="truncate">{tab.label}</span>
+                  {hasError && (
+                    <span className="w-2 h-2 rounded-full bg-destructive shrink-0 animate-pulse" />
+                  )}
                 </button>
               );
             })}
@@ -302,20 +487,27 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
             {tabs.map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
+              const hasError = (tab.id === 'personal' && (errors.firstName || errors.middleName || errors.lastName || errors.email || errors.phone || errors.password)) ||
+                               (tab.id === 'work' && (errors.role || errors.department)) ||
+                               (tab.id === 'bank' && (errors.bankName || errors.accountHolderName || errors.accountNumber || errors.ifscCode));
               return (
                 <button
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id as TabType)}
                   className={cn(
-                    "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all w-full text-left",
+                    "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all w-full text-left relative",
                     isActive 
                       ? "bg-primary text-primary-foreground shadow-md" 
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                    hasError && !isActive && "text-destructive hover:bg-destructive/10"
                   )}
                 >
                   <Icon className="w-4 h-4 shrink-0" />
                   <span>{tab.label}</span>
+                  {hasError && (
+                    <span className="w-2 h-2 rounded-full bg-destructive shrink-0 ml-auto mr-1 animate-pulse" />
+                  )}
                   {isActive && <ChevronRight className="w-4 h-4 ml-auto" />}
                 </button>
               );
@@ -388,45 +580,115 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                   
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="space-y-2">
-                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">First Name *</label>
+                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider flex items-center gap-1">
+                        <span>First Name</span>
+                        <span className="text-destructive font-black">*</span>
+                      </label>
                       <input 
-                        type="text" value={formData.firstName || ''} onChange={(e) => handleInputChange('firstName', e.target.value)}
-                        className="w-full px-4 py-2.5 bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
+                        type="text" 
+                        value={formData.firstName || ''} 
+                        onChange={(e) => handleInputChange('firstName', e.target.value)}
+                        className={cn(
+                          "w-full px-4 py-2.5 bg-muted/50 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-all",
+                          errors.firstName ? "border-destructive focus:ring-destructive/20 focus:border-destructive" : "border-border focus:ring-primary/20 focus:border-primary/50"
+                        )}
                         placeholder="John"
                       />
+                      {errors.firstName && (
+                        <p className="text-[11px] font-semibold text-destructive mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          <span>{errors.firstName}</span>
+                        </p>
+                      )}
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Middle Name</label>
+                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider flex items-center gap-1">
+                        <span>Middle Name</span>
+                        <span className="text-destructive font-black">*</span>
+                      </label>
                       <input 
-                        type="text" value={formData.middleName || ''} onChange={(e) => handleInputChange('middleName', e.target.value)}
-                        className="w-full px-4 py-2.5 bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
+                        type="text" 
+                        value={formData.middleName || ''} 
+                        onChange={(e) => handleInputChange('middleName', e.target.value)}
+                        className={cn(
+                          "w-full px-4 py-2.5 bg-muted/50 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-all",
+                          errors.middleName ? "border-destructive focus:ring-destructive/20 focus:border-destructive" : "border-border focus:ring-primary/20 focus:border-primary/50"
+                        )}
                         placeholder="M"
                       />
+                      {errors.middleName && (
+                        <p className="text-[11px] font-semibold text-destructive mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          <span>{errors.middleName}</span>
+                        </p>
+                      )}
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Last Name *</label>
+                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider flex items-center gap-1">
+                        <span>Last Name</span>
+                        <span className="text-destructive font-black">*</span>
+                      </label>
                       <input 
-                        type="text" value={formData.lastName || ''} onChange={(e) => handleInputChange('lastName', e.target.value)}
-                        className="w-full px-4 py-2.5 bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
+                        type="text" 
+                        value={formData.lastName || ''} 
+                        onChange={(e) => handleInputChange('lastName', e.target.value)}
+                        className={cn(
+                          "w-full px-4 py-2.5 bg-muted/50 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-all",
+                          errors.lastName ? "border-destructive focus:ring-destructive/20 focus:border-destructive" : "border-border focus:ring-primary/20 focus:border-primary/50"
+                        )}
                         placeholder="Doe"
                       />
+                      {errors.lastName && (
+                        <p className="text-[11px] font-semibold text-destructive mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          <span>{errors.lastName}</span>
+                        </p>
+                      )}
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Email Address *</label>
+                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider flex items-center gap-1">
+                        <span>Email Address</span>
+                        <span className="text-destructive font-black">*</span>
+                      </label>
                       <input 
-                        type="email" value={formData.email || ''} onChange={(e) => handleInputChange('email', e.target.value)}
-                        className="w-full px-4 py-2.5 bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
+                        type="email" 
+                        value={formData.email || ''} 
+                        onChange={(e) => handleInputChange('email', e.target.value)}
+                        className={cn(
+                          "w-full px-4 py-2.5 bg-muted/50 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-all",
+                          errors.email ? "border-destructive focus:ring-destructive/20 focus:border-destructive" : "border-border focus:ring-primary/20 focus:border-primary/50"
+                        )}
                         placeholder="john@example.com"
                       />
+                      {errors.email && (
+                        <p className="text-[11px] font-semibold text-destructive mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          <span>{errors.email}</span>
+                        </p>
+                      )}
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Phone Number *</label>
+                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider flex items-center gap-1">
+                        <span>Phone Number</span>
+                        <span className="text-destructive font-black">*</span>
+                      </label>
                       <input 
-                        type="tel" value={formData.phone || ''} onChange={(e) => handleInputChange('phone', e.target.value)}
-                        className="w-full px-4 py-2.5 bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
+                        type="tel" 
+                        value={formData.phone || ''} 
+                        onChange={(e) => handleInputChange('phone', e.target.value)}
+                        className={cn(
+                          "w-full px-4 py-2.5 bg-muted/50 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-all",
+                          errors.phone ? "border-destructive focus:ring-destructive/20 focus:border-destructive" : "border-border focus:ring-primary/20 focus:border-primary/50"
+                        )}
                         placeholder="+1 234 567 890"
                       />
+                      {errors.phone && (
+                        <p className="text-[11px] font-semibold text-destructive mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          <span>{errors.phone}</span>
+                        </p>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Date of Birth</label>
@@ -453,14 +715,26 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                     </div>
 
                     <div className="space-y-2 col-span-1 md:col-span-2">
-                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Password</label>
+                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider flex items-center gap-1">
+                        <span>Password</span>
+                        {!initialData && <span className="text-destructive font-black">*</span>}
+                      </label>
                       <PasswordInput 
                         disabled={isSelfEdit}
                         value={formData.password || ''} 
                         onChange={(e) => handleInputChange('password', e.target.value)}
-                        placeholder={initialData ? "Leave blank to keep current" : "Set login password"}
-                        className={cn(isSelfEdit && "opacity-60 cursor-not-allowed")}
+                        placeholder={initialData ? "Leave blank to keep current" : "Set login password (min 6 characters) *"}
+                        className={cn(
+                          isSelfEdit && "opacity-60 cursor-not-allowed",
+                          errors.password && "border-destructive focus:ring-destructive/20 focus:border-destructive"
+                        )}
                       />
+                      {errors.password && (
+                        <p className="text-[11px] font-semibold text-destructive mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          <span>{errors.password}</span>
+                        </p>
+                      )}
                       {initialData && <p className="text-[11px] text-muted-foreground">Only enter a new password if you wish to reset it.</p>}
                     </div>
                   </div>
@@ -515,25 +789,51 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                   <fieldset disabled={isSelfEdit} className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">System Role *</label>
+                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider flex items-center gap-1">
+                        <span>System Role</span>
+                        <span className="text-destructive font-black">*</span>
+                      </label>
                       <SearchableSelect 
-                        value={formData.role || ''} onChange={(val) => handleInputChange('role', val)}
+                        value={formData.role || ''} 
+                        onChange={(val) => handleInputChange('role', val)}
                         options={[
                           { label: 'Employee', value: 'Employee' },
                           { label: 'Manager', value: 'Manager' },
                           { label: 'Admin', value: 'Admin' }
                         ]}
-                        className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
+                        className={cn(
+                          "w-full px-4 h-[42px] bg-muted/50 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-all",
+                          errors.role ? "border-destructive focus:ring-destructive/20 focus:border-destructive" : "border-border focus:ring-primary/20 focus:border-primary/50"
+                        )}
                       />
+                      {errors.role && (
+                        <p className="text-[11px] font-semibold text-destructive mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          <span>{errors.role}</span>
+                        </p>
+                      )}
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Department *</label>
+                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider flex items-center gap-1">
+                        <span>Department</span>
+                        <span className="text-destructive font-black">*</span>
+                      </label>
                       <SearchableSelect 
-                        value={formData.department || ''} onChange={(val) => handleInputChange('department', val)}
+                        value={formData.department || ''} 
+                        onChange={(val) => handleInputChange('department', val)}
                         options={departments.map(dept => ({ label: dept, value: dept }))}
-                        className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
+                        className={cn(
+                          "w-full px-4 h-[42px] bg-muted/50 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-all",
+                          errors.department ? "border-destructive focus:ring-destructive/20 focus:border-destructive" : "border-border focus:ring-primary/20 focus:border-primary/50"
+                        )}
                       />
+                      {errors.department && (
+                        <p className="text-[11px] font-semibold text-destructive mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          <span>{errors.department}</span>
+                        </p>
+                      )}
                     </div>
 
                     <div className="space-y-2">
@@ -638,32 +938,92 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-border/50">
                     <div className="space-y-2">
-                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Bank Name</label>
+                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider flex items-center gap-1">
+                        <span>Bank Name</span>
+                        <span className="text-destructive font-black">*</span>
+                      </label>
                       <input 
-                        type="text" value={formData.bankName || ''} onChange={(e) => handleInputChange('bankName', e.target.value)}
-                        className="w-full px-4 py-2.5 bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
+                        type="text" 
+                        value={formData.bankName || ''} 
+                        onChange={(e) => handleInputChange('bankName', e.target.value)}
+                        className={cn(
+                          "w-full px-4 py-2.5 bg-muted/50 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-all",
+                          errors.bankName ? "border-destructive focus:ring-destructive/20 focus:border-destructive" : "border-border focus:ring-primary/20 focus:border-primary/50"
+                        )}
+                        placeholder="e.g. State Bank of India"
                       />
+                      {errors.bankName && (
+                        <p className="text-[11px] font-semibold text-destructive mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          <span>{errors.bankName}</span>
+                        </p>
+                      )}
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Account Holder Name</label>
+                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider flex items-center gap-1">
+                        <span>Account Holder Name</span>
+                        <span className="text-destructive font-black">*</span>
+                      </label>
                       <input 
-                        type="text" value={formData.accountHolderName || ''} onChange={(e) => handleInputChange('accountHolderName', e.target.value)}
-                        className="w-full px-4 py-2.5 bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
+                        type="text" 
+                        value={formData.accountHolderName || ''} 
+                        onChange={(e) => handleInputChange('accountHolderName', e.target.value)}
+                        className={cn(
+                          "w-full px-4 py-2.5 bg-muted/50 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-all",
+                          errors.accountHolderName ? "border-destructive focus:ring-destructive/20 focus:border-destructive" : "border-border focus:ring-primary/20 focus:border-primary/50"
+                        )}
+                        placeholder="Account holder's full name"
                       />
+                      {errors.accountHolderName && (
+                        <p className="text-[11px] font-semibold text-destructive mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          <span>{errors.accountHolderName}</span>
+                        </p>
+                      )}
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Account Number</label>
+                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider flex items-center gap-1">
+                        <span>Account Number</span>
+                        <span className="text-destructive font-black">*</span>
+                      </label>
                       <input 
-                        type="text" value={formData.accountNumber || ''} onChange={(e) => handleInputChange('accountNumber', e.target.value)}
-                        className="w-full px-4 py-2.5 bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
+                        type="text" 
+                        value={formData.accountNumber || ''} 
+                        onChange={(e) => handleInputChange('accountNumber', e.target.value)}
+                        className={cn(
+                          "w-full px-4 py-2.5 bg-muted/50 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-all",
+                          errors.accountNumber ? "border-destructive focus:ring-destructive/20 focus:border-destructive" : "border-border focus:ring-primary/20 focus:border-primary/50"
+                        )}
+                        placeholder="e.g. 123456789012"
                       />
+                      {errors.accountNumber && (
+                        <p className="text-[11px] font-semibold text-destructive mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          <span>{errors.accountNumber}</span>
+                        </p>
+                      )}
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">IFSC Code</label>
+                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider flex items-center gap-1">
+                        <span>IFSC Code</span>
+                        <span className="text-destructive font-black">*</span>
+                      </label>
                       <input 
-                        type="text" value={formData.ifscCode || ''} onChange={(e) => handleInputChange('ifscCode', e.target.value)}
-                        className="w-full px-4 py-2.5 bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all uppercase"
+                        type="text" 
+                        value={formData.ifscCode || ''} 
+                        onChange={(e) => handleInputChange('ifscCode', e.target.value.toUpperCase())}
+                        className={cn(
+                          "w-full px-4 py-2.5 bg-muted/50 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-all uppercase",
+                          errors.ifscCode ? "border-destructive focus:ring-destructive/20 focus:border-destructive" : "border-border focus:ring-primary/20 focus:border-primary/50"
+                        )}
+                        placeholder="e.g. SBIN0001234"
                       />
+                      {errors.ifscCode && (
+                        <p className="text-[11px] font-semibold text-destructive mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          <span>{errors.ifscCode}</span>
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -885,14 +1245,34 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                 </button>
               )}
 
-              <button 
-                type="submit"
-                form="employee-form"
-                className="px-3.5 sm:px-6 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-primary-foreground bg-primary hover:bg-primary/90 rounded-xl transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1.5 sm:gap-2 shrink-0 whitespace-nowrap"
-              >
-                <Check className="w-4 h-4" />
-                <span>{initialData ? 'Save Changes' : 'Create Employee'}</span>
-              </button>
+              {isFormValid ? (
+                <button 
+                  type="submit"
+                  form="employee-form"
+                  disabled={isSubmitting}
+                  className="px-3.5 sm:px-6 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-primary-foreground bg-primary hover:bg-primary/90 rounded-xl transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1.5 sm:gap-2 shrink-0 whitespace-nowrap cursor-pointer disabled:opacity-60"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>{initialData ? 'Saving...' : 'Creating...'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>{initialData ? 'Save Changes' : 'Create Employee'}</span>
+                    </>
+                  )}
+                </button>
+              ) : (
+                <div 
+                  title="Please fill all required (*) fields: First Name, Last Name, Email, Phone, Role and Department"
+                  className="px-3 sm:px-4 py-2 sm:py-2.5 bg-muted/60 text-muted-foreground border border-dashed border-border/80 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-2 select-none cursor-not-allowed transition-all opacity-80"
+                >
+                  <Lock className="w-3.5 h-3.5 text-muted-foreground/70 shrink-0" />
+                  <span>Fill all (*) to {initialData ? 'Save' : 'Create'}</span>
+                </div>
+              )}
             </div>
           </div>
       </DialogContent>

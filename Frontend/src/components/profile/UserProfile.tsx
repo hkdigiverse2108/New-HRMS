@@ -371,10 +371,14 @@ export function UserProfile() {
         onClose={() => setIsEditModalOpen(false)}
         initialData={profileData as any}
         isSelfEdit={true}
-        onSubmit={(updatedData) => {
-          updateEmployee(user.id, updatedData);
-          toast.success("Profile updated successfully!");
-          setIsEditModalOpen(false);
+        onSubmit={async (updatedData) => {
+          try {
+            await updateEmployee(user.id, updatedData);
+            setIsEditModalOpen(false);
+            return true;
+          } catch {
+            return false;
+          }
         }}
       />
     </div>

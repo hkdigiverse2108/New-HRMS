@@ -1,12 +1,4 @@
-/**
- * Common API Client for New-HRMS
- * - Automatically injects JWT Bearer token from localStorage
- * - Global loading indicator control
- * - Unified error handling with toast notifications
- * - Type-safe methods: get, post, put, patch, delete, upload
- */
-
-import { toast } from "sonner";
+import { toast } from "react-toastify";
 import { API_URL, getApiUrl } from "./config";
 
 export const TOKEN_STORAGE_KEY = "hrms_auth_token";
@@ -66,6 +58,50 @@ export interface RequestOptions extends RequestInit {
   skipAuth?: boolean;
 }
 
+// Endpoints that are called periodically or in the background and should never trigger an error toast
+const SILENT_BACKGROUND_ENDPOINTS = [
+  "/me",
+  "/auth/me",
+  "/permissions/stream",
+  "/health",
+  "/ping",
+  "/notifications/unread-count",
+  "/notifications/stream",
+];
+
+export const isSilentEndpoint = (endpoint: string): boolean => {
+  if (!endpoint) return false;
+  const firstPart = endpoint.toLowerCase().split("?")[0];
+  const clean = (firstPart || "").trim();
+  // Exact match or ends with /me (e.g., /api/me, /auth/me, /me)
+  if (clean === "/me" || clean.endsWith("/me")) return true;
+  return SILENT_BACKGROUND_ENDPOINTS.some(silent => clean === silent || clean.endsWith(silent));
+};
+
+// Toast deduplication cache to prevent duplicate toasts within 3 seconds
+const recentToasts = new Map<string, number>();
+
+export const showApiToastError = (message: string): void => {
+  if (!message || typeof window === "undefined") return;
+  const now = Date.now();
+  const lastShown = recentToasts.get(message);
+  if (lastShown && now - lastShown < 3000) {
+    return; // deduplicate within 3 seconds
+  }
+  recentToasts.set(message, now);
+  // Periodically clean old cache entries
+  if (recentToasts.size > 50) {
+    recentToasts.forEach((time, key) => {
+      if (now - time > 10000) recentToasts.delete(key);
+    });
+  }
+
+  toast.error(message, {
+    toastId: message, // native react-toastify deduplication
+    autoClose: 4000,
+  });
+};
+
 /**
  * Core Request wrapper
  */
@@ -114,6 +150,10 @@ async function apiRequest<T = any>(endpoint: string, options: RequestOptions = {
     return inFlightRequests.get(inFlightKey) as Promise<T>;
   }
 
+  // Determine if error toast should be shown for this request
+  const isSilent = isSilentEndpoint(endpoint) || isSilentEndpoint(cleanEndpoint);
+  const shouldToast = showErrorToast && !isSilent;
+
   const execute = async (): Promise<T> => {
     try {
       const response = await fetch(url, {
@@ -135,8 +175,8 @@ async function apiRequest<T = any>(endpoint: string, options: RequestOptions = {
           }
         }
 
-        if (showErrorToast && response.status !== 401) {
-          toast.error(message);
+        if (shouldToast && response.status !== 401) {
+          showApiToastError(message);
         }
 
         throw new Error(message);
@@ -148,8 +188,8 @@ async function apiRequest<T = any>(endpoint: string, options: RequestOptions = {
 
       return (await response.json()) as T;
     } catch (error: any) {
-      if (showErrorToast && !error.message) {
-        toast.error("Network error. Please check backend connection.");
+      if (shouldToast && (error.name === "TypeError" || error.message === "Failed to fetch")) {
+        showApiToastError("Unable to reach the server. Please check your network connection.");
       }
       throw error;
     } finally {

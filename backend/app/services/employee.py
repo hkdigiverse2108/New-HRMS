@@ -9,10 +9,19 @@ from typing import Optional
 class EmployeeService:
     @staticmethod
     async def create_employee(employee_in: EmployeeCreate):
-        # Check if user already exists
-        existing_user = await EmployeeRepository.get_employee_by_email(employee_in.personal_info.email_address)
-        if existing_user:
-            raise HTTPException(status_code=400, detail="Email already registered")
+        # 1. Check if email already exists
+        email = employee_in.personal_info.email_address if employee_in.personal_info else None
+        if email:
+            existing_email = await EmployeeRepository.get_employee_by_email(str(email))
+            if existing_email:
+                raise HTTPException(status_code=400, detail="An employee with this email address already exists.")
+
+        # 2. Check if phone already exists
+        phone = employee_in.personal_info.phone_number if employee_in.personal_info else None
+        if phone:
+            existing_phone = await EmployeeRepository.get_employee_by_phone(str(phone))
+            if existing_phone:
+                raise HTTPException(status_code=400, detail="An employee with this phone number already exists.")
 
         # Hash password & sync profile_photo
         employee_dict = employee_in.model_dump(mode="json")
@@ -52,6 +61,21 @@ class EmployeeService:
     async def update_employee(employee_id: str, employee_update: EmployeeUpdate):
         update_data = employee_update.model_dump(exclude_unset=True, mode="json")
         
+        # Check if email or phone is being updated and already taken by another employee
+        if "personal_info" in update_data and update_data["personal_info"]:
+            p_info = update_data["personal_info"]
+            new_email = p_info.get("email_address")
+            if new_email:
+                existing_email = await EmployeeRepository.get_employee_by_email(str(new_email))
+                if existing_email and str(existing_email.get("_id")) != str(employee_id):
+                    raise HTTPException(status_code=400, detail="An employee with this email address already exists.")
+
+            new_phone = p_info.get("phone_number")
+            if new_phone:
+                existing_phone = await EmployeeRepository.get_employee_by_phone(str(new_phone))
+                if existing_phone and str(existing_phone.get("_id")) != str(employee_id):
+                    raise HTTPException(status_code=400, detail="An employee with this phone number already exists.")
+
         # If photo is updated, sync profile_photo
         photo = employee_update.profile_photo or (employee_update.personal_info.profile_photo if employee_update.personal_info else None)
         if photo:

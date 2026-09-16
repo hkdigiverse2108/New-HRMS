@@ -5,7 +5,7 @@ import { useDepartments } from "./DepartmentContext";
 import { EmployeeProfileModal } from "./EmployeeProfileModal";
 import { EmployeeFormModal } from "./EmployeeFormModal";
 import { EmployeePermissionsModal } from "./EmployeePermissionsModal";
-import { toast } from "sonner";
+import { toast } from "react-toastify";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { cn, formatDate } from "@/lib/utils";
 import { useEmployeesContext } from "./EmployeeContext";
@@ -228,22 +228,20 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
     }
   };
 
-  const handleFormSubmit = (formData: Partial<Employee>) => {
-    if (editingEmployee) {
-      updateEmployee(editingEmployee.id, formData);
-      toast.success("Employee updated successfully.");
-    } else {
-      const newEmployee: Employee = {
-        ...(formData as Employee),
-        id: `EMP-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
-        avatar: `https://i.pravatar.cc/150?u=${formData.name?.split(' ')[0]?.toLowerCase() || 'new'}`,
-        performanceScore: 85, // default
-      };
-      addEmployee(newEmployee);
-      toast.success("New employee added.");
+  const handleFormSubmit = async (formData: Partial<Employee>): Promise<boolean> => {
+    try {
+      if (editingEmployee) {
+        await updateEmployee(editingEmployee.id, formData);
+      } else {
+        await addEmployee(formData);
+      }
+      setIsFormOpen(false);
+      setEditingEmployee(null);
+      return true;
+    } catch (err: any) {
+      // Backend error is automatically toasted by api client
+      return false;
     }
-    setIsFormOpen(false);
-    setEditingEmployee(null);
   };
 
   const handleDeleteEmployee = (id: string, name: string) => {

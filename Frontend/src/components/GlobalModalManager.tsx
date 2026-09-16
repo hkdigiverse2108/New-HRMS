@@ -535,9 +535,14 @@ export function GlobalModalManager() {
   const { activeModal, closeModal } = useGlobalModal();
   const { addEmployee } = useEmployeesContext();
 
-  const handleAddEmployee = (data: any) => {
-    addEmployee(data);
-    closeModal();
+  const handleAddEmployee = async (data: any): Promise<boolean> => {
+    try {
+      await addEmployee(data);
+      closeModal();
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   return (
