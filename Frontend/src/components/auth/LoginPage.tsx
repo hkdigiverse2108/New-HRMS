@@ -16,48 +16,78 @@ import {
   HelpCircle,
   X,
   Sparkles,
+  AlertCircle,
 } from "lucide-react";
 import { PasswordInput } from "@/components/ui/password-input";
 
 export const LoginPage: React.FC = () => {
   const { login, verifyOtp } = useAuth();
-  const [email, setEmail] = useState("admin@hrms.com");
-  const [password, setPassword] = useState("Password@123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState<"credentials" | "otp">("credentials");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [showForgotModal, setShowForgotModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Step 1: Submit email & password to /login
   const handleCredentialsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) return;
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !password) {
+      setErrorMessage("Please enter both your email address and password.");
+      return;
+    }
 
+    setErrorMessage(null);
     setIsSubmitting(true);
-    const result = await login(email, password);
+    const result = await login(cleanEmail, password);
     setIsSubmitting(false);
 
     if (result.success) {
+      setErrorMessage(null);
       setStep("otp");
+    } else {
+      setErrorMessage(result.message || "Invalid email or password. Please try again.");
     }
   };
 
   // Step 2: Submit OTP to /verify-otp
   const handleOtpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !otp) return;
+    const cleanEmail = email.trim();
+    const cleanOtp = otp.trim();
+    if (!cleanEmail || !cleanOtp) {
+      setErrorMessage("Please enter the 6-digit verification code.");
+      return;
+    }
 
+    setErrorMessage(null);
     setIsSubmitting(true);
-    await verifyOtp(email, otp.trim());
+    const result = await verifyOtp(cleanEmail, cleanOtp);
     setIsSubmitting(false);
+
+    if (result.success) {
+      if (typeof window !== "undefined") {
+        window.location.href = "/";
+      }
+    } else {
+      setErrorMessage(result.message || "Invalid verification code. Please check and try again.");
+    }
   };
 
   // Resend OTP
   const handleResendOtp = async () => {
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !password) return;
+    setErrorMessage(null);
     setIsResending(true);
-    await login(email, password);
+    const res = await login(cleanEmail, password);
     setIsResending(false);
+    if (!res.success) {
+      setErrorMessage(res.message || "Failed to resend OTP");
+    }
   };
 
   return (
@@ -233,10 +263,15 @@ export const LoginPage: React.FC = () => {
                   <Mail className="w-4 h-4 text-slate-400 absolute left-4 pointer-events-none" />
                   <input
                     type="email"
+                    name="email"
+                    autoComplete="username"
                     required
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Email"
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (errorMessage) setErrorMessage(null);
+                    }}
+                    placeholder="Enter your email"
                     className="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-2xl text-sm font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
                   />
                 </div>
@@ -245,21 +280,41 @@ export const LoginPage: React.FC = () => {
               {/* Password Input */}
               <div className="space-y-1.5">
                 <PasswordInput
+                  name="password"
+                  autoComplete="current-password"
                   required
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Password"
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (errorMessage) setErrorMessage(null);
+                  }}
+                  placeholder="Enter your password"
                   leftIcon={<Lock className="w-4 h-4 text-slate-400" />}
                   className="py-3 bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/80 rounded-2xl focus:ring-emerald-500/20 focus:border-emerald-500 font-medium text-sm text-slate-900 dark:text-white placeholder:text-slate-400"
                 />
               </div>
 
+              {/* Direct Inline Error Alert */}
+              {errorMessage && (
+                <div className="flex items-start gap-2.5 p-3.5 rounded-2xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 text-red-700 dark:text-red-300 text-xs font-semibold animate-in fade-in slide-in-from-top-1 duration-200">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-red-500 mt-0.5" />
+                  <span className="flex-1 leading-snug">{errorMessage}</span>
+                  <button
+                    type="button"
+                    onClick={() => setErrorMessage(null)}
+                    className="text-red-400 hover:text-red-600 transition-colors p-0.5"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
               {/* Main Login Button */}
-              <div className="pt-2">
+              <div className="pt-1">
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full py-3.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:opacity-95 text-white font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all active:scale-[0.98] cursor-pointer text-sm sm:text-base"
+                  className="w-full py-3.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:opacity-95 text-white font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all active:scale-[0.98] cursor-pointer disabled:opacity-75 text-sm sm:text-base"
                 >
                   {isSubmitting ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
@@ -298,14 +353,32 @@ export const LoginPage: React.FC = () => {
                     maxLength={6}
                     autoFocus
                     value={otp}
-                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                    onChange={(e) => {
+                      setOtp(e.target.value.replace(/\D/g, ""));
+                      if (errorMessage) setErrorMessage(null);
+                    }}
                     placeholder="• • • • • •"
                     className="w-full pl-11 pr-4 py-3 tracking-[0.35em] text-center text-lg font-bold bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-slate-900 dark:text-white"
                   />
                 </div>
               </div>
 
-              <div className="pt-2 space-y-3">
+              {/* Direct Inline Error Alert for OTP */}
+              {errorMessage && (
+                <div className="flex items-start gap-2.5 p-3.5 rounded-2xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 text-red-700 dark:text-red-300 text-xs font-semibold animate-in fade-in slide-in-from-top-1 duration-200">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-red-500 mt-0.5" />
+                  <span className="flex-1 leading-snug">{errorMessage}</span>
+                  <button
+                    type="button"
+                    onClick={() => setErrorMessage(null)}
+                    className="text-red-400 hover:text-red-600 transition-colors p-0.5"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              <div className="pt-1 space-y-3">
                 <button
                   type="submit"
                   disabled={isSubmitting || otp.length < 6}
@@ -324,7 +397,10 @@ export const LoginPage: React.FC = () => {
                 <div className="flex items-center justify-between pt-1 text-xs">
                   <button
                     type="button"
-                    onClick={() => setStep("credentials")}
+                    onClick={() => {
+                      setErrorMessage(null);
+                      setStep("credentials");
+                    }}
                     className="flex items-center gap-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 font-medium transition-colors"
                   >
                     <ArrowLeft className="w-3.5 h-3.5" />

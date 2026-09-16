@@ -12,6 +12,8 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 function NotFoundComponent() {
   return (
@@ -116,6 +118,18 @@ function RootShell({ children }: { children: ReactNode }) {
       <body>
         {children}
         <Toaster />
+        <ToastContainer
+          position="top-right"
+          autoClose={3500}
+          hideProgressBar={false}
+          newestOnTop
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme="colored"
+        />
         <Scripts />
       </body>
     </html>
@@ -124,7 +138,6 @@ function RootShell({ children }: { children: ReactNode }) {
 
 import { ThemeProvider } from "../components/ThemeProvider";
 import { AuthProvider } from "../components/auth/AuthContext";
-import { GlobalApiLoader } from "../components/common/GlobalApiLoader";
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
@@ -133,8 +146,6 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <ThemeProvider>
-          {/* Global Loading Spinner for all API requests */}
-          <GlobalApiLoader />
           {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
           <Outlet />
         </ThemeProvider>

@@ -2,14 +2,14 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { EMPLOYEES, Employee } from './employee-data';
 import { ORG_DATA, OrgNodeData } from './org-data';
 import { api } from '@/lib/api';
-import { toast } from 'sonner';
+import { toast } from 'react-toastify';
 
 interface EmployeeContextType {
   employees: Employee[];
   treeData: OrgNodeData;
   isLoading: boolean;
-  addEmployee: (employee: Partial<Employee>) => Promise<void>;
-  updateEmployee: (id: string, updates: Partial<Employee>) => Promise<void>;
+  addEmployee: (employee: Partial<Employee>) => Promise<Employee>;
+  updateEmployee: (id: string, updates: Partial<Employee>) => Promise<Employee>;
   deleteEmployee: (id: string) => Promise<void>;
   refreshEmployees: () => Promise<void>;
   updateTree: (newTree: OrgNodeData) => void;
@@ -74,22 +74,22 @@ function mapBackendToEmployee(be: any): Employee {
 // Helper to convert frontend Employee to backend EmployeeCreate payload
 function mapEmployeeToBackendPayload(fe: Partial<Employee>) {
   const parts = (fe.name || "").trim().split(/\s+/);
-  const firstName = fe.firstName || parts[0] || "Employee";
-  const lastName = fe.lastName || (parts.length > 1 ? parts.slice(1).join(" ") : "User");
+  const firstName = (fe.firstName || parts[0] || "").trim();
+  const lastName = (fe.lastName || (parts.length > 1 ? parts.slice(1).join(" ") : "")).trim();
   const photo = fe.profile_photo || fe.avatar || "";
 
   return {
     personal_info: {
       first_name: firstName,
-      middle_name: fe.middleName || null,
+      middle_name: fe.middleName ? fe.middleName.trim() : null,
       last_name: lastName,
-      email_address: fe.email || `emp_${Date.now()}@hrms.com`,
-      phone_number: fe.phone || null,
+      email_address: (fe.email || "").trim(),
+      phone_number: (fe.phone || "").trim() || null,
       date_of_birth: fe.dob || null,
       gender: fe.gender || "Male",
       password: fe.password || "Password@123",
-      parent_guardian_name: fe.parentName || null,
-      contact_number: fe.parentNumber || null,
+      parent_guardian_name: fe.parentName ? fe.parentName.trim() : null,
+      contact_number: fe.parentNumber ? fe.parentNumber.trim() : null,
       relation: fe.relation || null,
       profile_photo: photo || null
     },
@@ -165,7 +165,7 @@ export function EmployeeProvider({ children }: { children: React.ReactNode }) {
     try {
       setIsLoading(true);
       const json = await api.get<{ data?: any[]; total?: number }>('/employees', {
-        showLoader: true,
+        showLoader: false,
         showErrorToast: false,
       });
 
@@ -198,65 +198,39 @@ export function EmployeeProvider({ children }: { children: React.ReactNode }) {
     }
   }, [treeData]);
 
-  const addEmployee = async (employeeData: Partial<Employee>) => {
-    try {
-      const payload = mapEmployeeToBackendPayload(employeeData);
-      const created = await api.post('/employees', payload, {
-        showLoader: true,
-        showErrorToast: true,
-      });
+  const addEmployee = async (employeeData: Partial<Employee>): Promise<Employee> => {
+    const payload = mapEmployeeToBackendPayload(employeeData);
+    const created = await api.post('/employees', payload, {
+      showLoader: false,
+      showErrorToast: true,
+    });
 
-      if (created) {
-        const newEmp = mapBackendToEmployee(created);
-        setEmployees(prev => [newEmp, ...prev]);
-        toast.success("Employee created successfully!");
-        return;
-      }
-    } catch (err) {
-      console.error("Failed to add employee via API, adding locally:", err);
+    if (created) {
+      const newEmp = mapBackendToEmployee(created);
+      setEmployees(prev => [newEmp, ...prev]);
+      toast.success("Employee created successfully!");
+      return newEmp;
     }
-
-    // Local fallback if API fails
-    const localEmp: Employee = {
-      ...employeeData,
-      id: employeeData.id || `EMP-${Date.now()}`,
-      name: employeeData.name || "New Employee",
-      role: employeeData.role || "Employee",
-      department: employeeData.department || "Development",
-      status: employeeData.status || "Active",
-      email: employeeData.email || "",
-      phone: employeeData.phone || "",
-      joinDate: employeeData.joinDate || new Date().toISOString().split("T")[0] || "",
-      avatar: employeeData.avatar || employeeData.profile_photo || "",
-      performanceScore: employeeData.performanceScore || 85
-    } as Employee;
-    setEmployees(prev => [localEmp, ...prev]);
-    toast.success("Employee saved locally!");
+    throw new Error("Failed to create employee.");
   };
 
-  const updateEmployee = async (id: string, updates: Partial<Employee>) => {
-    try {
-      const existing = employees.find(e => e.id === id);
-      const merged = { ...existing, ...updates };
-      const payload = mapEmployeeToBackendPayload(merged);
+  const updateEmployee = async (id: string, updates: Partial<Employee>): Promise<Employee> => {
+    const existing = employees.find(e => e.id === id);
+    const merged = { ...existing, ...updates };
+    const payload = mapEmployeeToBackendPayload(merged);
 
-      const updated = await api.put(`/employees/${id}`, payload, {
-        showLoader: true,
-        showErrorToast: true,
-      });
+    const updated = await api.put(`/employees/${id}`, payload, {
+      showLoader: false,
+      showErrorToast: true,
+    });
 
-      if (updated) {
-        const updatedEmp = mapBackendToEmployee(updated);
-        setEmployees(prev => prev.map(emp => emp.id === id ? updatedEmp : emp));
-        toast.success("Employee updated successfully!");
-        return;
-      }
-    } catch (err) {
-      console.error("Failed to update employee via API, updating locally:", err);
+    if (updated) {
+      const updatedEmp = mapBackendToEmployee(updated);
+      setEmployees(prev => prev.map(emp => emp.id === id ? updatedEmp : emp));
+      toast.success("Employee updated successfully!");
+      return updatedEmp;
     }
-
-    setEmployees(prev => prev.map(emp => emp.id === id ? { ...emp, ...updates } : emp));
-    toast.success("Employee updated locally!");
+    throw new Error("Failed to update employee.");
   };
 
   const deleteEmployee = async (id: string) => {

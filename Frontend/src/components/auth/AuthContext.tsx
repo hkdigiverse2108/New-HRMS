@@ -30,7 +30,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
-  verifyOtp: (email: string, otp: string) => Promise<boolean>;
+  verifyOtp: (email: string, otp: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
   refreshProfile: () => Promise<void>;
 }
@@ -262,25 +262,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const res = await api.post<{ message: string; email?: string }>(
         "/login",
         { email, password },
-        { showErrorToast: true, showLoader: true, skipAuth: true }
+        { showErrorToast: false, showLoader: false, skipAuth: true }
       );
 
       if (res && res.message) {
-        toast.success(res.message);
         return { success: true, message: res.message };
       }
       return { success: false, message: "Failed to initiate login" };
     } catch (err: any) {
-      return { success: false, message: err.message || "Login failed" };
+      return { success: false, message: err.message || "Invalid credentials. Please check your email and password." };
     }
   };
 
-  const verifyOtp = async (email: string, otp: string): Promise<boolean> => {
+  const verifyOtp = async (email: string, otp: string): Promise<{ success: boolean; message?: string }> => {
     try {
       const res = await api.post<{ access_token: string; token_type: string }>(
         "/verify-otp",
         { email, otp },
-        { showErrorToast: true, showLoader: true, skipAuth: true }
+        { showErrorToast: false, showLoader: false, skipAuth: true }
       );
 
       if (res && res.access_token) {
@@ -308,11 +307,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           toast.success("Welcome back!");
         }
 
-        return true;
+        return { success: true };
       }
-      return false;
+      return { success: false, message: "Invalid verification code" };
     } catch (err: any) {
-      return false;
+      return { success: false, message: err.message || "Invalid or expired OTP. Please check and try again." };
     }
   };
 
