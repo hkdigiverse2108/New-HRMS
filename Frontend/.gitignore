@@ -43,3 +43,4 @@ build/
 .vercel
 
 package-lock.json
+.last_build_api_url
