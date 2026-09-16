@@ -7,7 +7,7 @@
  */
 
 import { toast } from "sonner";
-import { API_URL } from "./config";
+import { API_URL, getApiUrl } from "./config";
 
 export const TOKEN_STORAGE_KEY = "hrms_auth_token";
 export const USER_STORAGE_KEY = "hrms_user";
@@ -103,7 +103,8 @@ async function apiRequest<T = any>(endpoint: string, options: RequestOptions = {
   if (cleanEndpoint.length > 1 && cleanEndpoint.endsWith("/")) {
     cleanEndpoint = cleanEndpoint.slice(0, -1);
   }
-  const url = `${API_URL}${cleanEndpoint}`;
+  const baseUrl = getApiUrl() || API_URL;
+  const url = `${baseUrl}${cleanEndpoint}`;
 
   const method = (rest.method || "GET").toUpperCase();
   const isGet = method === "GET";

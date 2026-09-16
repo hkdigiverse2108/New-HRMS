@@ -10,14 +10,21 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
 
-// Load environment variables from root D:\New-HRMS\.env
-const env = loadEnv(process.env['NODE_ENV'] || "development", rootDir, "");
-const frontendPort = parseInt(env['FRONTEND_PORT'] || env['VITE_PORT'] || "5173", 10);
+// Load environment variables from root D:\New-HRMS\.env across dev, prod, and process.env
+const loadedEnv: Record<string, string> = {
+  ...loadEnv(process.env['NODE_ENV'] || "development", rootDir, ""),
+  ...loadEnv("production", rootDir, ""),
+  ...(Object.fromEntries(
+    Object.entries(process.env).filter(([k, v]) => k.startsWith("VITE_") || k.includes("PORT"))
+  ) as Record<string, string>),
+};
 
-// Expose all VITE_* variables from root .env to frontend
+const frontendPort = parseInt(loadedEnv['FRONTEND_PORT'] || loadedEnv['VITE_PORT'] || "5173", 10);
+
+// Expose all VITE_* variables from root .env and process.env to frontend
 const viteEnvDefines: Record<string, string> = {};
-for (const [key, value] of Object.entries(env)) {
-  if (key.startsWith("VITE_")) {
+for (const [key, value] of Object.entries(loadedEnv)) {
+  if (key.startsWith("VITE_") && value !== undefined && value !== "") {
     viteEnvDefines[`import.meta.env.${key}`] = JSON.stringify(value);
   }
 }

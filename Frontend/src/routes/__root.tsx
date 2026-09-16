@@ -94,6 +94,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
+    scripts: [
+      {
+        src: "/env-config.js",
+      },
+    ],
   }),
   shellComponent: RootShell,
   component: RootComponent,
@@ -105,6 +110,7 @@ function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
+        <script src="/env-config.js" />
         <HeadContent />
       </head>
       <body>

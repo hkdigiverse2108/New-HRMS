@@ -120,30 +120,95 @@ def check_mongo():
         print(f"\033[93mWARNING: Mongo ping issue: {e}\033[0m")
         return False
 
-def get_config():
+def load_root_env():
+    """Load all variables from root .env and set them in os.environ."""
     root_env = ROOT_DIR / ".env"
-    frontend_port = 5173
-    backend_port = 8000
-    host = "0.0.0.0"
-
+    env_dict = {}
     if root_env.exists():
         for line in root_env.read_text(encoding="utf-8", errors="ignore").splitlines():
             line = line.strip()
-            if line.startswith("#") or not line:
+            if not line or line.startswith("#"):
                 continue
-            if line.startswith("FRONTEND_PORT=") or line.startswith("VITE_PORT="):
-                val = line.split("=", 1)[1].strip()
-                if val.isdigit():
-                    frontend_port = int(val)
-            elif line.startswith("BACKEND_PORT=") or line.startswith("PORT="):
-                val = line.split("=", 1)[1].strip()
-                if val.isdigit():
-                    backend_port = int(val)
-            elif line.startswith("HOST=") or line.startswith("BACKEND_HOST="):
-                val = line.split("=", 1)[1].strip().strip('"').strip("'")
-                if val:
-                    host = val
-    return frontend_port, backend_port, host
+            if "=" in line:
+                key, val = line.split("=", 1)
+                key = key.strip()
+                val = val.strip().strip('"').strip("'")
+                env_dict[key] = val
+                os.environ[key] = val
+    return env_dict
+
+def get_config():
+    env_dict = load_root_env()
+    frontend_port = 5173
+    backend_port = 8000
+    host = "0.0.0.0"
+    vite_api_url = env_dict.get("VITE_API_URL", "").strip()
+
+    f_val = env_dict.get("FRONTEND_PORT") or env_dict.get("VITE_PORT")
+    if f_val and f_val.isdigit():
+        frontend_port = int(f_val)
+
+    b_val = env_dict.get("BACKEND_PORT") or env_dict.get("PORT")
+    if b_val and b_val.isdigit():
+        backend_port = int(b_val)
+
+    h_val = env_dict.get("HOST") or env_dict.get("BACKEND_HOST")
+    if h_val:
+        host = h_val
+
+    return frontend_port, backend_port, host, vite_api_url, env_dict
+
+def sync_env_config(vite_api_url: str):
+    """Write public/env-config.js and .vercel/output/static/env-config.js so frontend runtime has live VITE_API_URL."""
+    if not vite_api_url:
+        return
+    script_content = f'window.__ENV__ = {{\n  VITE_API_URL: "{vite_api_url}"\n}};\n'
+    try:
+        public_dir = FRONTEND_DIR / "public"
+        public_dir.mkdir(parents=True, exist_ok=True)
+        (public_dir / "env-config.js").write_text(script_content, encoding="utf-8")
+
+        static_dir = FRONTEND_DIR / ".vercel" / "output" / "static"
+        if static_dir.exists():
+            (static_dir / "env-config.js").write_text(script_content, encoding="utf-8")
+    except Exception as e:
+        print(f"[Notice] env-config sync: {e}")
+
+def ensure_frontend_build(vite_api_url: str, force_rebuild: bool = False):
+    """
+    Check if Frontend needs to be built or rebuilt based on VITE_API_URL or missing dist.
+    Prioritizes .env VITE_API_URL across both build-time and runtime.
+    """
+    dist_dir = FRONTEND_DIR / ".vercel" / "output"
+    stamp_file = FRONTEND_DIR / ".last_build_api_url"
+
+    last_built_url = stamp_file.read_text(encoding="utf-8").strip() if stamp_file.exists() else None
+
+    needs_build = False
+    reason = ""
+    if not dist_dir.exists():
+        needs_build = True
+        reason = "Frontend build output (.vercel/output) not found."
+    elif force_rebuild:
+        needs_build = True
+        reason = "Forced rebuild requested (--rebuild)."
+    elif vite_api_url and last_built_url != vite_api_url:
+        needs_build = True
+        reason = f"VITE_API_URL in .env ('{vite_api_url}') differs from previous build ('{last_built_url}')."
+
+    # Always ensure live runtime script is fresh
+    sync_env_config(vite_api_url)
+
+    if needs_build:
+        print(f"\033[94m[4/4] {reason} Rebuilding Frontend bundle...\033[0m")
+        npm_cmd = "npm.cmd" if os.name == "nt" else "npm"
+        build_env = {**os.environ, "VITE_API_URL": vite_api_url}
+        subprocess.check_call([npm_cmd, "run", "build"], cwd=str(FRONTEND_DIR), env=build_env)
+        stamp_file.write_text(vite_api_url, encoding="utf-8")
+        sync_env_config(vite_api_url)
+        print("\033[92m[4/4] Frontend bundle built successfully.\033[0m")
+    else:
+        print(f"\033[92m[4/4] Frontend bundle is up to date (API URL: {vite_api_url or 'default'}).\033[0m")
 
 def wait_for_backend(port, timeout=12):
     """Actively verify backend responds on HTTP before proceeding."""
@@ -232,7 +297,7 @@ def main():
     check_redis()
     check_mongo()
 
-    frontend_port, backend_port, host = get_config()
+    frontend_port, backend_port, host, vite_api_url, env_dict = get_config()
 
     # Pre-clean: ensure ports are free before starting
     free_ports(backend_port, frontend_port)
@@ -266,19 +331,18 @@ def main():
             print(f"\033[91m[CRITICAL] Backend crashed immediately with exit code {backend_proc.returncode}!\033[0m")
             return
 
-        # Ensure Frontend is built
-        dist_dir = FRONTEND_DIR / ".vercel" / "output"
-        if not dist_dir.exists():
-            print(f"[4/4] Building Frontend bundle...")
-            npm_cmd = "npm.cmd" if os.name == "nt" else "npm"
-            subprocess.check_call([npm_cmd, "run", "build"], cwd=str(FRONTEND_DIR))
+        # Ensure Frontend is built and up to date with .env VITE_API_URL
+        force_rebuild = "--rebuild" in sys.argv
+        ensure_frontend_build(vite_api_url, force_rebuild=force_rebuild)
 
         # Start Frontend using node directly (completely eliminates cmd.exe and 'Terminate batch job (Y/N)?' prompt)
         print(f"[4/4] Starting Frontend on port {frontend_port} ...")
         frontend_cmd = ["node", "run-preview.mjs"]
+        frontend_env = {**os.environ, "VITE_API_URL": vite_api_url, "FRONTEND_PORT": str(frontend_port)}
         frontend_proc = subprocess.Popen(
             frontend_cmd,
             cwd=str(FRONTEND_DIR),
+            env=frontend_env,
             **popen_kwargs
         )
         processes.append(frontend_proc)
@@ -287,6 +351,7 @@ def main():
         print("  HRMS Fullstack is up and running!")
         print(f"  - Frontend:      http://{display_host}:{frontend_port}")
         print(f"  - Backend API:   http://{display_host}:{backend_port}")
+        print(f"  - VITE_API_URL:  {vite_api_url or '(dynamic fallback)'}")
         print(f"  - Swagger Docs:  http://{display_host}:{backend_port}/docs")
         print(f"  - Redis Test:    http://{display_host}:{backend_port}/test-redis")
         print(f"  - Mongo Test:    http://{display_host}:{backend_port}/test-mongo")
@@ -331,7 +396,7 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         try:
-            f_port, b_port, _ = get_config()
+            f_port, b_port, *_ = get_config()
             free_ports(b_port, f_port)
         except Exception:
             pass
