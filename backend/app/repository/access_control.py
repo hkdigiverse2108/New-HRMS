@@ -196,11 +196,48 @@ class PresetPermissionRepository:
     @classmethod
     async def create_preset(cls, item_data: dict) -> dict:
         collection = await cls.get_collection()
+        dept = item_data.get("department")
         role = str(item_data.get("role") or "").strip()
-        
-        # If role is provided, upsert by role
+
+        # 1. If department is provided, upsert by department
+        if dept:
+            dept_clean = str(dept).strip()
+            query = {
+                "$or": [
+                    {"department": dept_clean},
+                    {"department": {"$regex": f"^{dept_clean}$", "$options": "i"}}
+                ]
+            }
+            existing = await collection.find_one(query)
+            if existing:
+                await collection.update_one(
+                    {"_id": existing["_id"]},
+                    {"$set": {
+                        "module_permissions": item_data["module_permissions"],
+                        "department": dept_clean,
+                        "role": role or "Employee"
+                    }}
+                )
+                existing["module_permissions"] = item_data["module_permissions"]
+                existing["_id"] = str(existing["_id"])
+                existing["department"] = dept_clean
+                existing["role"] = role or "Employee"
+                return existing
+            else:
+                doc = {
+                    "department": dept_clean,
+                    "role": role or "Employee",
+                    "module_permissions": item_data["module_permissions"],
+                    "department_id": str(item_data.get("department_id") or "all"),
+                    "designation_id": str(item_data.get("designation_id") or "all"),
+                }
+                result = await collection.insert_one(doc)
+                doc["_id"] = str(result.inserted_id)
+                return doc
+
+        # 2. If role is provided without department, upsert by role
         if role:
-            query = {"role": role}
+            query = {"role": role, "department": None}
             existing = await collection.find_one(query)
             if existing:
                 await collection.update_one(
@@ -217,6 +254,7 @@ class PresetPermissionRepository:
             else:
                 doc = {
                     "role": role,
+                    "department": None,
                     "module_permissions": item_data["module_permissions"],
                     "department_id": str(item_data.get("department_id") or "all"),
                     "designation_id": str(item_data.get("designation_id") or "all"),
@@ -244,6 +282,23 @@ class PresetPermissionRepository:
                 return item_data
 
     @classmethod
+    async def get_preset_by_department(cls, department: str) -> Optional[dict]:
+        collection = await cls.get_collection()
+        if not department:
+            return None
+        dept_clean = str(department).strip()
+        item = await collection.find_one({
+            "$or": [
+                {"department": dept_clean},
+                {"department": {"$regex": f"^{dept_clean}$", "$options": "i"}}
+            ]
+        })
+        if item:
+            item["_id"] = str(item["_id"])
+            item["department"] = dept_clean
+        return item
+
+    @classmethod
     async def get_preset_by_role(cls, role: str) -> Optional[dict]:
         collection = await cls.get_collection()
         if not role:
@@ -267,36 +322,50 @@ class PresetPermissionRepository:
             return None
 
     @classmethod
-    async def get_preset_for_employee(cls, role: Optional[str]) -> Tuple[Optional[dict], str]:
+    async def get_preset_for_employee(cls, role: Optional[str], department: Optional[str] = None) -> Tuple[Optional[dict], str]:
         """
-        Dynamically finds the matching preset for an employee based on their role:
-        1. Exact Role match (e.g. 'HR', 'Employee', 'Sub-Admin', 'Admin')
-        2. Fallback to 'Employee' preset if available
-        3. Fallback to DEFAULT_EMPLOYEE_PERMISSIONS
+        Dynamically finds the matching preset for an employee:
+        1. If Admin -> returns Admin full permissions.
+        2. Match Department Preset (e.g. 'HR', 'Development', 'Sales', etc.)
+        3. Match Role preset (if any)
+        4. Fallback to DEFAULT_DEPARTMENT_PERMISSIONS.get(department)
+        5. Fallback to DEFAULT_EMPLOYEE_PERMISSIONS
         """
         collection = await cls.get_collection()
         role_clean = str(role).strip() if role else "Employee"
-        
-        # 1. Match role preset
-        preset = await collection.find_one({"role": role_clean})
-        if preset and "module_permissions" in preset:
-            preset["_id"] = str(preset["_id"])
-            return preset, f"Role Preset ({role_clean})"
+        dept_clean = str(department).strip() if department else None
 
-        # 2. Fallback to Employee role preset if specific role preset doesn't exist
-        if role_clean != "Employee":
-            emp_preset = await collection.find_one({"role": "Employee"})
-            if emp_preset and "module_permissions" in emp_preset:
-                emp_preset["_id"] = str(emp_preset["_id"])
-                return emp_preset, "Role Preset (Employee)"
+        # 1. If Admin
+        if role_clean == "Admin":
+            from app.database.default_presets import get_admin_full_permissions
+            return {"module_permissions": get_admin_full_permissions()}, "Admin Role Preset"
 
-        # 3. Fallback to legacy global preset if exists
-        global_doc = await collection.find_one({"department_id": "all", "designation_id": "all"})
-        if global_doc and "module_permissions" in global_doc:
-            global_doc["_id"] = str(global_doc["_id"])
-            return global_doc, "Global Preset"
+        # 2. Match Department preset
+        if dept_clean:
+            dept_preset = await collection.find_one({
+                "$or": [
+                    {"department": dept_clean},
+                    {"department": {"$regex": f"^{dept_clean}$", "$options": "i"}}
+                ]
+            })
+            if dept_preset and "module_permissions" in dept_preset:
+                dept_preset["_id"] = str(dept_preset["_id"])
+                return dept_preset, f"Department Preset ({dept_clean})"
 
-        return None, "Default System Permissions"
+        # 3. Match Role preset
+        role_preset = await collection.find_one({"role": role_clean, "department": None})
+        if role_preset and "module_permissions" in role_preset:
+            role_preset["_id"] = str(role_preset["_id"])
+            return role_preset, f"Role Preset ({role_clean})"
+
+        # 4. Fallback to department defaults in code
+        if dept_clean:
+            from app.database.default_presets import get_default_permissions_for_department
+            default_dept_perms = get_default_permissions_for_department(dept_clean)
+            return {"module_permissions": default_dept_perms}, f"Default Department Permissions ({dept_clean})"
+
+        from app.database.default_presets import DEFAULT_EMPLOYEE_PERMISSIONS
+        return {"module_permissions": DEFAULT_EMPLOYEE_PERMISSIONS}, "Default System Permissions"
 
     @classmethod
     async def update_preset(cls, preset_id: str, module_permissions: dict) -> bool:
@@ -320,7 +389,8 @@ class PresetPermissionRepository:
         items = await cursor.to_list(1000)
         for it in items:
             it["_id"] = str(it["_id"])
-            it["role"] = str(it.get("role", "Employee"))
+            it["role"] = str(it.get("role") or "Employee")
+            it["department"] = it.get("department")
             it["department_id"] = str(it.get("department_id", "all"))
             it["designation_id"] = str(it.get("designation_id", "all"))
         return items

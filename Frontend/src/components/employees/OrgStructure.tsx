@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { ORG_DATA, OrgNodeData } from "./org-data";
-import { ChevronDown, ChevronUp, Users, ZoomIn, ZoomOut, Maximize, Settings, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Users, ZoomIn, ZoomOut, Maximize, Settings, Plus, Trash2, Network, Building2, Layers, Briefcase } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ManageDepartmentsModal } from "./ManageDepartmentsModal";
 import { AddOrgNodeModal } from "./AddOrgNodeModal";
@@ -8,77 +8,91 @@ import { DeleteConfirmModal } from "./DeleteConfirmModal";
 import { UnassignedSidebar } from "./UnassignedSidebar";
 import { toast } from "sonner";
 import { useEmployeesContext } from "./EmployeeContext";
+import { useModulePermissions } from "@/hooks/useModulePermissions";
 
-const OrgNodeCard = ({ 
-  node, 
-  isExpanded, 
+const OrgNodeCard = ({
+  node,
+  isExpanded,
   toggleExpand,
   onMoveNode,
   onAddClick,
-  onDeleteClick
-}: { 
-  node: OrgNodeData, 
-  isExpanded: boolean, 
+  onDeleteClick,
+  canCreate = true,
+  canUpdate = true,
+  canDelete = true,
+}: {
+  node: OrgNodeData,
+  isExpanded: boolean,
   toggleExpand: () => void,
   onMoveNode: (draggedId: string, targetId: string) => void,
   onAddClick: (node: OrgNodeData) => void,
-  onDeleteClick: (nodeId: string) => void
+  onDeleteClick: (nodeId: string) => void,
+  canCreate?: boolean | undefined,
+  canUpdate?: boolean | undefined,
+  canDelete?: boolean | undefined,
 }) => {
   const hasChildren = node.children && node.children.length > 0;
-  
+
   return (
-    <div 
-      draggable
-      onDragStart={(e) => { 
-        e.dataTransfer.setData('nodeId', node.id); 
-        e.stopPropagation(); 
+    <div
+      draggable={canUpdate}
+      onDragStart={(e) => {
+        if (!canUpdate) return;
+        e.dataTransfer.setData('nodeId', node.id);
+        e.stopPropagation();
       }}
-      onDragOver={(e) => { 
-        e.preventDefault(); 
-        e.stopPropagation(); 
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
       }}
-      onDrop={(e) => { 
-        e.preventDefault(); 
-        e.stopPropagation(); 
-        const draggedId = e.dataTransfer.getData('nodeId'); 
+      onDrop={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const draggedId = e.dataTransfer.getData('nodeId');
         if (draggedId) {
           onMoveNode(draggedId, node.id);
         }
       }}
       className="bg-white border border-border shadow-sm rounded-2xl p-4 w-[220px] z-10 relative transition-all hover:shadow-md hover:-translate-y-1 group inline-block mx-auto cursor-grab active:cursor-grabbing"
     >
-      <div className="absolute top-3 right-3 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-all z-20">
-        <button 
-          onPointerDown={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            onAddClick(node);
-          }}
-          className="p-1.5 bg-muted/50 hover:bg-primary hover:text-primary-foreground text-muted-foreground rounded-lg shadow-sm border border-border transition-colors"
-          title="Add report under this person"
-        >
-          <Plus className="w-3.5 h-3.5" />
-        </button>
-        <button 
-          onPointerDown={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            onDeleteClick(node.id);
-          }}
-          className="p-1.5 bg-muted/50 hover:bg-red-500 hover:text-white text-muted-foreground rounded-lg shadow-sm border border-border transition-colors"
-          title="Remove this person"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
-      </div>
+      {(canCreate || canDelete) && (
+        <div className="absolute top-3 right-3 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-all z-20">
+          {canCreate && (
+            <button
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                onAddClick(node);
+              }}
+              className="p-1.5 bg-muted/50 hover:bg-primary hover:text-primary-foreground text-muted-foreground rounded-lg shadow-sm border border-border transition-colors"
+              title="Add report under this person"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {canDelete && (
+            <button
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                onDeleteClick(node.id);
+              }}
+              className="p-1.5 bg-muted/50 hover:bg-red-500 hover:text-white text-muted-foreground rounded-lg shadow-sm border border-border transition-colors"
+              title="Remove this person"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-col items-center text-center">
         <div className="relative mb-3">
           <img src={node.avatar} alt={node.name} className="w-14 h-14 rounded-full object-cover border-2 border-white shadow-sm pointer-events-none" />
           <span className={cn(
             "absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-white",
-            node.status === 'Active' ? 'bg-emerald-500' : 
-            node.status === 'On Leave' ? 'bg-amber-500' : 'bg-blue-500'
+            node.status === 'Active' ? 'bg-emerald-500' :
+              node.status === 'On Leave' ? 'bg-amber-500' : 'bg-blue-500'
           )} />
         </div>
         <h3 className="text-[14px] font-bold text-foreground mb-0.5">{node.name}</h3>
@@ -86,9 +100,9 @@ const OrgNodeCard = ({
         <span className="px-2.5 py-1 bg-muted/50 text-foreground/80 border border-border/50 text-[10px] font-bold uppercase tracking-wider rounded-lg mb-2 inline-block">
           {node.department}
         </span>
-        
+
         {hasChildren && (
-          <button 
+          <button
             onClick={toggleExpand}
             className="mt-2 w-full py-1.5 flex items-center justify-center gap-1.5 bg-muted/50 hover:bg-muted text-foreground/80 rounded-xl transition-colors text-[11px] font-bold"
           >
@@ -102,39 +116,51 @@ const OrgNodeCard = ({
   );
 };
 
-const OrgTree = ({ 
+const OrgTree = ({
   node,
   onMoveNode,
   onAddClick,
-  onDeleteClick
-}: { 
+  onDeleteClick,
+  canCreate,
+  canUpdate,
+  canDelete,
+}: {
   node: OrgNodeData,
   onMoveNode: (draggedId: string, targetId: string) => void,
   onAddClick: (node: OrgNodeData) => void,
-  onDeleteClick: (nodeId: string) => void
+  onDeleteClick: (nodeId: string) => void,
+  canCreate?: boolean | undefined,
+  canUpdate?: boolean | undefined,
+  canDelete?: boolean | undefined,
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const hasChildren = node.children && node.children.length > 0;
 
   return (
     <li className="relative p-[20px] pt-[20px] text-center float-left table-cell org-node">
-      <OrgNodeCard 
-        node={node} 
-        isExpanded={isExpanded} 
-        toggleExpand={() => setIsExpanded(!isExpanded)} 
+      <OrgNodeCard
+        node={node}
+        isExpanded={isExpanded}
+        toggleExpand={() => setIsExpanded(!isExpanded)}
         onMoveNode={onMoveNode}
         onAddClick={onAddClick}
         onDeleteClick={onDeleteClick}
+        canCreate={canCreate}
+        canUpdate={canUpdate}
+        canDelete={canDelete}
       />
       {hasChildren && isExpanded && (
-        <ul className="pt-[20px] relative flex justify-center org-children animate-in fade-in slide-in-from-top-4 duration-300 m-0 p-0">
+        <ul className="pt-[20px] relative flex justify-center org-children animate-in fade-in slide-from-top-4 duration-300 m-0 p-0">
           {node.children!.map((child) => (
-            <OrgTree 
-              key={child.id} 
-              node={child} 
+            <OrgTree
+              key={child.id}
+              node={child}
               onMoveNode={onMoveNode}
               onAddClick={onAddClick}
               onDeleteClick={onDeleteClick}
+              canCreate={canCreate}
+              canUpdate={canUpdate}
+              canDelete={canDelete}
             />
           ))}
         </ul>
@@ -144,6 +170,7 @@ const OrgTree = ({
 };
 
 export function OrgStructure() {
+  const { canCreate, canUpdate, canDelete, isAdmin } = useModulePermissions("/employees/org");
   const [zoom, setZoom] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
@@ -156,11 +183,11 @@ export function OrgStructure() {
     if (draggedId === targetId) return;
 
     const newTree = JSON.parse(JSON.stringify(treeData)) as OrgNodeData;
-    
+
     // Check if dragging from unassigned
     const unassignedEmployee = employees.find(emp => emp.id === draggedId);
     let draggedNode: OrgNodeData | null = null;
-    
+
     if (draggedId === newTree.id) {
       toast.error("Cannot move the root node");
       return;
@@ -221,7 +248,7 @@ export function OrgStructure() {
     } else {
       removeNode(newTree);
     }
-    
+
     if (!draggedNode) return;
 
     const insertNode = (node: OrgNodeData): boolean => {
@@ -268,7 +295,7 @@ export function OrgStructure() {
 
     if (insertChild(newTree)) {
       updateTree(newTree);
-      
+
       // Also add to global employees list
       addEmployee({
         id: newId,
@@ -282,7 +309,7 @@ export function OrgStructure() {
         performanceScore: 85,
         joinDate: new Date().toISOString().split("T")[0] || ""
       });
-      
+
       toast.success(`${nodeData.name} added under ${selectedParent.name}`);
       setAddModalOpen(false);
     }
@@ -290,7 +317,7 @@ export function OrgStructure() {
 
   const handleDeleteNode = (nodeId: string) => {
     const newTree = JSON.parse(JSON.stringify(treeData)) as OrgNodeData;
-    
+
     if (nodeId === newTree.id) {
       toast.error("Cannot delete the root organization node.");
       return;
@@ -315,9 +342,9 @@ export function OrgStructure() {
 
   const confirmDelete = () => {
     if (!nodeToDelete) return;
-    
+
     const newTree = JSON.parse(JSON.stringify(treeData)) as OrgNodeData;
-    
+
     const removeNode = (node: OrgNodeData): boolean => {
       if (node.children) {
         const index = node.children.findIndex(c => c.id === nodeToDelete.id);
@@ -344,21 +371,23 @@ export function OrgStructure() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6 shrink-0">
         <div>
-          <h1 className="text-[28px] font-black text-foreground tracking-tight mb-2">Organizational Structure</h1>
+          <h1 className="text-[28px] font-black text-foreground tracking-tight mb-1">Organizational Structure</h1>
           <p className="text-[14px] text-muted-foreground">Visual hierarchy of teams. Drag and drop cards to reorganize.</p>
         </div>
-        
+
         <div className="flex gap-4 items-center">
-          <button 
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-border text-foreground/80 font-bold rounded-xl shadow-sm hover:bg-muted/50 transition-colors"
-          >
-            <Settings className="w-4 h-4" />
-            Manage Departments
-          </button>
-          
-          <div className="flex items-center gap-2 bg-white border border-border p-1.5 rounded-2xl shadow-sm">
-            <button 
+          {(isAdmin || canUpdate) && (
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-card border border-border text-foreground/80 font-bold rounded-xl shadow-sm hover:bg-muted/50 transition-colors text-xs"
+            >
+              <Settings className="w-4 h-4" />
+              Manage Departments
+            </button>
+          )}
+
+          <div className="flex items-center gap-2 bg-card border border-border p-1.5 rounded-2xl shadow-sm">
+            <button
               onClick={() => setZoom(Math.max(0.4, zoom - 0.1))}
               className="p-2 hover:bg-muted rounded-xl text-foreground/80 transition-colors"
             >
@@ -367,14 +396,14 @@ export function OrgStructure() {
             <span className="text-[12px] font-bold text-foreground/80 w-12 text-center">
               {Math.round(zoom * 100)}%
             </span>
-            <button 
+            <button
               onClick={() => setZoom(Math.min(2, zoom + 0.1))}
               className="p-2 hover:bg-muted rounded-xl text-foreground/80 transition-colors"
             >
               <ZoomIn className="w-4 h-4" />
             </button>
-            <div className="w-px h-6 bg-slate-200 mx-1"></div>
-            <button 
+            <div className="w-px h-6 bg-border mx-1"></div>
+            <button
               onClick={() => setZoom(1)}
               className="p-2 hover:bg-muted rounded-xl text-foreground/80 transition-colors"
             >
@@ -387,97 +416,100 @@ export function OrgStructure() {
       {/* Org Chart Container */}
       <div className="flex-1 flex relative overflow-hidden rounded-3xl border border-border/60 shadow-inner">
         <div className="flex-1 bg-muted/50/50 overflow-auto">
-          <style dangerouslySetInnerHTML={{__html: `
-            .org-children {
-              padding-top: 20px; 
-            position: relative;
-            transition: all 0.5s;
-          }
-          
-          .org-node {
-            float: left; text-align: center;
-            list-style-type: none;
-            position: relative;
-            padding: 20px 10px 0 10px;
-            transition: all 0.5s;
-          }
+          <style dangerouslySetInnerHTML={{
+            __html: `
+                .org-children {
+                  padding-top: 20px; 
+                  position: relative;
+                  transition: all 0.5s;
+                }
+                
+                .org-node {
+                  float: left; text-align: center;
+                  list-style-type: none;
+                  position: relative;
+                  padding: 20px 10px 0 10px;
+                  transition: all 0.5s;
+                }
 
-          /* Connectors */
-          .org-node::before, .org-node::after {
-            content: '';
-            position: absolute; top: 0; right: 50%;
-            border-top: 2px solid #cbd5e1;
-            width: 50%; height: 20px;
-          }
-          .org-node::after {
-            right: auto; left: 50%;
-            border-left: 2px solid #cbd5e1;
-          }
+                /* Connectors */
+                .org-node::before, .org-node::after {
+                  content: '';
+                  position: absolute; top: 0; right: 50%;
+                  border-top: 2px solid #cbd5e1;
+                  width: 50%; height: 20px;
+                }
+                .org-node::after {
+                  right: auto; left: 50%;
+                  border-left: 2px solid #cbd5e1;
+                }
 
-          /* We need to remove left-right connectors from elements without any siblings */
-          .org-node:only-child::after, .org-node:only-child::before {
-            display: none;
-          }
+                .org-node:only-child::after, .org-node:only-child::before {
+                  display: none;
+                }
 
-          /* Remove space from the top of single children */
-          .org-node:only-child { padding-top: 0; }
+                .org-node:only-child { padding-top: 0; }
 
-          /* Remove left connector from first child and right connector from last child */
-          .org-node:first-child::before, .org-node:last-child::after {
-            border: 0 none;
-          }
-          /* Adding back the vertical connector to the last nodes */
-          .org-node:last-child::before {
-            border-right: 2px solid #cbd5e1;
-            border-radius: 0 5px 0 0;
-          }
-          .org-node:first-child::after {
-            border-radius: 5px 0 0 0;
-          }
+                .org-node:first-child::before, .org-node:last-child::after {
+                  border: 0 none;
+                }
+                .org-node:last-child::before {
+                  border-right: 2px solid #cbd5e1;
+                  border-radius: 0 5px 0 0;
+                }
+                .org-node:first-child::after {
+                  border-radius: 5px 0 0 0;
+                }
 
-          /* Vertical line going down from parents */
-          .org-children::before {
-            content: '';
-            position: absolute; top: 0; left: 50%;
-            border-left: 2px solid #cbd5e1;
-            width: 0; height: 20px;
-            transform: translateX(-50%);
-          }
-        `}} />
+                .org-children::before {
+                  content: '';
+                  position: absolute; top: 0; left: 50%;
+                  border-left: 2px solid #cbd5e1;
+                  width: 0; height: 20px;
+                  transform: translateX(-50%);
+                }
+              `}} />
 
-        <div className="min-w-max p-12 flex justify-center items-start min-h-full">
-          <div style={{ transform: `scale(${zoom})`, transformOrigin: 'top center', transition: 'transform 0.3s ease' }}>
-            <ul className="flex justify-center m-0 p-0">
-              <OrgTree 
-                node={treeData} 
-                onMoveNode={handleMoveNode} 
-                onAddClick={(node) => {
-                  setSelectedParent(node);
-                  setAddModalOpen(true);
-                }}
-                onDeleteClick={handleDeleteNode}
-              />
-            </ul>
+          <div className="min-w-max p-12 flex justify-center items-start min-h-full">
+            <div style={{ transform: `scale(${zoom})`, transformOrigin: 'top center', transition: 'transform 0.3s ease' }}>
+              <ul className="flex justify-center m-0 p-0">
+                <OrgTree
+                  node={treeData}
+                  onMoveNode={handleMoveNode}
+                  onAddClick={(node) => {
+                    if (!canCreate) return;
+                    setSelectedParent(node);
+                    setAddModalOpen(true);
+                  }}
+                  onDeleteClick={(nodeId) => {
+                    if (!canDelete) return;
+                    handleDeleteNode(nodeId);
+                  }}
+                  canCreate={canCreate}
+                  canUpdate={canUpdate}
+                  canDelete={canDelete}
+                />
+              </ul>
+            </div>
           </div>
         </div>
-        </div>
-        
+
         <UnassignedSidebar />
       </div>
-      
-      <ManageDepartmentsModal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
+
+      <ManageDepartmentsModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
       />
 
-      <AddOrgNodeModal 
+      <AddOrgNodeModal
         isOpen={addModalOpen}
         onClose={() => setAddModalOpen(false)}
         onSubmit={handleAddNode}
         {...(selectedParent?.name ? { parentName: selectedParent.name } : {})}
       />
 
-      <DeleteConfirmModal 
+      <DeleteConfirmModal
         isOpen={!!nodeToDelete}
         node={nodeToDelete}
         onClose={() => setNodeToDelete(null)}

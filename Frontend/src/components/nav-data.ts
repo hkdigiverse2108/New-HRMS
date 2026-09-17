@@ -4,6 +4,7 @@ import {
   Files,
   IndianRupee,
   Building2,
+  Layers,
   Landmark,
   Clock,
   CalendarDays,
@@ -70,6 +71,7 @@ export const navItems: NavItem[] = [
     children: [
       { title: "Employee List", url: "/employees/list" },
       { title: "Org Structure", url: "/employees/org" },
+      { title: "Sub-Departments & Designations", url: "/employees/departments-setup" },
     ],
   },
 

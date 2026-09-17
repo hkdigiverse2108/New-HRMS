@@ -56,15 +56,18 @@ interface EmployeeItem {
 export function AccessControl() {
   const { user, refreshProfile } = useAuth();
   const { employees: ctxEmployees } = useEmployeesContext();
-  const [activeTab, setActiveTab] = useState<"employees" | "presets">("employees");
+  const [activeTab, setActiveTab] = useState<"departments" | "employees">("departments");
   const [modules, setModules] = useState<SystemModule[]>([]);
   const [employees, setEmployees] = useState<EmployeeItem[]>([]);
   const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
   const [designations, setDesignations] = useState<{ id: string; name: string }[]>([]);
 
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("");
-  const [availableRoles, setAvailableRoles] = useState<string[]>(["HR", "Employee", "Sub-Admin", "Admin"]);
-  const [selectedRole, setSelectedRole] = useState<string>("HR");
+  const [availableDepartments, setAvailableDepartments] = useState<string[]>([
+    "HR", "Development", "Sales", "Finance", "Management", "Python", "Digital Marketing", "Creative", "Product"
+  ]);
+  const [selectedDepartment, setSelectedDepartment] = useState<string>("HR");
+  const [availableRoles, setAvailableRoles] = useState<string[]>(["Admin", "Employee"]);
   const [empInheritanceInfo, setEmpInheritanceInfo] = useState<{ isCustom: boolean; inheritedFrom?: string }>({
     isCustom: false,
   });
@@ -135,7 +138,17 @@ export function AccessControl() {
         }
       }
 
-      // 3. Fetch available system roles
+      // 3. Fetch available departments
+      try {
+        const deptsRes = await api.get<string[]>("/permissions/departments", { showErrorToast: false });
+        if (deptsRes && Array.isArray(deptsRes) && deptsRes.length > 0) {
+          setAvailableDepartments(deptsRes);
+        }
+      } catch (err) {
+        console.warn("Error fetching departments", err);
+      }
+
+      // 4. Fetch available system roles
       try {
         const rolesRes = await api.get<string[]>("/permissions/roles", { showErrorToast: false });
         if (rolesRes && Array.isArray(rolesRes) && rolesRes.length > 0) {
@@ -158,12 +171,12 @@ export function AccessControl() {
     }
   }, [selectedEmployeeId, activeTab]);
 
-  // Load preset permissions when selected role changes
+  // Load preset permissions when selected department changes
   useEffect(() => {
-    if (activeTab === "presets" && selectedRole) {
-      loadRolePresetPermissions(selectedRole);
+    if (activeTab === "departments" && selectedDepartment) {
+      loadDepartmentPresetPermissions(selectedDepartment);
     }
-  }, [selectedRole, activeTab]);
+  }, [selectedDepartment, activeTab]);
 
   const loadEmployeePermissions = async (empId: string) => {
     setIsLoading(true);
@@ -195,10 +208,10 @@ export function AccessControl() {
     }
   };
 
-  const loadRolePresetPermissions = async (roleName: string) => {
+  const loadDepartmentPresetPermissions = async (deptName: string) => {
     setIsLoading(true);
     try {
-      const res = await api.get<any>(`/permissions/presets/${encodeURIComponent(roleName)}`, { showErrorToast: false });
+      const res = await api.get<any>(`/permissions/presets/department/${encodeURIComponent(deptName)}`, { showErrorToast: false });
       const rawPerms = res?.module_permissions || {};
       const formatted: Record<string, PermissionFlags> = {};
       
@@ -214,7 +227,7 @@ export function AccessControl() {
       });
       setPermissions(formatted);
     } catch (err) {
-      console.error("Failed to load role preset permissions", err);
+      console.error("Failed to load department preset permissions", err);
     } finally {
       setIsLoading(false);
     }
@@ -339,15 +352,16 @@ export function AccessControl() {
         setEmpInheritanceInfo({ isCustom: true });
         refreshProfile();
       } else {
-        if (!selectedRole) {
-          toast.error("Please select a Role");
+        if (!selectedDepartment) {
+          toast.error("Please select a Department");
           return;
         }
         await api.post("/permissions/presets", {
-          role: selectedRole,
+          department: selectedDepartment,
+          role: "Employee",
           module_permissions: permissions,
         });
-        toast.success(`'${selectedRole}' Role Preset saved! All ${selectedRole} employees will automatically inherit these permissions.`);
+        toast.success(`'${selectedDepartment}' Department Preset saved! All employees in '${selectedDepartment}' will automatically inherit these permissions.`);
         refreshProfile();
       }
     } catch (err: any) {
@@ -442,6 +456,18 @@ export function AccessControl() {
       {/* Tabs */}
       <div className="flex border-b border-border gap-4 sm:gap-6 overflow-x-auto scrollbar-hide">
         <button
+          onClick={() => setActiveTab("departments")}
+          className={cn(
+            "pb-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap",
+            activeTab === "departments"
+              ? "border-primary text-primary font-black"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Layers className="w-4 h-4" />
+          Department-Wise Presets
+        </button>
+        <button
           onClick={() => setActiveTab("employees")}
           className={cn(
             "pb-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap",
@@ -452,18 +478,6 @@ export function AccessControl() {
         >
           <Users className="w-4 h-4" />
           Employee-Wise Access
-        </button>
-        <button
-          onClick={() => setActiveTab("presets")}
-          className={cn(
-            "pb-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap",
-            activeTab === "presets"
-              ? "border-primary text-primary font-black"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          )}
-        >
-          <Layers className="w-4 h-4" />
-          Role-Wise Presets
         </button>
       </div>
 
@@ -517,14 +531,14 @@ export function AccessControl() {
                         onClick={handleResetEmployeeToPreset}
                         disabled={isSaving}
                         className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-background hover:bg-destructive/10 text-muted-foreground hover:text-destructive border border-border transition-colors flex items-center gap-1.5 shadow-sm"
-                        title="Revert custom permissions so this employee inherits from Preset again"
+                        title="Revert custom permissions so this employee inherits from Department Preset again"
                       >
-                        <RotateCcw className="w-3.5 h-3.5" /> Reset to Preset
+                        <RotateCcw className="w-3.5 h-3.5" /> Reset to Department Preset
                       </button>
                     </>
                   ) : (
                     <span className="px-2.5 py-1 rounded-md font-bold text-[11px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 flex items-center gap-1.5 shadow-sm">
-                      <Layers className="w-3.5 h-3.5" /> Inheriting: {empInheritanceInfo.inheritedFrom || "Role Preset"}
+                      <Layers className="w-3.5 h-3.5" /> Inheriting: {empInheritanceInfo.inheritedFrom || `Department Preset (${selectedEmployee.department})`}
                     </span>
                   )}
                 </div>
@@ -536,44 +550,51 @@ export function AccessControl() {
             <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
               <Info className="w-4 h-4 text-primary shrink-0" />
               <span>
-                Select a Role below to configure its global preset permissions. Any change here automatically reflects for all employees assigned to this role in real-time.
+                Select a Department below to configure its permissions preset. All employees in that department will automatically inherit these permissions in real-time.
               </span>
             </div>
             <div>
               <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
-                Select System Role for Preset
+                Select Department for Preset
               </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-2xl">
-                {availableRoles.map(role => (
-                  <button
-                    key={role}
-                    type="button"
-                    onClick={() => setSelectedRole(role)}
-                    className={cn(
-                      "p-3 rounded-xl border text-left transition-all relative overflow-hidden flex flex-col justify-between",
-                      selectedRole === role
-                        ? "bg-primary text-primary-foreground border-primary shadow-md ring-2 ring-primary/30"
-                        : "bg-background hover:bg-muted text-foreground border-border/80"
-                    )}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-black text-sm tracking-wide">{role}</span>
-                      {selectedRole === role && <Check className="w-4 h-4 text-primary-foreground" />}
-                    </div>
-                    <span className={cn(
-                      "text-[10px] font-medium leading-tight",
-                      selectedRole === role ? "text-primary-foreground/80" : "text-muted-foreground"
-                    )}>
-                      {role === "HR" 
-                        ? "Human Resources & Payroll" 
-                        : role === "Admin" 
-                        ? "Master Administrator" 
-                        : role === "Sub-Admin" 
-                        ? "Managerial Staff" 
-                        : "General Employees"}
-                    </span>
-                  </button>
-                ))}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                {availableDepartments.map(dept => {
+                  const descMap: Record<string, string> = {
+                    "HR": "Human Resources, Recruitment & Approvals",
+                    "Development": "Frontend, Backend & Engineering",
+                    "Python": "AI/ML, Data & Python Services",
+                    "Sales": "Leads, Pipeline & Invoicing",
+                    "Finance": "Payroll, Transactions & Accounts",
+                    "Management": "Approvals, Strategy & Reports",
+                    "Digital Marketing": "SEO, Ads & Marketing",
+                    "Creative": "UI/UX, Visual Design & Media",
+                    "Product": "Roadmaps, Analytics & Strategy",
+                  };
+                  return (
+                    <button
+                      key={dept}
+                      type="button"
+                      onClick={() => setSelectedDepartment(dept)}
+                      className={cn(
+                        "p-3 rounded-xl border text-left transition-all relative overflow-hidden flex flex-col justify-between",
+                        selectedDepartment === dept
+                          ? "bg-primary text-primary-foreground border-primary shadow-md ring-2 ring-primary/30"
+                          : "bg-background hover:bg-muted text-foreground border-border/80"
+                      )}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-black text-sm tracking-wide">{dept}</span>
+                        {selectedDepartment === dept && <Check className="w-4 h-4 text-primary-foreground" />}
+                      </div>
+                      <span className={cn(
+                        "text-[10px] font-medium leading-tight line-clamp-2",
+                        selectedDepartment === dept ? "text-primary-foreground/80" : "text-muted-foreground"
+                      )}>
+                        {descMap[dept] || "Department Access Preset"}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>

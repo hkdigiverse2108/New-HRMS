@@ -21,6 +21,7 @@ from app.models.employee import setup_employee_indexes
 from app.models.department import setup_department_indexes
 from app.models.sub_department import setup_sub_department_indexes
 from app.models.designation import setup_designation_indexes
+from app.models.penalty import setup_penalty_indexes
 from app.database.default_presets import init_database_presets_and_admin
 
 @asynccontextmanager
@@ -31,6 +32,7 @@ async def lifespan(app: FastAPI):
     await setup_department_indexes(db.db)
     await setup_sub_department_indexes(db.db)
     await setup_designation_indexes(db.db)
+    await setup_penalty_indexes(db.db)
     await init_database_presets_and_admin(db.db)
     yield
     # Shutdown events

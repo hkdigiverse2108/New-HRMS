@@ -13,7 +13,8 @@ async def create_department(data: DepartmentCreate, current_user: dict = Depends
     result = await DepartmentService.create(data)
 
     # Invalidate all department list caches so the new department appears
-    await clear_pattern("departments:list:*")
+    await clear_pattern("*department*")
+    await clear_pattern("*employees*")
 
     # Cache single department by ID
     item_id = str(result.get("_id") or result.get("id"))
@@ -65,10 +66,8 @@ async def update_department(item_id: str, data: DepartmentUpdate, current_user: 
 
     # Invalidate single & all department list caches
     await delete_cache(f"department:{item_id}")
-    await clear_pattern("departments:list:*")
-    # Also invalidate dependent lists (sub-departments and employees)
-    await clear_pattern("sub_departments:list:*")
-    await clear_pattern("employees:list:*")
+    await clear_pattern("*department*")
+    await clear_pattern("*employees*")
 
     # Store updated department in cache
     await set_cache(f"department:{item_id}", updated)
@@ -81,8 +80,7 @@ async def delete_department(item_id: str, current_user: dict = Depends(RoleCheck
 
     # Invalidate caches
     await delete_cache(f"department:{item_id}")
-    await clear_pattern("departments:list:*")
-    await clear_pattern("sub_departments:list:*")
-    await clear_pattern("employees:list:*")
+    await clear_pattern("*department*")
+    await clear_pattern("*employees*")
 
     return result

@@ -12,8 +12,9 @@ router = APIRouter(prefix="/sub-departments", tags=["Sub-Departments"])
 async def create_sub_department(data: SubDepartmentCreate, current_user: dict = Depends(RoleChecker(["Admin"]))):
     result = await SubDepartmentService.create(data)
 
-    # Invalidate all sub-department list caches
-    await clear_pattern("sub_departments:list:*")
+    # Invalidate all sub-department caches
+    await clear_pattern("*sub_department*")
+    await clear_pattern("*employees*")
 
     # Cache single sub-department by ID
     item_id = str(result.get("_id") or result.get("id"))

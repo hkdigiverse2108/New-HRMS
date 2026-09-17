@@ -2,8 +2,6 @@ from enum import Enum
 
 class SystemRole(str, Enum):
     ADMIN = "Admin"
-    HR = "HR"
-    SUB_ADMIN = "Sub-Admin"
     EMPLOYEE = "Employee"
 
 class GenderEnum(str, Enum):

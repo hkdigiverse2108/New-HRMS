@@ -378,6 +378,11 @@ class AttendanceService:
                         penalty_date=datetime.strptime(today_str, "%Y-%m-%d").date()
                     )
                     await PenaltyService.create_employee_penalty(penalty_data)
+                    # Invalidate penalty Redis caches so attendance-created penalties reflect immediately
+                    from app.redis.service import clear_pattern, delete_cache
+                    await clear_pattern("penalties:list:*")
+                    await delete_cache("penalties:leaderboard")
+                    await delete_cache("penalties:summary")
             except Exception as e:
                 print(f"Failed to auto-assign late penalty: {e}")
 

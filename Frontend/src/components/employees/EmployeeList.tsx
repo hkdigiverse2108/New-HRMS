@@ -13,6 +13,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuChe
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { getAvatarUrl } from "@/lib/config";
+import { useModulePermissions } from "@/hooks/useModulePermissions";
 
 const COLUMN_OPTIONS = [
   { key: "employee", label: "Employee", default: true },
@@ -62,6 +63,7 @@ const COLUMN_OPTIONS = [
 export function EmployeeList({ isNew }: { isNew?: boolean }) {
   const { employees, addEmployee, updateEmployee, deleteEmployee } = useEmployeesContext();
   const { departments } = useDepartments();
+  const { canCreate, canUpdate, canDelete, isAdmin } = useModulePermissions("/employees/list");
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(isNew || false);
@@ -158,34 +160,49 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
               >
                 <Eye className="w-3.5 h-3.5" />
               </button>
-              <button 
-                onClick={() => openEditForm(emp)}
-                className="p-1.5 text-muted-foreground hover:bg-blue-50 hover:text-blue-600 rounded-md transition-all active:scale-95"
-                title="Edit Employee"
-              >
-                <Edit2 className="w-3.5 h-3.5" />
-              </button>
-              <button 
-                onClick={() => setPermissionEmployee(emp)}
-                className="p-1.5 text-muted-foreground hover:bg-indigo-50 hover:text-indigo-600 rounded-md transition-all active:scale-95"
-                title="Manage Permissions"
-              >
-                <Shield className="w-3.5 h-3.5" />
-              </button>
-              <button 
-                onClick={() => {
-                  const newStatus = emp.status === 'Inactive' ? 'Active' : 'Inactive';
-                  updateEmployee(emp.id, { status: newStatus as any });
-                  toast.success(`${emp.name} is now ${newStatus}`);
-                }}
-                className={cn(
-                  "p-1.5 rounded-md transition-all active:scale-95",
-                  emp.status === 'Inactive' ? "text-amber-500 hover:bg-amber-50" : "text-muted-foreground hover:text-amber-600 hover:bg-amber-50"
-                )}
-                title={emp.status === 'Inactive' ? "Reactivate Employee" : "Deactivate Employee"}
-              >
-                {emp.status === 'Inactive' ? <UserCheck className="w-3.5 h-3.5" /> : <UserMinus className="w-3.5 h-3.5" />}
-              </button>
+              {canUpdate && (
+                <button 
+                  onClick={() => openEditForm(emp)}
+                  className="p-1.5 text-muted-foreground hover:bg-blue-50 hover:text-blue-600 rounded-md transition-all active:scale-95"
+                  title="Edit Employee"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+              {isAdmin && (
+                <button 
+                  onClick={() => setPermissionEmployee(emp)}
+                  className="p-1.5 text-muted-foreground hover:bg-indigo-50 hover:text-indigo-600 rounded-md transition-all active:scale-95"
+                  title="Manage Permissions"
+                >
+                  <Shield className="w-3.5 h-3.5" />
+                </button>
+              )}
+              {canUpdate && (
+                <button 
+                  onClick={() => {
+                    const newStatus = emp.status === 'Inactive' ? 'Active' : 'Inactive';
+                    updateEmployee(emp.id, { status: newStatus as any });
+                    toast.success(`${emp.name} is now ${newStatus}`);
+                  }}
+                  className={cn(
+                    "p-1.5 rounded-md transition-all active:scale-95",
+                    emp.status === 'Inactive' ? "text-amber-500 hover:bg-amber-50" : "text-muted-foreground hover:text-amber-600 hover:bg-amber-50"
+                  )}
+                  title={emp.status === 'Inactive' ? "Reactivate Employee" : "Deactivate Employee"}
+                >
+                  {emp.status === 'Inactive' ? <UserCheck className="w-3.5 h-3.5" /> : <UserMinus className="w-3.5 h-3.5" />}
+                </button>
+              )}
+              {canDelete && (
+                <button 
+                  onClick={() => handleDeleteEmployee(emp.id, emp.name)}
+                  className="p-1.5 text-muted-foreground hover:bg-red-50 hover:text-red-600 rounded-md transition-all active:scale-95"
+                  title="Delete Employee"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           </div>
         );
@@ -245,6 +262,10 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
   };
 
   const handleDeleteEmployee = (id: string, name: string) => {
+    if (!canDelete) {
+      toast.error("You do not have permission to delete employees.");
+      return;
+    }
     setDeleteConfirm({ isOpen: true, id, name });
   };
 
@@ -257,11 +278,19 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
   };
 
   const openAddForm = () => {
+    if (!canCreate) {
+      toast.error("You do not have permission to add employees.");
+      return;
+    }
     setEditingEmployee(null);
     setIsFormOpen(true);
   };
 
   const openEditForm = (emp: Employee) => {
+    if (!canUpdate) {
+      toast.error("You do not have permission to edit employees.");
+      return;
+    }
     setEditingEmployee(emp);
     setIsFormOpen(true);
   };
@@ -274,13 +303,15 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
           <h1 className="text-[28px] font-black text-foreground tracking-tight mb-2">Employee Directory</h1>
           <p className="text-[14px] text-muted-foreground">Manage your team members and their account permissions here.</p>
         </div>
-        <button 
-          onClick={openAddForm}
-          className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-5 py-2.5 rounded-xl font-bold transition-all shadow-sm shadow-primary/20 active:scale-95"
-        >
-          <Plus className="w-4 h-4" />
-          Add Employee
-        </button>
+        {canCreate && (
+          <button 
+            onClick={openAddForm}
+            className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-5 py-2.5 rounded-xl font-bold transition-all shadow-sm shadow-primary/20 active:scale-95"
+          >
+            <Plus className="w-4 h-4" />
+            Add Employee
+          </button>
+        )}
       </div>
 
       {/* Filters Bar */}
@@ -433,40 +464,49 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
             {sortedEmployees.map((emp) => (
             <div key={emp.id} className="group bg-white border border-border/50 rounded-3xl p-6 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 relative">
               <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button 
-                  onClick={() => openEditForm(emp)}
-                  className="p-2 text-muted-foreground hover:bg-muted hover:text-foreground/80 rounded-full transition-colors"
-                  title="Edit"
-                >
-                  <Edit2 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => {
-                    const newStatus = emp.status === 'Inactive' ? 'Active' : 'Inactive';
-                    updateEmployee(emp.id, { status: newStatus });
-                    toast.success(`${emp.name} is now ${newStatus}`);
-                  }}
-                  className={cn(
-                    "p-2 rounded-full transition-colors",
-                    emp.status === 'Inactive' ? "text-amber-500 hover:bg-amber-50" : "text-muted-foreground hover:bg-amber-50 hover:text-amber-600"
-                  )}
-                  title={emp.status === 'Inactive' ? "Mark as Active" : "Mark as Inactive"}
-                >
-                  {emp.status === 'Inactive' ? <UserCheck className="w-4 h-4" /> : <UserMinus className="w-4 h-4" />}
-                </button>
-                <button
-                  onClick={() => setPermissionEmployee(emp)}
-                  className="p-2 text-muted-foreground hover:bg-blue-50 hover:text-blue-600 rounded-full transition-colors"
-                  title="Manage Permissions"
-                >
-                  <Shield className="w-4 h-4" />
-                </button>
-                <button 
-                  onClick={() => handleDeleteEmployee(emp.id, emp.name)}
-                  className="p-2 text-muted-foreground hover:bg-red-50 hover:text-red-600 rounded-full transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {canUpdate && (
+                  <button 
+                    onClick={() => openEditForm(emp)}
+                    className="p-2 text-muted-foreground hover:bg-muted hover:text-foreground/80 rounded-full transition-colors"
+                    title="Edit"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                )}
+                {canUpdate && (
+                  <button
+                    onClick={() => {
+                      const newStatus = emp.status === 'Inactive' ? 'Active' : 'Inactive';
+                      updateEmployee(emp.id, { status: newStatus });
+                      toast.success(`${emp.name} is now ${newStatus}`);
+                    }}
+                    className={cn(
+                      "p-2 rounded-full transition-colors",
+                      emp.status === 'Inactive' ? "text-amber-500 hover:bg-amber-50" : "text-muted-foreground hover:bg-amber-50 hover:text-amber-600"
+                    )}
+                    title={emp.status === 'Inactive' ? "Mark as Active" : "Mark as Inactive"}
+                  >
+                    {emp.status === 'Inactive' ? <UserCheck className="w-4 h-4" /> : <UserMinus className="w-4 h-4" />}
+                  </button>
+                )}
+                {isAdmin && (
+                  <button
+                    onClick={() => setPermissionEmployee(emp)}
+                    className="p-2 text-muted-foreground hover:bg-blue-50 hover:text-blue-600 rounded-full transition-colors"
+                    title="Manage Permissions"
+                  >
+                    <Shield className="w-4 h-4" />
+                  </button>
+                )}
+                {canDelete && (
+                  <button 
+                    onClick={() => handleDeleteEmployee(emp.id, emp.name)}
+                    className="p-2 text-muted-foreground hover:bg-red-50 hover:text-red-600 rounded-full transition-colors"
+                    title="Delete"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
               
               <div className="flex flex-col items-center text-center">

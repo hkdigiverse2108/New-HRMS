@@ -22,6 +22,7 @@ import { SalesProvider } from "@/components/sales/SalesContext";
 import { Dashboard } from "@/components/dashboard/Dashboard";
 import { EmployeeList } from "@/components/employees/EmployeeList";
 import { OrgStructure } from "@/components/employees/OrgStructure";
+import { DepartmentDesignationManager } from "@/components/employees/DepartmentDesignationManager";
 import { AttendanceList } from "@/components/employees/AttendanceList";
 import { LeaveRequests } from "@/components/employees/LeaveRequests";
 import { toast } from "sonner";
@@ -78,6 +79,9 @@ import { AuditLogs } from "@/components/finance/AuditLogs";
 import { UserProfile } from "@/components/profile/UserProfile";
 import { GlobalModalProvider } from "@/components/GlobalModalContext";
 import { GlobalModalManager } from "@/components/GlobalModalManager";
+import { useAuth } from "@/components/auth/AuthContext";
+import { LoginPage } from "@/components/auth/LoginPage";
+import { hasModulePermission } from "@/lib/permissions";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -119,14 +123,15 @@ const suggestions = [
   ["Mobile drawer", "Off-canvas sidebar with a bottom bar for the 4 most used screens."],
 ];
 
-import { useAuth } from "@/components/auth/AuthContext";
-import { LoginPage } from "@/components/auth/LoginPage";
-
-function Index() {
-  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
+export function Index() {
+  const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const [isClient, setIsClient] = useState(false);
   const [active, setActiveState] = useState(() => {
     if (typeof window !== 'undefined') {
+      const path = window.location.pathname;
+      if (path && path !== "/" && path !== "/login") {
+        return path + (window.location.search || "");
+      }
       return localStorage.getItem("activeSidebarTab") || "/dashboard";
     }
     return "/dashboard";
@@ -134,6 +139,12 @@ function Index() {
 
   useEffect(() => {
     setIsClient(true);
+    // Clean up browser address bar to '/' so subpaths never break page reload
+    if (typeof window !== 'undefined' && window.location.pathname !== "/" && window.location.pathname !== "/login") {
+      try {
+        window.history.replaceState({}, '', '/');
+      } catch {}
+    }
   }, []);
 
   const setActive = (val: string) => {
@@ -142,6 +153,13 @@ function Index() {
       localStorage.setItem("activeSidebarTab", val);
     }
   };
+
+  // Permission guard: automatically redirect to /dashboard if current tab is not accessible by this role
+  useEffect(() => {
+    if (user && active !== "/dashboard" && !hasModulePermission(user, active, "read")) {
+      setActive("/dashboard");
+    }
+  }, [user, active]);
 
   const [activeAction, setActiveAction] = useState<string | null>(null);
 
@@ -205,6 +223,7 @@ function Index() {
                   {/* Render Employee pages */}
                   {basePath === "/employees/list" && <EmployeeList isNew={isNew} />}
                   {basePath === "/employees/org" && <OrgStructure />}
+                  {(basePath === "/employees/departments-setup" || basePath === "/employees/sub-departments" || basePath === "/employees/designations" || basePath === "/employees/departments") && <DepartmentDesignationManager />}
                   {(basePath === "/employees/attendance" || basePath === "/attendance") && <AttendanceList />}
                   {(basePath === "/employees/leave-requests" || basePath === "/leave") && <LeaveRequests isNew={isNew} />}
                   {(basePath === "/employees/documents" || basePath === "/documents") && <Documents setActive={setActive} />}

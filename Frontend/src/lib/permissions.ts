@@ -2,9 +2,23 @@ import type { UserProfile, PermissionFlags } from "@/components/auth/AuthContext
 import { NavItem, NavChild } from "@/components/nav-data";
 
 /**
+ * Determines if the current user has full Admin privileges.
+ */
+export function isUserAdmin(user: UserProfile | null): boolean {
+  if (!user) return false;
+  const role = String(user.role || (user as any).system_role || "").toLowerCase().trim();
+  return (
+    role === "admin" ||
+    role === "super admin" ||
+    role === "superadmin" ||
+    Boolean((user as any).is_superuser)
+  );
+}
+
+/**
  * Checks if the user has permission to access a given URL or perform an action.
  * - Admin role always has 100% full access to all modules and actions.
- * - Non-admin users check their resolved module permissions from user_permissions or presets.
+ * - Non-admin users check their dynamically resolved module permissions from the database.
  */
 export function hasModulePermission(
   user: UserProfile | null,
@@ -13,16 +27,17 @@ export function hasModulePermission(
 ): boolean {
   if (!user) return false;
 
-  // Admin has full unrestricted access everywhere
-  if (user.role === "Admin") {
+  // Admin has full unrestricted access everywhere based purely on role
+  if (isUserAdmin(user)) {
     return true;
   }
 
   if (!url) return false;
 
   const perms = user.permissions;
+
+  // Basic fallback for standard employee when no custom permissions are set
   if (!perms || Object.keys(perms).length === 0) {
-    // Basic fallback for standard employee
     const defaultAllowedPrefixes = [
       "/dashboard",
       "/employees/attendance",
@@ -35,52 +50,47 @@ export function hasModulePermission(
       "/remarks",
       "/profile"
     ];
-    return defaultAllowedPrefixes.some(prefix => url.startsWith(prefix));
+    return action === "read" && defaultAllowedPrefixes.some(prefix => url.startsWith(prefix));
   }
 
-  // 1. Direct match on url
+  const cleanUrl = (url.split("?")[0] ?? "").replace(/\/+$/, "") || "/";
+
+  // 1. Direct match on exact URL
   if (perms[url]) {
     const p = perms[url];
     return Boolean(p.all || p[action]);
   }
+  if (perms[cleanUrl]) {
+    const p = perms[cleanUrl];
+    return Boolean(p.all || p[action]);
+  }
 
-  // 2. Find matching base prefix
-  // e.g., url "/employees/list" -> check "/employees"
-  // url "/payroll/dashboard" -> check "/payroll"
-  // url "/work/sales/leads" -> check "/work/sales", then "/work"
-  const basePath = url.split("?")[0] ?? "";
-  const parts = basePath.split("/").filter(Boolean);
-  
-  // Try longest prefix to shortest
-  for (let i = parts.length; i >= 1; i--) {
-    const candidate = "/" + parts.slice(0, i).join("/");
-    if (perms[candidate]) {
-      const p = perms[candidate];
+  // 2. Dynamic hierarchical prefix matching (e.g. "/work/tasks/123" checks "/work/tasks", then "/work")
+  const parts = cleanUrl.split("/").filter(Boolean);
+  for (let i = parts.length - 1; i >= 1; i--) {
+    const parent = "/" + parts.slice(0, i).join("/");
+    if (perms[parent]) {
+      const p = perms[parent];
       return Boolean(p.all || p[action]);
     }
   }
 
-  // Admin-only sections are denied by default if not granted
-  const adminOnlyPrefixes = [
-    "/access-control",
-    "/settings",
-    "/restrictions",
-    "/activity-tracker",
-    "/activity-logs",
-    "/recycle-bin",
-    "/ceo-dashboard",
-    "/payroll",
-    "/finance",
-    "/invoice",
-    "/recruitment"
-  ];
-  if (adminOnlyPrefixes.some(pref => url.startsWith(pref))) {
-    return false;
+  // 3. Dynamic child match for parent group URLs
+  // If user requests read on parent (e.g. "/employees"), allow read if user has access to any child module (e.g. "/employees/list")
+  if (action === "read") {
+    const hasAnyChildPermitted = Object.keys(perms).some(permUrl => {
+      if (permUrl !== cleanUrl && permUrl.startsWith(cleanUrl + "/")) {
+        const p = perms[permUrl];
+        return Boolean(p?.all || p?.read);
+      }
+      return false;
+    });
+    if (hasAnyChildPermitted) {
+      return true;
+    }
   }
 
-  // For general work items, allow if read is default
-  const generalAllowed = ["/dashboard", "/schedule", "/chat", "/tasks", "/work/logs", "/profile"];
-  return generalAllowed.some(pref => url.startsWith(pref));
+  return false;
 }
 
 /**
@@ -93,7 +103,7 @@ export function filterNavigationForUser(
   if (!user) return [];
 
   // Admin gets the full unaltered navigation
-  if (user.role === "Admin") {
+  if (isUserAdmin(user)) {
     return items;
   }
 

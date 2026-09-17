@@ -195,6 +195,15 @@ def ensure_frontend_build(vite_api_url: str, force_rebuild: bool = False):
     elif vite_api_url and last_built_url != vite_api_url:
         needs_build = True
         reason = f"VITE_API_URL in .env ('{vite_api_url}') differs from previous build ('{last_built_url}')."
+    else:
+        src_dir = FRONTEND_DIR / "src"
+        if stamp_file.exists() and src_dir.exists():
+            stamp_mtime = stamp_file.stat().st_mtime
+            for p in src_dir.rglob("*"):
+                if p.is_file() and p.stat().st_mtime > stamp_mtime:
+                    needs_build = True
+                    reason = f"Source code modified ({p.name})."
+                    break
 
     # Always ensure live runtime script is fresh
     sync_env_config(vite_api_url)

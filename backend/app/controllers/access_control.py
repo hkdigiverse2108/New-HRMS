@@ -14,7 +14,13 @@ from app.repository.access_control import UserPermissionRepository, PresetPermis
 from app.repository.employee import EmployeeRepository
 from app.controllers.auth import RoleChecker
 from app.redis.service import get_cache, set_cache, delete_cache, clear_pattern
-from app.database.default_presets import SYSTEM_MODULES, DEFAULT_EMPLOYEE_PERMISSIONS, DEFAULT_HR_PERMISSIONS, DEFAULT_SUB_ADMIN_PERMISSIONS, get_admin_full_permissions
+from app.database.default_presets import (
+    SYSTEM_MODULES, 
+    DEFAULT_EMPLOYEE_PERMISSIONS, 
+    DEFAULT_HR_PERMISSIONS, 
+    get_admin_full_permissions,
+    get_default_permissions_for_department
+)
 from app.database.db import get_database
 
 router = APIRouter(
@@ -30,12 +36,13 @@ admin_role_checker = RoleChecker(["Admin", "CEO"])
 # ==========================================
 active_permission_listeners: Dict[str, asyncio.Queue] = {}
 
-async def broadcast_permission_update(employee_id: Optional[str] = None, role: Optional[str] = None):
+async def broadcast_permission_update(employee_id: Optional[str] = None, role: Optional[str] = None, department: Optional[str] = None):
     """Notify all connected SSE clients about permission changes immediately."""
     event_payload = json.dumps({
         "type": "PERMISSIONS_UPDATED",
         "employee_id": employee_id,
         "role": role,
+        "department": department,
         "timestamp": datetime.utcnow().isoformat()
     })
     dead_clients = []
@@ -66,15 +73,24 @@ async def get_default_permissions():
 
 @router.get("/roles", response_model=List[str])
 async def get_available_roles():
-    """Returns list of distinct roles available in HRMS for Role Presets."""
-    return ["HR", "Employee", "Sub-Admin", "Admin"]
+    """Returns list of distinct roles available in HRMS (Admin and Employee only)."""
+    return ["Admin", "Employee"]
+
+@router.get("/departments", response_model=List[str])
+async def get_available_departments():
+    """Returns list of all available departments for Department Presets."""
+    db = get_database()
+    depts = await db["departments"].find({}).to_list(100)
+    if depts:
+        return [d["name"] for d in depts if d.get("name")]
+    return ["HR", "Development", "Management", "Python", "Sales", "Creative", "Product", "Digital Marketing", "Finance"]
 
 # ==========================================
-# Permission Presets API Endpoints (Role-Wise)
+# Permission Presets API Endpoints (Department & Role Wise)
 # ==========================================
 @router.get("/presets", response_model=List[PermissionPresetResponse])
 async def get_all_presets():
-    """Fetches all role presets from database with Redis caching."""
+    """Fetches all presets from database with Redis caching."""
     cache_key = "presets:list:all"
     cached = await get_cache(cache_key)
     if cached is not None:
@@ -100,13 +116,40 @@ async def create_or_update_preset(item: PermissionPresetCreate):
     await db["user_permissions"].delete_many({"$or": [{"is_custom": False}, {"is_custom": None}]})
     
     # Broadcast live update to all connected clients
-    await broadcast_permission_update(role=item_data.get("role"))
+    await broadcast_permission_update(role=item_data.get("role"), department=item_data.get("department"))
     
     return created_item
 
+@router.get("/presets/department/{department_name}", response_model=PermissionPresetResponse)
+async def get_preset_by_department(department_name: str):
+    """Fetches preset permissions for a specific department (e.g. HR, Development, Sales, etc.)."""
+    clean_dept = str(department_name).strip()
+    cache_key = f"preset:department:{clean_dept}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    item = await PresetPermissionRepository.get_preset_by_department(clean_dept)
+    if not item:
+        # Fallback to seeded defaults if not yet in DB
+        perms = get_default_permissions_for_department(clean_dept)
+        result = {
+            "_id": "",
+            "role": "Employee",
+            "department": clean_dept,
+            "department_id": "all",
+            "designation_id": "all",
+            "module_permissions": perms
+        }
+        await set_cache(cache_key, result)
+        return result
+
+    await set_cache(cache_key, item)
+    return item
+
 @router.get("/presets/{role}", response_model=PermissionPresetResponse)
 async def get_preset_by_role(role: str):
-    """Fetches preset permissions for a specific role (e.g. HR, Employee, Sub-Admin, Admin)."""
+    """Fetches preset permissions for a specific role (e.g. Admin, Employee)."""
     clean_role = str(role).strip()
     cache_key = f"preset:role:{clean_role}"
     cached = await get_cache(cache_key)
@@ -115,13 +158,10 @@ async def get_preset_by_role(role: str):
 
     item = await PresetPermissionRepository.get_preset_by_role(clean_role)
     if not item:
-        # Fallback to seeded defaults if not yet in DB
-        if clean_role == "HR":
-            perms = DEFAULT_HR_PERMISSIONS
-        elif clean_role == "Admin":
+        if clean_role == "Admin":
             perms = get_admin_full_permissions()
-        elif clean_role == "Sub-Admin":
-            perms = DEFAULT_SUB_ADMIN_PERMISSIONS
+        elif clean_role == "HR":
+            perms = DEFAULT_HR_PERMISSIONS
         else:
             perms = DEFAULT_EMPLOYEE_PERMISSIONS
 
@@ -300,6 +340,7 @@ async def get_user_permission(employee_id: str):
 
     work_details = employee.get("work_details", {})
     system_role = work_details.get("system_role", "Employee")
+    department = work_details.get("department", "Development")
     
     # 1. If Admin, always return Admin full permissions
     if system_role == "Admin":
@@ -327,8 +368,8 @@ async def get_user_permission(employee_id: str):
         await set_cache(cache_key, res)
         return res
 
-    # 3. Inherit dynamically from Role Preset
-    preset, inherited_desc = await PresetPermissionRepository.get_preset_for_employee(system_role)
+    # 3. Inherit dynamically from Department Preset
+    preset, inherited_desc = await PresetPermissionRepository.get_preset_for_employee(system_role, department)
     
     if preset and "module_permissions" in preset:
         res = {
@@ -342,9 +383,9 @@ async def get_user_permission(employee_id: str):
         res = {
             "_id": "",
             "employee_id": employee_id,
-            "module_permissions": DEFAULT_EMPLOYEE_PERMISSIONS,
+            "module_permissions": get_default_permissions_for_department(department),
             "is_custom": False,
-            "inherited_from": f"Default System Permissions ({system_role})"
+            "inherited_from": f"Default Department Permissions ({department})"
         }
 
     await set_cache(cache_key, res)

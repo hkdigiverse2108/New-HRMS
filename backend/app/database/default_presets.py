@@ -25,6 +25,7 @@ SYSTEM_MODULES: List[Dict[str, Any]] = [
     {"id": "/employees", "name": "Employees", "section": "People", "is_parent": True},
     {"id": "/employees/list", "name": "Employee List", "section": "People", "parent_id": "/employees"},
     {"id": "/employees/org", "name": "Org Structure", "section": "People", "parent_id": "/employees"},
+    {"id": "/employees/departments-setup", "name": "Sub-Departments & Designations", "section": "People", "parent_id": "/employees"},
     {"id": "/employees/attendance", "name": "Attendance List", "section": "People", "parent_id": "/employees"},
     {"id": "/employees/documents", "name": "Documents", "section": "People", "parent_id": "/employees"},
 
@@ -140,7 +141,7 @@ DEFAULT_EMPLOYEE_PERMISSIONS: Dict[str, dict] = {
     "/recognitions": make_perm(read=True),
 }
 
-# Default permissions for HR role
+# Default permissions for HR Department
 DEFAULT_HR_PERMISSIONS: Dict[str, dict] = {
     "/dashboard": make_perm(all_perm=True),
     "/approvals": make_perm(all_perm=True),
@@ -156,6 +157,7 @@ DEFAULT_HR_PERMISSIONS: Dict[str, dict] = {
     "/employees": make_perm(all_perm=True),
     "/employees/list": make_perm(all_perm=True),
     "/employees/org": make_perm(all_perm=True),
+    "/employees/departments-setup": make_perm(all_perm=True),
     "/employees/attendance": make_perm(all_perm=True),
     "/employees/documents": make_perm(all_perm=True),
     "/recruitment": make_perm(all_perm=True),
@@ -183,12 +185,211 @@ DEFAULT_HR_PERMISSIONS: Dict[str, dict] = {
     "/elections": make_perm(all_perm=True),
 }
 
-# Default permissions for Sub-Admin role (almost all modules except access control)
-DEFAULT_SUB_ADMIN_PERMISSIONS: Dict[str, dict] = {
-    mod["id"]: make_perm(all_perm=True) 
-    for mod in SYSTEM_MODULES 
-    if mod["id"] not in ["/access-control", "/restrictions"]
+# Default permissions for Development Department
+DEFAULT_DEVELOPMENT_PERMISSIONS: Dict[str, dict] = {
+    "/dashboard": make_perm(read=True),
+    "/schedule": make_perm(read=True),
+    "/work/projects": make_perm(read=True, create=True, update=True),
+    "/work/logs": make_perm(read=True, create=True, update=True),
+    "/work/research": make_perm(read=True, create=True, update=True),
+    "/tasks": make_perm(read=True, create=True, update=True),
+    "/chat": make_perm(read=True, create=True),
+    "/employees": make_perm(read=True),
+    "/employees/attendance": make_perm(read=True, create=True),
+    "/employees/leave-requests": make_perm(read=True, create=True),
+    "/workspace": make_perm(read=True),
+    "/workspace/seating": make_perm(read=True),
+    "/workspace/gallery": make_perm(read=True),
+    "/remarks": make_perm(read=True),
+    "/recognitions": make_perm(read=True),
 }
+
+# Default permissions for Python Department
+DEFAULT_PYTHON_PERMISSIONS: Dict[str, dict] = {
+    "/dashboard": make_perm(read=True),
+    "/schedule": make_perm(read=True),
+    "/work/projects": make_perm(read=True, create=True, update=True),
+    "/work/logs": make_perm(read=True, create=True, update=True),
+    "/work/research": make_perm(read=True, create=True, update=True),
+    "/tasks": make_perm(read=True, create=True, update=True),
+    "/chat": make_perm(read=True, create=True),
+    "/employees": make_perm(read=True),
+    "/employees/attendance": make_perm(read=True, create=True),
+    "/employees/leave-requests": make_perm(read=True, create=True),
+    "/workspace": make_perm(read=True),
+    "/workspace/seating": make_perm(read=True),
+    "/workspace/gallery": make_perm(read=True),
+    "/remarks": make_perm(read=True),
+    "/recognitions": make_perm(read=True),
+}
+
+# Default permissions for Sales Department
+DEFAULT_SALES_PERMISSIONS: Dict[str, dict] = {
+    "/dashboard": make_perm(read=True),
+    "/schedule": make_perm(read=True),
+    "/work/sales": make_perm(all_perm=True),
+    "/work/sales/dashboard": make_perm(all_perm=True),
+    "/work/sales/pipeline": make_perm(all_perm=True),
+    "/work/sales/leads": make_perm(all_perm=True),
+    "/work/sales/tasks": make_perm(all_perm=True),
+    "/work/sales/analytics": make_perm(all_perm=True),
+    "/work/sales/team": make_perm(read=True),
+    "/work/sales/reports": make_perm(all_perm=True),
+    "/work/sales/settings": make_perm(read=True, update=True),
+    "/invoice": make_perm(read=True, create=True),
+    "/invoice/all": make_perm(read=True),
+    "/invoice/create": make_perm(read=True, create=True),
+    "/invoice/proforma": make_perm(read=True, create=True),
+    "/work/logs": make_perm(read=True, create=True, update=True),
+    "/tasks": make_perm(read=True, create=True, update=True),
+    "/chat": make_perm(read=True, create=True),
+    "/employees": make_perm(read=True),
+    "/employees/attendance": make_perm(read=True, create=True),
+    "/employees/leave-requests": make_perm(read=True, create=True),
+    "/workspace": make_perm(read=True),
+    "/workspace/seating": make_perm(read=True),
+    "/workspace/gallery": make_perm(read=True),
+    "/remarks": make_perm(read=True),
+    "/recognitions": make_perm(read=True),
+}
+
+# Default permissions for Finance Department
+DEFAULT_FINANCE_PERMISSIONS: Dict[str, dict] = {
+    "/dashboard": make_perm(read=True),
+    "/payroll": make_perm(all_perm=True),
+    "/payroll/dashboard": make_perm(all_perm=True),
+    "/payroll/structure": make_perm(all_perm=True),
+    "/payroll/settings": make_perm(all_perm=True),
+    "/payroll/processing": make_perm(all_perm=True),
+    "/payroll/bonuses": make_perm(all_perm=True),
+    "/payroll/payslips": make_perm(all_perm=True),
+    "/finance": make_perm(all_perm=True),
+    "/finance/transactions": make_perm(all_perm=True),
+    "/finance/plan": make_perm(all_perm=True),
+    "/finance/summary": make_perm(all_perm=True),
+    "/finance/clients": make_perm(all_perm=True),
+    "/finance/audit": make_perm(all_perm=True),
+    "/invoice": make_perm(all_perm=True),
+    "/invoice/all": make_perm(all_perm=True),
+    "/invoice/ledger": make_perm(all_perm=True),
+    "/invoice/create": make_perm(all_perm=True),
+    "/invoice/proforma": make_perm(all_perm=True),
+    "/reports": make_perm(read=True),
+    "/reports/payroll": make_perm(all_perm=True),
+    "/work/logs": make_perm(read=True, create=True, update=True),
+    "/tasks": make_perm(read=True, create=True, update=True),
+    "/chat": make_perm(read=True, create=True),
+    "/employees": make_perm(read=True),
+    "/employees/attendance": make_perm(read=True, create=True),
+    "/employees/leave-requests": make_perm(read=True, create=True),
+    "/workspace": make_perm(read=True),
+    "/remarks": make_perm(read=True),
+    "/recognitions": make_perm(read=True),
+}
+
+# Default permissions for Management Department
+DEFAULT_MANAGEMENT_PERMISSIONS: Dict[str, dict] = {
+    "/dashboard": make_perm(all_perm=True),
+    "/approvals": make_perm(all_perm=True),
+    "/approvals/daily-progress": make_perm(all_perm=True),
+    "/approvals/history": make_perm(all_perm=True),
+    "/reports": make_perm(all_perm=True),
+    "/reports/attendance": make_perm(all_perm=True),
+    "/reports/payroll": make_perm(all_perm=True),
+    "/reports/hiring": make_perm(all_perm=True),
+    "/reports/work": make_perm(all_perm=True),
+    "/employees": make_perm(all_perm=True),
+    "/employees/list": make_perm(read=True),
+    "/employees/org": make_perm(read=True),
+    "/employees/attendance": make_perm(all_perm=True),
+    "/recruitment": make_perm(all_perm=True),
+    "/schedule": make_perm(all_perm=True),
+    "/work/projects": make_perm(all_perm=True),
+    "/work/logs": make_perm(all_perm=True),
+    "/tasks": make_perm(all_perm=True),
+    "/chat": make_perm(all_perm=True),
+    "/workspace": make_perm(all_perm=True),
+    "/workspace/seating": make_perm(all_perm=True),
+    "/workspace/resource": make_perm(all_perm=True),
+    "/workspace/gallery": make_perm(all_perm=True),
+    "/remarks": make_perm(all_perm=True),
+    "/recognitions": make_perm(all_perm=True),
+}
+
+# Default permissions for Digital Marketing Department
+DEFAULT_DIGITAL_MARKETING_PERMISSIONS: Dict[str, dict] = {
+    "/dashboard": make_perm(read=True),
+    "/schedule": make_perm(read=True),
+    "/work/projects": make_perm(read=True, create=True, update=True),
+    "/work/logs": make_perm(read=True, create=True, update=True),
+    "/work/research": make_perm(read=True, create=True, update=True),
+    "/work/sales/leads": make_perm(read=True, create=True),
+    "/tasks": make_perm(read=True, create=True, update=True),
+    "/chat": make_perm(read=True, create=True),
+    "/employees": make_perm(read=True),
+    "/employees/attendance": make_perm(read=True, create=True),
+    "/employees/leave-requests": make_perm(read=True, create=True),
+    "/workspace": make_perm(read=True),
+    "/workspace/gallery": make_perm(read=True),
+    "/remarks": make_perm(read=True),
+    "/recognitions": make_perm(read=True),
+}
+
+# Default permissions for Creative Department
+DEFAULT_CREATIVE_PERMISSIONS: Dict[str, dict] = {
+    "/dashboard": make_perm(read=True),
+    "/schedule": make_perm(read=True),
+    "/work/projects": make_perm(read=True, create=True, update=True),
+    "/work/logs": make_perm(read=True, create=True, update=True),
+    "/tasks": make_perm(read=True, create=True, update=True),
+    "/chat": make_perm(read=True, create=True),
+    "/workspace": make_perm(read=True),
+    "/workspace/gallery": make_perm(read=True, create=True, update=True),
+    "/employees": make_perm(read=True),
+    "/employees/attendance": make_perm(read=True, create=True),
+    "/employees/leave-requests": make_perm(read=True, create=True),
+    "/remarks": make_perm(read=True),
+    "/recognitions": make_perm(read=True),
+}
+
+# Default permissions for Product Department
+DEFAULT_PRODUCT_PERMISSIONS: Dict[str, dict] = {
+    "/dashboard": make_perm(read=True),
+    "/schedule": make_perm(read=True),
+    "/work/projects": make_perm(all_perm=True),
+    "/work/logs": make_perm(read=True, create=True, update=True),
+    "/work/research": make_perm(all_perm=True),
+    "/tasks": make_perm(all_perm=True),
+    "/chat": make_perm(all_perm=True),
+    "/reports/work": make_perm(all_perm=True),
+    "/employees": make_perm(read=True),
+    "/employees/attendance": make_perm(read=True, create=True),
+    "/employees/leave-requests": make_perm(read=True, create=True),
+    "/workspace": make_perm(read=True),
+    "/remarks": make_perm(read=True),
+    "/recognitions": make_perm(read=True),
+}
+
+DEFAULT_DEPARTMENT_PERMISSIONS: Dict[str, Dict[str, dict]] = {
+    "HR": DEFAULT_HR_PERMISSIONS,
+    "Development": DEFAULT_DEVELOPMENT_PERMISSIONS,
+    "Python": DEFAULT_PYTHON_PERMISSIONS,
+    "Sales": DEFAULT_SALES_PERMISSIONS,
+    "Finance": DEFAULT_FINANCE_PERMISSIONS,
+    "Management": DEFAULT_MANAGEMENT_PERMISSIONS,
+    "Digital Marketing": DEFAULT_DIGITAL_MARKETING_PERMISSIONS,
+    "Creative": DEFAULT_CREATIVE_PERMISSIONS,
+    "Product": DEFAULT_PRODUCT_PERMISSIONS,
+}
+
+def get_default_permissions_for_department(dept_name: str) -> Dict[str, dict]:
+    if not dept_name:
+        return DEFAULT_DEVELOPMENT_PERMISSIONS
+    clean = str(dept_name).strip().lower()
+    for name, perms in DEFAULT_DEPARTMENT_PERMISSIONS.items():
+        if name.lower() == clean:
+            return perms
+    return DEFAULT_DEVELOPMENT_PERMISSIONS
 
 # ==============================================================================
 # DATABASE INITIALIZER & SEEDER
@@ -196,10 +397,9 @@ DEFAULT_SUB_ADMIN_PERMISSIONS: Dict[str, dict] = {
 async def init_database_presets_and_admin(db):
     """
     1. Ensures the single Master Admin user exists with 'Admin@123' password and full system access.
-    2. Does NOT modify any other users' existing roles.
-    3. Seeds role-based permission presets (HR, Employee, Sub-Admin, Admin) if not existing.
+    2. Seeds Department-wise permission presets for all 9 departments.
+    3. Seeds dual-role presets (Admin, Employee).
     """
-    # 1. Setup Master Admin: admin@hrms.com
     admin_email = "admin@hrms.com"
     salt = bcrypt.gensalt()
     admin_hashed_pw = bcrypt.hashpw("Admin@123".encode("utf-8"), salt).decode("utf-8")
@@ -268,27 +468,37 @@ async def init_database_presets_and_admin(db):
             upsert=True
         )
 
-    # 2. Seed Role-Based Permission Presets (HR, Employee, Sub-Admin, Admin)
-    role_presets = [
-        ("HR", DEFAULT_HR_PERMISSIONS),
-        ("Employee", DEFAULT_EMPLOYEE_PERMISSIONS),
-        ("Sub-Admin", DEFAULT_SUB_ADMIN_PERMISSIONS),
-        ("Admin", admin_full_perms),
-    ]
-
-    for role_name, default_perms in role_presets:
-        existing_preset = await db["permission_presets"].find_one({"role": role_name})
+    # 2. Seed Department-Wise Permission Presets
+    for dept_name, default_perms in DEFAULT_DEPARTMENT_PERMISSIONS.items():
+        existing_preset = await db["permission_presets"].find_one({"department": dept_name})
         if not existing_preset:
             await db["permission_presets"].update_one(
-                {"role": role_name},
+                {"department": dept_name},
                 {"$set": {
-                    "role": role_name,
+                    "department": dept_name,
+                    "role": "Employee",
                     "department_id": "all",
                     "designation_id": "all",
                     "module_permissions": default_perms
                 }},
                 upsert=True
             )
-            print(f"[Presets] Seeded role-based preset for '{role_name}'.")
+            print(f"[Presets] Seeded department-wise preset for '{dept_name}'.")
+
+    # 3. Seed Role Presets (Admin & Employee)
+    for role_name, default_perms in [("Admin", admin_full_perms), ("Employee", DEFAULT_DEVELOPMENT_PERMISSIONS)]:
+        existing_role_preset = await db["permission_presets"].find_one({"role": role_name, "department": None})
+        if not existing_role_preset:
+            await db["permission_presets"].update_one(
+                {"role": role_name, "department": None},
+                {"$set": {
+                    "role": role_name,
+                    "department": None,
+                    "department_id": "all",
+                    "designation_id": "all",
+                    "module_permissions": default_perms
+                }},
+                upsert=True
+            )
 
     print(f"[Admin] Master admin initialized: {admin_email} (Password: Admin@123)")

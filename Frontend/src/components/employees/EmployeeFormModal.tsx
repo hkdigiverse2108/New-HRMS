@@ -134,6 +134,59 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
     activelyUsingHRMS: true
   });
 
+  const [subDepartments, setSubDepartments] = useState<string[]>([]);
+  const [allDesignations, setAllDesignations] = useState<string[]>([]);
+  const [isLoadingSubDepts, setIsLoadingSubDepts] = useState(false);
+  const [isLoadingDesignations, setIsLoadingDesignations] = useState(false);
+
+  // Fetch all designations once on modal open
+  useEffect(() => {
+    if (isOpen) {
+      const fetchDesignations = async () => {
+        setIsLoadingDesignations(true);
+        try {
+          const res = await api.get<any>("/designations", { showErrorToast: false });
+          const raw = res?.data || res?.items || (Array.isArray(res) ? res : []);
+          const names = raw.map((d: any) => typeof d === 'string' ? d : d.name).filter(Boolean);
+          if (names.length > 0) {
+            setAllDesignations(names);
+          }
+        } catch (err) {
+          console.warn("Failed to fetch designations", err);
+        } finally {
+          setIsLoadingDesignations(false);
+        }
+      };
+      fetchDesignations();
+    }
+  }, [isOpen]);
+
+  // Fetch sub-departments dynamically when department changes
+  useEffect(() => {
+    if (isOpen && formData.department) {
+      const fetchSubDepartments = async (dept: string) => {
+        setIsLoadingSubDepts(true);
+        try {
+          const res = await api.get<any>(`/sub-departments/department/${encodeURIComponent(dept)}`, { showErrorToast: false });
+          const raw = res?.data || res?.items || (Array.isArray(res) ? res : []);
+          let names = raw.map((s: any) => typeof s === 'string' ? s : s.name).filter(Boolean);
+          if (names.length === 0) {
+            const allRes = await api.get<any>("/sub-departments", { showErrorToast: false });
+            const allRaw = allRes?.data || allRes?.items || (Array.isArray(allRes) ? allRes : []);
+            names = allRaw.map((s: any) => typeof s === 'string' ? s : s.name).filter(Boolean);
+          }
+          setSubDepartments(names);
+        } catch (err) {
+          console.warn("Failed to fetch sub-departments", err);
+          setSubDepartments([]);
+        } finally {
+          setIsLoadingSubDepts(false);
+        }
+      };
+      fetchSubDepartments(formData.department);
+    }
+  }, [isOpen, formData.department]);
+
   useEffect(() => {
     setErrors({});
     setIsSubmitting(false);
@@ -798,7 +851,6 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                         onChange={(val) => handleInputChange('role', val)}
                         options={[
                           { label: 'Employee', value: 'Employee' },
-                          { label: 'Manager', value: 'Manager' },
                           { label: 'Admin', value: 'Admin' }
                         ]}
                         className={cn(
@@ -821,7 +873,10 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                       </label>
                       <SearchableSelect 
                         value={formData.department || ''} 
-                        onChange={(val) => handleInputChange('department', val)}
+                        onChange={(val) => {
+                          handleInputChange('department', val);
+                          handleInputChange('sub_department', '');
+                        }}
                         options={departments.map(dept => ({ label: dept, value: dept }))}
                         className={cn(
                           "w-full px-4 h-[42px] bg-muted/50 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-all",
@@ -838,19 +893,29 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
 
                     <div className="space-y-2">
                       <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Sub-Department</label>
-                      <input 
-                        type="text" value={formData.sub_department || ''} onChange={(e) => handleInputChange('sub_department', e.target.value)}
-                        className="w-full px-4 py-2.5 bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
-                        placeholder="e.g. Frontend"
+                      <SearchableSelect 
+                        value={formData.sub_department || ''} 
+                        onChange={(val) => handleInputChange('sub_department', val)}
+                        options={Array.from(new Set([
+                          ...(formData.sub_department ? [formData.sub_department] : []),
+                          ...subDepartments
+                        ])).map(s => ({ label: s, value: s }))}
+                        placeholder={isLoadingSubDepts ? "Loading sub-departments..." : (subDepartments.length === 0 ? "Select or Add Sub-Department" : "Select Sub-Department")}
+                        className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
                       />
                     </div>
 
                     <div className="space-y-2">
                       <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Designation / Title</label>
-                      <input 
-                        type="text" value={formData.designation || ''} onChange={(e) => handleInputChange('designation', e.target.value)}
-                        className="w-full px-4 py-2.5 bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
-                        placeholder="e.g. Senior Developer"
+                      <SearchableSelect 
+                        value={formData.designation || ''} 
+                        onChange={(val) => handleInputChange('designation', val)}
+                        options={Array.from(new Set([
+                          ...(formData.designation ? [formData.designation] : []),
+                          ...allDesignations
+                        ])).map(d => ({ label: d, value: d }))}
+                        placeholder={isLoadingDesignations ? "Loading designations..." : "Select Designation / Title"}
+                        className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
                       />
                     </div>
 
