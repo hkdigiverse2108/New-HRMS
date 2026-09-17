@@ -54,8 +54,12 @@ async def get_deleted_projects(
         
     return await ProjectService.get_all_projects(is_deleted=True, page=page, limit=limit)
 
-
-
+@router.get("/{project_id}", response_model=ProjectResponse, response_model_exclude_none=True)
+async def get_project(project_id: str, current_user: dict = Depends(get_current_employee)):
+    item = await ProjectService.get_project_by_id(project_id)
+    if not item or item.get("is_deleted"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    return item
 @router.put("/{project_id}", response_model=ProjectResponse, response_model_exclude_none=True)
 async def update_project(project_id: str, data: ProjectUpdate, current_user: dict = Depends(get_current_employee)):
     item = await ProjectService.get_project_by_id(project_id)

@@ -17,9 +17,8 @@ class ProjectService:
             if client:
                 client_cache[client_id_str] = client
             else:
-                client_cache[client_id_str] = {}
-                
-        item["client"] = client_cache.get(client_id_str)
+                client_cache[client_id_str] = {"company_name": client_id_str}
+        item["client"] = client_cache[client_id_str]
 
     @staticmethod
     async def create_project(data: ProjectCreate):
