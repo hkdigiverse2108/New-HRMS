@@ -42,6 +42,26 @@ class TaskService:
             for hist in transfer_hist:
                 hist["from_employee_details"] = await get_details(hist.get("from_employee"))
                 hist["to_employee_details"] = await get_details(hist.get("to_employee"))
+                
+        # Populate Project Details for SMM tasks
+        project_id = item.get("project_id")
+        if project_id:
+            from app.repository.project import ProjectRepository
+            proj = await ProjectRepository.get_by_id(project_id)
+            if proj:
+                if "_id" in proj:
+                    proj["_id"] = str(proj["_id"])
+                item["project_details"] = proj
+                
+        # Populate Content Details for SMM tasks
+        content_item_id = item.get("content_item_id")
+        if content_item_id:
+            from app.repository.content import ContentRepository
+            content = await ContentRepository.get_by_id(content_item_id)
+            if content:
+                if "_id" in content:
+                    content["_id"] = str(content["_id"])
+                item["content_item_details"] = content
 
     @staticmethod
     async def create_task(data: TaskCreate, assigned_by: str):

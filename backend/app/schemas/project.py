@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 from typing import Optional, Dict, Any
 from datetime import datetime, date
 from enum import Enum
@@ -21,6 +21,37 @@ class ProjectPriority(str, Enum):
     MEDIUM = "Medium"
     HIGH = "High"
     URGENT = "Urgent"
+
+class CalendarApprovalStatus(str, Enum):
+    PENDING = "Pending"
+    APPROVED_BY_CLIENT = "Approved by Client"
+    CHANGES_REQUESTED = "Changes Requested"
+    REJECTED = "Rejected"
+
+class FollowUpScheduleType(str, Enum):
+    FIXED_INTERVAL = "Fixed Interval (Days)"
+    WEEKLY = "Weekly (Specific Days)"
+    MONTHLY = "Monthly (Specific Dates)"
+
+class ContentCalendarApproval(BaseModel):
+    month: int = Field(..., ge=1, le=12)
+    year: int
+    status: CalendarApprovalStatus = Field(default=CalendarApprovalStatus.PENDING)
+    reason: Optional[str] = None
+    updated_at: Optional[datetime] = None
+    updated_by: Optional[str] = None
+
+class ContentCalendarApprovalUpdate(BaseModel):
+    month: int = Field(..., ge=1, le=12)
+    year: int
+    status: CalendarApprovalStatus
+    reason: Optional[str] = None
+    
+    @model_validator(mode='after')
+    def check_reason(self):
+        if self.status != CalendarApprovalStatus.APPROVED_BY_CLIENT and not self.reason:
+            raise ValueError("Reason is required when status is not 'Approved by Client'")
+        return self
 
 class DigitalMarketingStats(BaseModel):
     reach_target: Optional[str] = None
@@ -81,6 +112,16 @@ class CampaignStatus(str, Enum):
     ACTIVE = "Active"
     INACTIVE = "Inactive"
 
+class CreativeTeam(BaseModel):
+    scripting: Optional[str] = None
+    reel_editing: Optional[str] = None
+    post_graphics: Optional[str] = None
+    shoot_videography: Optional[str] = None
+    approval_qc: Optional[str] = None
+    posting_publisher: Optional[str] = None
+    caption: Optional[str] = None
+    thumbnail: Optional[str] = None
+
 class Campaign(BaseModel):
     name: str
     status: CampaignStatus = Field(default=CampaignStatus.ACTIVE)
@@ -90,6 +131,14 @@ class ProjectBase(BaseModel):
     general: ProjectGeneralDetails
     finance: Optional[ProjectFinanceDetails] = None
     campaigns: Optional[list[Campaign]] = Field(default=None, description="Marketing campaigns")
+    creative_team: Optional[CreativeTeam] = None
+    whatsapp_group_link: Optional[str] = None
+    greetings_msg_sent: bool = False
+    followup_schedule_type: Optional[FollowUpScheduleType] = None
+    followup_schedule_value: Optional[list[int]] = Field(default=None, description="E.g. [7] for 7 days, [0, 3] for Mon & Thu")
+    last_followup_date: Optional[date] = None
+    next_followup_date: Optional[date] = None
+    content_approvals: Optional[list[ContentCalendarApproval]] = []
 
 class ProjectCreate(ProjectBase):
     pass
@@ -117,6 +166,12 @@ class ProjectUpdate(BaseModel):
     general: Optional[ProjectGeneralUpdate] = None
     finance: Optional[ProjectFinanceUpdate] = None
     campaigns: Optional[list[Campaign]] = None
+    creative_team: Optional[CreativeTeam] = None
+    whatsapp_group_link: Optional[str] = None
+    greetings_msg_sent: Optional[bool] = None
+    followup_schedule_type: Optional[FollowUpScheduleType] = None
+    followup_schedule_value: Optional[list[int]] = None
+    last_followup_date: Optional[date] = None
 
 class ProjectResponse(ProjectBase):
     id: str = Field(alias="_id")
@@ -125,5 +180,6 @@ class ProjectResponse(ProjectBase):
     is_deleted: bool = False
     
     client: Optional[dict] = None
+    creative_team_details: Optional[dict] = None
     
     model_config = ConfigDict(populate_by_name=True)

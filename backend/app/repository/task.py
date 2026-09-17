@@ -57,7 +57,11 @@ class TaskRepository:
         limit: Optional[int] = None, 
         involved_emp_id: Optional[str] = None,
         history_assigned_to: Optional[str] = None,
-        history_assigned_by: Optional[str] = None
+        history_assigned_by: Optional[str] = None,
+        content_item_id: Optional[str] = None,
+        project_id: Optional[str] = None,
+        creative_role: Optional[str] = None,
+        task_category: Optional[str] = None
     ):
         collection = await cls.get_collection()
         and_conditions = [{"is_deleted": is_deleted}]
@@ -79,6 +83,16 @@ class TaskRepository:
             and_conditions.append({"transfer_history.from_employee": history_assigned_by})
             
         query = {"$and": and_conditions} if len(and_conditions) > 1 else and_conditions[0]
+            
+        
+        if content_item_id:
+            query["content_item_id"] = content_item_id
+        if project_id:
+            query["project_id"] = project_id
+        if creative_role:
+            query["creative_role"] = creative_role
+        if task_category:
+            query["task_category"] = task_category
             
         total = await collection.count_documents(query)
 

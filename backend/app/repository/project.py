@@ -33,7 +33,19 @@ class ProjectRepository:
         return data
 
     @classmethod
-    async def get_all(cls, is_deleted: bool = False, client_id: Optional[str] = None, category: Optional[str] = None, priority: Optional[str] = None, status: Optional[str] = None, search: Optional[str] = None, page: Optional[int] = None, limit: Optional[int] = None):
+    async def get_all(
+        cls, 
+        is_deleted: bool = False, 
+        client_id: Optional[str] = None, 
+        category: Optional[str] = None, 
+        priority: Optional[str] = None, 
+        status: Optional[str] = None, 
+        search: Optional[str] = None, 
+        whatsapp_status: Optional[str] = None,
+        festival_posts: Optional[bool] = None,
+        page: Optional[int] = None, 
+        limit: Optional[int] = None
+    ):
         collection = await cls.get_collection()
         query = {"is_deleted": is_deleted}
         
@@ -55,6 +67,20 @@ class ProjectRepository:
         if search:
             query["general.project_name"] = {"$regex": search, "$options": "i"}
             
+        if whatsapp_status:
+            clean = whatsapp_status.lower().replace(" ", "")
+            if clean == "groupcreated":
+                query["whatsapp_group_link"] = {"$ne": None, "$exists": True}
+            elif clean == "grouppending":
+                query["whatsapp_group_link"] = {"$in": [None, ""]}
+            elif clean == "greetingssent":
+                query["greetings_msg_sent"] = True
+            elif clean == "greetingspending":
+                query["greetings_msg_sent"] = {"$ne": True}
+                
+        if festival_posts is not None:
+            query["general.creative_stats.festival_posts_included"] = festival_posts
+                
         total_count = await collection.count_documents(query)
         
         cursor = collection.find(query)

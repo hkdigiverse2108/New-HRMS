@@ -29,6 +29,8 @@ async def get_all_projects(
     priority: Optional[str] = Query(None, description="Filter by priority"),
     status: Optional[str] = Query(None, description="Filter by status (e.g. inprogress)"),
     search: Optional[str] = Query(None, description="Search term for project name"),
+    whatsapp_status: Optional[str] = Query(None, description="Filter by whatsapp status (Group Created, Group Pending, Greetings Sent, Greetings Pending)"),
+    festival_posts: Optional[bool] = Query(None, description="Filter by festival posts included"),
     current_user: dict = Depends(get_current_employee)
 ):
     return await ProjectService.get_all_projects(
@@ -38,6 +40,8 @@ async def get_all_projects(
         priority=priority,
         status=status,
         search=search,
+        whatsapp_status=whatsapp_status,
+        festival_posts=festival_posts,
         page=page, 
         limit=limit
     )
@@ -66,7 +70,7 @@ async def update_project(project_id: str, data: ProjectUpdate, current_user: dic
     if not item or item.get("is_deleted"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
         
-    updated = await ProjectService.update_project(project_id, data)
+    updated = await ProjectService.update_project(project_id, data, current_user.get("id"))
     if not updated:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to update project")
         

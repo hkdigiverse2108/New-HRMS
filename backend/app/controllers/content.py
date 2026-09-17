@@ -9,8 +9,10 @@ from app.schemas.content import (
     BulkAddRequest,
     ContentCalendarResponse
 )
+from app.schemas.project import ContentCalendarApprovalUpdate, ContentCalendarApproval
 from app.schemas.pagination import PaginatedResponse
 from app.services.content import ContentService
+from app.services.project import ProjectService
 from app.controllers.auth import get_current_employee
 
 router = APIRouter(prefix="/projects", tags=["Content Calendar"])
@@ -41,7 +43,7 @@ async def create_content_item(
     if data.project_id != project_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Project ID mismatch")
         
-    created = await ContentService.create_content(project_id, data)
+    created = await ContentService.create_content(project_id, data, current_user.get("id"))
     if not created:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
         
@@ -80,7 +82,7 @@ async def bulk_add_content_items(
             content_type=data.default_format,
             topic_title="Untitled Idea"
         )
-        created = await ContentService.create_content(project_id, new_item)
+        created = await ContentService.create_content(project_id, new_item, current_user.get("id"))
         if created:
             item = await ContentService.get_content_by_id(created["_id"])
             if item:
@@ -131,6 +133,42 @@ async def get_all_content_items(
         limit=limit
     )
 
+@router.get("/{project_id}/content/approval", response_model=Optional[ContentCalendarApproval])
+async def get_monthly_approval(
+    project_id: str,
+    month: int = Query(..., ge=1, le=12),
+    year: int = Query(...),
+    current_user: dict = Depends(get_current_employee)
+):
+    project = await ProjectService.get_project_by_id(project_id)
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        
+    approvals = project.get("content_approvals", [])
+    for approval in approvals:
+        if approval.get("month") == month and approval.get("year") == year:
+            return approval
+            
+    return None
+
+@router.put("/{project_id}/content/approval", response_model=ContentCalendarApproval)
+async def update_monthly_approval(
+    project_id: str,
+    data: ContentCalendarApprovalUpdate,
+    current_user: dict = Depends(get_current_employee)
+):
+    project = await ProjectService.get_project_by_id(project_id)
+    if not project or project.get("is_deleted"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        
+    emp_id = str(current_user.get("_id") or current_user.get("id"))
+    updated_approval = await ProjectService.update_content_approval(project_id, data, current_user_id=emp_id)
+    
+    if not updated_approval:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to update approval status")
+        
+    return updated_approval
+
 @router.get("/{project_id}/content/{content_id}", response_model=ContentItemResponse)
 async def get_content_item_by_id(
     project_id: str,
@@ -172,6 +210,7 @@ async def delete_content_item(
     if not item or item.get("project_id") != project_id or item.get("is_deleted"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Content item not found")
         
-    success = await ContentService.delete_content(content_id)
+    emp_id = str(current_user.get("_id") or current_user.get("id"))
+    success = await ContentService.delete_content(content_id, current_user_id=emp_id)
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to delete content item")

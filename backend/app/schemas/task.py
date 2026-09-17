@@ -47,6 +47,12 @@ class TaskBase(BaseModel):
     due_date: Optional[date] = None
     assigned_to: str = Field(..., description="Employee ID this task is assigned to")
     
+    # Optional fields for SMM Tasks
+    task_category: str = Field(default="General", description="Category of the task (e.g. General, SMM)")
+    content_item_id: Optional[str] = None
+    project_id: Optional[str] = None
+    creative_role: Optional[str] = None
+    
     transfer_request: Optional[TaskTransferRequest] = None
     transfer_history: list[TaskTransferHistory] = Field(default_factory=list)
 
@@ -129,5 +135,8 @@ class TaskResponse(TaskBase):
     assigned_to_details: Optional[UserDetails] = None
     assigned_by_details: Optional[UserDetails] = None
     created_by_details: Optional[UserDetails] = None
+    
+    project_details: Optional[dict] = None
+    content_item_details: Optional[dict] = None
     
     model_config = ConfigDict(populate_by_name=True)

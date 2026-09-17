@@ -54,3 +54,8 @@ class EmployeePenaltyDBModel(BaseModel):
         arbitrary_types_allowed=True,
         json_encoders={ObjectId: str}
     )
+
+async def setup_penalty_indexes(db):
+    # Setup indexes for penalty collections if needed
+    pass
+
