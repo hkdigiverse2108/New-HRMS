@@ -207,3 +207,92 @@ class AttendanceRepository:
                 new_doc["_id"] = str(res.inserted_id)
                 return serialize_mongo(new_doc)
 
+    @classmethod
+    async def upsert_manual_attendance(
+        cls,
+        employee_id: str,
+        date_str: str,
+        status: str,
+        employee_info: Dict[str, Any],
+        check_in: Optional[str] = "09:30 AM",
+        check_out: Optional[str] = "06:30 PM",
+        remarks: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Manually mark attendance by HR/Admin for a specific employee and date."""
+        collection = await cls.get_collection()
+        existing = await collection.find_one({"employee_id": employee_id, "date": date_str})
+
+        remark_text = remarks or "Marked manually by HR/Admin"
+        is_working = status in ["Present", "Half Day"]
+
+        gross_sec = 0
+        if is_working and check_in and check_out:
+            for fmt in ("%I:%M %p", "%I:%M%p", "%H:%M:%S", "%H:%M"):
+                try:
+                    t_in = datetime.strptime(check_in.strip(), fmt).time()
+                    break
+                except ValueError:
+                    t_in = None
+            for fmt in ("%I:%M %p", "%I:%M%p", "%H:%M:%S", "%H:%M"):
+                try:
+                    t_out = datetime.strptime(check_out.strip(), fmt).time()
+                    break
+                except ValueError:
+                    t_out = None
+
+            if t_in and t_out:
+                today = datetime.today()
+                dt_in = datetime.combine(today, t_in)
+                dt_out = datetime.combine(today, t_out)
+                diff = (dt_out - dt_in).total_seconds()
+                gross_sec = max(0, int(diff))
+
+        if gross_sec == 0 and is_working:
+            gross_sec = 28800 if status == "Present" else 14400
+
+        break_sec = existing.get("break_seconds", 0) if existing else 0
+        net_sec = max(0, gross_sec - break_sec) if is_working else 0
+
+        if is_working:
+            hrs = net_sec // 3600
+            mins = (net_sec % 3600) // 60
+            work_hours = f"{hrs}h {mins}m"
+        else:
+            work_hours = "--"
+
+        update_data = {
+            "status": status,
+            "check_in": check_in if is_working else "--",
+            "check_out": check_out if is_working else "--",
+            "work_hours": work_hours,
+            "gross_seconds": gross_sec,
+            "break_seconds": break_sec,
+            "net_work_seconds": net_sec,
+            "is_late": False,
+            "remarks": [remark_text],
+            "updated_at": datetime.utcnow().isoformat()
+        }
+
+        if existing:
+            await collection.update_one({"_id": existing["_id"]}, {"$set": update_data})
+            existing.update(update_data)
+            return serialize_mongo(existing)
+        else:
+            new_doc = {
+                "employee_id": employee_id,
+                "employee_name": employee_info.get("name", "Employee"),
+                "role": employee_info.get("role", "Staff"),
+                "department": employee_info.get("department", "General"),
+                "avatar": employee_info.get("avatar", ""),
+                "date": date_str,
+                "punches": [],
+                "breaks": [],
+                "created_at": datetime.utcnow().isoformat(),
+                **update_data
+            }
+            res = await collection.insert_one(new_doc)
+            new_doc["id"] = str(res.inserted_id)
+            new_doc["_id"] = str(res.inserted_id)
+            return serialize_mongo(new_doc)
+
+

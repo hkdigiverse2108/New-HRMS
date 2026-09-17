@@ -45,6 +45,9 @@ class EmployeePenaltyDBModel(BaseModel):
     penalty_type_id: PyObjectId
     price: float
     is_warning: bool = False
+    status: str = "Active"  # "Active", "Resolved", "Waived"
+    resolution_reason: Optional[str] = None
+    impact_payroll: bool = True
     reason: Optional[str] = None
     is_deleted: bool = False
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -55,7 +58,20 @@ class EmployeePenaltyDBModel(BaseModel):
         json_encoders={ObjectId: str}
     )
 
+import logging
+logger = logging.getLogger(__name__)
+
 async def setup_penalty_indexes(db):
-    # Setup indexes for penalty collections if needed
-    pass
+    try:
+        pt_col = db["penalty_types"]
+        await pt_col.create_index("name", unique=True)
+        
+        ep_col = db["employee_penalties"]
+        await ep_col.create_index([("employee_id", 1), ("is_deleted", 1)])
+        await ep_col.create_index([("penalty_type_id", 1)])
+        await ep_col.create_index([("penalty_date", -1)])
+        await ep_col.create_index([("status", 1)])
+        logger.info("Penalty database indexes setup successfully.")
+    except Exception as e:
+        logger.warning(f"Failed to setup penalty indexes: {e}")
 

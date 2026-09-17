@@ -9,7 +9,8 @@ from app.schemas.attendance import (
     PendingPunchOutResolveRequest,
     AttendanceOut,
     PendingPunchOutCheckResponse,
-    EOMSummaryResponse
+    EOMSummaryResponse,
+    ManualAttendanceRequest
 )
 from app.services.attendance import AttendanceService
 from app.controllers.auth import get_current_employee, RoleChecker
@@ -222,3 +223,23 @@ async def get_eom_summary(
 
     await set_cache(cache_key, result, ttl=120)
     return result
+
+@router.post("/manual")
+async def mark_manual_attendance(
+    payload: ManualAttendanceRequest,
+    current_employee: dict = Depends(RoleChecker(["Admin", "Subadmin", "HR"]))
+):
+    """
+    Allows Admin or HR to manually mark attendance for a day (bulk or per employee).
+    Useful when office is closed or for special events/holidays to prevent auto-penalties.
+    """
+    return await AttendanceService.mark_manual_attendance(
+        date_str=payload.date,
+        status_val=payload.status,
+        employee_id=payload.employee_id,
+        employee_ids=payload.employee_ids,
+        check_in=payload.check_in,
+        check_out=payload.check_out,
+        remarks=payload.remarks
+    )
+

@@ -21,6 +21,15 @@ class PendingPunchOutResolveRequest(BaseModel):
     date: str  # Fixed pending date (YYYY-MM-DD)
     punch_out_time: str  # Time in HH:MM or HH:MM:SS or ISO string
 
+class ManualAttendanceRequest(BaseModel):
+    employee_id: Optional[str] = None  # Single ID or "all"
+    employee_ids: Optional[List[str]] = None  # List of employee IDs for multi-select
+    date: str  # Fixed date (YYYY-MM-DD)
+    status: str = "Present"  # "Present" | "Half Day" | "On Leave" | "Holiday"
+    check_in: Optional[str] = "09:30 AM"
+    check_out: Optional[str] = "06:30 PM"
+    remarks: Optional[str] = "Marked manually by HR/Admin"
+
 class BreakItem(BaseModel):
     start_time: str
     end_time: Optional[str] = None

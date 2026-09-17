@@ -7,10 +7,14 @@ import {
   ChevronDown, 
   FileText, 
   MessageCircle,
-  ShieldCheck
+  ShieldCheck,
+  Plus,
+  Trash2,
+  X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SearchableSelect } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog";
 
 const PAY_PERIODS = [
   { id: "2026-01", label: "January 2026", period: "01 Jan 2026 – 31 Jan 2026" },
@@ -26,6 +30,11 @@ const PAY_PERIODS = [
 export function Payslips() {
   const [selectedEmpId, setSelectedEmpId] = useState(MOCK_EMPLOYEES[0]?.id || "");
   const [selectedPeriodId, setSelectedPeriodId] = useState("2026-07");
+  const [additionalDeductions, setAdditionalDeductions] = useState<{ id: string; name: string; amount: number }[]>([
+    { id: "1", name: "Trip Expense (Office Tour)", amount: 3500 },
+  ]);
+  const [isAddDeductionOpen, setIsAddDeductionOpen] = useState(false);
+  const [newDeduction, setNewDeduction] = useState({ name: "", amount: "" });
   
   const selectedEmp = MOCK_EMPLOYEES.find(e => e.id === selectedEmpId) || MOCK_EMPLOYEES[0];
   const selectedPeriod = PAY_PERIODS.find(p => p.id === selectedPeriodId) || PAY_PERIODS[6];
@@ -33,8 +42,26 @@ export function Payslips() {
   if (!selectedEmp || !selectedPeriod) return null;
 
   const totalEarnings = 105304;
-  const totalDeductions = 11708;
-  const netPayable = 93596;
+  const standardDeductions = 11708;
+  const additionalDeductionsTotal = additionalDeductions.reduce((acc, curr) => acc + curr.amount, 0);
+  const totalDeductions = standardDeductions + additionalDeductionsTotal;
+  const netPayable = totalEarnings - totalDeductions;
+
+  const handleAddDeduction = (e: React.FormEvent) => {
+    e.preventDefault();
+    const amt = parseFloat(newDeduction.amount);
+    if (!newDeduction.name.trim() || isNaN(amt) || amt <= 0) return;
+    setAdditionalDeductions(prev => [
+      ...prev,
+      { id: Date.now().toString(), name: newDeduction.name.trim(), amount: amt }
+    ]);
+    setNewDeduction({ name: "", amount: "" });
+    setIsAddDeductionOpen(false);
+  };
+
+  const handleRemoveDeduction = (id: string) => {
+    setAdditionalDeductions(prev => prev.filter(d => d.id !== id));
+  };
 
   // Extract initials
   const initials = selectedEmp.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
@@ -253,6 +280,45 @@ export function Payslips() {
                 <span className="text-muted-foreground">Other Deduction</span>
                 <span className="font-semibold text-foreground">₹0</span>
               </div>
+
+              {/* Custom Additional Deductions (e.g. Office Trip ₹3,500) */}
+              <div className="pt-4 border-t border-dashed border-border/80">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                    Additional Deductions
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddDeductionOpen(true)}
+                    className="flex items-center gap-1 text-[11px] font-bold text-[#0c7851] hover:text-[#00925e] bg-emerald-50 px-2 py-0.5 rounded-md transition-colors"
+                  >
+                    <Plus className="w-3 h-3" /> Add Deduction
+                  </button>
+                </div>
+
+                {additionalDeductions.length > 0 ? (
+                  <div className="space-y-2">
+                    {additionalDeductions.map((ded) => (
+                      <div key={ded.id} className="flex justify-between items-center text-[13px] bg-muted/20 hover:bg-muted/40 p-2 rounded-lg transition-colors group">
+                        <span className="text-foreground/90 font-medium">{ded.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-rose-600">-₹{ded.amount.toLocaleString("en-IN")}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveDeduction(ded.id)}
+                            title="Remove deduction"
+                            className="text-muted-foreground hover:text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[12px] text-muted-foreground italic">No additional deductions applied.</p>
+                )}
+              </div>
             </div>
           </div>
           
@@ -283,6 +349,71 @@ export function Payslips() {
 
       </div>
 
+      {/* Add Custom Deduction Dialog */}
+      <Dialog open={isAddDeductionOpen} onOpenChange={setIsAddDeductionOpen}>
+        <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+          <div className="flex items-center justify-between px-6 py-5 border-b border-border/50 bg-muted/30">
+            <div>
+              <h2 className="text-xl font-black tracking-tight">Add Additional Deduction</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">e.g. Office Trip Expense, Asset Damage</p>
+            </div>
+            <DialogClose asChild>
+              <button className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </DialogClose>
+          </div>
+
+          <form onSubmit={handleAddDeduction} className="flex flex-col">
+            <div className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
+                  Deduction Description
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Office Trip Expense / Tour Deduction"
+                  value={newDeduction.name}
+                  onChange={(e) => setNewDeduction({ ...newDeduction, name: e.target.value })}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0c7851]/20 font-medium"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
+                  Amount (₹)
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  placeholder="3500"
+                  value={newDeduction.amount}
+                  onChange={(e) => setNewDeduction({ ...newDeduction, amount: e.target.value })}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0c7851]/20 font-medium"
+                />
+              </div>
+            </div>
+
+            <div className="px-6 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsAddDeductionOpen(false)}
+                className="px-4 py-2 bg-background border border-border text-foreground/80 hover:bg-muted font-bold text-sm rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2 bg-[#0c7851] hover:bg-[#00925e] text-white font-bold text-sm rounded-xl transition-colors"
+              >
+                Add Deduction
+              </button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

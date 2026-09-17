@@ -154,6 +154,16 @@ export function Index() {
     }
   };
 
+  useEffect(() => {
+    const handleNavigateTab = (e: any) => {
+      if (e.detail) {
+        setActive(e.detail);
+      }
+    };
+    window.addEventListener("navigate_tab", handleNavigateTab);
+    return () => window.removeEventListener("navigate_tab", handleNavigateTab);
+  }, []);
+
   // Permission guard: automatically redirect to /dashboard if current tab is not accessible by this role
   useEffect(() => {
     if (user && active !== "/dashboard" && !hasModulePermission(user, active, "read")) {

@@ -29,19 +29,42 @@ class EmployeePenaltyBase(BaseModel):
     penalty_date: Optional[date] = Field(None, description="The date the penalty occurred (YYYY-MM-DD). Defaults to current date if not provided.")
 
 class EmployeePenaltyCreate(EmployeePenaltyBase):
-    pass
+    price: Optional[float] = Field(None, description="Custom price/deduction amount, overrides default if provided")
+    is_warning: Optional[bool] = Field(None, description="Explicitly set whether this is a warning or financial penalty")
+    status: Optional[str] = Field("Active", description="Status: 'Active', 'Resolved', or 'Waived'")
+    impact_payroll: Optional[bool] = Field(True, description="Whether this deduction should impact payroll")
+    resolution_reason: Optional[str] = None
 
 class EmployeePenaltyUpdate(BaseModel):
     penalty_type_id: Optional[str] = None
     reason: Optional[str] = None
     penalty_date: Optional[date] = None
+    price: Optional[float] = None
+    is_warning: Optional[bool] = None
+    status: Optional[str] = None  # "Active", "Resolved", "Waived"
+    resolution_reason: Optional[str] = None
+    impact_payroll: Optional[bool] = None
 
 class EmployeePenaltyResponse(EmployeePenaltyBase):
     id: str = Field(alias="_id")
     price: float
     is_warning: bool
+    status: str = "Active"
+    resolution_reason: Optional[str] = None
+    impact_payroll: bool = True
     is_deleted: bool = False
     created_at: datetime
     employee_name: Optional[str] = None
     avatar: Optional[str] = None
+    role: Optional[str] = None
+    department: Optional[str] = None
     penalty_type_name: Optional[str] = None
+
+class PenaltySummaryResponse(BaseModel):
+    active_penalties_count: int = 0
+    total_payroll_deductions: float = 0.0
+    max_violations_employee: str = "None"
+    max_violations_count: int = 0
+    max_penalty_employee: str = "None"
+    max_penalty_amount: float = 0.0
+

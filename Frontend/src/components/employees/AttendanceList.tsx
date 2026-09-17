@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { X, Download, MoreHorizontal, Clock, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Coffee, Briefcase, Award, FileSpreadsheet, RefreshCw } from "lucide-react";
+import { X, Download, MoreHorizontal, Clock, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Coffee, Briefcase, Award, FileSpreadsheet, RefreshCw, Search, Check, Users, ChevronDown } from "lucide-react";
 import { DateRange } from "react-day-picker";
 import { Calendar } from "@/components/ui/calendar";
 import { DialogClose, Dialog, DialogContent } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { useEmployeesContext } from "./EmployeeContext";
 import { useAuth } from "@/components/auth/AuthContext";
@@ -15,6 +16,9 @@ import { EOMSummaryView } from "@/components/attendance/EOMSummaryView";
 import { formatISTDate, formatISTTime, formatDurationSeconds, parseTimeToMinutes } from "@/lib/timeUtils";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import { isUserAdmin } from "@/lib/permissions";
+import { DatePicker } from "@/components/ui/date-picker";
+import { SearchableSelect } from "@/components/ui/select";
 
 type AttendanceStatus = "Present" | "Absent" | "Late" | "Half Day" | "On Leave";
 
@@ -140,7 +144,123 @@ export function AttendanceList() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const itemsPerPage = 10;
 
-  const isAdminOrHR = user?.role === "Admin" || user?.role === "HR";
+  const isAdminOrHR =
+    isUserAdmin(user) ||
+    ["admin", "super admin", "superadmin", "hr"].includes(String(user?.role || (user as any)?.system_role || "").toLowerCase().trim()) ||
+    String(user?.department || "").toLowerCase().trim() === "hr";
+
+  // Manual Attendance Modal State (for HR/Admin to mark day attendance / holiday / closed office)
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+  const [isSubmittingManual, setIsSubmittingManual] = useState(false);
+  const [isEmpPopoverOpen, setIsEmpPopoverOpen] = useState(false);
+  const [empSearch, setEmpSearch] = useState("");
+  const [manualForm, setManualForm] = useState({
+    selected_ids: ["all"] as string[],
+    date: formatISTDate(new Date(), "YYYY-MM-DD"),
+    status: "Present" as AttendanceStatus,
+    check_in: "09:30 AM",
+    check_out: "06:30 PM",
+    remarks: "",
+  });
+
+  // Non-admin active employees only
+  const eligibleEmployees = useMemo(() => {
+    return employees.filter((emp) => {
+      const role = String(emp.role || "").toLowerCase().trim();
+      const name = String(emp.name || "").toLowerCase().trim();
+      const status = String(emp.status || "active").toLowerCase().trim();
+
+      const isAdminRole = role === "admin" || role === "super admin" || role === "superadmin";
+      const isAdminName = name.startsWith("admin") || name.startsWith("system admin") || name === "admin";
+      const isInactive = status === "inactive" || status === "blocked" || status === "deleted";
+
+      return !isAdminRole && !isAdminName && !isInactive;
+    });
+  }, [employees]);
+
+  const filteredEligible = useMemo(() => {
+    if (!empSearch.trim()) return eligibleEmployees;
+    const q = empSearch.toLowerCase().trim();
+    return eligibleEmployees.filter(
+      (emp) =>
+        emp.name.toLowerCase().includes(q) ||
+        (emp.role || "").toLowerCase().includes(q) ||
+        (emp.department || "").toLowerCase().includes(q)
+    );
+  }, [eligibleEmployees, empSearch]);
+
+  const isAllSelected =
+    manualForm.selected_ids.includes("all") ||
+    (manualForm.selected_ids.length > 0 &&
+      manualForm.selected_ids.length === eligibleEmployees.length);
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      setManualForm((prev) => ({ ...prev, selected_ids: [] }));
+    } else {
+      setManualForm((prev) => ({ ...prev, selected_ids: ["all"] }));
+    }
+  };
+
+  const toggleEmployee = (empId: string) => {
+    setManualForm((prev) => {
+      if (prev.selected_ids.includes("all")) {
+        const allIds = eligibleEmployees.map((e) => e.id);
+        const newIds = allIds.filter((id) => id !== empId);
+        return { ...prev, selected_ids: newIds };
+      }
+
+      if (prev.selected_ids.includes(empId)) {
+        const newIds = prev.selected_ids.filter((id) => id !== empId);
+        return { ...prev, selected_ids: newIds };
+      } else {
+        const newIds = [...prev.selected_ids, empId];
+        if (newIds.length === eligibleEmployees.length) {
+          return { ...prev, selected_ids: ["all"] };
+        }
+        return { ...prev, selected_ids: newIds };
+      }
+    });
+  };
+
+  const removeEmployeeChip = (empId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setManualForm((prev) => {
+      if (prev.selected_ids.includes("all")) {
+        const allIds = eligibleEmployees.map((e) => e.id);
+        return { ...prev, selected_ids: allIds.filter((id) => id !== empId) };
+      }
+      return { ...prev, selected_ids: prev.selected_ids.filter((id) => id !== empId) };
+    });
+  };
+
+  const handleManualAttendanceSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (manualForm.selected_ids.length === 0) {
+      toast.error("Please select at least one employee.");
+      return;
+    }
+    try {
+      setIsSubmittingManual(true);
+      const isAll = manualForm.selected_ids.includes("all");
+      await api.post("/attendance/manual", {
+        employee_id: isAll ? "all" : null,
+        employee_ids: isAll ? null : manualForm.selected_ids,
+        date: manualForm.date,
+        status: manualForm.status,
+        check_in: manualForm.check_in,
+        check_out: manualForm.check_out,
+        remarks: manualForm.remarks || (manualForm.status === "Present" ? "Marked present manually by HR" : "Office closed / Special day marked by HR"),
+      });
+      toast.success("Attendance marked successfully");
+      setIsManualModalOpen(false);
+      fetchAttendance();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to mark manual attendance");
+    } finally {
+      setIsSubmittingManual(false);
+    }
+  };
 
   // Fetch real attendance records from backend
   const fetchAttendance = useCallback(async () => {
@@ -449,6 +569,14 @@ export function AttendanceList() {
               >
                 <Download className="w-4 h-4" /> Export
               </button>
+              {isAdminOrHR && (
+                <button
+                  onClick={() => setIsManualModalOpen(true)}
+                  className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs sm:text-sm rounded-xl shadow-sm flex items-center gap-2 transition-colors"
+                >
+                  <Clock className="w-4 h-4" /> Manual Attendance
+                </button>
+              )}
             </>
           )}
         </div>
@@ -845,6 +973,278 @@ export function AttendanceList() {
               </>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* HR Manual Attendance Dialog */}
+      <Dialog open={isManualModalOpen} onOpenChange={setIsManualModalOpen}>
+        <DialogContent className="sm:max-w-[480px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+          <div className="flex items-center justify-between px-6 md:px-8 py-5 border-b border-border/50 bg-muted/30">
+            <div>
+              <h2 className="text-xl font-black tracking-tight">Manual Attendance</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Mark attendance for a specific employee or all staff (e.g. office closed, festival, tech issue)
+              </p>
+            </div>
+            <DialogClose asChild>
+              <button className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </DialogClose>
+          </div>
+
+          <form onSubmit={handleManualAttendanceSubmit} className="flex flex-col">
+            <div className="p-6 md:p-8 space-y-4 max-h-[70vh] overflow-y-auto">
+              {/* Employee Selection - Multi-Select with Admin Exclusion */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
+                    Employee Scope
+                  </label>
+                  <span className="text-[11px] font-bold text-primary">
+                    {isAllSelected
+                      ? `All Active (${eligibleEmployees.length})`
+                      : `${manualForm.selected_ids.length} selected`}
+                  </span>
+                </div>
+
+                <Popover open={isEmpPopoverOpen} onOpenChange={setIsEmpPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className="w-full min-h-[42px] py-2 px-3.5 bg-background border border-border rounded-xl text-left flex items-center justify-between gap-2 shadow-none hover:bg-muted/40 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    >
+                      <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                        {isAllSelected ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-xs">
+                            <Users className="w-3.5 h-3.5" /> 🌟 All Active Staff ({eligibleEmployees.length})
+                          </span>
+                        ) : manualForm.selected_ids.length > 0 ? (
+                          manualForm.selected_ids.slice(0, 3).map((id) => {
+                            const emp = eligibleEmployees.find((e) => e.id === id);
+                            if (!emp) return null;
+                            return (
+                              <span
+                                key={id}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-muted text-foreground text-xs font-semibold border border-border/50"
+                              >
+                                {emp.name.split(" ")[0]}
+                                <span
+                                  role="button"
+                                  onClick={(e) => removeEmployeeChip(id, e)}
+                                  className="hover:text-rose-500 rounded p-0.5 transition-colors"
+                                >
+                                  <X className="w-3 h-3" />
+                                </span>
+                              </span>
+                            );
+                          })
+                        ) : (
+                          <span className="text-sm text-muted-foreground font-medium">Select employees...</span>
+                        )}
+                        {!isAllSelected && manualForm.selected_ids.length > 3 && (
+                          <span className="text-xs font-bold text-muted-foreground px-1.5 py-0.5 rounded-md bg-muted">
+                            +{manualForm.selected_ids.length - 3} more
+                          </span>
+                        )}
+                      </div>
+                      <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
+                    </button>
+                  </PopoverTrigger>
+
+                  <PopoverContent
+                    align="start"
+                    className="w-[360px] p-0 rounded-2xl shadow-2xl border-border/60 bg-card overflow-hidden z-[80]"
+                  >
+                    {/* Search Bar */}
+                    <div className="p-3 border-b border-border/60 bg-muted/20">
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                        <input
+                          type="text"
+                          value={empSearch}
+                          onChange={(e) => setEmpSearch(e.target.value)}
+                          placeholder="Search active staff..."
+                          className="w-full pl-8 pr-3 py-1.5 bg-background border border-border rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Quick Select Row */}
+                    <div className="px-3 py-2 border-b border-border/40 flex items-center justify-between bg-muted/10 text-xs">
+                      <button
+                        type="button"
+                        onClick={toggleSelectAll}
+                        className="flex items-center gap-2 font-bold text-foreground hover:text-primary transition-colors text-left"
+                      >
+                        <div
+                          className={cn(
+                            "w-4 h-4 rounded border flex items-center justify-center transition-colors",
+                            isAllSelected
+                              ? "bg-primary border-primary text-primary-foreground"
+                              : "border-muted-foreground/40 bg-background"
+                          )}
+                        >
+                          {isAllSelected && <Check className="w-3 h-3" />}
+                        </div>
+                        <span>🌟 All Active Staff ({eligibleEmployees.length})</span>
+                      </button>
+
+                      {manualForm.selected_ids.length > 0 && !isAllSelected && (
+                        <button
+                          type="button"
+                          onClick={() => setManualForm((prev) => ({ ...prev, selected_ids: [] }))}
+                          className="text-[11px] font-bold text-muted-foreground hover:text-rose-500 transition-colors"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Scrollable Employee List */}
+                    <div className="max-h-[220px] overflow-y-auto p-1.5 space-y-0.5">
+                      {filteredEligible.length > 0 ? (
+                        filteredEligible.map((emp) => {
+                          const isSelected = isAllSelected || manualForm.selected_ids.includes(emp.id);
+                          return (
+                            <div
+                              key={emp.id}
+                              onClick={() => toggleEmployee(emp.id)}
+                              className={cn(
+                                "flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-medium cursor-pointer transition-colors",
+                                isSelected
+                                  ? "bg-primary/10 text-foreground"
+                                  : "hover:bg-muted/50 text-muted-foreground"
+                              )}
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div
+                                  className={cn(
+                                    "w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors",
+                                    isSelected
+                                      ? "bg-primary border-primary text-primary-foreground"
+                                      : "border-muted-foreground/40 bg-background"
+                                  )}
+                                >
+                                  {isSelected && <Check className="w-3 h-3" />}
+                                </div>
+                                <img
+                                  src={emp.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(emp.name)}&background=random`}
+                                  alt={emp.name}
+                                  className="w-6 h-6 rounded-full object-cover shrink-0 border border-border"
+                                />
+                                <div className="min-w-0">
+                                  <p className="font-bold text-foreground truncate">{emp.name}</p>
+                                  <p className="text-[10px] text-muted-foreground truncate">{emp.role} {emp.department ? `· ${emp.department}` : ""}</p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="py-6 text-center text-xs text-muted-foreground">
+                          No matching active staff found.
+                        </div>
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* Date */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
+                  Date
+                </label>
+                <DatePicker
+                  value={manualForm.date}
+                  onChange={(val) => setManualForm((prev) => ({ ...prev, date: val }))}
+                  placeholder="Select attendance date"
+                  displayFormat="dd-MM-yyyy"
+                  className="w-full h-10 px-3 text-sm font-medium rounded-xl border border-border bg-background"
+                />
+              </div>
+
+              {/* Status */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
+                  Attendance Status
+                </label>
+                <SearchableSelect
+                  value={manualForm.status}
+                  onChange={(val) => setManualForm((prev) => ({ ...prev, status: val as AttendanceStatus }))}
+                  options={[
+                    { label: "Present (Full Day)", value: "Present" },
+                    { label: "Half Day", value: "Half Day" },
+                    { label: "On Leave / Holiday", value: "On Leave" },
+                  ]}
+                  placeholder="Select attendance status..."
+                  className="w-full h-10 px-3 bg-background border border-border rounded-xl text-sm font-medium"
+                />
+              </div>
+
+              {/* Check In / Out (only for Present/Half Day) */}
+              {(manualForm.status === "Present" || manualForm.status === "Half Day") && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
+                      Check-In Time
+                    </label>
+                    <input
+                      type="text"
+                      value={manualForm.check_in}
+                      onChange={(e) => setManualForm({ ...manualForm, check_in: e.target.value })}
+                      placeholder="09:30 AM"
+                      className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 font-medium"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
+                      Check-Out Time
+                    </label>
+                    <input
+                      type="text"
+                      value={manualForm.check_out}
+                      onChange={(e) => setManualForm({ ...manualForm, check_out: e.target.value })}
+                      placeholder="06:30 PM"
+                      className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 font-medium"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Remarks */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
+                  Reason / Remarks
+                </label>
+                <textarea
+                  rows={2}
+                  value={manualForm.remarks}
+                  onChange={(e) => setManualForm({ ...manualForm, remarks: e.target.value })}
+                  placeholder="e.g. Office closed early / Company picnic / System downtime"
+                  className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none font-medium"
+                />
+              </div>
+            </div>
+
+            <div className="px-6 md:px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsManualModalOpen(false)}
+                className="px-4 py-2 bg-background border border-border text-foreground/80 hover:bg-muted font-bold text-sm rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmittingManual}
+                className="px-5 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm rounded-xl transition-colors disabled:opacity-50"
+              >
+                {isSubmittingManual ? "Saving..." : "Apply Attendance"}
+              </button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
