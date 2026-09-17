@@ -8,6 +8,7 @@ import { DeleteConfirmModal } from "./DeleteConfirmModal";
 import { UnassignedSidebar } from "./UnassignedSidebar";
 import { toast } from "sonner";
 import { useEmployeesContext } from "./EmployeeContext";
+import { useModulePermissions } from "@/hooks/useModulePermissions";
 
 const OrgNodeCard = ({
   node,
@@ -15,21 +16,28 @@ const OrgNodeCard = ({
   toggleExpand,
   onMoveNode,
   onAddClick,
-  onDeleteClick
+  onDeleteClick,
+  canCreate = true,
+  canUpdate = true,
+  canDelete = true,
 }: {
   node: OrgNodeData,
   isExpanded: boolean,
   toggleExpand: () => void,
   onMoveNode: (draggedId: string, targetId: string) => void,
   onAddClick: (node: OrgNodeData) => void,
-  onDeleteClick: (nodeId: string) => void
+  onDeleteClick: (nodeId: string) => void,
+  canCreate?: boolean | undefined,
+  canUpdate?: boolean | undefined,
+  canDelete?: boolean | undefined,
 }) => {
   const hasChildren = node.children && node.children.length > 0;
 
   return (
     <div
-      draggable
+      draggable={canUpdate}
       onDragStart={(e) => {
+        if (!canUpdate) return;
         e.dataTransfer.setData('nodeId', node.id);
         e.stopPropagation();
       }}
@@ -47,30 +55,36 @@ const OrgNodeCard = ({
       }}
       className="bg-white border border-border shadow-sm rounded-2xl p-4 w-[220px] z-10 relative transition-all hover:shadow-md hover:-translate-y-1 group inline-block mx-auto cursor-grab active:cursor-grabbing"
     >
-      <div className="absolute top-3 right-3 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-all z-20">
-        <button
-          onPointerDown={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            onAddClick(node);
-          }}
-          className="p-1.5 bg-muted/50 hover:bg-primary hover:text-primary-foreground text-muted-foreground rounded-lg shadow-sm border border-border transition-colors"
-          title="Add report under this person"
-        >
-          <Plus className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onPointerDown={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            onDeleteClick(node.id);
-          }}
-          className="p-1.5 bg-muted/50 hover:bg-red-500 hover:text-white text-muted-foreground rounded-lg shadow-sm border border-border transition-colors"
-          title="Remove this person"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
-      </div>
+      {(canCreate || canDelete) && (
+        <div className="absolute top-3 right-3 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-all z-20">
+          {canCreate && (
+            <button
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                onAddClick(node);
+              }}
+              className="p-1.5 bg-muted/50 hover:bg-primary hover:text-primary-foreground text-muted-foreground rounded-lg shadow-sm border border-border transition-colors"
+              title="Add report under this person"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {canDelete && (
+            <button
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                onDeleteClick(node.id);
+              }}
+              className="p-1.5 bg-muted/50 hover:bg-red-500 hover:text-white text-muted-foreground rounded-lg shadow-sm border border-border transition-colors"
+              title="Remove this person"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-col items-center text-center">
         <div className="relative mb-3">
@@ -106,12 +120,18 @@ const OrgTree = ({
   node,
   onMoveNode,
   onAddClick,
-  onDeleteClick
+  onDeleteClick,
+  canCreate,
+  canUpdate,
+  canDelete,
 }: {
   node: OrgNodeData,
   onMoveNode: (draggedId: string, targetId: string) => void,
   onAddClick: (node: OrgNodeData) => void,
-  onDeleteClick: (nodeId: string) => void
+  onDeleteClick: (nodeId: string) => void,
+  canCreate?: boolean | undefined,
+  canUpdate?: boolean | undefined,
+  canDelete?: boolean | undefined,
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const hasChildren = node.children && node.children.length > 0;
@@ -125,9 +145,12 @@ const OrgTree = ({
         onMoveNode={onMoveNode}
         onAddClick={onAddClick}
         onDeleteClick={onDeleteClick}
+        canCreate={canCreate}
+        canUpdate={canUpdate}
+        canDelete={canDelete}
       />
       {hasChildren && isExpanded && (
-        <ul className="pt-[20px] relative flex justify-center org-children animate-in fade-in slide-in-from-top-4 duration-300 m-0 p-0">
+        <ul className="pt-[20px] relative flex justify-center org-children animate-in fade-in slide-from-top-4 duration-300 m-0 p-0">
           {node.children!.map((child) => (
             <OrgTree
               key={child.id}
@@ -135,6 +158,9 @@ const OrgTree = ({
               onMoveNode={onMoveNode}
               onAddClick={onAddClick}
               onDeleteClick={onDeleteClick}
+              canCreate={canCreate}
+              canUpdate={canUpdate}
+              canDelete={canDelete}
             />
           ))}
         </ul>
@@ -144,6 +170,7 @@ const OrgTree = ({
 };
 
 export function OrgStructure() {
+  const { canCreate, canUpdate, canDelete, isAdmin } = useModulePermissions("/employees/org");
   const [zoom, setZoom] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
@@ -349,13 +376,15 @@ export function OrgStructure() {
         </div>
 
         <div className="flex gap-4 items-center">
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-card border border-border text-foreground/80 font-bold rounded-xl shadow-sm hover:bg-muted/50 transition-colors text-xs"
-          >
-            <Settings className="w-4 h-4" />
-            Manage Departments
-          </button>
+          {(isAdmin || canUpdate) && (
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-card border border-border text-foreground/80 font-bold rounded-xl shadow-sm hover:bg-muted/50 transition-colors text-xs"
+            >
+              <Settings className="w-4 h-4" />
+              Manage Departments
+            </button>
+          )}
 
           <div className="flex items-center gap-2 bg-card border border-border p-1.5 rounded-2xl shadow-sm">
             <button
@@ -448,10 +477,17 @@ export function OrgStructure() {
                   node={treeData}
                   onMoveNode={handleMoveNode}
                   onAddClick={(node) => {
+                    if (!canCreate) return;
                     setSelectedParent(node);
                     setAddModalOpen(true);
                   }}
-                  onDeleteClick={handleDeleteNode}
+                  onDeleteClick={(nodeId) => {
+                    if (!canDelete) return;
+                    handleDeleteNode(nodeId);
+                  }}
+                  canCreate={canCreate}
+                  canUpdate={canUpdate}
+                  canDelete={canDelete}
                 />
               </ul>
             </div>

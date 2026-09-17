@@ -5,6 +5,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useModulePermissions } from "@/hooks/useModulePermissions";
 
 interface DepartmentsManagerProps {
   subDepartmentsCountMap?: Record<string, number>;
@@ -13,6 +14,7 @@ interface DepartmentsManagerProps {
 
 export function DepartmentsManager({ subDepartmentsCountMap = {}, onDepartmentChanged }: DepartmentsManagerProps) {
   const { departments, addDepartment, updateDepartment, removeDepartment } = useDepartments();
+  const { canCreate, canUpdate, canDelete } = useModulePermissions("/employees/departments-setup");
 
   const [search, setSearch] = useState("");
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -96,13 +98,15 @@ export function DepartmentsManager({ subDepartmentsCountMap = {}, onDepartmentCh
               className="w-full h-10 pl-9 pr-4 rounded-xl border border-border bg-background text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
             />
           </div>
-          <button
-            onClick={() => setIsAddOpen(true)}
-            className="px-4 h-10 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-xs flex items-center gap-2 shadow-sm transition-all shrink-0 active:scale-95"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add Department</span>
-          </button>
+          {canCreate && (
+            <button
+              onClick={() => setIsAddOpen(true)}
+              className="px-4 h-10 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-xs flex items-center gap-2 shadow-sm transition-all shrink-0 active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Department</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -133,25 +137,31 @@ export function DepartmentsManager({ subDepartmentsCountMap = {}, onDepartmentCh
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1 opacity-90 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => {
-                      setEditingDept(dept);
-                      setEditDeptName(dept);
-                    }}
-                    className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl transition-colors"
-                    title="Edit Department Name"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => setDeleteConfirm({ isOpen: true, dept })}
-                    className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl transition-colors"
-                    title="Delete Department"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
+                {(canUpdate || canDelete) && (
+                  <div className="flex items-center gap-1 opacity-90 group-hover:opacity-100 transition-opacity">
+                    {canUpdate && (
+                      <button
+                        onClick={() => {
+                          setEditingDept(dept);
+                          setEditDeptName(dept);
+                        }}
+                        className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl transition-colors"
+                        title="Edit Department Name"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                    )}
+                    {canDelete && (
+                      <button
+                        onClick={() => setDeleteConfirm({ isOpen: true, dept })}
+                        className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl transition-colors"
+                        title="Delete Department"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })

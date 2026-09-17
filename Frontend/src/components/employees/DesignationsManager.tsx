@@ -5,6 +5,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useModulePermissions } from "@/hooks/useModulePermissions";
 
 export interface DesignationRecord {
   id: string;
@@ -13,6 +14,7 @@ export interface DesignationRecord {
 }
 
 export function DesignationsManager() {
+  const { canCreate, canUpdate, canDelete } = useModulePermissions("/employees/departments-setup");
   const [designations, setDesignations] = useState<DesignationRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -149,13 +151,15 @@ export function DesignationsManager() {
               className="w-full h-10 pl-9 pr-4 rounded-xl border border-border bg-background text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
             />
           </div>
-          <button
-            onClick={() => setIsAddOpen(true)}
-            className="px-4 h-10 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-xs flex items-center gap-2 shadow-sm transition-all shrink-0 active:scale-95"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add Designation</span>
-          </button>
+          {canCreate && (
+            <button
+              onClick={() => setIsAddOpen(true)}
+              className="px-4 h-10 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-xs flex items-center gap-2 shadow-sm transition-all shrink-0 active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Designation</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -185,25 +189,31 @@ export function DesignationsManager() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-1 opacity-90 group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={() => {
-                    setEditingDesig(desig);
-                    setEditTitle(desig.name);
-                  }}
-                  className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl transition-colors"
-                  title="Edit Designation Title"
-                >
-                  <Edit2 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setDeleteConfirm({ isOpen: true, desig })}
-                  className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl transition-colors"
-                  title="Delete Designation"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
+              {(canUpdate || canDelete) && (
+                <div className="flex items-center gap-1 opacity-90 group-hover:opacity-100 transition-opacity">
+                  {canUpdate && (
+                    <button
+                      onClick={() => {
+                        setEditingDesig(desig);
+                        setEditTitle(desig.name);
+                      }}
+                      className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl transition-colors"
+                      title="Edit Designation Title"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                  )}
+                  {canDelete && (
+                    <button
+                      onClick={() => setDeleteConfirm({ isOpen: true, desig })}
+                      className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl transition-colors"
+                      title="Delete Designation"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           ))
         )}

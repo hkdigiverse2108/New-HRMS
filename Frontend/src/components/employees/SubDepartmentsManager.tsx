@@ -7,6 +7,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useModulePermissions } from "@/hooks/useModulePermissions";
 
 export interface SubDepartmentRecord {
   id: string;
@@ -22,6 +23,7 @@ interface SubDepartmentsManagerProps {
 
 export function SubDepartmentsManager({ onSubDepartmentsCountChange }: SubDepartmentsManagerProps) {
   const { departments, departmentItems } = useDepartments();
+  const { canCreate, canUpdate, canDelete } = useModulePermissions("/employees/departments-setup");
 
   const [subDepartments, setSubDepartments] = useState<SubDepartmentRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -204,16 +206,18 @@ export function SubDepartmentsManager({ onSubDepartmentsCountChange }: SubDepart
             />
           </div>
 
-          <button
-            onClick={() => {
-              setNewSubDept(departments[0] || "");
-              setIsAddOpen(true);
-            }}
-            className="px-4 h-10 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-xs flex items-center gap-2 shadow-sm transition-all shrink-0 active:scale-95"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add Sub-Department</span>
-          </button>
+          {canCreate && (
+            <button
+              onClick={() => {
+                setNewSubDept(departments[0] || "");
+                setIsAddOpen(true);
+              }}
+              className="px-4 h-10 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-xs flex items-center gap-2 shadow-sm transition-all shrink-0 active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Sub-Department</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -246,26 +250,32 @@ export function SubDepartmentsManager({ onSubDepartmentsCountChange }: SubDepart
                 </div>
               </div>
 
-              <div className="flex items-center gap-1 opacity-90 group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={() => {
-                    setEditingSub(sub);
-                    setEditSubName(sub.name);
-                    setEditSubDept(sub.department_name || "");
-                  }}
-                  className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl transition-colors"
-                  title="Edit Sub-Department"
-                >
-                  <Edit2 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setDeleteConfirm({ isOpen: true, sub })}
-                  className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl transition-colors"
-                  title="Delete Sub-Department"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
+              {(canUpdate || canDelete) && (
+                <div className="flex items-center gap-1 opacity-90 group-hover:opacity-100 transition-opacity">
+                  {canUpdate && (
+                    <button
+                      onClick={() => {
+                        setEditingSub(sub);
+                        setEditSubName(sub.name);
+                        setEditSubDept(sub.department_name || "");
+                      }}
+                      className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl transition-colors"
+                      title="Edit Sub-Department"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                  )}
+                  {canDelete && (
+                    <button
+                      onClick={() => setDeleteConfirm({ isOpen: true, sub })}
+                      className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl transition-colors"
+                      title="Delete Sub-Department"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           ))
         )}
