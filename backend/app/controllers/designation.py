@@ -13,7 +13,8 @@ async def create_designation(data: DesignationCreate, current_user: dict = Depen
     result = await DesignationService.create(data)
 
     # Invalidate all designation list caches so the new designation appears
-    await clear_pattern("designations:list:*")
+    await clear_pattern("*designation*")
+    await clear_pattern("*employees*")
 
     # Cache single designation by ID
     item_id = str(result.get("_id") or result.get("id"))
@@ -65,8 +66,8 @@ async def update_designation(item_id: str, data: DesignationUpdate, current_user
 
     # Invalidate single & all designation list caches
     await delete_cache(f"designation:{item_id}")
-    await clear_pattern("designations:list:*")
-    await clear_pattern("employees:list:*")
+    await clear_pattern("*designation*")
+    await clear_pattern("*employees*")
 
     # Store updated designation in cache
     await set_cache(f"designation:{item_id}", updated)
@@ -79,7 +80,7 @@ async def delete_designation(item_id: str, current_user: dict = Depends(RoleChec
 
     # Invalidate caches
     await delete_cache(f"designation:{item_id}")
-    await clear_pattern("designations:list:*")
-    await clear_pattern("employees:list:*")
+    await clear_pattern("*designation*")
+    await clear_pattern("*employees*")
 
     return result

@@ -124,7 +124,16 @@ class RoleChecker:
         if not employee:
             return True
         role = employee.get("work_details", {}).get("system_role", "Admin")
-        if self.allowed_roles and role not in self.allowed_roles and role != "Admin":
+        dept = employee.get("work_details", {}).get("department", "")
+
+        if role == "Admin":
+            return employee
+
+        # HR department employees have HR/Admin management privileges
+        if dept == "HR" and any(r in ["Admin", "HR", "Subadmin", "Sub-Admin"] for r in self.allowed_roles):
+            return employee
+
+        if self.allowed_roles and role not in self.allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Operation not permitted for this role"
@@ -136,6 +145,7 @@ async def resolve_effective_permissions_for_employee(employee: dict) -> dict:
     emp_id = str(employee.get("_id", "")).strip()
     work = employee.get("work_details", {})
     role = work.get("system_role", "Employee")
+    dept = work.get("department", "Development")
 
     if role == "Admin":
         from app.database.default_presets import get_admin_full_permissions
@@ -151,13 +161,13 @@ async def resolve_effective_permissions_for_employee(employee: dict) -> dict:
     if user_perm_doc and user_perm_doc.get("is_custom") is True and has_manual_permissions(user_perm_doc.get("module_permissions")):
         perms = user_perm_doc["module_permissions"]
     else:
-        # 2. Inherit dynamically from Role Preset (HR, Employee, Sub-Admin, Admin)
-        preset, _ = await PresetPermissionRepository.get_preset_for_employee(role)
+        # 2. Inherit dynamically from Department Preset
+        preset, _ = await PresetPermissionRepository.get_preset_for_employee(role, dept)
         if preset and "module_permissions" in preset:
             perms = preset["module_permissions"]
         else:
-            from app.database.default_presets import DEFAULT_EMPLOYEE_PERMISSIONS
-            perms = DEFAULT_EMPLOYEE_PERMISSIONS
+            from app.database.default_presets import get_default_permissions_for_department
+            perms = get_default_permissions_for_department(dept)
 
     await set_cache(f"user_perms_resolved:{emp_id}", perms, ttl=300)
     return perms
@@ -188,15 +198,32 @@ class DynamicPermissionChecker:
         perms = await resolve_effective_permissions_for_employee(employee)
         module_perms = perms.get(module_id, {})
         
-        # If still no permissions are found, deny access
-        if not module_perms:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied. No permissions set.")
-        
-        has_all = module_perms.get("all", False)
-        has_required = module_perms.get(required_permission, False)
-        
-        if has_all or has_required:
+        # 1. Direct match on base module_id
+        if module_perms.get("all") or module_perms.get(required_permission):
             return employee
+
+        # 2. Check full path candidate if request path has multiple segments (e.g. /work/projects)
+        full_path_candidate = "/" + "/".join(path_parts[:2]) if len(path_parts) >= 2 else None
+        if full_path_candidate and perms.get(full_path_candidate):
+            p = perms[full_path_candidate]
+            if p.get("all") or p.get(required_permission):
+                return employee
+
+        # 3. Check corresponding "/list" submodule or child submodules
+        # e.g., API GET /employees should be allowed if user has permission on "/employees/list"
+        list_submodule = perms.get(f"{module_id}/list", {})
+        if list_submodule.get("all") or list_submodule.get(required_permission):
+            return employee
+
+        # 4. If read operation, check if user has read on ANY submodule under this parent module
+        if required_permission == "read":
+            child_modules = [p for m_id, p in perms.items() if m_id.startswith(module_id + "/")]
+            if any(p.get("all") or p.get("read") for p in child_modules):
+                return employee
+
+        # If no permissions are found or set, deny access
+        if not module_perms and not perms:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied. No permissions set.")
             
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Operation '{required_permission}' not permitted on '{module_id}'")
 

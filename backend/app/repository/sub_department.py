@@ -61,7 +61,29 @@ class SubDepartmentRepository:
     @classmethod
     async def get_by_department_id(cls, department_id: str, page: Optional[int] = None, limit: Optional[int] = None):
         collection = await cls.get_collection()
-        query = {"department_id": department_id}
+        dept_str = str(department_id).strip()
+        db = get_database()
+        dept_ids_to_match = [dept_str]
+
+        try:
+            dept_doc = await db["departments"].find_one({
+                "$or": [
+                    {"name": dept_str},
+                    {"name": {"$regex": f"^{dept_str}$", "$options": "i"}}
+                ]
+            })
+            if dept_doc:
+                dept_ids_to_match.append(str(dept_doc["_id"]))
+        except Exception:
+            pass
+
+        query = {
+            "$or": [
+                {"department_id": {"$in": dept_ids_to_match}},
+                {"department_name": dept_str},
+                {"department_name": {"$regex": f"^{dept_str}$", "$options": "i"}}
+            ]
+        }
         total = await collection.count_documents(query)
         items = []
         if limit is None or limit <= 0 or page is None:

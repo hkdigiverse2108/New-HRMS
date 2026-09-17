@@ -31,16 +31,18 @@ class UserAccessControlResponse(UserAccessControlBase):
         populate_by_name = True
 
 # ==========================================
-# Permission Preset Schema (Role-Wise Presets)
+# Permission Preset Schema (Department & Role Presets)
 # ==========================================
 class PermissionPresetBase(BaseModel):
-    role: str
+    role: Optional[str] = "Employee"
+    department: Optional[str] = None
     department_id: Optional[str] = None
     designation_id: Optional[str] = None
     module_permissions: Dict[str, PermissionFlags] = {}
 
 class PermissionPresetCreate(BaseModel):
-    role: str
+    role: Optional[str] = "Employee"
+    department: Optional[str] = None
     department_id: Optional[str] = None
     designation_id: Optional[str] = None
     module_permissions: Dict[str, PermissionFlags] = {}
@@ -50,7 +52,8 @@ class PermissionPresetUpdate(BaseModel):
 
 class PermissionPresetResponse(BaseModel):
     id: str = Field(alias="_id")
-    role: str
+    role: Optional[str] = "Employee"
+    department: Optional[str] = None
     department_id: Optional[str] = None
     designation_id: Optional[str] = None
     module_permissions: Dict[str, PermissionFlags] = {}

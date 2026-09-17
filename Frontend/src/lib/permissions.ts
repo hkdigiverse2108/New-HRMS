@@ -50,7 +50,7 @@ export function hasModulePermission(
   // url "/work/sales/leads" -> check "/work/sales", then "/work"
   const basePath = url.split("?")[0] ?? "";
   const parts = basePath.split("/").filter(Boolean);
-  
+
   // Try longest prefix to shortest
   for (let i = parts.length; i >= 1; i--) {
     const candidate = "/" + parts.slice(0, i).join("/");
