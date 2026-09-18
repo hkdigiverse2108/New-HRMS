@@ -823,3 +823,73 @@ class AttendanceService:
             "employee_id": scoped_id,
             "employee_name": emp_info.get("name", "All Employees") if scoped_id else "All Employees"
         }
+
+    @classmethod
+    async def mark_manual_attendance(
+        cls,
+        date_str: str,
+        status_val: str,
+        employee_id: Optional[str] = None,
+        employee_ids: Optional[List[str]] = None,
+        check_in: Optional[str] = "09:30 AM",
+        check_out: Optional[str] = "06:30 PM",
+        remarks: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Manually marks attendance for selected active non-admin employees on a specific date.
+        """
+        target_emps = []
+        if employee_ids and len(employee_ids) > 0:
+            for eid in employee_ids:
+                if not eid or eid.lower() == "all":
+                    continue
+                emp = await EmployeeRepository.get_employee_by_id(eid)
+                if not emp:
+                    emp = await EmployeeRepository.get_employee_by_email(eid)
+                if emp:
+                    target_emps.append(emp)
+        elif employee_id and employee_id.lower() != "all":
+            emp = await EmployeeRepository.get_employee_by_id(employee_id)
+            if not emp:
+                emp = await EmployeeRepository.get_employee_by_email(employee_id)
+            if emp:
+                target_emps.append(emp)
+        else:
+            all_result = await EmployeeRepository.get_all_employees()
+            raw_emps = all_result.get("data", []) if isinstance(all_result, dict) else all_result
+            # Only include active and non-admin employees
+            target_emps = [
+                e for e in raw_emps 
+                if (e.get("work_details", {}).get("system_role") or "").lower() != "admin"
+                and (e.get("status") or "active").lower() == "active"
+            ]
+
+        # Extra guard: Never mark attendance for Admin role
+        target_emps = [
+            e for e in target_emps 
+            if (e.get("work_details", {}).get("system_role") or "").lower() != "admin"
+        ]
+
+        updated_count = 0
+        for emp in target_emps:
+            emp_id_str = str(emp.get("_id") or emp.get("id"))
+            emp_info = await cls.get_employee_info(emp_id_str)
+            await AttendanceRepository.upsert_manual_attendance(
+                employee_id=emp_id_str,
+                date_str=date_str,
+                status=status_val,
+                employee_info=emp_info,
+                check_in=check_in,
+                check_out=check_out,
+                remarks=remarks
+            )
+            updated_count += 1
+            await delete_cache(f"attendance:last:{emp_id_str}")
+
+        await clear_pattern("attendance:*")
+        return {
+            "success": True,
+            "count": updated_count,
+            "message": f"Successfully updated attendance for {updated_count} employee(s) on {date_str}."
+        }
+

@@ -75,6 +75,9 @@ class EmployeePenaltyRepository:
             data["penalty_date"] = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
             
         data["is_deleted"] = False
+        data["status"] = data.get("status", "Active")
+        data["impact_payroll"] = data.get("impact_payroll", True)
+        data["resolution_reason"] = data.get("resolution_reason", None)
         if "employee_id" in data:
             data["employee_id"] = ObjectId(data["employee_id"])
         if "penalty_type_id" in data:
@@ -89,13 +92,41 @@ class EmployeePenaltyRepository:
         return data
 
     @classmethod
-    async def get_all(cls, is_deleted: bool = False, employee_id: Optional[str] = None, penalty_type_id: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, page: Optional[int] = None, limit: Optional[int] = None):
+    async def get_all(
+        cls, 
+        is_deleted: bool = False, 
+        employee_id: Optional[str] = None, 
+        penalty_type_id: Optional[str] = None, 
+        status: Optional[str] = None,
+        type_filter: Optional[str] = None,
+        search: Optional[str] = None,
+        start_date: Optional[str] = None, 
+        end_date: Optional[str] = None, 
+        page: Optional[int] = None, 
+        limit: Optional[int] = None
+    ):
         collection = await cls.get_collection()
         query = {"is_deleted": is_deleted}
-        if employee_id:
-            query["employee_id"] = ObjectId(employee_id)
-        if penalty_type_id:
-            query["penalty_type_id"] = ObjectId(penalty_type_id)
+        
+        if employee_id and ObjectId.is_valid(str(employee_id)):
+            query["employee_id"] = ObjectId(str(employee_id))
+        if penalty_type_id and ObjectId.is_valid(str(penalty_type_id)):
+            query["penalty_type_id"] = ObjectId(str(penalty_type_id))
+            
+        if status:
+            if status == "Active":
+                query["$or"] = [{"status": "Active"}, {"status": {"$exists": False}}]
+            else:
+                query["status"] = status
+                
+        if type_filter:
+            if type_filter.lower() == "warning":
+                query["is_warning"] = True
+            elif type_filter.lower() == "penalty":
+                query["is_warning"] = False
+                
+        if search:
+            query["reason"] = {"$regex": search, "$options": "i"}
             
         if start_date or end_date:
             query["penalty_date"] = {}
@@ -119,10 +150,10 @@ class EmployeePenaltyRepository:
 
         if page and limit:
             skip = (page - 1) * limit
-            cursor = collection.find(query).skip(skip).limit(limit)
+            cursor = collection.find(query).sort("created_at", -1).skip(skip).limit(limit)
             total_pages = (total + limit - 1) // limit
         else:
-            cursor = collection.find(query)
+            cursor = collection.find(query).sort("created_at", -1)
             page = 1
             limit = total if total > 0 else 10
             total_pages = 1 if total > 0 else 0
@@ -134,6 +165,12 @@ class EmployeePenaltyRepository:
                 item["employee_id"] = str(item["employee_id"])
             if "penalty_type_id" in item:
                 item["penalty_type_id"] = str(item["penalty_type_id"])
+            if "status" not in item:
+                item["status"] = "Active"
+            if "impact_payroll" not in item:
+                item["impact_payroll"] = not item.get("is_warning", False) and (float(item.get("price", 0)) > 0)
+            if "resolution_reason" not in item:
+                item["resolution_reason"] = None
             items.append(item)
             
         return {
@@ -169,6 +206,10 @@ class EmployeePenaltyRepository:
             if isinstance(update_data["penalty_date"], date) and not isinstance(update_data["penalty_date"], datetime):
                 update_data["penalty_date"] = datetime.combine(update_data["penalty_date"], datetime.min.time())
                 
+        # If status is Waived and impact_payroll is not explicitly set, disable payroll impact
+        if update_data.get("status") == "Waived" and "impact_payroll" not in update_data:
+            update_data["impact_payroll"] = False
+
         try:
             await collection.update_one({"_id": ObjectId(item_id)}, {"$set": update_data})
             return await cls.get_by_id(item_id)
@@ -192,16 +233,27 @@ class EmployeePenaltyRepository:
             {"$group": {
                 "_id": "$employee_id",
                 "total_violations": {"$sum": 1},
-                "total_penalty_amount": {"$sum": {"$cond": [{"$eq": ["$is_warning", True]}, 0, "$price"]}}
+                "total_penalty_amount": {
+                    "$sum": {
+                        "$cond": [
+                            {"$or": [
+                                {"$eq": ["$is_warning", True]},
+                                {"$eq": ["$status", "Waived"]}
+                            ]},
+                            0,
+                            {"$ifNull": ["$price", 0]}
+                        ]
+                    }
+                }
             }},
             {"$facet": {
                 "top_by_violations": [
-                    {"$sort": {"total_violations": -1}},
-                    {"$limit": 5}
+                    {"$sort": {"total_violations": -1, "total_penalty_amount": -1}},
+                    {"$limit": 10}
                 ],
                 "top_by_amount": [
-                    {"$sort": {"total_penalty_amount": -1}},
-                    {"$limit": 5}
+                    {"$sort": {"total_penalty_amount": -1, "total_violations": -1}},
+                    {"$limit": 10}
                 ]
             }}
         ]
@@ -223,3 +275,40 @@ class EmployeePenaltyRepository:
             item["employee_id"] = str(item.pop("_id"))
             
         return facets
+
+    @classmethod
+    async def get_summary_stats(cls):
+        collection = await cls.get_collection()
+        
+        # 1. Total Active penalties (status != Waived/Resolved)
+        active_count = await collection.count_documents({
+            "is_deleted": False,
+            "status": {"$in": ["Active", None]}
+        })
+        
+        # 2. Total payroll deductions (active, financial, impact_payroll != False)
+        pipeline = [
+            {
+                "$match": {
+                    "is_deleted": False,
+                    "status": {"$in": ["Active", None]},
+                    "is_warning": False,
+                    "impact_payroll": {"$ne": False}
+                }
+            },
+            {
+                "$group": {
+                    "_id": None,
+                    "total_amount": {"$sum": {"$ifNull": ["$price", 0]}}
+                }
+            }
+        ]
+        total_deductions = 0.0
+        async for doc in collection.aggregate(pipeline):
+            total_deductions = float(doc.get("total_amount", 0.0))
+
+        return {
+            "active_penalties_count": active_count,
+            "total_payroll_deductions": total_deductions
+        }
+

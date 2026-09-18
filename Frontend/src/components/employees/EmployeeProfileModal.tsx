@@ -74,7 +74,17 @@ export function EmployeeProfileModal({ employee, onClose }: EmployeeProfileModal
             </div>
             
             <div className="flex gap-2 w-full md:w-auto mt-4 md:mt-0">
-              <button className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-5 py-2.5 rounded-xl font-bold transition-all shadow-sm shadow-primary/20 active:scale-95 text-[13px]">
+              <button 
+                type="button"
+                onClick={() => {
+                  onClose();
+                  if (typeof window !== "undefined") {
+                    localStorage.setItem("activeSidebarTab", "/chat");
+                    window.dispatchEvent(new CustomEvent("navigate_tab", { detail: "/chat" }));
+                  }
+                }}
+                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-5 py-2.5 rounded-xl font-bold transition-all shadow-sm shadow-primary/20 active:scale-95 text-[13px]"
+              >
                 <Mail className="w-4 h-4" /> Message
               </button>
             </div>
