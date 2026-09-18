@@ -124,11 +124,16 @@ class ContentRepository:
     @classmethod
     async def get_by_id(cls, item_id: str):
         collection = await cls.get_collection()
+        item = await collection.find_one({"_id": ObjectId(item_id), "is_deleted": False})
+        if item:
+            item["_id"] = str(item["_id"])
+        return item
+
+    @classmethod
+    async def count_by_project_id(cls, project_id: str) -> int:
+        collection = await cls.get_collection()
         try:
-            item = await collection.find_one({"_id": ObjectId(item_id), "is_deleted": {"$ne": True}})
-            if item:
-                item["_id"] = str(item["_id"])
-            return item
+            return await collection.count_documents({"project_id": project_id, "is_deleted": False})
         except Exception:
             return None
 

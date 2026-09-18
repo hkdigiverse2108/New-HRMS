@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from typing import Optional
-from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectCategory, ProjectPriority, ProjectStatus
+from typing import Optional, List
+from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectCategory, ProjectPriority, ProjectStatus, FollowUpLogCreate, FollowUpLog, ClientReviewCreate, ClientReviewUpdate, ClientReview
 from app.schemas.pagination import PaginatedResponse
 from app.services.project import ProjectService
 from app.controllers.auth import get_current_employee
@@ -31,6 +31,11 @@ async def get_all_projects(
     search: Optional[str] = Query(None, description="Search term for project name"),
     whatsapp_status: Optional[str] = Query(None, description="Filter by whatsapp status (Group Created, Group Pending, Greetings Sent, Greetings Pending)"),
     festival_posts: Optional[bool] = Query(None, description="Filter by festival posts included"),
+    has_content_calendar: Optional[bool] = Query(None, description="Filter by whether content calendar is created"),
+    is_onhold: Optional[bool] = Query(None, description="Filter by project on-hold status"),
+    followup_due: Optional[bool] = Query(None, description="Filter for projects where follow-up is currently due"),
+    feedback_due: Optional[bool] = Query(None, description="Filter for projects where feedback is currently due"),
+    cc_status: Optional[str] = Query(None, description="Filter by content calendar approval status (Pending, Approved by Client, Changes Requested, Rejected)"),
     current_user: dict = Depends(get_current_employee)
 ):
     return await ProjectService.get_all_projects(
@@ -42,6 +47,11 @@ async def get_all_projects(
         search=search,
         whatsapp_status=whatsapp_status,
         festival_posts=festival_posts,
+        has_content_calendar=has_content_calendar,
+        is_onhold=is_onhold,
+        followup_due=followup_due,
+        feedback_due=feedback_due,
+        cc_status=cc_status,
         page=page, 
         limit=limit
     )
@@ -64,6 +74,7 @@ async def get_project(project_id: str, current_user: dict = Depends(get_current_
     if not item or item.get("is_deleted"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     return item
+
 @router.put("/{project_id}", response_model=ProjectResponse, response_model_exclude_none=True)
 async def update_project(project_id: str, data: ProjectUpdate, current_user: dict = Depends(get_current_employee)):
     item = await ProjectService.get_project_by_id(project_id)
@@ -75,6 +86,38 @@ async def update_project(project_id: str, data: ProjectUpdate, current_user: dic
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to update project")
         
     return await ProjectService.get_project_by_id(project_id)
+
+@router.post("/{project_id}/followups", response_model=FollowUpLog)
+async def add_followup(project_id: str, data: FollowUpLogCreate, current_user: dict = Depends(get_current_employee)):
+    emp_id = str(current_user.get("_id") or current_user.get("id"))
+    log = await ProjectService.add_followup_log(project_id, data, emp_id)
+    if not log:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to add followup log or project not found")
+    return log
+
+@router.get("/{project_id}/followups", response_model=List[FollowUpLog])
+async def get_followups(project_id: str, current_user: dict = Depends(get_current_employee)):
+    return await ProjectService.get_followup_logs(project_id)
+
+@router.post("/{project_id}/reviews", response_model=ClientReview)
+async def add_client_review(project_id: str, data: ClientReviewCreate, current_user: dict = Depends(get_current_employee)):
+    emp_id = str(current_user.get("_id") or current_user.get("id"))
+    review = await ProjectService.add_client_review(project_id, data, emp_id)
+    if not review:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to add client review or project not found")
+    return review
+
+@router.put("/{project_id}/reviews/{review_id}/comment", response_model=ClientReview)
+async def update_client_review_comment(project_id: str, review_id: str, data: ClientReviewUpdate, current_user: dict = Depends(get_current_employee)):
+    emp_id = str(current_user.get("_id") or current_user.get("id"))
+    review = await ProjectService.update_client_review_comment(project_id, review_id, data, emp_id)
+    if not review:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to update comment or review not found")
+    return review
+
+@router.get("/{project_id}/reviews", response_model=List[ClientReview])
+async def get_client_reviews(project_id: str, current_user: dict = Depends(get_current_employee)):
+    return await ProjectService.get_client_reviews(project_id)
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_project(project_id: str, current_user: dict = Depends(get_current_employee)):

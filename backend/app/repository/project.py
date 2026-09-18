@@ -43,6 +43,11 @@ class ProjectRepository:
         search: Optional[str] = None, 
         whatsapp_status: Optional[str] = None,
         festival_posts: Optional[bool] = None,
+        has_content_calendar: Optional[bool] = None,
+        is_onhold: Optional[bool] = None,
+        followup_due: Optional[bool] = None,
+        feedback_due: Optional[bool] = None,
+        cc_status: Optional[str] = None,
         page: Optional[int] = None, 
         limit: Optional[int] = None
     ):
@@ -80,6 +85,35 @@ class ProjectRepository:
                 
         if festival_posts is not None:
             query["general.creative_stats.festival_posts_included"] = festival_posts
+            
+        if has_content_calendar is not None:
+            query["has_content_calendar"] = has_content_calendar
+            
+        if is_onhold is not None:
+            if is_onhold:
+                query["general.status"] = "On Hold"
+            else:
+                query["general.status"] = {"$ne": "On Hold"}
+                
+        if followup_due:
+            from datetime import datetime
+            now = datetime.utcnow()
+            query["next_followup_date"] = {"$lte": now, "$ne": None}
+            
+        if feedback_due:
+            from datetime import datetime
+            now = datetime.utcnow()
+            query["next_feedback_date"] = {"$lte": now, "$ne": None}
+            
+        if cc_status:
+            clean_cc = cc_status.lower().replace(" ", "")
+            cc_map = {
+                "pending": "Pending",
+                "approvedbyclient": "Approved by Client",
+                "changesrequested": "Changes Requested",
+                "rejected": "Rejected"
+            }
+            query["content_approvals.status"] = cc_map.get(clean_cc, cc_status)
                 
         total_count = await collection.count_documents(query)
         
