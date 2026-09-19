@@ -59,6 +59,26 @@ class DepartmentRepository:
             return None
 
     @classmethod
+    async def get_by_id_or_name(cls, query_str: str):
+        if not query_str:
+            return None
+        collection = await cls.get_collection()
+        try:
+            item = await collection.find_one({"_id": ObjectId(query_str)})
+            if item:
+                item["_id"] = str(item["_id"])
+                return item
+        except Exception:
+            pass
+
+        import re
+        regex = re.compile(f"^{re.escape(query_str)}$", re.IGNORECASE)
+        item = await collection.find_one({"$or": [{"department_name": regex}, {"name": regex}]})
+        if item:
+            item["_id"] = str(item["_id"])
+        return item
+
+    @classmethod
     async def update(cls, item_id: str, update_data: dict):
         collection = await cls.get_collection()
         try:

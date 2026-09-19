@@ -45,7 +45,7 @@ class TaskBase(BaseModel):
     status: TaskStatus = Field(default=TaskStatus.TO_DO)
     priority: TaskPriority = Field(default=TaskPriority.MEDIUM)
     due_date: Optional[date] = None
-    assigned_to: str = Field(..., description="Employee ID this task is assigned to")
+    assigned_to: Optional[str] = Field(None, description="Employee ID this task is assigned to")
     
     # Optional fields for SMM Tasks
     task_category: str = Field(default="General", description="Category of the task (e.g. General, SMM)")
@@ -91,6 +91,8 @@ class TaskUpdate(BaseModel):
     priority: Optional[TaskPriority] = None
     due_date: Optional[date] = None
     assigned_to: Optional[str] = None
+    history_assigned_to: Optional[str] = None
+    history_assigned_by: Optional[str] = None
 
     @field_validator('status', mode='before')
     @classmethod
@@ -125,6 +127,7 @@ class TaskQuickAssign(BaseModel):
 
 class TaskResponse(TaskBase):
     id: str = Field(alias="_id")
+    _id: Optional[str] = None
     assigned_by: str = Field(..., description="Employee ID who assigned this task")
     created_by: Optional[str] = Field(default=None, description="Employee ID who created this task")
     created_at: datetime
@@ -138,5 +141,36 @@ class TaskResponse(TaskBase):
     
     project_details: Optional[dict] = None
     content_item_details: Optional[dict] = None
+    
+    model_config = ConfigDict(populate_by_name=True, arbitrary_types_allowed=True)
+
+class DailyPlannerBase(BaseModel):
+    selected_tasks: Optional[list[str]] = Field(default=None, description="Array of Task IDs")
+    research: Optional[str] = None
+    activity: Optional[str] = None
+    meeting: Optional[str] = None
+
+class DailyPlannerCreate(DailyPlannerBase):
+    pass
+
+class DailyPlannerUpdate(BaseModel):
+    selected_tasks: Optional[list[str]] = None
+    research: Optional[str] = None
+    activity: Optional[str] = None
+    meeting: Optional[str] = None
+
+class DailyPlannerResponse(DailyPlannerBase):
+    id: str = Field(alias="_id")
+    employee_id: str
+    date: str
+    selected_tasks: list[str] = Field(default_factory=list)
+    selected_tasks_details: Optional[list[TaskResponse]] = None
+    
+    @field_validator('selected_tasks', mode='before')
+    @classmethod
+    def parse_selected_tasks(cls, v):
+        if v is None:
+            return []
+        return v
     
     model_config = ConfigDict(populate_by_name=True)

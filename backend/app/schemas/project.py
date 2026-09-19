@@ -8,7 +8,7 @@ class ProjectCategory(str, Enum):
     CREATIVE = "Creative"
     DIGITAL_MARKETING = "Digital Marketing"
     SALES = "Sales"
-
+    
 class ProjectStatus(str, Enum):
     NOT_STARTED = "Not Started"
     IN_PROGRESS = "In Progress"

@@ -24,6 +24,10 @@ class TaskService:
                         emp_cache[emp_id_str] = {"employee_name": "Unknown"}
             return emp_cache[emp_id_str]
 
+        if "_id" in item:
+            item["id"] = str(item["_id"])
+            item["_id"] = str(item["_id"])
+
         for field in ["assigned_to", "assigned_by"]:
             item[f"{field}_details"] = await get_details(item.get(field))
             
@@ -159,6 +163,51 @@ class TaskService:
         }
         
         return await TaskRepository.update(task_id, update_data)
+
+    @staticmethod
+    async def get_daily_overview(employee_id: str):
+        from datetime import date
+        today = date.today()
+        
+        # Get all tasks for this employee
+        all_tasks_res = await TaskRepository.get_all(assigned_to=employee_id, limit=1000)
+        tasks = all_tasks_res.get("data", [])
+        
+        emp_cache = {}
+        today_tasks = []
+        upcoming_tasks = []
+        
+        for t in tasks:
+            if t.get("status") == "completed":
+                continue
+                
+            await TaskService._populate_user_details(t, emp_cache)
+                
+            due_date_str = t.get("due_date")
+            if not due_date_str:
+                upcoming_tasks.append(t)
+                continue
+                
+            # Parse due date
+            from datetime import datetime
+            if isinstance(due_date_str, str):
+                due_date = datetime.fromisoformat(due_date_str.replace('Z', '+00:00')).date()
+            else:
+                due_date = due_date_str.date() if hasattr(due_date_str, 'date') else due_date_str
+                
+            if due_date <= today:
+                today_tasks.append((t, due_date))
+            else:
+                upcoming_tasks.append(t)
+                
+        # Sort today_tasks: Overdue first (oldest first), then today's tasks
+        today_tasks.sort(key=lambda x: x[1])
+        
+        # Return just the task dicts
+        return {
+            "today": [item[0] for item in today_tasks],
+            "upcoming": upcoming_tasks
+        }
 
     @staticmethod
     async def reject_transfer(task_id: str, task: dict):

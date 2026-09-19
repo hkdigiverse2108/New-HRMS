@@ -17,6 +17,7 @@ from app.controllers.client import router as client_router
 from app.controllers.project import router as project_router
 from app.controllers.content import router as content_router
 from app.controllers.activity import router as activity_router
+from app.controllers.research import router as research_router
 from app.models.employee import setup_employee_indexes
 from app.models.department import setup_department_indexes
 from app.models.sub_department import setup_sub_department_indexes
@@ -93,6 +94,7 @@ app.include_router(client_router)
 app.include_router(project_router)
 app.include_router(content_router)
 app.include_router(activity_router)
+app.include_router(research_router)
 
 # Mount static image paths AFTER API routes
 app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
