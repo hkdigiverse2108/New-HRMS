@@ -71,12 +71,17 @@ class DepartmentRepository:
         except Exception:
             pass
 
-        import re
-        regex = re.compile(f"^{re.escape(query_str)}$", re.IGNORECASE)
-        item = await collection.find_one({"$or": [{"department_name": regex}, {"name": regex}]})
-        if item:
-            item["_id"] = str(item["_id"])
-        return item
+        def clean(s: str) -> str:
+            return str(s).lower().replace(" ", "").replace("-", "").replace("_", "")
+
+        target = clean(query_str)
+        async for item in collection.find():
+            dept_name = item.get("department_name") or item.get("name")
+            if dept_name and clean(dept_name) == target:
+                item["_id"] = str(item["_id"])
+                return item
+
+        return None
 
     @classmethod
     async def update(cls, item_id: str, update_data: dict):

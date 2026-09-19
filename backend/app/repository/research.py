@@ -50,9 +50,30 @@ class ResearchRepository:
             ]
             query_conditions.append({"$or": visibility_conditions})
 
-        # Department filter
+        # Department filter (supports matching department ObjectId, department name, or normalized lowercase name)
         if department_id and department_id.lower() != "all":
-            query_conditions.append({"department_id": department_id})
+            dept_ids = [department_id]
+            from app.repository.department import DepartmentRepository
+            dept_doc = await DepartmentRepository.get_by_id_or_name(department_id)
+            if dept_doc:
+                real_id = str(dept_doc.get("_id"))
+                dept_name = dept_doc.get("department_name") or dept_doc.get("name")
+                if real_id not in dept_ids:
+                    dept_ids.append(real_id)
+                if dept_name and dept_name not in dept_ids:
+                    dept_ids.append(dept_name)
+            
+            import re
+            clean_str = department_id.replace(" ", "").replace("-", "").replace("_", "")
+            regex_pattern = f".*{re.escape(clean_str)}.*"
+            dept_regex = re.compile(regex_pattern, re.IGNORECASE)
+
+            query_conditions.append({
+                "$or": [
+                    {"department_id": {"$in": dept_ids}},
+                    {"department_id": dept_regex}
+                ]
+            })
 
         # Project filter
         if project_id:

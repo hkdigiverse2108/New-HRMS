@@ -10,14 +10,16 @@ router = APIRouter(prefix="/research", tags=["Research"])
 @router.get("", response_model=PaginatedResponse[ResearchResponse])
 async def get_all_research(
     department_id: Optional[str] = Query(None, description="Filter by Department ID"),
+    department: Optional[str] = Query(None, description="Filter by Department Name or ID"),
     project_id: Optional[str] = Query(None, description="Filter by Project ID"),
     search: Optional[str] = Query(None, description="Search by title, description or concept"),
     page: Optional[int] = Query(None, ge=1, description="Page number"),
     limit: Optional[int] = Query(None, ge=1, description="Items per page"),
     current_user: dict = Depends(get_current_employee)
 ):
+    dept_filter = department or department_id
     return await ResearchService.get_all_research(
-        department_id=department_id,
+        department_id=dept_filter,
         project_id=project_id,
         search_query=search,
         current_user=current_user,
