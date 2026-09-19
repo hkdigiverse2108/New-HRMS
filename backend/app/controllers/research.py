@@ -11,7 +11,9 @@ router = APIRouter(prefix="/research", tags=["Research"])
 async def get_all_research(
     department_id: Optional[str] = Query(None, description="Filter by Department ID"),
     department: Optional[str] = Query(None, description="Filter by Department Name or ID"),
+    employee_id: Optional[str] = Query(None, description="Filter by Employee ID"),
     project_id: Optional[str] = Query(None, description="Filter by Project ID"),
+    date: Optional[str] = Query(None, description="Filter by creation date (YYYY-MM-DD)"),
     search: Optional[str] = Query(None, description="Search by title, description or concept"),
     page: Optional[int] = Query(None, ge=1, description="Page number"),
     limit: Optional[int] = Query(None, ge=1, description="Items per page"),
@@ -20,7 +22,9 @@ async def get_all_research(
     dept_filter = department or department_id
     return await ResearchService.get_all_research(
         department_id=dept_filter,
+        filter_employee_id=employee_id,
         project_id=project_id,
+        date_filter=date,
         search_query=search,
         current_user=current_user,
         page=page,
@@ -75,7 +79,7 @@ async def delete_research(item_id: str, current_user: dict = Depends(get_current
             detail="Only the creator of this research item or an Admin can delete it"
         )
         
-    success = await ResearchService.delete_research(item_id)
+    success = await ResearchService.delete_research(item_id, current_user)
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to delete research item")
     return {"message": "Research item deleted successfully"}

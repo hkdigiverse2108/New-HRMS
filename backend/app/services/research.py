@@ -1,5 +1,6 @@
 from typing import Optional
 from datetime import datetime
+from bson import ObjectId
 from app.repository.research import ResearchRepository
 from app.repository.employee import EmployeeRepository
 from app.repository.department import DepartmentRepository
@@ -130,6 +131,42 @@ class ResearchService:
             shared_details.append(emp_cache[s_id_str])
         item["shared_with_details"] = shared_details
 
+        # 5. Populate History Employee details
+        history_list = item.get("history", [])
+        for h_entry in history_list:
+            h_emp_id = h_entry.get("employee_id")
+            if h_emp_id:
+                h_emp_id_str = str(h_emp_id)
+                if h_emp_id_str not in emp_cache:
+                    if h_emp_id_str == "default-admin-id":
+                        emp_cache[h_emp_id_str] = {
+                            "_id": "default-admin-id",
+                            "employee_name": "Default Admin",
+                            "email": "admin@hrms.com",
+                            "avatar": None
+                        }
+                    else:
+                        emp = await EmployeeRepository.get_employee_by_id(h_emp_id_str)
+                        if emp:
+                            personal = emp.get("personal_info", {})
+                            name = f"{personal.get('first_name', '')} {personal.get('last_name', '')}".strip() or "Employee"
+                            emp_cache[h_emp_id_str] = {
+                                "_id": str(emp.get("_id") or h_emp_id_str),
+                                "employee_name": name,
+                                "email": personal.get("email"),
+                                "avatar": personal.get("profile_picture")
+                            }
+                        else:
+                            emp_cache[h_emp_id_str] = {
+                                "_id": h_emp_id_str,
+                                "employee_name": "Unknown Employee",
+                                "email": None,
+                                "avatar": None
+                            }
+                h_entry["employee_details"] = emp_cache[h_emp_id_str]
+            else:
+                h_entry["employee_details"] = None
+
     @staticmethod
     async def create_research(data: ResearchCreate, current_user: dict):
         emp_id = str(current_user.get("_id") or current_user.get("id"))
@@ -155,10 +192,12 @@ class ResearchService:
 
     @staticmethod
     async def get_all_research(
-        department_id: Optional[str],
-        project_id: Optional[str],
-        search_query: Optional[str],
-        current_user: dict,
+        department_id: Optional[str] = None,
+        filter_employee_id: Optional[str] = None,
+        project_id: Optional[str] = None,
+        date_filter: Optional[str] = None,
+        search_query: Optional[str] = None,
+        current_user: dict = None,
         page: Optional[int] = None,
         limit: Optional[int] = None
     ):
@@ -175,7 +214,9 @@ class ResearchService:
 
         res = await ResearchRepository.get_all(
             department_id=department_id,
+            filter_employee_id=filter_employee_id,
             project_id=project_id,
+            date_filter=date_filter,
             search_query=search_query,
             employee_id=emp_id,
             emp_department_id=emp_dept_id,
@@ -200,11 +241,78 @@ class ResearchService:
 
     @staticmethod
     async def update_research(item_id: str, data: ResearchUpdate, current_user: Optional[dict] = None):
+        user_id = str(current_user.get("_id") or current_user.get("id")) if current_user else None
+        existing = await ResearchRepository.get_by_id(item_id)
+        if not existing:
+            return None
+
         update_dict = {k: v for k, v in data.model_dump(exclude_unset=True).items() if v is not None}
-        if update_dict:
-            await ResearchRepository.update(item_id, update_dict)
+        if not update_dict:
+            return await ResearchService.get_research_by_id(item_id, current_user)
+
+        changed_fields = []
+        for field, new_val in update_dict.items():
+            old_val = existing.get(field)
+
+            if field == "concepts":
+                import json
+                def norm_concepts(c_list):
+                    result = []
+                    for c in (c_list or []):
+                        if isinstance(c, dict):
+                            result.append({
+                                "concept_name": c.get("concept_name"),
+                                "details": c.get("details"),
+                                "reference_links": [str(l) for l in c.get("reference_links", [])]
+                            })
+                        else:
+                            result.append(str(c))
+                    return result
+                
+                norm_old = norm_concepts(old_val)
+                norm_new = norm_concepts(new_val)
+                if norm_old != norm_new:
+                    changed_fields.append({
+                        "field": "concepts",
+                        "old_value": json.dumps(norm_old),
+                        "new_value": json.dumps(norm_new)
+                    })
+            elif field == "shared_with":
+                old_list = [str(x) for x in (old_val or [])]
+                new_list = [str(x) for x in (new_val or [])]
+                if sorted(old_list) != sorted(new_list):
+                    changed_fields.append({
+                        "field": "shared_with",
+                        "old_value": ", ".join(old_list) if old_list else "None",
+                        "new_value": ", ".join(new_list) if new_list else "None"
+                    })
+            else:
+                str_old = str(old_val) if old_val is not None else ""
+                str_new = str(new_val) if new_val is not None else ""
+                if str_old != str_new:
+                    changed_fields.append({
+                        "field": field,
+                        "old_value": str_old,
+                        "new_value": str_new
+                    })
+
+        history_entry = None
+        if changed_fields:
+            field_names = [cf["field"] for cf in changed_fields]
+            summary = f"Updated {', '.join(field_names)}"
+            history_entry = {
+                "log_id": str(ObjectId()),
+                "employee_id": user_id,
+                "action": "updated",
+                "timestamp": datetime.utcnow(),
+                "changes_summary": summary,
+                "changed_fields": changed_fields
+            }
+
+        await ResearchRepository.update(item_id, update_dict, history_entry=history_entry)
         return await ResearchService.get_research_by_id(item_id, current_user)
 
     @staticmethod
-    async def delete_research(item_id: str):
-        return await ResearchRepository.delete(item_id)
+    async def delete_research(item_id: str, current_user: Optional[dict] = None):
+        user_id = str(current_user.get("_id") or current_user.get("id")) if current_user else None
+        return await ResearchRepository.delete(item_id, user_id=user_id)

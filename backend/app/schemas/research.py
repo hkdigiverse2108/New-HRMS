@@ -21,6 +21,19 @@ class ResearchUpdate(BaseModel):
     shared_with: Optional[list[str]] = None
     department_id: Optional[str] = None
 
+class FieldChangeDetail(BaseModel):
+    field: str = Field(..., description="Name of field changed (e.g. title, description, concepts)")
+    old_value: Optional[str] = Field(default=None, description="Previous value before change")
+    new_value: Optional[str] = Field(default=None, description="New value after change")
+
+class ResearchHistoryLog(BaseModel):
+    action: str = Field(..., description="Action type: created, updated, deleted")
+    employee_id: str = Field(..., description="ID of employee who performed change")
+    employee_details: Optional[dict] = Field(default=None, description="Populated employee details")
+    timestamp: datetime = Field(..., description="Date and time of change")
+    changes_summary: Optional[str] = Field(default=None, description="Summary of changes")
+    changed_fields: list[FieldChangeDetail] = Field(default_factory=list, description="Field-level old vs new value details")
+
 class ResearchResponse(BaseModel):
     id: str = Field(alias="_id")
     _id: Optional[str] = None
@@ -37,6 +50,7 @@ class ResearchResponse(BaseModel):
     department: Optional[str] = None
     can_edit: Optional[bool] = False
     can_delete: Optional[bool] = False
+    history: list[ResearchHistoryLog] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
