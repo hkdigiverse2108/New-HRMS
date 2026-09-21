@@ -25,17 +25,17 @@ async def get_all_projects(
     page: Optional[int] = Query(None, ge=1, description="Page number"),
     limit: Optional[int] = Query(None, ge=1, description="Items per page"),
     client_id: Optional[str] = Query(None, description="Filter by client ID"),
-    category: Optional[str] = Query(None, description="Filter by category (e.g. digitalmarketing)"),
+    category: Optional[str] = Query(None, description="Filter by category (e.g. digital_marketing)"),
     priority: Optional[str] = Query(None, description="Filter by priority"),
-    status: Optional[str] = Query(None, description="Filter by status (e.g. inprogress)"),
+    status: Optional[str] = Query(None, description="Filter by status (e.g. in_progress)"),
     search: Optional[str] = Query(None, description="Search term for project name"),
-    whatsapp_status: Optional[str] = Query(None, description="Filter by whatsapp status (Group Created, Group Pending, Greetings Sent, Greetings Pending)"),
+    whatsapp_status: Optional[str] = Query(None, description="Filter by whatsapp status (group_created, group_pending, greetings_sent, greetings_pending)"),
     festival_posts: Optional[bool] = Query(None, description="Filter by festival posts included"),
     has_content_calendar: Optional[bool] = Query(None, description="Filter by whether content calendar is created"),
     is_onhold: Optional[bool] = Query(None, description="Filter by project on-hold status"),
     followup_due: Optional[bool] = Query(None, description="Filter for projects where follow-up is currently due"),
     feedback_due: Optional[bool] = Query(None, description="Filter for projects where feedback is currently due"),
-    cc_status: Optional[str] = Query(None, description="Filter by content calendar approval status (Pending, Approved by Client, Changes Requested, Rejected)"),
+    cc_status: Optional[str] = Query(None, description="Filter by content calendar approval status (pending, approved_by_client, changes_requested, rejected)"),
     current_user: dict = Depends(get_current_employee)
 ):
     return await ProjectService.get_all_projects(
