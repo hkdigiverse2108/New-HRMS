@@ -60,3 +60,10 @@ class RemarkQuestionResponse(RemarkQuestionBase):
         json_encoders = {
             datetime: lambda v: v.isoformat()
         }
+
+from typing import List
+
+class SendReminderRequest(BaseModel):
+    type: str = "department" # "department" or "employee"
+    departments: Optional[List[str]] = []
+    employees: Optional[List[str]] = []

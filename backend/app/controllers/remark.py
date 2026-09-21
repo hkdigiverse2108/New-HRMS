@@ -6,9 +6,23 @@ from app.controllers.auth import get_current_employee
 
 router = APIRouter(prefix="/remarks", tags=["Remarks"])
 
+def is_admin(user: dict) -> bool:
+    role = user.get("work_details", {}).get("system_role", "")
+    user_id = str(user.get("_id") or user.get("id"))
+    return role in ["Admin", "Super Admin"] or user_id == "default-admin-id"
+
 @router.get("/overview", response_model=RemarkStats)
 async def get_remark_overview(current_user: dict = Depends(get_current_employee)):
     return await RemarkService.get_overview(current_user)
+
+from app.schemas.remark import RemarkCreate, RemarkUpdate, RemarkResponse, RemarkStats, SendReminderRequest
+
+@router.post("/send-reminders")
+async def send_reminders(data: SendReminderRequest, current_user: dict = Depends(get_current_employee)):
+    if not is_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can send reminders")
+    count = await RemarkService.send_reminders(data, current_user)
+    return {"message": f"Reminders sent successfully to {count} employees."}
 
 @router.post("", response_model=RemarkResponse, status_code=status.HTTP_201_CREATED)
 async def create_remark(data: RemarkCreate, current_user: dict = Depends(get_current_employee)):
@@ -43,10 +57,6 @@ async def delete_remark(remark_id: str, current_user: dict = Depends(get_current
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Remark not found or access denied")
 
-def is_admin(user: dict) -> bool:
-    role = user.get("work_details", {}).get("system_role", "")
-    user_id = str(user.get("_id") or user.get("id"))
-    return role in ["Admin", "Super Admin"] or user_id == "default-admin-id"
 
 from app.schemas.remark import RemarkQuestionCreate, RemarkQuestionUpdate, RemarkQuestionResponse
 from app.repository.remark import RemarkRepository

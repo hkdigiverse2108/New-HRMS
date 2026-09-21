@@ -181,3 +181,32 @@ class RemarkService:
             return False
 
         return await RemarkRepository.delete_remark(remark_id)
+
+    @staticmethod
+    async def send_reminders(data: Any, current_user: dict) -> int:
+        from app.database.db import get_database
+        from app.repository.notification import NotificationRepository
+        
+        db = get_database()
+        employees_coll = db["employees"]
+        query = {}
+        
+        if data.type == "department" and data.departments:
+            query["work_details.department"] = {"$in": data.departments}
+        elif data.type == "employee" and data.employees:
+            from bson import ObjectId
+            query["_id"] = {"$in": [ObjectId(eid) for eid in data.employees if ObjectId.is_valid(eid)]}
+            
+        employees = await employees_coll.find(query).to_list(None)
+        
+        count = 0
+        for emp in employees:
+            await NotificationRepository.create_notification({
+                "recipient_id": str(emp["_id"]),
+                "title": "Feedback Reminder",
+                "message": "Please submit your monthly remarks and feedback on time!",
+                "type": "reminder"
+            })
+            count += 1
+            
+        return count
