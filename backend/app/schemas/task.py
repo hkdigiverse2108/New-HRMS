@@ -174,3 +174,37 @@ class DailyPlannerResponse(DailyPlannerBase):
         return v
     
     model_config = ConfigDict(populate_by_name=True)
+
+class WorkActivityItem(BaseModel):
+    log_id: str
+    category: str = Field(default="Work")
+    activity: str
+    start_time: str
+    end_time: str
+    duration: str
+    duration_seconds: int = 0
+    is_in_progress: bool = False
+
+class EmployeeWorkLog(BaseModel):
+    employee_id: str
+    employee_name: str
+    designation: Optional[str] = "Staff"
+    avatar: Optional[str] = None
+    date: str
+    punch_in_time: str = "--"
+    activities: list[WorkActivityItem] = Field(default_factory=list)
+
+class WorkLogSummary(BaseModel):
+    work_time: str = "0m"
+    work_seconds: int = 0
+    work_avg: str = "0m"
+    research_time: str = "0m"
+    research_seconds: int = 0
+    research_avg: str = "0m"
+    other_time: str = "0m"
+    other_seconds: int = 0
+    other_avg: str = "0m"
+
+class WorkLogsDashboardResponse(BaseModel):
+    summary: WorkLogSummary
+    employees: list[EmployeeWorkLog] = Field(default_factory=list)

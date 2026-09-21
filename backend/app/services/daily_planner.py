@@ -43,8 +43,17 @@ class DailyPlannerService:
         insert_data["date"] = today_str
         
         created = await DailyPlannerRepository.create(insert_data)
+        
+        # Auto-log activity timeline entries
+        from app.services.work_log import WorkLogService
+        if data.activity:
+            await WorkLogService.log_activity_change(employee_id, f"Work: {data.activity}", "Work")
         if data.research:
+            await WorkLogService.log_activity_change(employee_id, f"Research: {data.research}", "Research")
             await DailyPlannerService._sync_research_item(employee_id, data.research)
+        if data.meeting:
+            await WorkLogService.log_activity_change(employee_id, f"Meeting: {data.meeting}", "Other")
+
         return await DailyPlannerService.get_planner_for_today(employee_id)
 
     @staticmethod
@@ -60,8 +69,17 @@ class DailyPlannerService:
         update_data = {k: v for k, v in data.model_dump(exclude_unset=True).items() if v is not None}
         if update_data:
             await DailyPlannerRepository.update(employee_id, today_str, update_data)
+            
+        # Auto-log activity timeline entries
+        from app.services.work_log import WorkLogService
+        if data.activity:
+            await WorkLogService.log_activity_change(employee_id, f"Work: {data.activity}", "Work")
         if data.research:
+            await WorkLogService.log_activity_change(employee_id, f"Research: {data.research}", "Research")
             await DailyPlannerService._sync_research_item(employee_id, data.research)
+        if data.meeting:
+            await WorkLogService.log_activity_change(employee_id, f"Meeting: {data.meeting}", "Other")
+
         return await DailyPlannerService.get_planner_for_today(employee_id)
 
     @staticmethod

@@ -1,6 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import Optional
-from app.schemas.task import TaskCreate, TaskUpdate, TaskResponse, TaskStatus, TaskPriority, TaskQuickAssign, TransferRequestPayload, DailyPlannerCreate, DailyPlannerUpdate, DailyPlannerResponse
+from app.schemas.task import (
+    TaskCreate, TaskUpdate, TaskResponse, TaskStatus, TaskPriority, TaskQuickAssign,
+    TransferRequestPayload, DailyPlannerCreate, DailyPlannerUpdate, DailyPlannerResponse,
+    WorkLogsDashboardResponse
+)
 from app.schemas.pagination import PaginatedResponse
 from app.services.task import TaskService
 from app.controllers.auth import get_current_employee
@@ -14,6 +18,27 @@ async def get_task_statuses():
 @router.get("/priorities", response_model=list[str])
 async def get_task_priorities():
     return [p.value for p in TaskPriority]
+
+@router.get("/work-logs", response_model=WorkLogsDashboardResponse)
+async def get_work_logs(
+    date: Optional[str] = Query(None, description="Filter by date (YYYY-MM-DD, today, yesterday, this_week, this_month)"),
+    start_date: Optional[str] = Query(None, description="Start date for range filter (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="End date for range filter (YYYY-MM-DD)"),
+    employee_id: Optional[str] = Query(None, description="Filter by specific employee ID"),
+    department_id: Optional[str] = Query(None, description="Filter by department ID"),
+    status: Optional[str] = Query(None, description="Filter by status (e.g., 'current_activity')"),
+    current_user: dict = Depends(get_current_employee)
+):
+    from app.services.work_log import WorkLogService
+    return await WorkLogService.get_work_logs_dashboard(
+        date_str=date,
+        start_date=start_date,
+        end_date=end_date,
+        filter_employee_id=employee_id,
+        department_id=department_id,
+        status=status,
+        current_user=current_user
+    )
 
 @router.get("/daily-overview")
 async def get_daily_overview(
