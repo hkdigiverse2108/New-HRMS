@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
 
@@ -36,12 +36,19 @@ class DailyProgressResponse(DailyProgressBase):
     employee_id: str
     employee_name: str
     department: str
-    status: str = "PENDING" # PENDING, VERIFIED, REJECTED
+    status: str = "Pending" # PENDING, VERIFIED, REJECTED
     rating: float = 0.0
     remarks: Optional[str] = None
     verified_by_id: Optional[str] = None
     submitted_at: datetime
     verified_at: Optional[datetime] = None
+
+    @field_validator('status', mode='before')
+    @classmethod
+    def format_status(cls, v: str) -> str:
+        if isinstance(v, str):
+            return v.title()
+        return v
 
     class Config:
         populate_by_name = True
