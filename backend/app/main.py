@@ -21,6 +21,7 @@ from app.controllers.research import router as research_router
 from app.controllers.remark import router as remark_router
 from app.controllers.notification import router as notification_router
 from app.controllers.daily_progress import router as daily_progress_router
+from app.controllers.chat import router as chat_router
 from app.models.employee import setup_employee_indexes
 from app.models.department import setup_department_indexes
 from app.models.sub_department import setup_sub_department_indexes
@@ -46,10 +47,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="New-HRMS", lifespan=lifespan, redirect_slashes=False)
 
-# Enable CORS for all origins with credentials support
+# Enable CORS for all origins (including file://, null, and localhost)
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"^https?://.*",
+    allow_origin_regex=r".*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -101,6 +102,7 @@ app.include_router(research_router)
 app.include_router(remark_router)
 app.include_router(notification_router)
 app.include_router(daily_progress_router)
+app.include_router(chat_router)
 
 # Mount static image paths AFTER API routes
 app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")

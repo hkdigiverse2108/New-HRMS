@@ -53,3 +53,9 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+
+# Temporary & Debug scripts
+check_*.py
+temp_*.js
+*.tmp
+
