@@ -8,7 +8,7 @@ class ProjectCategory(str, Enum):
     CREATIVE = "Creative"
     DIGITAL_MARKETING = "Digital Marketing"
     SALES = "Sales"
-
+    
 class ProjectStatus(str, Enum):
     NOT_STARTED = "Not Started"
     IN_PROGRESS = "In Progress"
@@ -52,6 +52,32 @@ class ContentCalendarApprovalUpdate(BaseModel):
         if self.status != CalendarApprovalStatus.APPROVED_BY_CLIENT and not self.reason:
             raise ValueError("Reason is required when status is not 'Approved by Client'")
         return self
+
+class FollowUpLogCreate(BaseModel):
+    text: str = Field(..., description="Notes/details for the follow-up")
+
+class FollowUpLog(BaseModel):
+    id: str
+    text: str
+    created_at: datetime
+    created_by: str
+    created_by_details: Optional[dict] = None
+    
+    model_config = ConfigDict(populate_by_name=True)
+
+class ClientReviewCreate(BaseModel):
+    review_text: str = Field(..., description="The main text of the client review")
+
+class ClientReviewUpdate(BaseModel):
+    admin_comment: str = Field(..., description="Admin/Manager comment on the review")
+
+class ClientReview(BaseModel):
+    id: str
+    review_text: str
+    admin_comment: Optional[str] = None
+    created_at: datetime
+    created_by: str
+    created_by_details: Optional[dict] = None
 
 class DigitalMarketingStats(BaseModel):
     reach_target: Optional[str] = None
@@ -134,10 +160,17 @@ class ProjectBase(BaseModel):
     creative_team: Optional[CreativeTeam] = None
     whatsapp_group_link: Optional[str] = None
     greetings_msg_sent: bool = False
+    has_content_calendar: bool = False
     followup_schedule_type: Optional[FollowUpScheduleType] = None
     followup_schedule_value: Optional[list[int]] = Field(default=None, description="E.g. [7] for 7 days, [0, 3] for Mon & Thu")
     last_followup_date: Optional[date] = None
     next_followup_date: Optional[date] = None
+    feedback_schedule_type: Optional[FollowUpScheduleType] = None
+    feedback_schedule_value: Optional[list[int]] = None
+    last_feedback_date: Optional[date] = None
+    next_feedback_date: Optional[date] = None
+    followup_logs: Optional[list[FollowUpLog]] = []
+    client_reviews: Optional[list[ClientReview]] = []
     content_approvals: Optional[list[ContentCalendarApproval]] = []
 
 class ProjectCreate(ProjectBase):
@@ -169,9 +202,15 @@ class ProjectUpdate(BaseModel):
     creative_team: Optional[CreativeTeam] = None
     whatsapp_group_link: Optional[str] = None
     greetings_msg_sent: Optional[bool] = None
+    has_content_calendar: Optional[bool] = None
     followup_schedule_type: Optional[FollowUpScheduleType] = None
     followup_schedule_value: Optional[list[int]] = None
     last_followup_date: Optional[date] = None
+    feedback_schedule_type: Optional[FollowUpScheduleType] = None
+    feedback_schedule_value: Optional[list[int]] = None
+    last_feedback_date: Optional[date] = None
+    followup_logs: Optional[list[FollowUpLog]] = None
+    client_reviews: Optional[list[ClientReview]] = None
 
 class ProjectResponse(ProjectBase):
     id: str = Field(alias="_id")

@@ -171,6 +171,8 @@ class ContentService:
                     performed_by=current_user_id
                 )
                 
+            await ProjectRepository.update(project_id, {"has_content_calendar": True})
+                
         return created_item
 
     @staticmethod
@@ -316,4 +318,10 @@ class ContentService:
                 performed_by=current_user_id
             )
             
+            project_id = existing["project_id"]
+            count = await ContentRepository.count_by_project_id(project_id)
+            if count == 0:
+                from app.repository.project import ProjectRepository
+                await ProjectRepository.update(project_id, {"has_content_calendar": False})
+                
         return deleted

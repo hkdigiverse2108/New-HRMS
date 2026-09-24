@@ -1,7 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import Optional
 from pydantic import BaseModel
-from app.schemas.task import TaskCreate, TaskUpdate, TaskResponse, TaskStatus, TaskPriority, TaskQuickAssign, TransferRequestPayload
+from app.schemas.task import (
+    TaskCreate, TaskUpdate, TaskResponse, TaskStatus, TaskPriority, TaskQuickAssign,
+    TransferRequestPayload, DailyPlannerCreate, DailyPlannerUpdate, DailyPlannerResponse,
+    WorkLogsDashboardResponse
+)
 from app.schemas.pagination import PaginatedResponse
 from app.services.task import TaskService
 from app.controllers.auth import get_current_employee
@@ -19,15 +23,67 @@ async def get_task_statuses():
 async def get_task_priorities():
     return [p.value for p in TaskPriority]
 
+@router.get("/work-logs", response_model=WorkLogsDashboardResponse)
+async def get_work_logs(
+    date: Optional[str] = Query(None, description="Filter by date (YYYY-MM-DD, today, yesterday, this_week, this_month)"),
+    start_date: Optional[str] = Query(None, description="Start date for range filter (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="End date for range filter (YYYY-MM-DD)"),
+    employee_id: Optional[str] = Query(None, description="Filter by specific employee ID"),
+    department_id: Optional[str] = Query(None, description="Filter by department ID"),
+    status: Optional[str] = Query(None, description="Filter by status (e.g., 'current_activity')"),
+    current_user: dict = Depends(get_current_employee)
+):
+    from app.services.work_log import WorkLogService
+    return await WorkLogService.get_work_logs_dashboard(
+        date_str=date,
+        start_date=start_date,
+        end_date=end_date,
+        filter_employee_id=employee_id,
+        department_id=department_id,
+        status=status,
+        current_user=current_user
+    )
+
+@router.get("/daily-overview")
+async def get_daily_overview(
+    employee_id: Optional[str] = Query(None, description="Optional employee ID (Admins can use this to check others' tasks)"),
+    current_user: dict = Depends(get_current_employee)
+):
+    emp_id = employee_id or str(current_user.get("_id") or current_user.get("id"))
+    return await TaskService.get_daily_overview(emp_id)
+
+@router.post("/daily-planner", response_model=DailyPlannerResponse)
+async def create_daily_planner(data: DailyPlannerCreate, current_user: dict = Depends(get_current_employee)):
+    emp_id = str(current_user.get("_id") or current_user.get("id"))
+    from app.services.daily_planner import DailyPlannerService
+    return await DailyPlannerService.create_planner(emp_id, data)
+
+@router.put("/daily-planner", response_model=DailyPlannerResponse)
+async def update_daily_planner(data: DailyPlannerUpdate, current_user: dict = Depends(get_current_employee)):
+    emp_id = str(current_user.get("_id") or current_user.get("id"))
+    from app.services.daily_planner import DailyPlannerService
+    return await DailyPlannerService.update_planner(emp_id, data)
+
+@router.get("/daily-planner", response_model=Optional[DailyPlannerResponse])
+async def get_daily_planner(current_user: dict = Depends(get_current_employee)):
+    emp_id = str(current_user.get("_id") or current_user.get("id"))
+    from app.services.daily_planner import DailyPlannerService
+    return await DailyPlannerService.get_planner_for_today(emp_id)
+
 @router.post("", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
 async def create_task(data: TaskCreate, current_user: dict = Depends(get_current_employee)):
     from app.repository.employee import EmployeeRepository
+    from datetime import date
+    assigned_by = str(current_user.get("_id") or current_user.get("id"))
+    if not data.assigned_to:
+        data.assigned_to = assigned_by
+    if not data.due_date:
+        data.due_date = date.today()
+        
     emp = await EmployeeRepository.get_employee_by_id(data.assigned_to)
     if not emp:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assigned employee does not exist")
         
-    current_uid = str(current_user.get("_id") or current_user.get("id"))
-    assigned_by = current_uid
     created = await TaskService.create_task(data, assigned_by)
     return await TaskService.get_task_by_id(created["_id"])
 

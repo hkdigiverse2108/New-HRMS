@@ -1,7 +1,7 @@
 from typing import Optional
 from app.repository.project import ProjectRepository
 from app.repository.client import ClientRepository
-from app.schemas.project import ProjectCreate, ProjectUpdate
+from app.schemas.project import ProjectCreate, ProjectUpdate, FollowUpLogCreate, ClientReviewCreate, ClientReviewUpdate
 from app.redis.service import get_cache, set_cache, delete_cache, clear_pattern, make_list_key
 
 class ProjectService:
@@ -49,16 +49,16 @@ class ProjectService:
         item["creative_team_details"] = details
 
     @staticmethod
-    def _calculate_next_followup_date(config: dict, default_start_date) -> Optional['date']:
+    def _calculate_next_schedule_date(config: dict, default_start_date, prefix: str) -> Optional['date']:
         if not config: return None
         from datetime import date, timedelta
         import calendar
         
-        schedule_type = config.get("followup_schedule_type")
-        schedule_value = config.get("followup_schedule_value", [])
+        schedule_type = config.get(f"{prefix}_schedule_type")
+        schedule_value = config.get(f"{prefix}_schedule_value", [])
         if not schedule_value: return None
         
-        last_date = config.get("last_followup_date") or default_start_date
+        last_date = config.get(f"last_{prefix}_date") or default_start_date
         if isinstance(last_date, str):
             from datetime import datetime
             last_date = datetime.fromisoformat(last_date.replace('Z', '+00:00')).date()
@@ -111,23 +111,22 @@ class ProjectService:
 
     @staticmethod
     async def create_project(data: ProjectCreate):
-        insert_data = data.model_dump(exclude_unset=True)
+        from datetime import date
+        today = date.today()
+        data_dict = data.model_dump(exclude_unset=True)
         
-        # Calculate initial follow-up date if config provided
-        if insert_data.get("followup_schedule_type") and insert_data.get("followup_schedule_value"):
-            from datetime import date
-            start_date = insert_data.get("general", {}).get("start_date") or date.today()
-            next_date = ProjectService._calculate_next_followup_date(insert_data, start_date)
-            if next_date:
-                # convert to datetime for mongo
-                from datetime import datetime
-                insert_data["next_followup_date"] = datetime.combine(next_date, datetime.min.time())
-                
-        created = await ProjectRepository.create(insert_data)
+        next_fup = ProjectService._calculate_next_schedule_date(data_dict, today, "followup")
+        if next_fup:
+            data_dict["next_followup_date"] = next_fup
+        next_fb = ProjectService._calculate_next_schedule_date(data_dict, today, "feedback")
+        if next_fb:
+            data_dict["next_feedback_date"] = next_fb
+            
+        created = await ProjectRepository.create(data_dict)
         await clear_pattern("projects:list:*")
         await clear_pattern("clients:list:*")
-        if insert_data.get("client_id"):
-            await delete_cache(f"client:{insert_data['client_id']}")
+        if data_dict.get("client_id"):
+            await delete_cache(f"client:{data_dict['client_id']}")
         return created
 
     @staticmethod
@@ -140,6 +139,11 @@ class ProjectService:
         search: Optional[str] = None, 
         whatsapp_status: Optional[str] = None,
         festival_posts: Optional[bool] = None,
+        has_content_calendar: Optional[bool] = None,
+        is_onhold: Optional[bool] = None,
+        followup_due: Optional[bool] = None,
+        feedback_due: Optional[bool] = None,
+        cc_status: Optional[str] = None,
         page: Optional[int] = None, 
         limit: Optional[int] = None
     ):
@@ -153,6 +157,11 @@ class ProjectService:
             search=search,
             whatsapp_status=whatsapp_status,
             festival_posts=festival_posts,
+            has_content_calendar=has_content_calendar,
+            is_onhold=is_onhold,
+            followup_due=followup_due,
+            feedback_due=feedback_due,
+            cc_status=cc_status,
             page=page,
             limit=limit
         )
@@ -160,7 +169,7 @@ class ProjectService:
         if cached is not None:
             return cached
 
-        result = await ProjectRepository.get_all(is_deleted, client_id, category, priority, status, search, whatsapp_status, festival_posts, page, limit)
+        result = await ProjectRepository.get_all(is_deleted, client_id, category, priority, status, search, whatsapp_status, festival_posts, has_content_calendar, is_onhold, followup_due, feedback_due, cc_status, page, limit)
         client_cache = {}
         emp_cache = {}
         for item in result.get("data", []):
@@ -216,12 +225,37 @@ class ProjectService:
                 update_data["next_followup_date"] = None
             
         old_project = existing_project
-            
-        updated = await ProjectRepository.update(project_id, update_data)
+
+        item = await ProjectRepository.get_by_id(project_id)
         
-        if updated and old_project and "creative_team" in update_data:
+        import json
+        from datetime import date
+        data_dict = json.loads(data.model_dump_json(exclude_unset=True))
+        if not data_dict:
+            return True
+            
+        # Merge with existing config for auto-calculation
+        merged_config = {**item} if item else {}
+        merged_config.update(data_dict)
+        
+        today = date.today()
+        next_fup = ProjectService._calculate_next_schedule_date(merged_config, today, "followup")
+        if next_fup is not None:
+            data_dict["next_followup_date"] = next_fup.isoformat() if hasattr(next_fup, 'isoformat') else next_fup
+            
+        next_fb = ProjectService._calculate_next_schedule_date(merged_config, today, "feedback")
+        if next_fb is not None:
+            data_dict["next_feedback_date"] = next_fb.isoformat() if hasattr(next_fb, 'isoformat') else next_fb
+
+        old_project = None
+        if "creative_team" in data_dict:
+            old_project = await ProjectRepository.get_by_id(project_id)
+            
+        updated = await ProjectRepository.update(project_id, data_dict)
+        
+        if updated and old_project and "creative_team" in data_dict:
             old_team = old_project.get("creative_team", {})
-            new_team = update_data["creative_team"]
+            new_team = data_dict["creative_team"]
             
             from app.repository.task import TaskRepository
             from app.schemas.task import TaskStatus
@@ -254,6 +288,154 @@ class ProjectService:
                 await delete_cache(f"client:{client_id}")
 
         return updated
+
+    @staticmethod
+    async def add_followup_log(project_id: str, data: FollowUpLogCreate, current_user_id: str):
+        project = await ProjectRepository.get_by_id(project_id)
+        if not project:
+            return None
+            
+        from datetime import date, datetime
+        import uuid
+        
+        # 1. Create the log
+        log = {
+            "id": str(uuid.uuid4()),
+            "text": data.text,
+            "created_at": datetime.utcnow(),
+            "created_by": current_user_id
+        }
+        
+        # Add it to the array
+        logs = project.get("followup_logs", [])
+        logs.append(log)
+        
+        # 2. Update the project's last_followup_date to today
+        # which will auto-trigger recalculation of next_followup_date
+        from app.schemas.project import ProjectUpdate
+        today = date.today()
+        
+        update_schema = ProjectUpdate(last_followup_date=today, followup_logs=logs)
+        await ProjectService.update_project(project_id, update_schema, current_user_id)
+        
+        # Format response
+        emp_cache = {}
+        await ProjectService._populate_creative_team({"creative_team": {"log_creator": log["created_by"]}}, emp_cache)
+        log["created_by_details"] = emp_cache.get(str(log["created_by"]), {"employee_name": str(log["created_by"])})
+        
+        return log
+
+    @staticmethod
+    async def get_followup_logs(project_id: str):
+        project = await ProjectRepository.get_by_id(project_id)
+        if not project:
+            return []
+            
+        logs = project.get("followup_logs", [])
+        # Sort desc by date
+        logs = sorted(logs, key=lambda x: x.get("created_at"), reverse=True)
+        
+        if logs:
+            emp_cache = {}
+            for log in logs:
+                emp_id_str = str(log.get("created_by", ""))
+                if emp_id_str not in emp_cache:
+                    from app.repository.employee import EmployeeRepository
+                    emp = await EmployeeRepository.get_employee_by_id(emp_id_str)
+                    if emp:
+                        personal = emp.get("personal_info", {})
+                        name = f"{personal.get('first_name', '')} {personal.get('last_name', '')}".strip() or "Employee"
+                        emp_cache[emp_id_str] = {"employee_name": name}
+                    else:
+                        emp_cache[emp_id_str] = {"employee_name": emp_id_str}
+                
+                log["created_by_details"] = emp_cache[emp_id_str]
+                
+        return logs
+
+    @staticmethod
+    async def add_client_review(project_id: str, data: ClientReviewCreate, current_user_id: str):
+        project = await ProjectRepository.get_by_id(project_id)
+        if not project:
+            return None
+            
+        from datetime import datetime
+        import uuid
+        
+        review = {
+            "id": str(uuid.uuid4()),
+            "review_text": data.review_text,
+            "admin_comment": None,
+            "created_at": datetime.utcnow(),
+            "created_by": current_user_id
+        }
+        
+        reviews = project.get("client_reviews", [])
+        reviews.append(review)
+        
+        from app.schemas.project import ProjectUpdate
+        update_schema = ProjectUpdate(client_reviews=reviews)
+        await ProjectService.update_project(project_id, update_schema, current_user_id)
+        
+        emp_cache = {}
+        await ProjectService._populate_creative_team({"creative_team": {"rev_creator": review["created_by"]}}, emp_cache)
+        review["created_by_details"] = emp_cache.get(str(review["created_by"]), {"employee_name": str(review["created_by"])})
+        
+        return review
+
+    @staticmethod
+    async def update_client_review_comment(project_id: str, review_id: str, data: ClientReviewUpdate, current_user_id: str):
+        project = await ProjectRepository.get_by_id(project_id)
+        if not project:
+            return None
+            
+        reviews = project.get("client_reviews", [])
+        updated_review = None
+        for rev in reviews:
+            if rev.get("id") == review_id:
+                rev["admin_comment"] = data.admin_comment
+                updated_review = rev
+                break
+                
+        if not updated_review:
+            return None
+            
+        from app.schemas.project import ProjectUpdate
+        update_schema = ProjectUpdate(client_reviews=reviews)
+        await ProjectService.update_project(project_id, update_schema, current_user_id)
+        
+        emp_cache = {}
+        await ProjectService._populate_creative_team({"creative_team": {"rev_creator": updated_review["created_by"]}}, emp_cache)
+        updated_review["created_by_details"] = emp_cache.get(str(updated_review["created_by"]), {"employee_name": str(updated_review["created_by"])})
+        
+        return updated_review
+
+    @staticmethod
+    async def get_client_reviews(project_id: str):
+        project = await ProjectRepository.get_by_id(project_id)
+        if not project:
+            return []
+            
+        reviews = project.get("client_reviews", [])
+        reviews = sorted(reviews, key=lambda x: x.get("created_at"), reverse=True)
+        
+        if reviews:
+            emp_cache = {}
+            for rev in reviews:
+                emp_id_str = str(rev.get("created_by", ""))
+                if emp_id_str not in emp_cache:
+                    from app.repository.employee import EmployeeRepository
+                    emp = await EmployeeRepository.get_employee_by_id(emp_id_str)
+                    if emp:
+                        personal = emp.get("personal_info", {})
+                        name = f"{personal.get('first_name', '')} {personal.get('last_name', '')}".strip() or "Employee"
+                        emp_cache[emp_id_str] = {"employee_name": name}
+                    else:
+                        emp_cache[emp_id_str] = {"employee_name": emp_id_str}
+                
+                rev["created_by_details"] = emp_cache[emp_id_str]
+                
+        return reviews
         
     @staticmethod
     async def update_content_approval(project_id: str, data: dict, current_user_id: str):

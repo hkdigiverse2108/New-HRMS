@@ -59,6 +59,31 @@ class DepartmentRepository:
             return None
 
     @classmethod
+    async def get_by_id_or_name(cls, query_str: str):
+        if not query_str:
+            return None
+        collection = await cls.get_collection()
+        try:
+            item = await collection.find_one({"_id": ObjectId(query_str)})
+            if item:
+                item["_id"] = str(item["_id"])
+                return item
+        except Exception:
+            pass
+
+        def clean(s: str) -> str:
+            return str(s).lower().replace(" ", "").replace("-", "").replace("_", "")
+
+        target = clean(query_str)
+        async for item in collection.find():
+            dept_name = item.get("department_name") or item.get("name")
+            if dept_name and clean(dept_name) == target:
+                item["_id"] = str(item["_id"])
+                return item
+
+        return None
+
+    @classmethod
     async def update(cls, item_id: str, update_data: dict):
         collection = await cls.get_collection()
         try:
