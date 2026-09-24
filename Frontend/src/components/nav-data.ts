@@ -105,7 +105,6 @@ export const navItems: NavItem[] = [
     icon: Briefcase,
     children: [
       { title: "Interviews", url: "/recruitment/interviews", badge: 2 },
-      { title: "Hirings", url: "/recruitment/hirings" },
     ],
   },
 
@@ -118,7 +117,6 @@ export const navItems: NavItem[] = [
       { title: "Plan", url: "/finance/plan" },
       { title: "Summary", url: "/finance/summary" },
       { title: "Other Transactions", url: "/finance/clients" },
-      { title: "Audit Logs", url: "/finance/audit" },
     ],
   },
 
@@ -225,40 +223,12 @@ export const navItems: NavItem[] = [
     ],
   },
 
-  // 24. Reports & Analytics
-  {
-    title: "Reports & Analytics",
-    icon: BarChart3,
-    children: [
-      { title: "Overview", url: "/reports" },
-      { title: "Attendance Report", url: "/reports/attendance" },
-      { title: "Payroll Cost", url: "/reports/payroll" },
-      { title: "Hiring Funnel", url: "/reports/hiring" },
-      { title: "Project & Work Report", url: "/reports/work" },
-    ],
-  },
-
-  // 25. CEO Dashboard
-  {
-    title: "CEO Dashboard",
-    icon: LayoutDashboard,
-    children: [
-      { title: "CEO Overview", url: "/ceo-dashboard" },
-      { title: "B2B Partnership", url: "/ceo-dashboard/b2b" },
-      { title: "Tech Collaboration", url: "/ceo-dashboard/collaboration" },
-      { title: "Franchise", url: "/ceo-dashboard/franchise" },
-      { title: "Reports", url: "/ceo-dashboard/reports" },
-      { title: "Settings", url: "/ceo-dashboard/settings" },
-    ],
-  },
-
-  // 26. Recycle Bin
+  // 24. Recycle Bin
   { title: "Recycle Bin", url: "/recycle-bin", icon: Trash2 },
 ];
 
 export const sectionOrder = [
   "Overview",
-  "Command Center",
   "People",
   "Finance",
   "Work",

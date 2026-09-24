@@ -204,7 +204,9 @@ export function SearchableSelect({
         >
           <span className="truncate min-w-0 text-left">
             {value
-              ? options.find((option) => option.value === value)?.label || value || placeholder
+              ? options.find((option) => option.value === value)?.label ||
+                (typeof value === "string" && /^[0-9a-fA-F]{24}$/.test(value) ? "Management" : value) ||
+                placeholder
               : placeholder}
           </span>
           <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />

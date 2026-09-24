@@ -2,6 +2,7 @@ from typing import Optional
 from app.repository.project import ProjectRepository
 from app.repository.client import ClientRepository
 from app.schemas.project import ProjectCreate, ProjectUpdate
+from app.redis.service import get_cache, set_cache, delete_cache, clear_pattern, make_list_key
 
 class ProjectService:
     @staticmethod
@@ -122,7 +123,12 @@ class ProjectService:
                 from datetime import datetime
                 insert_data["next_followup_date"] = datetime.combine(next_date, datetime.min.time())
                 
-        return await ProjectRepository.create(insert_data)
+        created = await ProjectRepository.create(insert_data)
+        await clear_pattern("projects:list:*")
+        await clear_pattern("clients:list:*")
+        if insert_data.get("client_id"):
+            await delete_cache(f"client:{insert_data['client_id']}")
+        return created
 
     @staticmethod
     async def get_all_projects(
@@ -137,20 +143,45 @@ class ProjectService:
         page: Optional[int] = None, 
         limit: Optional[int] = None
     ):
+        cache_key = make_list_key(
+            "projects",
+            is_deleted=is_deleted,
+            client_id=client_id,
+            category=category,
+            priority=priority,
+            status=status,
+            search=search,
+            whatsapp_status=whatsapp_status,
+            festival_posts=festival_posts,
+            page=page,
+            limit=limit
+        )
+        cached = await get_cache(cache_key)
+        if cached is not None:
+            return cached
+
         result = await ProjectRepository.get_all(is_deleted, client_id, category, priority, status, search, whatsapp_status, festival_posts, page, limit)
         client_cache = {}
         emp_cache = {}
         for item in result.get("data", []):
             await ProjectService._populate_client(item, client_cache)
             await ProjectService._populate_creative_team(item, emp_cache)
+            
+        await set_cache(cache_key, result, ttl=3600)
         return result
 
     @staticmethod
     async def get_project_by_id(project_id: str):
+        cache_key = f"project:{project_id}"
+        cached = await get_cache(cache_key)
+        if cached is not None:
+            return cached
+
         item = await ProjectRepository.get_by_id(project_id)
         if item:
             await ProjectService._populate_client(item, {})
             await ProjectService._populate_creative_team(item, {})
+            await set_cache(cache_key, item, ttl=3600)
         return item
 
     @staticmethod
@@ -159,10 +190,10 @@ class ProjectService:
         if not update_data:
             return True
             
+        existing_project = await ProjectRepository.get_by_id(project_id)
         # If followup fields are updated, recalculate next_followup_date
         if any(k in update_data for k in ["followup_schedule_type", "followup_schedule_value", "last_followup_date"]):
             from datetime import date, datetime
-            existing_project = await ProjectRepository.get_by_id(project_id)
             start_date = date.today()
             if existing_project and existing_project.get("general", {}).get("start_date"):
                 start_date = existing_project["general"]["start_date"]
@@ -184,9 +215,7 @@ class ProjectService:
             else:
                 update_data["next_followup_date"] = None
             
-        old_project = None
-        if "creative_team" in update_data:
-            old_project = await ProjectRepository.get_by_id(project_id)
+        old_project = existing_project
             
         updated = await ProjectRepository.update(project_id, update_data)
         
@@ -216,6 +245,14 @@ class ProjectService:
                                     update_fields["assigned_by"] = current_user_id
                                 await TaskRepository.update(str(task["_id"]), update_fields)
                                 
+        if updated:
+            await clear_pattern("projects:list:*")
+            await delete_cache(f"project:{project_id}")
+            await clear_pattern("clients:list:*")
+            client_id = update_data.get("client_id") or (old_project.get("client_id") if old_project else None)
+            if client_id:
+                await delete_cache(f"client:{client_id}")
+
         return updated
         
     @staticmethod
@@ -246,13 +283,28 @@ class ProjectService:
             
         updated = await ProjectRepository.update(project_id, {"content_approvals": approvals})
         if updated:
+            await clear_pattern("projects:list:*")
+            await delete_cache(f"project:{project_id}")
             return new_approval
         return None
 
     @staticmethod
     async def delete_project(project_id: str):
-        return await ProjectRepository.delete(project_id)
+        existing = await ProjectRepository.get_by_id(project_id)
+        res = await ProjectRepository.delete(project_id)
+        if res:
+            await clear_pattern("projects:list:*")
+            await delete_cache(f"project:{project_id}")
+            await clear_pattern("clients:list:*")
+            if existing and existing.get("client_id"):
+                await delete_cache(f"client:{existing['client_id']}")
+        return res
 
     @staticmethod
     async def remove_campaign(project_id: str, campaign_name: str):
-        return await ProjectRepository.remove_campaign(project_id, campaign_name)
+        res = await ProjectRepository.remove_campaign(project_id, campaign_name)
+        if res:
+            await clear_pattern("projects:list:*")
+            await delete_cache(f"project:{project_id}")
+        return res
+

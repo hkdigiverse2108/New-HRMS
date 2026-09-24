@@ -55,6 +55,14 @@ class TaskBase(BaseModel):
     
     transfer_request: Optional[TaskTransferRequest] = None
     transfer_history: list[TaskTransferHistory] = Field(default_factory=list)
+    recurrence: Optional[str] = Field(default="none", description="Recurrence frequency: none, daily, weekly, monthly")
+    approved_by: Optional[str] = None
+    approved_at: Optional[datetime] = None
+    review_rejected_reason: Optional[str] = None
+    assigned_by: Optional[str] = Field(default=None, description="Employee ID who assigned this task")
+    activity_history: list[dict] = Field(default_factory=list)
+    parent_task_id: Optional[str] = None
+    is_recurring_instance: Optional[bool] = False
 
     @field_validator('status', mode='before')
     @classmethod
@@ -91,6 +99,12 @@ class TaskUpdate(BaseModel):
     priority: Optional[TaskPriority] = None
     due_date: Optional[date] = None
     assigned_to: Optional[str] = None
+    recurrence: Optional[str] = None
+    approved_by: Optional[str] = None
+    approved_at: Optional[datetime] = None
+    review_rejected_reason: Optional[str] = None
+    assigned_by: Optional[str] = None
+    activity_history: Optional[list[dict]] = None
 
     @field_validator('status', mode='before')
     @classmethod
@@ -121,6 +135,7 @@ class TaskQuickAssign(BaseModel):
     title: str = Field(..., description="The title of the task")
     due_date: Optional[date] = None
     assigned_to: list[str] = Field(..., min_length=1, description="List of Employee IDs to assign the task to")
+    assigned_by: Optional[str] = None
 
 
 class TaskResponse(TaskBase):
@@ -135,6 +150,7 @@ class TaskResponse(TaskBase):
     assigned_to_details: Optional[UserDetails] = None
     assigned_by_details: Optional[UserDetails] = None
     created_by_details: Optional[UserDetails] = None
+    approved_by_details: Optional[UserDetails] = None
     
     project_details: Optional[dict] = None
     content_item_details: Optional[dict] = None

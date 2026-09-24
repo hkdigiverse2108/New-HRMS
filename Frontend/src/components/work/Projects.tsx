@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { X,  Search, Plus, Filter, MoreHorizontal, LayoutGrid, List, Briefcase, Calendar, Clock, Star, Circle, Trash2, Edit2, Archive, ArchiveRestore, ArrowLeft, Users, IndianRupee, FolderGit2, CheckCircle2, Settings2, TrendingUp, MousePointerClick, Target, BarChart3, ChevronDown, User, Building2, CreditCard, FileText, ChevronRight, Video, Instagram, Layers  } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -11,6 +11,8 @@ import { format, subDays, startOfYear, differenceInDays } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { moveToRecycleBin } from "@/lib/recycle-bin";
 import { SearchableSelect } from "@/components/ui/select";
+import { api } from "@/lib/api";
+import { DatePicker } from "@/components/ui/date-picker";
 
 type ProjectStatus = "In Progress" | "In Review" | "Completed" | "On Hold";
 type ClientStatus = "Active" | "Archived";
@@ -624,6 +626,92 @@ const getPresetDates = (postingDateStr: string) => {
   };
 };
 
+const mapBackendClient = (bc: any): Client => {
+  const stats = bc.client_stats || {};
+  const depts = bc.service_details?.departments || [];
+  return {
+    id: String(bc._id || bc.id),
+    name: bc.contact_person_name || bc.company_name || "Client",
+    companyName: bc.company_name || "",
+    email: bc.email_address || "",
+    phone: bc.phone_number || "",
+    address: bc.address || "",
+    state: bc.state_ut || "",
+    gstin: bc.gstin || "",
+    department: depts.join(", "),
+    remarks: bc.additional_notes || "",
+    logo: `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(bc.company_name || bc.contact_person_name || "Client")}`,
+    totalBudget: `₹${(stats.total_budget || 0).toLocaleString("en-IN")}`,
+    outstandingPayment: `₹${(stats.outstanding_amount || 0).toLocaleString("en-IN")}`,
+    onboardingDate: bc.created_at ? (bc.created_at.split("T")[0] ?? "") : "",
+    activeProjects: stats.total_projects || (bc.projects?.length || 0),
+    status: bc.is_archived ? "Archived" : "Active",
+    contacts: [{ name: bc.contact_person_name || "Contact", avatar: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(bc.contact_person_name || "User")}` }]
+  };
+};
+
+const mapBackendProject = (bp: any): Project => {
+  const gen = bp.general || {};
+  const fin = bp.finance || {};
+  const cStats = gen.creative_stats || {};
+  const dmStats = gen.digital_marketing_stats || {};
+  
+  let statusMapped: ProjectStatus = "In Progress";
+  const rawStatus = (gen.status || "").toLowerCase().replace(/[\s_]/g, "");
+  if (rawStatus === "completed") statusMapped = "Completed";
+  else if (rawStatus === "onhold" || rawStatus === "cancelled") statusMapped = "On Hold";
+  else if (rawStatus === "inreview") statusMapped = "In Review";
+  else statusMapped = "In Progress";
+
+  let pri: "Low" | "Medium" | "High" | "Critical" = "Medium";
+  const rawPri = (gen.priority || "").toLowerCase();
+  if (rawPri === "urgent") pri = "Critical";
+  else if (rawPri === "high") pri = "High";
+  else if (rawPri === "low") pri = "Low";
+
+  const teamMembers: { name: string; avatar: string }[] = [];
+  if (bp.creative_team_details) {
+    Object.entries(bp.creative_team_details).forEach(([role, detail]: [string, any]) => {
+      if (detail && detail.employee_name) {
+        teamMembers.push({
+          name: `${detail.employee_name} (${role})`,
+          avatar: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(detail.employee_name)}`
+        });
+      }
+    });
+  }
+  if (teamMembers.length === 0) {
+    teamMembers.push({ name: "Team Member", avatar: "https://api.dicebear.com/7.x/adventurer/svg?seed=Team" });
+  }
+
+  return {
+    id: String(bp._id || bp.id),
+    clientId: String(bp.client_id || ""),
+    name: gen.project_name || "Project",
+    description: gen.description || "",
+    category: gen.category || "General",
+    status: statusMapped,
+    priority: pri,
+    progress: gen.progress || 0,
+    startDate: gen.start_date ? (String(gen.start_date).split("T")[0] ?? "") : "",
+    endDate: gen.end_date ? (String(gen.end_date).split("T")[0] ?? "") : "",
+    teamDeadline: gen.team_deadline ? (String(gen.team_deadline).split("T")[0] ?? "") : "",
+    budget: fin.project_budget ? `₹${fin.project_budget.toLocaleString("en-IN")}` : "₹0",
+    amountReceived: fin.amount_received ? `₹${fin.amount_received.toLocaleString("en-IN")}` : "₹0",
+    nextPaymentDate: fin.next_payment_date ? (String(fin.next_payment_date).split("T")[0] ?? "") : "",
+    post: cStats.post_count_per_month || 0,
+    reel: cStats.reel_count_per_month || 0,
+    festivalPost: cStats.festival_posts_included ? "Yes" : "No",
+    reach: dmStats.reach_target || "",
+    leads: dmStats.leads_target ? String(dmStats.leads_target) : "",
+    cpl: dmStats.cpl ? String(dmStats.cpl) : "",
+    campaigns: bp.campaigns || [],
+    team: teamMembers,
+    modules: [],
+    contentCalendar: []
+  };
+};
+
 export function Projects({ isNew }: { isNew?: boolean }) {
   const [projectSubTab, setProjectSubTab] = useState<"workspace" | "logs">("workspace");
   const [isBulkAdd, setIsBulkAdd] = useState(false);
@@ -846,6 +934,47 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     }
     setProjectSubTab("workspace");
   }, [selectedProjectId]);
+
+  const [isLoadingData, setIsLoadingData] = useState(false);
+
+  const loadLiveData = useCallback(async () => {
+    setIsLoadingData(true);
+    try {
+      const [clientsRes, archivedClientsRes, projectsRes] = await Promise.allSettled([
+        api.get<{ data?: any[] } | any[]>("/clients", { showLoader: false }),
+        api.get<{ data?: any[] } | any[]>("/clients?is_archived=true", { showLoader: false }),
+        api.get<{ data?: any[] } | any[]>("/projects", { showLoader: false }),
+      ]);
+
+      let fetchedClients: Client[] = [];
+      if (clientsRes.status === "fulfilled" && clientsRes.value) {
+        const raw = Array.isArray(clientsRes.value) ? clientsRes.value : (clientsRes.value?.data || []);
+        fetchedClients = [...fetchedClients, ...raw.map(mapBackendClient)];
+      }
+      if (archivedClientsRes.status === "fulfilled" && archivedClientsRes.value) {
+        const raw = Array.isArray(archivedClientsRes.value) ? archivedClientsRes.value : (archivedClientsRes.value?.data || []);
+        fetchedClients = [...fetchedClients, ...raw.map((c: any) => ({ ...mapBackendClient(c), status: "Archived" as ClientStatus }))];
+      }
+      if (fetchedClients.length > 0) {
+        setClients(fetchedClients);
+      }
+
+      if (projectsRes.status === "fulfilled" && projectsRes.value) {
+        const raw = Array.isArray(projectsRes.value) ? projectsRes.value : (projectsRes.value?.data || []);
+        if (raw.length > 0) {
+          setProjects(raw.map(mapBackendProject));
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to fetch clients/projects from API:", err);
+    } finally {
+      setIsLoadingData(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadLiveData();
+  }, [loadLiveData]);
   
   const [campaignDateRange, setCampaignDateRange] = useState("Last 30 Days");
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>({
@@ -1299,100 +1428,154 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   };
   const [calendarForm, setCalendarForm] = useState<any>(defaultCalendarForm);
 
-  const handleCreateClient = () => {
+  const handleCreateClient = async () => {
     if (!newClientFormData.name.trim() || !newClientFormData.companyName?.trim() || !newClientFormData.phone?.trim()) {
       setShowNewClientErrors(true);
       toast.error("Please fill all required fields");
       return;
     }
 
-    const newClient: Client = {
-      id: `c${Date.now()}`,
-      ...newClientFormData,
-      logo: `https://i.pravatar.cc/150?u=${encodeURIComponent(newClientFormData.name)}`,
-      totalBudget: newClientFormData.totalBudget || "₹0",
-      outstandingPayment: newClientFormData.outstandingPayment || "₹0",
-      activeProjects: 0,
-      contacts: []
-    };
+    try {
+      const depts = newClientFormData.department
+        ? newClientFormData.department.split(",").map(d => d.trim()).filter(Boolean)
+        : [];
+      
+      const payload: any = {
+        company_name: newClientFormData.companyName.trim(),
+        contact_person_name: newClientFormData.name.trim(),
+        phone_number: newClientFormData.phone.trim(),
+        email_address: newClientFormData.email?.trim() || undefined,
+        address: newClientFormData.address?.trim() || undefined,
+        state_ut: newClientFormData.state?.trim() || undefined,
+        gstin: newClientFormData.gstin?.trim() || undefined,
+        additional_notes: newClientFormData.remarks?.trim() || undefined,
+      };
+      if (depts.length > 0) {
+        payload.service_details = { departments: depts };
+      }
 
-    setClients([newClient, ...clients]);
-    setIsNewClientModalOpen(false);
-    setNewClientFormData(defaultClientForm);
-    setShowNewClientErrors(false);
-    toast.success("Client created successfully");
+      await api.post("/clients", payload);
+      await loadLiveData();
+      setIsNewClientModalOpen(false);
+      setNewClientFormData(defaultClientForm);
+      setShowNewClientErrors(false);
+      toast.success("Client created successfully");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to create client");
+    }
   };
-  const handleUpdateClient = () => {
+
+  const handleUpdateClient = async () => {
     if (!editingClient || !editingClient.name.trim() || !editingClient.companyName?.trim() || !editingClient.phone?.trim()) {
       setShowEditClientErrors(true);
       toast.error("Please fill all required fields");
       return;
     }
 
-    setClients(clients.map(c => c.id === editingClient.id ? editingClient : c));
-    setIsEditClientModalOpen(false);
-    setEditingClient(null);
-    setShowEditClientErrors(false);
-    toast.success("Client updated successfully");
+    try {
+      const depts = editingClient.department
+        ? editingClient.department.split(",").map(d => d.trim()).filter(Boolean)
+        : [];
+
+      const payload: any = {
+        company_name: editingClient.companyName.trim(),
+        contact_person_name: editingClient.name.trim(),
+        phone_number: editingClient.phone.trim(),
+        email_address: editingClient.email?.trim() || undefined,
+        address: editingClient.address?.trim() || undefined,
+        state_ut: editingClient.state?.trim() || undefined,
+        gstin: editingClient.gstin?.trim() || undefined,
+        additional_notes: editingClient.remarks?.trim() || undefined,
+      };
+      if (depts.length > 0) {
+        payload.service_details = { departments: depts };
+      }
+
+      await api.put(`/clients/${editingClient.id}`, payload);
+      await loadLiveData();
+      setIsEditClientModalOpen(false);
+      setEditingClient(null);
+      setShowEditClientErrors(false);
+      toast.success("Client updated successfully");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update client");
+    }
   };
 
-  const handleCreateProject = () => {
+  const handleCreateProject = async () => {
     setShowNewProjectErrors(true);
     if (!newProjectName.trim() || !selectedClientId || !newProjectCategory || !newProjectStartDate || !newProjectEndDate) {
       toast.error("Please fill in all required fields");
       setTimeout(() => setShowNewProjectErrors(false), 3000);
       return;
     }
-    const newProject: Project = {
-      id: `p${Date.now()}`,
-      clientId: selectedClientId,
-      name: newProjectName,
-      category: newProjectCategory,
-      status: "In Progress",
-      progress: 0,
-      startDate: newProjectStartDate ?? (new Date().toISOString().split('T')[0] as string),
-      endDate: newProjectEndDate ?? (new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] as string),
-      budget: newProjectBudget || "₹0",
-      team: [{ name: "User", avatar: "https://i.pravatar.cc/150?u=user" }]
-    };
 
-    if (newProjectDescription) newProject.description = newProjectDescription;
-    if (newProjectPriority) newProject.priority = newProjectPriority;
-    if (newProjectTeamDeadline) newProject.teamDeadline = newProjectTeamDeadline;
-    if (newProjectServices) newProject.services = newProjectServices;
-    if (newProjectPost) newProject.post = parseInt(newProjectPost);
-    if (newProjectReel) newProject.reel = parseInt(newProjectReel);
-    if (newProjectFestivalPost) newProject.festivalPost = newProjectFestivalPost;
-    if (newProjectAmountReceived) newProject.amountReceived = newProjectAmountReceived;
-    if (newProjectNextPaymentDate) newProject.nextPaymentDate = newProjectNextPaymentDate;
-    if (newProjectReach) newProject.reach = newProjectReach;
-    if (newProjectLeads) newProject.leads = newProjectLeads;
-    if (newProjectCpl) newProject.cpl = newProjectCpl;
-    
-    setClients(clients.map(c => 
-      c.id === selectedClientId ? { ...c, activeProjects: c.activeProjects + 1 } : c
-    ));
-    
-    setProjects([newProject, ...projects]);
-    setNewProjectName("");
-    setNewProjectBudget("");
-    setNewProjectCategory("");
-    setNewProjectDescription("");
-    setNewProjectPriority("Medium");
-    setNewProjectTeamDeadline("");
-    setNewProjectServices("");
-    setNewProjectPost("");
-    setNewProjectReel("");
-    setNewProjectFestivalPost("No");
-    setNewProjectAmountReceived("");
-    setNewProjectNextPaymentDate("");
-    setNewProjectReach("");
-    setNewProjectLeads("");
-    setNewProjectCpl("");
-    setActiveProjectTab('general');
-    setShowNewProjectErrors(false);
-    setIsNewProjectModalOpen(false);
-    toast.success("Project created successfully!");
+    try {
+      const numBudget = parseFloat(String(newProjectBudget || "").replace(/[^0-9.]/g, "")) || 0;
+      const numReceived = parseFloat(String(newProjectAmountReceived || "").replace(/[^0-9.]/g, "")) || 0;
+      const numPost = parseInt(String(newProjectPost || "0"), 10) || 0;
+      const numReel = parseInt(String(newProjectReel || "0"), 10) || 0;
+      const numLeads = parseInt(String(newProjectLeads || "0"), 10) || undefined;
+      const numCpl = parseFloat(String(newProjectCpl || "0")) || undefined;
+
+      const payload: any = {
+        client_id: selectedClientId,
+        general: {
+          project_name: newProjectName.trim(),
+          description: newProjectDescription?.trim() || undefined,
+          category: newProjectCategory,
+          status: "In Progress",
+          priority: newProjectPriority || "Medium",
+          progress: 0,
+          start_date: newProjectStartDate,
+          end_date: newProjectEndDate,
+          team_deadline: newProjectTeamDeadline || undefined,
+          creative_stats: {
+            standard_posts: numPost > 0,
+            post_count_per_month: numPost,
+            reels_videos: numReel > 0,
+            reel_count_per_month: numReel,
+            festival_posts_included: newProjectFestivalPost === "Yes",
+            graphics_banners_required: false,
+          },
+          digital_marketing_stats: {
+            reach_target: newProjectReach?.trim() || undefined,
+            leads_target: numLeads,
+            cpl: numCpl,
+          },
+        },
+        finance: {
+          project_budget: numBudget,
+          amount_received: numReceived,
+          next_payment_date: newProjectNextPaymentDate || undefined,
+        },
+      };
+
+      await api.post("/projects", payload);
+      await loadLiveData();
+
+      setNewProjectName("");
+      setNewProjectBudget("");
+      setNewProjectCategory("");
+      setNewProjectDescription("");
+      setNewProjectPriority("Medium");
+      setNewProjectTeamDeadline("");
+      setNewProjectServices("");
+      setNewProjectPost("");
+      setNewProjectReel("");
+      setNewProjectFestivalPost("No");
+      setNewProjectAmountReceived("");
+      setNewProjectNextPaymentDate("");
+      setNewProjectReach("");
+      setNewProjectLeads("");
+      setNewProjectCpl("");
+      setActiveProjectTab('general');
+      setShowNewProjectErrors(false);
+      setIsNewProjectModalOpen(false);
+      toast.success("Project created successfully!");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to create project");
+    }
   };
 
   const openEditModal = (project: Project) => {
@@ -1401,19 +1584,47 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     setIsEditProjectModalOpen(true);
   };
 
-  const handleUpdateProject = () => {
+  const handleUpdateProject = async () => {
     setShowEditProjectErrors(true);
     if (!editingProject || !editingProject.name.trim() || !editingProject.category || !editingProject.startDate || !editingProject.endDate) {
       toast.error("Please fill in all required fields");
       setTimeout(() => setShowEditProjectErrors(false), 3000);
       return;
     }
-    setProjects(projects.map(p => p.id === editingProject.id ? editingProject : p));
-    setShowEditProjectErrors(false);
-    setIsEditProjectModalOpen(false);
-    setEditingProject(null);
-    setActiveProjectTab('general');
-    toast.success("Project updated successfully!");
+
+    try {
+      const numBudget = parseFloat(String(editingProject.budget || "").replace(/[^0-9.]/g, "")) || 0;
+      const numReceived = parseFloat(String(editingProject.amountReceived || "").replace(/[^0-9.]/g, "")) || 0;
+
+      const payload: any = {
+        general: {
+          project_name: editingProject.name.trim(),
+          description: editingProject.description?.trim() || undefined,
+          category: editingProject.category,
+          status: editingProject.status,
+          priority: editingProject.priority,
+          progress: editingProject.progress,
+          start_date: editingProject.startDate,
+          end_date: editingProject.endDate,
+        },
+        finance: {
+          project_budget: numBudget,
+          amount_received: numReceived,
+          next_payment_date: editingProject.nextPaymentDate || undefined,
+        },
+      };
+
+      await api.put(`/projects/${editingProject.id}`, payload);
+      await loadLiveData();
+
+      setShowEditProjectErrors(false);
+      setIsEditProjectModalOpen(false);
+      setEditingProject(null);
+      setActiveProjectTab('general');
+      toast.success("Project updated successfully!");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update project");
+    }
   };
 
   const handleAddCategory = () => {
@@ -1456,16 +1667,18 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       title: "Delete Project",
       description: "Are you sure you want to delete this project? All associated data will be permanently removed.",
       itemName: project.name,
-      action: () => {
-        moveToRecycleBin('Project', project.name, project, 'hrms_projects');
-        setProjects(prev => prev.filter(p => p.id !== project.id));
-        setClients(prev => prev.map(c => 
-          c.id === project.clientId ? { ...c, activeProjects: Math.max(0, c.activeProjects - 1) } : c
-        ));
-        if (selectedProjectId === project.id) {
-          setSelectedProjectId(null);
+      action: async () => {
+        try {
+          await api.delete(`/projects/${project.id}`);
+          moveToRecycleBin('Project', project.name, project, 'hrms_projects');
+          await loadLiveData();
+          if (selectedProjectId === project.id) {
+            setSelectedProjectId(null);
+          }
+          toast.success(`Project "${project.name}" deleted.`);
+        } catch (err: any) {
+          toast.error(err?.message || "Failed to delete project");
         }
-        toast.success(`Project "${project.name}" deleted.`);
       }
     });
   };
@@ -1476,29 +1689,43 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       title: "Delete Client",
       description: "Are you sure you want to delete this client? All associated projects will also be permanently deleted.",
       itemName: client.name,
-      action: () => {
-        moveToRecycleBin('Client', client.name, client, 'hrms_clients');
-        setClients(prev => prev.filter(c => c.id !== client.id));
-        setProjects(prev => prev.filter(p => p.clientId !== client.id));
-        if (selectedClientId === client.id) {
-          setSelectedClientId(null);
-          setSelectedProjectId(null);
+      action: async () => {
+        try {
+          await api.delete(`/clients/${client.id}`);
+          moveToRecycleBin('Client', client.name, client, 'hrms_clients');
+          await loadLiveData();
+          if (selectedClientId === client.id) {
+            setSelectedClientId(null);
+            setSelectedProjectId(null);
+          }
+          toast.success(`Client "${client.name}" deleted.`);
+        } catch (err: any) {
+          toast.error(err?.message || "Failed to delete client");
         }
-        toast.success(`Client "${client.name}" deleted.`);
       }
     });
   };
 
 
-  const archiveClient = (client: Client) => {
-    setClients(prev => prev.map(c => c.id === client.id ? { ...c, status: 'Archived' as ClientStatus } : c));
-    if (selectedClientId === client.id) setSelectedClientId(null);
-    toast.success(`Client "${client.name}" archived successfully.`);
+  const archiveClient = async (client: Client) => {
+    try {
+      await api.patch(`/clients/${client.id}/archive?status=true`);
+      await loadLiveData();
+      if (selectedClientId === client.id) setSelectedClientId(null);
+      toast.success(`Client "${client.name}" archived successfully.`);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to archive client");
+    }
   };
 
-  const unarchiveClient = (client: Client) => {
-    setClients(prev => prev.map(c => c.id === client.id ? { ...c, status: 'Active' as ClientStatus } : c));
-    toast.success(`Client "${client.name}" restored to Active.`);
+  const unarchiveClient = async (client: Client) => {
+    try {
+      await api.patch(`/clients/${client.id}/archive?status=false`);
+      await loadLiveData();
+      toast.success(`Client "${client.name}" restored to Active.`);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to restore client");
+    }
   };
 
   const getStatusColor = (status: ProjectStatus) => {
@@ -4813,28 +5040,27 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Start Date <span className="text-red-500">*</span></label>
-                          <input 
-                            type="date" 
+                          <DatePicker
                             value={editingProject.startDate}
-                            onChange={(e) => {
-                              const newStart = e.target.value;
+                            onChange={(newStart) => {
                               setEditingProject({
                                 ...editingProject, 
                                 startDate: newStart,
                                 endDate: editingProject.endDate < newStart ? newStart : editingProject.endDate
                               });
                             }}
-                            className={"w-full px-4 py-3 bg-muted/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium " + (showEditProjectErrors && !editingProject.startDate ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
+                            placeholder="Select start date"
+                            className={"w-full h-[42px] bg-muted/50 border rounded-xl font-medium " + (showEditProjectErrors && !editingProject.startDate ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
                           />
                         </div>
                         <div>
                           <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">End Date <span className="text-red-500">*</span></label>
-                          <input 
-                            type="date" 
+                          <DatePicker
                             value={editingProject.endDate}
-                            min={editingProject.startDate}
-                            onChange={(e) => setEditingProject({...editingProject, endDate: e.target.value})}
-                            className={"w-full px-4 py-3 bg-muted/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium " + (showEditProjectErrors && !editingProject.endDate ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
+                            minDate={editingProject.startDate}
+                            onChange={(val) => setEditingProject({...editingProject, endDate: val})}
+                            placeholder="Select end date"
+                            className={"w-full h-[42px] bg-muted/50 border rounded-xl font-medium " + (showEditProjectErrors && !editingProject.endDate ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
                           />
                         </div>
                       </div>
@@ -4948,7 +5174,12 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       </div>
                       <div className="space-y-2">
                         <label className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">Next Payment Date</label>
-                        <input type="date" value={editingProject.nextPaymentDate || ""} onChange={(e) => setEditingProject({...editingProject, nextPaymentDate: e.target.value})} className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium" />
+                        <DatePicker
+                          value={editingProject.nextPaymentDate || ""}
+                          onChange={(val) => setEditingProject({...editingProject, nextPaymentDate: val})}
+                          placeholder="Select payment date"
+                          className="w-full h-[42px] bg-muted/50 border border-border rounded-xl text-sm font-medium"
+                        />
                       </div>
                     </>
                   )}
@@ -5552,16 +5783,32 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Start Date <span className="text-red-500">*</span></label>
-                        <input type="date" value={newProjectStartDate} onChange={(e) => { const v = e.target.value; setNewProjectStartDate(v); if (newProjectEndDate < v) setNewProjectEndDate(v); }} className={cn("w-full px-4 h-[42px] bg-muted/50 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all", showNewProjectErrors && !newProjectStartDate ? "border-red-500" : "border-border")} />
+                        <DatePicker
+                          value={newProjectStartDate}
+                          onChange={(val) => { const v = val; setNewProjectStartDate(v); if (newProjectEndDate < v) setNewProjectEndDate(v); }}
+                          placeholder="Select start date"
+                          className={cn("w-full h-[42px] bg-muted/50 border rounded-xl text-sm font-medium", showNewProjectErrors && !newProjectStartDate ? "border-red-500" : "border-border")}
+                        />
                       </div>
                       <div className="space-y-2">
                         <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">End Date <span className="text-red-500">*</span></label>
-                        <input type="date" value={newProjectEndDate} min={newProjectStartDate} onChange={(e) => setNewProjectEndDate(e.target.value)} className={cn("w-full px-4 h-[42px] bg-muted/50 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all", showNewProjectErrors && !newProjectEndDate ? "border-red-500" : "border-border")} />
+                        <DatePicker
+                          value={newProjectEndDate}
+                          minDate={newProjectStartDate}
+                          onChange={(val) => setNewProjectEndDate(val)}
+                          placeholder="Select end date"
+                          className={cn("w-full h-[42px] bg-muted/50 border rounded-xl text-sm font-medium", showNewProjectErrors && !newProjectEndDate ? "border-red-500" : "border-border")}
+                        />
                       </div>
                     </div>
                     <div className="space-y-2">
                       <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Team Deadline (Internal)</label>
-                      <input type="date" value={newProjectTeamDeadline} onChange={(e) => setNewProjectTeamDeadline(e.target.value)} className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
+                      <DatePicker
+                        value={newProjectTeamDeadline}
+                        onChange={(val) => setNewProjectTeamDeadline(val)}
+                        placeholder="Select team deadline"
+                        className="w-full h-[42px] bg-muted/50 border border-border rounded-xl text-sm font-medium"
+                      />
                     </div>
                     {newProjectCategory === "Digital Marketing" && (
                       <div className="space-y-4 pt-4 border-t border-border/40 mt-4">
@@ -5614,7 +5861,12 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     </div>
                     <div className="space-y-2">
                       <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Next Payment Date</label>
-                      <input type="date" value={newProjectNextPaymentDate} onChange={(e) => setNewProjectNextPaymentDate(e.target.value)} className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
+                      <DatePicker
+                        value={newProjectNextPaymentDate}
+                        onChange={(val) => setNewProjectNextPaymentDate(val)}
+                        placeholder="Select payment date"
+                        className="w-full h-[42px] bg-muted/50 border border-border rounded-xl text-sm font-medium"
+                      />
                     </div>
                   </>
                 )}
@@ -5782,28 +6034,27 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Start Date <span className="text-red-500">*</span></label>
-                          <input 
-                            type="date" 
+                          <DatePicker
                             value={editingProject.startDate}
-                            onChange={(e) => {
-                              const newStart = e.target.value;
+                            onChange={(newStart) => {
                               setEditingProject({
                                 ...editingProject, 
                                 startDate: newStart,
                                 endDate: editingProject.endDate < newStart ? newStart : editingProject.endDate
                               });
                             }}
-                            className={"w-full px-4 py-3 bg-muted/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium " + (showEditProjectErrors && !editingProject.startDate ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
+                            placeholder="Select start date"
+                            className={"w-full h-[42px] bg-muted/50 border rounded-xl font-medium " + (showEditProjectErrors && !editingProject.startDate ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
                           />
                         </div>
                         <div>
                           <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">End Date <span className="text-red-500">*</span></label>
-                          <input 
-                            type="date" 
+                          <DatePicker
                             value={editingProject.endDate}
-                            min={editingProject.startDate}
-                            onChange={(e) => setEditingProject({...editingProject, endDate: e.target.value})}
-                            className={"w-full px-4 py-3 bg-muted/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium " + (showEditProjectErrors && !editingProject.endDate ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
+                            minDate={editingProject.startDate}
+                            onChange={(val) => setEditingProject({...editingProject, endDate: val})}
+                            placeholder="Select end date"
+                            className={"w-full h-[42px] bg-muted/50 border rounded-xl font-medium " + (showEditProjectErrors && !editingProject.endDate ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
                           />
                         </div>
                       </div>
@@ -5917,7 +6168,12 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       </div>
                       <div className="space-y-2">
                         <label className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">Next Payment Date</label>
-                        <input type="date" value={editingProject.nextPaymentDate || ""} onChange={(e) => setEditingProject({...editingProject, nextPaymentDate: e.target.value})} className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium" />
+                        <DatePicker
+                          value={editingProject.nextPaymentDate || ""}
+                          onChange={(val) => setEditingProject({...editingProject, nextPaymentDate: val})}
+                          placeholder="Select payment date"
+                          className="w-full h-[42px] bg-muted/50 border border-border rounded-xl text-sm font-medium"
+                        />
                       </div>
                     </>
                   )}
@@ -6569,7 +6825,12 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       </div>
                       <div className="space-y-2">
                         <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Onboarding Date</label>
-                        <input type="date" value={newClientFormData.onboardingDate} onChange={(e) => handleClientFormChange('onboardingDate', e.target.value)} className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
+                        <DatePicker
+                          value={newClientFormData.onboardingDate}
+                          onChange={(val) => handleClientFormChange('onboardingDate', val)}
+                          placeholder="Select onboarding date"
+                          className="w-full h-[42px] bg-muted/50 border border-border rounded-xl text-sm font-medium"
+                        />
                       </div>
                     </div>
                   </div>
@@ -6750,7 +7011,12 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         </div>
                         <div className="space-y-2">
                           <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Onboarding Date</label>
-                          <input type="date" value={editingClient.onboardingDate || ''} onChange={(e) => handleClientFormChange('onboardingDate', e.target.value, true)} className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
+                          <DatePicker
+                            value={editingClient.onboardingDate || ''}
+                            onChange={(val) => handleClientFormChange('onboardingDate', val, true)}
+                            placeholder="Select onboarding date"
+                            className="w-full h-[42px] bg-muted/50 border border-border rounded-xl text-sm font-medium"
+                          />
                         </div>
                       </div>
                     </div>

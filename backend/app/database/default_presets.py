@@ -422,8 +422,8 @@ async def init_database_presets_and_admin(db):
                 "$set": {
                     "personal_info.password": admin_hashed_pw,
                     "personal_info.email_address": admin_email,
-                    "personal_info.first_name": "System",
-                    "personal_info.last_name": "Admin",
+                    "personal_info.first_name": "Pramit",
+                    "personal_info.last_name": "Mangukiya",
                     "work_details.system_role": "Admin",
                     "work_details.is_delete": False,
                     "work_details.is_block": False,
@@ -433,8 +433,8 @@ async def init_database_presets_and_admin(db):
     else:
         new_admin = {
             "personal_info": {
-                "first_name": "System",
-                "last_name": "Admin",
+                "first_name": "Pramit",
+                "last_name": "Mangukiya",
                 "email_address": admin_email,
                 "password": admin_hashed_pw,
                 "gender": "Male",

@@ -153,3 +153,48 @@ class TaskRepository:
             return True
         except Exception:
             return False
+
+    @classmethod
+    async def get_stats(cls, involved_emp_id: Optional[str] = None):
+        collection = await cls.get_collection()
+        base_query = {"is_deleted": False}
+        if involved_emp_id:
+            base_query["$or"] = [{"assigned_to": involved_emp_id}, {"assigned_by": involved_emp_id}]
+        
+        now = datetime.utcnow()
+        start_of_today = datetime(now.year, now.month, now.day)
+        end_of_today = datetime(now.year, now.month, now.day, 23, 59, 59, 999999)
+
+        total = await collection.count_documents(base_query)
+        todo = await collection.count_documents({**base_query, "status": "todo"})
+        inprogress = await collection.count_documents({**base_query, "status": "inprogress"})
+        inreview = await collection.count_documents({**base_query, "status": "inreview"})
+        completed = await collection.count_documents({**base_query, "status": "completed"})
+
+        today = await collection.count_documents({
+            **base_query,
+            "due_date": {"$gte": start_of_today, "$lte": end_of_today}
+        })
+        
+        overdue = await collection.count_documents({
+            **base_query,
+            "due_date": {"$lt": start_of_today},
+            "status": {"$ne": "completed"}
+        })
+
+        upcoming = await collection.count_documents({
+            **base_query,
+            "due_date": {"$gt": end_of_today},
+            "status": {"$ne": "completed"}
+        })
+
+        return {
+            "total": total,
+            "todo": todo,
+            "inprogress": inprogress,
+            "inreview": inreview,
+            "completed": completed,
+            "today": today,
+            "overdue": overdue,
+            "upcoming": upcoming
+        }

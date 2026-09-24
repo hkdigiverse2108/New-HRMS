@@ -1,9 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import Optional
+from pydantic import BaseModel
 from app.schemas.task import TaskCreate, TaskUpdate, TaskResponse, TaskStatus, TaskPriority, TaskQuickAssign, TransferRequestPayload
 from app.schemas.pagination import PaginatedResponse
 from app.services.task import TaskService
 from app.controllers.auth import get_current_employee
+
+class RejectReviewPayload(BaseModel):
+    reason: Optional[str] = "Needs rework"
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
@@ -22,7 +26,8 @@ async def create_task(data: TaskCreate, current_user: dict = Depends(get_current
     if not emp:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assigned employee does not exist")
         
-    assigned_by = str(current_user.get("_id") or current_user.get("id"))
+    current_uid = str(current_user.get("_id") or current_user.get("id"))
+    assigned_by = current_uid
     created = await TaskService.create_task(data, assigned_by)
     return await TaskService.get_task_by_id(created["_id"])
 
@@ -82,6 +87,14 @@ async def get_deleted_tasks(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Admin/HR can view deleted tasks")
         
     return await TaskService.get_all_tasks(is_deleted=True, page=page, limit=limit)
+
+@router.get("/stats")
+async def get_task_stats(current_user: dict = Depends(get_current_employee)):
+    role = current_user.get("work_details", {}).get("system_role", "Employee")
+    involved_emp_id = None
+    if role not in ["Admin", "Subadmin", "HR"]:
+        involved_emp_id = str(current_user.get("_id") or current_user.get("id"))
+    return await TaskService.get_task_stats(involved_emp_id)
 
 @router.get("/{task_id}", response_model=TaskResponse)
 async def get_task_by_id(task_id: str, current_user: dict = Depends(get_current_employee)):
@@ -210,4 +223,40 @@ async def reject_task_transfer(task_id: str, current_user: dict = Depends(get_cu
     if not updated:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to reject transfer")
         
+    return await TaskService.get_task_by_id(task_id)
+
+@router.post("/{task_id}/approve", response_model=TaskResponse)
+async def approve_task(task_id: str, current_user: dict = Depends(get_current_employee)):
+    item = await TaskService.get_task_by_id(task_id)
+    if not item or item.get("is_deleted"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+        
+    role = current_user.get("work_details", {}).get("system_role", "Employee")
+    emp_id = str(current_user.get("_id") or current_user.get("id"))
+    
+    # Assigner or Admin/HR can approve
+    if role not in ["Admin", "Subadmin", "HR"] and item.get("assigned_by") != emp_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the task assigner or Admin/HR can approve this task")
+        
+    updated = await TaskService.approve_task(task_id, emp_id)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to approve task")
+    return await TaskService.get_task_by_id(task_id)
+
+@router.post("/{task_id}/reject-review", response_model=TaskResponse)
+async def reject_review_task(task_id: str, data: Optional[RejectReviewPayload] = None, current_user: dict = Depends(get_current_employee)):
+    item = await TaskService.get_task_by_id(task_id)
+    if not item or item.get("is_deleted"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+        
+    role = current_user.get("work_details", {}).get("system_role", "Employee")
+    emp_id = str(current_user.get("_id") or current_user.get("id"))
+    
+    if role not in ["Admin", "Subadmin", "HR"] and item.get("assigned_by") != emp_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the task assigner or Admin/HR can reject review")
+        
+    reason = data.reason if data else "Needs rework"
+    updated = await TaskService.reject_review(task_id, reason)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to reject review")
     return await TaskService.get_task_by_id(task_id)

@@ -5,16 +5,17 @@ from app.schemas.client import ClientCreate, ClientUpdate
 from app.schemas.project import ProjectCreate, ProjectCategory
 from app.services.project import ProjectService
 from app.repository.project import ProjectRepository
+from app.redis.service import get_cache, set_cache, delete_cache, clear_pattern, make_list_key
 from datetime import datetime, timedelta
 
 class ClientService:
     @staticmethod
     async def create_client(data: ClientCreate):
         created_client = await ClientRepository.create(data.model_dump(exclude_unset=True))
+        client_id = created_client["_id"]
         
         if data.service_details and data.service_details.departments:
             company_name = data.company_name
-            client_id = created_client["_id"]
             today = datetime.utcnow().date()
             
             for dept in data.service_details.departments:
@@ -35,10 +36,17 @@ class ClientService:
                 except ValueError:
                     pass # Ignore if department string doesn't match enum
                     
+        await clear_pattern("clients:list:*")
+        await clear_pattern("projects:list:*")
         return created_client
 
     @staticmethod
     async def get_all_clients(is_deleted: bool = False, is_archived: bool = False, search: Optional[str] = None, project_category: Optional[str] = None, page: Optional[int] = None, limit: Optional[int] = None):
+        cache_key = make_list_key("clients", is_deleted=is_deleted, is_archived=is_archived, search=search, project_category=project_category, page=page, limit=limit)
+        cached = await get_cache(cache_key)
+        if cached is not None:
+            return cached
+
         result = await ClientRepository.get_all(is_deleted, is_archived, search, project_category, page, limit)
         
         from app.repository.project import ProjectRepository
@@ -68,10 +76,16 @@ class ClientService:
             }
             client["projects"] = projects
             
+        await set_cache(cache_key, result, ttl=3600)
         return result
 
     @staticmethod
     async def get_client_by_id(client_id: str):
+        cache_key = f"client:{client_id}"
+        cached = await get_cache(cache_key)
+        if cached is not None:
+            return cached
+
         client = await ClientRepository.get_by_id(client_id)
         if not client:
             return None
@@ -98,7 +112,7 @@ class ClientService:
         }
         
         client["projects"] = projects
-        
+        await set_cache(cache_key, client, ttl=3600)
         return client
 
     @staticmethod
@@ -150,6 +164,10 @@ class ClientService:
                 except ValueError:
                     pass
                     
+        if success:
+            await clear_pattern("clients:list:*")
+            await delete_cache(f"client:{client_id}")
+            await clear_pattern("projects:list:*")
         return success
 
     @staticmethod
@@ -159,8 +177,16 @@ class ClientService:
             projects_res = await ProjectRepository.get_all(is_deleted=False, client_id=client_id, limit=1000)
             for p in projects_res.get("data", []):
                 await ProjectService.delete_project(p["_id"])
+            await clear_pattern("clients:list:*")
+            await delete_cache(f"client:{client_id}")
+            await clear_pattern("projects:list:*")
         return success
 
     @staticmethod
     async def archive_client(client_id: str, status: bool = True):
-        return await ClientRepository.archive(client_id, status)
+        res = await ClientRepository.archive(client_id, status)
+        if res:
+            await clear_pattern("clients:list:*")
+            await delete_cache(f"client:{client_id}")
+        return res
+
