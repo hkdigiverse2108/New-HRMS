@@ -329,7 +329,8 @@ def main():
             "--app-dir", str(BACKEND_DIR),
             "--host", host,
             "--port", str(backend_port),
-            "--reload"
+            "--reload",
+            "--reload-dir", str(BACKEND_DIR / "app"),
         ]
         backend_proc = subprocess.Popen(backend_cmd, cwd=str(ROOT_DIR), env=backend_env, **popen_kwargs)
         processes.append(backend_proc)

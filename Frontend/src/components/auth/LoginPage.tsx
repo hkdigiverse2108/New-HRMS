@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "./AuthContext";
 import {
   Lock,
@@ -21,7 +21,7 @@ import {
 import { PasswordInput } from "@/components/ui/password-input";
 
 export const LoginPage: React.FC = () => {
-  const { login, verifyOtp } = useAuth();
+  const { login, verifyOtp, isAuthenticated, isLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
@@ -31,31 +31,67 @@ export const LoginPage: React.FC = () => {
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // If already authenticated, redirect to workspace immediately
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && typeof window !== "undefined") {
+      window.location.href = "/";
+    }
+  }, [isAuthenticated, isLoading]);
+
+  // If credentials ever leaked into URL query parameters (e.g. from native browser submit),
+  // extract them safely and strip them immediately from the address bar and history.
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const search = window.location.search;
+      if (search && (search.includes("email=") || search.includes("password="))) {
+        try {
+          const params = new URLSearchParams(search);
+          const qEmail = params.get("email");
+          const qPassword = params.get("password");
+          if (qEmail && !email) setEmail(qEmail);
+          if (qPassword && !password) setPassword(qPassword);
+          window.history.replaceState({}, document.title, window.location.pathname || "/");
+        } catch {}
+      }
+    }
+  }, []);
+
   // Step 1: Submit email & password to /login
-  const handleCredentialsSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCredentialsSubmit = async (e?: React.FormEvent | React.SyntheticEvent) => {
+    if (e) {
+      if (typeof e.preventDefault === "function") e.preventDefault();
+      if (typeof e.stopPropagation === "function") e.stopPropagation();
+    }
     const cleanEmail = email.trim();
     if (!cleanEmail || !password) {
       setErrorMessage("Please enter both your email address and password.");
       return;
     }
 
-    setErrorMessage(null);
-    setIsSubmitting(true);
-    const result = await login(cleanEmail, password);
-    setIsSubmitting(false);
-
-    if (result.success) {
+    try {
       setErrorMessage(null);
-      setStep("otp");
-    } else {
-      setErrorMessage(result.message || "Invalid email or password. Please try again.");
+      setIsSubmitting(true);
+      const result = await login(cleanEmail, password);
+      setIsSubmitting(false);
+
+      if (result.success) {
+        setErrorMessage(null);
+        setStep("otp");
+      } else {
+        setErrorMessage(result.message || "Invalid email or password. Please try again.");
+      }
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setErrorMessage(err?.message || "Failed to sign in. Please verify your connection.");
     }
   };
 
   // Step 2: Submit OTP to /verify-otp
-  const handleOtpSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleOtpSubmit = async (e?: React.FormEvent | React.SyntheticEvent) => {
+    if (e) {
+      if (typeof e.preventDefault === "function") e.preventDefault();
+      if (typeof e.stopPropagation === "function") e.stopPropagation();
+    }
     const cleanEmail = email.trim();
     const cleanOtp = otp.trim();
     if (!cleanEmail || !cleanOtp) {
@@ -63,17 +99,22 @@ export const LoginPage: React.FC = () => {
       return;
     }
 
-    setErrorMessage(null);
-    setIsSubmitting(true);
-    const result = await verifyOtp(cleanEmail, cleanOtp);
-    setIsSubmitting(false);
+    try {
+      setErrorMessage(null);
+      setIsSubmitting(true);
+      const result = await verifyOtp(cleanEmail, cleanOtp);
+      setIsSubmitting(false);
 
-    if (result.success) {
-      if (typeof window !== "undefined") {
-        window.location.href = "/";
+      if (result.success) {
+        if (typeof window !== "undefined") {
+          window.location.href = "/";
+        }
+      } else {
+        setErrorMessage(result.message || "Invalid verification code. Please check and try again.");
       }
-    } else {
-      setErrorMessage(result.message || "Invalid verification code. Please check and try again.");
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setErrorMessage(err?.message || "Verification failed. Please try again.");
     }
   };
 
@@ -256,20 +297,30 @@ export const LoginPage: React.FC = () => {
 
           {/* STEP 1: EMAIL & PASSWORD FORM */}
           {step === "credentials" ? (
-            <form onSubmit={handleCredentialsSubmit} className="space-y-4 sm:space-y-5">
+            <form
+              action="#"
+              method="POST"
+              onSubmit={handleCredentialsSubmit}
+              className="space-y-4 sm:space-y-5"
+            >
               {/* Email Input */}
               <div className="space-y-1.5">
                 <div className="relative flex items-center">
                   <Mail className="w-4 h-4 text-slate-400 absolute left-4 pointer-events-none" />
                   <input
                     type="email"
-                    name="email"
                     autoComplete="username"
                     required
                     value={email}
                     onChange={(e) => {
                       setEmail(e.target.value);
                       if (errorMessage) setErrorMessage(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleCredentialsSubmit(e);
+                      }
                     }}
                     placeholder="Enter your email"
                     className="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-2xl text-sm font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
@@ -280,13 +331,18 @@ export const LoginPage: React.FC = () => {
               {/* Password Input */}
               <div className="space-y-1.5">
                 <PasswordInput
-                  name="password"
                   autoComplete="current-password"
                   required
                   value={password}
                   onChange={(e) => {
                     setPassword(e.target.value);
                     if (errorMessage) setErrorMessage(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleCredentialsSubmit(e);
+                    }
                   }}
                   placeholder="Enter your password"
                   leftIcon={<Lock className="w-4 h-4 text-slate-400" />}
@@ -312,8 +368,12 @@ export const LoginPage: React.FC = () => {
               {/* Main Login Button */}
               <div className="pt-1">
                 <button
-                  type="submit"
+                  type="button"
                   disabled={isSubmitting}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleCredentialsSubmit(e);
+                  }}
                   className="w-full py-3.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:opacity-95 text-white font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all active:scale-[0.98] cursor-pointer disabled:opacity-75 text-sm sm:text-base"
                 >
                   {isSubmitting ? (
@@ -340,7 +400,12 @@ export const LoginPage: React.FC = () => {
             </form>
           ) : (
             /* STEP 2: 6-DIGIT OTP VERIFICATION FORM */
-            <form onSubmit={handleOtpSubmit} className="space-y-4 sm:space-y-5 animate-in fade-in duration-200">
+            <form
+              action="#"
+              method="POST"
+              onSubmit={handleOtpSubmit}
+              className="space-y-4 sm:space-y-5 animate-in fade-in duration-200"
+            >
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                   6-Digit Verification OTP
@@ -356,6 +421,12 @@ export const LoginPage: React.FC = () => {
                     onChange={(e) => {
                       setOtp(e.target.value.replace(/\D/g, ""));
                       if (errorMessage) setErrorMessage(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleOtpSubmit(e);
+                      }
                     }}
                     placeholder="• • • • • •"
                     className="w-full pl-11 pr-4 py-3 tracking-[0.35em] text-center text-lg font-bold bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-slate-900 dark:text-white"
@@ -380,8 +451,12 @@ export const LoginPage: React.FC = () => {
 
               <div className="pt-1 space-y-3">
                 <button
-                  type="submit"
+                  type="button"
                   disabled={isSubmitting || otp.length < 6}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleOtpSubmit(e);
+                  }}
                   className="w-full py-3.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:opacity-95 text-white font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50 text-sm sm:text-base"
                 >
                   {isSubmitting ? (

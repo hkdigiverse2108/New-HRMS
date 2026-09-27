@@ -253,31 +253,46 @@ class ProjectService:
             
         updated = await ProjectRepository.update(project_id, data_dict)
         
-        if updated and old_project and "creative_team" in data_dict:
-            old_team = old_project.get("creative_team", {})
-            new_team = data_dict["creative_team"]
-            
-            from app.repository.task import TaskRepository
-            from app.schemas.task import TaskStatus
-            
-            for role, new_emp_id in new_team.items():
-                old_emp_id = old_team.get(role)
-                if old_emp_id != new_emp_id and new_emp_id:
-                    # Find incomplete SMM tasks for this role, project, and old employee
-                    existing_tasks = await TaskRepository.get_all(
-                        project_id=project_id, 
-                        creative_role=role, 
-                        assigned_to=old_emp_id,
-                        task_category="SMM"
-                    )
-                    
-                    if existing_tasks and existing_tasks.get("data"):
-                        for task in existing_tasks["data"]:
-                            if task.get("status") != TaskStatus.COMPLETED:
-                                update_fields = {"assigned_to": new_emp_id}
-                                if current_user_id:
-                                    update_fields["assigned_by"] = current_user_id
-                                await TaskRepository.update(str(task["_id"]), update_fields)
+        if updated and "creative_team" in data_dict:
+            try:
+                old_team = (old_project.get("creative_team") if old_project else None) or {}
+                new_team = data_dict.get("creative_team") or {}
+                
+                from app.repository.task import TaskRepository
+                from app.schemas.task import TaskStatus
+                
+                for role, new_emp_id in new_team.items():
+                    old_emp_id = old_team.get(role) if isinstance(old_team, dict) else None
+                    if old_emp_id != new_emp_id and new_emp_id:
+                        # Find incomplete SMM tasks for this role, project, and old employee
+                        if old_emp_id:
+                            existing_tasks = await TaskRepository.get_all(
+                                project_id=project_id, 
+                                creative_role=role, 
+                                assigned_to=old_emp_id,
+                                task_category="SMM"
+                            )
+                        else:
+                            existing_tasks = await TaskRepository.get_all(
+                                project_id=project_id, 
+                                creative_role=role, 
+                                task_category="SMM"
+                            )
+                        
+                        if existing_tasks and existing_tasks.get("data"):
+                            for task in existing_tasks["data"]:
+                                # If old_emp_id was empty, only reassign tasks that were unassigned
+                                if not old_emp_id and task.get("assigned_to"):
+                                    continue
+                                status_str = str(task.get("status", "")).lower()
+                                if status_str not in ["completed", "done"]:
+                                    update_fields = {"assigned_to": new_emp_id}
+                                    if current_user_id:
+                                        update_fields["assigned_by"] = current_user_id
+                                    await TaskRepository.update(str(task["_id"]), update_fields)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Error transferring tasks during creative team reassign: {e}")
                                 
         if updated:
             await clear_pattern("projects:list:*")

@@ -155,9 +155,12 @@ async function apiRequest<T = any>(endpoint: string, options: RequestOptions = {
   const shouldToast = showErrorToast && !isSilent;
 
   const execute = async (): Promise<T> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
     try {
       const response = await fetch(url, {
         headers,
+        signal: rest.signal || controller.signal,
         ...rest,
       });
 
@@ -188,11 +191,12 @@ async function apiRequest<T = any>(endpoint: string, options: RequestOptions = {
 
       return (await response.json()) as T;
     } catch (error: any) {
-      if (shouldToast && (error.name === "TypeError" || error.message === "Failed to fetch")) {
+      if (shouldToast && (error.name === "TypeError" || error.message === "Failed to fetch" || error.name === "AbortError")) {
         showApiToastError("Unable to reach the server. Please check your network connection.");
       }
       throw error;
     } finally {
+      clearTimeout(timeoutId);
       if (inFlightKey) {
         inFlightRequests.delete(inFlightKey);
       }

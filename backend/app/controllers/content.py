@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import Optional, List
 from datetime import timedelta
+from bson import ObjectId
 from app.schemas.content import (
     ContentItemCreate, 
     ContentItemUpdate, 
@@ -175,6 +176,8 @@ async def get_content_item_by_id(
     content_id: str,
     current_user: dict = Depends(get_current_employee)
 ):
+    if not ObjectId.is_valid(content_id):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid content ID format")
     item = await ContentService.get_content_by_id(content_id)
     if not item or item.get("project_id") != project_id or item.get("is_deleted"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Content item not found")
@@ -188,6 +191,8 @@ async def update_content_item(
     data: ContentItemUpdate,
     current_user: dict = Depends(get_current_employee)
 ):
+    if not ObjectId.is_valid(content_id):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid content ID format")
     item = await ContentService.get_content_by_id(content_id)
     if not item or item.get("project_id") != project_id or item.get("is_deleted"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Content item not found")
@@ -206,6 +211,8 @@ async def delete_content_item(
     content_id: str,
     current_user: dict = Depends(get_current_employee)
 ):
+    if not ObjectId.is_valid(content_id):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid content ID format")
     item = await ContentService.get_content_by_id(content_id)
     if not item or item.get("project_id") != project_id or item.get("is_deleted"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Content item not found")

@@ -40,7 +40,14 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [token, setToken] = useState<string | null>(() => getAuthToken());
   const [user, setUser] = useState<UserProfile | null>(() => getStoredUser());
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const currentToken = getAuthToken();
+    const storedUser = getStoredUser();
+    if (!currentToken) return false;
+    if (storedUser && storedUser.id) return false;
+    return true;
+  });
 
   // Keep a ref to the latest user object to compare permissions
   const userRef = useRef<UserProfile | null>(user);
@@ -129,6 +136,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // 1. Initial Load & Unauthorized handler
   useEffect(() => {
+    // Safety fallback: ensure loading spinner never blocks the app for more than 2 seconds
+    const safetyTimer = setTimeout(() => {
+      setIsLoading(false);
+    }, 2000);
+
     const currentToken = getAuthToken();
     if (currentToken) {
       try {
@@ -140,6 +152,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setToken(null);
             setUser(null);
             setIsLoading(false);
+            clearTimeout(safetyTimer);
             toast.error("Your session has expired. Please log in again.", { id: "session-expired" });
             return;
           }
@@ -147,7 +160,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch {}
     }
 
-    refreshProfile(true);
+    refreshProfile(true).finally(() => {
+      clearTimeout(safetyTimer);
+    });
 
     const handleUnauthorized = () => {
       removeAuthToken();
@@ -157,7 +172,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     window.addEventListener("hrms:unauthorized", handleUnauthorized);
-    return () => window.removeEventListener("hrms:unauthorized", handleUnauthorized);
+    return () => {
+      clearTimeout(safetyTimer);
+      window.removeEventListener("hrms:unauthorized", handleUnauthorized);
+    };
   }, [refreshProfile]);
 
   // 2. Real-Time Server-Sent Events (SSE) Stream for Live Permission Updates

@@ -59,6 +59,15 @@ function parseDate(val: string | Date | null | undefined): Date | undefined {
       const d = new Date(year, month, day);
       return isValid(d) ? d : undefined;
     }
+    // DD/MM/YYYY or DD-MM-YYYY format support
+    const matchDMY = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    if (matchDMY && matchDMY[1] && matchDMY[2] && matchDMY[3]) {
+      const day = parseInt(matchDMY[1], 10);
+      const month = parseInt(matchDMY[2], 10) - 1;
+      const year = parseInt(matchDMY[3], 10);
+      const d = new Date(year, month, day);
+      return isValid(d) ? d : undefined;
+    }
     const d = new Date(trimmed);
     return isValid(d) ? d : undefined;
   }
@@ -222,7 +231,7 @@ export function DatePicker({
         align={align}
         sideOffset={6}
         collisionPadding={8}
-        className="w-[calc(100vw-20px)] sm:w-auto p-2.5 sm:p-3 rounded-2xl shadow-2xl border border-border/70 bg-card z-[70] max-w-[340px] sm:max-w-none overflow-hidden"
+        className="w-[calc(100vw-20px)] sm:w-auto p-2.5 sm:p-3 rounded-2xl shadow-2xl border border-border/70 bg-card z-[300] max-w-[340px] sm:max-w-none overflow-hidden"
       >
         <div className="space-y-3">
           {/* Header with Month & Year Selectors */}

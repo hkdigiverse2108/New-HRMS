@@ -37,6 +37,7 @@ import { Tasks } from "@/components/work/Tasks";
 import { Chat } from "@/components/work/Chat";
 import { Research } from "@/components/work/Research";
 import { Projects } from "@/components/work/Projects";
+import { ModuleErrorBoundary } from "@/components/common/ModuleErrorBoundary";
 import { Penalties } from "@/components/employees/Penalties";
 import { Remarks } from "@/components/employees/Remarks";
 import { ActivityLogs } from "@/components/admin/ActivityLogs";
@@ -124,7 +125,7 @@ const suggestions = [
 ];
 
 export function Index() {
-  const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  const { user, token, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const [isClient, setIsClient] = useState(false);
   const [active, setActiveState] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -139,11 +140,19 @@ export function Index() {
 
   useEffect(() => {
     setIsClient(true);
-    // Clean up browser address bar to '/' so subpaths never break page reload
-    if (typeof window !== 'undefined' && window.location.pathname !== "/" && window.location.pathname !== "/login") {
-      try {
-        window.history.replaceState({}, '', '/');
-      } catch {}
+    if (typeof window !== 'undefined') {
+      const search = window.location.search || "";
+      const pathname = window.location.pathname || "/";
+      // If credentials were leaked in query string, clean them out immediately
+      if (search.includes("email=") || search.includes("password=")) {
+        try {
+          window.history.replaceState({}, '', pathname);
+        } catch {}
+      } else if (pathname !== "/" && pathname !== "/login") {
+        try {
+          window.history.replaceState({}, '', '/');
+        } catch {}
+      }
     }
   }, []);
 
@@ -183,7 +192,8 @@ export function Index() {
     }
   };
 
-  if (!isClient || isAuthLoading) {
+  // 1. If still running SSR or validating existing session token on the client, show clean loader
+  if (!isClient || (token && isAuthLoading)) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-background">
         <div className="w-8 h-8 rounded-full border-4 border-primary border-r-transparent animate-spin" />
@@ -191,7 +201,12 @@ export function Index() {
     );
   }
 
-  // If user is not authenticated, show the dedicated LoginPage
+  // 2. If session is not authenticated and no token exists, show LoginPage
+  if (!isAuthenticated && !token) {
+    return <LoginPage />;
+  }
+
+  // 3. If session could not be authenticated after validation, show LoginPage
   if (!isAuthenticated) {
     return <LoginPage />;
   }
@@ -271,7 +286,11 @@ export function Index() {
 
                   {/* Work */}
                   {basePath === "/work/logs" && <WorkLogs />}
-                  {basePath === "/work/projects" && <Projects isNew={isNew} />}
+                  {basePath === "/work/projects" && (
+                    <ModuleErrorBoundary moduleName="Clients & Projects">
+                      <Projects isNew={isNew} />
+                    </ModuleErrorBoundary>
+                  )}
                   {basePath === "/tasks" && <Tasks setActive={setActive} isNew={isNew} />}
                   {basePath === "/chat" && <Chat />}
                   {basePath === "/work/research" && <Research />}

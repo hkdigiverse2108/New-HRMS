@@ -167,7 +167,7 @@ class ProjectRepository:
             {"_id": ObjectId(project_id)},
             {"$set": data}
         )
-        return result.modified_count > 0
+        return result.modified_count > 0 or result.matched_count > 0
 
     @classmethod
     async def delete(cls, project_id: str):

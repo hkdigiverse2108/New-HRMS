@@ -14,6 +14,8 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { ThemeProvider } from "../components/ThemeProvider";
+import { AuthProvider } from "../components/auth/AuthContext";
 
 function NotFoundComponent() {
   return (
@@ -135,9 +137,6 @@ function RootShell({ children }: { children: ReactNode }) {
     </html>
   );
 }
-
-import { ThemeProvider } from "../components/ThemeProvider";
-import { AuthProvider } from "../components/auth/AuthContext";
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();

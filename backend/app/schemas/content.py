@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List
+from typing import Optional, List, Union
 from datetime import date, timedelta
 import datetime
 from enum import Enum
@@ -18,6 +18,7 @@ class ContentType(str, Enum):
     REEL = "Reel"
     POST = "Post"
     STORY = "Story"
+    CAROUSEL = "Carousel"
 
 class ContentStatus(str, Enum):
     IN_PROGRESS = "In Progress"
@@ -90,8 +91,8 @@ class BulkAddRequest(BaseModel):
 
 class ContentItemResponse(ContentItemBase):
     id: str = Field(alias="_id")
-    created_at: str
-    updated_at: str
+    created_at: Optional[Union[datetime.datetime, str]] = None
+    updated_at: Optional[Union[datetime.datetime, str]] = None
     is_deleted: bool = False
     
     # Populated fields

@@ -8,6 +8,7 @@ import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { toast } from "sonner";
 import { cn, formatDate } from "@/lib/utils";
 import { SearchableSelect } from "@/components/ui/select";
+import { DatePicker } from "@/components/ui/date-picker";
 import { api } from "@/lib/api";
 import { useAuth } from "@/components/auth/AuthContext";
 
@@ -767,11 +768,10 @@ export function Penalties() {
                           <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
                             Date of Infraction
                           </label>
-                          <input 
-                            type="date"
+                          <DatePicker
                             value={newDate}
-                            onChange={e => setNewDate(e.target.value)}
-                            className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                            onChange={(val) => setNewDate(val)}
+                            className="w-full"
                           />
                         </div>
 

@@ -10,7 +10,7 @@ const rootDir = path.resolve(__dirname, "..");
 // 1. Read configuration dynamically from root .env
 const env = loadEnv(process.env["NODE_ENV"] || "development", rootDir, "");
 const port = env["FRONTEND_PORT"] || env["VITE_PORT"] || "5173";
-const host = env["FRONTEND_HOST"] || env["HOST"] || (process.platform === "win32" ? "localhost" : "0.0.0.0");
+const host = env["FRONTEND_HOST"] || env["HOST"] || "0.0.0.0";
 const viteApiUrl = (env["VITE_API_URL"] || process.env["VITE_API_URL"] || "").trim();
 
 // Dynamically sync env-config.js so browser runtime gets exact VITE_API_URL from .env

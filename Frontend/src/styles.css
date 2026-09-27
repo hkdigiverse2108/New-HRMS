@@ -192,3 +192,17 @@
   --chart-1: oklch(0.6 0.2 300);
   --chart-2: oklch(0.65 0.15 330);
 }
+
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar,
+.hide-scrollbar::-webkit-scrollbar,
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar,
+.hide-scrollbar,
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

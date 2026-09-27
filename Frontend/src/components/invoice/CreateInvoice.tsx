@@ -3,6 +3,7 @@ import { Plus, Trash2, FileText, Send, Save, ArrowLeft, Building2, Calendar, Ind
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { cn } from "@/lib/utils";
 import { SearchableSelect } from "@/components/ui/select";
+import { DatePicker } from "@/components/ui/date-picker";
 
 interface LineItem {
   id: string;
@@ -20,7 +21,7 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
   const [taxRate, setTaxRate] = useState(0.18);
   const [invoiceDate, setInvoiceDate] = useState("");
   const [dueDate, setDueDate] = useState("");
-  
+
   const [invoiceNumber, setInvoiceNumber] = useState(() => `INV-${Date.now().toString().slice(-6)}`);
   const [paymentAccount, setPaymentAccount] = useState<"bank" | "cash">("bank");
   const [discountType, setDiscountType] = useState<"percent" | "amount">("percent");
@@ -29,7 +30,7 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
   const [bankName, setBankName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [ifscCode, setIfscCode] = useState("");
-  
+
   const [clients, setClients] = useState<any[]>(() => {
     if (typeof window !== "undefined") {
       const saved = (typeof window !== 'undefined' ? localStorage.getItem('hrms_clients') : null);
@@ -54,7 +55,7 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
   const [items, setItems] = useState<LineItem[]>([
     { id: "item1", description: "", quantity: 1, rate: 0 }
   ]);
-  const [deleteConfirm, setDeleteConfirm] = useState<{isOpen: boolean, id: string | null}>({isOpen: false, id: null});
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean, id: string | null }>({ isOpen: false, id: null });
 
   const handleAddItem = () => {
     setItems([...items, { id: `item_${Date.now()}`, description: "", quantity: 1, rate: 0 }]);
@@ -85,8 +86,8 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
     return items.reduce((acc, curr) => acc + (curr.quantity * curr.rate), 0);
   }, [items]);
 
-  const discountAmount = discountType === "percent" 
-    ? subtotal * (discountValue / 100) 
+  const discountAmount = discountType === "percent"
+    ? subtotal * (discountValue / 100)
     : discountValue;
   const taxableAmount = Math.max(0, subtotal - discountAmount);
   const taxAmount = taxableAmount * taxRate;
@@ -94,12 +95,12 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
 
   return (
     <div className="w-full space-y-6 sm:space-y-8 animate-in fade-in duration-500 min-w-0">
-      
+
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex items-center gap-3 sm:gap-4">
           {onBack && (
-            <button 
+            <button
               onClick={onBack}
               className="p-2 sm:p-2.5 bg-card border border-border/50 rounded-xl hover:bg-muted/50 transition-colors shadow-sm shrink-0"
             >
@@ -112,8 +113,8 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
               {isProforma ? "Create Proforma Invoice" : "Create Invoice"}
             </h1>
             <p className="text-muted-foreground mt-1 text-xs sm:text-sm font-medium">
-              {isProforma 
-                ? "Generate a preliminary bill of sale in advance of a delivery." 
+              {isProforma
+                ? "Generate a preliminary bill of sale in advance of a delivery."
                 : "Generate a new standard invoice for a client."}
             </p>
           </div>
@@ -131,7 +132,7 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
       </div>
 
       <div className="bg-card border border-border/50 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 shadow-sm space-y-6 sm:space-y-8 relative overflow-hidden">
-        
+
         {/* Badging for Proforma */}
         {isProforma && (
           <div className="absolute top-8 right-[-40px] rotate-45 bg-amber-500 text-amber-950 font-black tracking-widest text-xs py-1.5 px-12 shadow-sm border border-amber-400">
@@ -167,7 +168,7 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
 
             <div>
               <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5 block">GSTIN / Tax ID</label>
-              <input 
+              <input
                 type="text"
                 value={gstin}
                 onChange={(e) => setGstin(e.target.value)}
@@ -177,7 +178,7 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
             </div>
             <div>
               <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5 block">Client Address (Optional)</label>
-              <textarea 
+              <textarea
                 placeholder="Billing address..."
                 value={clientAddress}
                 onChange={(e) => setClientAddress(e.target.value)}
@@ -193,7 +194,7 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
             </h3>
             <div>
               <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5 block">Invoice Number</label>
-              <input 
+              <input
                 type="text"
                 value={invoiceNumber}
                 onChange={(e) => setInvoiceNumber(e.target.value)}
@@ -204,28 +205,28 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5 block">Invoice Date</label>
-                <input 
-                  type="date" 
+                <DatePicker
                   value={invoiceDate}
-                  onChange={(e) => setInvoiceDate(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium"
+                  onChange={(val) => setInvoiceDate(val)}
+                  placeholder="Select invoice date"
+                  className="w-full"
                 />
               </div>
               <div>
                 <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5 block">Due Date</label>
-                <input 
-                  type="date" 
+                <DatePicker
                   value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium"
+                  onChange={(val) => setDueDate(val)}
+                  placeholder="Select due date"
+                  className="w-full"
                 />
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5 block">PO Number / Reference</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   placeholder="e.g. PO-98765"
                   className="w-full px-4 py-2.5 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium"
                 />
@@ -270,7 +271,7 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
             <IndianRupee className="w-4 h-4 text-primary" />
             Line Items
           </h3>
-          
+
           <div className="overflow-x-auto min-w-0 pb-2">
             <div className="min-w-[550px] space-y-3">
               {/* Table Header */}
@@ -285,15 +286,15 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
               {items.map((item, index) => (
                 <div key={item.id} className="grid grid-cols-12 gap-4 items-center px-4 group">
                   <div className="col-span-6 relative">
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={item.description}
                       onChange={(e) => updateItem(item.id, 'description', e.target.value)}
                       placeholder="Item description..."
                       className="w-full px-4 py-2.5 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium"
                     />
                     {items.length > 1 && (
-                      <button 
+                      <button
                         onClick={() => handleRemoveItem(item.id)}
                         className="absolute -left-8 top-1/2 -translate-y-1/2 p-1.5 text-rose-500 hover:bg-rose-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
                         title="Remove Item"
@@ -303,8 +304,8 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
                     )}
                   </div>
                   <div className="col-span-2">
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       min="1"
                       value={item.quantity || ""}
                       onChange={(e) => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
@@ -312,8 +313,8 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
                     />
                   </div>
                   <div className="col-span-2">
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       min="0"
                       value={item.rate || ""}
                       onChange={(e) => updateItem(item.id, 'rate', parseFloat(e.target.value) || 0)}
@@ -328,7 +329,7 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
             </div>
           </div>
 
-          <button 
+          <button
             onClick={handleAddItem}
             className="mt-4 px-4 py-2 bg-muted/50 hover:bg-muted text-foreground text-sm font-bold rounded-xl transition-colors flex items-center gap-2"
           >
@@ -344,8 +345,8 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
             </div>
             <div>
               <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 block">Bank Name</label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 placeholder="e.g. HDFC Bank"
                 value={bankName}
                 onChange={(e) => setBankName(e.target.value)}
@@ -354,8 +355,8 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
             </div>
             <div>
               <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 block">Account Number</label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 placeholder="e.g. 50100234567890"
                 value={accountNumber}
                 onChange={(e) => setAccountNumber(e.target.value)}
@@ -364,8 +365,8 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
             </div>
             <div>
               <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 block">IFSC Code</label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 placeholder="e.g. HDFC0001234"
                 value={ifscCode}
                 onChange={(e) => setIfscCode(e.target.value)}
@@ -414,7 +415,7 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
                     </button>
                   </div>
                 </div>
-                <input 
+                <input
                   type="number"
                   min="0"
                   max={discountType === "percent" ? 100 : undefined}
@@ -429,7 +430,7 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
               </div>
               <div>
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5 block">Shipping / Extra (₹)</label>
-                <input 
+                <input
                   type="number"
                   min="0"
                   value={shippingCharges || ""}
@@ -474,14 +475,14 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
         {/* Notes */}
         <div>
           <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5 block">Notes / Terms</label>
-          <textarea 
+          <textarea
             defaultValue={isProforma ? "This is a proforma invoice. It does not demand payment." : "Please process payment within the due date to avoid late fees."}
             className="w-full px-4 py-3 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium resize-none h-20"
           />
         </div>
       </div>
 
-      <ConfirmModal 
+      <ConfirmModal
         isOpen={deleteConfirm.isOpen}
         onClose={() => setDeleteConfirm({ isOpen: false, id: null })}
         onConfirm={confirmRemoveItem}

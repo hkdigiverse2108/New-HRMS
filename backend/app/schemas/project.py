@@ -12,6 +12,7 @@ class ProjectCategory(str, Enum):
 class ProjectStatus(str, Enum):
     NOT_STARTED = "Not Started"
     IN_PROGRESS = "In Progress"
+    IN_REVIEW = "In Review"
     ON_HOLD = "On Hold"
     COMPLETED = "Completed"
     CANCELLED = "Cancelled"
@@ -108,8 +109,22 @@ class ProjectGeneralDetails(BaseModel):
     @field_validator('category', mode='before')
     def parse_category(cls, v):
         if isinstance(v, str):
-            clean_v = v.lower().replace(" ", "").replace("_", "")
-            cat_map = {"development": "Development", "creative": "Creative", "digitalmarketing": "Digital Marketing", "sales": "Sales"}
+            clean_v = v.lower().replace(" ", "").replace("_", "").replace("/", "")
+            cat_map = {
+                "development": "Development",
+                "creative": "Creative",
+                "digitalmarketing": "Digital Marketing",
+                "sales": "Sales",
+                "webdev": "Development",
+                "appdev": "Development",
+                "design": "Creative",
+                "uiux": "Creative",
+                "socialmediamanagement": "Creative",
+                "socialmedia": "Creative",
+                "smm": "Creative",
+                "socialmediamarketing": "Digital Marketing",
+                "general": "Development",
+            }
             return cat_map.get(clean_v, v)
         return v
 
@@ -117,7 +132,7 @@ class ProjectGeneralDetails(BaseModel):
     def parse_status(cls, v):
         if isinstance(v, str):
             clean_v = v.lower().replace(" ", "").replace("_", "")
-            stat_map = {"notstarted": "Not Started", "inprogress": "In Progress", "onhold": "On Hold", "completed": "Completed", "cancelled": "Cancelled"}
+            stat_map = {"notstarted": "Not Started", "inprogress": "In Progress", "inreview": "In Review", "onhold": "On Hold", "completed": "Completed", "cancelled": "Cancelled"}
             return stat_map.get(clean_v, v)
         return v
         
@@ -148,6 +163,13 @@ class CreativeTeam(BaseModel):
     caption: Optional[str] = None
     thumbnail: Optional[str] = None
 
+class SocialMediaCredential(BaseModel):
+    id: Optional[str] = None
+    platform: str
+    username: str
+    password: str
+    notes: Optional[str] = None
+
 class Campaign(BaseModel):
     name: str
     status: CampaignStatus = Field(default=CampaignStatus.ACTIVE)
@@ -158,7 +180,9 @@ class ProjectBase(BaseModel):
     finance: Optional[ProjectFinanceDetails] = None
     campaigns: Optional[list[Campaign]] = Field(default=None, description="Marketing campaigns")
     creative_team: Optional[CreativeTeam] = None
+    modules: Optional[list[Dict[str, Any]]] = Field(default=None, description="Project modules, tasks, and milestones")
     whatsapp_group_link: Optional[str] = None
+    social_media_credentials: Optional[list[SocialMediaCredential]] = None
     greetings_msg_sent: bool = False
     has_content_calendar: bool = False
     followup_schedule_type: Optional[FollowUpScheduleType] = None
@@ -189,6 +213,50 @@ class ProjectGeneralUpdate(BaseModel):
     digital_marketing_stats: Optional[DigitalMarketingStats] = None
     creative_stats: Optional[CreativeStats] = None
 
+    @field_validator('category', mode='before')
+    def parse_category(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, str):
+            clean_v = v.lower().replace(" ", "").replace("_", "").replace("/", "")
+            cat_map = {
+                "development": "Development",
+                "creative": "Creative",
+                "digitalmarketing": "Digital Marketing",
+                "sales": "Sales",
+                "webdev": "Development",
+                "appdev": "Development",
+                "design": "Creative",
+                "uiux": "Creative",
+                "socialmediamanagement": "Creative",
+                "socialmedia": "Creative",
+                "smm": "Creative",
+                "socialmediamarketing": "Digital Marketing",
+                "general": "Development",
+            }
+            return cat_map.get(clean_v, v)
+        return v
+
+    @field_validator('status', mode='before')
+    def parse_status(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, str):
+            clean_v = v.lower().replace(" ", "").replace("_", "")
+            stat_map = {"notstarted": "Not Started", "inprogress": "In Progress", "inreview": "In Review", "onhold": "On Hold", "completed": "Completed", "cancelled": "Cancelled"}
+            return stat_map.get(clean_v, v)
+        return v
+        
+    @field_validator('priority', mode='before')
+    def parse_priority(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, str):
+            clean_v = v.lower().replace(" ", "").replace("_", "")
+            pri_map = {"low": "Low", "medium": "Medium", "high": "High", "urgent": "Urgent"}
+            return pri_map.get(clean_v, v)
+        return v
+
 class ProjectFinanceUpdate(BaseModel):
     project_budget: Optional[float] = None
     amount_received: Optional[float] = None
@@ -200,7 +268,9 @@ class ProjectUpdate(BaseModel):
     finance: Optional[ProjectFinanceUpdate] = None
     campaigns: Optional[list[Campaign]] = None
     creative_team: Optional[CreativeTeam] = None
+    modules: Optional[list[Dict[str, Any]]] = None
     whatsapp_group_link: Optional[str] = None
+    social_media_credentials: Optional[list[SocialMediaCredential]] = None
     greetings_msg_sent: Optional[bool] = None
     has_content_calendar: Optional[bool] = None
     followup_schedule_type: Optional[FollowUpScheduleType] = None

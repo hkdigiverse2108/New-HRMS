@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Search, Filter, CheckCircle2, Clock, Check, X, Star, AlertCircle, MessageSquare, Activity, User, Eye } from "lucide-react";
 import { DialogClose,  Dialog, DialogContent  } from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/select";
+import { DatePicker } from "@/components/ui/date-picker";
 import { cn } from "@/lib/utils";
 
 type VerificationStatus = "Pending" | "Verified";
@@ -187,21 +188,19 @@ export function DailyProgress() {
           />
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <div className="flex items-center gap-2 w-full sm:w-auto bg-background border border-border/50 rounded-xl px-2 focus-within:ring-2 focus-within:ring-primary/20 transition-all">
-            <input 
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-full sm:w-auto px-2 py-2.5 bg-transparent focus:outline-none text-sm font-bold appearance-none cursor-pointer"
-            />
-            <span className="text-muted-foreground text-sm font-bold">to</span>
-            <input 
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="w-full sm:w-auto px-2 py-2.5 bg-transparent focus:outline-none text-sm font-bold appearance-none cursor-pointer"
-            />
-          </div>
+          <DatePicker 
+            value={startDate}
+            onChange={(val) => setStartDate(val)}
+            placeholder="Start date"
+            className="w-full sm:w-[145px]"
+          />
+          <span className="text-muted-foreground text-sm font-bold">to</span>
+          <DatePicker 
+            value={endDate}
+            onChange={(val) => setEndDate(val)}
+            placeholder="End date"
+            className="w-full sm:w-[145px]"
+          />
           <div className="relative w-full sm:w-auto">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />
             <SearchableSelect

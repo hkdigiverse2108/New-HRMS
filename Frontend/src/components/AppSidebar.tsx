@@ -260,6 +260,9 @@ function SidebarBody({
 
   const go = (url: string) => {
     setActive(url);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("navigate_tab", { detail: url }));
+    }
     onClose?.();
 
     // Find title of item being navigated to
