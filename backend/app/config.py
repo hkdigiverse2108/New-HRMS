@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     SMTP_PASS: str = ""
     SENDER_EMAIL: str = ""
 
+    # Google OAuth & Calendar Integration Settings
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/schedule/google/callback"
+    FRONTEND_SCHEDULE_URL: str = "http://localhost:7788/schedule"
+
     class Config:
         env_file = [
             str(ROOT_DIR / ".env"),

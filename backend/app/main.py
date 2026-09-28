@@ -22,6 +22,8 @@ from app.controllers.remark import router as remark_router
 from app.controllers.notification import router as notification_router
 from app.controllers.daily_progress import router as daily_progress_router
 from app.controllers.chat import router as chat_router
+from app.controllers.schedule import router as schedule_router
+from app.controllers.booking import booking_router, public_booking_router
 from app.models.employee import setup_employee_indexes
 from app.models.department import setup_department_indexes
 from app.models.sub_department import setup_sub_department_indexes
@@ -33,12 +35,15 @@ from app.database.default_presets import init_database_presets_and_admin
 async def lifespan(app: FastAPI):
     # Startup events
     await connect_to_mongo()
-    await setup_employee_indexes(db.db)
-    await setup_department_indexes(db.db)
-    await setup_sub_department_indexes(db.db)
-    await setup_designation_indexes(db.db)
-    await setup_penalty_indexes(db.db)
-    await init_database_presets_and_admin(db.db)
+    try:
+        await setup_employee_indexes(db.db)
+        await setup_department_indexes(db.db)
+        await setup_sub_department_indexes(db.db)
+        await setup_designation_indexes(db.db)
+        await setup_penalty_indexes(db.db)
+        await init_database_presets_and_admin(db.db)
+    except Exception as e:
+        print(f"[STARTUP WARNING] Database startup initialization notice: {e}")
     yield
     # Shutdown events
     await close_mongo_connection()
@@ -103,6 +108,9 @@ app.include_router(remark_router)
 app.include_router(notification_router)
 app.include_router(daily_progress_router)
 app.include_router(chat_router)
+app.include_router(schedule_router)
+app.include_router(booking_router)
+app.include_router(public_booking_router)
 
 # Mount static image paths AFTER API routes
 app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
