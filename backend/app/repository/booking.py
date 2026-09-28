@@ -104,11 +104,24 @@ class BookingRepository:
         return res
 
     @classmethod
+    def get_base_frontend_url(cls, request_base_url: Optional[str] = None) -> str:
+        env_url = (settings.FRONTEND_SCHEDULE_URL or "").strip()
+        if env_url:
+            if env_url.endswith("/schedule"):
+                env_url = env_url[:-9]
+            elif env_url.endswith("/schedule/"):
+                env_url = env_url[:-10]
+            return env_url.rstrip('/')
+        if request_base_url:
+            return request_base_url.rstrip('/')
+        return f"http://localhost:{settings.PORT}"
+
+    @classmethod
     async def create_booking_page(cls, employee_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
         db = await cls.get_db()
         now = datetime.utcnow()
 
-        base_frontend = (settings.FRONTEND_SCHEDULE_URL or "http://localhost:3000/schedule").rsplit('/', 1)[0]
+        base_frontend = cls.get_base_frontend_url(data.get("request_base_url"))
         shareable_url = f"{base_frontend}/book/{employee_id}"
 
         working_days = data.get("working_days", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"])

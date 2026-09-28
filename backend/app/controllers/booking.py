@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, status, HTTPException
+from fastapi import APIRouter, Depends, Query, status, HTTPException, Request
 from typing import Optional, List, Dict, Any
 from datetime import date, datetime
 
@@ -26,14 +26,16 @@ public_booking_router = APIRouter(prefix="/booking/public", tags=["Public Guest 
 @booking_router.post("/booking-pages", response_model=BookingPageResponse, status_code=status.HTTP_201_CREATED)
 async def create_booking_page(
     payload: BookingPageCreate,
+    request: Request,
     current_employee: dict = Depends(get_current_employee)
 ):
     """
     Create a new booking page configuration for the logged-in employee.
-    Generates a shareable booking link: http://localhost:3000/book/{employee_id}
+    Generates a shareable booking link dynamically based on environment or request host.
     """
     user_id = str(current_employee.get("work_details", {}).get("employee_id") or current_employee.get("_id") or current_employee.get("id"))
     data = payload.model_dump()
+    data["request_base_url"] = str(request.base_url)
     created = await BookingRepository.create_booking_page(employee_id=user_id, data=data)
     return created
 

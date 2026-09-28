@@ -30,8 +30,8 @@ class Settings(BaseSettings):
     # Google OAuth & Calendar Integration Settings
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
-    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/schedule/google/callback"
-    FRONTEND_SCHEDULE_URL: str = "http://localhost:7788/schedule"
+    GOOGLE_REDIRECT_URI: str = ""
+    FRONTEND_SCHEDULE_URL: str = ""
 
     class Config:
         env_file = [

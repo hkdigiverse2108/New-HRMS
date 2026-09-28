@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, status, HTTPException
+from fastapi import APIRouter, Depends, Query, status, HTTPException, Request
 from fastapi.responses import RedirectResponse, HTMLResponse
 from typing import Optional, List, Dict, Any
 from datetime import date, datetime
@@ -231,6 +231,7 @@ async def get_google_auth_status(
 
 @router.get("/google/login")
 async def google_auth_login(
+    request: Request,
     redirect: bool = Query(False, description="Set to true to directly redirect browser, or false to get JSON auth_url"),
     current_employee: dict = Depends(get_current_employee)
 ):
@@ -245,7 +246,7 @@ async def google_auth_login(
         )
 
     user_id = str(current_employee.get("work_details", {}).get("employee_id") or current_employee.get("_id") or current_employee.get("id"))
-    auth_url = GoogleCalendarService.generate_auth_url(employee_id=user_id)
+    auth_url = GoogleCalendarService.generate_auth_url(employee_id=user_id, request_base_url=str(request.base_url))
     
     if redirect:
         return RedirectResponse(url=auth_url)
@@ -257,6 +258,7 @@ async def google_auth_login(
 
 @router.get("/google/callback")
 async def google_auth_callback(
+    request: Request,
     code: Optional[str] = Query(None),
     state: Optional[str] = Query(None), # Contains employee_id
     error: Optional[str] = Query(None)
@@ -290,7 +292,7 @@ async def google_auth_callback(
         """, status_code=400)
 
     try:
-        data = await GoogleCalendarService.exchange_code_for_tokens(code=code)
+        data = await GoogleCalendarService.exchange_code_for_tokens(code=code, request_base_url=str(request.base_url))
         tokens = data.get("tokens", {})
         google_email = data.get("google_email", "")
 

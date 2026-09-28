@@ -14,9 +14,18 @@ class GoogleCalendarService:
     ]
 
     @classmethod
-    def generate_auth_url(cls, employee_id: str) -> str:
+    def get_redirect_uri(cls, request_base_url: Optional[str] = None) -> str:
+        uri = (settings.GOOGLE_REDIRECT_URI or "").strip()
+        if uri:
+            return uri
+        if request_base_url:
+            return f"{request_base_url.rstrip('/')}/schedule/google/callback"
+        return f"http://localhost:{settings.PORT}/schedule/google/callback"
+
+    @classmethod
+    def generate_auth_url(cls, employee_id: str, request_base_url: Optional[str] = None) -> str:
         client_id = (settings.GOOGLE_CLIENT_ID or "").strip()
-        redirect_uri = (settings.GOOGLE_REDIRECT_URI or "http://localhost:8000/schedule/google/callback").strip()
+        redirect_uri = cls.get_redirect_uri(request_base_url)
 
         params = {
             "client_id": client_id,
@@ -31,11 +40,11 @@ class GoogleCalendarService:
         return auth_url
 
     @classmethod
-    async def exchange_code_for_tokens(cls, code: str) -> Dict[str, Any]:
+    async def exchange_code_for_tokens(cls, code: str, request_base_url: Optional[str] = None) -> Dict[str, Any]:
         token_url = "https://oauth2.googleapis.com/token"
         client_id = (settings.GOOGLE_CLIENT_ID or "").strip()
         client_secret = (settings.GOOGLE_CLIENT_SECRET or "").strip()
-        redirect_uri = (settings.GOOGLE_REDIRECT_URI or "http://localhost:8000/schedule/google/callback").strip()
+        redirect_uri = cls.get_redirect_uri(request_base_url)
 
         payload = {
             "client_id": client_id,
