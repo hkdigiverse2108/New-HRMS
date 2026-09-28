@@ -80,11 +80,6 @@ class ClientReview(BaseModel):
     created_by: str
     created_by_details: Optional[dict] = None
 
-class DigitalMarketingStats(BaseModel):
-    reach_target: Optional[str] = None
-    leads_target: Optional[int] = None
-    cpl: Optional[float] = None
-
 class CreativeStats(BaseModel):
     standard_posts: bool = False
     post_count_per_month: int = 0
@@ -103,7 +98,6 @@ class ProjectGeneralDetails(BaseModel):
     start_date: date = Field(..., description="Project start date")
     end_date: date = Field(..., description="Project end date")
     team_deadline: Optional[date] = None
-    digital_marketing_stats: Optional[DigitalMarketingStats] = None
     creative_stats: Optional[CreativeStats] = None
 
     @field_validator('category', mode='before')
@@ -143,15 +137,6 @@ class ProjectGeneralDetails(BaseModel):
             pri_map = {"low": "Low", "medium": "Medium", "high": "High", "urgent": "Urgent"}
             return pri_map.get(clean_v, v)
         return v
-
-class ProjectFinanceDetails(BaseModel):
-    project_budget: Optional[float] = None
-    amount_received: Optional[float] = None
-    next_payment_date: Optional[date] = None
-
-class CampaignStatus(str, Enum):
-    ACTIVE = "Active"
-    INACTIVE = "Inactive"
 
 class CreativeTeam(BaseModel):
     scripting: Optional[str] = None
@@ -170,15 +155,116 @@ class SocialMediaCredential(BaseModel):
     password: str
     notes: Optional[str] = None
 
-class Campaign(BaseModel):
+class DailyMarketingStatCreate(BaseModel):
+    date: date
+    campaign_name: str
+    reach: int = 0
+    impressions: int = 0
+    leads: int = 0
+    revenue: float = 0.0
+    spend: float = 0.0
+    cost_metric: Optional[float] = None
+
+class DailyMarketingStatUpdate(BaseModel):
+    date: Optional[date] = None
+    campaign_name: Optional[str] = None
+    reach: Optional[int] = None
+    impressions: Optional[int] = None
+    leads: Optional[int] = None
+    revenue: Optional[float] = None
+    spend: Optional[float] = None
+    cost_metric: Optional[float] = None
+
+class BulkItem(BaseModel):
+    campaign_name: str
+    reach: int = 0
+    impressions: int = 0
+    leads: int = 0
+    revenue: float = 0.0
+    spend: float = 0.0
+    cost_metric: Optional[float] = None
+
+class DailyMarketingStatBulkCreate(BaseModel):
+    date: date
+    entries: list[BulkItem]
+
+class DailyMarketingStat(BaseModel):
+    id: str
+    sn: Optional[int] = None
+    date: date
+    campaign_name: str
+    reach: int = 0
+    impressions: int = 0
+    leads: int = 0
+    revenue: float = 0.0
+    spend: float = 0.0
+    cost_metric: float = 0.0
+    created_at: datetime
+    updated_at: datetime
+    created_by: Optional[str] = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+class TopCampaignItem(BaseModel):
+    campaign_name: str
+    leads: int = 0
+    spend: float = 0.0
+    reach: int = 0
+    impressions: int = 0
+    revenue: float = 0.0
+    cpl: float = 0.0
+
+
+class KpiMetricCard(BaseModel):
+    value: float
+    formatted: str
+    growth_pct: float
+
+class MarketingSummaryMetrics(BaseModel):
+    reach: KpiMetricCard
+    leads: KpiMetricCard
+    cost_per_lead: KpiMetricCard
+    amount_spent: KpiMetricCard
+    impressions: KpiMetricCard
+    revenue: KpiMetricCard
+
+class MarketingSummaryResponse(BaseModel):
+    project_name: str
+    filters: dict
+    kpis: MarketingSummaryMetrics
+    top_campaigns: list[TopCampaignItem]
+
+class MarketingWorkspaceResponse(BaseModel):
+    header: dict
+    filters: dict
+    kpis: MarketingSummaryMetrics
+    top_campaigns: list[TopCampaignItem]
+    stats_logs: list[DailyMarketingStat]
+    campaign_options: list[str]
+
+class MarketingCampaignCreate(BaseModel):
     name: str
-    status: CampaignStatus = Field(default=CampaignStatus.ACTIVE)
+
+class DailyRevenueCreate(BaseModel):
+    date: date
+    revenue: float = Field(..., ge=0, description="Daily revenue amount in ₹")
+
+class DailyRevenueUpdate(BaseModel):
+    revenue: float = Field(..., ge=0, description="Updated revenue amount in ₹")
+
+class DailyRevenue(BaseModel):
+    id: str
+    date: date
+    revenue: float
+    created_at: datetime
+    updated_at: datetime
+    created_by: Optional[str] = None
+
+    model_config = ConfigDict(populate_by_name=True)
 
 class ProjectBase(BaseModel):
     client_id: str = Field(..., description="Client ID this project belongs to")
     general: ProjectGeneralDetails
-    finance: Optional[ProjectFinanceDetails] = None
-    campaigns: Optional[list[Campaign]] = Field(default=None, description="Marketing campaigns")
     creative_team: Optional[CreativeTeam] = None
     modules: Optional[list[Dict[str, Any]]] = Field(default=None, description="Project modules, tasks, and milestones")
     whatsapp_group_link: Optional[str] = None
@@ -196,6 +282,9 @@ class ProjectBase(BaseModel):
     followup_logs: Optional[list[FollowUpLog]] = []
     client_reviews: Optional[list[ClientReview]] = []
     content_approvals: Optional[list[ContentCalendarApproval]] = []
+    daily_marketing_stats: Optional[list[DailyMarketingStat]] = []
+    marketing_campaigns: Optional[list[str]] = []
+    daily_revenues: Optional[list[DailyRevenue]] = []
 
 class ProjectCreate(ProjectBase):
     pass
@@ -210,7 +299,6 @@ class ProjectGeneralUpdate(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     team_deadline: Optional[date] = None
-    digital_marketing_stats: Optional[DigitalMarketingStats] = None
     creative_stats: Optional[CreativeStats] = None
 
     @field_validator('category', mode='before')
@@ -257,16 +345,9 @@ class ProjectGeneralUpdate(BaseModel):
             return pri_map.get(clean_v, v)
         return v
 
-class ProjectFinanceUpdate(BaseModel):
-    project_budget: Optional[float] = None
-    amount_received: Optional[float] = None
-    next_payment_date: Optional[date] = None
-
 class ProjectUpdate(BaseModel):
     client_id: Optional[str] = None
     general: Optional[ProjectGeneralUpdate] = None
-    finance: Optional[ProjectFinanceUpdate] = None
-    campaigns: Optional[list[Campaign]] = None
     creative_team: Optional[CreativeTeam] = None
     modules: Optional[list[Dict[str, Any]]] = None
     whatsapp_group_link: Optional[str] = None
@@ -281,6 +362,9 @@ class ProjectUpdate(BaseModel):
     last_feedback_date: Optional[date] = None
     followup_logs: Optional[list[FollowUpLog]] = None
     client_reviews: Optional[list[ClientReview]] = None
+    daily_marketing_stats: Optional[list[DailyMarketingStat]] = None
+    marketing_campaigns: Optional[list[str]] = None
+    daily_revenues: Optional[list[DailyRevenue]] = None
 
 class ProjectResponse(ProjectBase):
     id: str = Field(alias="_id")

@@ -23,10 +23,6 @@ class ProjectRepository:
             for date_field in ["start_date", "end_date", "team_deadline"]:
                 if date_field in data["general"] and isinstance(data["general"][date_field], date) and not isinstance(data["general"][date_field], datetime):
                     data["general"][date_field] = datetime.combine(data["general"][date_field], datetime.min.time())
-                    
-        if "finance" in data and data["finance"] and isinstance(data["finance"], dict):
-            if "next_payment_date" in data["finance"] and isinstance(data["finance"]["next_payment_date"], date) and not isinstance(data["finance"]["next_payment_date"], datetime):
-                data["finance"]["next_payment_date"] = datetime.combine(data["finance"]["next_payment_date"], datetime.min.time())
                 
         result = await collection.insert_one(data)
         data["_id"] = str(result.inserted_id)
@@ -159,10 +155,6 @@ class ProjectRepository:
                 if date_field in data["general"] and data["general"][date_field] and isinstance(data["general"][date_field], date) and not isinstance(data["general"][date_field], datetime):
                     data["general"][date_field] = datetime.combine(data["general"][date_field], datetime.min.time())
                     
-        if "finance" in data and data["finance"] and isinstance(data["finance"], dict):
-            if "next_payment_date" in data["finance"] and data["finance"]["next_payment_date"] and isinstance(data["finance"]["next_payment_date"], date) and not isinstance(data["finance"]["next_payment_date"], datetime):
-                data["finance"]["next_payment_date"] = datetime.combine(data["finance"]["next_payment_date"], datetime.min.time())
-                
         result = await collection.update_one(
             {"_id": ObjectId(project_id)},
             {"$set": data}
@@ -178,17 +170,5 @@ class ProjectRepository:
         result = await collection.update_one(
             {"_id": ObjectId(project_id)},
             {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}}
-        )
-        return result.modified_count > 0
-
-    @classmethod
-    async def remove_campaign(cls, project_id: str, campaign_name: str):
-        collection = await cls.get_collection()
-        if not ObjectId.is_valid(project_id):
-            return False
-        
-        result = await collection.update_one(
-            {"_id": ObjectId(project_id)},
-            {"$pull": {"campaigns": {"name": campaign_name}}}
         )
         return result.modified_count > 0

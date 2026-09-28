@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import Optional, List
-from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectCategory, ProjectPriority, ProjectStatus, FollowUpLogCreate, FollowUpLog, ClientReviewCreate, ClientReviewUpdate, ClientReview
+from datetime import date
+from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectCategory, ProjectPriority, ProjectStatus, FollowUpLogCreate, FollowUpLog, ClientReviewCreate, ClientReviewUpdate, ClientReview, DailyMarketingStatCreate, DailyMarketingStatUpdate, DailyMarketingStat, MarketingCampaignCreate, DailyMarketingStatBulkCreate, MarketingSummaryResponse, DailyRevenueCreate, DailyRevenueUpdate, DailyRevenue, MarketingWorkspaceResponse
 from app.schemas.pagination import PaginatedResponse
 from app.services.project import ProjectService
 from app.controllers.auth import get_current_employee
@@ -133,14 +134,128 @@ async def delete_project(project_id: str, current_user: dict = Depends(get_curre
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to delete project")
 
-@router.delete("/{project_id}/campaigns/{campaign_name}", response_model=ProjectResponse, response_model_exclude_none=True)
-async def delete_campaign(project_id: str, campaign_name: str, current_user: dict = Depends(get_current_employee)):
-    item = await ProjectService.get_project_by_id(project_id)
-    if not item or item.get("is_deleted"):
+@router.post("/{project_id}/marketing-stats", response_model=DailyMarketingStat, status_code=status.HTTP_201_CREATED)
+async def add_daily_marketing_stat(project_id: str, data: DailyMarketingStatCreate, current_user: dict = Depends(get_current_employee)):
+    emp_id = str(current_user.get("_id") or current_user.get("id"))
+    stat = await ProjectService.add_daily_marketing_stat(project_id, data, emp_id)
+    if not stat:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to add daily marketing stat or project not found")
+    return stat
+
+@router.post("/{project_id}/marketing-stats/bulk", response_model=List[DailyMarketingStat], status_code=status.HTTP_201_CREATED)
+async def add_bulk_daily_marketing_stats(project_id: str, data: DailyMarketingStatBulkCreate, current_user: dict = Depends(get_current_employee)):
+    emp_id = str(current_user.get("_id") or current_user.get("id"))
+    stats = await ProjectService.add_bulk_daily_marketing_stats(project_id, data, emp_id)
+    if stats is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to bulk add marketing stats or project not found")
+    return stats
+
+@router.get("/{project_id}/marketing-stats", response_model=List[DailyMarketingStat])
+async def get_daily_marketing_stats(
+    project_id: str,
+    campaign_name: Optional[str] = Query(None, description="Filter by campaign name"),
+    start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+    preset: Optional[str] = Query(None, description="Preset filter: today, yesterday, last_7_days, last_14_days, last_28_days, last_30_days, this_week, last_week, this_month, last_month, maximum"),
+    current_user: dict = Depends(get_current_employee)
+):
+    stats = await ProjectService.get_daily_marketing_stats(project_id, campaign_name=campaign_name, start_date=start_date, end_date=end_date, preset=preset)
+    if stats is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-        
-    success = await ProjectService.remove_campaign(project_id, campaign_name)
+    return stats
+
+@router.get("/{project_id}/marketing-summary", response_model=MarketingSummaryResponse)
+async def get_marketing_summary(
+    project_id: str,
+    campaign_name: Optional[str] = Query(None, description="Filter by campaign name"),
+    start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+    preset: Optional[str] = Query(None, description="Preset filter: today, yesterday, last_7_days, last_14_days, last_28_days, last_30_days, this_week, last_week, this_month, last_month, maximum"),
+    current_user: dict = Depends(get_current_employee)
+):
+    summary = await ProjectService.get_marketing_summary(project_id, campaign_name=campaign_name, start_date=start_date, end_date=end_date, preset=preset)
+    if summary is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    return summary
+
+@router.put("/{project_id}/marketing-stats/{stat_id}", response_model=DailyMarketingStat)
+async def update_daily_marketing_stat(project_id: str, stat_id: str, data: DailyMarketingStatUpdate, current_user: dict = Depends(get_current_employee)):
+    stat = await ProjectService.update_daily_marketing_stat(project_id, stat_id, data)
+    if not stat:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to update stat or stat not found")
+    return stat
+
+@router.delete("/{project_id}/marketing-stats/{stat_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_daily_marketing_stat(project_id: str, stat_id: str, current_user: dict = Depends(get_current_employee)):
+    success = await ProjectService.delete_daily_marketing_stat(project_id, stat_id)
     if not success:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to delete campaign or campaign not found")
-        
-    return await ProjectService.get_project_by_id(project_id)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to delete stat or stat not found")
+
+@router.get("/{project_id}/marketing-campaigns", response_model=List[str])
+async def get_marketing_campaigns(project_id: str, current_user: dict = Depends(get_current_employee)):
+    campaigns = await ProjectService.get_marketing_campaigns(project_id)
+    if campaigns is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    return campaigns
+
+@router.post("/{project_id}/marketing-campaigns", response_model=List[str], status_code=status.HTTP_201_CREATED)
+async def add_marketing_campaign(project_id: str, data: MarketingCampaignCreate, current_user: dict = Depends(get_current_employee)):
+    campaigns = await ProjectService.add_marketing_campaign(project_id, data.name)
+    if campaigns is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to add campaign or project not found")
+    return campaigns
+
+@router.post("/{project_id}/daily-revenue", response_model=DailyRevenue, status_code=status.HTTP_201_CREATED)
+async def add_daily_revenue(project_id: str, data: DailyRevenueCreate, current_user: dict = Depends(get_current_employee)):
+    emp_id = str(current_user.get("_id") or current_user.get("id"))
+    revenue = await ProjectService.add_daily_revenue(project_id, data, emp_id)
+    if not revenue:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to add daily revenue or project not found")
+    return revenue
+
+@router.get("/{project_id}/daily-revenue", response_model=List[DailyRevenue])
+async def get_daily_revenues(
+    project_id: str,
+    start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+    preset: Optional[str] = Query(None, description="Preset filter: today, yesterday, last_7_days, last_14_days, last_28_days, last_30_days, this_week, last_week, this_month, last_month, maximum"),
+    current_user: dict = Depends(get_current_employee)
+):
+    revenues = await ProjectService.get_daily_revenues(project_id, start_date=start_date, end_date=end_date, preset=preset)
+    if revenues is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    return revenues
+
+@router.put("/{project_id}/daily-revenue/{revenue_id}", response_model=DailyRevenue)
+async def update_daily_revenue(project_id: str, revenue_id: str, data: DailyRevenueUpdate, current_user: dict = Depends(get_current_employee)):
+    revenue = await ProjectService.update_daily_revenue(project_id, revenue_id, data)
+    if not revenue:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to update daily revenue or revenue not found")
+    return revenue
+
+@router.delete("/{project_id}/daily-revenue/{revenue_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_daily_revenue(project_id: str, revenue_id: str, current_user: dict = Depends(get_current_employee)):
+    success = await ProjectService.delete_daily_revenue(project_id, revenue_id)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to delete daily revenue or revenue not found")
+
+@router.get("/{project_id}/marketing-workspace", response_model=MarketingWorkspaceResponse)
+async def get_marketing_workspace(
+    project_id: str,
+    campaign_name: Optional[str] = Query(None, description="Filter by campaign name"),
+    start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+    preset: Optional[str] = Query(None, description="Preset filter: today, yesterday, last_7_days, last_14_days, last_28_days, last_30_days, this_week, last_week, this_month, last_month, maximum"),
+    current_user: dict = Depends(get_current_employee)
+):
+    workspace = await ProjectService.get_marketing_workspace(
+        project_id, 
+        campaign_name=campaign_name, 
+        start_date=start_date, 
+        end_date=end_date, 
+        preset=preset
+    )
+    if workspace is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    return workspace
+

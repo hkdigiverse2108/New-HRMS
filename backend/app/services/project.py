@@ -1,7 +1,9 @@
+import uuid
+from datetime import datetime, date
 from typing import Optional
 from app.repository.project import ProjectRepository
 from app.repository.client import ClientRepository
-from app.schemas.project import ProjectCreate, ProjectUpdate, FollowUpLogCreate, ClientReviewCreate, ClientReviewUpdate
+from app.schemas.project import ProjectCreate, ProjectUpdate, FollowUpLogCreate, ClientReviewCreate, ClientReviewUpdate, DailyMarketingStatCreate, DailyMarketingStatUpdate, DailyMarketingStatBulkCreate, DailyRevenueCreate, DailyRevenueUpdate
 from app.redis.service import get_cache, set_cache, delete_cache, clear_pattern, make_list_key
 
 class ProjectService:
@@ -498,10 +500,744 @@ class ProjectService:
         return res
 
     @staticmethod
-    async def remove_campaign(project_id: str, campaign_name: str):
-        res = await ProjectRepository.remove_campaign(project_id, campaign_name)
-        if res:
+    async def add_daily_marketing_stat(project_id: str, data: DailyMarketingStatCreate, current_user_id: str):
+        project = await ProjectRepository.get_by_id(project_id)
+        if not project:
+            return None
+            
+        stats = project.get("daily_marketing_stats", []) or []
+        campaigns = project.get("marketing_campaigns", []) or []
+        
+        camp_clean = data.campaign_name.strip()
+        if camp_clean and not any(c.lower() == camp_clean.lower() for c in campaigns):
+            campaigns.append(camp_clean)
+            
+        target_date = datetime.combine(data.date, datetime.min.time())
+        target_date_str = data.date.strftime("%Y-%m-%d") if isinstance(data.date, (date, datetime)) else str(data.date)[:10]
+        
+        def _get_date_str(d):
+            if isinstance(d, datetime):
+                return d.strftime("%Y-%m-%d")
+            elif isinstance(d, date):
+                return d.strftime("%Y-%m-%d")
+            elif isinstance(d, str):
+                return d[:10]
+            return ""
+
+        existing_idx = -1
+        existing_item = None
+        for idx, s in enumerate(stats):
+            if s.get("campaign_name", "").strip().lower() == camp_clean.lower() and _get_date_str(s.get("date")) == target_date_str:
+                existing_idx = idx
+                existing_item = s
+                break
+                
+        daily_revenues = project.get("daily_revenues", []) or []
+        auto_revenue = data.revenue
+        if auto_revenue == 0.0:
+            for r in daily_revenues:
+                if _get_date_str(r.get("date")) == target_date_str:
+                    auto_revenue = r.get("revenue", 0.0) or 0.0
+                    break
+
+        now = datetime.utcnow()
+        if existing_item:
+            # Combine/sum values into existing entry
+            existing_item["reach"] = (existing_item.get("reach", 0) or 0) + data.reach
+            existing_item["impressions"] = (existing_item.get("impressions", 0) or 0) + data.impressions
+            existing_item["leads"] = (existing_item.get("leads", 0) or 0) + data.leads
+            existing_item["revenue"] = round((existing_item.get("revenue", 0.0) or 0.0) + (data.revenue if data.revenue > 0 else auto_revenue), 2)
+            existing_item["spend"] = round((existing_item.get("spend", 0.0) or 0.0) + data.spend, 2)
+            
+            tot_leads = existing_item["leads"]
+            tot_spend = existing_item["spend"]
+            tot_reach = existing_item["reach"]
+            
+            if data.cost_metric is not None:
+                existing_item["cost_metric"] = data.cost_metric
+            elif tot_leads > 0:
+                existing_item["cost_metric"] = round(tot_spend / tot_leads, 2)
+            elif tot_reach > 0:
+                existing_item["cost_metric"] = round(tot_spend / tot_reach, 4)
+            else:
+                existing_item["cost_metric"] = 0.0
+                
+            existing_item["updated_at"] = now
+            stats[existing_idx] = existing_item
+            stat_entry = existing_item
+        else:
+            # Create brand new entry
+            cost_metric = data.cost_metric
+            if cost_metric is None:
+                if data.leads > 0:
+                    cost_metric = round(data.spend / data.leads, 2)
+                elif data.reach > 0:
+                    cost_metric = round(data.spend / data.reach, 4)
+                else:
+                    cost_metric = 0.0
+                    
+            stat_entry = {
+                "id": uuid.uuid4().hex[:12],
+                "date": target_date,
+                "campaign_name": camp_clean,
+                "reach": data.reach,
+                "impressions": data.impressions,
+                "leads": data.leads,
+                "revenue": auto_revenue,
+                "spend": data.spend,
+                "cost_metric": cost_metric,
+                "created_at": now,
+                "updated_at": now,
+                "created_by": current_user_id
+            }
+            stats.append(stat_entry)
+            
+        updated = await ProjectRepository.update(project_id, {"daily_marketing_stats": stats, "marketing_campaigns": campaigns})
+        if updated:
             await clear_pattern("projects:list:*")
             await delete_cache(f"project:{project_id}")
-        return res
+            # Calculate sn position
+            sorted_stats = sorted(stats, key=lambda x: str(x.get("date") or ""))
+            for idx, item in enumerate(sorted_stats):
+                if item.get("id") == stat_entry.get("id"):
+                    stat_entry["sn"] = idx + 1
+                    break
+            return stat_entry
+        return None
+
+    @staticmethod
+    async def add_bulk_daily_marketing_stats(project_id: str, data: DailyMarketingStatBulkCreate, current_user_id: str):
+        project = await ProjectRepository.get_by_id(project_id)
+        if not project:
+            return None
+            
+        stats = project.get("daily_marketing_stats", []) or []
+        campaigns = project.get("marketing_campaigns", []) or []
+        
+        target_date = datetime.combine(data.date, datetime.min.time())
+        target_date_str = data.date.strftime("%Y-%m-%d") if isinstance(data.date, (date, datetime)) else str(data.date)[:10]
+        
+        def _get_date_str(d):
+            if isinstance(d, datetime):
+                return d.strftime("%Y-%m-%d")
+            elif isinstance(d, date):
+                return d.strftime("%Y-%m-%d")
+            elif isinstance(d, str):
+                return d[:10]
+            return ""
+
+        now = datetime.utcnow()
+        affected_ids = []
+        
+        for entry in data.entries:
+            camp_clean = entry.campaign_name.strip()
+            if not camp_clean:
+                continue
+            if not any(c.lower() == camp_clean.lower() for c in campaigns):
+                campaigns.append(camp_clean)
+                
+            existing_idx = -1
+            existing_item = None
+            for idx, s in enumerate(stats):
+                if s.get("campaign_name", "").strip().lower() == camp_clean.lower() and _get_date_str(s.get("date")) == target_date_str:
+                    existing_idx = idx
+                    existing_item = s
+                    break
+                    
+            if existing_item:
+                existing_item["reach"] = (existing_item.get("reach", 0) or 0) + entry.reach
+                existing_item["impressions"] = (existing_item.get("impressions", 0) or 0) + entry.impressions
+                existing_item["leads"] = (existing_item.get("leads", 0) or 0) + entry.leads
+                existing_item["revenue"] = round((existing_item.get("revenue", 0.0) or 0.0) + entry.revenue, 2)
+                existing_item["spend"] = round((existing_item.get("spend", 0.0) or 0.0) + entry.spend, 2)
+                
+                tot_leads = existing_item["leads"]
+                tot_spend = existing_item["spend"]
+                tot_reach = existing_item["reach"]
+                
+                if entry.cost_metric is not None:
+                    existing_item["cost_metric"] = entry.cost_metric
+                elif tot_leads > 0:
+                    existing_item["cost_metric"] = round(tot_spend / tot_leads, 2)
+                elif tot_reach > 0:
+                    existing_item["cost_metric"] = round(tot_spend / tot_reach, 4)
+                else:
+                    existing_item["cost_metric"] = 0.0
+                    
+                existing_item["updated_at"] = now
+                stats[existing_idx] = existing_item
+                affected_ids.append(existing_item["id"])
+            else:
+                cost_metric = entry.cost_metric
+                if cost_metric is None:
+                    if entry.leads > 0:
+                        cost_metric = round(entry.spend / entry.leads, 2)
+                    elif entry.reach > 0:
+                        cost_metric = round(entry.spend / entry.reach, 4)
+                    else:
+                        cost_metric = 0.0
+                        
+                stat_entry = {
+                    "id": uuid.uuid4().hex[:12],
+                    "date": target_date,
+                    "campaign_name": camp_clean,
+                    "reach": entry.reach,
+                    "impressions": entry.impressions,
+                    "leads": entry.leads,
+                    "revenue": entry.revenue,
+                    "spend": entry.spend,
+                    "cost_metric": cost_metric,
+                    "created_at": now,
+                    "updated_at": now,
+                    "created_by": current_user_id
+                }
+                stats.append(stat_entry)
+                affected_ids.append(stat_entry["id"])
+
+        updated = await ProjectRepository.update(project_id, {"daily_marketing_stats": stats, "marketing_campaigns": campaigns})
+        if updated:
+            await clear_pattern("projects:list:*")
+            await delete_cache(f"project:{project_id}")
+            
+            sorted_stats = sorted(stats, key=lambda x: str(x.get("date") or ""))
+            result_list = []
+            for idx, item in enumerate(sorted_stats):
+                if item.get("id") in affected_ids:
+                    item["sn"] = idx + 1
+                    result_list.append(item)
+            return result_list
+        return None
+
+    @staticmethod
+    def _resolve_date_range(preset: Optional[str] = None, start_date: Optional[date] = None, end_date: Optional[date] = None):
+        from datetime import timedelta
+        today = date.today()
+        
+        if start_date or end_date:
+            return start_date, end_date
+            
+        if not preset:
+            return None, None
+            
+        clean_p = preset.lower().strip().replace(" ", "_").replace("-", "_")
+        
+        if clean_p == "today":
+            return today, today
+        elif clean_p == "yesterday":
+            y = today - timedelta(days=1)
+            return y, y
+        elif clean_p == "last_7_days":
+            return today - timedelta(days=6), today
+        elif clean_p == "last_14_days":
+            return today - timedelta(days=13), today
+        elif clean_p == "last_28_days":
+            return today - timedelta(days=27), today
+        elif clean_p == "last_30_days":
+            return today - timedelta(days=29), today
+        elif clean_p == "this_week":
+            start = today - timedelta(days=today.weekday())
+            return start, today
+        elif clean_p == "last_week":
+            end = today - timedelta(days=today.weekday() + 1)
+            start = end - timedelta(days=6)
+            return start, end
+        elif clean_p == "this_month":
+            start = date(today.year, today.month, 1)
+            return start, today
+        elif clean_p == "last_month":
+            first_this_month = date(today.year, today.month, 1)
+            last_day_last_month = first_this_month - timedelta(days=1)
+            first_day_last_month = date(last_day_last_month.year, last_day_last_month.month, 1)
+            return first_day_last_month, last_day_last_month
+        elif clean_p in ["maximum", "all"]:
+            return None, None
+            
+        return None, None
+
+    @staticmethod
+    def _extract_item_date(d):
+        if isinstance(d, datetime):
+            return d.date()
+        if isinstance(d, date):
+            return d
+        if isinstance(d, str):
+            try:
+                return datetime.strptime(d[:10], "%Y-%m-%d").date()
+            except Exception:
+                return None
+        return None
+
+    @staticmethod
+    async def get_daily_marketing_stats(project_id: str, campaign_name: Optional[str] = None, start_date: Optional[date] = None, end_date: Optional[date] = None, preset: Optional[str] = None):
+        project = await ProjectRepository.get_by_id(project_id)
+        if not project:
+            return None
+            
+        stats = project.get("daily_marketing_stats", []) or []
+        s_date, e_date = ProjectService._resolve_date_range(preset, start_date, end_date)
+        
+        filtered = []
+        for s in stats:
+            if campaign_name and campaign_name.strip().lower() not in ["all", "all campaigns", ""]:
+                if s.get("campaign_name", "").strip().lower() != campaign_name.strip().lower():
+                    continue
+                    
+            item_date = ProjectService._extract_item_date(s.get("date"))
+            if item_date:
+                if s_date and item_date < s_date:
+                    continue
+                if e_date and item_date > e_date:
+                    continue
+                    
+            filtered.append(s)
+
+        sorted_stats = sorted(filtered, key=lambda x: str(x.get("date") or ""))
+        for idx, item in enumerate(sorted_stats):
+            item["sn"] = idx + 1
+        return sorted_stats
+
+    @staticmethod
+    async def get_marketing_summary(project_id: str, campaign_name: Optional[str] = None, start_date: Optional[date] = None, end_date: Optional[date] = None, preset: Optional[str] = None):
+        from datetime import timedelta
+        project = await ProjectRepository.get_by_id(project_id)
+        if not project:
+            return None
+            
+        stats = await ProjectService.get_daily_marketing_stats(project_id, campaign_name=campaign_name, start_date=start_date, end_date=end_date, preset=preset)
+        s_date, e_date = ProjectService._resolve_date_range(preset, start_date, end_date)
+        
+        tot_reach = sum((s.get("reach", 0) or 0) for s in stats)
+        tot_impressions = sum((s.get("impressions", 0) or 0) for s in stats)
+        tot_leads = sum((s.get("leads", 0) or 0) for s in stats)
+        tot_revenue = round(sum((s.get("revenue", 0.0) or 0.0) for s in stats), 2)
+        tot_spend = round(sum((s.get("spend", 0.0) or 0.0) for s in stats), 2)
+        
+        cost_metric = round(tot_spend / tot_leads, 2) if tot_leads > 0 else (round(tot_spend / tot_reach, 4) if tot_reach > 0 else 0.0)
+        
+        # Calculate Previous Period for Growth Pct Comparison
+        prev_reach = 0
+        prev_impressions = 0
+        prev_leads = 0
+        prev_revenue = 0.0
+        prev_spend = 0.0
+        prev_cpl = 0.0
+        
+        if s_date and e_date:
+            days = max(1, (e_date - s_date).days + 1)
+            prev_end = s_date - timedelta(days=1)
+            prev_start = prev_end - timedelta(days=days - 1)
+            prev_stats = await ProjectService.get_daily_marketing_stats(project_id, campaign_name=campaign_name, start_date=prev_start, end_date=prev_end)
+            if prev_stats:
+                prev_reach = sum((s.get("reach", 0) or 0) for s in prev_stats)
+                prev_impressions = sum((s.get("impressions", 0) or 0) for s in prev_stats)
+                prev_leads = sum((s.get("leads", 0) or 0) for s in prev_stats)
+                prev_revenue = round(sum((s.get("revenue", 0.0) or 0.0) for s in prev_stats), 2)
+                prev_spend = round(sum((s.get("spend", 0.0) or 0.0) for s in prev_stats), 2)
+                prev_cpl = round(prev_spend / prev_leads, 2) if prev_leads > 0 else (round(prev_spend / prev_reach, 4) if prev_reach > 0 else 0.0)
+
+        def _calc_growth(curr, prev):
+            if prev > 0:
+                return round(((curr - prev) / prev) * 100, 1)
+            return 0.0
+
+        def _format_short(n):
+            if n >= 1_000_000:
+                val = f"{n / 1_000_000:.1f}M"
+                return val.replace(".0M", "M")
+            elif n >= 1_000:
+                val = f"{n / 1_000:.1f}K"
+                return val.replace(".0K", "K")
+            return f"{n:,.0f}"
+
+        campaign_map = {}
+        for s in stats:
+            c_name = s.get("campaign_name", "Unknown").strip()
+            if not c_name:
+                continue
+            if c_name not in campaign_map:
+                campaign_map[c_name] = {"campaign_name": c_name, "leads": 0, "spend": 0.0, "reach": 0, "impressions": 0, "revenue": 0.0, "cpl": 0.0}
+            campaign_map[c_name]["leads"] += (s.get("leads", 0) or 0)
+            campaign_map[c_name]["spend"] = round(campaign_map[c_name]["spend"] + (s.get("spend", 0.0) or 0.0), 2)
+            campaign_map[c_name]["reach"] += (s.get("reach", 0) or 0)
+            campaign_map[c_name]["impressions"] += (s.get("impressions", 0) or 0)
+            campaign_map[c_name]["revenue"] = round(campaign_map[c_name]["revenue"] + (s.get("revenue", 0.0) or 0.0), 2)
+
+        for c_data in campaign_map.values():
+            tot_c_leads = c_data["leads"]
+            tot_c_spend = c_data["spend"]
+            c_data["cpl"] = round(tot_c_spend / tot_c_leads, 2) if tot_c_leads > 0 else 0.0
+
+        # Sort based on leads descending (top performing campaigns), limit to top 5
+        top_campaigns = sorted(list(campaign_map.values()), key=lambda x: (x["leads"], x["spend"]), reverse=True)[:5]
+        
+        gen = project.get("general", {})
+        project_name = gen.get("project_name") if isinstance(gen, dict) else "Project"
+        
+        return {
+            "project_name": project_name or "Digital Marketing Project",
+            "filters": {
+                "campaign_name": campaign_name or "All Campaigns",
+                "preset": preset,
+                "start_date": s_date.strftime("%Y-%m-%d") if s_date else None,
+                "end_date": e_date.strftime("%Y-%m-%d") if e_date else None
+            },
+            "kpis": {
+                "reach": {
+                    "value": float(tot_reach),
+                    "formatted": _format_short(tot_reach),
+                    "growth_pct": _calc_growth(tot_reach, prev_reach)
+                },
+                "leads": {
+                    "value": float(tot_leads),
+                    "formatted": f"{tot_leads:,}",
+                    "growth_pct": _calc_growth(tot_leads, prev_leads)
+                },
+                "cost_per_lead": {
+                    "value": float(cost_metric),
+                    "formatted": f"₹{cost_metric:,.0f}",
+                    "growth_pct": _calc_growth(cost_metric, prev_cpl)
+                },
+                "amount_spent": {
+                    "value": float(tot_spend),
+                    "formatted": f"₹{tot_spend:,.0f}",
+                    "growth_pct": _calc_growth(tot_spend, prev_spend)
+                },
+                "impressions": {
+                    "value": float(tot_impressions),
+                    "formatted": _format_short(tot_impressions),
+                    "growth_pct": _calc_growth(tot_impressions, prev_impressions)
+                },
+                "revenue": {
+                    "value": float(tot_revenue),
+                    "formatted": f"₹{tot_revenue:,.0f}",
+                    "growth_pct": _calc_growth(tot_revenue, prev_revenue)
+                }
+            },
+            "top_campaigns": top_campaigns
+        }
+
+    @staticmethod
+    async def get_marketing_workspace(project_id: str, campaign_name: Optional[str] = None, start_date: Optional[date] = None, end_date: Optional[date] = None, preset: Optional[str] = None):
+        project = await ProjectRepository.get_by_id(project_id)
+        if not project:
+            return None
+            
+        summary = await ProjectService.get_marketing_summary(project_id, campaign_name=campaign_name, start_date=start_date, end_date=end_date, preset=preset)
+        stats_logs = await ProjectService.get_daily_marketing_stats(project_id, campaign_name=campaign_name, start_date=start_date, end_date=end_date, preset=preset)
+        campaign_options = await ProjectService.get_marketing_campaigns(project_id)
+        
+        # Calculate All-time Total Revenue added
+        daily_revenues = project.get("daily_revenues", []) or []
+        all_time_revenue = round(sum((r.get("revenue", 0.0) or 0.0) for r in daily_revenues), 2)
+        if all_time_revenue == 0.0:
+            all_time_revenue = round(sum((s.get("revenue", 0.0) or 0.0) for s in (project.get("daily_marketing_stats", []) or [])), 2)
+
+        filtered_revenue = summary.get("kpis", {}).get("revenue", {}).get("value", 0.0)
+
+        gen = project.get("general", {}) if isinstance(project.get("general"), dict) else {}
+        header_info = {
+            "project_name": gen.get("project_name", "Digital Marketing Project"),
+            "progress": gen.get("progress", 0),
+            "status": gen.get("status", "In Review"),
+            "category": gen.get("category", "Digital Marketing"),
+            "start_date": str(gen.get("start_date") or ""),
+            "end_date": str(gen.get("end_date") or ""),
+            "budget": all_time_revenue if all_time_revenue > 0 else float(gen.get("budget", 0) or 0),
+            "formatted_budget": f"₹{all_time_revenue:,.0f}" if all_time_revenue > 0 else (f"₹{float(gen.get('budget', 0)):,.0f}" if gen.get("budget") else "₹0"),
+            "total_revenue": all_time_revenue,
+            "formatted_total_revenue": f"₹{all_time_revenue:,.0f}",
+            "filtered_revenue": filtered_revenue,
+            "formatted_filtered_revenue": f"₹{filtered_revenue:,.0f}"
+        }
+        
+        return {
+            "header": header_info,
+            "filters": summary.get("filters", {}),
+            "kpis": summary.get("kpis", {}),
+            "top_campaigns": summary.get("top_campaigns", []),
+            "stats_logs": stats_logs or [],
+            "campaign_options": campaign_options or []
+        }
+
+    @staticmethod
+    async def update_daily_marketing_stat(project_id: str, stat_id: str, data: DailyMarketingStatUpdate):
+        project = await ProjectRepository.get_by_id(project_id)
+        if not project:
+            return None
+            
+        stats = project.get("daily_marketing_stats", []) or []
+        campaigns = project.get("marketing_campaigns", []) or []
+        target_idx = -1
+        target_item = None
+        
+        for idx, item in enumerate(stats):
+            if item.get("id") == stat_id:
+                target_idx = idx
+                target_item = item
+                break
+                
+        if target_idx == -1 or not target_item:
+            return None
+            
+        update_data = data.model_dump(exclude_unset=True)
+        if "date" in update_data and update_data["date"] and isinstance(update_data["date"], date) and not isinstance(update_data["date"], datetime):
+            update_data["date"] = datetime.combine(update_data["date"], datetime.min.time())
+            
+        if "campaign_name" in update_data and update_data["campaign_name"]:
+            camp_clean = update_data["campaign_name"].strip()
+            update_data["campaign_name"] = camp_clean
+            if camp_clean and not any(c.lower() == camp_clean.lower() for c in campaigns):
+                campaigns.append(camp_clean)
+
+        for k, v in update_data.items():
+            target_item[k] = v
+            
+        target_item["updated_at"] = datetime.utcnow()
+        
+        if "cost_metric" not in update_data:
+            leads = target_item.get("leads", 0) or 0
+            spend = target_item.get("spend", 0.0) or 0.0
+            reach = target_item.get("reach", 0) or 0
+            if leads > 0:
+                target_item["cost_metric"] = round(spend / leads, 2)
+            elif reach > 0:
+                target_item["cost_metric"] = round(spend / reach, 4)
+            else:
+                target_item["cost_metric"] = 0.0
+                
+        stats[target_idx] = target_item
+        updated = await ProjectRepository.update(project_id, {"daily_marketing_stats": stats, "marketing_campaigns": campaigns})
+        if updated:
+            await clear_pattern("projects:list:*")
+            await delete_cache(f"project:{project_id}")
+            target_item["sn"] = target_idx + 1
+            return target_item
+        return None
+
+    @staticmethod
+    async def delete_daily_marketing_stat(project_id: str, stat_id: str):
+        project = await ProjectRepository.get_by_id(project_id)
+        if not project:
+            return False
+            
+        stats = project.get("daily_marketing_stats", []) or []
+        new_stats = [item for item in stats if item.get("id") != stat_id]
+        if len(new_stats) == len(stats):
+            return False
+            
+        updated = await ProjectRepository.update(project_id, {"daily_marketing_stats": new_stats})
+        if updated:
+            await clear_pattern("projects:list:*")
+            await delete_cache(f"project:{project_id}")
+            return True
+        return False
+
+    @staticmethod
+    async def get_marketing_campaigns(project_id: str):
+        project = await ProjectRepository.get_by_id(project_id)
+        if not project:
+            return None
+        campaigns = set(project.get("marketing_campaigns", []) or [])
+        stats = project.get("daily_marketing_stats", []) or []
+        for s in stats:
+            if s.get("campaign_name"):
+                campaigns.add(s["campaign_name"].strip())
+        return sorted(list(campaigns))
+
+    @staticmethod
+    async def add_marketing_campaign(project_id: str, campaign_name: str):
+        project = await ProjectRepository.get_by_id(project_id)
+        if not project:
+            return None
+        campaigns = project.get("marketing_campaigns", []) or []
+        camp_clean = campaign_name.strip()
+        if camp_clean and not any(c.lower() == camp_clean.lower() for c in campaigns):
+            campaigns.append(camp_clean)
+            updated = await ProjectRepository.update(project_id, {"marketing_campaigns": campaigns})
+            if updated:
+                await clear_pattern("projects:list:*")
+                await delete_cache(f"project:{project_id}")
+        return campaigns
+
+    @staticmethod
+    async def add_daily_revenue(project_id: str, data: DailyRevenueCreate, current_user_id: str):
+        project = await ProjectRepository.get_by_id(project_id)
+        if not project:
+            return None
+            
+        daily_revenues = project.get("daily_revenues", []) or []
+        daily_stats = project.get("daily_marketing_stats", []) or []
+        
+        target_date = datetime.combine(data.date, datetime.min.time())
+        target_date_str = data.date.strftime("%Y-%m-%d") if isinstance(data.date, (date, datetime)) else str(data.date)[:10]
+        
+        def _get_date_str(d):
+            if isinstance(d, datetime):
+                return d.strftime("%Y-%m-%d")
+            elif isinstance(d, date):
+                return d.strftime("%Y-%m-%d")
+            elif isinstance(d, str):
+                return d[:10]
+            return ""
+
+        existing_idx = -1
+        existing_item = None
+        for idx, r in enumerate(daily_revenues):
+            if _get_date_str(r.get("date")) == target_date_str:
+                existing_idx = idx
+                existing_item = r
+                break
+                
+        now = datetime.utcnow()
+        if existing_item:
+            existing_item["revenue"] = data.revenue
+            existing_item["updated_at"] = now
+            daily_revenues[existing_idx] = existing_item
+            revenue_entry = existing_item
+        else:
+            revenue_entry = {
+                "id": uuid.uuid4().hex[:12],
+                "date": target_date,
+                "revenue": data.revenue,
+                "created_at": now,
+                "updated_at": now,
+                "created_by": current_user_id
+            }
+            daily_revenues.append(revenue_entry)
+            
+        for s in daily_stats:
+            if _get_date_str(s.get("date")) == target_date_str:
+                s["revenue"] = data.revenue
+                s["updated_at"] = now
+
+        updated = await ProjectRepository.update(project_id, {
+            "daily_revenues": daily_revenues,
+            "daily_marketing_stats": daily_stats
+        })
+        
+        if updated:
+            await clear_pattern("projects:list:*")
+            await delete_cache(f"project:{project_id}")
+            return revenue_entry
+        return None
+
+    @staticmethod
+    async def get_daily_revenues(project_id: str, start_date: Optional[date] = None, end_date: Optional[date] = None, preset: Optional[str] = None):
+        project = await ProjectRepository.get_by_id(project_id)
+        if not project:
+            return None
+        revenues = project.get("daily_revenues", []) or []
+        s_date, e_date = ProjectService._resolve_date_range(preset, start_date, end_date)
+        
+        filtered = []
+        for r in revenues:
+            item_date = ProjectService._extract_item_date(r.get("date"))
+            if item_date:
+                if s_date and item_date < s_date:
+                    continue
+                if e_date and item_date > e_date:
+                    continue
+            filtered.append(r)
+            
+        return sorted(filtered, key=lambda x: str(x.get("date") or ""))
+
+    @staticmethod
+    async def update_daily_revenue(project_id: str, revenue_id: str, data: DailyRevenueUpdate):
+        project = await ProjectRepository.get_by_id(project_id)
+        if not project:
+            return None
+            
+        daily_revenues = project.get("daily_revenues", []) or []
+        daily_stats = project.get("daily_marketing_stats", []) or []
+        
+        def _get_date_str(d):
+            if isinstance(d, datetime):
+                return d.strftime("%Y-%m-%d")
+            elif isinstance(d, date):
+                return d.strftime("%Y-%m-%d")
+            elif isinstance(d, str):
+                return d[:10]
+            return ""
+
+        target_idx = -1
+        target_item = None
+        for idx, r in enumerate(daily_revenues):
+            if r.get("id") == revenue_id:
+                target_idx = idx
+                target_item = r
+                break
+                
+        if target_idx == -1 or not target_item:
+            return None
+            
+        target_item["revenue"] = data.revenue
+        now = datetime.utcnow()
+        target_item["updated_at"] = now
+        daily_revenues[target_idx] = target_item
+        
+        target_date_str = _get_date_str(target_item.get("date"))
+        
+        for s in daily_stats:
+            if _get_date_str(s.get("date")) == target_date_str:
+                s["revenue"] = data.revenue
+                s["updated_at"] = now
+
+        updated = await ProjectRepository.update(project_id, {
+            "daily_revenues": daily_revenues,
+            "daily_marketing_stats": daily_stats
+        })
+        
+        if updated:
+            await clear_pattern("projects:list:*")
+            await delete_cache(f"project:{project_id}")
+            return target_item
+        return None
+
+    @staticmethod
+    async def delete_daily_revenue(project_id: str, revenue_id: str):
+        project = await ProjectRepository.get_by_id(project_id)
+        if not project:
+            return False
+            
+        daily_revenues = project.get("daily_revenues", []) or []
+        daily_stats = project.get("daily_marketing_stats", []) or []
+        
+        def _get_date_str(d):
+            if isinstance(d, datetime):
+                return d.strftime("%Y-%m-%d")
+            elif isinstance(d, date):
+                return d.strftime("%Y-%m-%d")
+            elif isinstance(d, str):
+                return d[:10]
+            return ""
+
+        target_item = None
+        new_revenues = []
+        for r in daily_revenues:
+            if r.get("id") == revenue_id:
+                target_item = r
+            else:
+                new_revenues.append(r)
+                
+        if not target_item:
+            return False
+            
+        target_date_str = _get_date_str(target_item.get("date"))
+        now = datetime.utcnow()
+        
+        for s in daily_stats:
+            if _get_date_str(s.get("date")) == target_date_str:
+                s["revenue"] = 0.0
+                s["updated_at"] = now
+
+        updated = await ProjectRepository.update(project_id, {
+            "daily_revenues": new_revenues,
+            "daily_marketing_stats": daily_stats
+        })
+        
+        if updated:
+            await clear_pattern("projects:list:*")
+            await delete_cache(f"project:{project_id}")
+            return True
+        return False
 
