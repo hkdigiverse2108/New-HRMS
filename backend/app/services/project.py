@@ -196,6 +196,54 @@ class ProjectService:
         return item
 
     @staticmethod
+    async def renew_project(project_id: str, data: 'ProjectRenewalCreate', current_user_id: str):
+        from app.schemas.project import ProjectRenewalCreate
+        import uuid
+        from datetime import datetime
+        
+        existing = await ProjectRepository.get_by_id(project_id)
+        if not existing:
+            return None
+            
+        # Add to history
+        renewal_history = existing.get("renewal_history", [])
+        if not renewal_history:
+            # Add initial date as first renewal
+            gen = existing.get("general", {})
+            if gen.get("start_date") and gen.get("end_date"):
+                renewal_history.append({
+                    "id": str(uuid.uuid4()),
+                    "start_date": gen.get("start_date"),
+                    "end_date": gen.get("end_date"),
+                    "renewed_at": existing.get("created_at") or datetime.utcnow(),
+                    "renewed_by": existing.get("client_id")  # Placeholder for original creator
+                })
+                
+        # Append new renewal
+        now = datetime.utcnow()
+        new_renewal = {
+            "id": str(uuid.uuid4()),
+            "start_date": datetime.combine(data.start_date, datetime.min.time()),
+            "end_date": datetime.combine(data.end_date, datetime.min.time()),
+            "renewed_at": now,
+            "renewed_by": current_user_id
+        }
+        renewal_history.append(new_renewal)
+        
+        # Update general start/end date to latest
+        gen = existing.get("general", {})
+        gen["start_date"] = datetime.combine(data.start_date, datetime.min.time())
+        gen["end_date"] = datetime.combine(data.end_date, datetime.min.time())
+        
+        update_data = {
+            "renewal_history": renewal_history,
+            "general": gen
+        }
+        
+        await ProjectRepository.update(project_id, update_data)
+        return await ProjectRepository.get_by_id(project_id)
+
+    @staticmethod
     async def update_project(project_id: str, data: ProjectUpdate, current_user_id: Optional[str] = None):
         update_data = data.model_dump(exclude_unset=True)
         if not update_data:
@@ -798,6 +846,10 @@ class ProjectService:
         
         return {
             "project_name": project_name or "Digital Marketing Project",
+            "timeline": {
+                "start_date": gen.get("start_date") if isinstance(gen, dict) else None,
+                "end_date": gen.get("end_date") if isinstance(gen, dict) else None
+            },
             "filters": {
                 "campaign_name": campaign_name or "All Campaigns",
                 "preset": preset,
@@ -875,11 +927,13 @@ class ProjectService:
         
         return {
             "header": header_info,
+            "timeline": summary.get("timeline", {}),
             "filters": summary.get("filters", {}),
             "kpis": summary.get("kpis", {}),
             "top_campaigns": summary.get("top_campaigns", []),
             "stats_logs": stats_logs or [],
-            "campaign_options": campaign_options or []
+            "campaign_options": campaign_options or [],
+            "renewal_history": project.get("renewal_history", [])
         }
 
     @staticmethod

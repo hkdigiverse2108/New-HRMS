@@ -241,19 +241,37 @@ class MarketingSummaryMetrics(BaseModel):
     impressions: KpiMetricCard
     revenue: KpiMetricCard
 
+class ProjectTimeline(BaseModel):
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+
+class ProjectRenewalCreate(BaseModel):
+    start_date: date
+    end_date: date
+    
+class ProjectRenewal(BaseModel):
+    id: str
+    start_date: date
+    end_date: date
+    renewed_at: datetime
+    renewed_by: Optional[str] = None
+
 class MarketingSummaryResponse(BaseModel):
     project_name: str
+    timeline: ProjectTimeline
     filters: dict
     kpis: MarketingSummaryMetrics
     top_campaigns: list[TopCampaignItem]
 
 class MarketingWorkspaceResponse(BaseModel):
     header: dict
+    timeline: ProjectTimeline
     filters: dict
     kpis: MarketingSummaryMetrics
     top_campaigns: list[TopCampaignItem]
     stats_logs: list[DailyMarketingStat]
     campaign_options: list[str]
+    renewal_history: Optional[list[ProjectRenewal]] = []
 
 class MarketingCampaignCreate(BaseModel):
     name: str
@@ -274,10 +292,6 @@ class DailyRevenue(BaseModel):
     created_by: Optional[str] = None
 
     model_config = ConfigDict(populate_by_name=True)
-
-class ProjectTimeline(BaseModel):
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
 
 class ProjectTaskSummaryResponse(BaseModel):
     progress: int = 0
@@ -306,6 +320,7 @@ class ProjectBase(BaseModel):
     daily_marketing_stats: Optional[list[DailyMarketingStat]] = []
     marketing_campaigns: Optional[list[str]] = []
     daily_revenues: Optional[list[DailyRevenue]] = []
+    renewal_history: Optional[list[ProjectRenewal]] = []
 
 class ProjectCreate(ProjectBase):
     pass

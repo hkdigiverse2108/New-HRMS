@@ -64,6 +64,9 @@ class TaskBase(BaseModel):
     activity_history: list[dict] = Field(default_factory=list)
     parent_task_id: Optional[str] = None
     is_recurring_instance: Optional[bool] = False
+    preset_id: Optional[str] = None
+    preset_task_id: Optional[str] = None
+    estimated_hours: Optional[float] = None
 
     @field_validator('status', mode='before')
     @classmethod

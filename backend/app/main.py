@@ -24,6 +24,7 @@ from app.controllers.daily_progress import router as daily_progress_router
 from app.controllers.chat import router as chat_router
 from app.controllers.schedule import router as schedule_router
 from app.controllers.booking import booking_router, public_booking_router
+from app.controllers.preset import router as preset_router
 from app.models.employee import setup_employee_indexes
 from app.models.department import setup_department_indexes
 from app.models.sub_department import setup_sub_department_indexes
@@ -111,6 +112,7 @@ app.include_router(chat_router)
 app.include_router(schedule_router)
 app.include_router(booking_router)
 app.include_router(public_booking_router)
+app.include_router(preset_router)
 
 # Mount static image paths AFTER API routes
 app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")

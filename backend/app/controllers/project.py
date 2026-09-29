@@ -1,14 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import Optional, List
 from datetime import date
-from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectCategory, ProjectPriority, ProjectStatus, FollowUpLogCreate, FollowUpLog, ClientReviewCreate, ClientReviewUpdate, ClientReview, DailyMarketingStatCreate, DailyMarketingStatUpdate, DailyMarketingStat, MarketingCampaignCreate, DailyMarketingStatBulkCreate, MarketingSummaryResponse, DailyRevenueCreate, DailyRevenueUpdate, DailyRevenue, MarketingWorkspaceResponse, ProjectTaskSummaryResponse
+from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectCategory, ProjectPriority, ProjectStatus, FollowUpLogCreate, FollowUpLog, DailyMarketingStatCreate, DailyMarketingStatUpdate, DailyMarketingStat, MarketingCampaignCreate, DailyMarketingStatBulkCreate, MarketingSummaryResponse, DailyRevenueCreate, DailyRevenueUpdate, DailyRevenue, MarketingWorkspaceResponse, ProjectTaskSummaryResponse, ProjectRenewalCreate
 from app.schemas.task import TaskCreate, TaskUpdate
-from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectCategory, ProjectPriority, ProjectStatus, FollowUpLogCreate, FollowUpLog, DailyMarketingStatCreate, DailyMarketingStatUpdate, DailyMarketingStat, MarketingCampaignCreate, DailyMarketingStatBulkCreate, MarketingSummaryResponse, DailyRevenueCreate, DailyRevenueUpdate, DailyRevenue, MarketingWorkspaceResponse
 from app.schemas.pagination import PaginatedResponse
 from app.services.project import ProjectService
 from app.controllers.auth import get_current_employee
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
+
+@router.post("/{project_id}/renew", response_model=ProjectResponse)
+async def renew_project(project_id: str, data: ProjectRenewalCreate, current_user: dict = Depends(get_current_employee)):
+    emp_id = str(current_user.get("_id") or current_user.get("id"))
+    updated = await ProjectService.renew_project(project_id, data, emp_id)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    return updated
 
 @router.get("/categories", response_model=list[str])
 async def get_project_categories():
