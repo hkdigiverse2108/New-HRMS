@@ -69,6 +69,7 @@ interface BackendTask {
   }>;
   project_details?: any;
   content_item_details?: any;
+  content_item_id?: string;
   task_category?: string;
   is_deleted?: boolean;
 }
@@ -97,6 +98,10 @@ interface TaskItem {
   activityHistory?: BackendTask["activity_history"] | undefined;
   projectDetails?: any;
   isProjectTask?: boolean | undefined;
+  // K15: category + auto/manual (auto = content-synced, delete nai thay)
+  taskCategory: string;
+  contentItemId: string;
+  isAuto: boolean;
   rawBackend: BackendTask;
 }
 
@@ -127,6 +132,13 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   const [priorityFilter, setPriorityFilter] = useState<"All" | Priority>("All");
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("all");
   const [timeframeFilter, setTimeframeFilter] = useState<TimeframeFilter>("all");
+  // K15: category filter (transcript — category field)
+  const [categoryFilter, setCategoryFilter] = useState<string>("All");
+  const taskCategories = useMemo(() => {
+    const s = new Set<string>();
+    tasks.forEach(t => { if (t.taskCategory) s.add(t.taskCategory); });
+    return ["All", ...Array.from(s).sort()];
+  }, [tasks]);
 
   // Create/Edit modal state
   const [isNewTaskOpen, setIsNewTaskOpen] = useState(isNew || false);
@@ -271,6 +283,10 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
             activityHistory: t.activity_history || [],
             projectDetails: t.project_details,
             isProjectTask: !!t.project_details || t.task_category === "SMM",
+            // K15
+            taskCategory: t.task_category || "General",
+            contentItemId: String(t.content_item_id || ""),
+            isAuto: Boolean(t.content_item_id),
             rawBackend: t,
           };
         });
@@ -353,6 +369,11 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
         return false;
       }
 
+      // K15. Category Filter
+      if (categoryFilter !== "All" && task.taskCategory !== categoryFilter) {
+        return false;
+      }
+
       // 5. Timeframe Filter
       if (timeframeFilter !== "all") {
         if (!task.dueDate) return false;
@@ -372,7 +393,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
       return true;
     });
-  }, [tasks, searchQuery, scopeFilter, statusFilter, priorityFilter, timeframeFilter, currentUserId]);
+  }, [tasks, searchQuery, scopeFilter, statusFilter, priorityFilter, timeframeFilter, categoryFilter, currentUserId]);
 
   const { items: sortedTasks, requestSort, sortConfig } = useSortableData(filteredTasks);
 
@@ -986,13 +1007,25 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
             />
           </div>
 
-          {(statusFilter !== "All" || priorityFilter !== "All" || timeframeFilter !== "all" || scopeFilter !== "all") && (
+          {/* K15: Category Filter */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-bold text-muted-foreground uppercase">Category:</span>
+            <SearchableSelect
+              value={categoryFilter}
+              onChange={(val) => setCategoryFilter(val)}
+              options={taskCategories.map(c => ({ label: c, value: c }))}
+              className="w-[130px] h-[32px] text-xs font-semibold"
+            />
+          </div>
+
+          {(statusFilter !== "All" || priorityFilter !== "All" || timeframeFilter !== "all" || scopeFilter !== "all" || categoryFilter !== "All") && (
             <button
               onClick={() => {
                 setStatusFilter("All");
                 setPriorityFilter("All");
                 setTimeframeFilter("all");
                 setScopeFilter("all");
+                setCategoryFilter("All");
                 setSearchQuery("");
               }}
               className="text-xs font-bold text-primary hover:underline px-2"
@@ -1094,13 +1127,18 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                                   >
                                     <ArrowRightLeft className="w-3.5 h-3.5" /> Transfer Task
                                   </button>
-                                  {(isAdminOrHR || task.assignedById === currentUserId) && (
+                                  {(isAdminOrHR || task.assignedById === currentUserId) && !task.isAuto && (
                                     <button
                                       onClick={(e) => handleDeleteTask(task.id, e)}
                                       className="w-full text-left px-2.5 py-1.5 text-xs font-bold hover:bg-destructive/10 text-destructive rounded-lg flex items-center gap-1.5"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" /> Delete Task
                                     </button>
+                                  )}
+                                  {(isAdminOrHR || task.assignedById === currentUserId) && task.isAuto && (
+                                    <p className="px-2.5 py-1.5 text-[10px] font-semibold text-muted-foreground/60 italic">
+                                      Auto task delete na thay
+                                    </p>
                                   )}
                                 </PopoverContent>
                               </Popover>
@@ -1249,7 +1287,12 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                             )}
                             {task.isProjectTask && (
                               <span className="text-[9px] font-bold bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 rounded">
-                                Project
+                                {task.taskCategory === "SMM" ? "SMM 📅" : "Project"}
+                              </span>
+                            )}
+                            {task.isAuto && (
+                              <span className="text-[9px] font-bold bg-muted text-muted-foreground px-1.5 py-0.5 rounded" title="Auto-generated — delete na thay">
+                                Auto
                               </span>
                             )}
                           </div>
@@ -1380,7 +1423,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                             <MoreHorizontal className="w-4 h-4" />
                           </button>
 
-                          {(isAdminOrHR || task.assignedById === currentUserId) && (
+                          {(isAdminOrHR || task.assignedById === currentUserId) && !task.isAuto && (
                             <button
                               onClick={(e) => handleDeleteTask(task.id, e)}
                               className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
@@ -1388,6 +1431,14 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
+                          )}
+                          {(isAdminOrHR || task.assignedById === currentUserId) && task.isAuto && (
+                            <span
+                              className="p-1.5 text-muted-foreground/40 cursor-not-allowed"
+                              title="Auto task delete na thay"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </span>
                           )}
                         </div>
                       </td>

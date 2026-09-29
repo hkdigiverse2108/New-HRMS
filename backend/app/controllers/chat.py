@@ -7,6 +7,9 @@ from app.services.websocket_manager import manager
 from app.controllers.auth import get_current_employee
 from app.controllers.image import IMAGES_DIR
 from app.config import BACKEND_DIR
+from pydantic import BaseModel
+from datetime import datetime
+from app.redis.service import delete_cache, clear_pattern
 import json
 import shutil
 import uuid
@@ -43,12 +46,52 @@ async def upload_chat_file(file: UploadFile = File(...)):
         shutil.copyfileobj(file.file, buffer)
         
     file_url = f"/images/chat_documents/{unique_filename}"
+    # Return both new + legacy keys for frontend compatibility (url vs file_url)
     return {
         "file_url": file_url,
+        "url": file_url,
         "file_name": file.filename,
+        "fileName": file.filename,
         "file_type": file.content_type,
-        "file_size": file_size
+        "media_type": file.content_type,
+        "file_size": file_size,
+        "fileSize": file_size
     }
+
+# --- Download File API (forces Save As / attachment header) ---
+@router.get("/download")
+async def download_chat_file(file_url: str = Query(...), filename: Optional[str] = Query(None)):
+    clean = file_url.strip()
+    if "://" in clean:
+        clean = "/" + clean.split("://", 1)[1].split("/", 1)[1]
+    
+    rel = clean
+    for prefix in ["/images/", "images/", "/uploads/", "uploads/"]:
+        if rel.startswith(prefix):
+            rel = rel[len(prefix):]
+            break
+            
+    target_path = (IMAGES_DIR / rel).resolve()
+    if not str(target_path).startswith(str(IMAGES_DIR.resolve())):
+        raise HTTPException(status_code=403, detail="Forbidden")
+        
+    if not target_path.exists() or not target_path.is_file():
+        target_path_alt = (IMAGES_DIR / "chat_documents" / Path(clean).name).resolve()
+        if target_path_alt.exists() and target_path_alt.is_file():
+            target_path = target_path_alt
+        else:
+            raise HTTPException(status_code=404, detail="File not found")
+            
+    download_name = filename or target_path.name
+    return FileResponse(
+        path=str(target_path),
+        filename=download_name,
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{download_name}"',
+            "Access-Control-Expose-Headers": "Content-Disposition"
+        }
+    )
 
 # --- Channels API ---
 
@@ -68,6 +111,53 @@ async def get_my_channels(current_user: dict = Depends(get_current_employee)):
     user_id = str(current_user.get("_id") or current_user.get("id"))
     channels = await ChatRepository.get_channels_for_user(user_id)
     return channels
+
+class DmRequest(BaseModel):
+    other_user_id: str
+
+@router.post("/channels/dm", response_model=ChannelResponse)
+async def get_or_create_dm_channel(data: DmRequest, current_user: dict = Depends(get_current_employee)):
+    user_id = str(current_user.get("_id") or current_user.get("id"))
+    other_id = str(data.other_user_id)
+
+    db = await ChatRepository.get_db()
+    from bson import ObjectId
+    other_user_doc = None
+    try:
+        other_user_doc = await db["employees"].find_one({"_id": ObjectId(other_id)})
+    except Exception:
+        pass
+    if not other_user_doc:
+        other_user_doc = await db["employees"].find_one({"id": other_id})
+
+    other_name = other_user_doc.get("name") if other_user_doc else "Direct Message"
+
+    # 1. Look for existing direct channel
+    channel = await ChatRepository.get_direct_channel(user_id, other_id)
+    if channel:
+        if not channel.get("name"):
+            channel["name"] = other_name
+            ch_id = channel.get("id") or channel.get("_id")
+            try:
+                await db["chat_channels"].update_one(
+                    {"_id": ObjectId(ch_id)},
+                    {"$set": {"name": other_name}}
+                )
+            except Exception:
+                pass
+        return channel
+
+    new_doc = {
+        "name": other_name,
+        "type": "direct",
+        "members": [user_id, other_id],
+        "created_by": user_id,
+        "created_at": datetime.utcnow()
+    }
+    created = await ChatRepository.create_channel(new_doc)
+    await delete_cache(f"chat:channels:{user_id}")
+    await delete_cache(f"chat:channels:{other_id}")
+    return created
 
 @router.put("/channels/{channel_id}")
 async def update_channel(channel_id: str, data: ChannelUpdate, current_user: dict = Depends(get_current_employee)):
@@ -103,7 +193,17 @@ async def add_channel_member(channel_id: str, member_id: str = Query(...), curre
     
     await ChatRepository.add_member_to_channel(channel_id, member_id)
     updated_channel = await ChatRepository.get_channel_by_id(channel_id)
-    
+
+    # Invalidate channel-list cache so the newly added user sees the group
+    # immediately without a page refresh (get_channels_for_user is cached).
+    try:
+        await delete_cache(f"chat:channels:{member_id}")
+        await delete_cache(f"chat:channels:{user_id}")
+        # Belt & braces: id-format mismatches must never leave a stale list
+        await clear_pattern("chat:channels:*")
+    except Exception:
+        pass
+
     event_data = {
         "action": "group_member_updated",
         "channel_id": channel_id,
@@ -126,7 +226,14 @@ async def remove_channel_member(channel_id: str, member_id: str, current_user: d
     # Broadcast before or fetch updated channel after removal
     await ChatRepository.remove_member_from_channel(channel_id, member_id)
     updated_channel = await ChatRepository.get_channel_by_id(channel_id)
-    
+
+    try:
+        await delete_cache(f"chat:channels:{member_id}")
+        await delete_cache(f"chat:channels:{user_id}")
+        await clear_pattern("chat:channels:*")
+    except Exception:
+        pass
+
     event_data = {
         "action": "group_member_updated",
         "channel_id": channel_id,
@@ -158,6 +265,206 @@ async def get_chat_history(channel_id: str, limit: int = 30, skip: int = 0, curr
     await ChatRepository.mark_messages_read(channel_id, user_id)
     
     return sanitized_messages
+
+# --- Messages REST Endpoints for live chat ---
+
+@router.get("/channels/{channel_id}/messages")
+async def get_channel_messages(
+    channel_id: str,
+    limit: int = 50,
+    skip: int = 0,
+    current_user: dict = Depends(get_current_employee)
+):
+    user_id = str(current_user.get("_id") or current_user.get("id"))
+    channel = await ChatRepository.get_channel_by_id(channel_id)
+    if not channel or user_id not in channel.get("members", []):
+        return []
+
+    messages = await ChatRepository.get_messages(channel_id, limit, skip)
+    messages.reverse()
+    sanitized = [ChatRepository.sanitize_poll_for_user(msg, user_id) for msg in messages]
+    await ChatRepository.mark_messages_read(channel_id, user_id)
+    return sanitized
+
+class SendMessageRequest(BaseModel):
+    content: Optional[str] = ""
+    media_url: Optional[str] = None
+    media_type: Optional[str] = None
+    file_name: Optional[str] = None
+    file_size: Optional[int] = None
+    reply_to: Optional[dict] = None
+    group_id: Optional[str] = None
+
+def extract_employee_name(emp: dict) -> str:
+    if not emp:
+        return "User"
+    if emp.get("name"):
+        return emp["name"]
+    p_info = emp.get("personal_info", {}) if isinstance(emp.get("personal_info"), dict) else {}
+    fn = p_info.get("first_name", "").strip()
+    ln = p_info.get("last_name", "").strip()
+    full = f"{fn} {ln}".strip()
+    if full:
+        return full
+    if emp.get("email"):
+        return emp["email"].split("@")[0].capitalize()
+    return "User"
+
+def extract_employee_avatar(emp: dict) -> Optional[str]:
+    if not emp:
+        return None
+    if emp.get("avatar"):
+        return emp["avatar"]
+    if emp.get("profile_photo"):
+        return emp["profile_photo"]
+    p_info = emp.get("personal_info", {}) if isinstance(emp.get("personal_info"), dict) else {}
+    return p_info.get("profile_photo") or p_info.get("avatar")
+
+@router.post("/channels/{channel_id}/messages")
+async def send_channel_message(
+    channel_id: str,
+    data: SendMessageRequest,
+    current_user: dict = Depends(get_current_employee)
+):
+    user_id = str(current_user.get("_id") or current_user.get("id"))
+    user_name = extract_employee_name(current_user)
+    user_avatar = extract_employee_avatar(current_user)
+
+    channel = await ChatRepository.get_channel_by_id(channel_id)
+    if not channel:
+        raise HTTPException(status_code=404, detail="Channel not found")
+
+    message_data = {
+        "channel_id": channel_id,
+        "sender_id": user_id,
+        "sender_name": user_name,
+        "sender_avatar": user_avatar,
+        "content": data.content or "",
+        "media_url": data.media_url,
+        "media_type": data.media_type or ("text" if not data.media_url else "file"),
+        "file_url": data.media_url,
+        "message_type": data.media_type or ("text" if not data.media_url else "file"),
+        "file_name": data.file_name,
+        "file_size": data.file_size,
+        "reply_to": data.reply_to,
+        "group_id": data.group_id,
+        "reactions": []
+    }
+    saved_msg = await ChatRepository.save_message(message_data)
+    
+    ws_event = {
+        "type": "new_message",
+        "action": "new_message",
+        "channel_id": channel_id,
+        "message": saved_msg
+    }
+    await manager.broadcast_to_channel(channel_id, ws_event)
+    return saved_msg
+
+@router.post("/channels/{channel_id}/read")
+async def mark_channel_messages_read(
+    channel_id: str,
+    current_user: dict = Depends(get_current_employee)
+):
+    user_id = str(current_user.get("_id") or current_user.get("id"))
+    await ChatRepository.mark_messages_read(channel_id, user_id)
+    ws_event = {
+        "type": "read_receipt",
+        "channel_id": channel_id,
+        "user_id": user_id
+    }
+    await manager.broadcast_to_channel(channel_id, ws_event)
+    return {"status": "ok"}
+
+class CreatePollRequest(BaseModel):
+    question: str
+    options: List[str]
+    allow_multiple_answers: bool = False
+
+@router.post("/channels/{channel_id}/polls")
+async def create_channel_poll(
+    channel_id: str,
+    data: CreatePollRequest,
+    current_user: dict = Depends(get_current_employee)
+):
+    user_id = str(current_user.get("_id") or current_user.get("id"))
+    user_name = extract_employee_name(current_user)
+    user_avatar = extract_employee_avatar(current_user)
+
+    formatted_options = [
+        {"id": f"opt_{i+1}", "text": opt, "voters": []}
+        for i, opt in enumerate(data.options)
+    ]
+    poll_data = {
+        "question": data.question,
+        "allow_multiple_answers": data.allow_multiple_answers,
+        "hide_voters_name": False,
+        "created_by": user_id,
+        "options": formatted_options
+    }
+
+    message_data = {
+        "channel_id": channel_id,
+        "sender_id": user_id,
+        "sender_name": user_name,
+        "sender_avatar": user_avatar,
+        "content": f"📊 Poll: {data.question}",
+        "message_type": "poll",
+        "poll": poll_data,
+        "reactions": []
+    }
+    saved_msg = await ChatRepository.save_message(message_data)
+    
+    ws_event = {
+        "type": "new_message",
+        "action": "new_message",
+        "channel_id": channel_id,
+        "message": saved_msg
+    }
+    await manager.broadcast_to_channel(channel_id, ws_event)
+    return saved_msg
+
+class ReactRequest(BaseModel):
+    emoji: str
+
+@router.post("/messages/{message_id}/react")
+async def react_to_message(
+    message_id: str,
+    data: ReactRequest,
+    current_user: dict = Depends(get_current_employee)
+):
+    user_id = str(current_user.get("_id") or current_user.get("id"))
+    updated = await ChatRepository.toggle_message_reaction(message_id, data.emoji, user_id)
+    if updated and updated.get("channel_id"):
+        ws_event = {
+            "type": "reaction_updated",
+            "action": "reaction_updated",
+            "message_id": message_id,
+            "reactions": updated.get("reactions")
+        }
+        await manager.broadcast_to_channel(updated["channel_id"], ws_event)
+    return updated or {"status": "ok"}
+
+class VoteRequest(BaseModel):
+    option_id: str
+
+@router.post("/messages/{message_id}/vote")
+async def vote_poll_option(
+    message_id: str,
+    data: VoteRequest,
+    current_user: dict = Depends(get_current_employee)
+):
+    user_id = str(current_user.get("_id") or current_user.get("id"))
+    updated = await ChatRepository.vote_poll_option(message_id, data.option_id, user_id)
+    if updated and updated.get("channel_id"):
+        ws_event = {
+            "type": "poll_voted",
+            "action": "poll_voted",
+            "message_id": message_id,
+            "poll": updated.get("poll")
+        }
+        await manager.broadcast_to_channel(updated["channel_id"], ws_event)
+    return updated or {"status": "ok"}
 
 @router.get("/pinned/{channel_id}", response_model=List[MessageResponse])
 async def get_pinned_messages(channel_id: str, current_user: dict = Depends(get_current_employee)):
@@ -259,6 +566,14 @@ async def forward_messages(body: ForwardMessageRequest, current_user: dict = Dep
     )
     return forwarded
 
+@router.delete("/messages/{message_id}")
+async def delete_chat_message(message_id: str, current_user: dict = Depends(get_current_employee)):
+    user_id = str(current_user.get("_id") or current_user.get("id"))
+    success = await ChatRepository.delete_message(message_id, user_id)
+    if not success:
+        raise HTTPException(status_code=403, detail="Not authorized or message not found")
+    return {"message": "Message deleted successfully", "message_id": message_id}
+
 # --- WebSocket ---
 
 @router.websocket("/ws/{token}")
@@ -281,6 +596,14 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
             try:
                 message_data = json.loads(data)
             except Exception:
+                continue
+
+            # Heartbeat ping/pong support
+            if message_data.get("type") == "ping" or message_data.get("action") == "ping":
+                try:
+                    await websocket.send_text(json.dumps({"type": "pong", "action": "pong"}))
+                except Exception:
+                    pass
                 continue
 
             try:
@@ -339,6 +662,25 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                             ch_id = f_msg.get("channel_id")
                             if ch_id:
                                 await manager.broadcast_to_channel(ch_id, f_msg)
+                    continue
+
+                # --- Handle Delete Message Action ---
+                if message_data.get("action") in ("delete_message", "remove_message"):
+                    message_id = message_data.get("message_id")
+                    channel_id = message_data.get("channel_id")
+                    if message_id:
+                        deleted = await ChatRepository.delete_message(message_id, user_id)
+                        if deleted:
+                            del_event = {
+                                "action": "message_deleted",
+                                "message_id": message_id,
+                                "channel_id": channel_id,
+                                "deleted_by": user_id
+                            }
+                            if channel_id:
+                                await manager.broadcast_to_channel(channel_id, del_event)
+                            else:
+                                await manager.send_personal_message(json.dumps(del_event, default=str), user_id)
                     continue
 
                 # --- Handle Save for Later Action ---
@@ -406,6 +748,10 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                         ext = Path(file_name or file_url).suffix.lower()
                         if ext in (".webm", ".mp3", ".wav", ".ogg", ".m4a", ".aac"):
                             message_type = "audio"
+                        elif ext in (".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".bmp"):
+                            message_type = "image"
+                        elif ext in (".mp4", ".mov", ".avi", ".mkv"):
+                            message_type = "video"
                         else:
                             message_type = "file"
                     elif content and content.strip().startswith(("http://", "https://")):

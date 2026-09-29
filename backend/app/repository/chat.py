@@ -3,6 +3,7 @@ from bson import ObjectId
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 import pymongo
+from app.redis.service import get_cache, set_cache, delete_cache, clear_pattern, redis_client
 
 def serialize_mongo(data: Any) -> Any:
     if isinstance(data, list):
@@ -45,6 +46,11 @@ class ChatRepository:
 
     @classmethod
     async def get_channels_for_user(cls, user_id: str) -> List[Dict[str, Any]]:
+        cache_key = f"chat:channels:{user_id}"
+        cached = await get_cache(cache_key)
+        if cached is not None:
+            return cached
+
         db = await cls.get_db()
 
         # Check if self channel exists for this user, if not create it automatically
@@ -90,6 +96,24 @@ class ChatRepository:
             })
             ch["unread_count"] = unread_count
 
+            # Ensure name is never None
+            if not ch.get("name"):
+                if ch.get("type") == "direct":
+                    other_members = [m for m in ch.get("members", []) if str(m) != str(user_id)]
+                    if other_members:
+                        other_user_id = str(other_members[0])
+                        try:
+                            emp = await db["employees"].find_one({"_id": ObjectId(other_user_id)})
+                        except Exception:
+                            emp = None
+                        if not emp:
+                            emp = await db["employees"].find_one({"id": other_user_id})
+                        ch["name"] = emp.get("name") if emp else "Direct Message"
+                    else:
+                        ch["name"] = "Direct Message"
+                else:
+                    ch["name"] = "General"
+
         # Sort channels by last message timestamp (or created_at if no messages yet)
         def get_sort_key(c):
             lm = c.get("last_message")
@@ -98,12 +122,23 @@ class ChatRepository:
             return c.get("created_at") or datetime.min
 
         channels.sort(key=get_sort_key, reverse=True)
+        await set_cache(cache_key, channels, ttl=45)
         return channels
 
     @classmethod
     async def get_channel_by_id(cls, channel_id: str) -> Optional[Dict[str, Any]]:
         db = await cls.get_db()
-        doc = await db[cls.channels_collection].find_one({"_id": ObjectId(channel_id)})
+        doc = None
+        try:
+            if ObjectId.is_valid(str(channel_id)):
+                doc = await db[cls.channels_collection].find_one({"_id": ObjectId(str(channel_id))})
+        except Exception:
+            pass
+        if not doc:
+            try:
+                doc = await db[cls.channels_collection].find_one({"_id": str(channel_id)})
+            except Exception:
+                pass
         return serialize_mongo(doc) if doc else None
 
     @classmethod
@@ -132,44 +167,168 @@ class ChatRepository:
     @classmethod
     async def update_channel(cls, channel_id: str, data: Dict[str, Any], user_id: str) -> bool:
         db = await cls.get_db()
-        result = await db[cls.channels_collection].update_one(
-            {"_id": ObjectId(channel_id), "members": user_id},
-            {"$set": data}
-        )
-        return result.modified_count > 0
+        # Support both ObjectId and plain string ids (e.g. chan-xxx mocks)
+        filt_options = [{"members": user_id}]
+        try:
+            if ObjectId.is_valid(str(channel_id)):
+                filt_options.append({"_id": ObjectId(str(channel_id))})
+        except Exception:
+            pass
+        filt_options.append({"_id": str(channel_id)})
+        # Try ObjectId filter first, then string filter
+        for f in ({"_id": ObjectId(str(channel_id)), "members": user_id} if ObjectId.is_valid(str(channel_id)) else None,
+                  {"_id": str(channel_id), "members": user_id}):
+            if not f:
+                continue
+            try:
+                result = await db[cls.channels_collection].update_one(f, {"$set": data})
+                if result.modified_count > 0 or result.matched_count > 0:
+                    try:
+                        ch = await cls.get_channel_by_id(channel_id)
+                        if ch and ch.get("members"):
+                            for m in ch["members"]:
+                                await delete_cache(f"chat:channels:{m}")
+                    except Exception:
+                        pass
+                    return True
+            except Exception:
+                continue
+        return False
 
     @classmethod
     async def delete_channel(cls, channel_id: str, user_id: str) -> bool:
         db = await cls.get_db()
-        result = await db[cls.channels_collection].delete_one(
-            {"_id": ObjectId(channel_id), "created_by": user_id}
-        )
-        return result.deleted_count > 0
+        for f in ({"_id": ObjectId(str(channel_id)), "created_by": user_id} if ObjectId.is_valid(str(channel_id)) else None,
+                  {"_id": str(channel_id), "created_by": user_id}):
+            if not f:
+                continue
+            try:
+                result = await db[cls.channels_collection].delete_one(f)
+                if result.deleted_count > 0:
+                    return True
+            except Exception:
+                continue
+        return False
 
     @classmethod
     async def add_member_to_channel(cls, channel_id: str, new_member_id: str) -> bool:
+        from bson import ObjectId as _OID
         db = await cls.get_db()
-        result = await db[cls.channels_collection].update_one(
-            {"_id": ObjectId(channel_id)},
-            {"$addToSet": {"members": new_member_id}}
-        )
-        return result.modified_count > 0
+        filt: Any = {"_id": str(channel_id)}
+        try:
+            if _OID.is_valid(str(channel_id)):
+                filt = {"_id": _OID(str(channel_id))}
+        except Exception:
+            pass
+        try:
+            result = await db[cls.channels_collection].update_one(
+                filt,
+                {"$addToSet": {"members": new_member_id}}
+            )
+            if result.modified_count > 0 or result.matched_count > 0:
+                try:
+                    await delete_cache(f"chat:channels:{new_member_id}")
+                except Exception:
+                    pass
+                return True
+        except Exception:
+            pass
+        # Fallback: try plain-string _id filter
+        try:
+            result = await db[cls.channels_collection].update_one(
+                {"_id": str(channel_id)},
+                {"$addToSet": {"members": new_member_id}}
+            )
+            return result.modified_count > 0 or result.matched_count > 0
+        except Exception:
+            return False
 
     @classmethod
     async def remove_member_from_channel(cls, channel_id: str, member_id: str) -> bool:
+        from bson import ObjectId as _OID
         db = await cls.get_db()
-        result = await db[cls.channels_collection].update_one(
-            {"_id": ObjectId(channel_id)},
-            {"$pull": {"members": member_id}}
-        )
-        return result.modified_count > 0
+        filt: Any = {"_id": str(channel_id)}
+        try:
+            if _OID.is_valid(str(channel_id)):
+                filt = {"_id": _OID(str(channel_id))}
+        except Exception:
+            pass
+        try:
+            result = await db[cls.channels_collection].update_one(
+                filt,
+                {"$pull": {"members": member_id}}
+            )
+            if result.modified_count > 0 or result.matched_count > 0:
+                try:
+                    await delete_cache(f"chat:channels:{member_id}")
+                except Exception:
+                    pass
+                return True
+        except Exception:
+            pass
+        try:
+            result = await db[cls.channels_collection].update_one(
+                {"_id": str(channel_id)},
+                {"$pull": {"members": member_id}}
+            )
+            return result.modified_count > 0 or result.matched_count > 0
+        except Exception:
+            return False
+
+    @classmethod
+    async def auto_add_new_employee_to_channels(cls, new_employee_id: str):
+        db = await cls.get_db()
+        emp_id = str(new_employee_id)
+        # Find all groups with auto_join_new_employees: True
+        cursor = db[cls.channels_collection].find({
+            "auto_join_new_employees": True,
+            "type": {"$nin": ["direct", "self"]}
+        })
+        channels = await cursor.to_list(length=100)
+        from app.services.websocket_manager import manager
+        import json
+        for ch in channels:
+            ch_id = str(ch.get("_id") or ch.get("id"))
+            from bson import ObjectId as _OID
+            filt: Any = {"_id": ch_id}
+            try:
+                if _OID.is_valid(ch_id):
+                    filt = {"_id": _OID(ch_id)}
+            except Exception:
+                pass
+            await db[cls.channels_collection].update_one(
+                filt,
+                {"$addToSet": {"members": emp_id}}
+            )
+            try:
+                await delete_cache(f"chat:channels:{emp_id}")
+            except Exception:
+                pass
+            updated_ch = await cls.get_channel_by_id(ch_id)
+            event_data = {
+                "action": "group_member_updated",
+                "channel_id": ch_id,
+                "channel": updated_ch,
+                "event_type": "member_added",
+                "member_id": emp_id
+            }
+            try:
+                await manager.broadcast_to_channel(ch_id, event_data)
+                await manager.send_personal_message(json.dumps(event_data, default=str), emp_id)
+            except Exception:
+                pass
 
     # --- Messages ---
     @classmethod
     async def save_message(cls, data: Dict[str, Any]) -> Dict[str, Any]:
         db = await cls.get_db()
         now = datetime.utcnow()
-        doc = {**data, "timestamp": now, "is_read_by": [data.get("sender_id")]}
+        doc = {
+            **data,
+            "timestamp": now,
+            "created_at": now.isoformat(),
+            "is_read_by": [str(data.get("sender_id"))] if data.get("sender_id") else []
+        }
 
         # Resolve reply_to if reply_to_id is provided
         reply_to_id = data.get("reply_to_id")
@@ -188,6 +347,19 @@ class ChatRepository:
 
         result = await db[cls.messages_collection].insert_one(doc)
         doc["_id"] = result.inserted_id
+
+        # Invalidate caches for all members
+        channel_id = data.get("channel_id")
+        if channel_id:
+            try:
+                await clear_pattern(f"chat:history:{channel_id}:*")
+                channel = await cls.get_channel_by_id(channel_id)
+                if channel and channel.get("members"):
+                    for m_id in channel["members"]:
+                        await delete_cache(f"chat:channels:{m_id}")
+            except Exception:
+                pass
+
         return serialize_mongo(doc)
 
     @classmethod
@@ -206,6 +378,10 @@ class ChatRepository:
             {"channel_id": channel_id, "is_read_by": {"$ne": user_id}},
             {"$addToSet": {"is_read_by": user_id}}
         )
+        try:
+            await delete_cache(f"chat:channels:{user_id}")
+        except Exception:
+            pass
 
     @classmethod
     async def vote_poll_option(cls, message_id: str, option_id: str, user_id: str) -> Optional[Dict[str, Any]]:
@@ -317,6 +493,14 @@ class ChatRepository:
 
     @classmethod
     async def update_user_presence(cls, user_id: str, is_online: bool) -> Dict[str, Any]:
+        try:
+            if is_online:
+                await redis_client.sadd("chat:online_users", user_id)
+            else:
+                await redis_client.srem("chat:online_users", user_id)
+        except Exception:
+            pass
+
         db = await cls.get_db()
         now = datetime.utcnow()
         doc = {
@@ -333,18 +517,37 @@ class ChatRepository:
 
     @classmethod
     async def get_user_presence(cls, user_id: str) -> Dict[str, Any]:
+        # Fast Redis check
+        is_online = False
+        try:
+            is_online = bool(await redis_client.sismember("chat:online_users", user_id))
+        except Exception:
+            pass
+
         db = await cls.get_db()
         doc = await db[cls.presence_collection].find_one({"user_id": user_id})
         if not doc:
             return {
                 "user_id": user_id,
-                "is_online": False,
+                "is_online": is_online,
                 "last_seen": None
             }
-        return serialize_mongo(doc)
+        result = serialize_mongo(doc)
+        result["is_online"] = is_online or result.get("is_online", False)
+        return result
 
     @classmethod
     async def get_batch_user_presence(cls, user_ids: List[str]) -> List[Dict[str, Any]]:
+        online_set = set()
+        try:
+            if user_ids:
+                is_members = await redis_client.smismember("chat:online_users", *user_ids)
+                for uid, is_on in zip(user_ids, is_members):
+                    if is_on:
+                        online_set.add(uid)
+        except Exception:
+            pass
+
         db = await cls.get_db()
         cursor = db[cls.presence_collection].find({"user_id": {"$in": user_ids}})
         docs = await cursor.to_list(length=len(user_ids))
@@ -352,15 +555,50 @@ class ChatRepository:
         
         result = []
         for uid in user_ids:
+            is_on = uid in online_set
             if uid in found_map:
-                result.append(found_map[uid])
+                item = found_map[uid]
+                item["is_online"] = is_on or item.get("is_online", False)
+                result.append(item)
             else:
                 result.append({
                     "user_id": uid,
-                    "is_online": False,
+                    "is_online": is_on,
                     "last_seen": None
                 })
         return result
+
+    @classmethod
+    async def delete_message(cls, message_id: str, user_id: str) -> bool:
+        db = await cls.get_db()
+        try:
+            msg_id_obj = ObjectId(message_id)
+        except Exception:
+            return False
+
+        msg = await db[cls.messages_collection].find_one({"_id": msg_id_obj})
+        if not msg:
+            return False
+
+        channel_id = msg.get("channel_id")
+        channel = await cls.get_channel_by_id(channel_id) if channel_id else None
+        
+        is_sender = str(msg.get("sender_id")) == str(user_id)
+        is_admin = channel and str(channel.get("created_by")) == str(user_id)
+        
+        if not is_sender and not is_admin:
+            return False
+
+        await db[cls.messages_collection].delete_one({"_id": msg_id_obj})
+        if channel_id:
+            try:
+                await clear_pattern(f"chat:history:{channel_id}:*")
+                if channel and channel.get("members"):
+                    for m_id in channel["members"]:
+                        await delete_cache(f"chat:channels:{m_id}")
+            except Exception:
+                pass
+        return True
 
 
     @classmethod
@@ -609,9 +847,13 @@ class ChatRepository:
                 "channel_id": channel_id,
                 "sender_id": sender_id,
                 "content": orig_msg.get("content", ""),
-                "message_type": orig_msg.get("message_type", "text"),
-                "file_url": orig_msg.get("file_url"),
+                "message_type": orig_msg.get("message_type") or orig_msg.get("media_type", "text"),
+                "media_type": orig_msg.get("media_type") or orig_msg.get("message_type", "text"),
+                "file_url": orig_msg.get("file_url") or orig_msg.get("media_url"),
+                "media_url": orig_msg.get("media_url") or orig_msg.get("file_url"),
                 "file_name": orig_msg.get("file_name"),
+                "file_size": orig_msg.get("file_size"),
+                "group_id": orig_msg.get("group_id"),
                 "poll": orig_msg.get("poll"),
                 "mentions": orig_msg.get("mentions", []),
                 "is_forwarded": True

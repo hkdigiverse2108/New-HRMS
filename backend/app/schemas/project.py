@@ -66,19 +66,7 @@ class FollowUpLog(BaseModel):
     
     model_config = ConfigDict(populate_by_name=True)
 
-class ClientReviewCreate(BaseModel):
-    review_text: str = Field(..., description="The main text of the client review")
-
-class ClientReviewUpdate(BaseModel):
-    admin_comment: str = Field(..., description="Admin/Manager comment on the review")
-
-class ClientReview(BaseModel):
-    id: str
-    review_text: str
-    admin_comment: Optional[str] = None
-    created_at: datetime
-    created_by: str
-    created_by_details: Optional[dict] = None
+# K12: Client Reviews system removed (transcript — no requirement).
 
 class CreativeStats(BaseModel):
     standard_posts: bool = False
@@ -137,6 +125,27 @@ class ProjectGeneralDetails(BaseModel):
             pri_map = {"low": "Low", "medium": "Medium", "high": "High", "urgent": "Urgent"}
             return pri_map.get(clean_v, v)
         return v
+
+class PaymentEntry(BaseModel):
+    """K10: client payment followup entry — date, amount, work period, next reminder."""
+    id: Optional[str] = None
+    date: Optional[str] = None
+    amount: Optional[float] = None
+    work_from: Optional[str] = None
+    work_to: Optional[str] = None
+    next_reminder: Optional[str] = None
+    note: Optional[str] = None
+    created_by: Optional[str] = None
+
+class ProjectFinanceDetails(BaseModel):
+    project_budget: Optional[float] = None
+    amount_received: Optional[float] = None
+    next_payment_date: Optional[date] = None
+    payments: Optional[list[PaymentEntry]] = None
+
+class CampaignStatus(str, Enum):
+    ACTIVE = "Active"
+    INACTIVE = "Inactive"
 
 class CreativeTeam(BaseModel):
     scripting: Optional[str] = None
@@ -280,7 +289,6 @@ class ProjectBase(BaseModel):
     last_feedback_date: Optional[date] = None
     next_feedback_date: Optional[date] = None
     followup_logs: Optional[list[FollowUpLog]] = []
-    client_reviews: Optional[list[ClientReview]] = []
     content_approvals: Optional[list[ContentCalendarApproval]] = []
     daily_marketing_stats: Optional[list[DailyMarketingStat]] = []
     marketing_campaigns: Optional[list[str]] = []
@@ -345,6 +353,12 @@ class ProjectGeneralUpdate(BaseModel):
             return pri_map.get(clean_v, v)
         return v
 
+class ProjectFinanceUpdate(BaseModel):
+    project_budget: Optional[float] = None
+    amount_received: Optional[float] = None
+    next_payment_date: Optional[date] = None
+    payments: Optional[list[PaymentEntry]] = None
+
 class ProjectUpdate(BaseModel):
     client_id: Optional[str] = None
     general: Optional[ProjectGeneralUpdate] = None
@@ -361,7 +375,6 @@ class ProjectUpdate(BaseModel):
     feedback_schedule_value: Optional[list[int]] = None
     last_feedback_date: Optional[date] = None
     followup_logs: Optional[list[FollowUpLog]] = None
-    client_reviews: Optional[list[ClientReview]] = None
     daily_marketing_stats: Optional[list[DailyMarketingStat]] = None
     marketing_campaigns: Optional[list[str]] = None
     daily_revenues: Optional[list[DailyRevenue]] = None
