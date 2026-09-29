@@ -262,11 +262,20 @@ class DailyRevenue(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
+class ProjectTimeline(BaseModel):
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+
+class ProjectTaskSummaryResponse(BaseModel):
+    progress: int = 0
+    total_tasks: int = 0
+    status_counts: dict = Field(default_factory=dict)
+    timeline: ProjectTimeline
+
 class ProjectBase(BaseModel):
     client_id: str = Field(..., description="Client ID this project belongs to")
     general: ProjectGeneralDetails
     creative_team: Optional[CreativeTeam] = None
-    modules: Optional[list[Dict[str, Any]]] = Field(default=None, description="Project modules, tasks, and milestones")
     whatsapp_group_link: Optional[str] = None
     social_media_credentials: Optional[list[SocialMediaCredential]] = None
     greetings_msg_sent: bool = False
@@ -349,7 +358,6 @@ class ProjectUpdate(BaseModel):
     client_id: Optional[str] = None
     general: Optional[ProjectGeneralUpdate] = None
     creative_team: Optional[CreativeTeam] = None
-    modules: Optional[list[Dict[str, Any]]] = None
     whatsapp_group_link: Optional[str] = None
     social_media_credentials: Optional[list[SocialMediaCredential]] = None
     greetings_msg_sent: Optional[bool] = None

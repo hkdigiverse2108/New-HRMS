@@ -7,6 +7,7 @@ class TaskStatus(str, Enum):
     TO_DO = "todo"
     IN_PROGRESS = "inprogress"
     IN_REVIEW = "inreview"
+    BUGS = "bugs"
     COMPLETED = "completed"
 
 class TaskPriority(str, Enum):
@@ -43,12 +44,12 @@ class TaskBase(BaseModel):
     title: str = Field(..., description="The title of the task")
     description: Optional[str] = None
     status: TaskStatus = Field(default=TaskStatus.TO_DO)
-    priority: TaskPriority = Field(default=TaskPriority.MEDIUM)
+    priority: Optional[TaskPriority] = Field(default=TaskPriority.MEDIUM)
     due_date: Optional[date] = None
     assigned_to: Optional[str] = Field(None, description="Employee ID this task is assigned to")
     
-    # Optional fields for SMM Tasks
-    task_category: str = Field(default="General", description="Category of the task (e.g. General, SMM)")
+    # Optional fields
+    task_category: Optional[str] = Field(default="General", description="Category of the task (e.g. General, SMM, Development)")
     content_item_id: Optional[str] = None
     project_id: Optional[str] = None
     creative_role: Optional[str] = None
@@ -67,6 +68,8 @@ class TaskBase(BaseModel):
     @field_validator('status', mode='before')
     @classmethod
     def parse_status(cls, v):
+        if v is None:
+            return TaskStatus.TO_DO
         if isinstance(v, str):
             clean = v.lower().replace(" ", "").replace("_", "")
             if clean in ["todo", "notstarted"]:
@@ -75,6 +78,8 @@ class TaskBase(BaseModel):
                 return TaskStatus.IN_PROGRESS
             if clean in ["inreview", "review"]:
                 return TaskStatus.IN_REVIEW
+            if clean in ["bugs", "bug"]:
+                return TaskStatus.BUGS
             if clean in ["completed", "done"]:
                 return TaskStatus.COMPLETED
         return v
@@ -82,6 +87,8 @@ class TaskBase(BaseModel):
     @field_validator('priority', mode='before')
     @classmethod
     def parse_priority(cls, v):
+        if not v:
+            return TaskPriority.MEDIUM
         if isinstance(v, str):
             clean = v.lower().strip()
             if clean == "urgent":
@@ -156,6 +163,7 @@ class TaskResponse(TaskBase):
     approved_by_details: Optional[UserDetails] = None
     
     project_details: Optional[dict] = None
+    client_details: Optional[dict] = None
     content_item_details: Optional[dict] = None
     
     model_config = ConfigDict(populate_by_name=True, arbitrary_types_allowed=True)

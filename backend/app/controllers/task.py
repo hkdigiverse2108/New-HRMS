@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import Optional
+from datetime import date
 from pydantic import BaseModel
 from app.schemas.task import (
     TaskCreate, TaskUpdate, TaskResponse, TaskStatus, TaskPriority, TaskQuickAssign,
@@ -75,8 +76,17 @@ async def create_task(data: TaskCreate, current_user: dict = Depends(get_current
     from app.repository.employee import EmployeeRepository
     from datetime import date
     assigned_by = str(current_user.get("_id") or current_user.get("id"))
+    
+    role = current_user.get("work_details", {}).get("system_role", "Employee")
+    designation = str(current_user.get("work_details", {}).get("designation", "")).lower()
+    
     if not data.assigned_to:
         data.assigned_to = assigned_by
+        
+    if role not in ["Admin", "Subadmin", "HR"] and designation not in ["team leader", "head"]:
+        if data.assigned_to != assigned_by:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are only allowed to assign tasks to yourself.")
+            
     if not data.due_date:
         data.due_date = date.today()
         
@@ -90,8 +100,16 @@ async def create_task(data: TaskCreate, current_user: dict = Depends(get_current
 @router.post("/quick-assign", response_model=list[TaskResponse], status_code=status.HTTP_201_CREATED)
 async def quick_assign_tasks(data: list[TaskQuickAssign], current_user: dict = Depends(get_current_employee)):
     from app.repository.employee import EmployeeRepository
+    assigned_by = str(current_user.get("_id") or current_user.get("id"))
+    role = current_user.get("work_details", {}).get("system_role", "Employee")
+    designation = str(current_user.get("work_details", {}).get("designation", "")).lower()
+    
     for task in data:
         for assignee in task.assigned_to:
+            if role not in ["Admin", "Subadmin", "HR"] and designation not in ["team leader", "head"]:
+                if assignee != assigned_by:
+                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are only allowed to assign tasks to yourself.")
+                    
             emp = await EmployeeRepository.get_employee_by_id(assignee)
             if not emp:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Assigned employee {assignee} does not exist")
@@ -110,14 +128,32 @@ async def get_all_tasks(
     priority: Optional[str] = Query(None, description="Filter by task priority"),
     history_assigned_to: Optional[str] = Query(None, description="Filter by employee ID in transfer history as receiver"),
     history_assigned_by: Optional[str] = Query(None, description="Filter by employee ID in transfer history as sender"),
+    project_id: Optional[str] = Query(None, description="Filter by project ID"),
+    task_category: Optional[str] = Query(None, description="Filter by task category (e.g. Development)"),
+    timeline_filter: Optional[str] = Query(None, description="Filter by timeline: today, pending, upcoming"),
+    start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+    search: Optional[str] = Query(None, description="Search by task title"),
+    view: Optional[str] = Query("me", description="View scope: 'me' (My Tasks) or 'team' (Team Tasks)"),
     current_user: dict = Depends(get_current_employee)
 ):
     role = current_user.get("work_details", {}).get("system_role", "Employee")
+    designation = current_user.get("work_details", {}).get("designation", "")
+    department = current_user.get("work_details", {}).get("department", "")
     
     involved_emp_id = None
+    team_employee_ids = None
+    
     if role not in ["Admin", "Subadmin", "HR"]:
         emp_id = str(current_user.get("_id") or current_user.get("id"))
-        involved_emp_id = emp_id
+        is_leader = str(designation).lower() in ["team leader", "head"]
+        
+        if is_leader and view == "team":
+            from app.repository.employee import EmployeeRepository
+            dept_emps = await EmployeeRepository.get_all_employees(department=department, limit=1000)
+            team_employee_ids = [str(e["_id"]) for e in dept_emps.get("data", [])]
+        else:
+            involved_emp_id = emp_id
 
     return await TaskService.get_all_tasks(
         is_deleted=False, 
@@ -129,7 +165,14 @@ async def get_all_tasks(
         limit=limit,
         involved_emp_id=involved_emp_id,
         history_assigned_to=history_assigned_to,
-        history_assigned_by=history_assigned_by
+        history_assigned_by=history_assigned_by,
+        project_id=project_id,
+        task_category=task_category,
+        timeline_filter=timeline_filter,
+        start_date=start_date,
+        end_date=end_date,
+        search=search,
+        team_employee_ids=team_employee_ids
     )
 
 @router.get("/deleted", response_model=PaginatedResponse[TaskResponse])
@@ -175,11 +218,16 @@ async def update_task(task_id: str, data: TaskUpdate, current_user: dict = Depen
         
     # Anyone who is assigned to or assigned by the task can update it.
     role = current_user.get("work_details", {}).get("system_role", "Employee")
+    designation = str(current_user.get("work_details", {}).get("designation", "")).lower()
     emp_id = str(current_user.get("_id") or current_user.get("id"))
     
     if role not in ["Admin", "Subadmin", "HR"]:
         if item.get("assigned_to") != emp_id and item.get("assigned_by") != emp_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to update this task")
+            
+        if data.assigned_to and data.assigned_to != item.get("assigned_to"):
+            if designation not in ["team leader", "head"] and data.assigned_to != emp_id:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are only allowed to assign tasks to yourself.")
             
     if data.assigned_to is not None:
         from app.repository.employee import EmployeeRepository
