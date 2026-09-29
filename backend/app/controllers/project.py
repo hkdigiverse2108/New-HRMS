@@ -1,12 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import Optional, List
 from datetime import date
-from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectCategory, ProjectPriority, ProjectStatus, FollowUpLogCreate, FollowUpLog, DailyMarketingStatCreate, DailyMarketingStatUpdate, DailyMarketingStat, MarketingCampaignCreate, DailyMarketingStatBulkCreate, MarketingSummaryResponse, DailyRevenueCreate, DailyRevenueUpdate, DailyRevenue, MarketingWorkspaceResponse
+from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectCategory, ProjectPriority, ProjectStatus, FollowUpLogCreate, FollowUpLog, DailyMarketingStatCreate, DailyMarketingStatUpdate, DailyMarketingStat, MarketingCampaignCreate, DailyMarketingStatBulkCreate, MarketingSummaryResponse, DailyRevenueCreate, DailyRevenueUpdate, DailyRevenue, MarketingWorkspaceResponse, ProjectTaskSummaryResponse, ProjectRenewalCreate
+from app.schemas.task import TaskCreate, TaskUpdate
 from app.schemas.pagination import PaginatedResponse
 from app.services.project import ProjectService
 from app.controllers.auth import get_current_employee
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
+
+@router.post("/{project_id}/renew", response_model=ProjectResponse)
+async def renew_project(project_id: str, data: ProjectRenewalCreate, current_user: dict = Depends(get_current_employee)):
+    emp_id = str(current_user.get("_id") or current_user.get("id"))
+    updated = await ProjectService.renew_project(project_id, data, emp_id)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    return updated
 
 @router.get("/categories", response_model=list[str])
 async def get_project_categories():
@@ -240,4 +249,125 @@ async def get_marketing_workspace(
     if workspace is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     return workspace
+
+@router.get("/{project_id}/task-summary", response_model=ProjectTaskSummaryResponse)
+async def get_project_task_summary(
+    project_id: str,
+    current_user: dict = Depends(get_current_employee)
+):
+    from app.services.task import TaskService
+    summary = await TaskService.get_project_task_summary(project_id)
+    if summary is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    return summary
+
+@router.get("/{project_id}/activity-logs")
+async def get_project_activity_logs(
+    project_id: str,
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1),
+    current_user: dict = Depends(get_current_employee)
+):
+    from app.services.task import TaskService
+    return await TaskService.get_project_activity_logs(project_id, page, limit)
+
+@router.get("/{project_id}/tasks")
+async def get_project_tasks(
+    project_id: str,
+    status: Optional[str] = Query(None, description="Filter by task status"),
+    assigned_to: Optional[str] = Query(None, description="Filter by assigned employee ID"),
+    timeline_filter: Optional[str] = Query(None, description="Filter by timeline: today, pending, upcoming"),
+    start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+    search: Optional[str] = Query(None, description="Search by task title"),
+    view: Optional[str] = Query("me", description="View scope: 'me' (My Tasks) or 'team' (Team Tasks)"),
+    page: Optional[int] = Query(None, ge=1),
+    limit: Optional[int] = Query(None, ge=1),
+    current_user: dict = Depends(get_current_employee)
+):
+    role = current_user.get("work_details", {}).get("system_role", "Employee")
+    designation = current_user.get("work_details", {}).get("designation", "")
+    department = current_user.get("work_details", {}).get("department", "")
+    
+    involved_emp_id = None
+    team_employee_ids = None
+    
+    if role not in ["Admin", "Subadmin", "HR"]:
+        emp_id = str(current_user.get("_id") or current_user.get("id"))
+        is_leader = str(designation).lower() in ["team leader", "head"]
+        
+        if is_leader and view == "team":
+            from app.repository.employee import EmployeeRepository
+            dept_emps = await EmployeeRepository.get_all_employees(department=department, limit=1000)
+            team_employee_ids = [str(e["_id"]) for e in dept_emps.get("data", [])]
+        else:
+            involved_emp_id = emp_id
+
+    from app.services.task import TaskService
+    return await TaskService.get_all_tasks(
+        is_deleted=False,
+        project_id=project_id,
+        status=status,
+        assigned_to=assigned_to,
+        timeline_filter=timeline_filter,
+        start_date=start_date,
+        end_date=end_date,
+        search=search,
+        involved_emp_id=involved_emp_id,
+        team_employee_ids=team_employee_ids,
+        page=page,
+        limit=limit
+    )
+
+@router.post("/{project_id}/tasks", status_code=status.HTTP_201_CREATED)
+async def create_project_task(project_id: str, data: TaskCreate, current_user: dict = Depends(get_current_employee)):
+    from app.services.task import TaskService
+    data.project_id = project_id
+    assigned_by = str(current_user.get("_id") or current_user.get("id"))
+    role = current_user.get("work_details", {}).get("system_role", "Employee")
+    designation = str(current_user.get("work_details", {}).get("designation", "")).lower()
+    
+    if not data.assigned_to:
+        data.assigned_to = assigned_by
+        
+    if role not in ["Admin", "Subadmin", "HR"] and designation not in ["team leader", "head"]:
+        if data.assigned_to != assigned_by:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are only allowed to assign tasks to yourself.")
+            
+    created = await TaskService.create_task(data, assigned_by)
+    return await TaskService.get_task_by_id(created["_id"])
+
+@router.put("/{project_id}/tasks/{task_id}")
+async def update_project_task(project_id: str, task_id: str, data: TaskUpdate, current_user: dict = Depends(get_current_employee)):
+    from app.services.task import TaskService
+    
+    item = await TaskService.get_task_by_id(task_id)
+    if not item or item.get("is_deleted"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+        
+    emp_id = str(current_user.get("_id") or current_user.get("id"))
+    role = current_user.get("work_details", {}).get("system_role", "Employee")
+    designation = str(current_user.get("work_details", {}).get("designation", "")).lower()
+    
+    if role not in ["Admin", "Subadmin", "HR"]:
+        if item.get("assigned_to") != emp_id and item.get("assigned_by") != emp_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to update this task")
+            
+        if data.assigned_to and data.assigned_to != item.get("assigned_to"):
+            if designation not in ["team leader", "head"] and data.assigned_to != emp_id:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are only allowed to assign tasks to yourself.")
+                
+    updated = await TaskService.update_task(task_id, data, emp_id)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to update task")
+    return await TaskService.get_task_by_id(task_id)
+
+@router.delete("/{project_id}/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_project_task(project_id: str, task_id: str, current_user: dict = Depends(get_current_employee)):
+    from app.services.task import TaskService
+    success = await TaskService.delete_task(task_id)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to delete task")
+
+
 

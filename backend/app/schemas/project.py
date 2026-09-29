@@ -247,19 +247,37 @@ class MarketingSummaryMetrics(BaseModel):
     impressions: KpiMetricCard
     revenue: KpiMetricCard
 
+class ProjectTimeline(BaseModel):
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+
+class ProjectRenewalCreate(BaseModel):
+    start_date: date
+    end_date: date
+    
+class ProjectRenewal(BaseModel):
+    id: str
+    start_date: date
+    end_date: date
+    renewed_at: datetime
+    renewed_by: Optional[str] = None
+
 class MarketingSummaryResponse(BaseModel):
     project_name: str
+    timeline: ProjectTimeline
     filters: dict
     kpis: MarketingSummaryMetrics
     top_campaigns: list[TopCampaignItem]
 
 class MarketingWorkspaceResponse(BaseModel):
     header: dict
+    timeline: ProjectTimeline
     filters: dict
     kpis: MarketingSummaryMetrics
     top_campaigns: list[TopCampaignItem]
     stats_logs: list[DailyMarketingStat]
     campaign_options: list[str]
+    renewal_history: Optional[list[ProjectRenewal]] = []
 
 class MarketingCampaignCreate(BaseModel):
     name: str
@@ -281,11 +299,16 @@ class DailyRevenue(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
+class ProjectTaskSummaryResponse(BaseModel):
+    progress: int = 0
+    total_tasks: int = 0
+    status_counts: dict = Field(default_factory=dict)
+    timeline: ProjectTimeline
+
 class ProjectBase(BaseModel):
     client_id: str = Field(..., description="Client ID this project belongs to")
     general: ProjectGeneralDetails
     creative_team: Optional[CreativeTeam] = None
-    modules: Optional[list[Dict[str, Any]]] = Field(default=None, description="Project modules, tasks, and milestones")
     whatsapp_group_link: Optional[str] = None
     social_media_credentials: Optional[list[SocialMediaCredential]] = None
     greetings_msg_sent: bool = False
@@ -305,6 +328,7 @@ class ProjectBase(BaseModel):
     daily_marketing_stats: Optional[list[DailyMarketingStat]] = []
     marketing_campaigns: Optional[list[str]] = []
     daily_revenues: Optional[list[DailyRevenue]] = []
+    renewal_history: Optional[list[ProjectRenewal]] = []
 
 class ProjectCreate(ProjectBase):
     pass
@@ -375,7 +399,6 @@ class ProjectUpdate(BaseModel):
     client_id: Optional[str] = None
     general: Optional[ProjectGeneralUpdate] = None
     creative_team: Optional[CreativeTeam] = None
-    modules: Optional[list[Dict[str, Any]]] = None
     whatsapp_group_link: Optional[str] = None
     social_media_credentials: Optional[list[SocialMediaCredential]] = None
     greetings_msg_sent: Optional[bool] = None
