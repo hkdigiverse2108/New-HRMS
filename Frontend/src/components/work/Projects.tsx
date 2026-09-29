@@ -99,7 +99,10 @@ interface Project {
     date: string;
     campaignName: string;
     reach: number;
+    impressions: number;
     leads: number;
+    followers: number;
+    revenue: number;
     spend: number;
   }[] | undefined;
   activityLogs?: {
@@ -294,8 +297,7 @@ export const getDateProgress = (
 
 // K16: project date-range mathi months list + default month (running cycle).
 // today range ma hoy to current month, pela hoy to start month, pachi hoy to end month.
-export const getProjectMonths = (
-  startDate?: string | null,
+export const getProjectMonths = (  startDate?: string | null,
   endDate?: string | null,
   now: Date = new Date()
 ): { months: { value: string; label: string }[]; def: string } => {
@@ -318,6 +320,27 @@ export const getProjectMonths = (
   const clamped = now < s ? s : now > e ? e : now;
   const def = `${clamped.getFullYear()}-${String(clamped.getMonth() + 1).padStart(2, "0")}`;
   return { months, def };
+};
+
+// K18: month-overlap rule — filter range (e.g. 1-30) ma approval month (e.g. 15) ave to match thay.
+// Exact-month ne badle overlap check, etle Sept-approved + new-month-pending banne dekhay.
+export const isMonthOverlapping = (
+  month: number,
+  year: number,
+  from?: string | Date | null,
+  to?: string | Date | null
+): boolean => {
+  if (!from && !to) return true;
+  const mStart = new Date(year, month - 1, 1);
+  const mEnd = new Date(year, month, 0);
+  const f = from ? new Date(from) : null;
+  const t = to ? new Date(to) : null;
+  if ((f && isNaN(f.getTime())) || (t && isNaN(t.getTime()))) return true;
+  const fDay = f ? new Date(f.getFullYear(), f.getMonth(), f.getDate()) : null;
+  const tDay = t ? new Date(t.getFullYear(), t.getMonth(), t.getDate()) : null;
+  if (fDay && mEnd < fDay) return false;
+  if (tDay && mStart > tDay) return false;
+  return true;
 };
 
 export const isSocialMediaCategory = (cat?: string) => {
@@ -603,11 +626,11 @@ const INITIAL_PROJECTS: Project[] = [
       { name: "James", avatar: "https://i.pravatar.cc/150?u=james" }
     ],
     dailyStats: [
-      { id: "ds-1", date: "2026-08-24", campaignName: "Q4 Retargeting Ads", reach: 15000, leads: 45, spend: 8100 },
-      { id: "ds-2", date: "2026-08-24", campaignName: "Holiday Social Push", reach: 28000, leads: 92, spend: 15600 },
-      { id: "ds-3", date: "2026-08-23", campaignName: "Q4 Retargeting Ads", reach: 14200, leads: 38, spend: 7800 },
-      { id: "ds-4", date: "2026-08-23", campaignName: "Holiday Social Push", reach: 25400, leads: 81, spend: 14500 },
-      { id: "ds-5", date: "2026-08-22", campaignName: "B2B Email Drip", reach: 4100, leads: 12, spend: 3200 }
+      { id: "ds-1", date: "2026-08-24", campaignName: "Q4 Retargeting Ads", reach: 15000, impressions: 18000, leads: 45, followers: 12, revenue: 25000, spend: 8100 },
+      { id: "ds-2", date: "2026-08-24", campaignName: "Holiday Social Push", reach: 28000, impressions: 32000, leads: 92, followers: 30, revenue: 40000, spend: 15600 },
+      { id: "ds-3", date: "2026-08-23", campaignName: "Q4 Retargeting Ads", reach: 14200, impressions: 17000, leads: 38, followers: 9, revenue: 22000, spend: 7800 },
+      { id: "ds-4", date: "2026-08-23", campaignName: "Holiday Social Push", reach: 25400, impressions: 29000, leads: 81, followers: 25, revenue: 35000, spend: 14500 },
+      { id: "ds-5", date: "2026-08-22", campaignName: "B2B Email Drip", reach: 4100, impressions: 5000, leads: 12, followers: 3, revenue: 8000, spend: 3200 }
     ]
   },
   {
@@ -1082,7 +1105,7 @@ const mapBackendProject = (bp: any): Project => {
 export function Projects({ isNew }: { isNew?: boolean }) {
   const [projectSubTab, setProjectSubTab] = useState<"workspace" | "logs">("workspace");
   const [isBulkAdd, setIsBulkAdd] = useState(false);
-  const [bulkStatsEntries, setBulkStatsEntries] = useState<{ [campaignName: string]: { reach: string, leads: string, spend: string } }>({});
+  const [bulkStatsEntries, setBulkStatsEntries] = useState<{ [campaignName: string]: { reach: string, impressions: string, leads: string, followers: string, revenue: string, spend: string } }>({});
 
   const logProjectActivity = (projectId: string, action: string, details?: string) => {
     const now = new Date();
@@ -1334,6 +1357,37 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   const [calendarMonthFilter, setCalendarMonthFilter] = useState<string>("Current");
   const [isEditTargetsModalOpen, setIsEditTargetsModalOpen] = useState(false);
   const [targetsForm, setTargetsForm] = useState<{ post: number; reel: number }>({ post: 8, reel: 8 });
+  // K18: CC status (month approval) — inline section, overlap rule sathe
+  const [ccApprovals, setCcApprovals] = useState<Record<string, any>>({});
+  const [ccStatusDraft, setCcStatusDraft] = useState<string>("Pending");
+  const [ccReasonDraft, setCcReasonDraft] = useState<string>("");
+  const fetchCcApproval = useCallback(async (projId: string, month: number, year: number) => {
+    const key = `${year}-${String(month).padStart(2, "0")}`;
+    try {
+      const res = await api.get<any>(`/projects/${projId}/content/approval?month=${month}&year=${year}`, { showLoader: false, showErrorToast: false });
+      setCcApprovals(prev => ({ ...prev, [key]: res || null }));
+    } catch {
+      setCcApprovals(prev => ({ ...prev, [key]: null }));
+    }
+  }, []);
+  const handleSaveCcStatus = async (projId: string, month: number, year: number) => {
+    if (ccStatusDraft !== "Approved by Client" && !ccReasonDraft.trim()) {
+      toast.error("Reason compulsory che (Approved sivay)");
+      return;
+    }
+    try {
+      const res = await api.put<any>(`/projects/${projId}/content/approval`, {
+        month, year, status: ccStatusDraft,
+        reason: ccReasonDraft.trim() || undefined,
+      });
+      const key = `${year}-${String(month).padStart(2, "0")}`;
+      setCcApprovals(prev => ({ ...prev, [key]: res || null }));
+      setCcReasonDraft("");
+      toast.success("CC status updated");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update CC status");
+    }
+  };
 
   // Feature 5: WhatsApp Group & Client Credentials
   const [isWhatsappModalOpen, setIsWhatsappModalOpen] = useState(false);
@@ -1661,15 +1715,53 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       setBackendActivityLogs([]);
     }
   }, []);
+  // F4: backend campaign options (autosuggest source)
+  const [dmCampaigns, setDmCampaigns] = useState<string[]>([]);
+  const [campSuggestOpen, setCampSuggestOpen] = useState(false);
+  // F7: edit existing stat (PUT) vs new (POST)
+  const [editingStatId, setEditingStatId] = useState<string | null>(null);
+  // F4: backend DM stats → project.dailyStats (replaces local mock)
+  const fetchDmStats = useCallback(async (projId: string) => {
+    if (!projId) return;
+    try {
+      const res = await api.get<any[]>(`/projects/${projId}/marketing-stats`, { showLoader: false, showErrorToast: false });
+      const list = Array.isArray(res) ? res : [];
+      const mapped = list.map((s: any) => ({
+        id: String(s.id || s._id),
+        date: (String(s.date || "").split("T")[0] ?? ""),
+        campaignName: s.campaign_name || "",
+        reach: Number(s.reach) || 0,
+        impressions: Number(s.impressions) || 0,
+        leads: Number(s.leads) || 0,
+        followers: Number(s.followers) || 0,
+        revenue: Number(s.revenue) || 0,
+        spend: Number(s.spend) || 0,
+      }));
+      setProjects(prev => prev.map(p => (p.id === projId ? { ...p, dailyStats: mapped } : p)));
+    } catch {
+      // keep existing (offline safe)
+    }
+  }, []);
+  const fetchDmCampaigns = useCallback(async (projId: string) => {
+    if (!projId) return;
+    try {
+      const res = await api.get<string[]>(`/projects/${projId}/marketing-campaigns`, { showLoader: false, showErrorToast: false });
+      if (Array.isArray(res) && res.length > 0) setDmCampaigns(res);
+    } catch {
+      // fallback to local list below
+    }
+  }, []);
   useEffect(() => {
     if (selectedProjectId) {
       fetchProjectContentCalendar(selectedProjectId);
       fetchProjectFollowups(selectedProjectId);
       fetchProjectActivities(selectedProjectId);
+      fetchDmStats(selectedProjectId);
+      fetchDmCampaigns(selectedProjectId);
     } else {
       setBackendActivityLogs([]);
     }
-  }, [selectedProjectId, fetchProjectContentCalendar, fetchProjectFollowups, fetchProjectActivities]);
+  }, [selectedProjectId, fetchProjectContentCalendar, fetchProjectFollowups, fetchProjectActivities, fetchDmStats, fetchDmCampaigns]);
   
   const [campaignDateRange, setCampaignDateRange] = useState("Last 30 Days");
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>({
@@ -1677,6 +1769,107 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     to: new Date(),
   });
   const [selectedCampaignForStats, setSelectedCampaignForStats] = useState("All Campaigns");
+  // F6: top performing auto (backend summary.top_campaigns)
+  // F1+F2: full summary (KPIs + growth, filter-wired) — live leads row
+  const [topCampaigns, setTopCampaigns] = useState<any[]>([]);
+  const [dmSummary, setDmSummary] = useState<any | null>(null);
+  // F8: monthly auto-report (1 month select → full data auto)
+  const [reportMonth, setReportMonth] = useState<string>("");
+  const [reportData, setReportData] = useState<any | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const fetchMonthlyReport = useCallback(async (projId: string, ym: string) => {
+    if (!projId || !/^\d{4}-\d{2}$/.test(ym)) return;
+    setReportLoading(true);
+    try {
+      const [yy, mm] = ym.split("-").map(Number);
+      const lastDay = new Date((yy as number), (mm as number), 0).getDate();
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const qs = `start_date=${yy}-${pad(mm as number)}-01&end_date=${yy}-${pad(mm as number)}-${lastDay}`;
+      const res = await api.get<any>(`/projects/${projId}/marketing-summary?${qs}`, { showLoader: false, showErrorToast: false });
+      setReportData(res || null);
+    } catch {
+      setReportData(null);
+    } finally {
+      setReportLoading(false);
+    }
+  }, []);
+  const fetchMarketingSummary = useCallback(async (projId: string) => {
+    if (!projId) return;
+    try {
+      const params = new URLSearchParams();
+      const f = customDateRange?.from ? new Date(customDateRange.from) : null;
+      const t = customDateRange?.to ? new Date(customDateRange.to) : null;
+      if (f && !isNaN(f.getTime())) params.set("start_date", format(f, "yyyy-MM-dd"));
+      if (t && !isNaN(t.getTime())) params.set("end_date", format(t, "yyyy-MM-dd"));
+      if (selectedCampaignForStats && selectedCampaignForStats !== "All Campaigns") {
+        params.set("campaign_name", selectedCampaignForStats.replace(" (Inactive)", ""));
+      }
+      const qs = params.toString();
+      const res = await api.get<any>(`/projects/${projId}/marketing-summary${qs ? `?${qs}` : ""}`, { showLoader: false, showErrorToast: false });
+      setTopCampaigns(Array.isArray(res?.top_campaigns) ? res.top_campaigns : []);
+      setDmSummary(res || null);
+    } catch {
+      setTopCampaigns([]);
+      setDmSummary(null);
+    }
+  }, [customDateRange, selectedCampaignForStats]);
+  // F3: revenue log (popup + total)
+  const [revenues, setRevenues] = useState<any[]>([]);
+  const [isRevenueOpen, setIsRevenueOpen] = useState(false);
+  const [revenueForm, setRevenueForm] = useState({ date: "", revenue: "", editId: "" as string });
+  const revenueTotal = revenues.reduce((s, r) => s + (Number(r.revenue) || 0), 0);
+  const handleSaveRevenue = async () => {
+    if (!selectedProjectId) return;
+    if (!revenueForm.date || !(parseFloat(revenueForm.revenue) > 0)) {
+      toast.error("Date ane revenue (>0) compulsory che");
+      return;
+    }
+    try {
+      if (revenueForm.editId) {
+        await api.put(`/projects/${selectedProjectId}/daily-revenue/${revenueForm.editId}`, { revenue: parseFloat(revenueForm.revenue) });
+        toast.success("Revenue updated!");
+      } else {
+        await api.post(`/projects/${selectedProjectId}/daily-revenue`, { date: revenueForm.date, revenue: parseFloat(revenueForm.revenue) });
+        toast.success("Revenue saved!");
+      }
+      await fetchRevenues(selectedProjectId);
+      setRevenueForm({ date: "", revenue: "", editId: "" });
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save revenue");
+    }
+  };
+  const handleDeleteRevenue = async (id: string) => {
+    if (!selectedProjectId || !window.confirm("Aa revenue entry delete karvi?")) return;
+    try {
+      await api.delete(`/projects/${selectedProjectId}/daily-revenue/${id}`, { showErrorToast: false });
+      await fetchRevenues(selectedProjectId);
+      toast.success("Revenue entry deleted");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete revenue");
+    }
+  };
+  const fetchRevenues = useCallback(async (projId: string) => {
+    if (!projId) return;
+    try {
+      const res = await api.get<any[]>(`/projects/${projId}/daily-revenue`, { showLoader: false, showErrorToast: false });
+      setRevenues(Array.isArray(res) ? res : []);
+    } catch {
+      setRevenues([]);
+    }
+  }, []);
+  useEffect(() => {
+    if (selectedProjectId) fetchMarketingSummary(selectedProjectId);
+  }, [selectedProjectId, fetchMarketingSummary]);
+  // F3: revenues on project open
+  useEffect(() => {
+    if (selectedProjectId) fetchRevenues(selectedProjectId);
+    else setRevenues([]);
+  }, [selectedProjectId, fetchRevenues]);
+  // F5: campaign-group open/close (same-name combine → 1 dropdown)
+  const [openCampGroups, setOpenCampGroups] = useState<Record<string, boolean>>({});
+  const toggleCampGroup = (name: string) => {
+    setOpenCampGroups(prev => ({ ...prev, [name]: !(prev[name] !== false) }));
+  };
   // K8: project khule tyare timeline default = running range (start → today/end).
   // K16: CC month default = project running cycle month.
   useEffect(() => {
@@ -1690,172 +1883,190 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     setCustomDateRange({ from: s > today ? today : s, to: e < today ? e : today });
     setCampaignDateRange("Custom");
     setCalendarMonthFilter(getProjectMonths(p.startDate, p.endDate, today).def);
+    // F8: report month default = running month
+    setReportMonth(getProjectMonths(p.startDate, p.endDate, today).def);
   }, [selectedProjectId]);
+  // F8: report auto-fetch on month/project change
+  useEffect(() => {
+    if (selectedProjectId && reportMonth) fetchMonthlyReport(selectedProjectId, reportMonth);
+    else setReportData(null);
+  }, [selectedProjectId, reportMonth, fetchMonthlyReport]);
+  // K18: selected month + range-overlap months na approvals fetch (overlap rule)
+  useEffect(() => {
+    if (!selectedProjectId) return;
+    const wanted = new Map<string, { m: number; y: number }>();
+    const pushMonth = (d: Date) => {
+      if (isNaN(d.getTime())) return;
+      const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      if (!wanted.has(k)) wanted.set(k, { m: d.getMonth() + 1, y: d.getFullYear() });
+    };
+    if (/^\d{4}-\d{2}$/.test(calendarMonthFilter)) {
+      const [yy, mm] = calendarMonthFilter.split("-").map(Number);
+      pushMonth(new Date((yy as number), (mm as number) - 1, 1));
+    } else {
+      pushMonth(new Date());
+    }
+    // custom range overlap (max 13 months)
+    const f = customDateRange?.from ? new Date(customDateRange.from) : null;
+    const t = customDateRange?.to ? new Date(customDateRange.to) : null;
+    if (f && t && !isNaN(f.getTime()) && !isNaN(t.getTime())) {
+      const cur = new Date(f.getFullYear(), f.getMonth(), 1);
+      const last = new Date(t.getFullYear(), t.getMonth(), 1);
+      let guard = 0;
+      while (cur <= last && guard < 13) {
+        pushMonth(new Date(cur));
+        cur.setMonth(cur.getMonth() + 1);
+        guard++;
+      }
+    }
+    wanted.forEach(({ m, y }) => fetchCcApproval(selectedProjectId, m, y));
+  }, [selectedProjectId, calendarMonthFilter, customDateRange, fetchCcApproval]);
   const [isLogDailyStatsOpen, setIsLogDailyStatsOpen] = useState(false);
   const [dailyStatsForm, setDailyStatsForm] = useState({
     date: format(new Date(), "yyyy-MM-dd"),
-    campaignName: "Q4 Retargeting Ads",
+    campaignName: "",
     reach: "",
+    impressions: "",
     leads: "",
+    followers: "",
+    revenue: "",
     spend: ""
   });
 
   useEffect(() => {
     if (isLogDailyStatsOpen && selectedProjectId) {
       const project = projects.find(p => p.id === selectedProjectId);
-      const campaignList = (project?.campaigns && project.campaigns.length > 0)
-        ? project.campaigns
-            .map(c => typeof c === 'string' ? { name: c, status: 'Active' } : { name: c.name || "", status: c.status || 'Active' })
-            .filter(c => c.status === 'Active')
-            .map(c => c.name)
-        : ["Q4 Retargeting Ads", "Holiday Social Push", "B2B Email Drip"];
-      
+      // F4: backend campaigns first, fallback local/mock
+      const campaignList = dmCampaigns.length > 0
+        ? dmCampaigns
+        : (project?.campaigns && project.campaigns.length > 0)
+          ? project.campaigns
+              .map(c => typeof c === 'string' ? { name: c, status: 'Active' } : { name: c.name || "", status: c.status || 'Active' })
+              .filter(c => c.status === 'Active')
+              .map(c => c.name)
+          : ["Q4 Retargeting Ads", "Holiday Social Push", "B2B Email Drip"];
+      const emptyEntry = () => ({ reach: "", impressions: "", leads: "", followers: "", revenue: "", spend: "" });
       const dailyStats = project?.dailyStats || [];
       const initial: any = {};
       campaignList.forEach(name => {
         const match = dailyStats.find((s: any) => s.campaignName === name && s.date === dailyStatsForm.date);
         if (match) {
+          const str = (v: any) => (v !== undefined && v !== null ? String(v) : "");
           initial[name] = {
-            reach: match.reach !== undefined ? String(match.reach) : "",
-            leads: match.leads !== undefined ? String(match.leads) : "",
-            spend: match.spend !== undefined ? String(match.spend) : ""
+            reach: str(match.reach), impressions: str(match.impressions), leads: str(match.leads),
+            followers: str(match.followers), revenue: str(match.revenue), spend: str(match.spend),
           };
         } else {
-          initial[name] = { reach: "", leads: "", spend: "" };
+          initial[name] = emptyEntry();
         }
       });
       setBulkStatsEntries(initial);
     }
-  }, [isLogDailyStatsOpen, selectedProjectId, dailyStatsForm.date]);
+  }, [isLogDailyStatsOpen, selectedProjectId, dailyStatsForm.date, dmCampaigns]);
 
-  const handleLogDailyStats = (e: React.FormEvent) => {
+  const numOrZero = (v: any) => {
+    const n = parseFloat(v);
+    return isNaN(n) || n < 0 ? 0 : n;
+  };
+  const numOrInt = (v: any) => {
+    const n = parseInt(v);
+    return isNaN(n) || n < 0 ? 0 : n;
+  };
+
+  // F7: table mathi edit → modal prefill + PUT
+  const openEditStat = (stat: any) => {
+    setDailyStatsForm({
+      date: stat.date || "",
+      campaignName: stat.campaignName || "",
+      reach: stat.reach !== undefined && stat.reach !== null ? String(stat.reach) : "",
+      impressions: stat.impressions !== undefined && stat.impressions !== null ? String(stat.impressions) : "",
+      leads: stat.leads !== undefined && stat.leads !== null ? String(stat.leads) : "",
+      followers: stat.followers !== undefined && stat.followers !== null ? String(stat.followers) : "",
+      revenue: stat.revenue !== undefined && stat.revenue !== null ? String(stat.revenue) : "",
+      spend: stat.spend !== undefined && stat.spend !== null ? String(stat.spend) : "",
+    });
+    setEditingStatId(String(stat.id));
+    setIsBulkAdd(false);
+    setIsLogDailyStatsOpen(true);
+  };
+
+  // F4: backend marketing-stats API (single + bulk) — campaign auto-create free
+  const handleLogDailyStats = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProjectId) return;
-    const project = projects.find(p => p.id === selectedProjectId);
-    if (!project) return;
 
     if (!dailyStatsForm.date) {
       toast.error("Please select a date");
       return;
     }
 
-    if (isBulkAdd) {
-      const newStatsList: any[] = [];
-      const logDetails: string[] = [];
-      
-      for (const [campaignName, entry] of Object.entries(bulkStatsEntries)) {
-        if (!entry.reach && !entry.leads && !entry.spend) continue;
-        
-        const reachVal = entry.reach ? parseInt(entry.reach) : 0;
-        const leadsVal = entry.leads ? parseInt(entry.leads) : 0;
-        const spendVal = entry.spend ? parseInt(entry.spend) : 0;
-        
-        if (isNaN(reachVal) || reachVal < 0 || isNaN(leadsVal) || leadsVal < 0 || isNaN(spendVal) || spendVal < 0) {
-          toast.error(`Please enter valid positive numbers for ${campaignName}`);
+    try {
+      if (isBulkAdd) {
+        const entries = Object.entries(bulkStatsEntries)
+          .filter(([name, entry]: [string, any]) => name.trim() && (entry.reach || entry.leads || entry.spend || entry.impressions || entry.followers || entry.revenue))
+          .map(([campaign_name, entry]: [string, any]) => ({
+            campaign_name: campaign_name.trim(),
+            reach: numOrInt(entry.reach),
+            impressions: numOrInt(entry.impressions),
+            leads: numOrInt(entry.leads),
+            followers: numOrInt(entry.followers),
+            revenue: numOrZero(entry.revenue),
+            spend: numOrZero(entry.spend),
+          }));
+
+        if (entries.length === 0) {
+          toast.error("Please enter stats for at least one campaign.");
           return;
         }
-        
-        newStatsList.push({
-          id: `ds-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+
+        await api.post(`/projects/${selectedProjectId}/marketing-stats/bulk`, {
           date: dailyStatsForm.date,
-          campaignName,
-          reach: reachVal,
-          leads: leadsVal,
-          spend: spendVal
+          entries,
         });
-        
-        logDetails.push(`${campaignName} (Reach: ${reachVal}, Leads: ${leadsVal}, Spend: ₹${spendVal})`);
+        toast.success(`Bulk stats logged for ${entries.length} campaigns!`);
+      } else {
+        const camp = dailyStatsForm.campaignName.trim();
+        if (!camp) {
+          toast.error("Campaign name lakho (navu hoy to auto-bani jashe)");
+          return;
+        }
+        const body = {
+          date: dailyStatsForm.date,
+          campaign_name: camp,
+          reach: numOrInt(dailyStatsForm.reach),
+          impressions: numOrInt(dailyStatsForm.impressions),
+          leads: numOrInt(dailyStatsForm.leads),
+          followers: numOrInt(dailyStatsForm.followers),
+          revenue: numOrZero(dailyStatsForm.revenue),
+          spend: numOrZero(dailyStatsForm.spend),
+        };
+        if (editingStatId) {
+          // F7: bhulthi khoti entry → update
+          await api.put(`/projects/${selectedProjectId}/marketing-stats/${editingStatId}`, body);
+          toast.success("Stats updated successfully!");
+        } else {
+          await api.post(`/projects/${selectedProjectId}/marketing-stats`, body);
+          toast.success("Daily stats logged successfully!");
+        }
+        setEditingStatId(null);
       }
-      
-      if (newStatsList.length === 0) {
-        toast.error("Please enter stats for at least one campaign.");
-        return;
-      }
-      
-      const loggedCampaignNames = newStatsList.map(s => s.campaignName);
-      const remainingStats = (project.dailyStats || []).filter((s: any) => 
-        !(s.date === dailyStatsForm.date && loggedCampaignNames.includes(s.campaignName))
-      );
-      const updatedStats = [...newStatsList, ...remainingStats];
-      
-      const nowLog = {
-        id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-        action: "Logged Bulk Daily Stats",
-        performedBy: "Alex (You)",
-        timestamp: `${String(new Date().getDate()).padStart(2, '0')}/${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()} ${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`,
-        details: `Logged stats for ${newStatsList.length} campaigns on ${dailyStatsForm.date}: ${logDetails.join("; ")}`
-      };
-      
-      const newProjects = projects.map(p => p.id === selectedProjectId ? { 
-        ...p, 
-        dailyStats: updatedStats,
-        activityLogs: [...(p.activityLogs || []), nowLog]
-      } : p);
-      
-      setProjects(newProjects);
-      localStorage.setItem("hrms_projects", JSON.stringify(newProjects));
+
+      await fetchDmStats(selectedProjectId);
+      await fetchDmCampaigns(selectedProjectId);
       setIsLogDailyStatsOpen(false);
-      toast.success("Bulk stats logged successfully!");
-      return;
+      setDailyStatsForm({
+        date: format(new Date(), "yyyy-MM-dd"),
+        campaignName: "",
+        reach: "",
+        impressions: "",
+        leads: "",
+        followers: "",
+        revenue: "",
+        spend: ""
+      });
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to log stats");
     }
-
-    const reachVal = parseInt(dailyStatsForm.reach);
-    const leadsVal = parseInt(dailyStatsForm.leads);
-    const spendVal = parseInt(dailyStatsForm.spend);
-    if (isNaN(reachVal) || reachVal < 0) {
-      toast.error("Please enter a valid reach number");
-      return;
-    }
-    if (isNaN(leadsVal) || leadsVal < 0) {
-      toast.error("Please enter a valid leads number");
-      return;
-    }
-    if (isNaN(spendVal) || spendVal < 0) {
-      toast.error("Please enter a valid spend amount");
-      return;
-    }
-
-    const newStat = {
-      id: `ds-${Date.now()}`,
-      date: dailyStatsForm.date,
-      campaignName: dailyStatsForm.campaignName,
-      reach: reachVal,
-      leads: leadsVal,
-      spend: spendVal
-    };
-
-    const remainingStats = (project.dailyStats || []).filter((s: any) => 
-      !(s.date === dailyStatsForm.date && s.campaignName === dailyStatsForm.campaignName)
-    );
-    const updatedStats = [newStat, ...remainingStats];
-    
-    const nowLog = {
-      id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      action: "Logged Daily Stats",
-      performedBy: "Alex (You)",
-      timestamp: `${String(new Date().getDate()).padStart(2, '0')}/${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()} ${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`,
-      details: `Added stats for ${dailyStatsForm.campaignName} on ${dailyStatsForm.date} (Reach: ${reachVal}, Leads: ${leadsVal}, Spend: ₹${spendVal})`
-    };
-
-    const newProjects = projects.map(p => p.id === selectedProjectId ? { 
-      ...p, 
-      dailyStats: updatedStats,
-      activityLogs: [...(p.activityLogs || []), nowLog]
-    } : p);
-
-    setProjects(newProjects);
-    localStorage.setItem("hrms_projects", JSON.stringify(newProjects));
-    window.dispatchEvent(new Event("storage"));
-    
-    setIsLogDailyStatsOpen(false);
-    setDailyStatsForm({
-      date: format(new Date(), "yyyy-MM-dd"),
-      campaignName: "Q4 Retargeting Ads",
-      reach: "",
-      leads: "",
-      spend: ""
-    });
-    toast.success("Daily stats logged successfully!");
   };
 
   useEffect(() => { localStorage.setItem('hrms_clients', JSON.stringify(clients)); }, [clients]);
@@ -2122,7 +2333,15 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   const [openDept, setOpenDept] = useState<Record<string, boolean>>({ smm: true, dm: true });
   useEffect(() => {
     setOpenDept({ smm: true, dm: true });
+    setExplainMode(false);
+    setExplainedIds([]);
   }, [selectedProjectId]);
+  // K17: explanation mode (Meet ma samjavva — click = highlight, clear)
+  const [explainMode, setExplainMode] = useState(false);
+  const [explainedIds, setExplainedIds] = useState<string[]>([]);
+  const toggleExplain = (id: string) => {
+    setExplainedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
   // K6: dept arrow → section open + auto view + scroll
   const jumpToDept = (dept: "smm" | "dm") => {
     setOpenDept(prev => ({ ...prev, [dept]: true }));
@@ -3860,13 +4079,19 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                })()}
              </div>
             
+            {/* F3: Budget ni jagyae Revenue total (transcript: budget nathi jotu) */}
             <div className="bg-card border border-border/60 rounded-3xl p-6 flex items-center gap-5 shadow-sm">
-              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
+              <button
+                type="button"
+                onClick={() => { setRevenueForm({ date: "", revenue: "", editId: "" }); setIsRevenueOpen(true); }}
+                className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0 hover:bg-emerald-500/20 transition-colors"
+                title="Revenue log kholo"
+              >
                 <IndianRupee className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Budget</p>
-                <h3 className="text-3xl font-black text-foreground font-mono">{project.budget}</h3>
+              </button>
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Total Revenue</p>
+                <h3 className="text-3xl font-black text-emerald-600 font-mono">₹{revenueTotal.toLocaleString("en-IN")}</h3>
               </div>
             </div>
             
@@ -4320,12 +4545,131 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     </div>
                   </div>
 
+                  {/* K17: timeline completion — final-link rule (posting date sudhi final link = done) */}
+                  {(() => {
+                    const todayStr = new Date().toISOString().split("T")[0] ?? "";
+                    const due = filteredCalendar.filter(i => i.postingDate && i.postingDate <= todayStr);
+                    const done = due.filter(i => (i.finalPostLink || i.finalReelLink || i.postingLinkOfIg || "").trim() !== "");
+                    const pct = due.length > 0 ? Math.round((done.length / due.length) * 100) : 0;
+                    return (
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 px-4 py-3 bg-card/80 border border-border/60 rounded-2xl shadow-sm">
+                        <div className="flex items-baseline gap-2 shrink-0">
+                          <span className="text-2xl font-black text-foreground font-mono">{done.length}/{due.length}</span>
+                          <span className="text-[11px] text-muted-foreground font-bold uppercase tracking-wider">thai gaya</span>
+                        </div>
+                        <div className="flex-1 h-2 bg-muted/60 rounded-full overflow-hidden min-w-[120px]">
+                          <div className={cn("h-full rounded-full transition-all duration-500", pct === 100 ? "bg-emerald-500" : "bg-primary")} style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="text-[11px] font-bold text-muted-foreground shrink-0">{pct}% • Final link rule</span>
+                      </div>
+                    );
+                  })()}
+                  {/* K18: CC status inline (month approval + overlap months + update) */}
+                  {(() => {
+                    const now = new Date();
+                    const ck = /^\d{4}-\d{2}$/.test(calendarMonthFilter)
+                      ? calendarMonthFilter
+                      : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+                    const [yy, mm] = ck.split("-").map(Number);
+                    const ap = ccApprovals[ck];
+                    const chipCls =
+                      ap?.status === "Approved by Client"
+                        ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
+                        : ap?.status === "Rejected"
+                        ? "bg-rose-500/10 text-rose-500 border-rose-500/30"
+                        : ap?.status === "Changes Requested"
+                        ? "bg-amber-500/10 text-amber-600 border-amber-500/30"
+                        : "bg-muted text-muted-foreground border-border/50";
+                    // overlap months (range ma avta months — Sept approved + new pending banne dekhay)
+                    const f = customDateRange?.from ? new Date(customDateRange.from) : null;
+                    const t = customDateRange?.to ? new Date(customDateRange.to) : null;
+                    const overlapKeys: string[] = [];
+                    if (f && t && !isNaN(f.getTime()) && !isNaN(t.getTime())) {
+                      const cur = new Date(f.getFullYear(), f.getMonth(), 1);
+                      const last = new Date(t.getFullYear(), t.getMonth(), 1);
+                      let g = 0;
+                      while (cur <= last && g < 13) {
+                        const k = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}`;
+                        if (!overlapKeys.includes(k)) overlapKeys.push(k);
+                        cur.setMonth(cur.getMonth() + 1);
+                        g++;
+                      }
+                    }
+                    return (
+                      <div className="flex flex-col gap-2 px-4 py-3 bg-card/80 border border-border/60 rounded-2xl shadow-sm">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[11px] font-black text-muted-foreground uppercase tracking-widest">CC Status:</span>
+                          <span className={cn("px-2.5 py-1 rounded-full text-[11px] font-black border", chipCls)}>
+                            {ck} • {ap?.status || "Pending"}
+                          </span>
+                          {overlapKeys.filter(k => k !== ck).map(k => (
+                            <span key={k} className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-muted text-muted-foreground border border-border/40">
+                              {k} • {ccApprovals[k]?.status || "—"}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <select
+                            value={ccStatusDraft}
+                            onChange={e => setCcStatusDraft(e.target.value)}
+                            className="h-9 px-3 bg-background border border-border/60 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-primary"
+                          >
+                            {["Pending", "Approved by Client", "Changes Requested", "Rejected"].map(s => (
+                              <option key={s} value={s}>{s}</option>
+                            ))}
+                          </select>
+                          {ccStatusDraft !== "Approved by Client" && (
+                            <input
+                              type="text"
+                              value={ccReasonDraft}
+                              onChange={e => setCcReasonDraft(e.target.value)}
+                              placeholder="Reason compulsory..."
+                              className="flex-1 px-3 h-9 bg-background border border-border/60 rounded-xl text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary"
+                            />
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleSaveCcStatus(project.id, (mm as number), (yy as number))}
+                            className="h-9 px-4 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/90 transition-colors shrink-0"
+                          >
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4">
                     <div>
                       <h2 className="text-base sm:text-lg lg:text-xl font-bold tracking-tight">Content Calendar</h2>
                       <p className="text-xs text-muted-foreground mt-0.5">Plan, schedule, and track content approval pipeline</p>
                     </div>
                     <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar w-full lg:w-auto py-0.5 shrink-0">
+                      {/* K17: explanation mode (Meet presentation) */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (explainMode) setExplainedIds([]);
+                          setExplainMode(v => !v);
+                        }}
+                        className={cn(
+                          "h-8 px-3 rounded-xl text-xs font-bold shrink-0 shadow-sm transition-all border",
+                          explainMode
+                            ? "bg-violet-600 text-white border-violet-600"
+                            : "bg-card hover:bg-card border-border/60 text-foreground"
+                        )}
+                        title="Google Meet ma samjavva: items par click = highlight"
+                      >
+                        {explainMode ? `✨ Explaining (${explainedIds.length})` : "✨ Explain"}
+                      </button>
+                      {explainMode && explainedIds.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setExplainedIds([])}
+                          className="h-8 px-3 rounded-xl text-xs font-bold shrink-0 shadow-sm transition-all border bg-card hover:bg-muted border-border/60 text-muted-foreground"
+                        >
+                          Clear
+                        </button>
+                      )}
                       <Select value={calendarTypeFilter} onValueChange={(val) => setCalendarTypeFilter(val)}>
                         <SelectTrigger className="h-8 w-auto min-w-[95px] max-w-[120px] px-2.5 bg-card/90 hover:bg-card border border-border/60 rounded-xl text-xs font-semibold text-foreground shrink-0 shadow-sm transition-all focus:ring-1 focus:ring-primary/30 gap-1.5">
                           <SelectValue placeholder="All Types" />
@@ -4500,7 +4844,19 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                 );
 
                               return (
-                                <tr key={item.id} onClick={() => setExpandedRowId(isExpanded ? null : item.id)} className={cn("hover:bg-muted/20 transition-all group cursor-pointer", isExpanded ? "bg-muted/10 align-top" : "h-[80px]")}>
+                                <tr
+                                  key={item.id}
+                                  onClick={() => {
+                                    // K17: explain mode ma click = highlight, normal ma expand
+                                    if (explainMode) toggleExplain(item.id);
+                                    else setExpandedRowId(isExpanded ? null : item.id);
+                                  }}
+                                  className={cn(
+                                    "hover:bg-muted/20 transition-all group cursor-pointer",
+                                    isExpanded ? "bg-muted/10 align-top" : "h-[80px]",
+                                    explainMode && explainedIds.includes(item.id) && "bg-violet-500/10 ring-2 ring-inset ring-violet-500/60"
+                                  )}
+                                >
 
                                   {/* Schedule */}
                                   <td className="py-2 px-5 text-center whitespace-nowrap">
@@ -4759,37 +5115,28 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               let leads = totalLeads.toLocaleString("en-IN");
               let cpl = computedCPL.toString();
               let amountSpent = totalSpent.toLocaleString("en-IN");
-              
-              let reachTrend = "+14.2%", leadsTrend = "+8.1%", cplTrend = "-5.4%", amountSpentTrend = "+12.2%";
 
-              if (totalReach === 0) {
-                reach = project.reach || "1.2M";
-                leads = project.leads || "3,240";
-                cpl = project.cpl || "250";
-                amountSpent = "8,10,000";
+              let reachTrend = "+0.0%", leadsTrend = "+0.0%", cplTrend = "+0.0%", amountSpentTrend = "+0.0%";
 
-                if (selectedCampaignForStats === "Q4 Retargeting Ads") {
-                  reach = "450K"; leads = "1,400"; cpl = "180"; amountSpent = "2,52,000";
-                  reachTrend = "+5.1%"; leadsTrend = "+12.0%"; cplTrend = "-2.5%"; amountSpentTrend = "+8.4%";
-                } else if (selectedCampaignForStats === "Holiday Social Push") {
-                  reach = "850K"; leads = "1,600"; cpl = "320"; amountSpent = "5,12,000";
-                  reachTrend = "+22.4%"; leadsTrend = "+4.2%"; cplTrend = "+1.1%"; amountSpentTrend = "+2.1%";
-                } else if (selectedCampaignForStats === "B2B Email Drip") {
-                  reach = "120K"; leads = "240"; cpl = "450"; amountSpent = "1,08,000";
-                  reachTrend = "+2.0%"; leadsTrend = "+1.1%"; cplTrend = "-8.5%"; amountSpentTrend = "+1.0%";
-                }
-
-                let days = 30;
-                if (customDateRange?.from && customDateRange?.to) {
-                  days = differenceInDays(customDateRange.to, customDateRange.from) || 1;
-                }
-
-                if (days !== 30) {
-                  const ratio = days / 30;
-                  reach = (parseFloat(reach) * ratio).toFixed(1) + (reach.includes("M") ? "M" : "K");
-                  leads = Math.floor(parseInt(leads.replace(/,/g, "")) * ratio).toLocaleString("en-IN");
-                  amountSpent = Math.floor(parseInt(amountSpent.replace(/,/g, "")) * ratio).toLocaleString("en-IN");
-                }
+              // F1+F2: backend summary hoy to real KPIs + growth (filter-wired, live)
+              const fmtGrowth = (g: any) => {
+                if (typeof g !== "number" || isNaN(g)) return "+0.0%";
+                return `${g >= 0 ? "+" : ""}${g}%`;
+              };
+              const sk = dmSummary?.kpis;
+              if (sk) {
+                const rv = Number(sk.reach?.value);
+                if (!isNaN(rv)) reach = rv >= 1000000 ? `${(rv / 1000000).toFixed(1)}M` : rv >= 1000 ? `${Math.round(rv / 1000)}K` : `${Math.round(rv)}`;
+                const lv = Number(sk.leads?.value);
+                if (!isNaN(lv)) leads = Math.round(lv).toLocaleString("en-IN");
+                const cv = Number(sk.cost_per_lead?.value);
+                if (!isNaN(cv)) cpl = `${Math.round(cv)}`;
+                const sv = Number(sk.amount_spent?.value);
+                if (!isNaN(sv)) amountSpent = Math.round(sv).toLocaleString("en-IN");
+                reachTrend = fmtGrowth(sk.reach?.growth_pct);
+                leadsTrend = fmtGrowth(sk.leads?.growth_pct);
+                cplTrend = fmtGrowth(sk.cost_per_lead?.growth_pct);
+                amountSpentTrend = fmtGrowth(sk.amount_spent?.growth_pct);
               }
 
               return (
@@ -4858,6 +5205,14 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground font-bold text-xs rounded-lg hover:bg-primary/90 transition-all shadow-sm whitespace-nowrap"
                       >
                         <Plus className="w-3.5 h-3.5" /> Log Stats
+                      </button>
+                      {/* F3: revenue icon → popup (page nai) */}
+                      <button
+                        onClick={() => { setRevenueForm({ date: "", revenue: "", editId: "" }); setIsRevenueOpen(true); }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white font-bold text-xs rounded-lg hover:bg-emerald-700 transition-all shadow-sm whitespace-nowrap"
+                        title="Revenue log (popup)"
+                      >
+                        <IndianRupee className="w-3.5 h-3.5" /> Revenue
                       </button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -5019,30 +5374,93 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
                   {/* K7: Daily Data Entry Tasks card removed (DM ma tasks rakhvana nathi) */}
                   <div className="grid grid-cols-1 gap-6">
-                    {/* Top Performing Campaigns */}
+                    {/* Top Performing Campaigns (F6: backend auto) */}
                     <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm">
                       <div className="flex items-center justify-between mb-6">
                         <h3 className="text-sm font-bold text-foreground">Top Performing Campaigns</h3>
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase">Auto • by leads</span>
                       </div>
                       <div className="space-y-4">
-                        {[
-                          { name: "Q4 Retargeting Ads", budget: "₹45,000", leads: 450, status: "Active", progress: 75 },
-                          { name: "Holiday Social Push", budget: "₹20,000", leads: 180, status: "Active", progress: 40 },
-                          { name: "B2B Email Drip", budget: "₹15,000", leads: 85, status: "Completed", progress: 100 }
-                        ].map((camp, i) => (
-                          <div key={i} className="flex items-center gap-4">
-                            <div className="flex-1">
-                              <div className="flex justify-between items-center mb-1">
-                                <span className="text-sm font-bold text-foreground">{camp.name}</span>
-                                <span className="text-xs font-bold text-muted-foreground font-mono">{camp.leads} leads</span>
+                        {topCampaigns.length === 0 && (
+                          <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">Haju koi campaign data nathi.</p>
+                        )}
+                        {(() => {
+                          const maxLeads = Math.max(1, ...topCampaigns.map(c => Number(c.leads) || 0));
+                          return topCampaigns.slice(0, 5).map((camp: any, i: number) => {
+                            const leads = Number(camp.leads) || 0;
+                            const spend = Number(camp.spend) || 0;
+                            const pct = Math.round((leads / maxLeads) * 100);
+                            return (
+                              <div key={camp.campaign_name || i} className="flex items-center gap-4">
+                                <div className="flex-1">
+                                  <div className="flex justify-between items-center mb-1 gap-2">
+                                    <span className="text-sm font-bold text-foreground truncate">{camp.campaign_name}</span>
+                                    <span className="text-xs font-bold text-muted-foreground font-mono whitespace-nowrap">
+                                      {leads.toLocaleString()} leads • ₹{spend.toLocaleString("en-IN")}
+                                      {Number(camp.revenue) > 0 && (
+                                        <span className="text-emerald-600"> • ₹{Number(camp.revenue).toLocaleString("en-IN")}</span>
+                                      )}
+                                    </span>
+                                  </div>
+                                  <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                                    <div className={cn("h-full rounded-full transition-all duration-1000", i === 0 ? "bg-emerald-500" : "bg-primary")} style={{ width: `${pct}%` }}></div>
+                                  </div>
+                                </div>
                               </div>
-                              <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                                <div className={cn("h-full rounded-full transition-all duration-1000", camp.progress === 100 ? "bg-emerald-500" : "bg-primary")} style={{ width: `${camp.progress}%` }}></div>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+                            );
+                          });
+                        })()}
                       </div>
+                    </div>
+
+                    {/* F8: Monthly Report — 1 month select = full data auto (ochha button) */}
+                    <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+                        <h3 className="text-sm font-bold text-foreground">Monthly Report <span className="text-[10px] font-bold text-muted-foreground uppercase ml-1">Auto</span></h3>
+                        <select
+                          value={reportMonth}
+                          onChange={(e) => setReportMonth(e.target.value)}
+                          className="h-9 px-3 bg-muted/50 border border-border/60 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-primary"
+                        >
+                          <option value="">Select month...</option>
+                          {getProjectMonths(project.startDate, project.endDate).months.map(m => (
+                            <option key={m.value} value={m.value}>{m.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      {reportLoading ? (
+                        <p className="text-xs text-muted-foreground font-semibold text-center py-6">Loading report...</p>
+                      ) : !reportData ? (
+                        <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">Month select karo — badho data automatic malse.</p>
+                      ) : (
+                        <>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-4">
+                            {[
+                              { label: "Reach", v: reportData?.kpis?.reach },
+                              { label: "Impressions", v: reportData?.kpis?.impressions },
+                              { label: "Leads", v: reportData?.kpis?.leads },
+                              { label: "Cost / Lead", v: reportData?.kpis?.cost_per_lead },
+                              { label: "Spend", v: reportData?.kpis?.amount_spent },
+                              { label: "Revenue", v: reportData?.kpis?.revenue },
+                            ].map(k => (
+                              <div key={k.label} className="rounded-2xl border border-border/40 bg-muted/20 px-3.5 py-3">
+                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{k.label}</p>
+                                <p className="text-lg font-black text-foreground font-mono mt-0.5">{k.v?.formatted ?? "—"}</p>
+                                {typeof k.v?.growth_pct === "number" && (
+                                  <p className={`text-[10px] font-bold font-mono ${k.v.growth_pct >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
+                                    {k.v.growth_pct >= 0 ? "▲" : "▼"} {Math.abs(k.v.growth_pct)}%
+                                  </p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          {(reportData?.top_campaigns || []).length > 0 && (
+                            <div className="text-[11px] text-muted-foreground font-semibold">
+                              Top: {(reportData.top_campaigns || []).slice(0, 3).map((c: any) => c.campaign_name).join(" • ")}
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
 
                   <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm">
@@ -5055,65 +5473,122 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     <div className="overflow-x-auto">
                       <table className="w-full text-left border-collapse">
                         <thead>
+                          {/* F7: full columns — Sr, date, campaign, reach, impression, lead, followers, revenue, spend, cost + action */}
                           <tr className="border-b border-border/40 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                            <th className="pb-3 pl-4">Date</th>
+                            <th className="pb-3 pl-4">Sr</th>
+                            <th className="pb-3">Date</th>
                             <th className="pb-3">Campaign</th>
                             <th className="pb-3 text-right">Reach</th>
+                            <th className="pb-3 text-right">Impr.</th>
                             <th className="pb-3 text-right">Leads</th>
+                            <th className="pb-3 text-right">Followers</th>
+                            <th className="pb-3 text-right">Revenue</th>
                             <th className="pb-3 text-right">Spend</th>
                             <th className="pb-3 text-right">CPL</th>
                             <th className="pb-3 text-right pr-4">Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border/20 text-xs font-semibold text-foreground">
+                          {/* F5: same-name combine → 1 dropdown per campaign (totals + collapse) */}
                           {(() => {
                             const dailyStats = dateFiltered || [];
                             if (dailyStats.length === 0) {
                               return (
                                 <tr>
-                                  <td colSpan={7} className="py-8 text-center text-xs font-semibold text-muted-foreground/40">
+                                  <td colSpan={11} className="py-8 text-center text-xs font-semibold text-muted-foreground/40">
                                     No stats logged yet matching the filters.
                                   </td>
                                 </tr>
                               );
                             }
-                            return dailyStats.slice(0, 10).map((stat: any) => {
-                              const cpl = stat.leads > 0 ? Math.round(stat.spend / stat.leads) : 0;
-                              return (
-                                <tr key={stat.id} className="hover:bg-muted/10 transition-colors">
-                                  <td className="py-3.5 pl-4 font-mono">{safeFormat(stat.date, "dd/MM/yyyy")}</td>
-                                  <td className="py-3.5 font-bold">{stat.campaignName}</td>
-                                  <td className="py-3.5 text-right font-mono">{Number(stat.reach || 0).toLocaleString()}</td>
-                                  <td className="py-3.5 text-right font-mono">{Number(stat.leads || 0).toLocaleString()}</td>
-                                  <td className="py-3.5 text-right font-mono">₹{Number(stat.spend || 0).toLocaleString()}</td>
-                                  <td className="py-3.5 text-right font-mono text-primary">₹{cpl}</td>
-                                  <td className="py-3.5 text-right pr-4">
-                                    <button
-                                      onClick={() => {
-                                        setConfirmModalState({
-                                          isOpen: true,
-                                          title: "Delete Daily Stats Log",
-                                          description: `Are you sure you want to delete this daily stat log for "${stat.campaignName}" on ${stat.date}? This action cannot be undone.`,
-                                          itemName: `${stat.campaignName} (${stat.date})`,
-                                          action: () => {
-                                            const updatedStats = (project.dailyStats || []).filter((s: any) => s.id !== stat.id);
-                                            const newProjects = projects.map(p => p.id === project.id ? { ...p, dailyStats: updatedStats } : p);
-                                            setProjects(newProjects);
-                                            localStorage.setItem("hrms_projects", JSON.stringify(newProjects));
-                                            window.dispatchEvent(new Event("storage"));
-                                            toast.success("Daily stats log deleted successfully!");
-                                            setConfirmModalState(prev => ({ ...prev, isOpen: false }));
-                                          }
-                                        });
-                                      }}
-                                      className="p-1 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors border border-border/30 shadow-sm bg-card inline-flex items-center justify-center"
-                                      title="Delete stats log"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
+                            const groups = new Map<string, any[]>();
+                            dailyStats.forEach((s: any) => {
+                              const k = s.campaignName || "Unknown";
+                              if (!groups.has(k)) groups.set(k, []);
+                              groups.get(k)!.push(s);
+                            });
+                            let sr = 0;
+                            return Array.from(groups.entries()).flatMap(([name, items]) => {
+                              const open = openCampGroups[name] !== false;
+                              const tLeads = items.reduce((a, s) => a + (Number(s.leads) || 0), 0);
+                              const tSpend = items.reduce((a, s) => a + (Number(s.spend) || 0), 0);
+                              const tRev = items.reduce((a, s) => a + (Number(s.revenue) || 0), 0);
+                              const rows: any[] = [(
+                                <tr key={`g-${name}`} onClick={() => toggleCampGroup(name)} className="cursor-pointer bg-muted/30 hover:bg-muted/50 transition-colors">
+                                  <td colSpan={11} className="py-2.5 pl-4 pr-4">
+                                    <span className="flex items-center gap-2 flex-wrap">
+                                      <span className="text-muted-foreground text-[10px]">{open ? "▼" : "▶"}</span>
+                                      <span className="font-black text-foreground">{name}</span>
+                                      <span className="px-1.5 py-0.5 rounded-md bg-primary/10 text-primary text-[10px] font-black">{items.length} logs</span>
+                                      <span className="text-[11px] text-muted-foreground font-bold ml-auto">
+                                        Leads: <span className="text-foreground font-mono">{tLeads.toLocaleString()}</span>
+                                        {" • "}Spend: <span className="text-foreground font-mono">₹{tSpend.toLocaleString("en-IN")}</span>
+                                        {" • "}Rev: <span className="text-emerald-600 font-mono">₹{tRev.toLocaleString("en-IN")}</span>
+                                      </span>
+                                    </span>
                                   </td>
                                 </tr>
-                              );
+                              )];
+                              if (open) {
+                                items.slice(0, 30).forEach((stat: any) => {
+                                  sr += 1;
+                                  const cpl = stat.leads > 0 ? Math.round(stat.spend / stat.leads) : 0;
+                                  rows.push((
+                                    <tr key={stat.id} className="hover:bg-muted/10 transition-colors">
+                                      <td className="py-3.5 pl-4 font-mono text-muted-foreground">{sr}</td>
+                                      <td className="py-3.5 font-mono">{safeFormat(stat.date, "dd/MM/yyyy")}</td>
+                                      <td className="py-3.5 text-muted-foreground">↳ {stat.campaignName}</td>
+                                      <td className="py-3.5 text-right font-mono">{Number(stat.reach || 0).toLocaleString()}</td>
+                                      <td className="py-3.5 text-right font-mono">{Number(stat.impressions || 0).toLocaleString()}</td>
+                                      <td className="py-3.5 text-right font-mono">{Number(stat.leads || 0).toLocaleString()}</td>
+                                      <td className="py-3.5 text-right font-mono">{Number(stat.followers || 0).toLocaleString()}</td>
+                                      <td className="py-3.5 text-right font-mono text-emerald-600">₹{Number(stat.revenue || 0).toLocaleString("en-IN")}</td>
+                                      <td className="py-3.5 text-right font-mono">₹{Number(stat.spend || 0).toLocaleString()}</td>
+                                      <td className="py-3.5 text-right font-mono text-primary">₹{cpl}</td>
+                                      <td className="py-3.5 text-right pr-4">
+                                        <span className="inline-flex items-center gap-1">
+                                          <button
+                                            onClick={() => openEditStat(stat)}
+                                            className="p-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors border border-border/30 shadow-sm bg-card inline-flex items-center justify-center"
+                                            title="Edit stats log"
+                                          >
+                                            <Edit2 className="w-3.5 h-3.5" />
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              setConfirmModalState({
+                                                isOpen: true,
+                                                title: "Delete Daily Stats Log",
+                                                description: `Are you sure you want to delete this daily stat log for "${stat.campaignName}" on ${stat.date}? This action cannot be undone.`,
+                                                itemName: `${stat.campaignName} (${stat.date})`,
+                                                action: () => {
+                                                  (async () => {
+                                                    try {
+                                                      await api.delete(`/projects/${project.id}/marketing-stats/${stat.id}`, { showErrorToast: false });
+                                                      await fetchDmStats(project.id);
+                                                      await fetchDmCampaigns(project.id);
+                                                      toast.success("Daily stats log deleted successfully!");
+                                                    } catch (err: any) {
+                                                      toast.error(err?.message || "Failed to delete stats log");
+                                                    } finally {
+                                                      setConfirmModalState(prev => ({ ...prev, isOpen: false }));
+                                                    }
+                                                  })();
+                                                }
+                                              });
+                                            }}
+                                            className="p-1 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors border border-border/30 shadow-sm bg-card inline-flex items-center justify-center"
+                                            title="Delete stats log"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  ));
+                                });
+                              }
+                              return rows;
                             });
                           })()}
                         </tbody>
@@ -7838,17 +8313,18 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         itemName={confirmModalState.itemName}
       />
 
-      <Dialog open={isLogDailyStatsOpen} onOpenChange={setIsLogDailyStatsOpen}>
+      <Dialog open={isLogDailyStatsOpen} onOpenChange={(open) => { setIsLogDailyStatsOpen(open); if (!open) setEditingStatId(null); }}>
         <DialogContent className={cn("p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl bg-card z-50 transition-all duration-300", isBulkAdd ? "sm:max-w-[700px]" : "sm:max-w-[450px]")}>
           <div className="p-6 md:p-8 border-b border-border/40">
             <h2 className="text-lg font-black tracking-tight text-foreground flex items-center gap-2">
-              📈 Log Daily Marketing Stats
+              📈 {editingStatId ? "Edit Stats Entry" : "Log Daily Marketing Stats"}
             </h2>
             <p className="text-xs text-muted-foreground mt-1 font-medium">Enter performance metrics for the selected campaign and date.</p>
           </div>
 
           <form onSubmit={handleLogDailyStats} className="p-6 md:p-8 space-y-5">
-            {/* Mode Switcher */}
+            {/* Mode Switcher (F7: edit vakhte single j) */}
+            {!editingStatId && (
             <div className="flex items-center justify-between border-b border-border/40 pb-3">
               <span className="text-xs font-black uppercase tracking-wider text-foreground">Entry Mode</span>
               <div className="flex bg-muted/60 p-0.5 rounded-lg border border-border/50 text-[10px] font-bold">
@@ -7868,6 +8344,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 </button>
               </div>
             </div>
+            )}
 
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Date</label>
@@ -7880,26 +8357,46 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
             {!isBulkAdd ? (
               <>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Campaign</label>
-                  <select
+                <div className="space-y-1.5 relative">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Campaign (type = auto-new, no confirm)</label>
+                  <input
+                    type="text"
                     value={dailyStatsForm.campaignName}
-                    onChange={(e) => setDailyStatsForm({ ...dailyStatsForm, campaignName: e.target.value })}
+                    onChange={(e) => { setDailyStatsForm({ ...dailyStatsForm, campaignName: e.target.value }); setCampSuggestOpen(true); }}
+                    onFocus={() => setCampSuggestOpen(true)}
+                    onBlur={() => setTimeout(() => setCampSuggestOpen(false), 150)}
+                    placeholder="e.g. HKL Leads (navu hoy to auto-banse)"
                     className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold text-foreground"
-                  >
-                    {(() => {
-                      const project = projects.find(p => p.id === selectedProjectId);
-                      const campaignList = (project?.campaigns && project.campaigns.length > 0)
-                        ? project.campaigns
-                            .map(c => typeof c === 'string' ? { name: c, status: 'Active' } : { name: c.name || "", status: c.status || 'Active' })
-                            .filter(c => c.status === 'Active')
-                            .map(c => c.name)
+                  />
+                  {campSuggestOpen && (() => {
+                    const project = projects.find(p => p.id === selectedProjectId);
+                    const base = dmCampaigns.length > 0
+                      ? dmCampaigns
+                      : (project?.campaigns && project.campaigns.length > 0)
+                        ? project.campaigns.map(c => typeof c === 'string' ? c : (c.name || "")).filter(Boolean)
                         : ["Q4 Retargeting Ads", "Holiday Social Push", "B2B Email Drip"];
-                      return campaignList.map(opt => (
-                        <option key={opt} value={opt}>{opt}</option>
-                      ));
-                    })()}
-                  </select>
+                    const q = dailyStatsForm.campaignName.trim().toLowerCase();
+                    const opts = base.filter(n => !q || n.toLowerCase().includes(q)).slice(0, 6);
+                    if (opts.length === 0) return null;
+                    return (
+                      <div className="absolute left-0 right-0 top-full mt-1 z-20 bg-card border border-border/60 rounded-xl shadow-xl overflow-hidden">
+                        {opts.map(opt => (
+                          <button
+                            key={opt}
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setDailyStatsForm({ ...dailyStatsForm, campaignName: opt });
+                              setCampSuggestOpen(false);
+                            }}
+                            className="w-full text-left px-4 py-2 text-xs font-bold hover:bg-primary/10 hover:text-primary transition-colors"
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -7907,7 +8404,6 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Reach</label>
                     <input
                       type="number"
-                      required={!isBulkAdd}
                       placeholder="e.g. 15000"
                       value={dailyStatsForm.reach}
                       onChange={(e) => setDailyStatsForm({ ...dailyStatsForm, reach: e.target.value })}
@@ -7915,13 +8411,42 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     />
                   </div>
                   <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Impressions</label>
+                    <input
+                      type="number"
+                      placeholder="e.g. 18000"
+                      value={dailyStatsForm.impressions}
+                      onChange={(e) => setDailyStatsForm({ ...dailyStatsForm, impressions: e.target.value })}
+                      className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Leads</label>
                     <input
                       type="number"
-                      required={!isBulkAdd}
                       placeholder="e.g. 42"
                       value={dailyStatsForm.leads}
                       onChange={(e) => setDailyStatsForm({ ...dailyStatsForm, leads: e.target.value })}
+                      className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Followers</label>
+                    <input
+                      type="number"
+                      placeholder="e.g. 15"
+                      value={dailyStatsForm.followers}
+                      onChange={(e) => setDailyStatsForm({ ...dailyStatsForm, followers: e.target.value })}
+                      className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Revenue (₹)</label>
+                    <input
+                      type="number"
+                      placeholder="e.g. 25000"
+                      value={dailyStatsForm.revenue}
+                      onChange={(e) => setDailyStatsForm({ ...dailyStatsForm, revenue: e.target.value })}
                       className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
                     />
                   </div>
@@ -7931,7 +8456,6 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Spend (₹)</label>
                   <input
                     type="number"
-                    required={!isBulkAdd}
                     placeholder="e.g. 5000"
                     value={dailyStatsForm.spend}
                     onChange={(e) => setDailyStatsForm({ ...dailyStatsForm, spend: e.target.value })}
@@ -7942,48 +8466,75 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             ) : (
               <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
                 {Object.keys(bulkStatsEntries).map((campaignName) => {
-                  const entry = bulkStatsEntries[campaignName] || { reach: "", leads: "", spend: "" };
+                  const entry = bulkStatsEntries[campaignName] || { reach: "", impressions: "", leads: "", followers: "", revenue: "", spend: "" };
+                  const setEntry = (patch: Partial<{ reach: string; impressions: string; leads: string; followers: string; revenue: string; spend: string }>) => setBulkStatsEntries({
+                    ...bulkStatsEntries,
+                    [campaignName]: { ...entry, ...patch }
+                  });
+                  const numCls = "w-full px-2.5 h-[34px] bg-background border border-border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold";
+                  const lblCls = "text-[9px] font-bold text-muted-foreground uppercase mb-1 block";
                   return (
                     <div key={campaignName} className="p-4 bg-muted/20 border border-border/40 rounded-2xl space-y-3">
                       <p className="text-xs font-black text-foreground">{campaignName}</p>
                       <div className="grid grid-cols-3 gap-2">
                         <div>
-                          <label className="text-[9px] font-bold text-muted-foreground uppercase mb-1 block">Reach</label>
+                          <label className={lblCls}>Reach</label>
                           <input
                             type="number"
                             placeholder="e.g. 12000"
                             value={entry.reach}
-                            onChange={(e) => setBulkStatsEntries({
-                              ...bulkStatsEntries,
-                              [campaignName]: { ...entry, reach: e.target.value }
-                            })}
-                            className="w-full px-2.5 h-[34px] bg-background border border-border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold"
+                            onChange={(e) => setEntry({ reach: e.target.value })}
+                            className={numCls}
                           />
                         </div>
                         <div>
-                          <label className="text-[9px] font-bold text-muted-foreground uppercase mb-1 block">Leads</label>
+                          <label className={lblCls}>Impressions</label>
+                          <input
+                            type="number"
+                            placeholder="e.g. 15000"
+                            value={entry.impressions}
+                            onChange={(e) => setEntry({ impressions: e.target.value })}
+                            className={numCls}
+                          />
+                        </div>
+                        <div>
+                          <label className={lblCls}>Leads</label>
                           <input
                             type="number"
                             placeholder="e.g. 35"
                             value={entry.leads}
-                            onChange={(e) => setBulkStatsEntries({
-                              ...bulkStatsEntries,
-                              [campaignName]: { ...entry, leads: e.target.value }
-                            })}
-                            className="w-full px-2.5 h-[34px] bg-background border border-border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold"
+                            onChange={(e) => setEntry({ leads: e.target.value })}
+                            className={numCls}
                           />
                         </div>
                         <div>
-                          <label className="text-[9px] font-bold text-muted-foreground uppercase mb-1 block">Spend (₹)</label>
+                          <label className={lblCls}>Followers</label>
+                          <input
+                            type="number"
+                            placeholder="e.g. 10"
+                            value={entry.followers}
+                            onChange={(e) => setEntry({ followers: e.target.value })}
+                            className={numCls}
+                          />
+                        </div>
+                        <div>
+                          <label className={lblCls}>Revenue (₹)</label>
+                          <input
+                            type="number"
+                            placeholder="e.g. 8000"
+                            value={entry.revenue}
+                            onChange={(e) => setEntry({ revenue: e.target.value })}
+                            className={numCls}
+                          />
+                        </div>
+                        <div>
+                          <label className={lblCls}>Spend (₹)</label>
                           <input
                             type="number"
                             placeholder="e.g. 3000"
                             value={entry.spend}
-                            onChange={(e) => setBulkStatsEntries({
-                              ...bulkStatsEntries,
-                              [campaignName]: { ...entry, spend: e.target.value }
-                            })}
-                            className="w-full px-2.5 h-[34px] bg-background border border-border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold"
+                            onChange={(e) => setEntry({ spend: e.target.value })}
+                            className={numCls}
                           />
                         </div>
                       </div>
@@ -8007,6 +8558,76 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               </button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+      {/* F3: Revenue popup (page nai) — date + revenue, total, edit/delete */}
+      <Dialog open={isRevenueOpen} onOpenChange={(open) => { setIsRevenueOpen(open); if (!open) setRevenueForm({ date: "", revenue: "", editId: "" }); }}>
+        <DialogContent className="sm:max-w-[440px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+          <div className="px-6 py-5 border-b border-border/50 bg-muted/30 flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-black tracking-tight flex items-center gap-2">
+                <IndianRupee className="w-5 h-5 text-emerald-600" /> Revenue
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">Total: <span className="font-black text-emerald-600 font-mono">₹{revenueTotal.toLocaleString("en-IN")}</span></p>
+            </div>
+            <DialogClose asChild>
+              <button className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </DialogClose>
+          </div>
+          <div className="p-6 space-y-3 max-h-[40vh] overflow-y-auto">
+            {revenues.length === 0 && (
+              <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">Haju koi revenue entry nathi.</p>
+            )}
+            {[...revenues].sort((a, b) => String(b.date || "").localeCompare(String(a.date || ""))).map((r: any) => (
+              <div key={String(r.id || r._id)} className="flex items-center gap-3 px-4 py-2.5 rounded-2xl border border-border/40 bg-muted/20 text-xs">
+                <span className="font-mono font-bold">{String(r.date || "").split("T")[0]}</span>
+                <span className="font-black text-emerald-600 font-mono ml-auto">₹{Number(r.revenue || 0).toLocaleString("en-IN")}</span>
+                <button
+                  type="button"
+                  onClick={() => setRevenueForm({ date: (String(r.date || "").split("T")[0] ?? ""), revenue: String(r.revenue ?? ""), editId: String(r.id || r._id) })}
+                  className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                  title="Edit"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteRevenue(String(r.id || r._id))}
+                  className="p-1.5 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors"
+                  title="Delete"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="px-6 py-4 bg-muted/30 border-t border-border/50">
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <DatePicker
+                value={revenueForm.date}
+                onChange={(val) => setRevenueForm({ ...revenueForm, date: val })}
+                placeholder="Date"
+                className="h-10 bg-background border-border rounded-xl text-xs"
+              />
+              <input
+                type="number"
+                min="0"
+                value={revenueForm.revenue}
+                onChange={(e) => setRevenueForm({ ...revenueForm, revenue: e.target.value })}
+                placeholder="e.g. 50000"
+                className="px-3 h-10 bg-background border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleSaveRevenue}
+              className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors shadow-sm"
+            >
+              {revenueForm.editId ? "Update Revenue" : "Save Revenue"}
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
         <Dialog open={isEditProjectModalOpen} onOpenChange={setIsEditProjectModalOpen}>

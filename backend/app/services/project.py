@@ -465,6 +465,7 @@ class ProjectService:
             existing_item["reach"] = (existing_item.get("reach", 0) or 0) + data.reach
             existing_item["impressions"] = (existing_item.get("impressions", 0) or 0) + data.impressions
             existing_item["leads"] = (existing_item.get("leads", 0) or 0) + data.leads
+            existing_item["followers"] = (existing_item.get("followers", 0) or 0) + (data.followers or 0)
             existing_item["revenue"] = round((existing_item.get("revenue", 0.0) or 0.0) + (data.revenue if data.revenue > 0 else auto_revenue), 2)
             existing_item["spend"] = round((existing_item.get("spend", 0.0) or 0.0) + data.spend, 2)
             
@@ -502,6 +503,7 @@ class ProjectService:
                 "reach": data.reach,
                 "impressions": data.impressions,
                 "leads": data.leads,
+                "followers": data.followers or 0,
                 "revenue": auto_revenue,
                 "spend": data.spend,
                 "cost_metric": cost_metric,
@@ -567,6 +569,7 @@ class ProjectService:
                 existing_item["reach"] = (existing_item.get("reach", 0) or 0) + entry.reach
                 existing_item["impressions"] = (existing_item.get("impressions", 0) or 0) + entry.impressions
                 existing_item["leads"] = (existing_item.get("leads", 0) or 0) + entry.leads
+                existing_item["followers"] = (existing_item.get("followers", 0) or 0) + (entry.followers or 0)
                 existing_item["revenue"] = round((existing_item.get("revenue", 0.0) or 0.0) + entry.revenue, 2)
                 existing_item["spend"] = round((existing_item.get("spend", 0.0) or 0.0) + entry.spend, 2)
                 
@@ -603,6 +606,7 @@ class ProjectService:
                     "reach": entry.reach,
                     "impressions": entry.impressions,
                     "leads": entry.leads,
+                    "followers": entry.followers or 0,
                     "revenue": entry.revenue,
                     "spend": entry.spend,
                     "cost_metric": cost_metric,

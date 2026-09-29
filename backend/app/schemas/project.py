@@ -170,6 +170,7 @@ class DailyMarketingStatCreate(BaseModel):
     reach: int = 0
     impressions: int = 0
     leads: int = 0
+    followers: int = 0
     revenue: float = 0.0
     spend: float = 0.0
     cost_metric: Optional[float] = None
@@ -180,6 +181,7 @@ class DailyMarketingStatUpdate(BaseModel):
     reach: Optional[int] = None
     impressions: Optional[int] = None
     leads: Optional[int] = None
+    followers: Optional[int] = None
     revenue: Optional[float] = None
     spend: Optional[float] = None
     cost_metric: Optional[float] = None
@@ -189,6 +191,7 @@ class BulkItem(BaseModel):
     reach: int = 0
     impressions: int = 0
     leads: int = 0
+    followers: int = 0
     revenue: float = 0.0
     spend: float = 0.0
     cost_metric: Optional[float] = None
@@ -205,6 +208,7 @@ class DailyMarketingStat(BaseModel):
     reach: int = 0
     impressions: int = 0
     leads: int = 0
+    followers: int = 0
     revenue: float = 0.0
     spend: float = 0.0
     cost_metric: float = 0.0

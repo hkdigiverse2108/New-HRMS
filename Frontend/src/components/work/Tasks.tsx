@@ -157,6 +157,18 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   const [quickTasks, setQuickTasks] = useState<Array<{ title: string; assignee: string; dueDate: string }>>([
     { title: "", assignee: "", dueDate: "" },
   ]);
+  // F9: brand default — title auto "Brand - work" (transcript: HK jevu)
+  const [quickBrand, setQuickBrand] = useState("");
+  const [brandClients, setBrandClients] = useState<Array<{ id: string; name: string }>>([]);
+  const fetchBrandClients = async () => {
+    try {
+      const res = await api.get<any>("/clients", { showLoader: false, showErrorToast: false });
+      const list = Array.isArray(res) ? res : (res?.data || []);
+      setBrandClients(list.map((c: any) => ({ id: String(c._id || c.id), name: c.company_name || c.name || "Client" })));
+    } catch {
+      // silent — brand optional
+    }
+  };
 
   // Transfer Modal State
   const [transferringTask, setTransferringTask] = useState<TaskItem | null>(null);
@@ -444,6 +456,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
     setIsQuickSubmitting(true);
     try {
+      const brandPrefix = quickBrand.trim();
       const payload = valid.map((t) => {
         let assigneeId = t.assignee;
         const matchedEmp = employees.find((e) => e.name === t.assignee || e.id === t.assignee);
@@ -451,8 +464,13 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
         else if (employees.length > 0 && !assigneeId) assigneeId = employees[0]?.id || "";
         else if (!assigneeId) assigneeId = currentUserId;
 
+        // F9: Brand - work (already prefixed hoy to double nai)
+        let title = t.title.trim();
+        if (brandPrefix && !title.toLowerCase().startsWith(brandPrefix.toLowerCase() + " -") && !title.toLowerCase().startsWith(brandPrefix.toLowerCase() + " ")) {
+          title = `${brandPrefix} - ${title}`;
+        }
         return {
-          title: t.title.trim(),
+          title,
           due_date: t.dueDate || undefined,
           assigned_to: [assigneeId],
         };
@@ -711,7 +729,11 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
             open={showQuickAssign}
             onOpenChange={(open) => {
               setShowQuickAssign(open);
-              if (!open) setQuickTasks([{ title: "", assignee: "", dueDate: "" }]);
+              if (open) fetchBrandClients();
+              if (!open) {
+                setQuickTasks([{ title: "", assignee: "", dueDate: "" }]);
+                setQuickBrand("");
+              }
             }}
           >
             <DialogTrigger asChild>
@@ -736,6 +758,23 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
               </div>
 
               <div className="p-6 space-y-3 overflow-y-auto max-h-[55vh]">
+                {/* F9: brand default — badha titles "Brand - work" thashe */}
+                <div className="flex items-center gap-3 pb-2 border-b border-border/40">
+                  <span className="text-[10px] font-black text-muted-foreground uppercase tracking-wider whitespace-nowrap">Brand:</span>
+                  <SearchableSelect
+                    value={quickBrand}
+                    onChange={(val) => setQuickBrand(val === "__none__" ? "" : val)}
+                    options={[
+                      { label: "No brand", value: "__none__" },
+                      ...brandClients.map(c => ({ label: c.name, value: c.name })),
+                    ]}
+                    placeholder="Select brand (optional)"
+                    className="flex-1 h-[36px] text-xs font-semibold"
+                  />
+                  {quickBrand && (
+                    <span className="text-[10px] font-bold text-primary whitespace-nowrap">→ "{quickBrand} - ..."</span>
+                  )}
+                </div>
                 <div className="grid grid-cols-12 gap-3 pb-2 border-b border-border/40 text-[10px] font-black text-muted-foreground uppercase tracking-wider">
                   <div className="col-span-5">Task Title *</div>
                   <div className="col-span-4">Assignee *</div>
