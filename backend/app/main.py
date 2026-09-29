@@ -22,6 +22,7 @@ from app.controllers.remark import router as remark_router
 from app.controllers.notification import router as notification_router
 from app.controllers.daily_progress import router as daily_progress_router
 from app.controllers.chat import router as chat_router
+from app.controllers.dashboard import router as dashboard_router
 from app.controllers.schedule import router as schedule_router
 from app.controllers.booking import booking_router, public_booking_router
 from app.models.employee import setup_employee_indexes
@@ -108,6 +109,7 @@ app.include_router(remark_router)
 app.include_router(notification_router)
 app.include_router(daily_progress_router)
 app.include_router(chat_router)
+app.include_router(dashboard_router)
 app.include_router(schedule_router)
 app.include_router(booking_router)
 app.include_router(public_booking_router)

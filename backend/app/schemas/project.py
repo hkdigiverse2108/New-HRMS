@@ -137,6 +137,12 @@ class PaymentEntry(BaseModel):
     note: Optional[str] = None
     created_by: Optional[str] = None
 
+class DateRangeEntry(BaseModel):
+    """Renewal periods — latest (last) range is the default."""
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    label: Optional[str] = None
+
 class ProjectFinanceDetails(BaseModel):
     project_budget: Optional[float] = None
     amount_received: Optional[float] = None
@@ -295,6 +301,8 @@ class ProjectBase(BaseModel):
     followup_logs: Optional[list[FollowUpLog]] = []
     content_approvals: Optional[list[ContentCalendarApproval]] = []
     daily_marketing_stats: Optional[list[DailyMarketingStat]] = []
+    date_ranges: Optional[list[DateRangeEntry]] = []
+    daily_marketing_stats: Optional[list[DailyMarketingStat]] = []
     marketing_campaigns: Optional[list[str]] = []
     daily_revenues: Optional[list[DailyRevenue]] = []
 
@@ -382,6 +390,7 @@ class ProjectUpdate(BaseModel):
     daily_marketing_stats: Optional[list[DailyMarketingStat]] = None
     marketing_campaigns: Optional[list[str]] = None
     daily_revenues: Optional[list[DailyRevenue]] = None
+    date_ranges: Optional[list[DateRangeEntry]] = None
 
 class ProjectResponse(ProjectBase):
     id: str = Field(alias="_id")

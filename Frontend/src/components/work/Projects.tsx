@@ -64,6 +64,8 @@ interface Project {
   progress: number;
   startDate: string;
   endDate: string;
+  // Renewal periods — latest = effective dates
+  dateRanges?: { start_date: string; end_date: string; label?: string }[] | undefined;
   teamDeadline?: string | undefined;
   budget: string;
   services?: string | undefined;
@@ -427,7 +429,64 @@ const UserAvatar = ({
   );
 };
 
-// K5: Highlighted brand/client logo — naam vachvu na pade, logo uparthi idea avi jay.
+// Renewals manager — + thi navi date, last = default (array). Edit modal (be branch) ma vapray.
+const RenewalsManager = ({
+  ranges,
+  onChange,
+}: {
+  ranges: { start_date: string; end_date: string; label?: string }[];
+  onChange: (ranges: { start_date: string; end_date: string; label?: string }[]) => void;
+}) => {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
+          Renewal Periods {ranges.length > 0 && <span className="text-primary">({ranges.length})</span>}
+        </label>
+        <button
+          type="button"
+          onClick={() => onChange([...ranges, { start_date: "", end_date: "", label: "" }])}
+          className="px-3 py-1.5 bg-primary/10 text-primary font-bold text-xs rounded-xl hover:bg-primary/20 transition-colors"
+        >
+          + Add Period
+        </button>
+      </div>
+      {ranges.map((r, idx) => (
+        <div key={idx} className="flex items-center gap-2 p-2.5 rounded-2xl border border-border/50 bg-muted/20">
+          <span className="text-[10px] font-black text-muted-foreground w-6 shrink-0">#{idx + 1}</span>
+          <DatePicker
+            value={r.start_date}
+            onChange={(val) => onChange(ranges.map((x, i) => (i === idx ? { ...x, start_date: val } : x)))}
+            placeholder="Start"
+            className="flex-1 h-10 bg-background border-border rounded-xl text-xs"
+          />
+          <span className="text-muted-foreground text-xs">→</span>
+          <DatePicker
+            value={r.end_date}
+            minDate={r.start_date}
+            onChange={(val) => onChange(ranges.map((x, i) => (i === idx ? { ...x, end_date: val } : x)))}
+            placeholder="End"
+            className="flex-1 h-10 bg-background border-border rounded-xl text-xs"
+          />
+          {idx === ranges.length - 1 && (
+            <span className="text-[9px] font-black text-emerald-600 bg-emerald-500/10 px-1.5 py-0.5 rounded shrink-0">DEFAULT</span>
+          )}
+          <button
+            type="button"
+            onClick={() => onChange(ranges.filter((_, i) => i !== idx))}
+            className="p-1.5 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors shrink-0"
+            title="Remove period"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ))}
+      {ranges.length === 0 && (
+        <p className="text-[11px] text-muted-foreground/70 italic">Single period (upar Start–End). Renewal hoy to + thi umero.</p>
+      )}
+    </div>
+  );
+};
 const BrandLogo = ({
   src,
   alt,
@@ -1051,6 +1110,18 @@ const mapBackendProject = (bp: any): Project => {
     teamMembers.push({ name: "Team Member", avatar: "https://api.dicebear.com/7.x/adventurer/svg?seed=Team" });
   }
 
+  // Renewal periods (backend date_ranges) — latest (last) = default effective dates
+  const rawRanges = Array.isArray(bp.date_ranges) ? bp.date_ranges : [];
+  const dateRanges = rawRanges
+    .map((r: any) => ({
+      start_date: r.start_date ? (String(r.start_date).split("T")[0] ?? "") : "",
+      end_date: r.end_date ? (String(r.end_date).split("T")[0] ?? "") : "",
+      label: r.label || "",
+    }))
+    .filter((r: any) => r.start_date && r.end_date);
+  const effStart = dateRanges.length > 0 ? (dateRanges[dateRanges.length - 1] as any).start_date : (gen.start_date ? (String(gen.start_date).split("T")[0] ?? "") : "");
+  const effEnd = dateRanges.length > 0 ? (dateRanges[dateRanges.length - 1] as any).end_date : (gen.end_date ? (String(gen.end_date).split("T")[0] ?? "") : "");
+
   return {
     id: String(bp._id || bp.id),
     clientId: String(bp.client_id || ""),
@@ -1068,8 +1139,9 @@ const mapBackendProject = (bp: any): Project => {
     status: statusMapped,
     priority: pri,
     progress: gen.progress || 0,
-    startDate: gen.start_date ? (String(gen.start_date).split("T")[0] ?? "") : "",
-    endDate: gen.end_date ? (String(gen.end_date).split("T")[0] ?? "") : "",
+    startDate: effStart,
+    endDate: effEnd,
+    dateRanges,
     teamDeadline: gen.team_deadline ? (String(gen.team_deadline).split("T")[0] ?? "") : "",
     budget: fin.project_budget ? `₹${fin.project_budget.toLocaleString("en-IN")}` : "₹0",
     amountReceived: fin.amount_received ? `₹${fin.amount_received.toLocaleString("en-IN")}` : "₹0",
@@ -2603,6 +2675,10 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           amount_received: numReceived,
           next_payment_date: newProjectNextPaymentDate || undefined,
         },
+        // First period = initial dates
+        date_ranges: (newProjectStartDate && newProjectEndDate)
+          ? [{ start_date: newProjectStartDate, end_date: newProjectEndDate }]
+          : [],
       };
 
       await api.post("/projects", payload);
@@ -2681,6 +2757,12 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             cpl: editingProject.cpl ? Number(String(editingProject.cpl).replace(/,/g, "")) || 0 : undefined
           }
         },
+        // Renewals array (last = default)
+        date_ranges: (editingProject.dateRanges || []).filter(r => r.start_date && r.end_date).map(r => ({
+          start_date: r.start_date,
+          end_date: r.end_date,
+          label: r.label || undefined,
+        })),
         finance: {
           project_budget: numBudget,
           amount_received: numReceived,
@@ -4108,6 +4190,17 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     <p className="text-[11px] font-bold text-primary mt-1">{dp.total} days • {dp.elapsed} elapsed</p>
                   ) : null;
                 })()}
+                {/* Renewals: month-wise periods (reporting mate) */}
+                {(project.dateRanges || []).length > 1 && (
+                  <div className="mt-2 space-y-1 border-t border-border/40 pt-2">
+                    {project.dateRanges!.map((r, i) => (
+                      <p key={i} className="text-[10px] font-bold text-muted-foreground font-mono">
+                        #{i + 1} {safeFormat(r.start_date, "dd/MM/yyyy")} → {safeFormat(r.end_date, "dd/MM/yyyy")}
+                        {i === project.dateRanges!.length - 1 && <span className="text-emerald-600 ml-1">• current</span>}
+                      </p>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -8720,6 +8813,17 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                           />
                         </div>
                       </div>
+                      <RenewalsManager
+                        ranges={editingProject.dateRanges || []}
+                        onChange={(dateRanges) => {
+                          const last = dateRanges[dateRanges.length - 1];
+                          setEditingProject({
+                            ...editingProject,
+                            dateRanges,
+                            ...(last && last.start_date && last.end_date ? { startDate: last.start_date, endDate: last.end_date } : {}),
+                          });
+                        }}
+                      />
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Category <span className="text-red-500">*</span></label>
@@ -9765,6 +9869,17 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                           />
                         </div>
                       </div>
+                      <RenewalsManager
+                        ranges={editingProject.dateRanges || []}
+                        onChange={(dateRanges) => {
+                          const last = dateRanges[dateRanges.length - 1];
+                          setEditingProject({
+                            ...editingProject,
+                            dateRanges,
+                            ...(last && last.start_date && last.end_date ? { startDate: last.start_date, endDate: last.end_date } : {}),
+                          });
+                        }}
+                      />
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Category <span className="text-red-500">*</span></label>

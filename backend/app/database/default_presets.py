@@ -8,6 +8,19 @@ from app.database.db import get_database
 SYSTEM_MODULES: List[Dict[str, Any]] = [
     # --- OVERVIEW ---
     {"id": "/dashboard", "name": "Dashboard", "section": "Overview", "is_parent": False},
+    # Dashboard inner sections (section-level access, e.g. Princebhai sees only section-2)
+    {"id": "/dashboard#time-tracker", "name": "Dashboard: Time Tracker", "section": "Overview", "parent_id": "/dashboard"},
+    {"id": "/dashboard#today-schedule", "name": "Dashboard: Today Schedule", "section": "Overview", "parent_id": "/dashboard"},
+    {"id": "/dashboard#company-health", "name": "Dashboard: Company Health", "section": "Overview", "parent_id": "/dashboard"},
+    {"id": "/dashboard#employee-performance", "name": "Dashboard: Employee Performance", "section": "Overview", "parent_id": "/dashboard"},
+    {"id": "/dashboard#attendance-analytics", "name": "Dashboard: Attendance Analytics", "section": "Overview", "parent_id": "/dashboard"},
+    {"id": "/dashboard#department-status", "name": "Dashboard: Department Status", "section": "Overview", "parent_id": "/dashboard"},
+    {"id": "/dashboard#project-delivery", "name": "Dashboard: Project Delivery", "section": "Overview", "parent_id": "/dashboard"},
+    {"id": "/dashboard#sales-overview", "name": "Dashboard: Sales Overview", "section": "Overview", "parent_id": "/dashboard"},
+    {"id": "/dashboard#finance-overview", "name": "Dashboard: Finance Overview", "section": "Overview", "parent_id": "/dashboard"},
+    {"id": "/dashboard#tasks-clients", "name": "Dashboard: Tasks & Clients", "section": "Overview", "parent_id": "/dashboard"},
+    {"id": "/dashboard#hr-news", "name": "Dashboard: HR & News", "section": "Overview", "parent_id": "/dashboard"},
+    {"id": "/dashboard#notifications", "name": "Dashboard: Notifications", "section": "Overview", "parent_id": "/dashboard"},
     
     {"id": "/approvals", "name": "Approvals Hub", "section": "Overview", "is_parent": True},
     {"id": "/employees/leave-requests", "name": "Leave Requests (Approvals)", "section": "Overview", "parent_id": "/approvals"},

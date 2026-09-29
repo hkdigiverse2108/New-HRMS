@@ -28,7 +28,7 @@ admin_hr_checker = RoleChecker(["Admin", "Subadmin", "HR"])
 async def invalidate_penalty_caches():
     """Invalidate all cached penalty lists, summaries, and leaderboard data."""
     await clear_pattern("penalties:list:*")
-    await delete_cache("penalties:leaderboard")
+    await clear_pattern("penalties:leaderboard*")
     await delete_cache("penalties:summary")
 
 # --- Penalty Types ---
@@ -160,13 +160,17 @@ async def get_deleted_employee_penalties(
     return await PenaltyService.get_all_penalties(is_deleted=True, page=page, limit=limit)
 
 @router.get("/leaderboard")
-async def get_penalty_leaderboard(current_user: dict = Depends(get_current_employee)):
-    cache_key = "penalties:leaderboard"
+async def get_penalty_leaderboard(
+    month: Optional[int] = None,
+    year: Optional[int] = None,
+    current_user: dict = Depends(get_current_employee)
+):
+    cache_key = f"penalties:leaderboard:{month or 'all'}:{year or 'all'}"
     cached = await get_cache(cache_key)
     if cached is not None:
         return cached
 
-    result = await PenaltyService.get_leaderboard()
+    result = await PenaltyService.get_leaderboard(month=month, year=year)
     await set_cache(cache_key, result, ttl=300)
     return result
 

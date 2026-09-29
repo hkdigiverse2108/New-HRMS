@@ -46,15 +46,9 @@ import { Restrictions } from "@/components/admin/Restrictions";
 import { AdminSettings } from "@/components/admin/AdminSettings";
 import { AccessControl } from "@/components/admin/AccessControl";
 import { RecycleBin } from "@/components/admin/RecycleBin";
-import { CEODashboard } from "@/components/admin/CEODashboard";
 import { Elections } from "@/components/admin/Elections";
 import { Recognitions } from "@/components/admin/Recognitions";
 import { TeamLeaderOfWeek } from "@/components/admin/TeamLeaderOfWeek";
-import { B2BModule } from "@/components/admin/b2b/B2BModule";
-import { CollaborationModule } from "@/components/admin/collaboration/CollaborationModule";
-import { FranchiseModule } from "@/components/admin/franchise/FranchiseModule";
-import { ReportsModule } from "@/components/admin/reports/ReportsModule";
-import { SettingsModule } from "@/components/admin/settings/SettingsModule";
 import SeatingArrangementPage from "@/components/workspace/Seating";
 import ResourceManagementPage from "@/components/workspace/Resource";
 import { Gallery } from "@/components/workspace/Gallery";
@@ -67,16 +61,10 @@ import { CreateInvoice } from "@/components/invoice/CreateInvoice";
 import { CreateProforma } from "@/components/invoice/CreateProforma";
 import { InvoiceLedger } from "@/components/invoice/InvoiceLedger";
 import { InvoiceApprovals } from "@/components/approvals/InvoiceApprovals";
-import { ReportsOverview } from "@/components/reports/ReportsOverview";
-import { AttendanceReport } from "@/components/reports/AttendanceReport";
-import { PayrollReport } from "@/components/reports/PayrollReport";
-import { HiringFunnel } from "@/components/reports/HiringFunnel";
-import { WorkReport } from "@/components/reports/WorkReport";
 import { Transactions } from "@/components/finance/Transactions";
 import { FinancialPlan } from "@/components/finance/FinancialPlan";
 import { FinancialSummary } from "@/components/finance/FinancialSummary";
 import { OtherTransactions } from "@/components/finance/OtherTransactions";
-import { AuditLogs } from "@/components/finance/AuditLogs";
 import { UserProfile } from "@/components/profile/UserProfile";
 import { GlobalModalProvider } from "@/components/GlobalModalContext";
 import { GlobalModalManager } from "@/components/GlobalModalManager";
@@ -264,18 +252,13 @@ export function Index() {
                   {basePath === "/finance/plan" && <FinancialPlan />}
                   {basePath === "/finance/summary" && <FinancialSummary />}
                   {basePath === "/finance/clients" && <OtherTransactions />}
-                  {basePath === "/finance/audit" && <AuditLogs />}
+                  {/* Finance (Audit Logs page removed per Audio PDF) */}
                   {basePath === "/invoice/all" && <AllInvoices />}
                   {basePath === "/invoice/ledger" && <InvoiceLedger />}
                   {basePath === "/invoice/create" && <CreateInvoice onBack={() => setActive("/invoice/all")} />}
                   {basePath === "/invoice/proforma" && <CreateProforma onBack={() => setActive("/invoice/all")} />}
 
-                  {/* Reports */}
-                  {basePath === "/reports" && <ReportsOverview />}
-                  {basePath === "/reports/attendance" && <AttendanceReport />}
-                  {basePath === "/reports/payroll" && <PayrollReport />}
-                  {basePath === "/reports/hiring" && <HiringFunnel />}
-                  {basePath === "/reports/work" && <WorkReport />}
+                  {/* Reports & Analysis sub-department — REMOVED per Audio PDF */}
 
                   {/* Recruitment */}
                   {basePath === "/recruitment/interviews" && <Interviews />}
@@ -301,13 +284,7 @@ export function Index() {
                   {basePath === "/workspace/gallery" && <Gallery />}
 
 
-                  {/* Admin & Command Center */}
-                  {basePath === "/ceo-dashboard" && <CEODashboard active={active} />}
-                  {basePath.startsWith("/ceo-dashboard/b2b") && <B2BModule active={active} />}
-                  {basePath === "/ceo-dashboard/collaboration" && <CollaborationModule />}
-                  {basePath === "/ceo-dashboard/franchise" && <FranchiseModule />}
-                  {basePath === "/ceo-dashboard/reports" && <ReportsModule />}
-                  {basePath === "/ceo-dashboard/settings" && <SettingsModule />}
+                  {/* Admin (Command Center REMOVED per Audio PDF) */}
                   {basePath === "/activity-logs" && <ActivityLogs />}
                   {basePath === "/activity-tracker" && <ActivityTracker />}
                   {basePath === "/restrictions" && <Restrictions />}

@@ -213,8 +213,8 @@ class PenaltyService:
         return {"detail": "Penalty deleted successfully"}
 
     @staticmethod
-    async def get_leaderboard():
-        facets = await EmployeePenaltyRepository.get_leaderboard()
+    async def get_leaderboard(month: Optional[int] = None, year: Optional[int] = None):
+        facets = await EmployeePenaltyRepository.get_leaderboard(month=month, year=year)
         from app.repository.employee import EmployeeRepository
         
         async def enrich_entry(entry: dict):

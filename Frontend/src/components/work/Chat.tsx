@@ -694,7 +694,8 @@ function ChatInner() {
   }, []);
 
   // WhatsApp-style rich text formatter (*bold*, _italic_, ~strike~, `code`, and links)
-  const renderFormattedText = useCallback((rawText: string) => {
+  // Issue: @mention must highlight ONLY the @token (no spaces) + bubble-aware colors
+  const renderFormattedText = useCallback((rawText: string, isMeMsg: boolean = false) => {
     if (!rawText) return null;
     const lines = rawText.split(/\r?\n/);
 
@@ -706,18 +707,23 @@ function ChatInner() {
           }
 
           // Tokenize formatting markers: *bold*, _italic_, ~strike~, `code`, URLs, and @mentions
-          const regex = /(\*[^\*\r\n]+\*|_[^_\r\n]+_|~[^~\r\n]+~|`[^`\r\n]+`|https?:\/\/[^\s]+|@[a-zA-Z0-9_\. -]+(?=\s|$|[.,!?]))/g;
+          // NOTE: mention = single @token WITHOUT spaces (so "@Admin hi" highlights only "@Admin")
+          const regex = /(\*[^\*\r\n]+\*|_[^_\r\n]+_|~[^~\r\n]+~|`[^`\r\n]+`|https?:\/\/[^\s]+|@[A-Za-z0-9_.]+)/g;
           const segments = line.split(regex);
 
           const rendered = segments.map((seg, sIdx) => {
             if (!seg) return null;
 
-            // Mention: @Name
+            // Mention: @Name (only the token, rest of message stays normal)
             if (seg.startsWith("@") && seg.length > 1) {
               return (
                 <span
                   key={sIdx}
-                  className="font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-500/15 px-1 py-0.5 rounded cursor-pointer hover:underline"
+                  className={
+                    isMeMsg
+                      ? "font-bold text-white bg-white/25 px-1 py-0.5 rounded cursor-pointer hover:bg-white/35"
+                      : "font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-500/15 px-1 py-0.5 rounded cursor-pointer hover:underline"
+                  }
                 >
                   {seg}
                 </span>
@@ -3395,12 +3401,12 @@ function ChatInner() {
                           </div>
                         )}
 
-                        {/* TEXT MESSAGE CONTENT - WhatsApp style */}
+                        {/* TEXT MESSAGE CONTENT - WhatsApp style (tick inline, no extra line) */}
                         {msg.content && (
-                          <div className="break-words select-text">
+                          <div className={cn("break-words select-text relative", isMe && "pr-6")}>
                             {msg.content.length > 700 && !expandedMessages.has(msg.id) ? (
                               <>
-                                <div>{renderFormattedText(msg.content.slice(0, 700))}...</div>
+                                <div>{renderFormattedText(msg.content.slice(0, 700), isMe)}</div>
                                 <button
                                   type="button"
                                   onClick={() => toggleExpandMessage(msg.id)}
@@ -3414,7 +3420,7 @@ function ChatInner() {
                               </>
                             ) : (
                               <>
-                                <div>{renderFormattedText(msg.content)}</div>
+                                <div>{renderFormattedText(msg.content, isMe)}</div>
                                 {msg.content.length > 700 && (
                                   <button
                                     type="button"
@@ -3429,26 +3435,24 @@ function ChatInner() {
                                 )}
                               </>
                             )}
-                            {/* WhatsApp style tick at bottom right */}
+                            {/* WhatsApp style tick — absolute at end of last line, never a new line */}
                             {isMe && (
-                              <div className="flex justify-end items-center mt-1 text-[10px]">
-                                <span
-                                  className="inline-flex items-center"
-                                  title={isMessageSeen(msg) ? "Seen / Read" : "Delivered"}
-                                >
-                                  {isMessageSeen(msg) ? (
-                                    <CheckCheck
-                                      className="w-4 h-4 text-[#53bdeb]"
-                                      strokeWidth={2.5}
-                                    />
-                                  ) : (
-                                    <CheckCheck
-                                      className="w-4 h-4 text-white/70 dark:text-muted-foreground"
-                                      strokeWidth={2}
-                                    />
-                                  )}
-                                </span>
-                              </div>
+                              <span
+                                className="absolute bottom-0 right-0 inline-flex items-center leading-none"
+                                title={isMessageSeen(msg) ? "Seen / Read" : "Delivered"}
+                              >
+                                {isMessageSeen(msg) ? (
+                                  <CheckCheck
+                                    className="w-4 h-4 text-[#53bdeb]"
+                                    strokeWidth={2.5}
+                                  />
+                                ) : (
+                                  <CheckCheck
+                                    className="w-4 h-4 text-white/70 dark:text-muted-foreground"
+                                    strokeWidth={2}
+                                  />
+                                )}
+                              </span>
                             )}
                           </div>
                         )}

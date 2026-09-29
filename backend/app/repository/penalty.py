@@ -226,10 +226,19 @@ class EmployeePenaltyRepository:
             return False
 
     @classmethod
-    async def get_leaderboard(cls):
+    async def get_leaderboard(cls, month: Optional[int] = None, year: Optional[int] = None):
         collection = await cls.get_collection()
+        match: dict = {"is_deleted": False}
+        # Month-wise leaderboard (Audio PDF): current month default, changeable
+        if month and year:
+            try:
+                start = datetime(year, int(month), 1)
+                end = datetime(year + 1, 1, 1) if int(month) == 12 else datetime(year, int(month) + 1, 1)
+                match["penalty_date"] = {"$gte": start, "$lt": end}
+            except Exception:
+                pass
         pipeline = [
-            {"$match": {"is_deleted": False}},
+            {"$match": match},
             {"$group": {
                 "_id": "$employee_id",
                 "total_violations": {"$sum": 1},
