@@ -34,7 +34,16 @@ class EmployeeService:
 
         employee_dict["personal_info"]["password"] = get_password_hash(employee_dict["personal_info"]["password"])
 
-        return await EmployeeRepository.create_employee(employee_dict)
+        created_emp = await EmployeeRepository.create_employee(employee_dict)
+        try:
+            emp_id = str(created_emp.get("_id") or created_emp.get("id"))
+            if emp_id:
+                from app.repository.chat import ChatRepository
+                await ChatRepository.auto_add_new_employee_to_channels(emp_id)
+        except Exception as e:
+            print(f"Error auto-joining employee to chat groups: {e}")
+
+        return created_emp
 
     @staticmethod
     async def get_employees(

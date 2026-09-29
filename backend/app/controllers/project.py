@@ -3,6 +3,7 @@ from typing import Optional, List
 from datetime import date
 from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectCategory, ProjectPriority, ProjectStatus, FollowUpLogCreate, FollowUpLog, ClientReviewCreate, ClientReviewUpdate, ClientReview, DailyMarketingStatCreate, DailyMarketingStatUpdate, DailyMarketingStat, MarketingCampaignCreate, DailyMarketingStatBulkCreate, MarketingSummaryResponse, DailyRevenueCreate, DailyRevenueUpdate, DailyRevenue, MarketingWorkspaceResponse, ProjectTaskSummaryResponse
 from app.schemas.task import TaskCreate, TaskUpdate
+from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectCategory, ProjectPriority, ProjectStatus, FollowUpLogCreate, FollowUpLog, DailyMarketingStatCreate, DailyMarketingStatUpdate, DailyMarketingStat, MarketingCampaignCreate, DailyMarketingStatBulkCreate, MarketingSummaryResponse, DailyRevenueCreate, DailyRevenueUpdate, DailyRevenue, MarketingWorkspaceResponse
 from app.schemas.pagination import PaginatedResponse
 from app.services.project import ProjectService
 from app.controllers.auth import get_current_employee
@@ -101,25 +102,7 @@ async def add_followup(project_id: str, data: FollowUpLogCreate, current_user: d
 async def get_followups(project_id: str, current_user: dict = Depends(get_current_employee)):
     return await ProjectService.get_followup_logs(project_id)
 
-@router.post("/{project_id}/reviews", response_model=ClientReview)
-async def add_client_review(project_id: str, data: ClientReviewCreate, current_user: dict = Depends(get_current_employee)):
-    emp_id = str(current_user.get("_id") or current_user.get("id"))
-    review = await ProjectService.add_client_review(project_id, data, emp_id)
-    if not review:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to add client review or project not found")
-    return review
-
-@router.put("/{project_id}/reviews/{review_id}/comment", response_model=ClientReview)
-async def update_client_review_comment(project_id: str, review_id: str, data: ClientReviewUpdate, current_user: dict = Depends(get_current_employee)):
-    emp_id = str(current_user.get("_id") or current_user.get("id"))
-    review = await ProjectService.update_client_review_comment(project_id, review_id, data, emp_id)
-    if not review:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to update comment or review not found")
-    return review
-
-@router.get("/{project_id}/reviews", response_model=List[ClientReview])
-async def get_client_reviews(project_id: str, current_user: dict = Depends(get_current_employee)):
-    return await ProjectService.get_client_reviews(project_id)
+# K12: Client Reviews system removed (transcript — no requirement).
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_project(project_id: str, current_user: dict = Depends(get_current_employee)):

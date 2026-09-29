@@ -1,5 +1,6 @@
 import { DashboardHeader } from "./sections/DashboardHeader";
 import { TimeTrackerWidget } from "./sections/TimeTrackerWidget";
+import { TodaySchedule } from "./sections/TodaySchedule";
 import { CompanyHealth } from "./sections/CompanyHealth";
 import { EmployeePerformance } from "./sections/EmployeePerformance";
 import { AttendanceAnalytics } from "./sections/AttendanceAnalytics";
@@ -20,6 +21,9 @@ export function Dashboard({ setActive, onAction }: { setActive?: (url: string) =
 
       {/* SECTION 01b: Time Tracker Widget */}
       <TimeTrackerWidget />
+
+      {/* K19: Aajno Schedule + Today's Tasks (andar javani wait nai) */}
+      <TodaySchedule setActive={setActive} />
 
       {/* SECTION 02: Company Health (12 Metrics) */}
       <CompanyHealth />

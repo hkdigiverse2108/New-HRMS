@@ -72,6 +72,16 @@ interface Project {
   festivalPost?: string | undefined;
   amountReceived?: string | undefined;
   nextPaymentDate?: string | undefined;
+  // K10: payment followup entries (date, amount, work period, next reminder)
+  payments?: {
+    id: string;
+    date: string;
+    amount: number;
+    work_from?: string | undefined;
+    work_to?: string | undefined;
+    next_reminder?: string | undefined;
+    note?: string | undefined;
+  }[] | undefined;
   reach?: string | undefined;
   leads?: string | undefined;
   cpl?: string | undefined;
@@ -79,6 +89,8 @@ interface Project {
   contentCalendar?: CalendarItem[] | undefined;
   team: { name: string; avatar: string }[];
   whatsapp_group_link?: string | undefined;
+  // K14: next followup date (backend auto-calculates)
+  nextFollowupDate?: string | undefined;
   creativeTeam?: CreativeTeamRoles | undefined;
   creativeTeamDetails?: Record<string, any> | undefined;
   credentials?: { id?: string; platform: string; username: string; password: string; notes?: string }[] | undefined;
@@ -87,7 +99,10 @@ interface Project {
     date: string;
     campaignName: string;
     reach: number;
+    impressions: number;
     leads: number;
+    followers: number;
+    revenue: number;
     spend: number;
   }[] | undefined;
   activityLogs?: {
@@ -264,6 +279,70 @@ export const parseDepartments = (deptString?: string): string[] => {
   return deptString.split(",").map(d => d.trim()).filter(Boolean);
 };
 
+// K8: date-driven progress — start→end mathi elapsed/total days + % (transcript L111-116).
+// Dates na hoy to null (stored progress fallback).
+export const getDateProgress = (
+  startDate?: string | null,
+  endDate?: string | null,
+  now: Date = new Date()
+): { elapsed: number; total: number; pct: number } | null => {
+  if (!startDate || !endDate) return null;
+  const s = new Date(startDate);
+  const e = new Date(endDate);
+  if (isNaN(s.getTime()) || isNaN(e.getTime())) return null;
+  const total = Math.max(1, Math.round((e.getTime() - s.getTime()) / 86400000) + 1);
+  const elapsed = Math.min(total, Math.max(0, Math.round((now.getTime() - s.getTime()) / 86400000) + 1));
+  return { elapsed, total, pct: Math.round((elapsed / total) * 100) };
+};
+
+// K16: project date-range mathi months list + default month (running cycle).
+// today range ma hoy to current month, pela hoy to start month, pachi hoy to end month.
+export const getProjectMonths = (  startDate?: string | null,
+  endDate?: string | null,
+  now: Date = new Date()
+): { months: { value: string; label: string }[]; def: string } => {
+  const s = startDate ? new Date(startDate) : null;
+  const e = endDate ? new Date(endDate) : null;
+  if (!s || !e || isNaN(s.getTime()) || isNaN(e.getTime())) return { months: [], def: "Current" };
+  const months: { value: string; label: string }[] = [];
+  const cur = new Date(s.getFullYear(), s.getMonth(), 1);
+  const last = new Date(e.getFullYear(), e.getMonth(), 1);
+  let guard = 0;
+  while (cur <= last && guard < 37) {
+    const v = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}`;
+    months.push({
+      value: v,
+      label: cur.toLocaleString("en-US", { month: "short", year: "numeric" }),
+    });
+    cur.setMonth(cur.getMonth() + 1);
+    guard++;
+  }
+  const clamped = now < s ? s : now > e ? e : now;
+  const def = `${clamped.getFullYear()}-${String(clamped.getMonth() + 1).padStart(2, "0")}`;
+  return { months, def };
+};
+
+// K18: month-overlap rule — filter range (e.g. 1-30) ma approval month (e.g. 15) ave to match thay.
+// Exact-month ne badle overlap check, etle Sept-approved + new-month-pending banne dekhay.
+export const isMonthOverlapping = (
+  month: number,
+  year: number,
+  from?: string | Date | null,
+  to?: string | Date | null
+): boolean => {
+  if (!from && !to) return true;
+  const mStart = new Date(year, month - 1, 1);
+  const mEnd = new Date(year, month, 0);
+  const f = from ? new Date(from) : null;
+  const t = to ? new Date(to) : null;
+  if ((f && isNaN(f.getTime())) || (t && isNaN(t.getTime()))) return true;
+  const fDay = f ? new Date(f.getFullYear(), f.getMonth(), f.getDate()) : null;
+  const tDay = t ? new Date(t.getFullYear(), t.getMonth(), t.getDate()) : null;
+  if (fDay && mEnd < fDay) return false;
+  if (tDay && mStart > tDay) return false;
+  return true;
+};
+
 export const isSocialMediaCategory = (cat?: string) => {
   if (!cat) return false;
   const c = cat.toLowerCase().replace(/[\s_\-\/]/g, "");
@@ -344,6 +423,37 @@ const UserAvatar = ({
       ) : (
         <span className="leading-none">{initials}</span>
       )}
+    </div>
+  );
+};
+
+// K5: Highlighted brand/client logo — naam vachvu na pade, logo uparthi idea avi jay.
+const BrandLogo = ({
+  src,
+  alt,
+  size = "w-16 h-16",
+  rounded = "rounded-2xl",
+  className = ""
+}: {
+  src?: string | null | undefined;
+  alt?: string | null | undefined;
+  size?: string | undefined;
+  rounded?: string | undefined;
+  className?: string | undefined;
+}) => {
+  const seed = encodeURIComponent(String(alt || "brand").slice(0, 24) || "brand");
+  const fallback = `https://api.dicebear.com/7.x/identicon/svg?seed=${seed}`;
+  return (
+    <div className={cn(size, rounded, "border-2 border-primary/30 overflow-hidden shadow-md shadow-primary/10 bg-white p-1 ring-2 ring-primary/10 shrink-0", className)}>
+      <img
+        src={src && String(src).trim() !== "" ? src : fallback}
+        alt={alt || "Brand logo"}
+        className="w-full h-full object-cover rounded-xl"
+        onError={(e) => {
+          const el = e.currentTarget;
+          if (!el.src.includes("dicebear")) el.src = fallback;
+        }}
+      />
     </div>
   );
 };
@@ -516,11 +626,11 @@ const INITIAL_PROJECTS: Project[] = [
       { name: "James", avatar: "https://i.pravatar.cc/150?u=james" }
     ],
     dailyStats: [
-      { id: "ds-1", date: "2026-08-24", campaignName: "Q4 Retargeting Ads", reach: 15000, leads: 45, spend: 8100 },
-      { id: "ds-2", date: "2026-08-24", campaignName: "Holiday Social Push", reach: 28000, leads: 92, spend: 15600 },
-      { id: "ds-3", date: "2026-08-23", campaignName: "Q4 Retargeting Ads", reach: 14200, leads: 38, spend: 7800 },
-      { id: "ds-4", date: "2026-08-23", campaignName: "Holiday Social Push", reach: 25400, leads: 81, spend: 14500 },
-      { id: "ds-5", date: "2026-08-22", campaignName: "B2B Email Drip", reach: 4100, leads: 12, spend: 3200 }
+      { id: "ds-1", date: "2026-08-24", campaignName: "Q4 Retargeting Ads", reach: 15000, impressions: 18000, leads: 45, followers: 12, revenue: 25000, spend: 8100 },
+      { id: "ds-2", date: "2026-08-24", campaignName: "Holiday Social Push", reach: 28000, impressions: 32000, leads: 92, followers: 30, revenue: 40000, spend: 15600 },
+      { id: "ds-3", date: "2026-08-23", campaignName: "Q4 Retargeting Ads", reach: 14200, impressions: 17000, leads: 38, followers: 9, revenue: 22000, spend: 7800 },
+      { id: "ds-4", date: "2026-08-23", campaignName: "Holiday Social Push", reach: 25400, impressions: 29000, leads: 81, followers: 25, revenue: 35000, spend: 14500 },
+      { id: "ds-5", date: "2026-08-22", campaignName: "B2B Email Drip", reach: 4100, impressions: 5000, leads: 12, followers: 3, revenue: 8000, spend: 3200 }
     ]
   },
   {
@@ -648,7 +758,10 @@ const INITIAL_PROJECTS: Project[] = [
   }
 ];
 
-const TABS = ["Active Clients", "Brand Division", "Archived Clients"];
+  // K1: 4-tab landing — Active/Archived Projects + Active/Archived Clients.
+  // "Brand Division" is kept as a separate toggle (not a tab) so the feature stays.
+  const TABS = ["Active Projects", "Active Clients", "Archived Projects", "Archived Clients"];
+  const PROJECT_TABS = ["Active Projects", "Archived Projects"];
 
 const syncSocialMediaTasksForProject = (project: any, calendarItems: any[]) => {
   const modules = project.modules || [];
@@ -961,6 +1074,16 @@ const mapBackendProject = (bp: any): Project => {
     budget: fin.project_budget ? `₹${fin.project_budget.toLocaleString("en-IN")}` : "₹0",
     amountReceived: fin.amount_received ? `₹${fin.amount_received.toLocaleString("en-IN")}` : "₹0",
     nextPaymentDate: fin.next_payment_date ? (String(fin.next_payment_date).split("T")[0] ?? "") : "",
+    // K10: normalize payment entries (ISO date strings)
+    payments: Array.isArray(fin.payments) ? fin.payments.map((pay: any, idx: number) => ({
+      id: String(pay.id || `pay-${idx}-${pay.date || ""}`),
+      date: pay.date ? String(pay.date).split("T")[0] : "",
+      amount: Number(pay.amount) || 0,
+      work_from: pay.work_from ? String(pay.work_from).split("T")[0] : "",
+      work_to: pay.work_to ? String(pay.work_to).split("T")[0] : "",
+      next_reminder: pay.next_reminder ? String(pay.next_reminder).split("T")[0] : "",
+      note: pay.note || "",
+    })) : [],
     post: cStats.post_count_per_month || 0,
     reel: cStats.reel_count_per_month || 0,
     festivalPost: cStats.festival_posts_included ? "Yes" : "No",
@@ -972,6 +1095,7 @@ const mapBackendProject = (bp: any): Project => {
     modules: Array.isArray(bp.modules) && bp.modules.length > 0 ? bp.modules : [],
     contentCalendar: [],
     whatsapp_group_link: bp.whatsapp_group_link || "",
+    nextFollowupDate: (bp as any).next_followup_date ? (String((bp as any).next_followup_date).split("T")[0] ?? "") : "",
     creativeTeam: bp.creative_team || {},
     creativeTeamDetails: bp.creative_team_details || {},
     credentials: bp.social_media_credentials || []
@@ -981,7 +1105,7 @@ const mapBackendProject = (bp: any): Project => {
 export function Projects({ isNew }: { isNew?: boolean }) {
   const [projectSubTab, setProjectSubTab] = useState<"workspace" | "logs">("workspace");
   const [isBulkAdd, setIsBulkAdd] = useState(false);
-  const [bulkStatsEntries, setBulkStatsEntries] = useState<{ [campaignName: string]: { reach: string, leads: string, spend: string } }>({});
+  const [bulkStatsEntries, setBulkStatsEntries] = useState<{ [campaignName: string]: { reach: string, impressions: string, leads: string, followers: string, revenue: string, spend: string } }>({});
 
   const logProjectActivity = (projectId: string, action: string, details?: string) => {
     const now = new Date();
@@ -1188,7 +1312,13 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
   const [categories, setCategories] = useState<string[]>([...FIXED_DEPARTMENTS]);
 
-  const [activeTab, setActiveTab] = useState(TABS[0]);
+  const [activeTab, setActiveTab] = useState<string>(TABS[0] ?? "Active Projects");
+  // K1: Brand Division lives outside the 4 tabs (toggle, so the feature stays).
+  const [showBrandDivision, setShowBrandDivision] = useState(false);
+  const selectTab = (tab: string) => {
+    setActiveTab(tab);
+    setShowBrandDivision(false);
+  };
   const [searchQuery, setSearchQuery] = useState("");
   
   const [clientSort, setClientSort] = useState<"name" | "budgetDesc" | "projectsDesc">("name");
@@ -1227,6 +1357,37 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   const [calendarMonthFilter, setCalendarMonthFilter] = useState<string>("Current");
   const [isEditTargetsModalOpen, setIsEditTargetsModalOpen] = useState(false);
   const [targetsForm, setTargetsForm] = useState<{ post: number; reel: number }>({ post: 8, reel: 8 });
+  // K18: CC status (month approval) — inline section, overlap rule sathe
+  const [ccApprovals, setCcApprovals] = useState<Record<string, any>>({});
+  const [ccStatusDraft, setCcStatusDraft] = useState<string>("Pending");
+  const [ccReasonDraft, setCcReasonDraft] = useState<string>("");
+  const fetchCcApproval = useCallback(async (projId: string, month: number, year: number) => {
+    const key = `${year}-${String(month).padStart(2, "0")}`;
+    try {
+      const res = await api.get<any>(`/projects/${projId}/content/approval?month=${month}&year=${year}`, { showLoader: false, showErrorToast: false });
+      setCcApprovals(prev => ({ ...prev, [key]: res || null }));
+    } catch {
+      setCcApprovals(prev => ({ ...prev, [key]: null }));
+    }
+  }, []);
+  const handleSaveCcStatus = async (projId: string, month: number, year: number) => {
+    if (ccStatusDraft !== "Approved by Client" && !ccReasonDraft.trim()) {
+      toast.error("Reason compulsory che (Approved sivay)");
+      return;
+    }
+    try {
+      const res = await api.put<any>(`/projects/${projId}/content/approval`, {
+        month, year, status: ccStatusDraft,
+        reason: ccReasonDraft.trim() || undefined,
+      });
+      const key = `${year}-${String(month).padStart(2, "0")}`;
+      setCcApprovals(prev => ({ ...prev, [key]: res || null }));
+      setCcReasonDraft("");
+      toast.success("CC status updated");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update CC status");
+    }
+  };
 
   // Feature 5: WhatsApp Group & Client Credentials
   const [isWhatsappModalOpen, setIsWhatsappModalOpen] = useState(false);
@@ -1528,11 +1689,79 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     }
   }, []);
 
+  const fetchProjectFollowups = useCallback(async (projId: string) => {
+    try {
+      const res = await api.get<any[]>(`/projects/${projId}/followups`, { showLoader: false, showErrorToast: false });
+      setProjectFollowups(Array.isArray(res) ? res : []);
+    } catch {
+      setProjectFollowups([]);
+    }
+  }, []);
+  // K11: backend activity logs (content CRUD auto-logs) — logs tab ma by default
+  const [backendActivityLogs, setBackendActivityLogs] = useState<any[]>([]);
+  const fetchProjectActivities = useCallback(async (projId: string) => {
+    try {
+      const res = await api.get<any>(`/projects/${projId}/activities?limit=50`, { showLoader: false, showErrorToast: false });
+      const raw = Array.isArray(res) ? res : (res?.data || []);
+      setBackendActivityLogs(raw.map((a: any) => ({
+        id: String(a.id || a._id || `${a.action}-${a.timestamp}`),
+        action: a.action || "Activity",
+        details: a.description || "",
+        performedBy: a.performed_by_details?.employee_name || a.performed_by || "System",
+        timestamp: a.timestamp ? String(a.timestamp).replace("T", " ").slice(0, 16) : "",
+        _backend: true,
+      })));
+    } catch {
+      setBackendActivityLogs([]);
+    }
+  }, []);
+  // F4: backend campaign options (autosuggest source)
+  const [dmCampaigns, setDmCampaigns] = useState<string[]>([]);
+  const [campSuggestOpen, setCampSuggestOpen] = useState(false);
+  // F7: edit existing stat (PUT) vs new (POST)
+  const [editingStatId, setEditingStatId] = useState<string | null>(null);
+  // F4: backend DM stats → project.dailyStats (replaces local mock)
+  const fetchDmStats = useCallback(async (projId: string) => {
+    if (!projId) return;
+    try {
+      const res = await api.get<any[]>(`/projects/${projId}/marketing-stats`, { showLoader: false, showErrorToast: false });
+      const list = Array.isArray(res) ? res : [];
+      const mapped = list.map((s: any) => ({
+        id: String(s.id || s._id),
+        date: (String(s.date || "").split("T")[0] ?? ""),
+        campaignName: s.campaign_name || "",
+        reach: Number(s.reach) || 0,
+        impressions: Number(s.impressions) || 0,
+        leads: Number(s.leads) || 0,
+        followers: Number(s.followers) || 0,
+        revenue: Number(s.revenue) || 0,
+        spend: Number(s.spend) || 0,
+      }));
+      setProjects(prev => prev.map(p => (p.id === projId ? { ...p, dailyStats: mapped } : p)));
+    } catch {
+      // keep existing (offline safe)
+    }
+  }, []);
+  const fetchDmCampaigns = useCallback(async (projId: string) => {
+    if (!projId) return;
+    try {
+      const res = await api.get<string[]>(`/projects/${projId}/marketing-campaigns`, { showLoader: false, showErrorToast: false });
+      if (Array.isArray(res) && res.length > 0) setDmCampaigns(res);
+    } catch {
+      // fallback to local list below
+    }
+  }, []);
   useEffect(() => {
     if (selectedProjectId) {
       fetchProjectContentCalendar(selectedProjectId);
+      fetchProjectFollowups(selectedProjectId);
+      fetchProjectActivities(selectedProjectId);
+      fetchDmStats(selectedProjectId);
+      fetchDmCampaigns(selectedProjectId);
+    } else {
+      setBackendActivityLogs([]);
     }
-  }, [selectedProjectId, fetchProjectContentCalendar]);
+  }, [selectedProjectId, fetchProjectContentCalendar, fetchProjectFollowups, fetchProjectActivities, fetchDmStats, fetchDmCampaigns]);
   
   const [campaignDateRange, setCampaignDateRange] = useState("Last 30 Days");
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>({
@@ -1540,171 +1769,304 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     to: new Date(),
   });
   const [selectedCampaignForStats, setSelectedCampaignForStats] = useState("All Campaigns");
+  // F6: top performing auto (backend summary.top_campaigns)
+  // F1+F2: full summary (KPIs + growth, filter-wired) — live leads row
+  const [topCampaigns, setTopCampaigns] = useState<any[]>([]);
+  const [dmSummary, setDmSummary] = useState<any | null>(null);
+  // F8: monthly auto-report (1 month select → full data auto)
+  const [reportMonth, setReportMonth] = useState<string>("");
+  const [reportData, setReportData] = useState<any | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const fetchMonthlyReport = useCallback(async (projId: string, ym: string) => {
+    if (!projId || !/^\d{4}-\d{2}$/.test(ym)) return;
+    setReportLoading(true);
+    try {
+      const [yy, mm] = ym.split("-").map(Number);
+      const lastDay = new Date((yy as number), (mm as number), 0).getDate();
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const qs = `start_date=${yy}-${pad(mm as number)}-01&end_date=${yy}-${pad(mm as number)}-${lastDay}`;
+      const res = await api.get<any>(`/projects/${projId}/marketing-summary?${qs}`, { showLoader: false, showErrorToast: false });
+      setReportData(res || null);
+    } catch {
+      setReportData(null);
+    } finally {
+      setReportLoading(false);
+    }
+  }, []);
+  const fetchMarketingSummary = useCallback(async (projId: string) => {
+    if (!projId) return;
+    try {
+      const params = new URLSearchParams();
+      const f = customDateRange?.from ? new Date(customDateRange.from) : null;
+      const t = customDateRange?.to ? new Date(customDateRange.to) : null;
+      if (f && !isNaN(f.getTime())) params.set("start_date", format(f, "yyyy-MM-dd"));
+      if (t && !isNaN(t.getTime())) params.set("end_date", format(t, "yyyy-MM-dd"));
+      if (selectedCampaignForStats && selectedCampaignForStats !== "All Campaigns") {
+        params.set("campaign_name", selectedCampaignForStats.replace(" (Inactive)", ""));
+      }
+      const qs = params.toString();
+      const res = await api.get<any>(`/projects/${projId}/marketing-summary${qs ? `?${qs}` : ""}`, { showLoader: false, showErrorToast: false });
+      setTopCampaigns(Array.isArray(res?.top_campaigns) ? res.top_campaigns : []);
+      setDmSummary(res || null);
+    } catch {
+      setTopCampaigns([]);
+      setDmSummary(null);
+    }
+  }, [customDateRange, selectedCampaignForStats]);
+  // F3: revenue log (popup + total)
+  const [revenues, setRevenues] = useState<any[]>([]);
+  const [isRevenueOpen, setIsRevenueOpen] = useState(false);
+  const [revenueForm, setRevenueForm] = useState({ date: "", revenue: "", editId: "" as string });
+  const revenueTotal = revenues.reduce((s, r) => s + (Number(r.revenue) || 0), 0);
+  const handleSaveRevenue = async () => {
+    if (!selectedProjectId) return;
+    if (!revenueForm.date || !(parseFloat(revenueForm.revenue) > 0)) {
+      toast.error("Date ane revenue (>0) compulsory che");
+      return;
+    }
+    try {
+      if (revenueForm.editId) {
+        await api.put(`/projects/${selectedProjectId}/daily-revenue/${revenueForm.editId}`, { revenue: parseFloat(revenueForm.revenue) });
+        toast.success("Revenue updated!");
+      } else {
+        await api.post(`/projects/${selectedProjectId}/daily-revenue`, { date: revenueForm.date, revenue: parseFloat(revenueForm.revenue) });
+        toast.success("Revenue saved!");
+      }
+      await fetchRevenues(selectedProjectId);
+      setRevenueForm({ date: "", revenue: "", editId: "" });
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save revenue");
+    }
+  };
+  const handleDeleteRevenue = async (id: string) => {
+    if (!selectedProjectId || !window.confirm("Aa revenue entry delete karvi?")) return;
+    try {
+      await api.delete(`/projects/${selectedProjectId}/daily-revenue/${id}`, { showErrorToast: false });
+      await fetchRevenues(selectedProjectId);
+      toast.success("Revenue entry deleted");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete revenue");
+    }
+  };
+  const fetchRevenues = useCallback(async (projId: string) => {
+    if (!projId) return;
+    try {
+      const res = await api.get<any[]>(`/projects/${projId}/daily-revenue`, { showLoader: false, showErrorToast: false });
+      setRevenues(Array.isArray(res) ? res : []);
+    } catch {
+      setRevenues([]);
+    }
+  }, []);
+  useEffect(() => {
+    if (selectedProjectId) fetchMarketingSummary(selectedProjectId);
+  }, [selectedProjectId, fetchMarketingSummary]);
+  // F3: revenues on project open
+  useEffect(() => {
+    if (selectedProjectId) fetchRevenues(selectedProjectId);
+    else setRevenues([]);
+  }, [selectedProjectId, fetchRevenues]);
+  // F5: campaign-group open/close (same-name combine → 1 dropdown)
+  const [openCampGroups, setOpenCampGroups] = useState<Record<string, boolean>>({});
+  const toggleCampGroup = (name: string) => {
+    setOpenCampGroups(prev => ({ ...prev, [name]: !(prev[name] !== false) }));
+  };
+  // K8: project khule tyare timeline default = running range (start → today/end).
+  // K16: CC month default = project running cycle month.
+  useEffect(() => {
+    if (!selectedProjectId) return;
+    const p = projects.find(x => x.id === selectedProjectId);
+    if (!p?.startDate || !p?.endDate) return;
+    const s = new Date(p.startDate);
+    const e = new Date(p.endDate);
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return;
+    const today = new Date();
+    setCustomDateRange({ from: s > today ? today : s, to: e < today ? e : today });
+    setCampaignDateRange("Custom");
+    setCalendarMonthFilter(getProjectMonths(p.startDate, p.endDate, today).def);
+    // F8: report month default = running month
+    setReportMonth(getProjectMonths(p.startDate, p.endDate, today).def);
+  }, [selectedProjectId]);
+  // F8: report auto-fetch on month/project change
+  useEffect(() => {
+    if (selectedProjectId && reportMonth) fetchMonthlyReport(selectedProjectId, reportMonth);
+    else setReportData(null);
+  }, [selectedProjectId, reportMonth, fetchMonthlyReport]);
+  // K18: selected month + range-overlap months na approvals fetch (overlap rule)
+  useEffect(() => {
+    if (!selectedProjectId) return;
+    const wanted = new Map<string, { m: number; y: number }>();
+    const pushMonth = (d: Date) => {
+      if (isNaN(d.getTime())) return;
+      const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      if (!wanted.has(k)) wanted.set(k, { m: d.getMonth() + 1, y: d.getFullYear() });
+    };
+    if (/^\d{4}-\d{2}$/.test(calendarMonthFilter)) {
+      const [yy, mm] = calendarMonthFilter.split("-").map(Number);
+      pushMonth(new Date((yy as number), (mm as number) - 1, 1));
+    } else {
+      pushMonth(new Date());
+    }
+    // custom range overlap (max 13 months)
+    const f = customDateRange?.from ? new Date(customDateRange.from) : null;
+    const t = customDateRange?.to ? new Date(customDateRange.to) : null;
+    if (f && t && !isNaN(f.getTime()) && !isNaN(t.getTime())) {
+      const cur = new Date(f.getFullYear(), f.getMonth(), 1);
+      const last = new Date(t.getFullYear(), t.getMonth(), 1);
+      let guard = 0;
+      while (cur <= last && guard < 13) {
+        pushMonth(new Date(cur));
+        cur.setMonth(cur.getMonth() + 1);
+        guard++;
+      }
+    }
+    wanted.forEach(({ m, y }) => fetchCcApproval(selectedProjectId, m, y));
+  }, [selectedProjectId, calendarMonthFilter, customDateRange, fetchCcApproval]);
   const [isLogDailyStatsOpen, setIsLogDailyStatsOpen] = useState(false);
   const [dailyStatsForm, setDailyStatsForm] = useState({
     date: format(new Date(), "yyyy-MM-dd"),
-    campaignName: "Q4 Retargeting Ads",
+    campaignName: "",
     reach: "",
+    impressions: "",
     leads: "",
+    followers: "",
+    revenue: "",
     spend: ""
   });
 
   useEffect(() => {
     if (isLogDailyStatsOpen && selectedProjectId) {
       const project = projects.find(p => p.id === selectedProjectId);
-      const campaignList = (project?.campaigns && project.campaigns.length > 0)
-        ? project.campaigns
-            .map(c => typeof c === 'string' ? { name: c, status: 'Active' } : { name: c.name || "", status: c.status || 'Active' })
-            .filter(c => c.status === 'Active')
-            .map(c => c.name)
-        : ["Q4 Retargeting Ads", "Holiday Social Push", "B2B Email Drip"];
-      
+      // F4: backend campaigns first, fallback local/mock
+      const campaignList = dmCampaigns.length > 0
+        ? dmCampaigns
+        : (project?.campaigns && project.campaigns.length > 0)
+          ? project.campaigns
+              .map(c => typeof c === 'string' ? { name: c, status: 'Active' } : { name: c.name || "", status: c.status || 'Active' })
+              .filter(c => c.status === 'Active')
+              .map(c => c.name)
+          : ["Q4 Retargeting Ads", "Holiday Social Push", "B2B Email Drip"];
+      const emptyEntry = () => ({ reach: "", impressions: "", leads: "", followers: "", revenue: "", spend: "" });
       const dailyStats = project?.dailyStats || [];
       const initial: any = {};
       campaignList.forEach(name => {
         const match = dailyStats.find((s: any) => s.campaignName === name && s.date === dailyStatsForm.date);
         if (match) {
+          const str = (v: any) => (v !== undefined && v !== null ? String(v) : "");
           initial[name] = {
-            reach: match.reach !== undefined ? String(match.reach) : "",
-            leads: match.leads !== undefined ? String(match.leads) : "",
-            spend: match.spend !== undefined ? String(match.spend) : ""
+            reach: str(match.reach), impressions: str(match.impressions), leads: str(match.leads),
+            followers: str(match.followers), revenue: str(match.revenue), spend: str(match.spend),
           };
         } else {
-          initial[name] = { reach: "", leads: "", spend: "" };
+          initial[name] = emptyEntry();
         }
       });
       setBulkStatsEntries(initial);
     }
-  }, [isLogDailyStatsOpen, selectedProjectId, dailyStatsForm.date]);
+  }, [isLogDailyStatsOpen, selectedProjectId, dailyStatsForm.date, dmCampaigns]);
 
-  const handleLogDailyStats = (e: React.FormEvent) => {
+  const numOrZero = (v: any) => {
+    const n = parseFloat(v);
+    return isNaN(n) || n < 0 ? 0 : n;
+  };
+  const numOrInt = (v: any) => {
+    const n = parseInt(v);
+    return isNaN(n) || n < 0 ? 0 : n;
+  };
+
+  // F7: table mathi edit → modal prefill + PUT
+  const openEditStat = (stat: any) => {
+    setDailyStatsForm({
+      date: stat.date || "",
+      campaignName: stat.campaignName || "",
+      reach: stat.reach !== undefined && stat.reach !== null ? String(stat.reach) : "",
+      impressions: stat.impressions !== undefined && stat.impressions !== null ? String(stat.impressions) : "",
+      leads: stat.leads !== undefined && stat.leads !== null ? String(stat.leads) : "",
+      followers: stat.followers !== undefined && stat.followers !== null ? String(stat.followers) : "",
+      revenue: stat.revenue !== undefined && stat.revenue !== null ? String(stat.revenue) : "",
+      spend: stat.spend !== undefined && stat.spend !== null ? String(stat.spend) : "",
+    });
+    setEditingStatId(String(stat.id));
+    setIsBulkAdd(false);
+    setIsLogDailyStatsOpen(true);
+  };
+
+  // F4: backend marketing-stats API (single + bulk) — campaign auto-create free
+  const handleLogDailyStats = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProjectId) return;
-    const project = projects.find(p => p.id === selectedProjectId);
-    if (!project) return;
 
     if (!dailyStatsForm.date) {
       toast.error("Please select a date");
       return;
     }
 
-    if (isBulkAdd) {
-      const newStatsList: any[] = [];
-      const logDetails: string[] = [];
-      
-      for (const [campaignName, entry] of Object.entries(bulkStatsEntries)) {
-        if (!entry.reach && !entry.leads && !entry.spend) continue;
-        
-        const reachVal = entry.reach ? parseInt(entry.reach) : 0;
-        const leadsVal = entry.leads ? parseInt(entry.leads) : 0;
-        const spendVal = entry.spend ? parseInt(entry.spend) : 0;
-        
-        if (isNaN(reachVal) || reachVal < 0 || isNaN(leadsVal) || leadsVal < 0 || isNaN(spendVal) || spendVal < 0) {
-          toast.error(`Please enter valid positive numbers for ${campaignName}`);
+    try {
+      if (isBulkAdd) {
+        const entries = Object.entries(bulkStatsEntries)
+          .filter(([name, entry]: [string, any]) => name.trim() && (entry.reach || entry.leads || entry.spend || entry.impressions || entry.followers || entry.revenue))
+          .map(([campaign_name, entry]: [string, any]) => ({
+            campaign_name: campaign_name.trim(),
+            reach: numOrInt(entry.reach),
+            impressions: numOrInt(entry.impressions),
+            leads: numOrInt(entry.leads),
+            followers: numOrInt(entry.followers),
+            revenue: numOrZero(entry.revenue),
+            spend: numOrZero(entry.spend),
+          }));
+
+        if (entries.length === 0) {
+          toast.error("Please enter stats for at least one campaign.");
           return;
         }
-        
-        newStatsList.push({
-          id: `ds-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+
+        await api.post(`/projects/${selectedProjectId}/marketing-stats/bulk`, {
           date: dailyStatsForm.date,
-          campaignName,
-          reach: reachVal,
-          leads: leadsVal,
-          spend: spendVal
+          entries,
         });
-        
-        logDetails.push(`${campaignName} (Reach: ${reachVal}, Leads: ${leadsVal}, Spend: ₹${spendVal})`);
+        toast.success(`Bulk stats logged for ${entries.length} campaigns!`);
+      } else {
+        const camp = dailyStatsForm.campaignName.trim();
+        if (!camp) {
+          toast.error("Campaign name lakho (navu hoy to auto-bani jashe)");
+          return;
+        }
+        const body = {
+          date: dailyStatsForm.date,
+          campaign_name: camp,
+          reach: numOrInt(dailyStatsForm.reach),
+          impressions: numOrInt(dailyStatsForm.impressions),
+          leads: numOrInt(dailyStatsForm.leads),
+          followers: numOrInt(dailyStatsForm.followers),
+          revenue: numOrZero(dailyStatsForm.revenue),
+          spend: numOrZero(dailyStatsForm.spend),
+        };
+        if (editingStatId) {
+          // F7: bhulthi khoti entry → update
+          await api.put(`/projects/${selectedProjectId}/marketing-stats/${editingStatId}`, body);
+          toast.success("Stats updated successfully!");
+        } else {
+          await api.post(`/projects/${selectedProjectId}/marketing-stats`, body);
+          toast.success("Daily stats logged successfully!");
+        }
+        setEditingStatId(null);
       }
-      
-      if (newStatsList.length === 0) {
-        toast.error("Please enter stats for at least one campaign.");
-        return;
-      }
-      
-      const loggedCampaignNames = newStatsList.map(s => s.campaignName);
-      const remainingStats = (project.dailyStats || []).filter((s: any) => 
-        !(s.date === dailyStatsForm.date && loggedCampaignNames.includes(s.campaignName))
-      );
-      const updatedStats = [...newStatsList, ...remainingStats];
-      
-      const nowLog = {
-        id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-        action: "Logged Bulk Daily Stats",
-        performedBy: "Alex (You)",
-        timestamp: `${String(new Date().getDate()).padStart(2, '0')}/${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()} ${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`,
-        details: `Logged stats for ${newStatsList.length} campaigns on ${dailyStatsForm.date}: ${logDetails.join("; ")}`
-      };
-      
-      const newProjects = projects.map(p => p.id === selectedProjectId ? { 
-        ...p, 
-        dailyStats: updatedStats,
-        activityLogs: [...(p.activityLogs || []), nowLog]
-      } : p);
-      
-      setProjects(newProjects);
-      localStorage.setItem("hrms_projects", JSON.stringify(newProjects));
+
+      await fetchDmStats(selectedProjectId);
+      await fetchDmCampaigns(selectedProjectId);
       setIsLogDailyStatsOpen(false);
-      toast.success("Bulk stats logged successfully!");
-      return;
+      setDailyStatsForm({
+        date: format(new Date(), "yyyy-MM-dd"),
+        campaignName: "",
+        reach: "",
+        impressions: "",
+        leads: "",
+        followers: "",
+        revenue: "",
+        spend: ""
+      });
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to log stats");
     }
-
-    const reachVal = parseInt(dailyStatsForm.reach);
-    const leadsVal = parseInt(dailyStatsForm.leads);
-    const spendVal = parseInt(dailyStatsForm.spend);
-    if (isNaN(reachVal) || reachVal < 0) {
-      toast.error("Please enter a valid reach number");
-      return;
-    }
-    if (isNaN(leadsVal) || leadsVal < 0) {
-      toast.error("Please enter a valid leads number");
-      return;
-    }
-    if (isNaN(spendVal) || spendVal < 0) {
-      toast.error("Please enter a valid spend amount");
-      return;
-    }
-
-    const newStat = {
-      id: `ds-${Date.now()}`,
-      date: dailyStatsForm.date,
-      campaignName: dailyStatsForm.campaignName,
-      reach: reachVal,
-      leads: leadsVal,
-      spend: spendVal
-    };
-
-    const remainingStats = (project.dailyStats || []).filter((s: any) => 
-      !(s.date === dailyStatsForm.date && s.campaignName === dailyStatsForm.campaignName)
-    );
-    const updatedStats = [newStat, ...remainingStats];
-    
-    const nowLog = {
-      id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      action: "Logged Daily Stats",
-      performedBy: "Alex (You)",
-      timestamp: `${String(new Date().getDate()).padStart(2, '0')}/${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()} ${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`,
-      details: `Added stats for ${dailyStatsForm.campaignName} on ${dailyStatsForm.date} (Reach: ${reachVal}, Leads: ${leadsVal}, Spend: ₹${spendVal})`
-    };
-
-    const newProjects = projects.map(p => p.id === selectedProjectId ? { 
-      ...p, 
-      dailyStats: updatedStats,
-      activityLogs: [...(p.activityLogs || []), nowLog]
-    } : p);
-
-    setProjects(newProjects);
-    localStorage.setItem("hrms_projects", JSON.stringify(newProjects));
-    window.dispatchEvent(new Event("storage"));
-    
-    setIsLogDailyStatsOpen(false);
-    setDailyStatsForm({
-      date: format(new Date(), "yyyy-MM-dd"),
-      campaignName: "Q4 Retargeting Ads",
-      reach: "",
-      leads: "",
-      spend: ""
-    });
-    toast.success("Daily stats logged successfully!");
   };
 
   useEffect(() => { localStorage.setItem('hrms_clients', JSON.stringify(clients)); }, [clients]);
@@ -1867,6 +2229,9 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     { id: 'remarks', label: 'Remarks', icon: FileText }
   ];
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(isNew || false);
+  // K9: landing standalone New Project (client picker — client pela, pachhi project)
+  const [isLandingProjectOpen, setIsLandingProjectOpen] = useState(false);
+  const [landingProjectClientId, setLandingProjectClientId] = useState("");
   const [isEditClientModalOpen, setIsEditClientModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [showEditClientErrors, setShowEditClientErrors] = useState(false);
@@ -1964,6 +2329,117 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   const [bulkFormatType, setBulkFormatType] = useState("Post");
   const [visualSelectedDates, setVisualSelectedDates] = useState<Date[] | undefined>([]);
   const [dmWorkspaceView, setDmWorkspaceView] = useState<"social" | "stats">("social");
+  // K4: dept-wise dropdowns — smm/dm collapsible, project switch par reset (default open).
+  const [openDept, setOpenDept] = useState<Record<string, boolean>>({ smm: true, dm: true });
+  useEffect(() => {
+    setOpenDept({ smm: true, dm: true });
+    setExplainMode(false);
+    setExplainedIds([]);
+  }, [selectedProjectId]);
+  // K17: explanation mode (Meet ma samjavva — click = highlight, clear)
+  const [explainMode, setExplainMode] = useState(false);
+  const [explainedIds, setExplainedIds] = useState<string[]>([]);
+  const toggleExplain = (id: string) => {
+    setExplainedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+  // K6: dept arrow → section open + auto view + scroll
+  const jumpToDept = (dept: "smm" | "dm") => {
+    setOpenDept(prev => ({ ...prev, [dept]: true }));
+    setDmWorkspaceView(dept === "smm" ? "social" : "stats");
+    setTimeout(() => {
+      document.getElementById(dept === "smm" ? "dept-section-smm" : "dept-section-dm")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+  };
+  // K10: finance payments + followups
+  const [projectFollowups, setProjectFollowups] = useState<any[]>([]);
+  const [isPayFormOpen, setIsPayFormOpen] = useState(false);
+  const [payForm, setPayForm] = useState({ date: "", amount: "", work_from: "", work_to: "", next_reminder: "", note: "", ownerId: "" });
+  const [followupText, setFollowupText] = useState("");
+  const [followupNextDate, setFollowupNextDate] = useState("");
+  // K10 helpers: full-finance PUT (scalars + payments, else $set wipes)
+  const parseMoney = (s?: string | number | null) => parseFloat(String(s ?? "").replace(/[^0-9.]/g, "")) || 0;
+  const buildFinancePayload = (p: Project) => ({
+    project_budget: parseMoney(p.budget),
+    amount_received: parseMoney(p.amountReceived),
+    next_payment_date: p.nextPaymentDate || undefined,
+    payments: (p.payments || []).map(e => ({
+      id: e.id,
+      date: e.date || undefined,
+      amount: e.amount,
+      work_from: e.work_from || undefined,
+      work_to: e.work_to || undefined,
+      next_reminder: e.next_reminder || undefined,
+      note: e.note || undefined,
+    })),
+  });
+  const handleSavePayment = async (proj: Project, cliName: string) => {
+    if (!payForm.date || !parseMoney(payForm.amount)) {
+      toast.error("Date ane amount compulsory che");
+      return;
+    }
+    const entry = {
+      id: `pay-${Date.now()}`,
+      date: payForm.date,
+      amount: parseMoney(payForm.amount),
+      work_from: payForm.work_from || "",
+      work_to: payForm.work_to || "",
+      next_reminder: payForm.next_reminder || "",
+      note: payForm.note.trim(),
+    };
+    const next = [...(proj.payments || []), entry];
+    try {
+      await api.put(`/projects/${proj.id}`, { finance: { ...buildFinancePayload(proj), payments: next } });
+      const period = entry.work_from || entry.work_to ? ` (${entry.work_from || ""}${entry.work_from && entry.work_to ? " → " : ""}${entry.work_to || ""})` : "";
+      const rem = entry.next_reminder ? ` • Next: ${entry.next_reminder}` : "";
+      await api.post(`/projects/${proj.id}/followups`, { text: `Payment ₹${entry.amount.toLocaleString("en-IN")} on ${entry.date}${period}${rem}` }, { showErrorToast: false }).catch(() => null);
+      if (payForm.ownerId && entry.next_reminder) {
+        const owner = (employees || []).find(e => String(e.id) === String(payForm.ownerId));
+        await api.post("/tasks", {
+          title: `Payment followup: ${cliName} — ${entry.next_reminder}`,
+          description: `Client payment followup levano: ₹${entry.amount.toLocaleString("en-IN")} (${entry.date})`,
+          assigned_to: payForm.ownerId,
+          due_date: entry.next_reminder,
+          project_id: proj.id,
+          task_category: "Finance",
+        }, { showErrorToast: false }).catch(() => null);
+        if (owner) toast.success(`Followup task ${owner.name} ne assign thayu`);
+      }
+      await loadLiveData();
+      fetchProjectFollowups(proj.id);
+      setPayForm({ date: "", amount: "", work_from: "", work_to: "", next_reminder: "", note: "", ownerId: "" });
+      setIsPayFormOpen(false);
+      toast.success("Payment entry saved");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save payment");
+    }
+  };
+  const handleDeletePayment = async (proj: Project, payId: string) => {
+    if (!window.confirm("Aa payment entry delete karvi?")) return;
+    const next = (proj.payments || []).filter(e => String(e.id) !== String(payId));
+    try {
+      await api.put(`/projects/${proj.id}`, { finance: { ...buildFinancePayload(proj), payments: next } });
+      await loadLiveData();
+      toast.success("Payment entry deleted");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete payment");
+    }
+  };
+  const handleAddFollowup = async (proj: Project) => {
+    if (!followupText.trim()) {
+      toast.error("Followup text lakho");
+      return;
+    }
+    try {
+      const text = followupNextDate ? `${followupText.trim()} (Next: ${followupNextDate})` : followupText.trim();
+      await api.post(`/projects/${proj.id}/followups`, { text });
+      setFollowupText("");
+      setFollowupNextDate("");
+      fetchProjectFollowups(proj.id);
+      toast.success("Followup added");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to add followup");
+    }
+  };
   
   const [isCalendarSettingsOpen, setIsCalendarSettingsOpen] = useState(false);
   const [calendarOffsets, setCalendarOffsets] = useState(() => {
@@ -2035,7 +2511,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       setIsNewClientModalOpen(false);
       setNewClientFormData(defaultClientForm);
       setShowNewClientErrors(false);
-      toast.success("Client created successfully");
+      toast.success(depts.length > 0 ? `Client created successfully + ${depts.length} project${depts.length > 1 ? "s" : ""} auto-created` : "Client created successfully");
     } catch (err: any) {
       toast.error(err?.message || "Failed to create client");
     }
@@ -2072,7 +2548,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       setIsEditClientModalOpen(false);
       setEditingClient(null);
       setShowEditClientErrors(false);
-      toast.success("Client updated successfully");
+      toast.success(depts.length > 0 ? `Client updated successfully (${depts.length} dept project${depts.length > 1 ? "s" : ""} synced)` : "Client updated successfully");
     } catch (err: any) {
       toast.error(err?.message || "Failed to update client");
     }
@@ -2080,7 +2556,9 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
   const handleCreateProject = async () => {
     setShowNewProjectErrors(true);
-    if (!newProjectName.trim() || !selectedClientId || !newProjectCategory || !newProjectStartDate || !newProjectEndDate) {
+    // K9: landing context ma selectedClientId null hoy → landing picker vapro
+    const effClientId = selectedClientId || landingProjectClientId;
+    if (!newProjectName.trim() || !effClientId || !newProjectCategory || !newProjectStartDate || !newProjectEndDate) {
       toast.error("Please fill in all required fields");
       setTimeout(() => setShowNewProjectErrors(false), 3000);
       return;
@@ -2095,7 +2573,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       const numCpl = parseFloat(String(newProjectCpl || "0")) || undefined;
 
       const payload: any = {
-        client_id: selectedClientId,
+        client_id: effClientId,
         general: {
           project_name: newProjectName.trim(),
           description: newProjectDescription?.trim() || undefined,
@@ -2148,6 +2626,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       setActiveProjectTab('general');
       setShowNewProjectErrors(false);
       setIsNewProjectModalOpen(false);
+      setIsLandingProjectOpen(false);
+      setLandingProjectClientId("");
       toast.success("Project created successfully!");
     } catch (err: any) {
       toast.error(err?.message || "Failed to create project");
@@ -2205,6 +2685,16 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           project_budget: numBudget,
           amount_received: numReceived,
           next_payment_date: editingProject.nextPaymentDate || undefined,
+          // K10: keep payment entries (else $set would wipe them)
+          payments: (editingProject.payments || []).map(p => ({
+            id: p.id,
+            date: p.date || undefined,
+            amount: p.amount,
+            work_from: p.work_from || undefined,
+            work_to: p.work_to || undefined,
+            next_reminder: p.next_reminder || undefined,
+            note: p.note || undefined,
+          })),
         },
       };
 
@@ -2428,6 +2918,21 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     if (clientSort === "projectsDesc") {
       return b.activeProjects - a.activeProjects;
     }
+    return a.name.localeCompare(b.name);
+  });
+
+  // K1: Projects landing lists. Active = anything not Completed; Archived = Completed.
+  // K14: On Hold default neeche (sort last).
+  const filteredProjects = projects.filter(project => {
+    if (activeTab === "Active Projects" && project.status === "Completed") return false;
+    if (activeTab === "Archived Projects" && project.status !== "Completed") return false;
+    if (searchQuery && !`${project.name} ${clients.find(c => c.id === project.clientId)?.name || ""}`.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    if (clientFilterCategories.length > 0 && !clientFilterCategories.includes(project.category)) return false;
+    return true;
+  }).sort((a, b) => {
+    const aHold = a.status === "On Hold" ? 1 : 0;
+    const bHold = b.status === "On Hold" ? 1 : 0;
+    if (aHold !== bHold) return aHold - bHold;
     return a.name.localeCompare(b.name);
   });
 
@@ -2666,8 +3171,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                       <X className="w-3 h-3" />
                                     </button>
                                   )}
-                                </div>
-                              </div>
+                        </div>
+                      </div>
 
                               <div className="max-h-56 overflow-y-auto p-1.5 space-y-0.5">
                                 {/* Option: Unassign */}
@@ -3367,6 +3872,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               >
                 <ArrowLeft className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
               </button>
+              {/* K5: highlighted client logo — project ni odakh logo uparthi */}
+              <BrandLogo src={client.logo} alt={client.name} size="w-20 h-20" />
               <div>
                 <h1 className="text-3xl font-black tracking-tight text-foreground leading-tight">{project.name}</h1>
                 <div className="flex items-center gap-2 mt-2">
@@ -3431,6 +3938,32 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 )}
               </button>
 
+              {/* K6: dept arrows — click = auto dept view + scroll */}
+              {isSocialMediaCategory(project.category) && (
+                <button
+                  type="button"
+                  onClick={() => jumpToDept("smm")}
+                  className="flex items-center gap-2 px-3.5 py-2 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-xl transition-all shadow-sm"
+                  title="Go to Social Media (SMM) section"
+                >
+                  <span>📱</span>
+                  <span>SMM</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                </button>
+              )}
+              {isMarketingCategory(project.category) && (
+                <button
+                  type="button"
+                  onClick={() => jumpToDept("dm")}
+                  className="flex items-center gap-2 px-3.5 py-2 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-xl transition-all shadow-sm"
+                  title="Go to Digital Marketing section"
+                >
+                  <span>📈</span>
+                  <span>DM</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                </button>
+              )}
+
               {/* Assign Creative Team */}
               <button
                 type="button"
@@ -3466,28 +3999,99 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             </div>
           </div>
 
+          {/* K13: Quick Links — brand na badha shortcuts ek j jagyae (go-to) */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-black text-muted-foreground uppercase tracking-widest mr-1">Quick Links:</span>
+            {project.whatsapp_group_link ? (
+              <button
+                type="button"
+                onClick={() => window.open(project.whatsapp_group_link, "_blank")}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-emerald-700 font-bold text-xs rounded-full transition-colors"
+                title="WhatsApp group kholo"
+              >
+                <MessageSquare className="w-3.5 h-3.5" /> WhatsApp Group <ExternalLink className="w-3 h-3" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => { setWhatsappLinkInput(""); setIsWhatsappModalOpen(true); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-muted hover:bg-muted/70 border border-border/50 text-muted-foreground font-bold text-xs rounded-full transition-colors"
+                title="WhatsApp group link set karo"
+              >
+                <MessageSquare className="w-3.5 h-3.5" /> Set WhatsApp
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => document.getElementById("finance-section")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-full transition-colors shadow-sm"
+              title="Finance & followups par jao"
+            >
+              ➦ Followups
+            </button>
+            <button
+              type="button"
+              onClick={() => { setProjectSubTab("logs"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-full transition-colors shadow-sm"
+              title="Activity logs juo"
+            >
+              📋 Logs
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsCredentialsModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-full transition-colors shadow-sm"
+              title="Credentials kholo"
+            >
+              <Key className="w-3.5 h-3.5 text-amber-500" /> Credentials
+              {((project.credentials || []).length > 0) && (
+                <span className="px-1.5 py-0.5 bg-amber-500/10 text-amber-600 rounded-full text-[10px] font-black">{(project.credentials || []).length}</span>
+              )}
+            </button>
+          </div>
+
           {/* Top Summary */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm">
-               <div className="flex justify-between items-end mb-2">
-                  <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Progress</span>
-                  <span className="text-3xl font-black text-foreground font-mono">{project.progress}%</span>
-               </div>
-               <div className="h-2 w-full bg-muted/60 rounded-full overflow-hidden mt-4">
-                 <div 
-                   className={cn("h-full rounded-full transition-all duration-1000 ease-out", getProgressColor(project.status))}
-                   style={{ width: `${project.progress}%` }}
-                 ></div>
-               </div>
-            </div>
+               {(() => {
+                 // K8: start–end dates lakheli + eni pramane % (date-driven progress)
+                 const dp = getDateProgress(project.startDate, project.endDate);
+                 const pct = dp ? dp.pct : (project.progress || 0);
+                 return (
+                   <>
+                     <div className="flex justify-between items-end mb-2">
+                       <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Progress</span>
+                       <span className="text-3xl font-black text-foreground font-mono">{pct}%</span>
+                     </div>
+                     {dp && (
+                       <p className="text-[11px] font-bold text-muted-foreground">
+                         {safeFormat(project.startDate, "dd/MM/yyyy")} → {safeFormat(project.endDate, "dd/MM/yyyy")} • {dp.elapsed}/{dp.total} days
+                       </p>
+                     )}
+                     <div className="h-2 w-full bg-muted/60 rounded-full overflow-hidden mt-4">
+                       <div
+                         className={cn("h-full rounded-full transition-all duration-1000 ease-out", getProgressColor(project.status))}
+                         style={{ width: `${pct}%` }}
+                       ></div>
+                     </div>
+                   </>
+                 );
+               })()}
+             </div>
             
+            {/* F3: Budget ni jagyae Revenue total (transcript: budget nathi jotu) */}
             <div className="bg-card border border-border/60 rounded-3xl p-6 flex items-center gap-5 shadow-sm">
-              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
+              <button
+                type="button"
+                onClick={() => { setRevenueForm({ date: "", revenue: "", editId: "" }); setIsRevenueOpen(true); }}
+                className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0 hover:bg-emerald-500/20 transition-colors"
+                title="Revenue log kholo"
+              >
                 <IndianRupee className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Budget</p>
-                <h3 className="text-3xl font-black text-foreground font-mono">{project.budget}</h3>
+              </button>
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Total Revenue</p>
+                <h3 className="text-3xl font-black text-emerald-600 font-mono">₹{revenueTotal.toLocaleString("en-IN")}</h3>
               </div>
             </div>
             
@@ -3498,6 +4102,137 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               <div>
                 <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Timeline</p>
                 <h3 className="text-sm font-black text-foreground">{safeFormat(project.startDate, "dd/MM/yyyy")} - {safeFormat(project.endDate, "dd/MM/yyyy")}</h3>
+                {(() => {
+                  const dp = getDateProgress(project.startDate, project.endDate);
+                  return dp ? (
+                    <p className="text-[11px] font-bold text-primary mt-1">{dp.total} days • {dp.elapsed} elapsed</p>
+                  ) : null;
+                })()}
+              </div>
+            </div>
+          </div>
+
+          {/* K10: Finance & Payments — date, amount, work period, next reminder + followups */}
+          <div id="finance-section" className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm scroll-mt-4">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
+                  <IndianRupee className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-foreground">Finance & Payments</h3>
+                  <p className="text-[11px] text-muted-foreground font-medium">
+                    Total received: ₹{((project.payments || []).reduce((s, e) => s + (Number(e.amount) || 0), 0)).toLocaleString("en-IN")} • {(project.payments || []).length} entries
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPayFormOpen(v => !v)}
+                className="px-4 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/90 transition-all shadow-sm"
+              >
+                {isPayFormOpen ? "Close" : "+ Add Payment"}
+              </button>
+            </div>
+
+            {/* Payment entries */}
+            <div className="space-y-2 mb-4">
+              {(project.payments || []).length === 0 && (
+                <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">Haju koi payment entry nathi.</p>
+              )}
+              {(project.payments || []).map(e => (
+                <div key={e.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 rounded-2xl border border-border/40 bg-muted/20 text-xs">
+                  <span className="font-mono font-bold text-foreground">{e.date || "—"}</span>
+                  <span className="font-black text-emerald-600 font-mono">₹{(Number(e.amount) || 0).toLocaleString("en-IN")}</span>
+                  {(e.work_from || e.work_to) && (
+                    <span className="font-semibold text-muted-foreground">Work: {e.work_from || ""}{e.work_from && e.work_to ? " → " : ""}{e.work_to || ""}</span>
+                  )}
+                  {e.next_reminder && (
+                    <span className="font-bold text-amber-600">Next: {e.next_reminder}</span>
+                  )}
+                  {e.note && <span className="text-muted-foreground truncate max-w-[220px]" title={e.note}>{e.note}</span>}
+                  <button type="button" onClick={() => handleDeletePayment(project, e.id)} className="ml-auto p-1 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors" title="Delete entry">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Add payment form */}
+            {isPayFormOpen && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 rounded-2xl bg-muted/30 border border-border/40 mb-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Date *</label>
+                  <DatePicker value={payForm.date} onChange={(val) => setPayForm({ ...payForm, date: val })} placeholder="Select date" className="w-full h-10 bg-background border-border rounded-xl text-xs" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Amount *</label>
+                  <input type="number" min="0" value={payForm.amount} onChange={e => setPayForm({ ...payForm, amount: e.target.value })} placeholder="e.g. 50000" className="w-full px-3 h-10 bg-background border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Work From</label>
+                  <DatePicker value={payForm.work_from} onChange={(val) => setPayForm({ ...payForm, work_from: val })} placeholder="Select date" className="w-full h-10 bg-background border-border rounded-xl text-xs" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Work To</label>
+                  <DatePicker value={payForm.work_to} onChange={(val) => setPayForm({ ...payForm, work_to: val })} placeholder="Select date" className="w-full h-10 bg-background border-border rounded-xl text-xs" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Next Reminder</label>
+                  <DatePicker value={payForm.next_reminder} onChange={(val) => setPayForm({ ...payForm, next_reminder: val })} placeholder="Select date" className="w-full h-10 bg-background border-border rounded-xl text-xs" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Responsibility (auto-task)</label>
+                  <select value={payForm.ownerId} onChange={e => setPayForm({ ...payForm, ownerId: e.target.value })} className="w-full px-3 h-10 bg-background border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20">
+                    <option value="">Select...</option>
+                    {(employees || []).map(emp => (
+                      <option key={emp.id} value={emp.id}>{emp.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1 col-span-2 md:col-span-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Note</label>
+                  <input type="text" value={payForm.note} onChange={e => setPayForm({ ...payForm, note: e.target.value })} placeholder="Optional" className="w-full px-3 h-10 bg-background border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                </div>
+                <div className="flex items-end col-span-2 md:col-span-1">
+                  <button type="button" onClick={() => handleSavePayment(project, client.name)} className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors shadow-sm">
+                    Save Payment
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Followups: recent + quick add (text + next date) */}
+            <div className="border-t border-border/40 pt-4">
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Followups {projectFollowups.length > 0 && `(${projectFollowups.length})`}</p>
+              <div className="space-y-1.5 mb-3 max-h-32 overflow-y-auto pr-1">
+                {projectFollowups.length === 0 && (
+                  <p className="text-[11px] text-muted-foreground/60 font-medium">Haju koi followup nathi.</p>
+                )}
+                {projectFollowups.slice(0, 5).map((f: any, i: number) => (
+                  <p key={f.id || i} className="text-xs text-foreground bg-muted/30 border border-border/30 rounded-xl px-3 py-1.5">
+                    <span className="font-bold">{f.text}</span>
+                    <span className="text-muted-foreground font-mono text-[10px] ml-2">{f.created_at ? String(f.created_at).split("T")[0] : ""}</span>
+                  </p>
+                ))}
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="text"
+                  value={followupText}
+                  onChange={e => setFollowupText(e.target.value)}
+                  placeholder="Followup text lakho..."
+                  className="flex-1 px-3 h-10 bg-background border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+                <DatePicker
+                  value={followupNextDate}
+                  onChange={(val) => setFollowupNextDate(val)}
+                  placeholder="Next date"
+                  className="h-10 bg-background border-border rounded-xl text-xs font-medium sm:w-[160px]"
+                />
+                <button type="button" onClick={() => handleAddFollowup(project)} className="px-4 h-10 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/90 transition-colors shrink-0">
+                  + Followup
+                </button>
               </div>
             </div>
           </div>
@@ -3598,12 +4333,23 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 </div>
               </div>
               <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
-                {(!project.activityLogs || project.activityLogs.length === 0) ? (
-                  <div className="text-center py-16 text-sm text-muted-foreground/60 font-semibold italic">
-                    No activity logs recorded yet.
-                  </div>
-                ) : (
-                  [...project.activityLogs].reverse().map((log: any) => (
+                {(() => {
+                  // K11: backend logs (by default) + local logs, dedupe by id
+                  const seen = new Set<string>();
+                  const combined = [...backendActivityLogs, ...(project.activityLogs || [])].filter(l => {
+                    const k = String(l.id || `${l.action}-${l.timestamp}`);
+                    if (seen.has(k)) return false;
+                    seen.add(k);
+                    return true;
+                  });
+                  if (combined.length === 0) {
+                    return (
+                      <div className="text-center py-16 text-sm text-muted-foreground/60 font-semibold italic">
+                        No activity logs recorded yet.
+                      </div>
+                    );
+                  }
+                  return combined.map((log: any) => (
                     <div key={log.id} className="flex gap-4 p-4 bg-muted/20 hover:bg-muted/30 rounded-2xl border border-border/40 transition-colors">
                       <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 font-bold text-sm">
                         ⚙️
@@ -3619,8 +4365,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         <p className="text-[10px] font-bold text-primary/80">Performed by: {log.performedBy}</p>
                       </div>
                     </div>
-                  ))
-                )}
+                  ));
+                })()}
               </div>
             </div>
           ) : (
@@ -3656,6 +4402,24 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
               return (
                 <div className="lg:col-span-3 space-y-6">
+                  {/* K4: SMM dept dropdown header — click = auto SMM content + collapse */}
+                  <button
+                    type="button"
+                    id="dept-section-smm"
+                    onClick={() => {
+                      setOpenDept(prev => ({ ...prev, smm: !(prev["smm"] !== false) }));
+                      setDmWorkspaceView("social");
+                    }}
+                    className="flex items-center justify-between w-full p-3.5 bg-card/90 border border-border/60 rounded-2xl shadow-sm hover:bg-muted/40 transition-colors"
+                  >
+                    <span className="flex items-center gap-2 text-sm font-black text-foreground">
+                      <span>📱</span> Social Media (SMM)
+                      <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-black">{filteredCalendar.length} items</span>
+                    </span>
+                    <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", openDept["smm"] !== false && "rotate-180")} />
+                  </button>
+                  {(openDept["smm"] !== false) && (
+                  <>
                   {/* Digital Marketing View Switcher */}
                   {isMarketingCategory(project.category) && (
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-card/90 border border-border/60 rounded-2xl shadow-sm backdrop-blur-md gap-3">
@@ -3771,18 +4535,141 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                           <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
                             <SelectItem value="Current" className="text-xs font-semibold">Current Month</SelectItem>
                             <SelectItem value="All" className="text-xs font-semibold">All Items</SelectItem>
+                            {/* K16: project range months (e.g. 15th-cycle) */}
+                            {getProjectMonths(project.startDate, project.endDate).months.map(m => (
+                              <SelectItem key={m.value} value={m.value} className="text-xs font-semibold">{m.label}</SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
                     </div>
                   </div>
 
+                  {/* K17: timeline completion — final-link rule (posting date sudhi final link = done) */}
+                  {(() => {
+                    const todayStr = new Date().toISOString().split("T")[0] ?? "";
+                    const due = filteredCalendar.filter(i => i.postingDate && i.postingDate <= todayStr);
+                    const done = due.filter(i => (i.finalPostLink || i.finalReelLink || i.postingLinkOfIg || "").trim() !== "");
+                    const pct = due.length > 0 ? Math.round((done.length / due.length) * 100) : 0;
+                    return (
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 px-4 py-3 bg-card/80 border border-border/60 rounded-2xl shadow-sm">
+                        <div className="flex items-baseline gap-2 shrink-0">
+                          <span className="text-2xl font-black text-foreground font-mono">{done.length}/{due.length}</span>
+                          <span className="text-[11px] text-muted-foreground font-bold uppercase tracking-wider">thai gaya</span>
+                        </div>
+                        <div className="flex-1 h-2 bg-muted/60 rounded-full overflow-hidden min-w-[120px]">
+                          <div className={cn("h-full rounded-full transition-all duration-500", pct === 100 ? "bg-emerald-500" : "bg-primary")} style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="text-[11px] font-bold text-muted-foreground shrink-0">{pct}% • Final link rule</span>
+                      </div>
+                    );
+                  })()}
+                  {/* K18: CC status inline (month approval + overlap months + update) */}
+                  {(() => {
+                    const now = new Date();
+                    const ck = /^\d{4}-\d{2}$/.test(calendarMonthFilter)
+                      ? calendarMonthFilter
+                      : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+                    const [yy, mm] = ck.split("-").map(Number);
+                    const ap = ccApprovals[ck];
+                    const chipCls =
+                      ap?.status === "Approved by Client"
+                        ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
+                        : ap?.status === "Rejected"
+                        ? "bg-rose-500/10 text-rose-500 border-rose-500/30"
+                        : ap?.status === "Changes Requested"
+                        ? "bg-amber-500/10 text-amber-600 border-amber-500/30"
+                        : "bg-muted text-muted-foreground border-border/50";
+                    // overlap months (range ma avta months — Sept approved + new pending banne dekhay)
+                    const f = customDateRange?.from ? new Date(customDateRange.from) : null;
+                    const t = customDateRange?.to ? new Date(customDateRange.to) : null;
+                    const overlapKeys: string[] = [];
+                    if (f && t && !isNaN(f.getTime()) && !isNaN(t.getTime())) {
+                      const cur = new Date(f.getFullYear(), f.getMonth(), 1);
+                      const last = new Date(t.getFullYear(), t.getMonth(), 1);
+                      let g = 0;
+                      while (cur <= last && g < 13) {
+                        const k = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}`;
+                        if (!overlapKeys.includes(k)) overlapKeys.push(k);
+                        cur.setMonth(cur.getMonth() + 1);
+                        g++;
+                      }
+                    }
+                    return (
+                      <div className="flex flex-col gap-2 px-4 py-3 bg-card/80 border border-border/60 rounded-2xl shadow-sm">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[11px] font-black text-muted-foreground uppercase tracking-widest">CC Status:</span>
+                          <span className={cn("px-2.5 py-1 rounded-full text-[11px] font-black border", chipCls)}>
+                            {ck} • {ap?.status || "Pending"}
+                          </span>
+                          {overlapKeys.filter(k => k !== ck).map(k => (
+                            <span key={k} className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-muted text-muted-foreground border border-border/40">
+                              {k} • {ccApprovals[k]?.status || "—"}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <select
+                            value={ccStatusDraft}
+                            onChange={e => setCcStatusDraft(e.target.value)}
+                            className="h-9 px-3 bg-background border border-border/60 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-primary"
+                          >
+                            {["Pending", "Approved by Client", "Changes Requested", "Rejected"].map(s => (
+                              <option key={s} value={s}>{s}</option>
+                            ))}
+                          </select>
+                          {ccStatusDraft !== "Approved by Client" && (
+                            <input
+                              type="text"
+                              value={ccReasonDraft}
+                              onChange={e => setCcReasonDraft(e.target.value)}
+                              placeholder="Reason compulsory..."
+                              className="flex-1 px-3 h-9 bg-background border border-border/60 rounded-xl text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary"
+                            />
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleSaveCcStatus(project.id, (mm as number), (yy as number))}
+                            className="h-9 px-4 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/90 transition-colors shrink-0"
+                          >
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4">
                     <div>
                       <h2 className="text-base sm:text-lg lg:text-xl font-bold tracking-tight">Content Calendar</h2>
                       <p className="text-xs text-muted-foreground mt-0.5">Plan, schedule, and track content approval pipeline</p>
                     </div>
                     <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar w-full lg:w-auto py-0.5 shrink-0">
+                      {/* K17: explanation mode (Meet presentation) */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (explainMode) setExplainedIds([]);
+                          setExplainMode(v => !v);
+                        }}
+                        className={cn(
+                          "h-8 px-3 rounded-xl text-xs font-bold shrink-0 shadow-sm transition-all border",
+                          explainMode
+                            ? "bg-violet-600 text-white border-violet-600"
+                            : "bg-card hover:bg-card border-border/60 text-foreground"
+                        )}
+                        title="Google Meet ma samjavva: items par click = highlight"
+                      >
+                        {explainMode ? `✨ Explaining (${explainedIds.length})` : "✨ Explain"}
+                      </button>
+                      {explainMode && explainedIds.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setExplainedIds([])}
+                          className="h-8 px-3 rounded-xl text-xs font-bold shrink-0 shadow-sm transition-all border bg-card hover:bg-muted border-border/60 text-muted-foreground"
+                        >
+                          Clear
+                        </button>
+                      )}
                       <Select value={calendarTypeFilter} onValueChange={(val) => setCalendarTypeFilter(val)}>
                         <SelectTrigger className="h-8 w-auto min-w-[95px] max-w-[120px] px-2.5 bg-card/90 hover:bg-card border border-border/60 rounded-xl text-xs font-semibold text-foreground shrink-0 shadow-sm transition-all focus:ring-1 focus:ring-primary/30 gap-1.5">
                           <SelectValue placeholder="All Types" />
@@ -3957,7 +4844,19 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                 );
 
                               return (
-                                <tr key={item.id} onClick={() => setExpandedRowId(isExpanded ? null : item.id)} className={cn("hover:bg-muted/20 transition-all group cursor-pointer", isExpanded ? "bg-muted/10 align-top" : "h-[80px]")}>
+                                <tr
+                                  key={item.id}
+                                  onClick={() => {
+                                    // K17: explain mode ma click = highlight, normal ma expand
+                                    if (explainMode) toggleExplain(item.id);
+                                    else setExpandedRowId(isExpanded ? null : item.id);
+                                  }}
+                                  className={cn(
+                                    "hover:bg-muted/20 transition-all group cursor-pointer",
+                                    isExpanded ? "bg-muted/10 align-top" : "h-[80px]",
+                                    explainMode && explainedIds.includes(item.id) && "bg-violet-500/10 ring-2 ring-inset ring-violet-500/60"
+                                  )}
+                                >
 
                                   {/* Schedule */}
                                   <td className="py-2 px-5 text-center whitespace-nowrap">
@@ -4179,6 +5078,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       </div>
                     )}
                   </div>
+                  </>
+                  )}
                 </div>
               );
             })() : isMarketingCategory(project.category) ? (() => {
@@ -4214,41 +5115,50 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               let leads = totalLeads.toLocaleString("en-IN");
               let cpl = computedCPL.toString();
               let amountSpent = totalSpent.toLocaleString("en-IN");
-              
-              let reachTrend = "+14.2%", leadsTrend = "+8.1%", cplTrend = "-5.4%", amountSpentTrend = "+12.2%";
 
-              if (totalReach === 0) {
-                reach = project.reach || "1.2M";
-                leads = project.leads || "3,240";
-                cpl = project.cpl || "250";
-                amountSpent = "8,10,000";
+              let reachTrend = "+0.0%", leadsTrend = "+0.0%", cplTrend = "+0.0%", amountSpentTrend = "+0.0%";
 
-                if (selectedCampaignForStats === "Q4 Retargeting Ads") {
-                  reach = "450K"; leads = "1,400"; cpl = "180"; amountSpent = "2,52,000";
-                  reachTrend = "+5.1%"; leadsTrend = "+12.0%"; cplTrend = "-2.5%"; amountSpentTrend = "+8.4%";
-                } else if (selectedCampaignForStats === "Holiday Social Push") {
-                  reach = "850K"; leads = "1,600"; cpl = "320"; amountSpent = "5,12,000";
-                  reachTrend = "+22.4%"; leadsTrend = "+4.2%"; cplTrend = "+1.1%"; amountSpentTrend = "+2.1%";
-                } else if (selectedCampaignForStats === "B2B Email Drip") {
-                  reach = "120K"; leads = "240"; cpl = "450"; amountSpent = "1,08,000";
-                  reachTrend = "+2.0%"; leadsTrend = "+1.1%"; cplTrend = "-8.5%"; amountSpentTrend = "+1.0%";
-                }
-
-                let days = 30;
-                if (customDateRange?.from && customDateRange?.to) {
-                  days = differenceInDays(customDateRange.to, customDateRange.from) || 1;
-                }
-
-                if (days !== 30) {
-                  const ratio = days / 30;
-                  reach = (parseFloat(reach) * ratio).toFixed(1) + (reach.includes("M") ? "M" : "K");
-                  leads = Math.floor(parseInt(leads.replace(/,/g, "")) * ratio).toLocaleString("en-IN");
-                  amountSpent = Math.floor(parseInt(amountSpent.replace(/,/g, "")) * ratio).toLocaleString("en-IN");
-                }
+              // F1+F2: backend summary hoy to real KPIs + growth (filter-wired, live)
+              const fmtGrowth = (g: any) => {
+                if (typeof g !== "number" || isNaN(g)) return "+0.0%";
+                return `${g >= 0 ? "+" : ""}${g}%`;
+              };
+              const sk = dmSummary?.kpis;
+              if (sk) {
+                const rv = Number(sk.reach?.value);
+                if (!isNaN(rv)) reach = rv >= 1000000 ? `${(rv / 1000000).toFixed(1)}M` : rv >= 1000 ? `${Math.round(rv / 1000)}K` : `${Math.round(rv)}`;
+                const lv = Number(sk.leads?.value);
+                if (!isNaN(lv)) leads = Math.round(lv).toLocaleString("en-IN");
+                const cv = Number(sk.cost_per_lead?.value);
+                if (!isNaN(cv)) cpl = `${Math.round(cv)}`;
+                const sv = Number(sk.amount_spent?.value);
+                if (!isNaN(sv)) amountSpent = Math.round(sv).toLocaleString("en-IN");
+                reachTrend = fmtGrowth(sk.reach?.growth_pct);
+                leadsTrend = fmtGrowth(sk.leads?.growth_pct);
+                cplTrend = fmtGrowth(sk.cost_per_lead?.growth_pct);
+                amountSpentTrend = fmtGrowth(sk.amount_spent?.growth_pct);
               }
 
               return (
                 <div className="lg:col-span-3 space-y-6">
+                  {/* K4: Digital Marketing dept dropdown header — click = auto DM stats + collapse */}
+                  <button
+                    type="button"
+                    id="dept-section-dm"
+                    onClick={() => {
+                      setOpenDept(prev => ({ ...prev, dm: !(prev["dm"] !== false) }));
+                      setDmWorkspaceView("stats");
+                    }}
+                    className="flex items-center justify-between w-full p-3.5 bg-card/90 border border-border/60 rounded-2xl shadow-sm hover:bg-muted/40 transition-colors"
+                  >
+                    <span className="flex items-center gap-2 text-sm font-black text-foreground">
+                      <span>📈</span> Digital Marketing
+                      <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-black">{dailyStatsList.length} logs</span>
+                    </span>
+                    <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", openDept["dm"] !== false && "rotate-180")} />
+                  </button>
+                  {(openDept["dm"] !== false) && (
+                  <>
                   {/* Digital Marketing View Switcher */}
                   <div className="flex flex-wrap items-center justify-between p-2.5 bg-card/90 border border-border/60 rounded-2xl shadow-sm backdrop-blur-md gap-3">
                     <div className="flex items-center gap-2">
@@ -4295,6 +5205,14 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground font-bold text-xs rounded-lg hover:bg-primary/90 transition-all shadow-sm whitespace-nowrap"
                       >
                         <Plus className="w-3.5 h-3.5" /> Log Stats
+                      </button>
+                      {/* F3: revenue icon → popup (page nai) */}
+                      <button
+                        onClick={() => { setRevenueForm({ date: "", revenue: "", editId: "" }); setIsRevenueOpen(true); }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white font-bold text-xs rounded-lg hover:bg-emerald-700 transition-all shadow-sm whitespace-nowrap"
+                        title="Revenue log (popup)"
+                      >
+                        <IndianRupee className="w-3.5 h-3.5" /> Revenue
                       </button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -4454,101 +5372,96 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Top Performing Campaigns */}
+                  {/* K7: Daily Data Entry Tasks card removed (DM ma tasks rakhvana nathi) */}
+                  <div className="grid grid-cols-1 gap-6">
+                    {/* Top Performing Campaigns (F6: backend auto) */}
                     <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm">
                       <div className="flex items-center justify-between mb-6">
                         <h3 className="text-sm font-bold text-foreground">Top Performing Campaigns</h3>
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase">Auto • by leads</span>
                       </div>
                       <div className="space-y-4">
-                        {[
-                          { name: "Q4 Retargeting Ads", budget: "₹45,000", leads: 450, status: "Active", progress: 75 },
-                          { name: "Holiday Social Push", budget: "₹20,000", leads: 180, status: "Active", progress: 40 },
-                          { name: "B2B Email Drip", budget: "₹15,000", leads: 85, status: "Completed", progress: 100 }
-                        ].map((camp, i) => (
-                          <div key={i} className="flex items-center gap-4">
-                            <div className="flex-1">
-                              <div className="flex justify-between items-center mb-1">
-                                <span className="text-sm font-bold text-foreground">{camp.name}</span>
-                                <span className="text-xs font-bold text-muted-foreground font-mono">{camp.leads} leads</span>
-                              </div>
-                              <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                                <div className={cn("h-full rounded-full transition-all duration-1000", camp.progress === 100 ? "bg-emerald-500" : "bg-primary")} style={{ width: `${camp.progress}%` }}></div>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Daily Data Entry Tasks */}
-                    <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm">
-                      <div className="flex items-center justify-between mb-6">
-                        <h3 className="text-sm font-bold text-foreground">Daily Data Entry Tasks</h3>
-                      </div>
-                      <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1">
+                        {topCampaigns.length === 0 && (
+                          <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">Haju koi campaign data nathi.</p>
+                        )}
                         {(() => {
-                          const dailyModule = (project.modules || []).find((m: any) => m.id === "daily-data-entry");
-                          const dailyTasks = dailyModule ? dailyModule.tasks || [] : [];
-                          if (dailyTasks.length === 0) {
+                          const maxLeads = Math.max(1, ...topCampaigns.map(c => Number(c.leads) || 0));
+                          return topCampaigns.slice(0, 5).map((camp: any, i: number) => {
+                            const leads = Number(camp.leads) || 0;
+                            const spend = Number(camp.spend) || 0;
+                            const pct = Math.round((leads / maxLeads) * 100);
                             return (
-                              <div className="text-center py-8 text-xs font-semibold text-muted-foreground/40 border border-dashed border-border/20 rounded-2xl bg-muted/5">
-                                No daily tasks yet.
-                              </div>
-                            );
-                          }
-                          return dailyTasks.map((t: any) => {
-                            const isCompleted = t.status === "completed";
-                            return (
-                              <div key={t.id} className="flex items-center justify-between p-3 rounded-2xl border border-border/40 hover:bg-muted/30 transition-colors">
-                                <div className="flex items-center gap-3">
-                                  <button
-                                    onClick={() => {
-                                      const nextStatus = isCompleted ? "todo" : "completed";
-                                      const updatedModules = (project.modules || []).map((m: any) => {
-                                        if (m.id === "daily-data-entry") {
-                                          return {
-                                            ...m,
-                                            tasks: m.tasks.map((task: any) => task.id === t.id ? { ...task, status: nextStatus } : task)
-                                          };
-                                        }
-                                        return m;
-                                      });
-                                      const newProjects = projects.map(p => p.id === project.id ? { ...p, modules: updatedModules } : p);
-                                      setProjects(newProjects);
-                                      localStorage.setItem("hrms_projects", JSON.stringify(newProjects));
-                                      window.dispatchEvent(new Event("storage"));
-                                      toast.success(isCompleted ? "Task marked incomplete" : "Task completed!");
-                                    }}
-                                    className={cn(
-                                      "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors shrink-0",
-                                      isCompleted ? "border-emerald-500 bg-emerald-500/10 text-emerald-500" : "border-muted-foreground hover:border-primary text-transparent"
-                                    )}
-                                  >
-                                    {isCompleted && <CheckCircle2 className="w-3.5 h-3.5" />}
-                                  </button>
-                                  <div className="flex flex-col">
-                                    <span className={cn("text-xs font-bold", isCompleted ? "text-muted-foreground line-through decoration-muted-foreground/50" : "text-foreground")}>
-                                      {t.title}
-                                    </span>
-                                    <span className="text-[10px] text-muted-foreground mt-0.5">
-                                      Due: {t.dueDate} • Assigned: {t.assignedToName || "Emma"}
+                              <div key={camp.campaign_name || i} className="flex items-center gap-4">
+                                <div className="flex-1">
+                                  <div className="flex justify-between items-center mb-1 gap-2">
+                                    <span className="text-sm font-bold text-foreground truncate">{camp.campaign_name}</span>
+                                    <span className="text-xs font-bold text-muted-foreground font-mono whitespace-nowrap">
+                                      {leads.toLocaleString()} leads • ₹{spend.toLocaleString("en-IN")}
+                                      {Number(camp.revenue) > 0 && (
+                                        <span className="text-emerald-600"> • ₹{Number(camp.revenue).toLocaleString("en-IN")}</span>
+                                      )}
                                     </span>
                                   </div>
+                                  <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                                    <div className={cn("h-full rounded-full transition-all duration-1000", i === 0 ? "bg-emerald-500" : "bg-primary")} style={{ width: `${pct}%` }}></div>
+                                  </div>
                                 </div>
-                                <span className={cn(
-                                  "px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border",
-                                  isCompleted ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : "bg-amber-500/10 text-amber-600 border-amber-500/20"
-                                )}>
-                                  {isCompleted ? "Done" : "Pending"}
-                                </span>
                               </div>
                             );
                           });
                         })()}
                       </div>
                     </div>
-                  </div>
+
+                    {/* F8: Monthly Report — 1 month select = full data auto (ochha button) */}
+                    <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+                        <h3 className="text-sm font-bold text-foreground">Monthly Report <span className="text-[10px] font-bold text-muted-foreground uppercase ml-1">Auto</span></h3>
+                        <select
+                          value={reportMonth}
+                          onChange={(e) => setReportMonth(e.target.value)}
+                          className="h-9 px-3 bg-muted/50 border border-border/60 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-primary"
+                        >
+                          <option value="">Select month...</option>
+                          {getProjectMonths(project.startDate, project.endDate).months.map(m => (
+                            <option key={m.value} value={m.value}>{m.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      {reportLoading ? (
+                        <p className="text-xs text-muted-foreground font-semibold text-center py-6">Loading report...</p>
+                      ) : !reportData ? (
+                        <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">Month select karo — badho data automatic malse.</p>
+                      ) : (
+                        <>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-4">
+                            {[
+                              { label: "Reach", v: reportData?.kpis?.reach },
+                              { label: "Impressions", v: reportData?.kpis?.impressions },
+                              { label: "Leads", v: reportData?.kpis?.leads },
+                              { label: "Cost / Lead", v: reportData?.kpis?.cost_per_lead },
+                              { label: "Spend", v: reportData?.kpis?.amount_spent },
+                              { label: "Revenue", v: reportData?.kpis?.revenue },
+                            ].map(k => (
+                              <div key={k.label} className="rounded-2xl border border-border/40 bg-muted/20 px-3.5 py-3">
+                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{k.label}</p>
+                                <p className="text-lg font-black text-foreground font-mono mt-0.5">{k.v?.formatted ?? "—"}</p>
+                                {typeof k.v?.growth_pct === "number" && (
+                                  <p className={`text-[10px] font-bold font-mono ${k.v.growth_pct >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
+                                    {k.v.growth_pct >= 0 ? "▲" : "▼"} {Math.abs(k.v.growth_pct)}%
+                                  </p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          {(reportData?.top_campaigns || []).length > 0 && (
+                            <div className="text-[11px] text-muted-foreground font-semibold">
+                              Top: {(reportData.top_campaigns || []).slice(0, 3).map((c: any) => c.campaign_name).join(" • ")}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
 
                   <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm">
                     <div className="flex items-center justify-between mb-6">
@@ -4560,71 +5473,131 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     <div className="overflow-x-auto">
                       <table className="w-full text-left border-collapse">
                         <thead>
+                          {/* F7: full columns — Sr, date, campaign, reach, impression, lead, followers, revenue, spend, cost + action */}
                           <tr className="border-b border-border/40 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                            <th className="pb-3 pl-4">Date</th>
+                            <th className="pb-3 pl-4">Sr</th>
+                            <th className="pb-3">Date</th>
                             <th className="pb-3">Campaign</th>
                             <th className="pb-3 text-right">Reach</th>
+                            <th className="pb-3 text-right">Impr.</th>
                             <th className="pb-3 text-right">Leads</th>
+                            <th className="pb-3 text-right">Followers</th>
+                            <th className="pb-3 text-right">Revenue</th>
                             <th className="pb-3 text-right">Spend</th>
                             <th className="pb-3 text-right">CPL</th>
                             <th className="pb-3 text-right pr-4">Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border/20 text-xs font-semibold text-foreground">
+                          {/* F5: same-name combine → 1 dropdown per campaign (totals + collapse) */}
                           {(() => {
                             const dailyStats = dateFiltered || [];
                             if (dailyStats.length === 0) {
                               return (
                                 <tr>
-                                  <td colSpan={7} className="py-8 text-center text-xs font-semibold text-muted-foreground/40">
+                                  <td colSpan={11} className="py-8 text-center text-xs font-semibold text-muted-foreground/40">
                                     No stats logged yet matching the filters.
                                   </td>
                                 </tr>
                               );
                             }
-                            return dailyStats.slice(0, 10).map((stat: any) => {
-                              const cpl = stat.leads > 0 ? Math.round(stat.spend / stat.leads) : 0;
-                              return (
-                                <tr key={stat.id} className="hover:bg-muted/10 transition-colors">
-                                  <td className="py-3.5 pl-4 font-mono">{safeFormat(stat.date, "dd/MM/yyyy")}</td>
-                                  <td className="py-3.5 font-bold">{stat.campaignName}</td>
-                                  <td className="py-3.5 text-right font-mono">{Number(stat.reach || 0).toLocaleString()}</td>
-                                  <td className="py-3.5 text-right font-mono">{Number(stat.leads || 0).toLocaleString()}</td>
-                                  <td className="py-3.5 text-right font-mono">₹{Number(stat.spend || 0).toLocaleString()}</td>
-                                  <td className="py-3.5 text-right font-mono text-primary">₹{cpl}</td>
-                                  <td className="py-3.5 text-right pr-4">
-                                    <button
-                                      onClick={() => {
-                                        setConfirmModalState({
-                                          isOpen: true,
-                                          title: "Delete Daily Stats Log",
-                                          description: `Are you sure you want to delete this daily stat log for "${stat.campaignName}" on ${stat.date}? This action cannot be undone.`,
-                                          itemName: `${stat.campaignName} (${stat.date})`,
-                                          action: () => {
-                                            const updatedStats = (project.dailyStats || []).filter((s: any) => s.id !== stat.id);
-                                            const newProjects = projects.map(p => p.id === project.id ? { ...p, dailyStats: updatedStats } : p);
-                                            setProjects(newProjects);
-                                            localStorage.setItem("hrms_projects", JSON.stringify(newProjects));
-                                            window.dispatchEvent(new Event("storage"));
-                                            toast.success("Daily stats log deleted successfully!");
-                                            setConfirmModalState(prev => ({ ...prev, isOpen: false }));
-                                          }
-                                        });
-                                      }}
-                                      className="p-1 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors border border-border/30 shadow-sm bg-card inline-flex items-center justify-center"
-                                      title="Delete stats log"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
+                            const groups = new Map<string, any[]>();
+                            dailyStats.forEach((s: any) => {
+                              const k = s.campaignName || "Unknown";
+                              if (!groups.has(k)) groups.set(k, []);
+                              groups.get(k)!.push(s);
+                            });
+                            let sr = 0;
+                            return Array.from(groups.entries()).flatMap(([name, items]) => {
+                              const open = openCampGroups[name] !== false;
+                              const tLeads = items.reduce((a, s) => a + (Number(s.leads) || 0), 0);
+                              const tSpend = items.reduce((a, s) => a + (Number(s.spend) || 0), 0);
+                              const tRev = items.reduce((a, s) => a + (Number(s.revenue) || 0), 0);
+                              const rows: any[] = [(
+                                <tr key={`g-${name}`} onClick={() => toggleCampGroup(name)} className="cursor-pointer bg-muted/30 hover:bg-muted/50 transition-colors">
+                                  <td colSpan={11} className="py-2.5 pl-4 pr-4">
+                                    <span className="flex items-center gap-2 flex-wrap">
+                                      <span className="text-muted-foreground text-[10px]">{open ? "▼" : "▶"}</span>
+                                      <span className="font-black text-foreground">{name}</span>
+                                      <span className="px-1.5 py-0.5 rounded-md bg-primary/10 text-primary text-[10px] font-black">{items.length} logs</span>
+                                      <span className="text-[11px] text-muted-foreground font-bold ml-auto">
+                                        Leads: <span className="text-foreground font-mono">{tLeads.toLocaleString()}</span>
+                                        {" • "}Spend: <span className="text-foreground font-mono">₹{tSpend.toLocaleString("en-IN")}</span>
+                                        {" • "}Rev: <span className="text-emerald-600 font-mono">₹{tRev.toLocaleString("en-IN")}</span>
+                                      </span>
+                                    </span>
                                   </td>
                                 </tr>
-                              );
+                              )];
+                              if (open) {
+                                items.slice(0, 30).forEach((stat: any) => {
+                                  sr += 1;
+                                  const cpl = stat.leads > 0 ? Math.round(stat.spend / stat.leads) : 0;
+                                  rows.push((
+                                    <tr key={stat.id} className="hover:bg-muted/10 transition-colors">
+                                      <td className="py-3.5 pl-4 font-mono text-muted-foreground">{sr}</td>
+                                      <td className="py-3.5 font-mono">{safeFormat(stat.date, "dd/MM/yyyy")}</td>
+                                      <td className="py-3.5 text-muted-foreground">↳ {stat.campaignName}</td>
+                                      <td className="py-3.5 text-right font-mono">{Number(stat.reach || 0).toLocaleString()}</td>
+                                      <td className="py-3.5 text-right font-mono">{Number(stat.impressions || 0).toLocaleString()}</td>
+                                      <td className="py-3.5 text-right font-mono">{Number(stat.leads || 0).toLocaleString()}</td>
+                                      <td className="py-3.5 text-right font-mono">{Number(stat.followers || 0).toLocaleString()}</td>
+                                      <td className="py-3.5 text-right font-mono text-emerald-600">₹{Number(stat.revenue || 0).toLocaleString("en-IN")}</td>
+                                      <td className="py-3.5 text-right font-mono">₹{Number(stat.spend || 0).toLocaleString()}</td>
+                                      <td className="py-3.5 text-right font-mono text-primary">₹{cpl}</td>
+                                      <td className="py-3.5 text-right pr-4">
+                                        <span className="inline-flex items-center gap-1">
+                                          <button
+                                            onClick={() => openEditStat(stat)}
+                                            className="p-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors border border-border/30 shadow-sm bg-card inline-flex items-center justify-center"
+                                            title="Edit stats log"
+                                          >
+                                            <Edit2 className="w-3.5 h-3.5" />
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              setConfirmModalState({
+                                                isOpen: true,
+                                                title: "Delete Daily Stats Log",
+                                                description: `Are you sure you want to delete this daily stat log for "${stat.campaignName}" on ${stat.date}? This action cannot be undone.`,
+                                                itemName: `${stat.campaignName} (${stat.date})`,
+                                                action: () => {
+                                                  (async () => {
+                                                    try {
+                                                      await api.delete(`/projects/${project.id}/marketing-stats/${stat.id}`, { showErrorToast: false });
+                                                      await fetchDmStats(project.id);
+                                                      await fetchDmCampaigns(project.id);
+                                                      toast.success("Daily stats log deleted successfully!");
+                                                    } catch (err: any) {
+                                                      toast.error(err?.message || "Failed to delete stats log");
+                                                    } finally {
+                                                      setConfirmModalState(prev => ({ ...prev, isOpen: false }));
+                                                    }
+                                                  })();
+                                                }
+                                              });
+                                            }}
+                                            className="p-1 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors border border-border/30 shadow-sm bg-card inline-flex items-center justify-center"
+                                            title="Delete stats log"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  ));
+                                });
+                              }
+                              return rows;
                             });
                           })()}
                         </tbody>
                       </table>
                     </div>
                   </div>
+                  </div>
+                  </>
+                  )}
                 </div>
               );
             })() : (
@@ -7340,17 +8313,18 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         itemName={confirmModalState.itemName}
       />
 
-      <Dialog open={isLogDailyStatsOpen} onOpenChange={setIsLogDailyStatsOpen}>
+      <Dialog open={isLogDailyStatsOpen} onOpenChange={(open) => { setIsLogDailyStatsOpen(open); if (!open) setEditingStatId(null); }}>
         <DialogContent className={cn("p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl bg-card z-50 transition-all duration-300", isBulkAdd ? "sm:max-w-[700px]" : "sm:max-w-[450px]")}>
           <div className="p-6 md:p-8 border-b border-border/40">
             <h2 className="text-lg font-black tracking-tight text-foreground flex items-center gap-2">
-              📈 Log Daily Marketing Stats
+              📈 {editingStatId ? "Edit Stats Entry" : "Log Daily Marketing Stats"}
             </h2>
             <p className="text-xs text-muted-foreground mt-1 font-medium">Enter performance metrics for the selected campaign and date.</p>
           </div>
 
           <form onSubmit={handleLogDailyStats} className="p-6 md:p-8 space-y-5">
-            {/* Mode Switcher */}
+            {/* Mode Switcher (F7: edit vakhte single j) */}
+            {!editingStatId && (
             <div className="flex items-center justify-between border-b border-border/40 pb-3">
               <span className="text-xs font-black uppercase tracking-wider text-foreground">Entry Mode</span>
               <div className="flex bg-muted/60 p-0.5 rounded-lg border border-border/50 text-[10px] font-bold">
@@ -7370,6 +8344,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 </button>
               </div>
             </div>
+            )}
 
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Date</label>
@@ -7382,26 +8357,46 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
             {!isBulkAdd ? (
               <>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Campaign</label>
-                  <select
+                <div className="space-y-1.5 relative">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Campaign (type = auto-new, no confirm)</label>
+                  <input
+                    type="text"
                     value={dailyStatsForm.campaignName}
-                    onChange={(e) => setDailyStatsForm({ ...dailyStatsForm, campaignName: e.target.value })}
+                    onChange={(e) => { setDailyStatsForm({ ...dailyStatsForm, campaignName: e.target.value }); setCampSuggestOpen(true); }}
+                    onFocus={() => setCampSuggestOpen(true)}
+                    onBlur={() => setTimeout(() => setCampSuggestOpen(false), 150)}
+                    placeholder="e.g. HKL Leads (navu hoy to auto-banse)"
                     className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold text-foreground"
-                  >
-                    {(() => {
-                      const project = projects.find(p => p.id === selectedProjectId);
-                      const campaignList = (project?.campaigns && project.campaigns.length > 0)
-                        ? project.campaigns
-                            .map(c => typeof c === 'string' ? { name: c, status: 'Active' } : { name: c.name || "", status: c.status || 'Active' })
-                            .filter(c => c.status === 'Active')
-                            .map(c => c.name)
+                  />
+                  {campSuggestOpen && (() => {
+                    const project = projects.find(p => p.id === selectedProjectId);
+                    const base = dmCampaigns.length > 0
+                      ? dmCampaigns
+                      : (project?.campaigns && project.campaigns.length > 0)
+                        ? project.campaigns.map(c => typeof c === 'string' ? c : (c.name || "")).filter(Boolean)
                         : ["Q4 Retargeting Ads", "Holiday Social Push", "B2B Email Drip"];
-                      return campaignList.map(opt => (
-                        <option key={opt} value={opt}>{opt}</option>
-                      ));
-                    })()}
-                  </select>
+                    const q = dailyStatsForm.campaignName.trim().toLowerCase();
+                    const opts = base.filter(n => !q || n.toLowerCase().includes(q)).slice(0, 6);
+                    if (opts.length === 0) return null;
+                    return (
+                      <div className="absolute left-0 right-0 top-full mt-1 z-20 bg-card border border-border/60 rounded-xl shadow-xl overflow-hidden">
+                        {opts.map(opt => (
+                          <button
+                            key={opt}
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setDailyStatsForm({ ...dailyStatsForm, campaignName: opt });
+                              setCampSuggestOpen(false);
+                            }}
+                            className="w-full text-left px-4 py-2 text-xs font-bold hover:bg-primary/10 hover:text-primary transition-colors"
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -7409,7 +8404,6 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Reach</label>
                     <input
                       type="number"
-                      required={!isBulkAdd}
                       placeholder="e.g. 15000"
                       value={dailyStatsForm.reach}
                       onChange={(e) => setDailyStatsForm({ ...dailyStatsForm, reach: e.target.value })}
@@ -7417,13 +8411,42 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     />
                   </div>
                   <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Impressions</label>
+                    <input
+                      type="number"
+                      placeholder="e.g. 18000"
+                      value={dailyStatsForm.impressions}
+                      onChange={(e) => setDailyStatsForm({ ...dailyStatsForm, impressions: e.target.value })}
+                      className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Leads</label>
                     <input
                       type="number"
-                      required={!isBulkAdd}
                       placeholder="e.g. 42"
                       value={dailyStatsForm.leads}
                       onChange={(e) => setDailyStatsForm({ ...dailyStatsForm, leads: e.target.value })}
+                      className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Followers</label>
+                    <input
+                      type="number"
+                      placeholder="e.g. 15"
+                      value={dailyStatsForm.followers}
+                      onChange={(e) => setDailyStatsForm({ ...dailyStatsForm, followers: e.target.value })}
+                      className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Revenue (₹)</label>
+                    <input
+                      type="number"
+                      placeholder="e.g. 25000"
+                      value={dailyStatsForm.revenue}
+                      onChange={(e) => setDailyStatsForm({ ...dailyStatsForm, revenue: e.target.value })}
                       className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
                     />
                   </div>
@@ -7433,7 +8456,6 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Spend (₹)</label>
                   <input
                     type="number"
-                    required={!isBulkAdd}
                     placeholder="e.g. 5000"
                     value={dailyStatsForm.spend}
                     onChange={(e) => setDailyStatsForm({ ...dailyStatsForm, spend: e.target.value })}
@@ -7444,48 +8466,75 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             ) : (
               <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
                 {Object.keys(bulkStatsEntries).map((campaignName) => {
-                  const entry = bulkStatsEntries[campaignName] || { reach: "", leads: "", spend: "" };
+                  const entry = bulkStatsEntries[campaignName] || { reach: "", impressions: "", leads: "", followers: "", revenue: "", spend: "" };
+                  const setEntry = (patch: Partial<{ reach: string; impressions: string; leads: string; followers: string; revenue: string; spend: string }>) => setBulkStatsEntries({
+                    ...bulkStatsEntries,
+                    [campaignName]: { ...entry, ...patch }
+                  });
+                  const numCls = "w-full px-2.5 h-[34px] bg-background border border-border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold";
+                  const lblCls = "text-[9px] font-bold text-muted-foreground uppercase mb-1 block";
                   return (
                     <div key={campaignName} className="p-4 bg-muted/20 border border-border/40 rounded-2xl space-y-3">
                       <p className="text-xs font-black text-foreground">{campaignName}</p>
                       <div className="grid grid-cols-3 gap-2">
                         <div>
-                          <label className="text-[9px] font-bold text-muted-foreground uppercase mb-1 block">Reach</label>
+                          <label className={lblCls}>Reach</label>
                           <input
                             type="number"
                             placeholder="e.g. 12000"
                             value={entry.reach}
-                            onChange={(e) => setBulkStatsEntries({
-                              ...bulkStatsEntries,
-                              [campaignName]: { ...entry, reach: e.target.value }
-                            })}
-                            className="w-full px-2.5 h-[34px] bg-background border border-border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold"
+                            onChange={(e) => setEntry({ reach: e.target.value })}
+                            className={numCls}
                           />
                         </div>
                         <div>
-                          <label className="text-[9px] font-bold text-muted-foreground uppercase mb-1 block">Leads</label>
+                          <label className={lblCls}>Impressions</label>
+                          <input
+                            type="number"
+                            placeholder="e.g. 15000"
+                            value={entry.impressions}
+                            onChange={(e) => setEntry({ impressions: e.target.value })}
+                            className={numCls}
+                          />
+                        </div>
+                        <div>
+                          <label className={lblCls}>Leads</label>
                           <input
                             type="number"
                             placeholder="e.g. 35"
                             value={entry.leads}
-                            onChange={(e) => setBulkStatsEntries({
-                              ...bulkStatsEntries,
-                              [campaignName]: { ...entry, leads: e.target.value }
-                            })}
-                            className="w-full px-2.5 h-[34px] bg-background border border-border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold"
+                            onChange={(e) => setEntry({ leads: e.target.value })}
+                            className={numCls}
                           />
                         </div>
                         <div>
-                          <label className="text-[9px] font-bold text-muted-foreground uppercase mb-1 block">Spend (₹)</label>
+                          <label className={lblCls}>Followers</label>
+                          <input
+                            type="number"
+                            placeholder="e.g. 10"
+                            value={entry.followers}
+                            onChange={(e) => setEntry({ followers: e.target.value })}
+                            className={numCls}
+                          />
+                        </div>
+                        <div>
+                          <label className={lblCls}>Revenue (₹)</label>
+                          <input
+                            type="number"
+                            placeholder="e.g. 8000"
+                            value={entry.revenue}
+                            onChange={(e) => setEntry({ revenue: e.target.value })}
+                            className={numCls}
+                          />
+                        </div>
+                        <div>
+                          <label className={lblCls}>Spend (₹)</label>
                           <input
                             type="number"
                             placeholder="e.g. 3000"
                             value={entry.spend}
-                            onChange={(e) => setBulkStatsEntries({
-                              ...bulkStatsEntries,
-                              [campaignName]: { ...entry, spend: e.target.value }
-                            })}
-                            className="w-full px-2.5 h-[34px] bg-background border border-border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold"
+                            onChange={(e) => setEntry({ spend: e.target.value })}
+                            className={numCls}
                           />
                         </div>
                       </div>
@@ -7509,6 +8558,76 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               </button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+      {/* F3: Revenue popup (page nai) — date + revenue, total, edit/delete */}
+      <Dialog open={isRevenueOpen} onOpenChange={(open) => { setIsRevenueOpen(open); if (!open) setRevenueForm({ date: "", revenue: "", editId: "" }); }}>
+        <DialogContent className="sm:max-w-[440px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+          <div className="px-6 py-5 border-b border-border/50 bg-muted/30 flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-black tracking-tight flex items-center gap-2">
+                <IndianRupee className="w-5 h-5 text-emerald-600" /> Revenue
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">Total: <span className="font-black text-emerald-600 font-mono">₹{revenueTotal.toLocaleString("en-IN")}</span></p>
+            </div>
+            <DialogClose asChild>
+              <button className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </DialogClose>
+          </div>
+          <div className="p-6 space-y-3 max-h-[40vh] overflow-y-auto">
+            {revenues.length === 0 && (
+              <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">Haju koi revenue entry nathi.</p>
+            )}
+            {[...revenues].sort((a, b) => String(b.date || "").localeCompare(String(a.date || ""))).map((r: any) => (
+              <div key={String(r.id || r._id)} className="flex items-center gap-3 px-4 py-2.5 rounded-2xl border border-border/40 bg-muted/20 text-xs">
+                <span className="font-mono font-bold">{String(r.date || "").split("T")[0]}</span>
+                <span className="font-black text-emerald-600 font-mono ml-auto">₹{Number(r.revenue || 0).toLocaleString("en-IN")}</span>
+                <button
+                  type="button"
+                  onClick={() => setRevenueForm({ date: (String(r.date || "").split("T")[0] ?? ""), revenue: String(r.revenue ?? ""), editId: String(r.id || r._id) })}
+                  className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                  title="Edit"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteRevenue(String(r.id || r._id))}
+                  className="p-1.5 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors"
+                  title="Delete"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="px-6 py-4 bg-muted/30 border-t border-border/50">
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <DatePicker
+                value={revenueForm.date}
+                onChange={(val) => setRevenueForm({ ...revenueForm, date: val })}
+                placeholder="Date"
+                className="h-10 bg-background border-border rounded-xl text-xs"
+              />
+              <input
+                type="number"
+                min="0"
+                value={revenueForm.revenue}
+                onChange={(e) => setRevenueForm({ ...revenueForm, revenue: e.target.value })}
+                placeholder="e.g. 50000"
+                className="px-3 h-10 bg-background border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleSaveRevenue}
+              className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors shadow-sm"
+            >
+              {revenueForm.editId ? "Update Revenue" : "Save Revenue"}
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
         <Dialog open={isEditProjectModalOpen} onOpenChange={setIsEditProjectModalOpen}>
@@ -8000,9 +9119,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             >
               <ArrowLeft className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
             </button>
-            <div className="w-14 h-14 rounded-2xl border-2 border-border/50 overflow-hidden shadow-sm bg-card">
-              <img src={client.logo} alt={client.name} className="w-full h-full object-cover" />
-            </div>
+            {/* K5: highlighted logo */}
+            <BrandLogo src={client.logo} alt={client.name} size="w-20 h-20" />
             <div>
               <h1 className="text-3xl font-black tracking-tight text-foreground leading-tight">{client.name}</h1>
               <span className="px-2 py-0.5 mt-1 inline-flex text-[10px] font-bold uppercase tracking-widest rounded-lg items-center gap-1.5 text-primary bg-primary/10">
@@ -9032,15 +10150,23 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-foreground bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-transparent">Clients</h1>
-          <p className="text-muted-foreground mt-1">Manage your clients and view their projects.</p>
+          <h1 className="text-3xl font-black tracking-tight text-foreground bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-transparent">
+            {showBrandDivision ? "Brand Division" : PROJECT_TABS.includes(activeTab) ? "Projects" : "Clients"}
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            {showBrandDivision
+              ? "Team members and their assigned brands."
+              : PROJECT_TABS.includes(activeTab)
+              ? "Manage your projects across departments."
+              : "Manage your clients and view their projects."}
+          </p>
         </div>
         <div className="flex items-center gap-3 w-full md:w-auto">
           <div className="relative flex-1 md:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <input 
-              type="text" 
-              placeholder="Search clients..." 
+            <input
+              type="text"
+              placeholder={PROJECT_TABS.includes(activeTab) && !showBrandDivision ? "Search projects..." : "Search clients..."}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-4 py-2.5 bg-card border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
@@ -9063,7 +10189,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               {TABS.map(tab => (
                 <DropdownMenuItem 
                   key={tab}
-                  onSelect={(e) => { e.preventDefault(); setActiveTab(tab); }}
+                  onSelect={(e) => { e.preventDefault(); selectTab(tab); }}
                   className={cn(
                     "rounded-xl cursor-pointer py-2 focus:bg-primary/10 focus:text-primary font-medium transition-colors flex items-center justify-between",
                     activeTab === tab && "bg-primary/10 text-primary"
@@ -9133,7 +10259,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       e.preventDefault(); 
                       setClientFilterCategories([]); 
                       setClientSort("name");
-                      setActiveTab(TABS[0]);
+                      selectTab(TABS[0] ?? "Active Projects");
                     }}
                     className="rounded-xl cursor-pointer py-2 focus:bg-rose-500/10 focus:text-rose-500 text-rose-500 font-bold transition-colors flex items-center justify-center"
                   >
@@ -9160,6 +10286,13 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             )}
           </button>
 
+          {/* K9: project tabs par New Project + New Client baju-bajuma */}
+          {PROJECT_TABS.includes(activeTab) && !showBrandDivision && (
+            <button onClick={() => { setLandingProjectClientId(""); setIsLandingProjectOpen(true); }} className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground font-bold text-sm rounded-xl hover:bg-primary/90 transition-all shadow-sm">
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">New Project</span>
+            </button>
+          )}
           <button onClick={() => setIsNewClientModalOpen(true)} className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground font-bold text-sm rounded-xl hover:bg-primary/90 transition-all shadow-sm">
             <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">New Client</span>
@@ -9182,26 +10315,63 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         ))}
       </div>
 
-      {/* Tabs */}
+      {/* Tabs (K1: 4 landing tabs + Brand Division toggle) */}
       <div className="flex gap-2 border-b border-border/40 pb-4 overflow-x-auto hide-scrollbar">
         {TABS.map(tab => (
           <button
             key={tab}
-            onClick={() => setActiveTab(tab)}
+            onClick={() => selectTab(tab)}
             className={cn(
               "px-5 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-300",
-              activeTab === tab 
-                ? "bg-primary text-primary-foreground shadow-md shadow-primary/20" 
+              activeTab === tab && !showBrandDivision
+                ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
                 : "bg-card text-foreground/70 hover:bg-muted/80 border border-border/40"
             )}
           >
             {tab}
           </button>
         ))}
+        <button
+          onClick={() => setShowBrandDivision(v => !v)}
+          className={cn(
+            "px-5 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-300",
+            showBrandDivision
+              ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
+              : "bg-card text-foreground/70 hover:bg-muted/80 border border-dashed border-border/60"
+          )}
+        >
+          Brand Division
+        </button>
       </div>
 
-      {/* Feature 2: Brand Division View or Clients Grid */}
-      {activeTab === "Brand Division" ? (
+      {/* K2: Department-wise filter chips (project showcase). Synced with the
+          Filter-dropdown category selection (single-select). */}
+      {PROJECT_TABS.includes(activeTab) && !showBrandDivision && (
+        <div className="flex gap-2 overflow-x-auto hide-scrollbar py-1">
+          {["All", ...categories].map(cat => {
+            const selected = cat === "All"
+              ? clientFilterCategories.length === 0
+              : clientFilterCategories.length === 1 && clientFilterCategories[0] === cat;
+            return (
+              <button
+                key={cat}
+                onClick={() => setClientFilterCategories(cat === "All" ? [] : [cat])}
+                className={cn(
+                  "px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all duration-200 border",
+                  selected
+                    ? "bg-foreground text-background border-foreground shadow-sm"
+                    : "bg-card text-foreground/70 hover:bg-muted/80 border-border/40"
+                )}
+              >
+                {cat}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Feature 2: Brand Division View or Landing Grids (K1) */}
+      {showBrandDivision ? (
         <div className="space-y-6 pt-2">
           {/* Brand Division Controls */}
           <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-card border border-border/60 rounded-2xl p-4 shadow-sm">
@@ -9382,6 +10552,131 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             )}
           </div>
         </div>
+      ) : PROJECT_TABS.includes(activeTab) ? (
+        /* K1: Projects Grid (Active / Archived) */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
+          {filteredProjects.map((project) => {
+            const projClient = clients.find(c => c.id === project.clientId);
+            const statusStyle =
+              project.status === "Completed"
+                ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
+                : project.status === "In Review"
+                ? "bg-amber-500/10 text-amber-600 border-amber-500/30"
+                : project.status === "On Hold"
+                ? "bg-rose-500/10 text-rose-500 border-rose-500/30"
+                : "bg-blue-500/10 text-blue-600 border-blue-500/30";
+            return (
+              <div
+                key={project.id}
+                onClick={(e) => {
+                  const target = e.target as HTMLElement;
+                  if (target.closest('button') || target.closest('[role="menuitem"]')) {
+                    return;
+                  }
+                  if (projClient) setSelectedClientId(projClient.id);
+                  setSelectedProjectId(project.id);
+                }}
+                className="group bg-white border border-border/40 rounded-[2rem] p-6 shadow-sm hover:shadow-2xl hover:shadow-primary/5 hover:-translate-y-1 hover:border-primary/30 transition-all duration-300 relative flex flex-col cursor-pointer"
+              >
+                {/* Background Accent */}
+                <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-primary/[0.03] to-transparent rounded-t-[2rem] pointer-events-none transition-opacity opacity-0 group-hover:opacity-100"></div>
+
+                <div className="flex justify-between items-start mb-5 relative z-10">
+                  {/* K5: highlighted logo */}
+                  <BrandLogo src={projClient?.logo} alt={project.name} size="w-20 h-20" />
+                  <span className={cn("px-2.5 py-1 rounded-full text-[11px] font-black border shrink-0", statusStyle)}>
+                    {project.status}
+                  </span>
+                </div>
+
+                <div className="relative z-10 mb-4 flex-grow">
+                  <h3 className="text-xl font-black tracking-tight text-foreground line-clamp-2 leading-tight group-hover:text-primary transition-colors">{project.name}</h3>
+                  <div className="flex flex-wrap items-center gap-2 mt-3">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-1 bg-muted rounded-md text-muted-foreground">
+                      <Briefcase className="w-3.5 h-3.5" /> {projClient?.name || "Client"}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-1 bg-primary/10 text-primary rounded-md">
+                      {project.category}
+                    </span>
+                  </div>
+                  {/* K14: brand status chips — WA green/red, festival, followup */}
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                    {project.whatsapp_group_link ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 bg-emerald-500/10 text-emerald-600 border border-emerald-500/30 rounded-full">
+                        ✓ WA Created
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 bg-rose-500/10 text-rose-500 border border-rose-500/30 rounded-full">
+                        ✕ WA Not Created
+                      </span>
+                    )}
+                    {project.festivalPost === "Yes" && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 bg-emerald-500/10 text-emerald-600 border border-emerald-500/30 rounded-full">
+                        ✓ Festival Post
+                      </span>
+                    )}
+                    {project.nextFollowupDate && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-amber-500/10 text-amber-600 border border-amber-500/30 rounded-full">
+                        Followup: {safeFormat(project.nextFollowupDate, "dd/MM/yyyy")}
+                      </span>
+                    )}
+                  </div>
+                  {(project.startDate || project.endDate) && (
+                    <p className="text-[11px] font-semibold text-muted-foreground mt-2 flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5" />
+                      {project.startDate ? safeFormat(project.startDate, "dd/MM/yyyy") : ""}{project.startDate && project.endDate ? " → " : ""}{project.endDate ? safeFormat(project.endDate, "dd/MM/yyyy") : ""}
+                    </p>
+                  )}
+                </div>
+
+                {/* Team overlap */}
+                {(project.team ?? []).length > 0 && (
+                  <div className="flex items-center gap-3 mb-4 relative z-10">
+                    <div className="flex -space-x-2">
+                      {(project.team ?? []).slice(0, 5).map((t, idx) => (
+                        <img key={idx} src={t.avatar} className="w-8 h-8 rounded-full border-2 border-white shadow-sm" title={t.name} />
+                      ))}
+                    </div>
+                    <span className="text-xs font-bold text-muted-foreground">{(project.team ?? []).length} Members</span>
+                  </div>
+                )}
+
+                {/* Footer Summary (K8: date-driven progress) */}
+                {(() => {
+                  const dp = getDateProgress(project.startDate, project.endDate);
+                  const pct = dp ? dp.pct : (project.progress || 0);
+                  return (
+                    <>
+                      <div className="flex justify-between items-end pt-4 border-t border-border/40 relative z-10 gap-3">
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Budget</span>
+                          <span className="text-base font-black text-foreground mt-0.5 font-mono truncate">{project.budget || "—"}</span>
+                        </div>
+                        <div className="flex flex-col text-right shrink-0">
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Progress</span>
+                          <span className="text-base font-black text-primary mt-0.5 font-mono">{pct}%</span>
+                        </div>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-muted mt-3 overflow-hidden relative z-10">
+                        <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
+                      </div>
+                      {dp && (
+                        <p className="text-[10px] font-bold text-muted-foreground mt-1.5 relative z-10">{dp.elapsed}/{dp.total} days</p>
+                      )}
+                    </>
+                  );
+                })()}
+
+              </div>
+            );
+          })}
+          {filteredProjects.length === 0 && (
+            <div className="col-span-full py-12 flex flex-col items-center justify-center text-center">
+              <h3 className="text-lg font-bold text-foreground">No projects found</h3>
+              <p className="text-muted-foreground mt-1">Try adjusting your search query.</p>
+            </div>
+          )}
+        </div>
       ) : (
         /* Clients Grid */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
@@ -9402,9 +10697,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-primary/[0.03] to-transparent rounded-t-[2rem] pointer-events-none transition-opacity opacity-0 group-hover:opacity-100"></div>
 
               <div className="flex justify-between items-start mb-5 relative z-10">
-                <div className="w-16 h-16 rounded-2xl border border-border/50 overflow-hidden shadow-sm bg-white p-1 group-hover:scale-105 group-hover:border-primary/30 transition-all duration-300">
-                  <img src={client.logo} alt={client.name} className="w-full h-full object-cover rounded-xl" />
-                </div>
+                {/* K5: highlighted logo */}
+                <BrandLogo src={client.logo} alt={client.name} size="w-20 h-20" />
                 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -9658,6 +10952,12 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                             );
                           })}
                         </div>
+                        {/* K3: jetla departments select, etla projects auto-create thashe */}
+                        {parseDepartments(newClientFormData.department).length > 0 && (
+                          <p className="text-[11px] font-semibold text-primary bg-primary/5 border border-primary/20 rounded-xl px-3 py-2">
+                            {parseDepartments(newClientFormData.department).length} department{parseDepartments(newClientFormData.department).length > 1 ? "s" : ""} selected → {parseDepartments(newClientFormData.department).length} project{parseDepartments(newClientFormData.department).length > 1 ? "s" : ""} auto-create thashe ({parseDepartments(newClientFormData.department).join(", ")})
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -9723,6 +11023,115 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               className="px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all"
             >
               Create Client
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      {/* K9: Landing standalone New Project — client pela (select), pachhi project */}
+      <Dialog open={isLandingProjectOpen} onOpenChange={setIsLandingProjectOpen}>
+        <DialogContent className="sm:max-w-[560px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+          <div className="flex items-center justify-between px-6 md:px-8 py-5 border-b border-border/50 bg-muted/30">
+            <div>
+              <h2 className="text-xl md:text-2xl font-black tracking-tight">New Project</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">Pela client select karo, pachhi project details.</p>
+            </div>
+            <button
+              onClick={() => setIsLandingProjectOpen(false)}
+              className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="p-6 md:p-8 space-y-5 overflow-y-auto max-h-[70vh]">
+            <div className="space-y-2">
+              <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Client *</label>
+              <div className="flex gap-2">
+                <select
+                  value={landingProjectClientId}
+                  onChange={(e) => setLandingProjectClientId(e.target.value)}
+                  className={"flex-1 px-4 h-[42px] bg-muted/50 border rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all " + (showNewProjectErrors && !landingProjectClientId ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
+                >
+                  <option value="">Select client...</option>
+                  {clients.filter(c => c.status === "Active").sort((a, b) => a.name.localeCompare(b.name)).map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => { setIsLandingProjectOpen(false); setIsNewClientModalOpen(true); }}
+                  className="px-4 h-[42px] bg-primary/10 text-primary font-bold rounded-xl hover:bg-primary/20 transition-all text-sm whitespace-nowrap"
+                  title="Navo client banavo"
+                >
+                  + New
+                </button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Project Name *</label>
+              <input
+                type="text"
+                value={newProjectName}
+                onChange={(e) => setNewProjectName(e.target.value)}
+                placeholder="e.g. Diwali Campaign"
+                className={"w-full px-4 h-[42px] bg-muted/50 border rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all " + (showNewProjectErrors && !newProjectName.trim() ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Department *</label>
+              <select
+                value={newProjectCategory}
+                onChange={(e) => setNewProjectCategory(e.target.value)}
+                className={"w-full px-4 h-[42px] bg-muted/50 border rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all " + (showNewProjectErrors && !newProjectCategory ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
+              >
+                <option value="">Select department...</option>
+                {categories.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Start Date *</label>
+                <DatePicker
+                  value={newProjectStartDate}
+                  onChange={(val) => setNewProjectStartDate(val)}
+                  placeholder="Start date"
+                  className="w-full h-[42px] bg-muted/50 border border-border rounded-xl text-sm font-medium"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">End Date *</label>
+                <DatePicker
+                  value={newProjectEndDate}
+                  onChange={(val) => setNewProjectEndDate(val)}
+                  placeholder="End date"
+                  className="w-full h-[42px] bg-muted/50 border border-border rounded-xl text-sm font-medium"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Budget</label>
+              <input
+                type="text"
+                value={newProjectBudget}
+                onChange={(e) => setNewProjectBudget(e.target.value)}
+                placeholder="e.g. ₹10,000"
+                className="w-full px-4 h-[42px] bg-muted/50 border border-border/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+              />
+            </div>
+          </div>
+          <div className="px-6 md:px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
+            <button
+              onClick={() => setIsLandingProjectOpen(false)}
+              className="px-5 py-2.5 rounded-xl font-bold text-muted-foreground hover:bg-muted transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleCreateProject}
+              className="px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all"
+            >
+              Create Project
             </button>
           </div>
         </DialogContent>
@@ -9854,25 +11263,31 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                 <button
                                   key={dept}
                                   type="button"
-                                  onClick={() => toggleClientDepartment(dept, true)}
-                                  className={cn(
-                                    "flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-xs font-bold transition-all text-left",
-                                    isSelected
-                                      ? "bg-primary/10 border-primary text-primary shadow-sm"
-                                      : "bg-muted/40 border-border/70 text-muted-foreground hover:bg-muted/80 hover:text-foreground hover:border-border"
-                                  )}
-                                >
-                                  <span className="truncate">{dept}</span>
-                                  <div className={cn(
-                                    "w-4 h-4 rounded-md flex items-center justify-center shrink-0 border ml-1.5 transition-colors",
-                                    isSelected ? "bg-primary border-primary text-primary-foreground" : "border-border bg-background"
-                                  )}>
-                                    {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
-                                  </div>
-                                </button>
-                              );
-                            })}
+                                onClick={() => toggleClientDepartment(dept, true)}
+                                className={cn(
+                                  "flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-xs font-bold transition-all text-left",
+                                  isSelected
+                                    ? "bg-primary/10 border-primary text-primary shadow-sm"
+                                    : "bg-muted/40 border-border/70 text-muted-foreground hover:bg-muted/80 hover:text-foreground hover:border-border"
+                                )}
+                              >
+                                <span className="truncate">{dept}</span>
+                                <div className={cn(
+                                  "w-4 h-4 rounded-md flex items-center justify-center shrink-0 border ml-1.5 transition-colors",
+                                  isSelected ? "bg-primary border-primary text-primary-foreground" : "border-border bg-background"
+                                )}>
+                                  {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                                </div>
+                              </button>
+                            );
+                          })}
                           </div>
+                          {/* K3: dept add/remove → per-dept projects auto add/remove thashe */}
+                          {editingClient && parseDepartments(editingClient.department).length > 0 && (
+                            <p className="text-[11px] font-semibold text-primary bg-primary/5 border border-primary/20 rounded-xl px-3 py-2">
+                              {parseDepartments(editingClient.department).length} department{parseDepartments(editingClient.department).length > 1 ? "s" : ""} → {parseDepartments(editingClient.department).length} project{parseDepartments(editingClient.department).length > 1 ? "s" : ""} ({parseDepartments(editingClient.department).join(", ")})
+                            </p>
+                          )}
                         </div>
                       </div>
                     </div>

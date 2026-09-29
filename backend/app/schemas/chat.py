@@ -5,10 +5,13 @@ from datetime import datetime
 class ChannelCreate(BaseModel):
     name: str
     members: List[str] = []
+    auto_join_new_employees: bool = False
 
 class ChannelUpdate(BaseModel):
     name: Optional[str] = None
+    description: Optional[str] = None
     members: Optional[List[str]] = None
+    auto_join_new_employees: Optional[bool] = None
 
 class LastMessageInfo(BaseModel):
     content: Optional[str] = ""
@@ -18,9 +21,10 @@ class LastMessageInfo(BaseModel):
 
 class ChannelResponse(BaseModel):
     id: str = Field(alias="_id")
-    name: str
+    name: Optional[str] = "Chat"
     type: Optional[str] = "group"
     members: List[str] = []
+    auto_join_new_employees: bool = False
     created_by: Optional[str] = None
     created_at: Optional[datetime] = None
     last_message: Optional[LastMessageInfo] = None

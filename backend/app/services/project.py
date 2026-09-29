@@ -3,7 +3,7 @@ from datetime import datetime, date
 from typing import Optional
 from app.repository.project import ProjectRepository
 from app.repository.client import ClientRepository
-from app.schemas.project import ProjectCreate, ProjectUpdate, FollowUpLogCreate, ClientReviewCreate, ClientReviewUpdate, DailyMarketingStatCreate, DailyMarketingStatUpdate, DailyMarketingStatBulkCreate, DailyRevenueCreate, DailyRevenueUpdate
+from app.schemas.project import ProjectCreate, ProjectUpdate, FollowUpLogCreate, DailyMarketingStatCreate, DailyMarketingStatUpdate, DailyMarketingStatBulkCreate, DailyRevenueCreate, DailyRevenueUpdate
 from app.redis.service import get_cache, set_cache, delete_cache, clear_pattern, make_list_key
 
 class ProjectService:
@@ -335,11 +335,12 @@ class ProjectService:
         update_schema = ProjectUpdate(last_followup_date=today, followup_logs=logs)
         await ProjectService.update_project(project_id, update_schema, current_user_id)
         
-        # Format response
+        # Format response (created_by_details must be a dict for FollowUpLog schema)
         emp_cache = {}
         await ProjectService._populate_creative_team({"creative_team": {"log_creator": log["created_by"]}}, emp_cache)
-        log["created_by_details"] = emp_cache.get(str(log["created_by"]), {"employee_name": str(log["created_by"])})
-        
+        creator_info = emp_cache.get(str(log["created_by"]), {"employee_name": str(log["created_by"])})
+        log["created_by_details"] = creator_info if isinstance(creator_info, dict) else {"employee_name": str(creator_info)}
+
         return log
 
     @staticmethod
@@ -370,90 +371,8 @@ class ProjectService:
                 
         return logs
 
-    @staticmethod
-    async def add_client_review(project_id: str, data: ClientReviewCreate, current_user_id: str):
-        project = await ProjectRepository.get_by_id(project_id)
-        if not project:
-            return None
-            
-        from datetime import datetime
-        import uuid
-        
-        review = {
-            "id": str(uuid.uuid4()),
-            "review_text": data.review_text,
-            "admin_comment": None,
-            "created_at": datetime.utcnow(),
-            "created_by": current_user_id
-        }
-        
-        reviews = project.get("client_reviews", [])
-        reviews.append(review)
-        
-        from app.schemas.project import ProjectUpdate
-        update_schema = ProjectUpdate(client_reviews=reviews)
-        await ProjectService.update_project(project_id, update_schema, current_user_id)
-        
-        emp_cache = {}
-        await ProjectService._populate_creative_team({"creative_team": {"rev_creator": review["created_by"]}}, emp_cache)
-        review["created_by_details"] = emp_cache.get(str(review["created_by"]), {"employee_name": str(review["created_by"])})
-        
-        return review
+    # K12: Client Reviews system removed (transcript — no requirement).
 
-    @staticmethod
-    async def update_client_review_comment(project_id: str, review_id: str, data: ClientReviewUpdate, current_user_id: str):
-        project = await ProjectRepository.get_by_id(project_id)
-        if not project:
-            return None
-            
-        reviews = project.get("client_reviews", [])
-        updated_review = None
-        for rev in reviews:
-            if rev.get("id") == review_id:
-                rev["admin_comment"] = data.admin_comment
-                updated_review = rev
-                break
-                
-        if not updated_review:
-            return None
-            
-        from app.schemas.project import ProjectUpdate
-        update_schema = ProjectUpdate(client_reviews=reviews)
-        await ProjectService.update_project(project_id, update_schema, current_user_id)
-        
-        emp_cache = {}
-        await ProjectService._populate_creative_team({"creative_team": {"rev_creator": updated_review["created_by"]}}, emp_cache)
-        updated_review["created_by_details"] = emp_cache.get(str(updated_review["created_by"]), {"employee_name": str(updated_review["created_by"])})
-        
-        return updated_review
-
-    @staticmethod
-    async def get_client_reviews(project_id: str):
-        project = await ProjectRepository.get_by_id(project_id)
-        if not project:
-            return []
-            
-        reviews = project.get("client_reviews", [])
-        reviews = sorted(reviews, key=lambda x: x.get("created_at"), reverse=True)
-        
-        if reviews:
-            emp_cache = {}
-            for rev in reviews:
-                emp_id_str = str(rev.get("created_by", ""))
-                if emp_id_str not in emp_cache:
-                    from app.repository.employee import EmployeeRepository
-                    emp = await EmployeeRepository.get_employee_by_id(emp_id_str)
-                    if emp:
-                        personal = emp.get("personal_info", {})
-                        name = f"{personal.get('first_name', '')} {personal.get('last_name', '')}".strip() or "Employee"
-                        emp_cache[emp_id_str] = {"employee_name": name}
-                    else:
-                        emp_cache[emp_id_str] = {"employee_name": emp_id_str}
-                
-                rev["created_by_details"] = emp_cache[emp_id_str]
-                
-        return reviews
-        
     @staticmethod
     async def update_content_approval(project_id: str, data: dict, current_user_id: str):
         project = await ProjectRepository.get_by_id(project_id)
@@ -546,6 +465,7 @@ class ProjectService:
             existing_item["reach"] = (existing_item.get("reach", 0) or 0) + data.reach
             existing_item["impressions"] = (existing_item.get("impressions", 0) or 0) + data.impressions
             existing_item["leads"] = (existing_item.get("leads", 0) or 0) + data.leads
+            existing_item["followers"] = (existing_item.get("followers", 0) or 0) + (data.followers or 0)
             existing_item["revenue"] = round((existing_item.get("revenue", 0.0) or 0.0) + (data.revenue if data.revenue > 0 else auto_revenue), 2)
             existing_item["spend"] = round((existing_item.get("spend", 0.0) or 0.0) + data.spend, 2)
             
@@ -583,6 +503,7 @@ class ProjectService:
                 "reach": data.reach,
                 "impressions": data.impressions,
                 "leads": data.leads,
+                "followers": data.followers or 0,
                 "revenue": auto_revenue,
                 "spend": data.spend,
                 "cost_metric": cost_metric,
@@ -648,6 +569,7 @@ class ProjectService:
                 existing_item["reach"] = (existing_item.get("reach", 0) or 0) + entry.reach
                 existing_item["impressions"] = (existing_item.get("impressions", 0) or 0) + entry.impressions
                 existing_item["leads"] = (existing_item.get("leads", 0) or 0) + entry.leads
+                existing_item["followers"] = (existing_item.get("followers", 0) or 0) + (entry.followers or 0)
                 existing_item["revenue"] = round((existing_item.get("revenue", 0.0) or 0.0) + entry.revenue, 2)
                 existing_item["spend"] = round((existing_item.get("spend", 0.0) or 0.0) + entry.spend, 2)
                 
@@ -684,6 +606,7 @@ class ProjectService:
                     "reach": entry.reach,
                     "impressions": entry.impressions,
                     "leads": entry.leads,
+                    "followers": entry.followers or 0,
                     "revenue": entry.revenue,
                     "spend": entry.spend,
                     "cost_metric": cost_metric,
