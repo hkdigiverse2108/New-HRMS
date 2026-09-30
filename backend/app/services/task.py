@@ -601,12 +601,13 @@ class TaskService:
 
     @staticmethod
     async def get_task_stats(involved_emp_id: Optional[str] = None):
-        await TaskService.process_recurring_tasks()
-
         cache_key = f"tasks:stats:{involved_emp_id or 'all'}"
         cached = await get_cache(cache_key)
         if cached is not None:
             return cached
+
+        # Heavy recurring generation only on cache miss (was running on every call)
+        await TaskService.process_recurring_tasks()
 
         stats = await TaskRepository.get_stats(involved_emp_id)
         await set_cache(cache_key, stats, ttl=300)

@@ -197,10 +197,13 @@ class EmployeeRepository:
     async def delete_employee(cls, employee_id: str):
         collection = await cls.get_collection()
         try:
-            result = await collection.update_one(
-                {"_id": ObjectId(employee_id)}, 
+            existing = await collection.find_one({"_id": ObjectId(employee_id)}, {"_id": 1})
+            if not existing:
+                return False
+            await collection.update_one(
+                {"_id": ObjectId(employee_id)},
                 {"$set": {"work_details.is_delete": True}}
             )
-            return result.modified_count > 0
+            return True
         except Exception:
             return False

@@ -16,9 +16,11 @@ class PersonalInfo(BaseModel):
     contact_number: Optional[str] = None
     relation: Optional[RelationEnum] = None
     profile_photo: Optional[str] = None
+    password_enc: Optional[str] = None  # vault copy (self-view only, never for others)
 
 class PersonalInfoOut(PersonalInfo):
     password: str = Field(exclude=True) # Exclude password from responses
+    password_enc: str = Field(default="", exclude=True) # Exclude vault copy too
 
 
 
@@ -69,8 +71,27 @@ class EmployeeCreate(BaseModel):
     bond_and_exit: Optional[BondAndExit] = BondAndExit()
     profile_photo: Optional[str] = None
 
+class PersonalInfoUpdate(BaseModel):
+    """Partial personal info for updates — all optional so blank password can be omitted."""
+    first_name: Optional[str] = None
+    middle_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email_address: Optional[EmailStr] = None
+    phone_number: Optional[str] = None
+    date_of_birth: Optional[date] = None
+    gender: Optional[GenderEnum] = None
+    password: Optional[str] = None
+    parent_guardian_name: Optional[str] = None
+    contact_number: Optional[str] = None
+    relation: Optional[RelationEnum] = None
+    profile_photo: Optional[str] = None
+
+class PersonalInfoSelfOut(PersonalInfoOut):
+    """Self view — decrypted password included ONLY for own record."""
+    password: Optional[str] = None  # type: ignore[assignment]
+
 class EmployeeUpdate(BaseModel):
-    personal_info: Optional[PersonalInfo] = None
+    personal_info: Optional[PersonalInfoUpdate] = None
     work_details: Optional[WorkDetails] = None
     bank_and_docs: Optional[BankAndDocs] = None
     document_checklist: Optional[DocumentChecklist] = None
@@ -87,3 +108,7 @@ class EmployeeOut(BaseModel):
     profile_photo: Optional[str] = None
 
     model_config = ConfigDict(populate_by_name=True)
+
+class EmployeeSelfOut(EmployeeOut):
+    """Single-record self view — password present only for own record."""
+    personal_info: PersonalInfoSelfOut  # type: ignore[assignment]

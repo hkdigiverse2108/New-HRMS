@@ -1,6 +1,7 @@
 from app.schemas.employee import EmployeeCreate, EmployeeUpdate
 from app.repository.employee import EmployeeRepository
 from app.controllers.auth import get_password_hash
+from app.utils.password_vault import encrypt_password
 from fastapi import HTTPException
 
 from app.schemas.enums import GenderEnum, SystemRole, WorkModeEnum
@@ -32,7 +33,12 @@ class EmployeeService:
             employee_dict["personal_info"]["profile_photo"] = photo
             employee_dict["profile_photo"] = photo
 
-        employee_dict["personal_info"]["password"] = get_password_hash(employee_dict["personal_info"]["password"])
+        plain_password = str(employee_dict["personal_info"]["password"])
+        employee_dict["personal_info"]["password"] = get_password_hash(plain_password)
+        try:
+            employee_dict["personal_info"]["password_enc"] = encrypt_password(plain_password)
+        except Exception:
+            pass
 
         created_emp = await EmployeeRepository.create_employee(employee_dict)
         try:
@@ -67,6 +73,19 @@ class EmployeeService:
         return employee
 
     @staticmethod
+    def _flatten_update(data: dict, prefix: str = "") -> dict:
+        """Flatten nested dicts to dotted keys so $set merges subdocuments
+        instead of replacing them (partial updates stay safe)."""
+        flat: dict = {}
+        for k, v in (data or {}).items():
+            key = f"{prefix}.{k}" if prefix else k
+            if isinstance(v, dict):
+                flat.update(EmployeeService._flatten_update(v, key))
+            else:
+                flat[key] = v
+        return flat
+
+    @staticmethod
     async def update_employee(employee_id: str, employee_update: EmployeeUpdate):
         update_data = employee_update.model_dump(exclude_unset=True, mode="json")
         
@@ -93,11 +112,33 @@ class EmployeeService:
             update_data["personal_info"]["profile_photo"] = photo
             update_data["profile_photo"] = photo
 
-        # If password is being updated, hash it
-        if "personal_info" in update_data and "password" in update_data["personal_info"] and update_data["personal_info"]["password"]:
-            update_data["personal_info"]["password"] = get_password_hash(update_data["personal_info"]["password"])
+        # If password is being updated, hash it (+ refresh vault copy).
+        # Blank/missing password = no change (never overwrite).
+        # NOTE: repo $set replaces the whole personal_info subdocument, so the
+        # existing hash/vault copy must be re-injected when password is untouched.
+        existing_emp = await EmployeeRepository.get_employee_by_id(employee_id)
+        if existing_emp is None:
+            raise HTTPException(status_code=404, detail="Employee not found")
+        if "personal_info" in update_data and update_data["personal_info"]:
+            pw = update_data["personal_info"].get("password")
+            if pw is not None and str(pw).strip():
+                plain = str(update_data["personal_info"]["password"])
+                update_data["personal_info"]["password"] = get_password_hash(plain)
+                try:
+                    update_data["personal_info"]["password_enc"] = encrypt_password(plain)
+                except Exception:
+                    pass
+            else:
+                update_data["personal_info"].pop("password", None)
+                old_pi = existing_emp.get("personal_info") or {}
+                if old_pi.get("password"):
+                    update_data["personal_info"]["password"] = old_pi["password"]
+                if old_pi.get("password_enc"):
+                    update_data["personal_info"]["password_enc"] = old_pi["password_enc"]
             
-        updated_emp = await EmployeeRepository.update_employee(employee_id, update_data)
+        updated_emp = await EmployeeRepository.update_employee(
+            employee_id, EmployeeService._flatten_update(update_data)
+        )
         if not updated_emp:
             raise HTTPException(status_code=404, detail="Employee not found or could not be updated")
         return updated_emp

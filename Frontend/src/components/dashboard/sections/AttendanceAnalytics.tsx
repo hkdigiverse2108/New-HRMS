@@ -3,25 +3,30 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { WEEKLY_ATTENDANCE } from "../dashboard-data";
 import { CollapsibleSection } from "./CollapsibleSection";
+import { useDashboardOverview } from "@/hooks/useDashboardOverview";
 
 export function AttendanceAnalytics() {
   const [currentMonthDate, setCurrentMonthDate] = useState(new Date());
+  // Late leaderboard month-wise (Audio PDF): current month default, changeable
+  const { data } = useDashboardOverview(currentMonthDate.getMonth() + 1, currentMonthDate.getFullYear());
+  const leaders: any[] = data?.penalty_leaderboard?.top_by_violations || [];
+  const wfh = data?.wfh || { total: 0, count: 0, names: [], pct: 0 };
 
   const generateHeatmap = () => {
     const year = currentMonthDate.getFullYear();
     const month = currentMonthDate.getMonth();
-    
+
     // get first day of month (0-6 where 0 is Sunday, 1 is Monday...)
     const firstDay = new Date(year, month, 1).getDay();
     // adjust firstDay so that 0 is Monday, 6 is Sunday
     const adjustedFirstDay = firstDay === 0 ? 6 : firstDay - 1;
-    
+
     // get total days in month
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-    
+
     const weeks = [];
     let currentDay = 1;
-    
+
     for (let w = 0; w < 6; w++) {
       const days = [];
       for (let d = 0; d < 7; d++) {
@@ -44,7 +49,7 @@ export function AttendanceAnalytics() {
     }
     return weeks;
   };
-  
+
   const heatmap = generateHeatmap();
 
   return (
@@ -63,14 +68,14 @@ export function AttendanceAnalytics() {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.5} />
                 <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} dy={10} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} ticks={[0, 40, 80, 120, 160]} domain={[0, 160]} />
-                <Tooltip 
+                <Tooltip
                   contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', borderRadius: '12px', color: 'var(--foreground)', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                   itemStyle={{ fontWeight: 'bold' }}
                   cursor={{ fill: 'var(--muted)', opacity: 0.2 }}
                 />
-                <Legend 
-                  iconType="circle" 
-                  wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} 
+                <Legend
+                  iconType="circle"
+                  wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}
                   formatter={(value) => <span className="text-muted-foreground font-medium capitalize">{value}</span>}
                 />
                 <Bar dataKey="present" fill="#00A56C" radius={[4, 4, 0, 0]} barSize={16} />
@@ -84,27 +89,64 @@ export function AttendanceAnalytics() {
 
         {/* Small stats */}
         <div className="space-y-6">
-          <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm min-w-0">
+          {/* Work From Home — BIG with live names + auto % (Audio PDF) */}
+          <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm min-w-0 md:col-span-1">
             <h3 className="font-bold text-foreground mb-1">Work From Home</h3>
-            <p className="text-[11px] text-muted-foreground mb-4">26 employees remote today</p>
+            <p className="text-[11px] text-muted-foreground mb-3">
+              {wfh.count > 0 ? wfh.names.slice(0, 4).join(", ") + (wfh.names.length > 4 ? ` +${wfh.names.length - 4}` : "") : "No one is on WFH"}
+            </p>
             <div className="flex items-end gap-2">
-              <p className="text-3xl font-black text-blue-500 leading-none">17%</p>
+              <p className="text-3xl font-black text-blue-500 leading-none">{wfh.pct}%</p>
+              <p className="text-[11px] font-bold text-muted-foreground mb-1">{wfh.count}/{wfh.total}</p>
             </div>
             <div className="h-1.5 w-full bg-muted rounded-full mt-4 overflow-hidden">
-              <div className="h-full bg-blue-500 rounded-full" style={{ width: '17%' }}></div>
+              <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min(100, wfh.pct)}%` }}></div>
             </div>
+            {wfh.names.length > 4 && (
+              <p className="text-[10px] text-muted-foreground mt-2 font-semibold">{wfh.names.slice(4).join(", ")}</p>
+            )}
           </div>
-          
+
+          {/* Late Coming Leaderboard — month-wise (Audio PDF) */}
           <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm min-w-0">
-            <h3 className="font-bold text-foreground mb-1">Late Analysis</h3>
-            <p className="text-[11px] text-muted-foreground mb-4">Avg delay 18 min · peak on Wednesdays</p>
-            <div className="flex items-end gap-2">
-              <p className="text-3xl font-black text-amber-500 leading-none">8</p>
-              <p className="text-[11px] font-bold text-muted-foreground mb-1">late today</p>
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-bold text-foreground">Late Coming</h3>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setCurrentMonthDate(new Date(currentMonthDate.getFullYear(), currentMonthDate.getMonth() - 1, 1))}
+                  className="w-6 h-6 flex items-center justify-center rounded-lg bg-muted/50 text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <span className="text-[10px] font-bold text-muted-foreground min-w-[52px] text-center">
+                  {currentMonthDate.toLocaleString('default', { month: 'short' })}
+                </span>
+                <button
+                  onClick={() => setCurrentMonthDate(new Date(currentMonthDate.getFullYear(), currentMonthDate.getMonth() + 1, 1))}
+                  className="w-6 h-6 flex items-center justify-center rounded-lg bg-muted/50 text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
-            <div className="h-1.5 w-full bg-muted rounded-full mt-4 overflow-hidden">
-              <div className="h-full bg-amber-500 rounded-full" style={{ width: '8%' }}></div>
-            </div>
+            <p className="text-[11px] text-muted-foreground mb-3">
+              {currentMonthDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
+            </p>
+            {leaders.length === 0 ? (
+              <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-3 py-2.5 text-center">No late entries this month. 🎉</p>
+            ) : (
+              <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
+                {leaders.slice(0, 6).map((l: any, i: number) => (
+                  <div key={i} className="flex items-center gap-2.5">
+                    <span className="text-[10px] font-black text-muted-foreground w-4 shrink-0">#{i + 1}</span>
+                    <span className="flex-1 min-w-0 text-xs font-bold text-foreground truncate">{l.employee_name || "Employee"}</span>
+                    <span className="text-[10px] font-black text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded-md shrink-0">
+                      {l.total_violations}x
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -116,13 +158,13 @@ export function AttendanceAnalytics() {
               <p className="text-[11px] text-muted-foreground">Attendance intensity for {currentMonthDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</p>
             </div>
             <div className="flex items-center gap-2">
-              <button 
+              <button
                 onClick={() => setCurrentMonthDate(new Date(currentMonthDate.getFullYear(), currentMonthDate.getMonth() - 1, 1))}
                 className="w-8 h-8 flex items-center justify-center rounded-lg bg-muted/50 text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <button 
+              <button
                 onClick={() => setCurrentMonthDate(new Date(currentMonthDate.getFullYear(), currentMonthDate.getMonth() + 1, 1))}
                 className="w-8 h-8 flex items-center justify-center rounded-lg bg-muted/50 text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
               >
@@ -140,15 +182,15 @@ export function AttendanceAnalytics() {
                   </div>
                 ))}
               </div>
-              
+
               {/* Calendar Grid */}
               {heatmap.map((week, w) => (
                 <div key={w} className="flex gap-2">
                   {week.map((day, d) => (
-                    <div 
-                      key={d} 
+                    <div
+                      key={d}
                       className={`flex-1 h-10 flex items-center justify-center rounded-lg text-[12px] font-medium transition-all cursor-default ${!day.date ? 'opacity-0' : 'hover:scale-[1.02]'} ${
-                        day.val === 0 ? 'bg-muted/50 text-muted-foreground' : 
+                        day.val === 0 ? 'bg-muted/50 text-muted-foreground' :
                         day.val === 1 ? 'bg-emerald-100 text-emerald-800' :
                         day.val === 2 ? 'bg-emerald-300 text-emerald-900' :
                         day.val === 3 ? 'bg-emerald-500 text-white' : 'bg-emerald-700 text-white'

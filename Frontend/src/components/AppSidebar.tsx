@@ -35,7 +35,7 @@ import { useTheme } from "./ThemeProvider";
 import { triggerGlobalModal, type GlobalModalType } from "./GlobalModalContext";
 import { useAuth } from "./auth/AuthContext";
 import { LoginModal } from "./auth/LoginModal";
-import { getAvatarUrl } from "@/lib/config";
+import { getAvatarUrl, handleAvatarError } from "@/lib/config";
 import { LogIn, LogOut } from "lucide-react";
 import { filterNavigationForUser, hasModulePermission } from "@/lib/permissions";
 
@@ -602,6 +602,7 @@ function SidebarBody({
                 src={getAvatarUrl(user.profile_photo || user.avatar, user.name || "User")}
                 alt={user.name}
                 className="w-8 h-8 rounded-full object-cover shrink-0 border border-border"
+                onError={handleAvatarError}
               />
               {!collapsed && (
                 <div className="min-w-0 text-left">

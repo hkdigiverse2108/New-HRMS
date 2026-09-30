@@ -42,6 +42,7 @@ class DailyProgressResponse(DailyProgressBase):
     verified_by_id: Optional[str] = None
     submitted_at: datetime
     verified_at: Optional[datetime] = None
+    on_leave: bool = False
 
     @field_validator('status', mode='before')
     @classmethod
