@@ -281,7 +281,7 @@ export const parseDepartments = (deptString?: string): string[] => {
   return deptString.split(",").map(d => d.trim()).filter(Boolean);
 };
 
-// K8: date-driven progress — start→end mathi elapsed/total days + % (transcript L111-116).
+// K8: date-driven progress — elapsed/total days + % from start to end (transcript L111-116).
 // Dates na hoy to null (stored progress fallback).
 export const getDateProgress = (
   startDate?: string | null,
@@ -297,7 +297,7 @@ export const getDateProgress = (
   return { elapsed, total, pct: Math.round((elapsed / total) * 100) };
 };
 
-// K16: project date-range mathi months list + default month (running cycle).
+// K16: months list from project date-range + default month (running cycle).
 // today range ma hoy to current month, pela hoy to start month, pachi hoy to end month.
 export const getProjectMonths = (  startDate?: string | null,
   endDate?: string | null,
@@ -2045,7 +2045,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     return isNaN(n) || n < 0 ? 0 : n;
   };
 
-  // F7: table mathi edit → modal prefill + PUT
+  // F7: edit from table → modal prefill + PUT
   const openEditStat = (stat: any) => {
     setDailyStatsForm({
       date: stat.date || "",
@@ -2474,7 +2474,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           project_id: proj.id,
           task_category: "Finance",
         }, { showErrorToast: false }).catch(() => null);
-        if (owner) toast.success(`Followup task ${owner.name} ne assign thayu`);
+        if (owner) toast.success(`Follow-up task assigned to ${owner.name}`);
       }
       await loadLiveData();
       fetchProjectFollowups(proj.id);
@@ -4098,7 +4098,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 type="button"
                 onClick={() => { setWhatsappLinkInput(""); setIsWhatsappModalOpen(true); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-muted hover:bg-muted/70 border border-border/50 text-muted-foreground font-bold text-xs rounded-full transition-colors"
-                title="WhatsApp group link set karo"
+                title="Set WhatsApp group link"
               >
                 <MessageSquare className="w-3.5 h-3.5" /> Set WhatsApp
               </button>
@@ -4107,7 +4107,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               type="button"
               onClick={() => document.getElementById("finance-section")?.scrollIntoView({ behavior: "smooth", block: "start" })}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-full transition-colors shadow-sm"
-              title="Finance & followups par jao"
+              title="Go to Finance & follow-ups"
             >
               ➦ Followups
             </button>
@@ -4115,7 +4115,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               type="button"
               onClick={() => { setProjectSubTab("logs"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-full transition-colors shadow-sm"
-              title="Activity logs juo"
+              title="View activity logs"
             >
               📋 Logs
             </button>
@@ -4161,7 +4161,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                })()}
              </div>
             
-            {/* F3: Budget ni jagyae Revenue total (transcript: budget nathi jotu) */}
+            {/* F3: Revenue total instead of Budget (transcript: budget is not needed) */}
             <div className="bg-card border border-border/60 rounded-3xl p-6 flex items-center gap-5 shadow-sm">
               <button
                 type="button"
@@ -4231,7 +4231,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             {/* Payment entries */}
             <div className="space-y-2 mb-4">
               {(project.payments || []).length === 0 && (
-                <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">Haju koi payment entry nathi.</p>
+                <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">No payment entries yet.</p>
               )}
               {(project.payments || []).map(e => (
                 <div key={e.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 rounded-2xl border border-border/40 bg-muted/20 text-xs">
@@ -4300,7 +4300,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Followups {projectFollowups.length > 0 && `(${projectFollowups.length})`}</p>
               <div className="space-y-1.5 mb-3 max-h-32 overflow-y-auto pr-1">
                 {projectFollowups.length === 0 && (
-                  <p className="text-[11px] text-muted-foreground/60 font-medium">Haju koi followup nathi.</p>
+                  <p className="text-[11px] text-muted-foreground/60 font-medium">No follow-ups yet.</p>
                 )}
                 {projectFollowups.slice(0, 5).map((f: any, i: number) => (
                   <p key={f.id || i} className="text-xs text-foreground bg-muted/30 border border-border/30 rounded-xl px-3 py-1.5">
@@ -4648,7 +4648,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 px-4 py-3 bg-card/80 border border-border/60 rounded-2xl shadow-sm">
                         <div className="flex items-baseline gap-2 shrink-0">
                           <span className="text-2xl font-black text-foreground font-mono">{done.length}/{due.length}</span>
-                          <span className="text-[11px] text-muted-foreground font-bold uppercase tracking-wider">thai gaya</span>
+                          <span className="text-[11px] text-muted-foreground font-bold uppercase tracking-wider">done</span>
                         </div>
                         <div className="flex-1 h-2 bg-muted/60 rounded-full overflow-hidden min-w-[120px]">
                           <div className={cn("h-full rounded-full transition-all duration-500", pct === 100 ? "bg-emerald-500" : "bg-primary")} style={{ width: `${pct}%` }} />
@@ -5465,7 +5465,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     </div>
                   </div>
 
-                  {/* K7: Daily Data Entry Tasks card removed (DM ma tasks rakhvana nathi) */}
+                  {/* K7: Daily Data Entry Tasks card removed (no tasks in DM) */}
                   <div className="grid grid-cols-1 gap-6">
                     {/* Top Performing Campaigns (F6: backend auto) */}
                     <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm">
@@ -5475,7 +5475,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       </div>
                       <div className="space-y-4">
                         {topCampaigns.length === 0 && (
-                          <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">Haju koi campaign data nathi.</p>
+                          <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">No campaign data yet.</p>
                         )}
                         {(() => {
                           const maxLeads = Math.max(1, ...topCampaigns.map(c => Number(c.leads) || 0));
@@ -5524,7 +5524,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       {reportLoading ? (
                         <p className="text-xs text-muted-foreground font-semibold text-center py-6">Loading report...</p>
                       ) : !reportData ? (
-                        <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">Month select karo — badho data automatic malse.</p>
+                        <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">Select a month — all data loads automatically.</p>
                       ) : (
                         <>
                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-4">
@@ -8671,7 +8671,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           </div>
           <div className="p-6 space-y-3 max-h-[40vh] overflow-y-auto">
             {revenues.length === 0 && (
-              <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">Haju koi revenue entry nathi.</p>
+                <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">No revenue entries yet.</p>
             )}
             {[...revenues].sort((a, b) => String(b.date || "").localeCompare(String(a.date || ""))).map((r: any) => (
               <div key={String(r.id || r._id)} className="flex items-center gap-3 px-4 py-2.5 rounded-2xl border border-border/40 bg-muted/20 text-xs">
@@ -11148,7 +11148,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           <div className="flex items-center justify-between px-6 md:px-8 py-5 border-b border-border/50 bg-muted/30">
             <div>
               <h2 className="text-xl md:text-2xl font-black tracking-tight">New Project</h2>
-              <p className="text-sm text-muted-foreground mt-0.5">Pela client select karo, pachhi project details.</p>
+              <p className="text-sm text-muted-foreground mt-0.5">Select a client first, then project details.</p>
             </div>
             <button
               onClick={() => setIsLandingProjectOpen(false)}

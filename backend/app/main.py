@@ -44,6 +44,17 @@ async def lifespan(app: FastAPI):
         await setup_designation_indexes(db.db)
         await setup_penalty_indexes(db.db)
         await init_database_presets_and_admin(db.db)
+        # Hot-path indexes for dashboard ONE-API (idempotent)
+        try:
+            await db.db["tasks"].create_index([("is_deleted", 1), ("status", 1)])
+            await db.db["tasks"].create_index([("is_deleted", 1), ("due_date", 1)])
+            await db.db["tasks"].create_index([("assigned_to", 1), ("is_deleted", 1)])
+            await db.db["projects"].create_index([("is_deleted", 1)])
+            await db.db["projects"].create_index([("general.status", 1)])
+            await db.db["notifications"].create_index([("recipient_id", 1), ("is_read", 1), ("created_at", -1)])
+            await db.db["remarks"].create_index([("submitted_by_id", 1)])
+        except Exception as ie:
+            print(f"[STARTUP WARNING] dashboard index notice: {ie}")
     except Exception as e:
         print(f"[STARTUP WARNING] Database startup initialization notice: {e}")
     yield

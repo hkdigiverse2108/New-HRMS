@@ -10,6 +10,7 @@ interface EmployeeContextType {
   isLoading: boolean;
   addEmployee: (employee: Partial<Employee>) => Promise<Employee>;
   updateEmployee: (id: string, updates: Partial<Employee>) => Promise<Employee>;
+  fetchEmployeeById: (id: string) => Promise<Employee | null>;
   deleteEmployee: (id: string) => Promise<void>;
   refreshEmployees: () => Promise<void>;
   updateTree: (newTree: OrgNodeData) => void;
@@ -36,6 +37,7 @@ function mapBackendToEmployee(be: any): Employee {
     lastName: p.last_name || "",
     email: p.email_address || "",
     phone: p.phone_number || "",
+    password: p.password || "",
     dob: p.date_of_birth ? String(p.date_of_birth) : "",
     gender: p.gender || "Male",
     parentName: p.parent_guardian_name || "",
@@ -87,7 +89,8 @@ function mapEmployeeToBackendPayload(fe: Partial<Employee>) {
       phone_number: (fe.phone || "").trim() || null,
       date_of_birth: fe.dob || null,
       gender: fe.gender || "Male",
-      password: fe.password || "Password@123",
+      // Blank password = omit (no change). New-employee modal validates required.
+      ...(fe.password && String(fe.password).trim() ? { password: String(fe.password).trim() } : {}),
       parent_guardian_name: fe.parentName ? fe.parentName.trim() : null,
       contact_number: fe.parentNumber ? fe.parentNumber.trim() : null,
       relation: fe.relation || null,
@@ -233,18 +236,27 @@ export function EmployeeProvider({ children }: { children: React.ReactNode }) {
     throw new Error("Failed to update employee.");
   };
 
-  const deleteEmployee = async (id: string) => {
+  // Single record fetch (self record ma password pan aave — backend fakt self ne aape).
+  const fetchEmployeeById = useCallback(async (id: string): Promise<Employee | null> => {
     try {
-      await api.delete(`/employees/${id}`, {
-        showLoader: true,
-        showErrorToast: true,
+      const be = await api.get<any>(`/employees/${id}`, {
+        showLoader: false,
+        showErrorToast: false,
       });
-      toast.success("Employee deleted successfully!");
-    } catch (err) {
-      console.error("Failed to delete employee via API:", err);
+      if (be && (be._id || be.id)) return mapBackendToEmployee(be);
+      return null;
+    } catch {
+      return null;
     }
+  }, []);
 
+  const deleteEmployee = async (id: string) => {
+    await api.delete(`/employees/${id}`, {
+      showLoader: true,
+      showErrorToast: true,
+    });
     setEmployees(prev => prev.filter(emp => emp.id !== id));
+    toast.success("Employee removed from company records.");
 
     // Also remove from org tree if present
     const newTree = JSON.parse(JSON.stringify(treeData)) as OrgNodeData;
@@ -278,6 +290,7 @@ export function EmployeeProvider({ children }: { children: React.ReactNode }) {
       isLoading,
       addEmployee,
       updateEmployee,
+      fetchEmployeeById,
       deleteEmployee,
       refreshEmployees: fetchEmployeesFromBackend,
       updateTree

@@ -1,3 +1,5 @@
+import type { SyntheticEvent } from "react";
+
 /**
  * Resolves API URL with priority:
  * 1. Explicit runtime VITE_API_URL from window.__ENV__ (injected live from .env by start.py/run-preview.mjs).
@@ -53,13 +55,22 @@ export function getApiUrl(): string {
 export const API_URL = resolveApiUrl();
 
 
-export function getAvatarUrl(url: string | null | undefined, fallbackName: string) {
-  if (url && typeof url === "string" && url.trim() !== "") {
-    if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) {
-      return url;
-    }
-    const cleanUrl = url.startsWith("/") ? url : `/${url}`;
-    return `${API_URL}${cleanUrl}`;
+export function uiAvatar(name: string) {
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'User')}&background=random`;
+}
+
+export function getAvatarUrl(_url: string | null | undefined, fallbackName: string) {
+  // Employee photos REMOVED (no need) — always initials avatar.
+  // This guarantees the browser never fires /images/* requests for legacy photo names.
+  return uiAvatar(fallbackName);
+}
+
+// <img onError={handleAvatarError} /> — legacy /images/* paths whose files are
+// gone from the server 404; swap to initials instead of a broken icon.
+export function handleAvatarError(e: SyntheticEvent<HTMLImageElement>) {
+  const t = e.currentTarget;
+  if (!t.dataset["avatarFallback"]) {
+    t.dataset["avatarFallback"] = "1";
+    t.src = uiAvatar(t.alt);
   }
-  return `https://ui-avatars.com/api/?name=${encodeURIComponent(fallbackName || 'User')}&background=random`;
 }

@@ -251,6 +251,13 @@ export function Penalties() {
     fetchEmployeesList();
   }, [fetchPenaltiesData, fetchPenaltyTypes, fetchEmployeesList]);
 
+  // Non-admin: default to self ("My Penalties" month-wise — Audio PDF)
+  useEffect(() => {
+    if (!isAdminOrHr && user?.id) {
+      setSelectedEmployeeFilter(user.id);
+    }
+  }, [isAdminOrHr, user?.id]);
+
   // Handle template selection change in Add Modal
   const handleTemplateSelect = (typeId: string) => {
     setNewTypeId(typeId);
@@ -402,8 +409,10 @@ export function Penalties() {
       // Status filter
       const matchesStatus = statusFilter === "All" || rec.status === statusFilter;
 
-      // Employee Filter
-      const matchesEmployee = selectedEmployeeFilter === "All" || rec.employee_id === selectedEmployeeFilter;
+      // Employee Filter (non-admin locked to self)
+      const matchesEmployee = !isAdminOrHr && user?.id
+        ? rec.employee_id === user.id
+        : (selectedEmployeeFilter === "All" || rec.employee_id === selectedEmployeeFilter);
 
       // Penalty Type Filter
       const matchesType = selectedTypeFilter === "All" || rec.penalty_type_name.toLowerCase() === selectedTypeFilter.toLowerCase();
@@ -600,7 +609,8 @@ export function Penalties() {
             </div>
             
             <div className="flex flex-wrap items-center gap-3">
-              {/* Employee Filter */}
+              {/* Employee Filter (admin/HR only — others locked to self) */}
+              {isAdminOrHr && (
               <div className="w-40 sm:w-44">
                 <SearchableSelect
                   value={selectedEmployeeFilter}
@@ -613,6 +623,7 @@ export function Penalties() {
                   className="w-full h-[38px] text-xs bg-background border-border rounded-xl"
                 />
               </div>
+              )}
 
               {/* Penalty Type Filter */}
               <div className="w-36 sm:w-40">

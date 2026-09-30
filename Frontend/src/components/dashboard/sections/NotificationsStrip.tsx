@@ -77,7 +77,7 @@ export function NotificationsStrip() {
             )}
           </div>
           {notifs.length === 0 ? (
-            <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">Koi notification nathi.</p>
+            <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">No notifications.</p>
           ) : (
             <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
               {notifs.map(n => (

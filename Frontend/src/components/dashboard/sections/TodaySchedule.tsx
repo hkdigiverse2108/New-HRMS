@@ -66,8 +66,8 @@ export function TodaySchedule({ setActive }: { setActive?: ((url: string) => voi
 
   return (
     <div className="mb-12">
-      <CollapsibleSection section="Today" title="Aajno Schedule">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <CollapsibleSection section="Today" title="Today's Schedule">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Schedule / meetings */}
           <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-4">
@@ -75,18 +75,18 @@ export function TodaySchedule({ setActive }: { setActive?: ((url: string) => voi
                 <CalendarDays className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="font-bold text-foreground text-sm">Aajno Schedule</h3>
+                <h3 className="font-bold text-foreground text-sm">Today's Schedule</h3>
                 <p className="text-[11px] text-muted-foreground">Meetings & plan</p>
               </div>
             </div>
             {meeting ? (
               <p className="text-[13px] font-semibold text-foreground bg-muted/50 border border-border/50 rounded-2xl px-4 py-3">{meeting}</p>
             ) : (
-              <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">Aaje koi schedule nathi.</p>
+              <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">No schedule for today.</p>
             )}
             <div className="flex gap-3 mt-4">
               <div className="flex-1 bg-emerald-50 border border-emerald-100 rounded-2xl p-4">
-                <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Pura karya</p>
+                <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Completed</p>
                 <p className="text-2xl font-black text-emerald-700">{doneCount}/{tasks.length}</p>
               </div>
               <div className="flex-1 bg-blue-50 border border-blue-100 rounded-2xl p-4">
@@ -105,7 +105,7 @@ export function TodaySchedule({ setActive }: { setActive?: ((url: string) => voi
                 </div>
                 <div>
                   <h3 className="font-bold text-foreground text-sm">Today's Tasks</h3>
-                  <p className="text-[11px] text-muted-foreground">Khulya vagar j juo • click = complete</p>
+                  <p className="text-[11px] text-muted-foreground">View without opening • click = complete</p>
                 </div>
               </div>
               <button
@@ -119,7 +119,7 @@ export function TodaySchedule({ setActive }: { setActive?: ((url: string) => voi
             {isLoading ? (
               <p className="text-xs text-muted-foreground font-semibold text-center py-6">Loading...</p>
             ) : tasks.length === 0 ? (
-              <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">Aajna koi task nathi. 🎉</p>
+              <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">No tasks for today. 🎉</p>
             ) : (
               <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
                 {tasks.map(task => {

@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { UserPlus, CheckSquare, Briefcase, Receipt, Clock, Settings, X, Plus, Search } from "lucide-react";
 import { formatDate, cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog";
+import { useAuth } from "@/components/auth/AuthContext";
 
 import { navItems } from "@/components/nav-data";
 import { Link2 } from "lucide-react";
@@ -48,6 +49,32 @@ navItems.forEach(item => {
 });
 
 export function DashboardHeader({ setActive, onAction }: { setActive?: ((url: string) => void) | undefined; onAction?: ((action: string) => void) | undefined }) {
+  const { user } = useAuth();
+  const [now, setNow] = useState(() => new Date());
+
+  // Live IST clock
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const istNow = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+  const hour = istNow.getHours();
+  const greeting = hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
+  const firstName = (user?.name || "User").split(" ")[0];
+  const timeStr = istNow.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true }).toUpperCase();
+  const monthName = istNow.toLocaleString("default", { month: "long" });
+
+  // Working day: Mon-Sat counted (live)
+  const y = istNow.getFullYear();
+  const m = istNow.getMonth();
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const isWorkday = (d: number) => {
+    const wd = new Date(y, m, d).getDay();
+    return wd !== 0; // Sunday off
+  };
+  const totalWorkdays = Array.from({ length: daysInMonth }, (_, i) => i + 1).filter(isWorkday).length;
+  const passedWorkdays = Array.from({ length: istNow.getDate() }, (_, i) => i + 1).filter(isWorkday).length;
   const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedActionIds, setSelectedActionIds] = useState<string[]>(() => {
@@ -78,9 +105,9 @@ export function DashboardHeader({ setActive, onAction }: { setActive?: ((url: st
         <div>
           <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-2">CEO Command Center</p>
           <h1 className="text-2xl sm:text-3xl md:text-[34px] font-black text-foreground tracking-tight flex items-center gap-2 mb-2 leading-tight">
-            Good Evening, Het <span className="text-2xl sm:text-3xl">👋</span>
+            {greeting}, {firstName} <span className="text-2xl sm:text-3xl">👋</span>
           </h1>
-          <p className="text-xs sm:text-[14px] text-muted-foreground">Today's overview for HK DigiVerse — everything moving across the company, in one screen.</p>
+          <p className="text-xs sm:text-[14px] text-muted-foreground">Today's overview — everything moving across the company, in one screen.</p>
         </div>
         <div className="flex flex-wrap gap-2 sm:gap-3 justify-start lg:justify-end w-full lg:max-w-xl">
           {activeActions.map(action => (
@@ -100,20 +127,20 @@ export function DashboardHeader({ setActive, onAction }: { setActive?: ((url: st
 
       <div className="grid grid-cols-1 min-[360px]:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-6 sm:mt-8">
         <div className="bg-muted/50/40 rounded-2xl p-4 sm:p-5 border border-border/40">
-          <p className="text-[10px] font-bold text-muted-foreground mb-1">Current Time</p>
-          <p className="text-xl sm:text-[22px] font-black text-primary truncate">05:28:41 PM</p>
+          <p className="text-[10px] font-bold text-muted-foreground mb-1">Current Time (IST)</p>
+          <p className="text-xl sm:text-[22px] font-black text-primary truncate">{timeStr}</p>
         </div>
         <div className="bg-muted/50/40 rounded-2xl p-4 sm:p-5 border border-border/40">
           <p className="text-[10px] font-bold text-muted-foreground mb-1">Today's Date</p>
-          <p className="text-xl sm:text-[22px] font-black text-blue-500 truncate">{formatDate(new Date())}</p>
+          <p className="text-xl sm:text-[22px] font-black text-blue-500 truncate">{formatDate(istNow)}</p>
         </div>
         <div className="bg-muted/50/40 rounded-2xl p-4 sm:p-5 border border-border/40">
           <p className="text-[10px] font-bold text-muted-foreground mb-1">Working Day</p>
-          <p className="text-xl sm:text-[22px] font-black text-amber-500 truncate">Day 22 of 26</p>
+          <p className="text-xl sm:text-[22px] font-black text-amber-500 truncate">Day {passedWorkdays} of {totalWorkdays}</p>
         </div>
         <div className="bg-muted/50/40 rounded-2xl p-4 sm:p-5 border border-border/40">
           <p className="text-[10px] font-bold text-muted-foreground mb-1">Financial Month</p>
-          <p className="text-xl sm:text-[22px] font-black text-primary truncate">August</p>
+          <p className="text-xl sm:text-[22px] font-black text-primary truncate">{monthName}</p>
         </div>
       </div>
     </div>

@@ -8,7 +8,7 @@ import { useApi } from "@/hooks/useApi";
 import { useUser } from "@/hooks/useUser";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { API_URL, getAvatarUrl } from "@/lib/config";
+import { API_URL, getAvatarUrl, handleAvatarError } from "@/lib/config";
 import { DeleteConfirmDialog } from "@/components/hrms/delete-confirm-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -914,7 +914,7 @@ export default function SeatingArrangementPage() {
                               <div className="space-y-3">
                                 <div className="flex items-center gap-3">
                                   <Avatar className="w-9 h-9 border border-brand-teal/20 shadow-sm flex-shrink-0">
-                                    <AvatarImage src={getAvatarUrl(employee.profilePhoto, employee.name || `${employee.firstName} ${employee.lastName}`)} />
+                                    <AvatarImage src={getAvatarUrl(employee.profilePhoto, employee.name || `${employee.firstName} ${employee.lastName}`)} onError={handleAvatarError} />
                                     <AvatarFallback className="bg-brand-light text-brand-teal text-xs font-bold">
                                       {(employee.name || `${employee.firstName} ${employee.lastName}`).split(' ').map((n: string) => n[0]).join('')}
                                     </AvatarFallback>
@@ -1039,7 +1039,7 @@ export default function SeatingArrangementPage() {
                               <div className="space-y-3">
                                 <div className="flex items-center gap-3">
                                   <Avatar className="w-9 h-9 border border-brand-teal/20 shadow-sm flex-shrink-0">
-                                    <AvatarImage src={getAvatarUrl(employee.profilePhoto, employee.name || `${employee.firstName} ${employee.lastName}`)} />
+                                    <AvatarImage src={getAvatarUrl(employee.profilePhoto, employee.name || `${employee.firstName} ${employee.lastName}`)} onError={handleAvatarError} />
                                     <AvatarFallback className="bg-brand-light text-brand-teal text-xs font-bold">
                                       {(employee.name || `${employee.firstName} ${employee.lastName}`).split(' ').map((n: string) => n[0]).join('')}
                                     </AvatarFallback>

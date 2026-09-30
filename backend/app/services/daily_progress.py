@@ -208,6 +208,7 @@ class DailyProgressService:
                 await DailyProgressRepository.update_progress(str(emp_record.get("_id") or emp_record.get("id")), update_payload)
                 # re-fetch
                 existing = await DailyProgressRepository.get_all_progress(query)
+            await DailyProgressService._attach_leave_flags(existing)
             return existing[0]
             
         from app.repository.task import TaskRepository
@@ -215,7 +216,9 @@ class DailyProgressService:
         tasks = all_tasks_res.get("data", [])
         
         draft = await DailyProgressService._generate_draft(current_user, tasks, today)
-        return await DailyProgressRepository.create_progress(draft)
+        created = await DailyProgressRepository.create_progress(draft)
+        await DailyProgressService._attach_leave_flags([created])
+        return created
 
     @staticmethod
     async def get_all_progress(
@@ -365,7 +368,8 @@ class DailyProgressService:
                             
                 # Re-fetch after sync
                 records = await DailyProgressRepository.get_all_progress(query)
-                
+
+        await DailyProgressService._attach_leave_flags(records)
         return records
 
     @staticmethod
@@ -574,6 +578,105 @@ class DailyProgressService:
                 "type": "general"
             })
             
+        return result
+
+    @staticmethod
+    async def _leave_ranges(start, end):
+        """Approved leaves overlapping [start, end] as (employee_id, start_iso, end_iso)."""
+        from app.database.db import get_database
+        out = []
+        try:
+            db = get_database()
+            if db is None:
+                return out
+            cursor = db["leave_requests"].find(
+                {"status": "Approved", "start_date": {"$lte": end.isoformat()}, "end_date": {"$gte": start.isoformat()}},
+                {"employee_id": 1, "start_date": 1, "end_date": 1},
+            )
+            async for doc in cursor:
+                eid = doc.get("employee_id")
+                if eid:
+                    out.append((str(eid), str(doc.get("start_date") or ""), str(doc.get("end_date") or "")))
+        except Exception:
+            pass
+        return out
+
+    @staticmethod
+    def _record_date_iso(rec) -> str:
+        dt = rec.get("submitted_at")
+        try:
+            if isinstance(dt, datetime):
+                return dt.date().isoformat()
+            if isinstance(dt, str):
+                return dt[:10]
+        except Exception:
+            pass
+        return ""
+
+    @staticmethod
+    async def _attach_leave_flags(records):
+        """Leave-parallel: mark records whose employee is on approved leave that day."""
+        try:
+            dates = sorted({DailyProgressService._record_date_iso(r) for r in records if DailyProgressService._record_date_iso(r)})
+            if not dates:
+                for r in records:
+                    r["on_leave"] = False
+                return records
+            from datetime import date as _date
+            s = _date.fromisoformat(dates[0])
+            e = _date.fromisoformat(dates[-1])
+            leaves = await DailyProgressService._leave_ranges(s, e)
+            for r in records:
+                d = DailyProgressService._record_date_iso(r)
+                eid = str(r.get("employee_id") or "")
+                r["on_leave"] = any(e2 == eid and ls <= d <= le for (e2, ls, le) in leaves)
+        except Exception:
+            for r in records:
+                r.setdefault("on_leave", False)
+        return records
+
+    @staticmethod
+    async def reset_progress(progress_id: str, current_user: dict) -> Optional[Dict[str, Any]]:
+        """Reopen VERIFIED/REJECTED back to PENDING (reset verification)."""
+        if not DailyProgressService._is_admin_or_hr(current_user):
+            return None
+
+        progress = await DailyProgressRepository.get_progress_by_id(progress_id)
+        if not progress:
+            return None
+
+        user_id = str(current_user.get("_id") or current_user.get("id"))
+
+        update_data = {
+            "status": "PENDING",
+            "rating": 0,
+            "remarks": None,
+            "verified_by_id": None,
+            "verified_at": None,
+        }
+
+        personal_info = current_user.get("personal_info", {})
+        user_name = f"{personal_info.get('first_name', '')} {personal_info.get('last_name', '')}".strip() or "Unknown"
+        emp_name = progress.get("employee_name", "Unknown")
+
+        push_log = {
+            "action": "DAILY REPORT RESET",
+            "performed_by_id": user_id,
+            "performed_by_name": user_name,
+            "timestamp": datetime.utcnow(),
+            "details": f"Reset daily report for {emp_name} back to pending"
+        }
+
+        result = await DailyProgressRepository.update_progress(progress_id, update_data, push_log)
+
+        if result:
+            await NotificationRepository.create_notification({
+                "recipient_id": progress.get("employee_id"),
+                "title": "Daily Progress Reopened",
+                "message": "Your daily progress report was reset to pending for re-review.",
+                "type": "general"
+            })
+
         return result
 
     @staticmethod

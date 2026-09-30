@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { Search, X, Filter, LayoutGrid, List, MoreVertical, Phone, Mail, Plus, MapPin, Edit2, Trash2, Key, UserMinus, UserCheck, Shield, FileText, LogOut, Clock, Columns, Eye, Users } from "lucide-react";
+import { Search, X, Filter, LayoutGrid, List, MoreVertical, Phone, Mail, Plus, MapPin, Edit2, Trash2, Key, UserMinus, UserCheck, Shield, FileText, LogOut, Clock, Columns, Eye, EyeOff, Users } from "lucide-react";
 import { EMPLOYEES, Employee } from "./employee-data";
 import { useDepartments } from "./DepartmentContext";
 import { EmployeeProfileModal } from "./EmployeeProfileModal";
@@ -13,7 +13,9 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuChe
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { getAvatarUrl } from "@/lib/config";
+import { handleAvatarError } from "@/lib/config";
 import { useModulePermissions } from "@/hooks/useModulePermissions";
+import { useAuth } from "@/components/auth/AuthContext";
 
 const COLUMN_OPTIONS = [
   { key: "employee", label: "Employee", default: true },
@@ -61,7 +63,33 @@ const COLUMN_OPTIONS = [
 ];
 
 export function EmployeeList({ isNew }: { isNew?: boolean }) {
-  const { employees, addEmployee, updateEmployee, deleteEmployee } = useEmployeesContext();
+  const { employees, addEmployee, updateEmployee, deleteEmployee, fetchEmployeeById } = useEmployeesContext();
+const { user } = useAuth();
+
+// Self row mate password merge (non-privileged viewer potanu j joi shake).
+const [selfPassword, setSelfPassword] = useState("");
+// Card-level hide/show toggle (default masked).
+const [revealedPwIds, setRevealedPwIds] = useState<string[]>([]);
+const togglePw = (id: string) => {
+  setRevealedPwIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
+};
+const selfId = useMemo(() => {
+  if (!user) return "";
+  const byId = employees.find(e => e.id === user.id);
+  if (byId) return byId.id;
+  const byEmail = employees.find(e => e.email?.toLowerCase() === user.email?.toLowerCase());
+  return byEmail ? byEmail.id : "";
+}, [employees, user]);
+
+useEffect(() => {
+  let alive = true;
+  (async () => {
+    if (!selfId) { setSelfPassword(""); return; }
+    const full = await fetchEmployeeById(selfId);
+    if (alive) setSelfPassword(full?.password || "");
+  })();
+  return () => { alive = false; };
+}, [selfId, fetchEmployeeById]);
   const { departments } = useDepartments();
   const { canCreate, canUpdate, canDelete, isAdmin } = useModulePermissions("/employees/list");
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -117,7 +145,7 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
       case "employee":
         return (
           <div className="flex items-center gap-3">
-            <img src={getAvatarUrl(emp.avatar || emp.profile_photo, emp.name)} alt={emp.name} className="w-10 h-10 rounded-full object-cover" />
+            <img src={getAvatarUrl(emp.avatar || emp.profile_photo, emp.name)} alt={emp.name} className="w-10 h-10 rounded-full object-cover" onError={handleAvatarError} />
             <div>
               <p className="text-[14px] font-bold text-foreground">{emp.name}</p>
               <p className="text-[12px] text-muted-foreground">{emp.role}</p>
@@ -206,6 +234,24 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
             </div>
           </div>
         );
+      case "password": {
+        const pw = emp.password || (emp.id === selfId ? selfPassword : "");
+        const revealed = revealedPwIds.includes(emp.id);
+        if (!pw) return <span className="text-[13px] text-foreground/80">••••••</span>;
+        return (
+          <span className="flex items-center gap-1.5 text-[13px] text-foreground/80">
+            <span>{revealed ? pw : "••••••"}</span>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); togglePw(emp.id); }}
+              className="p-0.5 rounded text-muted-foreground hover:text-primary transition-colors"
+              title={revealed ? "Hide password" : "Show password"}
+            >
+              {revealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            </button>
+          </span>
+        );
+      }
       case "hasBond":
       case "hasNoticePeriod":
       case "hasResignation":
@@ -269,10 +315,13 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
     setDeleteConfirm({ isOpen: true, id, name });
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (deleteConfirm.id) {
-      deleteEmployee(deleteConfirm.id);
-      toast.success(`${deleteConfirm.name} removed from company records.`);
+      try {
+        await deleteEmployee(deleteConfirm.id);
+      } catch {
+        // api client already toasted the error; keep the row (no local removal).
+      }
     }
     setDeleteConfirm({ isOpen: false, id: null, name: "" });
   };
@@ -286,12 +335,23 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
     setIsFormOpen(true);
   };
 
-  const openEditForm = (emp: Employee) => {
+  const openEditForm = async (emp: Employee) => {
     if (!canUpdate) {
       toast.error("You do not have permission to edit employees.");
       return;
     }
-    setEditingEmployee(emp);
+    // Self-edit: fetch single record so own password prefills (backend returns
+    // password ONLY for self — others, even Admin, get none).
+    let data = emp;
+    try {
+      if (selfId && emp.id === selfId) {
+        const full = await fetchEmployeeById(emp.id);
+        if (full?.password) data = { ...emp, password: full.password };
+      }
+    } catch {
+      /* fall back to list version */
+    }
+    setEditingEmployee(data);
     setIsFormOpen(true);
   };
 
@@ -511,7 +571,7 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
               
               <div className="flex flex-col items-center text-center">
                 <div className="relative mb-4">
-                  <img src={getAvatarUrl(emp.avatar || emp.profile_photo, emp.name)} alt={emp.name} className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-md" />
+                  <img src={getAvatarUrl(emp.avatar || emp.profile_photo, emp.name)} alt={emp.name} className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-md" onError={handleAvatarError} />
                   <span className={cn(
                     "absolute bottom-1 right-1 w-4 h-4 rounded-full border-2 border-white",
                     getStatusColor(emp.status)
@@ -561,7 +621,24 @@ export function EmployeeList({ isNew }: { isNew?: boolean }) {
                   </div>
                   <div className="flex items-center justify-center gap-2">
                     <Key className="w-3.5 h-3.5 text-primary/70" />
-                    <span className="truncate">{emp.password || "No password set"}</span>
+                    {(() => {
+                      const pw = emp.password || (emp.id === selfId ? selfPassword : "");
+                      const revealed = revealedPwIds.includes(emp.id);
+                      if (!pw) return <span className="truncate">••••••</span>;
+                      return (
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <span className="truncate">{revealed ? pw : "••••••"}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); togglePw(emp.id); }}
+                            className="p-0.5 rounded text-muted-foreground hover:text-primary transition-colors shrink-0"
+                            title={revealed ? "Hide password" : "Show password"}
+                          >
+                            {revealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                        </span>
+                      );
+                    })()}
                   </div>
                 </div>
 

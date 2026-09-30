@@ -2,6 +2,7 @@ import { X, Calendar, MapPin, Phone, Mail, Briefcase, Award, TrendingUp, Clock, 
 import { Employee } from "./employee-data";
 import { DialogClose,  Dialog, DialogContent  } from "@/components/ui/dialog";
 import { cn, formatDate } from "@/lib/utils";
+import { getAvatarUrl, handleAvatarError } from "@/lib/config";
 
 interface EmployeeProfileModalProps {
   employee: Employee;
@@ -55,9 +56,10 @@ export function EmployeeProfileModal({ employee, onClose }: EmployeeProfileModal
           <div className="flex flex-col md:flex-row gap-4 md:gap-6 items-start md:items-end mb-8">
             <div className="relative -mt-12">
               <img 
-                src={employee.avatar} 
+                src={getAvatarUrl(employee.avatar || (employee as any).profile_photo, employee.name)} 
                 alt={employee.name} 
                 className="w-24 h-24 rounded-2xl object-cover border-4 border-white shadow-lg bg-white" 
+                onError={handleAvatarError}
               />
               <span className={cn(
                 "absolute -bottom-2 -right-2 px-3 py-1 rounded-xl text-[10px] font-bold border-2 border-white shadow-sm",

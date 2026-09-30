@@ -4,6 +4,8 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, Optional
 
+from bson import ObjectId
+
 from app.database.db import get_database
 from app.redis.service import get_cache, set_cache
 
@@ -30,6 +32,7 @@ class DashboardService:
         from app.services.penalty import PenaltyService
         from app.services.attendance import AttendanceService
         from app.services.remark import RemarkService
+        from app.repository.task import TaskRepository
 
         m, y, start, end = _month_bounds(month, year)
         cache_key = f"dashboard:overview:{user_id}:{y}-{m:02d}"
@@ -121,8 +124,326 @@ class DashboardService:
                 "outstanding": max(0.0, total_budget - total_received),
             }
 
+        async def wfh_block():
+            # WFH today: names + auto % (Audio PDF)
+            db = get_database()
+            names = []
+            total = 0
+            try:
+                total = await db["employees"].count_documents({})
+                cursor = db["employees"].find(
+                    {"work_details.work_mode": {"$in": ["WFH", "Work From Home", "Remote", "Hybrid", "wfh"]}},
+                    {"personal_info": 1},
+                )
+                async for doc in cursor:
+                    p = doc.get("personal_info", {}) or {}
+                    nm = f"{p.get('first_name', '')} {p.get('last_name', '')}".strip()
+                    names.append(nm or "Employee")
+            except Exception:
+                pass
+            pct = round(len(names) / total * 100, 1) if total else 0
+            return {"total": total, "count": len(names), "names": names, "pct": pct}
+
+        async def company_health():
+            # Section 02 live: headcounts, today attendance, leaves, interns, clients, revenue
+            from datetime import date as _date
+            db = get_database()
+            today = _date.today()
+            ds = today.isoformat()
+            dstart = datetime(today.year, today.month, today.day)
+            emp_filter = {"work_details.is_delete": {"$ne": True}}
+            out = {
+                "total_employees": 0, "present_today": 0, "absent_today": 0, "late_today": 0,
+                "total_interns": 0, "pending_leaves": 0,
+                "total_clients": 0, "active_clients": 0,
+                "running_projects": 0, "pending_tasks": 0,
+                "monthly_revenue": 0.0,
+            }
+            try:
+                out["total_employees"] = await db["employees"].count_documents(emp_filter)
+            except Exception:
+                pass
+            try:
+                present_ids: set = set()
+                cursor = db["attendance"].find({"date": ds}, {"status": 1, "is_late": 1, "employee_id": 1})
+                async for doc in cursor:
+                    st = str(doc.get("status") or "")
+                    if st in ("Present", "Half Day"):
+                        out["present_today"] += 1
+                        if doc.get("employee_id"):
+                            present_ids.add(str(doc["employee_id"]))
+                    if doc.get("is_late"):
+                        out["late_today"] += 1
+                leave_ids: set = set()
+                try:
+                    cur2 = db["leave_requests"].find(
+                        {"status": "Approved", "start_date": {"$lte": ds}, "end_date": {"$gte": ds}},
+                        {"employee_id": 1},
+                    )
+                    async for doc in cur2:
+                        if doc.get("employee_id"):
+                            leave_ids.add(str(doc["employee_id"]))
+                except Exception:
+                    pass
+                out["absent_today"] = max(0, out["total_employees"] - len(present_ids | leave_ids))
+            except Exception:
+                pass
+            try:
+                out["total_interns"] = await db["employees"].count_documents(
+                    {**emp_filter, "work_details.designation": {"$regex": "intern", "$options": "i"}}
+                )
+            except Exception:
+                pass
+            try:
+                out["pending_leaves"] = await db["leave_requests"].count_documents({"status": "Pending"})
+            except Exception:
+                pass
+            try:
+                out["total_clients"] = await db["clients"].count_documents(
+                    {"is_deleted": {"$ne": True}, "is_archived": {"$ne": True}}
+                )
+            except Exception:
+                pass
+            try:
+                ids = await db["projects"].distinct(
+                    "client_id",
+                    {"is_deleted": {"$ne": True}, "$or": [{"general.status": "In Progress"}, {"status": "In Progress"}]},
+                )
+                out["active_clients"] = len([i for i in ids if i])
+            except Exception:
+                pass
+            try:
+                prefix = f"{y}-{m:02d}"
+                pipeline = [
+                    {"$match": {"is_deleted": {"$ne": True}}},
+                    {"$unwind": "$finance.payments"},
+                    {"$match": {"finance.payments.date": {"$regex": f"^{prefix}"}}},
+                    {"$group": {"_id": None, "rev": {"$sum": {"$ifNull": ["$finance.payments.amount", 0]}}}},
+                ]
+                async for doc in db["projects"].aggregate(pipeline):
+                    out["monthly_revenue"] = float(doc.get("rev") or 0)
+            except Exception:
+                pass
+            return out
+
+        async def tasks_clients_block():
+            # Sections 09-10 live: task KPIs, client KPIs, key accounts, deadlines, follow-ups
+            from datetime import date as _date
+            db = get_database()
+            today = _date.today()
+            dstart = datetime(today.year, today.month, today.day)
+            out = {
+                "overdue": 0, "completed_today": 0, "new_this_month": 0,
+                "key_accounts": [], "upcoming_deadlines": [], "follow_ups": [],
+            }
+            try:
+                out["overdue"] = await db["tasks"].count_documents(
+                    {"status": {"$ne": "completed"}, "due_date": {"$lt": dstart}}
+                )
+            except Exception:
+                pass
+            try:
+                out["completed_today"] = await db["tasks"].count_documents(
+                    {"status": "completed", "updated_at": {"$gte": dstart}}
+                )
+            except Exception:
+                pass
+            try:
+                out["new_this_month"] = await db["clients"].count_documents(
+                    {"is_deleted": {"$ne": True}, "created_at": {"$gte": start}}
+                )
+            except Exception:
+                pass
+            try:
+                pipeline = [
+                    {"$match": {"is_deleted": {"$ne": True}}},
+                    {"$group": {
+                        "_id": "$client_id",
+                        "budget": {"$sum": {"$ifNull": ["$finance.project_budget", 0]}},
+                        "received": {"$sum": {"$ifNull": ["$finance.amount_received", 0]}},
+                        "since": {"$min": "$created_at"},
+                    }},
+                    {"$sort": {"budget": -1}},
+                    {"$limit": 4},
+                ]
+                raw = []
+                async for doc in db["projects"].aggregate(pipeline):
+                    if doc.get("_id"):
+                        raw.append(doc)
+                cmap = {}
+                try:
+                    oids = []
+                    for r in raw:
+                        try:
+                            oids.append(ObjectId(str(r["_id"])))
+                        except Exception:
+                            pass
+                    cur = db["clients"].find({"_id": {"$in": oids}}, {"company_name": 1})
+                    async for c in cur:
+                        cmap[str(c["_id"])] = c.get("company_name") or "Client"
+                except Exception:
+                    pass
+                for r in raw:
+                    cid = str(r["_id"])
+                    budget = float(r.get("budget") or 0)
+                    received = float(r.get("received") or 0)
+                    pct = (received / budget * 100) if budget else 0
+                    since = r.get("since")
+                    year = since.year if hasattr(since, "year") else "—"
+                    out["key_accounts"].append({
+                        "name": cmap.get(cid, "Client"),
+                        "since": str(year),
+                        "value": "High" if budget >= 500000 else ("Medium" if budget >= 100000 else "Standard"),
+                        "health": "Good" if pct >= 40 or received > 0 else "Warning",
+                    })
+            except Exception:
+                pass
+            try:
+                emap: dict = {}
+                try:
+                    cur = db["employees"].find({}, {"personal_info": 1})
+                    async for e in cur:
+                        p = e.get("personal_info", {}) or {}
+                        emap[str(e["_id"])] = f"{p.get('first_name', '')} {p.get('last_name', '')}".strip() or "Employee"
+                except Exception:
+                    pass
+                cur = db["tasks"].find(
+                    {"status": {"$ne": "completed"}, "due_date": {"$gte": dstart}},
+                    {"title": 1, "due_date": 1, "assigned_to": 1},
+                ).sort("due_date", 1).limit(6)
+                async for t in cur:
+                    dd = t.get("due_date")
+                    ds2 = dd.date().isoformat() if hasattr(dd, "date") else str(dd or "")[:10]
+                    aid = str(t.get("assigned_to") or "")
+                    out["upcoming_deadlines"].append({
+                        "title": t.get("title") or "Task",
+                        "due": ds2,
+                        "assignee": emap.get(aid, "Team"),
+                    })
+            except Exception:
+                pass
+            try:
+                cur = db["projects"].find(
+                    {"is_deleted": {"$ne": True}, "finance.next_payment_date": {"$gte": dstart}},
+                    {"general.project_name": 1, "client_id": 1, "finance.next_payment_date": 1, "finance.project_budget": 1},
+                ).sort("finance.next_payment_date", 1).limit(5)
+                proj_rows = []
+                cids = set()
+                async for p in cur:
+                    g = p.get("general", {}) or {}
+                    f = p.get("finance", {}) or {}
+                    cid = str(p.get("client_id") or "")
+                    if cid:
+                        cids.add(cid)
+                    proj_rows.append({"name": g.get("project_name") or "Project", "cid": cid,
+                                      "npd": f.get("next_payment_date"), "budget": f.get("project_budget") or 0})
+                cmap2: dict = {}
+                if cids:
+                    try:
+                        oids = []
+                        for c in cids:
+                            try:
+                                oids.append(ObjectId(c))
+                            except Exception:
+                                pass
+                        cur2 = db["clients"].find({"_id": {"$in": oids}}, {"company_name": 1, "contact_person_name": 1})
+                        async for c in cur2:
+                            cmap2[str(c["_id"])] = c.get("company_name") or c.get("contact_person_name") or "Client"
+                    except Exception:
+                        pass
+                for r in proj_rows:
+                    npd = r["npd"]
+                    ds3 = npd.date().isoformat() if hasattr(npd, "date") else str(npd or "")[:10]
+                    out["follow_ups"].append({
+                        "client": cmap2.get(r["cid"], r["name"]),
+                        "assignee": r["name"],
+                        "date": ds3,
+                    })
+            except Exception:
+                pass
+            return out
+
+        async def departments_block():
+            # Section 05 live: per-department headcount, present today, tasks done/total
+            from datetime import date as _date
+            db = get_database()
+            ds = _date.today().isoformat()
+            names: list = []
+            try:
+                cur = db["departments"].find({}, {"name": 1})
+                async for d in cur:
+                    if d.get("name"):
+                        names.append(d["name"])
+            except Exception:
+                pass
+            emps: list = []
+            try:
+                cur = db["employees"].find(
+                    {"work_details.is_delete": {"$ne": True}},
+                    {"work_details.department": 1},
+                )
+                async for d in cur:
+                    emps.append((str(d["_id"]), (d.get("work_details") or {}).get("department") or "General"))
+            except Exception:
+                pass
+            if not names:
+                names = sorted({dept for _, dept in emps})
+            present_ids: set = set()
+            try:
+                cur = db["attendance"].find({"date": ds}, {"status": 1, "employee_id": 1})
+                async for d in cur:
+                    if str(d.get("status") or "") in ("Present", "Half Day") and d.get("employee_id"):
+                        present_ids.add(str(d["employee_id"]))
+            except Exception:
+                pass
+            tasks_by_emp: dict = {}
+            try:
+                cur = db["tasks"].find({}, {"status": 1, "assigned_to": 1})
+                async for t in cur:
+                    aid = str(t.get("assigned_to") or "")
+                    if not aid:
+                        continue
+                    e = tasks_by_emp.setdefault(aid, {"open": 0, "done": 0})
+                    if str(t.get("status") or "") == "completed":
+                        e["done"] += 1
+                    else:
+                        e["open"] += 1
+            except Exception:
+                pass
+            out = []
+            for n in names:
+                ids = [eid for eid, dept in emps if dept == n]
+                ids_set = set(ids)
+                total = len(ids)
+                present = len([i for i in ids if i in present_ids])
+                done = sum(tasks_by_emp.get(i, {}).get("done", 0) for i in ids)
+                open_n = sum(tasks_by_emp.get(i, {}).get("open", 0) for i in ids)
+                _ = ids_set
+                out.append({"name": n, "total": total, "present": present, "tasks": open_n, "completed": done})
+            return out
+
+        async def eom_block():            # Employee-of-Month latest winners for Top-5 performance (Audio PDF)
+            db = get_database()
+            winners = []
+            try:
+                cursor = db["eom_winners"].find({}).sort([("year", -1), ("month", -1)]).limit(12)
+                async for doc in cursor:
+                    winners.append({
+                        "month": doc.get("month"),
+                        "year": doc.get("year"),
+                        "rank": doc.get("rank"),
+                        "employee_id": str(doc.get("employee_id") or ""),
+                        "employee_name": doc.get("employee_name") or "Employee",
+                        "score_pct": doc.get("score_pct") or 0,
+                    })
+            except Exception:
+                pass
+            return {"winners": winners}
+
         results = await asyncio.gather(
-            safe(TaskService.get_task_stats(user_id), {}),
+            # Direct repo call: skips 9s recurring-task generation (runs on /tasks/stats),
+            # so dashboard stays fast even with Redis down.
+            safe(TaskRepository.get_stats(user_id), {}),
             safe(TaskService.get_daily_overview(user_id), {"today": [], "upcoming": []}),
             safe(PenaltyService.get_summary_stats(), {}),
             safe(PenaltyService.get_leaderboard(month=m, year=y), {}),
@@ -131,6 +452,11 @@ class DashboardService:
             safe(projects_summary(), {}),
             safe(notifications_unread(), {"unread_count": 0, "latest": []}),
             safe(clients_outstanding(), {}),
+            safe(wfh_block(), {"total": 0, "count": 0, "names": [], "pct": 0}),
+            safe(eom_block(), {"winners": []}),
+            safe(company_health(), {}),
+            safe(tasks_clients_block(), {}),
+            safe(departments_block(), []),
         )
 
         payload = {
@@ -145,7 +471,36 @@ class DashboardService:
             "projects": results[6] or {},
             "notifications": results[7] or {},
             "finance_pending": results[8] or {},
+            "wfh": results[9] or {},
+            "eom": results[10] or {},
+            "health": results[11] or {},
+            "tasks_clients": results[12] or {},
+            "departments": results[13] or [],
         }
+        # cross-block reuse (no extra queries)
+        try:
+            proj = payload.get("projects") or {}
+            tstats = payload.get("tasks") or {}
+            h = payload.get("health") or {}
+            h["running_projects"] = proj.get("active", 0)
+            h["pending_tasks"] = (
+                int(tstats.get("todo") or 0) + int(tstats.get("inprogress") or 0) + int(tstats.get("inreview") or 0)
+            )
+            payload["health"] = h
+            tc = payload.get("tasks_clients") or {}
+            tc["my_tasks"] = [
+                {
+                    "title": t.get("title") or "Task",
+                    "status": str(t.get("status") or "todo"),
+                    "assignee": t.get("task_category") or "General",
+                    "due": (str(t.get("due_date") or "")[:10] or "—"),
+                }
+                for t in ((payload.get("today") or {}).get("today") or [])
+            ][:6]
+            tc["satisfaction"] = (payload.get("remarks") or {}).get("average_satisfaction", 0)
+            payload["tasks_clients"] = tc
+        except Exception:
+            pass
         try:
             await set_cache(cache_key, payload, ttl=60)
         except Exception:

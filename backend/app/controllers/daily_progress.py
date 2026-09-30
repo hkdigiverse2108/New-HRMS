@@ -64,6 +64,13 @@ async def reject_progress(progress_id: str, current_user: dict = Depends(get_cur
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Progress not found or access denied (Admin/HR only)")
     return progress
 
+@router.put("/{progress_id}/reset", response_model=DailyProgressResponse)
+async def reset_progress(progress_id: str, current_user: dict = Depends(get_current_employee)):
+    progress = await DailyProgressService.reset_progress(progress_id, current_user)
+    if not progress:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Progress not found or access denied (Admin/HR only)")
+    return progress
+
 @router.delete("/{progress_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_progress(progress_id: str, current_user: dict = Depends(get_current_employee)):
     success = await DailyProgressService.delete_progress(progress_id, current_user)

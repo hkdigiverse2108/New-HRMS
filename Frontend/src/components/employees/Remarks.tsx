@@ -216,7 +216,7 @@ export function Remarks() {
     e.preventDefault();
     const empId = isAdmin ? formEmpId : myId;
     if (!empId) {
-      toast.error("Employee select karo.");
+      toast.error("Please select an employee.");
       return;
     }
     for (const q of questions) {
@@ -312,7 +312,7 @@ export function Remarks() {
         ? { type: "department", departments: selectedDepts, employees: [] }
         : { type: "employee", departments: [], employees: selectedEmps };
       const res = await api.post<any>("/remarks/send-reminders", body);
-      toast.success("Reminders Sent!", { description: res?.message || "Notifications mokli didhi." });
+      toast.success("Reminders Sent!", { description: res?.message || "Notifications sent." });
       setIsReminderOpen(false);
       setSelectedDepts([]);
       setSelectedEmps([]);
@@ -348,7 +348,7 @@ export function Remarks() {
           <div>
             <h1 className="text-2xl font-black text-foreground tracking-tight mb-2">Monthly Remarks & Feedback</h1>
             <p className="text-sm text-muted-foreground max-w-xl">
-              {isAdmin ? "Review qualitative feedback and satisfaction scores." : "Tamara remarks ahiya submit karo — admin na questions niche deshe."}
+              {isAdmin ? "Review qualitative feedback and satisfaction scores." : "Submit your remarks here — admin questions will appear below."}
             </p>
           </div>
 
@@ -405,7 +405,7 @@ export function Remarks() {
                     </div>
                     <div className="overflow-y-auto">
                       {notifs.length === 0 && (
-                        <p className="text-xs text-muted-foreground text-center py-6">Koi notification nathi.</p>
+                        <p className="text-xs text-muted-foreground text-center py-6">No notifications.</p>
                       )}
                       {notifs.map(n => (
                         <button
@@ -448,7 +448,7 @@ export function Remarks() {
                 onClick={() => { setShowMissing(v => !v); }}
                 className={cn("px-4 py-2.5 font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm shrink-0 border",
                   showMissing ? "bg-amber-500 text-white border-amber-500" : "bg-white border-border text-foreground/80 hover:bg-muted/50")}
-                title="Jemne remarks nakhya nathi te"
+                        title="Those who have not submitted remarks"
               >
                 <Users className="w-4 h-4" />
                 <span className="hidden sm:inline">{showMissing ? "All Remarks" : "Missing"}</span>
@@ -696,7 +696,7 @@ export function Remarks() {
                       </div>
                     ))}
                     {questions.length === 0 && (
-                      <p className="text-xs text-muted-foreground/70 italic">Haju koi questions nathi — admin Manage Questions mathi add karshe.</p>
+                      <p className="text-xs text-muted-foreground/70 italic">No questions yet — admin will add them from Manage Questions.</p>
                     )}
 
                     <label className="flex items-center gap-2 text-xs font-bold cursor-pointer text-foreground/80">
@@ -849,7 +849,7 @@ export function Remarks() {
                         </div>
                       ))}
                       {Object.keys(record.custom_answers || {}).length === 0 && record.rating === 0 && (
-                        <p className="text-xs text-muted-foreground italic">Haju submit karyu nathi.</p>
+                        <p className="text-xs text-muted-foreground italic">Not submitted yet.</p>
                       )}
                     </div>
 

@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { Sparkles, Trophy, PartyPopper, Star } from "lucide-react";
-import { TOP_PERFORMERS, NEEDS_ATTENTION, LATE_LEADERBOARD, SPOTLIGHT_EMPLOYEES } from "../dashboard-data";
+import { Sparkles, Trophy, Star } from "lucide-react";
+import { NEEDS_ATTENTION, SPOTLIGHT_EMPLOYEES } from "../dashboard-data";
 import { cn } from "@/lib/utils";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { SpotlightEditor, SpotlightEmployee } from "./SpotlightEditor";
 import { BADGE_PRESETS } from "./spotlight-constants";
 import { SparklesCelebration } from "../../common/SparklesCelebration";
+import { useDashboardOverview } from "@/hooks/useDashboardOverview";
 
 export function EmployeePerformance() {
   const [currentSpotlight, setCurrentSpotlight] = useState(0);
@@ -36,31 +37,48 @@ export function EmployeePerformance() {
 
   const spotlight = spotlights[currentSpotlight] || spotlights[0];
 
+  // Top-5 live: Employee-of-Month winners (Audio PDF). Empty = admin has not set EOM yet.
+  const { data } = useDashboardOverview();
+  const eomWinners: any[] = (data?.eom?.winners || []).slice(0, 5);
+  const eomLabel = eomWinners.length > 0 && eomWinners[0]?.month
+    ? new Date(eomWinners[0].year, eomWinners[0].month - 1, 1).toLocaleString("default", { month: "long", year: "numeric" })
+    : "";
+
   return (
     <div className="mb-12">
       <CollapsibleSection section="Section 03" title="Employee Performance">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Top 5 Performers */}
+        {/* Top 5 Performers — live EOM */}
         <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm min-w-0">
           <div className="mb-4">
             <h3 className="font-bold text-foreground">Top 5 Performers</h3>
-            <p className="text-[11px] text-muted-foreground">Ranked by weighted productivity score</p>
+            <p className="text-[11px] text-muted-foreground">
+              {eomLabel ? `Employee of the Month • ${eomLabel}` : "Employee of the Month wise"}
+            </p>
           </div>
+          {eomWinners.length === 0 ? (
+            <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-3 py-6 text-center">
+              EOM winners are not set.<br />Admin will set them on the dashboard.
+            </p>
+          ) : (
           <div className="space-y-3">
-            {TOP_PERFORMERS.map((emp, i) => (
+            {eomWinners.map((emp: any, i: number) => (
               <div key={i} className="flex items-center justify-between p-3 rounded-2xl bg-muted/50 border border-border/50">
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white font-bold text-[11px] text-muted-foreground shadow-sm">
-                    {emp.isTop ? <Trophy className="h-3 w-3 text-amber-500" /> : i + 1}
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white font-bold text-[11px] text-muted-foreground shadow-sm shrink-0">
+                    {i === 0 ? <Trophy className="h-3 w-3 text-amber-500" /> : emp.rank || i + 1}
                   </div>
-                  <div>
-                    <p className="text-[13px] font-bold text-foreground leading-tight">{emp.name}</p>
-                    <p className="text-[11px] text-muted-foreground">{emp.dept}</p>
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-bold text-foreground leading-tight truncate">{emp.employee_name || "Employee"}</p>
+                    <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                      <Star className="h-3 w-3 text-amber-500" /> {emp.score_pct || 0}%
+                    </p>
                   </div>
                 </div>
               </div>
             ))}
           </div>
+          )}
         </div>
 
         {/* Spotlight Carousel */}
@@ -125,23 +143,8 @@ export function EmployeePerformance() {
           </div>
         </div>
 
-        {/* Third Column: Stacked Cards */}
+        {/* Third Column: Needs Attention (same — Audio PDF) */}
         <div className="flex flex-col gap-6">
-          {/* Late Coming Leaderboard */}
-          <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm">
-            <h3 className="font-bold text-foreground mb-6">Late Coming Leaderboard</h3>
-            <div className="space-y-4">
-              {LATE_LEADERBOARD.map((emp, i) => (
-                <div key={i} className="flex justify-between items-center">
-                  <p className="text-[14px] text-muted-foreground font-medium">{emp.name}</p>
-                  <span className="text-[12px] font-medium text-amber-500 bg-amber-50 px-3 py-1 rounded-full">
-                    {emp.late} late
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
           {/* Needs Attention */}
           <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm">
             <h3 className="font-bold text-foreground mb-6">Needs Attention</h3>

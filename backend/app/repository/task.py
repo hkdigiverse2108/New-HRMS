@@ -203,38 +203,37 @@ class TaskRepository:
         start_of_today = datetime(now.year, now.month, now.day)
         end_of_today = datetime(now.year, now.month, now.day, 23, 59, 59, 999999)
 
-        total = await collection.count_documents(base_query)
-        todo = await collection.count_documents({**base_query, "status": "todo"})
-        inprogress = await collection.count_documents({**base_query, "status": "inprogress"})
-        inreview = await collection.count_documents({**base_query, "status": "inreview"})
-        completed = await collection.count_documents({**base_query, "status": "completed"})
+        # Single round-trip facet (was 8 sequential counts ~900ms cold)
+        facet_res = await collection.aggregate([
+            {"$match": base_query},
+            {"$facet": {
+                "total": [{"$count": "n"}],
+                "todo": [{"$match": {"status": "todo"}}, {"$count": "n"}],
+                "inprogress": [{"$match": {"status": "inprogress"}}, {"$count": "n"}],
+                "inreview": [{"$match": {"status": "inreview"}}, {"$count": "n"}],
+                "completed": [{"$match": {"status": "completed"}}, {"$count": "n"}],
+                "today": [{"$match": {"due_date": {"$gte": start_of_today, "$lte": end_of_today}}}, {"$count": "n"}],
+                "overdue": [{"$match": {"due_date": {"$lt": start_of_today}, "status": {"$ne": "completed"}}}, {"$count": "n"}],
+                "upcoming": [{"$match": {"due_date": {"$gt": end_of_today}, "status": {"$ne": "completed"}}}, {"$count": "n"}],
+            }},
+        ]).to_list(length=1)
 
-        today = await collection.count_documents({
-            **base_query,
-            "due_date": {"$gte": start_of_today, "$lte": end_of_today}
-        })
-        
-        overdue = await collection.count_documents({
-            **base_query,
-            "due_date": {"$lt": start_of_today},
-            "status": {"$ne": "completed"}
-        })
-
-        upcoming = await collection.count_documents({
-            **base_query,
-            "due_date": {"$gt": end_of_today},
-            "status": {"$ne": "completed"}
-        })
+        def _n(key: str) -> int:
+            try:
+                arr = (facet_res[0] if facet_res else {}).get(key, [])
+                return int(arr[0].get("n", 0)) if arr else 0
+            except Exception:
+                return 0
 
         return {
-            "total": total,
-            "todo": todo,
-            "inprogress": inprogress,
-            "inreview": inreview,
-            "completed": completed,
-            "today": today,
-            "overdue": overdue,
-            "upcoming": upcoming
+            "total": _n("total"),
+            "todo": _n("todo"),
+            "inprogress": _n("inprogress"),
+            "inreview": _n("inreview"),
+            "completed": _n("completed"),
+            "today": _n("today"),
+            "overdue": _n("overdue"),
+            "upcoming": _n("upcoming")
         }
         
     @classmethod

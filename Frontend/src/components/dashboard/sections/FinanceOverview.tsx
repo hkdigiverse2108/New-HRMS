@@ -1,33 +1,44 @@
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { FINANCE_METRICS, CASH_FLOW, PROFIT_TREND } from "../dashboard-data";
+import { CASH_FLOW, PROFIT_TREND } from "../dashboard-data";
 import { CollapsibleSection } from "./CollapsibleSection";
+import { useDashboardOverview } from "@/hooks/useDashboardOverview";
+
+const inr = (n: any) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 
 export function FinanceOverview() {
+  // Pending payments BIG (Audio PDF) — live outstanding from project finance.
+  const { data } = useDashboardOverview();
+  const fin = data?.finance_pending || { total_budget: 0, total_received: 0, outstanding: 0 };
+  const collectedPct = fin.total_budget > 0 ? Math.round((fin.total_received / fin.total_budget) * 100) : 0;
+
   return (
     <div className="mb-12">
       <CollapsibleSection section="Section 08" title="Finance Overview">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Metrics */}
-        <div className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-3 sm:gap-4">
-          <div className="bg-emerald-50 border border-emerald-100 rounded-3xl p-5 shadow-sm flex flex-col justify-between min-w-0">
-            <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider mb-2">Today's Income</p>
-            <p className="text-[26px] font-black text-emerald-700 leading-none">{FINANCE_METRICS.todayIncome}</p>
-          </div>
-          <div className="bg-rose-50 border border-rose-100 rounded-3xl p-5 shadow-sm flex flex-col justify-between min-w-0">
-            <p className="text-[11px] font-bold text-rose-600 uppercase tracking-wider mb-2">Today's Expense</p>
-            <p className="text-[26px] font-black text-rose-700 leading-none">{FINANCE_METRICS.todayExpense}</p>
-          </div>
-          <div className="bg-white border border-border/60 rounded-3xl p-5 shadow-sm flex flex-col justify-between min-[360px]:col-span-2 min-w-0">
+        {/* Pending payments — BIG */}
+        <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm flex flex-col justify-between min-w-0 lg:row-span-1">
+          <div>
             <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Outstanding Payments</p>
-            <p className="text-3xl font-black text-foreground">{FINANCE_METRICS.outstanding}</p>
+            <p className="text-4xl font-black text-rose-600 leading-none">{inr(fin.outstanding)}</p>
+            <p className="text-[11px] text-muted-foreground mt-2 font-semibold">Receivable from clients</p>
           </div>
-          <div className="bg-white border border-border/60 rounded-3xl p-5 shadow-sm flex flex-col justify-between min-w-0">
-            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-2 leading-tight">Pending Client Payments</p>
-            <p className="text-[22px] font-black text-blue-500 mt-2">{FINANCE_METRICS.pendingClient}</p>
-          </div>
-          <div className="bg-white border border-border/60 rounded-3xl p-5 shadow-sm flex flex-col justify-between min-w-0">
-            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-2 leading-tight">Pending Vendor Payments</p>
-            <p className="text-[22px] font-black text-amber-500 mt-2">{FINANCE_METRICS.pendingVendor}</p>
+          <div className="mt-5 space-y-3">
+            <div className="flex justify-between items-center bg-muted/50 border border-border/50 rounded-2xl px-4 py-3">
+              <span className="text-[11px] font-bold text-muted-foreground uppercase">Total Budget</span>
+              <span className="text-lg font-black text-foreground">{inr(fin.total_budget)}</span>
+            </div>
+            <div className="flex justify-between items-center bg-emerald-50 border border-emerald-100 rounded-2xl px-4 py-3">
+              <span className="text-[11px] font-bold text-emerald-600 uppercase">Received</span>
+              <span className="text-lg font-black text-emerald-700">{inr(fin.total_received)}</span>
+            </div>
+            <div>
+              <div className="flex justify-between text-[10px] font-bold text-muted-foreground mb-1">
+                <span>Collection</span><span>{collectedPct}%</span>
+              </div>
+              <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${Math.min(100, collectedPct)}%` }}></div>
+              </div>
+            </div>
           </div>
         </div>
 

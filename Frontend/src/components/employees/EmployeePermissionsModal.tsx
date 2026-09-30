@@ -24,7 +24,7 @@ import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { Employee } from "./employee-data";
 import { cn } from "@/lib/utils";
-import { getAvatarUrl } from "@/lib/config";
+import { getAvatarUrl, handleAvatarError } from "@/lib/config";
 import { useAuth } from "@/components/auth/AuthContext";
 
 interface SystemModule {
@@ -307,6 +307,7 @@ export function EmployeePermissionsModal({
               src={getAvatarUrl(employee.avatar || employee.profile_photo, employee.name)} 
               alt={employee.name} 
               className="w-7 h-7 rounded-full object-cover border border-border shrink-0" 
+              onError={handleAvatarError}
             />
             <div className="min-w-0 truncate">
               <span className="font-bold text-foreground">{employee.name}</span>

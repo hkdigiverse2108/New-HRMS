@@ -113,37 +113,7 @@ export function HRAndNews() {
 
           <div className="h-px bg-border/60"></div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <FileText className="h-4 w-4 text-amber-500" />
-                <h3 className="text-[13px] font-bold text-foreground">Document Expiry</h3>
-              </div>
-              <ul className="space-y-2">
-                {HR_UPDATES.document.map((item, i) => (
-                  <li key={i} className="flex justify-between items-center text-[11px]">
-                    <span className="font-medium text-foreground/80">{item.name}</span>
-                    <span className="text-muted-foreground">{item.date}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <Megaphone className="h-4 w-4 text-blue-500" />
-                <h3 className="text-[13px] font-bold text-foreground">Policy Updates</h3>
-              </div>
-              <ul className="space-y-2">
-                {HR_UPDATES.policies.map((item, i) => (
-                  <li key={i} className="flex justify-between items-center text-[11px]">
-                    <span className="font-medium text-foreground/80">{item.name}</span>
-                    <span className="text-emerald-600 font-bold bg-emerald-50 px-1.5 rounded">{item.status}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
+          {/* Document Expiry + Policy Updates — REMOVED per Audio PDF */}
         </div>
         </CollapsibleSection>
       </div>

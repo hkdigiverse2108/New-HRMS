@@ -17,7 +17,7 @@ import { HRAndNews } from "./sections/HRAndNews";
 export function Dashboard({ setActive, onAction }: { setActive?: (url: string) => void, onAction?: (action: string) => void }) {
   const { user } = useAuth();
   // Section-level access (Meeting PDF): jene je section no access aape te j dekhay.
-  // Jo user pase koi section-level key j nathi → /dashboard read par fallback (jun behavior).
+  // If the user has no section-level keys at all → fall back to /dashboard read (old behavior).
   const showSection = (key: string) => {
     if (!user) return false;
     if (isUserAdmin(user)) return true;
@@ -40,7 +40,7 @@ export function Dashboard({ setActive, onAction }: { setActive?: (url: string) =
       {/* SECTION 01b: Time Tracker Widget */}
       {showSection("time-tracker") && <TimeTrackerWidget />}
 
-      {/* K19: Aajno Schedule + Today's Tasks (andar javani wait nai) */}
+      {/* K19: Today's Schedule + Today's Tasks (no need to open anything) */}
       {showSection("today-schedule") && <TodaySchedule setActive={setActive} />}
 
       {/* SECTION 02: Company Health (12 Metrics) */}
