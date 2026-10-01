@@ -9,7 +9,7 @@ import {
   HeartPulse, Factory, Shirt, Landmark, Car, Plane, Cpu,
   Scissors, Dumbbell, HardHat, Shapes, ChevronUp, ChevronDown, ChevronRight
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { useSales } from "./SalesContext";
 import { moveToRecycleBin } from "@/lib/recycle-bin";

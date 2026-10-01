@@ -3,6 +3,7 @@ from typing import Optional, List, Dict, Any
 
 from app.schemas.attendance import (
     PunchInRequest,
+    UpdateActiveTaskRequest,
     PunchOutRequest,
     BreakRequest,
     BreakRecoveryRequest,
@@ -66,7 +67,7 @@ async def punch_in(
     Direct Punch-In action.
     - Admin is prevented from punching in for themselves.
     - Blocks if prior pending punch-out exists.
-    - Applies late detection and half-day leave check.
+    - Applies late detection, task association, and half-day leave check.
     """
     work = current_employee.get("work_details", {})
     system_role = work.get("system_role", "Employee")
@@ -80,10 +81,36 @@ async def punch_in(
         )
 
     notes = payload.notes if payload else None
-    result = await AttendanceService.punch_in(employee_id, notes=notes)
+    task_id = payload.task_id if payload else None
+    task_title = payload.task_title if payload else None
+    task_type = payload.task_type if payload else "Today's Work"
+
+    result = await AttendanceService.punch_in(
+        employee_id,
+        notes=notes,
+        task_id=task_id,
+        task_title=task_title,
+        task_type=task_type
+    )
     
     # Invalidate Redis caches
     await delete_cache(f"attendance:last:{employee_id}")
+    await clear_pattern("attendance:*")
+    return result
+
+@router.post("/change-task/{employee_id}")
+async def change_active_task(
+    employee_id: str,
+    payload: UpdateActiveTaskRequest,
+    current_employee: dict = Depends(get_current_employee)
+):
+    """Changes the active working task during an ongoing punched-in session."""
+    result = await AttendanceService.change_active_task(
+        employee_id=employee_id,
+        task_id=payload.task_id,
+        task_title=payload.task_title,
+        task_type=payload.task_type
+    )
     await clear_pattern("attendance:*")
     return result
 

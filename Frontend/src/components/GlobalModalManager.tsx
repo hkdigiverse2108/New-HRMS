@@ -7,7 +7,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { EmployeeFormModal } from "@/components/employees/EmployeeFormModal";
 import { CreateEventModal } from "@/components/schedule/CreateEventModal";
 import { useGlobalModal } from "./GlobalModalContext";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { format } from "date-fns";
 import { useSettingsContext } from "@/components/payroll/SettingsContext";
 import { useEmployeesContext } from "@/components/employees/EmployeeContext";

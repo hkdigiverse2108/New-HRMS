@@ -2,7 +2,7 @@ import { useState } from "react";
 import { X, Plus, Trash2 } from "lucide-react";
 import { DialogClose,  Dialog, DialogContent  } from "@/components/ui/dialog";
 import { useDepartments } from "./DepartmentContext";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 
 interface ManageDepartmentsModalProps {

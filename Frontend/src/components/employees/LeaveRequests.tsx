@@ -6,7 +6,7 @@ import { SearchableSelect } from "@/components/ui/select";
 import { useSettingsContext } from "../payroll/SettingsContext";
 import { useAuth } from "@/components/auth/AuthContext";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { DateRangeFilter } from "@/components/common/DateRangeFilter";
 import { DatePicker } from "@/components/ui/date-picker";
 import { SearchInput } from "@/components/common/SearchInput";

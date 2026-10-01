@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { AlertCircle, Clock, CheckCircle2, ShieldAlert } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { formatISTDate, formatISTTime, isTimeStrictlyAfter } from "@/lib/timeUtils";
 
 export interface PendingRecordInfo {

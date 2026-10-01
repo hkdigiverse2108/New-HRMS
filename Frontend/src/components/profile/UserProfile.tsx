@@ -3,7 +3,7 @@ import { User, Briefcase, CreditCard, FileText, Mail, Phone, MapPin, Building, C
 import { cn, formatDate } from "@/lib/utils";
 import { useEmployeesContext } from "@/components/employees/EmployeeContext";
 import { EmployeeFormModal } from "@/components/employees/EmployeeFormModal";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 type TabType = 'overview' | 'personal' | 'financial' | 'offboarding';
 

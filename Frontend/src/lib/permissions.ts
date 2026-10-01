@@ -16,6 +16,25 @@ export function isUserAdmin(user: UserProfile | null): boolean {
 }
 
 /**
+ * Known system parent modules that group distinct child sub-modules in Access Control.
+ * A parent read permission on these groups does NOT grant read to its children.
+ * Only explicit child permission OR parent `all` (Full Access) grants child access.
+ */
+const GROUP_PARENT_MODULES = new Set([
+  "/employees",
+  "/approvals",
+  "/reports",
+  "/recruitment",
+  "/work/sales",
+  "/payroll",
+  "/finance",
+  "/invoice",
+  "/workspace",
+  "/ceo-dashboard",
+  "/recognitions",
+]);
+
+/**
  * Checks if the user has permission to access a given URL or perform an action.
  * - Admin role always has 100% full access to all modules and actions.
  * - Non-admin users check their dynamically resolved module permissions from the database.
@@ -36,21 +55,9 @@ export function hasModulePermission(
 
   const perms = user.permissions;
 
-  // Basic fallback for standard employee when no custom permissions are set
+  // Strict fallback: if no permissions are configured for the employee, only profile view is permitted
   if (!perms || Object.keys(perms).length === 0) {
-    const defaultAllowedPrefixes = [
-      "/dashboard",
-      "/employees/attendance",
-      "/employees/leave-requests",
-      "/schedule",
-      "/tasks",
-      "/chat",
-      "/work/logs",
-      "/workspace",
-      "/remarks",
-      "/profile"
-    ];
-    return action === "read" && defaultAllowedPrefixes.some(prefix => url.startsWith(prefix));
+    return action === "read" && url.startsWith("/profile");
   }
 
   const cleanUrl = (url.split("?")[0] ?? "").replace(/\/+$/, "") || "/";
@@ -65,19 +72,29 @@ export function hasModulePermission(
     return Boolean(p.all || p[action]);
   }
 
-  // 2. Dynamic hierarchical prefix matching (e.g. "/work/tasks/123" checks "/work/tasks", then "/work")
+  // 2. Dynamic hierarchical prefix matching (for dynamic sub-routes like "/tasks/123" or "/work/projects/edit/456")
   const parts = cleanUrl.split("/").filter(Boolean);
   for (let i = parts.length - 1; i >= 1; i--) {
     const parent = "/" + parts.slice(0, i).join("/");
     if (perms[parent]) {
       const p = perms[parent];
-      return Boolean(p.all || p[action]);
+      // Full Access on parent grants all subpaths
+      if (p.all) return true;
+
+      // Category parent groups (/employees, /reports, etc.) should NEVER grant children unless p.all is True
+      if (GROUP_PARENT_MODULES.has(parent)) {
+        continue;
+      }
+
+      // Concrete functional modules (e.g. /tasks, /work/projects, /schedule) grant sub-routes
+      return Boolean(p[action]);
     }
   }
 
   // 3. Dynamic child match for parent group URLs
-  // If user requests read on parent (e.g. "/employees"), allow read if user has access to any child module (e.g. "/employees/list")
-  if (action === "read") {
+  // If evaluating access for a parent group URL itself (e.g. "/employees" dropdown header),
+  // allow read if user has access to any child module (e.g. "/employees/attendance")
+  if (action === "read" && GROUP_PARENT_MODULES.has(cleanUrl)) {
     const hasAnyChildPermitted = Object.keys(perms).some(permUrl => {
       if (permUrl !== cleanUrl && permUrl.startsWith(cleanUrl + "/")) {
         const p = perms[permUrl];
@@ -111,6 +128,11 @@ export function filterNavigationForUser(
     .map((item) => {
       // Filter children if present
       if (item.children && item.children.length > 0) {
+        // Approvals Hub is strictly for approvers with /approvals module permissions
+        if ((item.title === "Approvals Hub" || item.url === "/approvals") && !hasModulePermission(user, "/approvals", "read")) {
+          return null;
+        }
+
         const allowedChildren = item.children.filter((child) =>
           hasModulePermission(user, child.url, "read")
         );
@@ -122,7 +144,7 @@ export function filterNavigationForUser(
           };
         }
 
-        // If no children allowed, don't show the parent group unless parent URL is allowed
+        // If no children allowed, don't show the parent group unless parent URL is allowed and has no children
         if (item.url && hasModulePermission(user, item.url, "read")) {
           return {
             ...item,

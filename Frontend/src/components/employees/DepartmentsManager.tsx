@@ -3,7 +3,7 @@ import { Building2, Plus, Search, Edit2, Trash2, X, Check, Layers, AlertCircle }
 import { useDepartments } from "./DepartmentContext";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { useModulePermissions } from "@/hooks/useModulePermissions";
 

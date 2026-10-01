@@ -5,7 +5,7 @@ import { SearchableSelect } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { useAuth } from "@/components/auth/AuthContext";
 
 type VerificationStatus = "Pending" | "Verified" | "Rejected";

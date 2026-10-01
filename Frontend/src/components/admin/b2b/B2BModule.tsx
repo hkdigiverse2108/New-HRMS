@@ -7,7 +7,7 @@ import { X,
   } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { DialogClose,  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter  } from "@/components/ui/dialog";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";

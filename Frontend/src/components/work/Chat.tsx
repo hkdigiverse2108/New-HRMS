@@ -29,7 +29,7 @@ import {
   Share2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast } from "react-toastify";
+import { toast } from "@/lib/toast";
 import { useAuth } from "@/components/auth/AuthContext";
 import { useEmployeesContext } from "@/components/employees/EmployeeContext";
 import { api, getAuthToken } from "@/lib/api";

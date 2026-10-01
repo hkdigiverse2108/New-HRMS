@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { X, Search, Bell, Star, MessageSquareHeart, TrendingUp, Calendar, ChevronDown, CheckCircle2, Plus, Users, Building2, Send, Settings, GripVertical, Trash2, Eye, EyeOff, Pencil } from "lucide-react";
 import { DialogClose, Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { cn, formatDate } from "@/lib/utils";
 import { SearchableSelect } from "@/components/ui/select";
 import { api } from "@/lib/api";

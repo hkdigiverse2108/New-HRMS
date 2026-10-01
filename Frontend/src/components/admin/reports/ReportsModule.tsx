@@ -1,5 +1,5 @@
 import { BarChart2, Download } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 export function ReportsModule() {
   return (

@@ -4,7 +4,7 @@ import { SearchInput } from "@/components/common/SearchInput";
 import { getRecycleBinItems, restoreItem, permanentlyDeleteItem, cleanupOldItems, RecycleBinItem, RECYCLE_BIN_DAYS_LIMIT } from "@/lib/recycle-bin";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { formatDistanceToNow, format } from "date-fns";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";

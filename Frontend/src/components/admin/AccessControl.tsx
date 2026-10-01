@@ -21,7 +21,7 @@ import {
   RotateCcw
 } from "lucide-react";
 import { api } from "@/lib/api";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { useAuth } from "@/components/auth/AuthContext";
 import { useEmployeesContext } from "@/components/employees/EmployeeContext";
 import { SearchableSelect } from "@/components/ui/select";
@@ -260,20 +260,49 @@ export function AccessControl() {
         }
       }
 
-      // If this is a parent module and toggled 'all', also toggle all its children!
-      const mod = modules.find(m => m.id === moduleId);
+      // Check if this module has children (parent module)
+      const children = modules.filter(m => m.parent_id === moduleId);
       const childUpdates: Record<string, PermissionFlags> = {};
-      if (mod?.is_parent && action === "all") {
-        const children = modules.filter(m => m.parent_id === moduleId);
-        children.forEach(c => {
-          childUpdates[c.id] = { ...updated };
-        });
+
+      if (children.length > 0) {
+        if (action === "all") {
+          children.forEach(c => {
+            childUpdates[c.id] = { ...updated };
+          });
+        } else if (action === "read" && !updated.read) {
+          // If explicitly turning OFF parent read, also turn off children
+          children.forEach(c => {
+            const childCur = prev[c.id] || { read: false, create: false, update: false, delete: false, all: false };
+            childUpdates[c.id] = {
+              ...childCur,
+              read: false,
+              create: false,
+              update: false,
+              delete: false,
+              all: false,
+            };
+          });
+        }
+      }
+
+      // If this module is a child module and read is turned ON, ensure parent read is also ON
+      const mod = modules.find(m => m.id === moduleId);
+      const parentUpdates: Record<string, PermissionFlags> = {};
+      if (mod?.parent_id && updated.read) {
+        const parentCur = prev[mod.parent_id] || { read: false, create: false, update: false, delete: false, all: false };
+        if (!parentCur.read) {
+          parentUpdates[mod.parent_id] = {
+            ...parentCur,
+            read: true,
+          };
+        }
       }
 
       return {
         ...prev,
         [moduleId]: updated,
-        ...childUpdates
+        ...childUpdates,
+        ...parentUpdates,
       };
     });
   };

@@ -206,3 +206,90 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* =========================================================================
+   React-Toastify Custom Premium Styling (Matching User Screenshot)
+   ========================================================================= */
+.Toastify__toast-container--top-right {
+  top: 1.25rem !important;
+  right: 1.25rem !important;
+  width: 380px !important;
+  max-width: 90vw !important;
+  z-index: 999999 !important;
+}
+
+.Toastify__toast {
+  background: #ffffff !important;
+  color: #111827 !important;
+  border-radius: 16px !important;
+  padding: 16px 18px !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.03) !important;
+  border: 1px solid rgba(229, 231, 235, 0.9) !important;
+  min-height: 64px !important;
+  margin-bottom: 12px !important;
+  overflow: hidden !important;
+}
+
+.dark .Toastify__toast {
+  background: #1e293b !important;
+  color: #f8fafc !important;
+  border-color: rgba(51, 65, 85, 0.8) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3) !important;
+}
+
+.Toastify__toast-body {
+  padding: 0 !important;
+  margin: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  font-size: 13.5px !important;
+  font-weight: 500 !important;
+  line-height: 1.45 !important;
+  color: #374151 !important;
+}
+
+.dark .Toastify__toast-body {
+  color: #e2e8f0 !important;
+}
+
+.Toastify__close-button {
+  color: #9ca3af !important;
+  opacity: 0.8 !important;
+  align-self: flex-start !important;
+  margin-top: -2px !important;
+  margin-right: -4px !important;
+}
+
+.Toastify__close-button:hover {
+  color: #111827 !important;
+  opacity: 1 !important;
+}
+
+.dark .Toastify__close-button:hover {
+  color: #ffffff !important;
+}
+
+/* Progress bar at the bottom */
+.Toastify__progress-bar {
+  height: 3.5px !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  opacity: 1 !important;
+}
+
+.Toastify__progress-bar--success {
+  background: #22c55e !important;
+}
+
+.Toastify__progress-bar--error {
+  background: #ef4444 !important;
+}
+
+.Toastify__progress-bar--warning {
+  background: #f59e0b !important;
+}
+
+.Toastify__progress-bar--info {
+  background: #3b82f6 !important;
+}
+

@@ -6,7 +6,7 @@ import { Users, Gift, MinusCircle, PlayCircle, CheckCircle2, Lock, FileSpreadshe
 import { SearchInput } from "@/components/common/SearchInput";
 import { SearchableSelect } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 type PayrollStage = "not_generated" | "generated" | "approved" | "locked";
 

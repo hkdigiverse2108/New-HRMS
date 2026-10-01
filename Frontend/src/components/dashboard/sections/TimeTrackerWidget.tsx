@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Clock, Coffee, LogIn, LogOut, CheckCircle2, ShieldCheck, AlertCircle } from "lucide-react";
+import { Clock, Coffee, LogIn, LogOut, CheckCircle2, ShieldCheck, AlertCircle, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useAuth } from "@/components/auth/AuthContext";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import {
   formatISTTime,
   formatDurationHours,
@@ -12,6 +12,8 @@ import {
   getTodayDateIST
 } from "@/lib/timeUtils";
 import { PendingPunchOutModal, PendingRecordInfo } from "@/components/attendance/PendingPunchOutModal";
+import { UpdateActivityModal, SelectedTaskInfo } from "./UpdateActivityModal";
+import { BreakOutChoiceModal } from "./BreakOutChoiceModal";
 
 type PunchStatus = "Punched Out" | "Punched In" | "On Break";
 
@@ -27,6 +29,15 @@ export function TimeTrackerWidget() {
   const [punchOutTime, setPunchOutTime] = useState<string | null>(null);
   const [breakStartTime, setBreakStartTime] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Active Task State
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [activeTaskTitle, setActiveTaskTitle] = useState<string | null>(null);
+  const [activeTaskType, setActiveTaskType] = useState<string | null>(null);
+  const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
+  const [isChangeMode, setIsChangeMode] = useState(false);
+  const [isBreakOutChoiceModalOpen, setIsBreakOutChoiceModalOpen] = useState(false);
+  const [isBreakOutNewTaskMode, setIsBreakOutNewTaskMode] = useState(false);
 
   // Pending Punch-Out Modal state
   const [pendingRecord, setPendingRecord] = useState<PendingRecordInfo | null>(null);
@@ -78,6 +89,16 @@ export function TimeTrackerWidget() {
         setPunchOutTime(todayDoc.check_out && todayDoc.check_out !== "--" ? todayDoc.check_out : null);
         setBreakSeconds(todayDoc.break_seconds || 0);
 
+        if (todayDoc.current_task_title) {
+          setActiveTaskTitle(todayDoc.current_task_title);
+          setActiveTaskId(todayDoc.current_task_id || null);
+          setActiveTaskType(todayDoc.current_task_type || null);
+        } else {
+          setActiveTaskTitle(null);
+          setActiveTaskId(null);
+          setActiveTaskType(null);
+        }
+
         if (todayDoc.status === "On Break") {
           setStatus("On Break");
           setWorkSeconds(todayDoc.net_work_seconds || 0);
@@ -124,31 +145,90 @@ export function TimeTrackerWidget() {
     };
   }, [status]);
 
-  // Handle Punch In
-  const handlePunchIn = async () => {
+  // Open Activity Modal for Punch In
+  const handlePunchInClick = async () => {
     // Double safety check: Verify no pending punch-out before punching in!
     const hasPending = await checkPendingSession();
     if (hasPending) {
       toast.error("Please resolve your pending punch-out from previous session first.");
       return;
     }
+    setIsChangeMode(false);
+    setIsActivityModalOpen(true);
+  };
 
-    try {
-      setIsSubmitting(true);
-      const res = await api.post<any>(`/attendance/punch-in/${employeeId}`, {});
-      setStatus("Punched In");
-      setPunchInTime(res?.check_in || formatISTTime(new Date()));
-      setPunchOutTime(null);
-      setBreakStartTime(null);
-      setBreakSeconds(res?.break_seconds || 0);
-      setWorkSeconds(res?.net_work_seconds || 0);
-      toast.success(res?.is_late ? "Punched In (Late Arrival recorded)" : "Punched In successfully!");
-      window.dispatchEvent(new Event("attendance_updated"));
-    } catch (err: any) {
-      const msg = err?.data?.detail || err?.message || "Failed to Punch In";
-      toast.error(msg);
-    } finally {
-      setIsSubmitting(false);
+  // Called when user selects and saves task from UpdateActivityModal
+  const handleSaveActivity = async (selectedTask: SelectedTaskInfo) => {
+    if (isBreakOutNewTaskMode) {
+      try {
+        setIsSubmitting(true);
+        // 1. Switch active task
+        await api.post<any>(`/attendance/change-task/${employeeId}`, {
+          task_id: selectedTask.taskId,
+          task_title: selectedTask.taskTitle,
+          task_type: selectedTask.taskType,
+        });
+        // 2. Perform Break Out
+        const res = await api.post<any>(`/attendance/break-out/${employeeId}`, {});
+        setStatus("Punched In");
+        setActiveTaskId(selectedTask.taskId || null);
+        setActiveTaskTitle(selectedTask.taskTitle);
+        setActiveTaskType(selectedTask.taskType);
+        setBreakStartTime(null);
+        if (res?.break_seconds !== undefined) {
+          setBreakSeconds(res.break_seconds);
+        }
+        toast.success(`Break ended! Switched work to: ${selectedTask.taskTitle}`);
+        window.dispatchEvent(new Event("attendance_updated"));
+      } catch (err: any) {
+        toast.error(err?.data?.detail || err?.message || "Failed to resume work with new task");
+      } finally {
+        setIsSubmitting(false);
+        setIsBreakOutNewTaskMode(false);
+      }
+    } else if (isChangeMode) {
+      try {
+        setIsSubmitting(true);
+        const res = await api.post<any>(`/attendance/change-task/${employeeId}`, {
+          task_id: selectedTask.taskId,
+          task_title: selectedTask.taskTitle,
+          task_type: selectedTask.taskType,
+        });
+        setActiveTaskId(selectedTask.taskId || null);
+        setActiveTaskTitle(selectedTask.taskTitle);
+        setActiveTaskType(selectedTask.taskType);
+        toast.success(res?.message || `Switched task to: ${selectedTask.taskTitle}`);
+        window.dispatchEvent(new Event("attendance_updated"));
+      } catch (err: any) {
+        toast.error(err?.data?.detail || err?.message || "Failed to switch task");
+      } finally {
+        setIsSubmitting(false);
+      }
+    } else {
+      try {
+        setIsSubmitting(true);
+        const res = await api.post<any>(`/attendance/punch-in/${employeeId}`, {
+          task_id: selectedTask.taskId,
+          task_title: selectedTask.taskTitle,
+          task_type: selectedTask.taskType,
+        });
+        setStatus("Punched In");
+        setActiveTaskId(selectedTask.taskId || null);
+        setActiveTaskTitle(selectedTask.taskTitle);
+        setActiveTaskType(selectedTask.taskType);
+        setPunchInTime(res?.check_in || formatISTTime(new Date()));
+        setPunchOutTime(null);
+        setBreakStartTime(null);
+        setBreakSeconds(res?.break_seconds || 0);
+        setWorkSeconds(res?.net_work_seconds || 0);
+        toast.success(res?.is_late ? "Punched In (Late Arrival recorded)" : "Punched In successfully!");
+        window.dispatchEvent(new Event("attendance_updated"));
+      } catch (err: any) {
+        const msg = err?.data?.detail || err?.message || "Failed to Punch In";
+        toast.error(msg);
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -158,6 +238,9 @@ export function TimeTrackerWidget() {
       setIsSubmitting(true);
       const res = await api.post<any>(`/attendance/punch-out/${employeeId}`, {});
       setStatus("Punched Out");
+      setActiveTaskTitle(null);
+      setActiveTaskId(null);
+      setActiveTaskType(null);
       setPunchOutTime(res?.check_out || formatISTTime(new Date()));
       if (res?.net_work_seconds !== undefined) {
         setWorkSeconds(res.net_work_seconds);
@@ -189,8 +272,8 @@ export function TimeTrackerWidget() {
     }
   };
 
-  // Handle Break Out
-  const handleBreakOut = async () => {
+  // Handle Break Out directly (continuing previous/current task)
+  const handleBreakOutDirect = async () => {
     try {
       setIsSubmitting(true);
       const res = await api.post<any>(`/attendance/break-out/${employeeId}`, {});
@@ -199,12 +282,13 @@ export function TimeTrackerWidget() {
       if (res?.break_seconds !== undefined) {
         setBreakSeconds(res.break_seconds);
       }
-      toast.success(`Break ended. Total break time: ${formatDurationSeconds(res?.break_seconds ?? breakSeconds)}`);
+      toast.success(`Break ended. Continued on: ${activeTaskTitle || "General Work"}`);
       window.dispatchEvent(new Event("attendance_updated"));
     } catch (err: any) {
       toast.error(err?.data?.detail || "Failed to end break");
     } finally {
       setIsSubmitting(false);
+      setIsBreakOutChoiceModalOpen(false);
     }
   };
 
@@ -289,6 +373,27 @@ export function TimeTrackerWidget() {
                 On Break since {breakStartTime}
               </p>
             )}
+
+            {/* Current Active Task Pill */}
+            {(status === "Punched In" || status === "On Break") && (
+              <div className="flex items-center gap-2 mt-2 px-3 py-1 bg-muted/60 border border-border/80 rounded-xl text-xs">
+                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider shrink-0">Working on:</span>
+                <span className="font-semibold text-foreground max-w-[180px] sm:max-w-[260px] truncate" title={activeTaskTitle || "General Work"}>
+                  {activeTaskTitle || "General Work"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsChangeMode(true);
+                    setIsActivityModalOpen(true);
+                  }}
+                  className="ml-auto text-[11px] font-bold text-primary hover:text-primary/80 flex items-center gap-1 hover:underline cursor-pointer shrink-0"
+                  title="Change current task"
+                >
+                  <RefreshCw className="w-3 h-3" /> Change
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -358,7 +463,7 @@ export function TimeTrackerWidget() {
           {status === "On Break" && (
             <button
               type="button"
-              onClick={handleBreakOut}
+              onClick={() => setIsBreakOutChoiceModalOpen(true)}
               disabled={isSubmitting}
               className="flex-1 md:flex-none px-6 py-3 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-60 bg-primary text-primary-foreground hover:bg-primary/90 shadow-md shadow-primary/20"
             >
@@ -370,7 +475,7 @@ export function TimeTrackerWidget() {
           {status === "Punched Out" && (
             <button
               type="button"
-              onClick={handlePunchIn}
+              onClick={handlePunchInClick}
               disabled={isSubmitting}
               className="flex-1 md:flex-none px-6 py-3 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-md active:scale-95 disabled:opacity-60 bg-primary text-primary-foreground hover:bg-primary/90 shadow-primary/20"
             >
@@ -379,6 +484,33 @@ export function TimeTrackerWidget() {
           )}
         </div>
       </div>
+
+      {/* Break Out Choice Modal: Previous Task vs New Task */}
+      <BreakOutChoiceModal
+        isOpen={isBreakOutChoiceModalOpen}
+        onClose={() => setIsBreakOutChoiceModalOpen(false)}
+        currentTaskTitle={activeTaskTitle}
+        onContinueCurrentTask={handleBreakOutDirect}
+        onSelectNewTask={() => {
+          setIsBreakOutChoiceModalOpen(false);
+          setIsBreakOutNewTaskMode(true);
+          setIsChangeMode(true);
+          setIsActivityModalOpen(true);
+        }}
+      />
+
+      {/* Update Activity / Task Selection Modal */}
+      <UpdateActivityModal
+        isOpen={isActivityModalOpen}
+        onClose={() => {
+          setIsActivityModalOpen(false);
+          setIsBreakOutNewTaskMode(false);
+        }}
+        onSave={handleSaveActivity}
+        currentTaskTitle={activeTaskTitle}
+        employeeId={employeeId}
+        isChangeMode={isChangeMode}
+      />
 
       {/* Mandatory Blocking Pending Punch-Out Modal */}
       <PendingPunchOutModal

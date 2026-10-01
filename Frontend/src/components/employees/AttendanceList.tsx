@@ -15,7 +15,7 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { EOMSummaryView } from "@/components/attendance/EOMSummaryView";
 import { formatISTDate, formatISTTime, formatDurationSeconds, parseTimeToMinutes } from "@/lib/timeUtils";
 import { api } from "@/lib/api";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { isUserAdmin } from "@/lib/permissions";
 import { DatePicker } from "@/components/ui/date-picker";
 import { SearchableSelect } from "@/components/ui/select";

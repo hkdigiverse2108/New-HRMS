@@ -5,7 +5,7 @@ import { useDepartments } from "./DepartmentContext";
 import { EmployeeProfileModal } from "./EmployeeProfileModal";
 import { EmployeeFormModal } from "./EmployeeFormModal";
 import { EmployeePermissionsModal } from "./EmployeePermissionsModal";
-import { toast } from "react-toastify";
+import { toast } from "@/lib/toast";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { cn, formatDate } from "@/lib/utils";
 import { useEmployeesContext } from "./EmployeeContext";

@@ -1,5 +1,5 @@
 import { CheckSquare, Plus } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 export function TasksModule() {
   return (

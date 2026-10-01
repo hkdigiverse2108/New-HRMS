@@ -34,8 +34,8 @@ class DailyProgressApprove(BaseModel):
 class DailyProgressResponse(DailyProgressBase):
     id: str = Field(alias="_id")
     employee_id: str
-    employee_name: str
-    department: str
+    employee_name: Optional[str] = "Employee"
+    department: Optional[str] = "General"
     status: str = "Pending" # PENDING, VERIFIED, REJECTED
     rating: float = 0.0
     remarks: Optional[str] = None
@@ -43,6 +43,20 @@ class DailyProgressResponse(DailyProgressBase):
     submitted_at: datetime
     verified_at: Optional[datetime] = None
     on_leave: bool = False
+
+    @field_validator('department', mode='before')
+    @classmethod
+    def format_department(cls, v):
+        if not v:
+            return "General"
+        return str(v)
+
+    @field_validator('employee_name', mode='before')
+    @classmethod
+    def format_employee_name(cls, v):
+        if not v:
+            return "Employee"
+        return str(v)
 
     @field_validator('status', mode='before')
     @classmethod

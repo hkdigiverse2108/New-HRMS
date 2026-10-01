@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { EMPLOYEES, Employee } from './employee-data';
 import { ORG_DATA, OrgNodeData } from './org-data';
 import { api } from '@/lib/api';
-import { toast } from 'react-toastify';
+import { toast } from "@/lib/toast";
 
 interface EmployeeContextType {
   employees: Employee[];

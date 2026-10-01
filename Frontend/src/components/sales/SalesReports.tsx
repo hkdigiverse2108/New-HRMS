@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Download, FileText, Calendar, Filter, PieChart, Users, TrendingUp, IndianRupee } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
 const reportTypes = [

@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { useApi } from "@/hooks/useApi";
 import { useUser } from "@/hooks/useUser";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { API_URL, getAvatarUrl, handleAvatarError } from "@/lib/config";
 import { DeleteConfirmDialog } from "@/components/hrms/delete-confirm-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { X, Plus, Calendar as CalendarIcon, Video, MoreHorizontal, Clock, CheckCircle2, ChevronRight, User } from "lucide-react";
 import { DialogClose,  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { SearchableSelect } from "@/components/ui/select";
 import { SearchInput } from "@/components/common/SearchInput";

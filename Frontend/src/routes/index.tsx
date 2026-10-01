@@ -25,7 +25,7 @@ import { OrgStructure } from "@/components/employees/OrgStructure";
 import { DepartmentDesignationManager } from "@/components/employees/DepartmentDesignationManager";
 import { AttendanceList } from "@/components/employees/AttendanceList";
 import { LeaveRequests } from "@/components/employees/LeaveRequests";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { DepartmentProvider } from "@/components/employees/DepartmentContext";
 import { EmployeeProvider } from "@/components/employees/EmployeeContext";
 import { SettingsProvider } from "@/components/payroll/SettingsContext";
