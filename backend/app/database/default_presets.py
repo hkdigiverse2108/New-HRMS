@@ -1,4 +1,3 @@
-import bcrypt
 from typing import Dict, Any, List
 from app.database.db import get_database
 
@@ -7,7 +6,7 @@ from app.database.db import get_database
 # ==============================================================================
 SYSTEM_MODULES: List[Dict[str, Any]] = [
     # --- OVERVIEW ---
-    {"id": "/dashboard", "name": "Dashboard", "section": "Overview", "is_parent": False},
+    {"id": "/dashboard", "name": "Dashboard", "section": "Overview", "is_parent": True},
     # Dashboard inner sections (section-level access, e.g. Princebhai sees only section-2)
     {"id": "/dashboard#time-tracker", "name": "Dashboard: Time Tracker", "section": "Overview", "parent_id": "/dashboard"},
     {"id": "/dashboard#today-schedule", "name": "Dashboard: Today Schedule", "section": "Overview", "parent_id": "/dashboard"},
@@ -140,7 +139,6 @@ def get_admin_full_permissions() -> Dict[str, dict]:
 # Default permissions for general employees
 DEFAULT_EMPLOYEE_PERMISSIONS: Dict[str, dict] = {
     "/dashboard": make_perm(read=True),
-    "/employees": make_perm(read=True),
     "/employees/attendance": make_perm(read=True, create=True),
     "/employees/leave-requests": make_perm(read=True, create=True),
     "/schedule": make_perm(read=True),
@@ -201,20 +199,21 @@ DEFAULT_HR_PERMISSIONS: Dict[str, dict] = {
 # Default permissions for Development Department
 DEFAULT_DEVELOPMENT_PERMISSIONS: Dict[str, dict] = {
     "/dashboard": make_perm(read=True),
+    "/dashboard#time-tracker": make_perm(read=True),
+    "/dashboard#today-schedule": make_perm(read=True),
+    "/dashboard#project-delivery": make_perm(read=True),
+    "/dashboard#tasks-clients": make_perm(read=True),
+    "/dashboard#attendance-analytics": make_perm(read=True),
+    "/dashboard#hr-news": make_perm(read=True),
+    "/dashboard#notifications": make_perm(read=True),
     "/schedule": make_perm(read=True),
     "/work/projects": make_perm(read=True, create=True, update=True),
     "/work/logs": make_perm(read=True, create=True, update=True),
-    "/work/research": make_perm(read=True, create=True, update=True),
     "/tasks": make_perm(read=True, create=True, update=True),
     "/chat": make_perm(read=True, create=True),
-    "/employees": make_perm(read=True),
     "/employees/attendance": make_perm(read=True, create=True),
     "/employees/leave-requests": make_perm(read=True, create=True),
-    "/workspace": make_perm(read=True),
     "/workspace/seating": make_perm(read=True),
-    "/workspace/gallery": make_perm(read=True),
-    "/remarks": make_perm(read=True),
-    "/recognitions": make_perm(read=True),
 }
 
 # Default permissions for Python Department
@@ -226,7 +225,6 @@ DEFAULT_PYTHON_PERMISSIONS: Dict[str, dict] = {
     "/work/research": make_perm(read=True, create=True, update=True),
     "/tasks": make_perm(read=True, create=True, update=True),
     "/chat": make_perm(read=True, create=True),
-    "/employees": make_perm(read=True),
     "/employees/attendance": make_perm(read=True, create=True),
     "/employees/leave-requests": make_perm(read=True, create=True),
     "/workspace": make_perm(read=True),
@@ -256,7 +254,6 @@ DEFAULT_SALES_PERMISSIONS: Dict[str, dict] = {
     "/work/logs": make_perm(read=True, create=True, update=True),
     "/tasks": make_perm(read=True, create=True, update=True),
     "/chat": make_perm(read=True, create=True),
-    "/employees": make_perm(read=True),
     "/employees/attendance": make_perm(read=True, create=True),
     "/employees/leave-requests": make_perm(read=True, create=True),
     "/workspace": make_perm(read=True),
@@ -292,7 +289,6 @@ DEFAULT_FINANCE_PERMISSIONS: Dict[str, dict] = {
     "/work/logs": make_perm(read=True, create=True, update=True),
     "/tasks": make_perm(read=True, create=True, update=True),
     "/chat": make_perm(read=True, create=True),
-    "/employees": make_perm(read=True),
     "/employees/attendance": make_perm(read=True, create=True),
     "/employees/leave-requests": make_perm(read=True, create=True),
     "/workspace": make_perm(read=True),
@@ -339,7 +335,6 @@ DEFAULT_DIGITAL_MARKETING_PERMISSIONS: Dict[str, dict] = {
     "/work/sales/leads": make_perm(read=True, create=True),
     "/tasks": make_perm(read=True, create=True, update=True),
     "/chat": make_perm(read=True, create=True),
-    "/employees": make_perm(read=True),
     "/employees/attendance": make_perm(read=True, create=True),
     "/employees/leave-requests": make_perm(read=True, create=True),
     "/workspace": make_perm(read=True),
@@ -358,7 +353,6 @@ DEFAULT_CREATIVE_PERMISSIONS: Dict[str, dict] = {
     "/chat": make_perm(read=True, create=True),
     "/workspace": make_perm(read=True),
     "/workspace/gallery": make_perm(read=True, create=True, update=True),
-    "/employees": make_perm(read=True),
     "/employees/attendance": make_perm(read=True, create=True),
     "/employees/leave-requests": make_perm(read=True, create=True),
     "/remarks": make_perm(read=True),
@@ -375,7 +369,6 @@ DEFAULT_PRODUCT_PERMISSIONS: Dict[str, dict] = {
     "/tasks": make_perm(all_perm=True),
     "/chat": make_perm(all_perm=True),
     "/reports/work": make_perm(all_perm=True),
-    "/employees": make_perm(read=True),
     "/employees/attendance": make_perm(read=True, create=True),
     "/employees/leave-requests": make_perm(read=True, create=True),
     "/workspace": make_perm(read=True),
@@ -409,79 +402,16 @@ def get_default_permissions_for_department(dept_name: str) -> Dict[str, dict]:
 # ==============================================================================
 async def init_database_presets_and_admin(db):
     """
-    1. Ensures the single Master Admin user exists with 'Admin@123' password and full system access.
-    2. Seeds Department-wise permission presets for all 9 departments.
-    3. Seeds dual-role presets (Admin, Employee).
+    Seeds permission presets only:
+    1. Department-wise permission presets.
+    2. Dual-role presets (Admin, Employee).
+
+    NOTE: No master admin is auto-created. Admin accounts come from
+    real employee records (migration / manual create).
     """
-    admin_email = "admin@hrms.com"
-    salt = bcrypt.gensalt()
-    admin_hashed_pw = bcrypt.hashpw("Admin@123".encode("utf-8"), salt).decode("utf-8")
-    
     admin_full_perms = get_admin_full_permissions()
-    
-    existing_admin = await db["employees"].find_one({
-        "$or": [
-            {"personal_info.email_address": admin_email},
-            {"email": admin_email}
-        ]
-    })
-    
-    admin_id = None
-    if existing_admin:
-        admin_id = str(existing_admin["_id"])
-        await db["employees"].update_one(
-            {"_id": existing_admin["_id"]},
-            {
-                "$set": {
-                    "personal_info.password": admin_hashed_pw,
-                    "personal_info.email_address": admin_email,
-                    "personal_info.first_name": "Pramit",
-                    "personal_info.last_name": "Mangukiya",
-                    "work_details.system_role": "Admin",
-                    "work_details.is_delete": False,
-                    "work_details.is_block": False,
-                }
-            }
-        )
-    else:
-        new_admin = {
-            "personal_info": {
-                "first_name": "Pramit",
-                "last_name": "Mangukiya",
-                "email_address": admin_email,
-                "password": admin_hashed_pw,
-                "gender": "Male",
-                "profile_photo": ""
-            },
-            "work_details": {
-                "system_role": "Admin",
-                "department": "Management",
-                "designation": "Administrator",
-                "is_delete": False,
-                "is_block": False,
-                "work_mode": "WFO"
-            },
-            "profile_photo": "",
-            "otp": None
-        }
-        res = await db["employees"].insert_one(new_admin)
-        admin_id = str(res.inserted_id)
 
-    # Ensure admin has full user permissions in user_permissions collection
-    if admin_id:
-        await db["user_permissions"].update_one(
-            {"employee_id": admin_id},
-            {
-                "$set": {
-                    "employee_id": admin_id,
-                    "module_permissions": admin_full_perms,
-                    "is_custom": True
-                }
-            },
-            upsert=True
-        )
-
-    # 2. Seed Department-Wise Permission Presets
+    # 1. Seed Department-Wise Permission Presets
     for dept_name, default_perms in DEFAULT_DEPARTMENT_PERMISSIONS.items():
         existing_preset = await db["permission_presets"].find_one({"department": dept_name})
         if not existing_preset:
@@ -514,4 +444,4 @@ async def init_database_presets_and_admin(db):
                 upsert=True
             )
 
-    print(f"[Admin] Master admin initialized: {admin_email} (Password: Admin@123)")
+    print("[Presets] Permission presets seeding complete (no master admin created).")

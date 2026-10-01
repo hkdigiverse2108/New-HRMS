@@ -16,17 +16,39 @@ import { HRAndNews } from "./sections/HRAndNews";
 
 export function Dashboard({ setActive, onAction }: { setActive?: (url: string) => void, onAction?: (action: string) => void }) {
   const { user } = useAuth();
-  // Section-level access (Meeting PDF): jene je section no access aape te j dekhay.
-  // If the user has no section-level keys at all → fall back to /dashboard read (old behavior).
   const showSection = (key: string) => {
     if (!user) return false;
     if (isUserAdmin(user)) return true;
     const perms = (user as any).permissions as Record<string, any> | undefined;
-    const hasAnySectionKey = perms && Object.keys(perms).some(k => k.startsWith("/dashboard#"));
-    if (!hasAnySectionKey) {
+    if (!perms || Object.keys(perms).length === 0) {
       return hasModulePermission(user, "/dashboard", "read");
     }
-    return hasModulePermission(user, `/dashboard#${key}`, "read");
+
+    // Direct explicit grant
+    if (perms[`/dashboard#${key}`]?.read || perms[`/dashboard#${key}`]?.all) return true;
+    if (perms["/dashboard"]?.all) return true;
+
+    // Check if any specific dashboard subsection was explicitly granted true
+    const hasAnyExplicitTrueSection = Object.keys(perms).some(
+      k => k.startsWith("/dashboard#") && Boolean(perms[k]?.read || perms[k]?.all)
+    );
+
+    // If no subsection was explicitly enabled as true, but base dashboard read is granted:
+    // Allow standard core employee/developer sections and hide sensitive finance/management sections
+    if (!hasAnyExplicitTrueSection && hasModulePermission(user, "/dashboard", "read")) {
+      const defaultGeneralSections = [
+        "time-tracker",
+        "today-schedule",
+        "project-delivery",
+        "tasks-clients",
+        "attendance-analytics",
+        "hr-news",
+        "notifications"
+      ];
+      return defaultGeneralSections.includes(key);
+    }
+
+    return false;
   };
 
   return (

@@ -213,6 +213,7 @@ export const navItems: NavItem[] = [
   // 23. Approvals Hub
   {
     title: "Approvals Hub",
+    url: "/approvals",
     icon: CheckCheck,
     badge: 9,
     children: [

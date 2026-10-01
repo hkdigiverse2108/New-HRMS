@@ -253,13 +253,21 @@ class AttendanceService:
         return updated or update_data
 
     @classmethod
-    async def punch_in(cls, employee_id: str, notes: Optional[str] = None) -> Dict[str, Any]:
+    async def punch_in(
+        cls,
+        employee_id: str,
+        notes: Optional[str] = None,
+        task_id: Optional[str] = None,
+        task_title: Optional[str] = None,
+        task_type: Optional[str] = "Today's Work"
+    ) -> Dict[str, Any]:
         """
-        Handles Punch-In.
+        Handles Punch-In with Task Association.
         1. Checks for pending punch-out from past dates.
         2. Applies Late Detection against 09:30 AM + 10m buffer (09:40 AM).
         3. Checks for approved half-day leave for today.
         4. Resumes session if already punched out today.
+        5. Associates current task and records task history.
         """
         # Step 1: Safety check for pending punch-out
         pending_check = await cls.check_pending_punch_out(employee_id)
@@ -324,6 +332,15 @@ class AttendanceService:
             if not is_late_recalc and "Late Punch-in Penalty Remark" in remarks:
                 remarks.remove("Late Punch-in Penalty Remark")
 
+            task_history = today_record.get("task_history", [])
+            if task_title:
+                task_history.append({
+                    "task_id": task_id,
+                    "task_title": task_title,
+                    "task_type": task_type or "Today's Work",
+                    "started_at": current_time_str
+                })
+
             update_data = {
                 "status": "Active",
                 "punches": punches,
@@ -331,6 +348,12 @@ class AttendanceService:
                 "remarks": remarks,
                 "check_out": "--"
             }
+            if task_title:
+                update_data["current_task_id"] = task_id
+                update_data["current_task_title"] = task_title
+                update_data["current_task_type"] = task_type or "Today's Work"
+                update_data["task_history"] = task_history
+
             # Keep original check_in if already present
             if not today_record.get("check_in") or today_record.get("check_in") == "--":
                 update_data["check_in"] = current_time_str
@@ -340,6 +363,8 @@ class AttendanceService:
             await set_cache(f"attendance:active:{employee_id}", {
                 "status": "Active",
                 "check_in": updated.get("check_in"),
+                "current_task_id": task_id or updated.get("current_task_id"),
+                "current_task_title": task_title or updated.get("current_task_title"),
                 "record_id": updated.get("id"),
                 "date": today_str
             }, ttl=86400)
@@ -378,13 +403,20 @@ class AttendanceService:
                         penalty_date=datetime.strptime(today_str, "%Y-%m-%d").date()
                     )
                     await PenaltyService.create_employee_penalty(penalty_data)
-                    # Invalidate penalty Redis caches so attendance-created penalties reflect immediately
-                    from app.redis.service import clear_pattern, delete_cache
                     await clear_pattern("penalties:list:*")
                     await delete_cache("penalties:leaderboard")
                     await delete_cache("penalties:summary")
             except Exception as e:
                 print(f"Failed to auto-assign late penalty: {e}")
+
+        task_history = []
+        if task_title:
+            task_history.append({
+                "task_id": task_id,
+                "task_title": task_title,
+                "task_type": task_type or "Today's Work",
+                "started_at": current_time_str
+            })
 
         new_doc = {
             "employee_id": employee_id,
@@ -404,6 +436,10 @@ class AttendanceService:
             "is_late": is_late,
             "late_remark": late_remark,
             "remarks": remarks_list,
+            "current_task_id": task_id,
+            "current_task_title": task_title,
+            "current_task_type": task_type or "Today's Work",
+            "task_history": task_history,
             "punches": [{
                 "check_in": current_time_str,
                 "check_out": None,
@@ -417,12 +453,58 @@ class AttendanceService:
         await set_cache(f"attendance:active:{employee_id}", {
             "status": status_text,
             "check_in": current_time_str,
+            "current_task_id": task_id,
+            "current_task_title": task_title,
             "record_id": created.get("id"),
             "date": today_str
         }, ttl=86400)
         await clear_pattern("attendance:list:*")
         await clear_pattern(f"attendance:summary:{employee_id}:*")
         return created
+
+    @classmethod
+    async def change_active_task(
+        cls,
+        employee_id: str,
+        task_id: Optional[str] = None,
+        task_title: Optional[str] = None,
+        task_type: Optional[str] = "Today's Work"
+    ) -> Dict[str, Any]:
+        """Updates the active working task during an active punched-in session."""
+        now = get_now_ist()
+        today_str = format_date_ist(now)
+        current_time_str = format_time_ist(now)
+        record = await AttendanceRepository.get_by_employee_and_date(employee_id, today_str)
+        if not record:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No active attendance record found for today.")
+
+        task_history = record.get("task_history", [])
+        if task_title:
+            task_history.append({
+                "task_id": task_id,
+                "task_title": task_title,
+                "task_type": task_type or "Today's Work",
+                "started_at": current_time_str
+            })
+
+        update_data = {
+            "current_task_id": task_id,
+            "current_task_title": task_title,
+            "current_task_type": task_type or "Today's Work",
+            "task_history": task_history
+        }
+        await AttendanceRepository.update_record(record["id"], update_data)
+        updated = await AttendanceRepository.get_record_by_id(record["id"])
+        await set_cache(f"attendance:active:{employee_id}", {
+            "status": updated.get("status"),
+            "check_in": updated.get("check_in"),
+            "current_task_id": task_id,
+            "current_task_title": task_title,
+            "record_id": updated.get("id"),
+            "date": today_str
+        }, ttl=86400)
+        await clear_pattern("attendance:list:*")
+        return updated
 
     @classmethod
     async def break_in(cls, employee_id: str, reason: Optional[str] = None) -> Dict[str, Any]:
@@ -446,7 +528,9 @@ class AttendanceService:
         breaks = record.get("breaks", [])
         breaks.append({
             "start_time": current_time_str,
+            "start_iso": now.isoformat(),
             "end_time": None,
+            "end_iso": None,
             "duration_seconds": 0,
             "reason": reason
         })
@@ -468,7 +552,7 @@ class AttendanceService:
 
     @classmethod
     async def break_out(cls, employee_id: str) -> Dict[str, Any]:
-        """Closes the current break and resumes active session."""
+        """Closes the current break and resumes active session with exact second precision."""
         now = get_now_ist()
         today_str = format_date_ist(now)
         record = await AttendanceRepository.get_by_employee_and_date(employee_id, today_str)
@@ -486,23 +570,33 @@ class AttendanceService:
         t_now = now.time()
         breaks = record.get("breaks", [])
 
-        # Find the open break
-        total_break_seconds = record.get("break_seconds", 0)
+        # Find the open break and calculate exact duration
         found_open = False
         for b in breaks:
             if not b.get("end_time"):
                 b["end_time"] = current_time_str
-                t_start = parse_time_str(b.get("start_time"))
-                if t_start:
-                    dur = compute_duration_seconds(t_start, t_now)
-                    b["duration_seconds"] = dur
-                    total_break_seconds += dur
+                b["end_iso"] = now.isoformat()
+                start_iso = b.get("start_iso")
+                if start_iso:
+                    try:
+                        s_dt = datetime.fromisoformat(start_iso)
+                        dur = max(0, int((now - s_dt).total_seconds()))
+                    except Exception:
+                        t_start = parse_time_str(b.get("start_time"))
+                        dur = compute_duration_seconds(t_start, t_now) if t_start else 0
+                else:
+                    t_start = parse_time_str(b.get("start_time"))
+                    dur = compute_duration_seconds(t_start, t_now) if t_start else 0
+
+                b["duration_seconds"] = dur
                 found_open = True
                 break
 
         if not found_open:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No open break found to end.")
 
+        # Clean, exact sum of all breaks prevents double accumulation
+        total_break_seconds = sum(b.get("duration_seconds", 0) for b in breaks)
         break_hours_str = format_seconds_to_hours(total_break_seconds)
 
         update_data = {
@@ -649,15 +743,24 @@ class AttendanceService:
 
         # 1. Close any open break
         breaks = record.get("breaks", [])
-        total_break_seconds = record.get("break_seconds", 0)
         for b in breaks:
             if not b.get("end_time"):
                 b["end_time"] = current_time_str
-                t_b_start = parse_time_str(b.get("start_time"))
-                if t_b_start:
-                    dur = compute_duration_seconds(t_b_start, t_out)
-                    b["duration_seconds"] = dur
-                    total_break_seconds += dur
+                b["end_iso"] = punch_out_dt.isoformat()
+                start_iso = b.get("start_iso")
+                if start_iso:
+                    try:
+                        s_dt = datetime.fromisoformat(start_iso)
+                        dur = max(0, int((punch_out_dt - s_dt).total_seconds()))
+                    except Exception:
+                        t_b_start = parse_time_str(b.get("start_time"))
+                        dur = compute_duration_seconds(t_b_start, t_out) if t_b_start else 0
+                else:
+                    t_b_start = parse_time_str(b.get("start_time"))
+                    dur = compute_duration_seconds(t_b_start, t_out) if t_b_start else 0
+                b["duration_seconds"] = dur
+
+        total_break_seconds = sum(b.get("duration_seconds", 0) for b in breaks)
 
         # 2. Close last punch
         punches = record.get("punches", [])

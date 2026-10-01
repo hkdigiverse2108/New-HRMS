@@ -2,8 +2,15 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 
 class PunchInRequest(BaseModel):
-    # TODO: Future activity/task selection integration will be connected here
     notes: Optional[str] = None
+    task_id: Optional[str] = None
+    task_title: Optional[str] = None
+    task_type: Optional[str] = "Today's Work"
+
+class UpdateActiveTaskRequest(BaseModel):
+    task_id: Optional[str] = None
+    task_title: str
+    task_type: Optional[str] = "Today's Work"
 
 class PunchOutRequest(BaseModel):
     notes: Optional[str] = None
@@ -62,6 +69,10 @@ class AttendanceOut(BaseModel):
     punches: Optional[List[Dict[str, Any]]] = []
     breaks: Optional[List[Dict[str, Any]]] = []
     logs: Optional[List[Dict[str, Any]]] = []
+    current_task_id: Optional[str] = None
+    current_task_title: Optional[str] = None
+    current_task_type: Optional[str] = None
+    task_history: Optional[List[Dict[str, Any]]] = []
     actively_using_hrms: bool = True
 
 class PendingPunchOutCheckResponse(BaseModel):
