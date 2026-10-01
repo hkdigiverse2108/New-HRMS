@@ -3,7 +3,7 @@ import { X, User, Briefcase, Building2, ShieldAlert, ChevronDown } from "lucide-
 import { DialogClose,  Dialog, DialogContent  } from "@/components/ui/dialog";
 import { OrgNodeData } from "./org-data";
 import { EMPLOYEES } from "@/components/employees/employee-data";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { useDepartments } from "./DepartmentContext";
 import { SearchableSelect } from "@/components/ui/select";
 

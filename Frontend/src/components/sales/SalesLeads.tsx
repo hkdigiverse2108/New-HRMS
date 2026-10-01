@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { Plus, Filter, Download, MoreVertical, X, Calendar, Phone, Mail, MessageSquare } from "lucide-react";
 import { SearchInput } from "@/components/common/SearchInput";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { formatCurrency, type Lead, type LeadStage } from "./sales-data";
 import { useSales } from "./SalesContext";

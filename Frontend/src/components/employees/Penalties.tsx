@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { DialogClose, Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { cn, formatDate } from "@/lib/utils";
 import { SearchableSelect } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";

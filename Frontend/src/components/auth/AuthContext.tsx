@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
 import { api, getAuthToken, setAuthToken, removeAuthToken, getStoredUser, setStoredUser } from "@/lib/api";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { API_URL } from "@/lib/config";
 import { hasModulePermission } from "@/lib/permissions";
 

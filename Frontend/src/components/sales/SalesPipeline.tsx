@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Plus, LayoutGrid, Table2, Clock } from "lucide-react";
 import { SearchInput } from "@/components/common/SearchInput";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { formatCurrency, type Lead, } from "./sales-data";
 import { useSales } from "./SalesContext";

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { X, Plus, Calendar, Check, Briefcase, BookOpen, Users, Clock } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 export type WorkActivityType = "Today's Work" | "Upcoming Work" | "Research" | "Activity" | "Meeting";
 
@@ -68,34 +68,33 @@ export function UpdateActivityModal({
     const fetchTasks = async () => {
       setIsLoading(true);
       try {
-        const todayDateStr = new Date().toISOString().split("T")[0];
-        
+        const todayDateStr: string = String(new Date().toISOString().split("T")[0] || "");
+        const addedTaskIds = new Set<string>();
+        const todayList: TaskItem[] = [];
+        const upcomingList: TaskItem[] = [];
+
         // 1. Fetch daily overview (today & upcoming tasks)
         let dailyRes: any = null;
         try {
           dailyRes = await api.get<any>("/tasks/daily-overview", { showErrorToast: false });
         } catch {}
 
-        // Fallback or raw tasks if overview is empty
-        let rawTasks: any[] = [];
-        if (!dailyRes?.today?.length && !dailyRes?.upcoming?.length) {
-          try {
-            const listRes = await api.get<any>("/tasks", { showErrorToast: false });
-            rawTasks = listRes?.data || listRes?.items || listRes || [];
-          } catch {}
-        }
-
-        const todayList: TaskItem[] = [];
-        const upcomingList: TaskItem[] = [];
-
         if (dailyRes?.today && Array.isArray(dailyRes.today)) {
           dailyRes.today.forEach((t: any) => {
-            const due = t.due_date ? String(t.due_date).split("T")[0] : todayDateStr;
+            const status = String(t.status || "").toLowerCase();
+            if (status === "completed" || status === "done" || status === "closed") return;
+            const taskId = String(t.id || t._id);
+            if (addedTaskIds.has(taskId)) return;
+            addedTaskIds.add(taskId);
+
+            const rawDue = t.due_date ? String(t.due_date).split("T")[0] : undefined;
+            const due: string = rawDue || todayDateStr;
+            const isPreviousPending = Boolean(due && todayDateStr && due < todayDateStr);
             todayList.push({
-              id: String(t.id || t._id),
+              id: taskId,
               title: t.title || t.name || "Task",
               dueDate: due,
-              badge: t.is_custom ? "Custom Task" : (t.priority || "Task"),
+              badge: isPreviousPending ? `Pending (${due})` : (t.is_custom ? "Custom Task" : (t.priority || "Today")),
               category: "Today's Work",
             });
           });
@@ -103,9 +102,16 @@ export function UpdateActivityModal({
 
         if (dailyRes?.upcoming && Array.isArray(dailyRes.upcoming)) {
           dailyRes.upcoming.forEach((t: any) => {
-            const due = t.due_date ? String(t.due_date).split("T")[0] : "";
+            const status = String(t.status || "").toLowerCase();
+            if (status === "completed" || status === "done" || status === "closed") return;
+            const taskId = String(t.id || t._id);
+            if (addedTaskIds.has(taskId)) return;
+            addedTaskIds.add(taskId);
+
+            const rawDue = t.due_date ? String(t.due_date).split("T")[0] : undefined;
+            const due: string = rawDue || "";
             upcomingList.push({
-              id: String(t.id || t._id),
+              id: taskId,
               title: t.title || t.name || "Upcoming Task",
               dueDate: due,
               badge: t.priority || "Upcoming",
@@ -114,18 +120,47 @@ export function UpdateActivityModal({
           });
         }
 
-        // If today is empty, populate from raw tasks or sample daily tasks
-        if (todayList.length === 0 && rawTasks.length > 0) {
-          rawTasks.slice(0, 5).forEach((t: any) => {
-            todayList.push({
-              id: String(t.id || t._id),
-              title: t.title || "Daily Task",
-              dueDate: todayDateStr,
-              badge: "Assigned Task",
-              category: "Today's Work",
-            });
+        // 2. Fetch all user tasks to catch any previous days' pending tasks not in overview
+        try {
+          const listRes = await api.get<any>("/tasks?limit=200", { showErrorToast: false });
+          const rawTasks: any[] = listRes?.data || listRes?.items || (Array.isArray(listRes) ? listRes : []);
+          rawTasks.forEach((t: any) => {
+            const status = String(t.status || "").toLowerCase();
+            if (status === "completed" || status === "done" || status === "closed") return;
+            const taskId = String(t.id || t._id);
+            if (addedTaskIds.has(taskId)) return;
+            addedTaskIds.add(taskId);
+
+            const rawDue = t.due_date ? String(t.due_date).split("T")[0] : undefined;
+            const due: string = rawDue || "";
+            if (due && todayDateStr && due < todayDateStr) {
+              // Previous days' uncompleted/pending task -> show in Today's Work!
+              todayList.push({
+                id: taskId,
+                title: t.title || "Pending Task",
+                dueDate: due,
+                badge: `Pending (${due})`,
+                category: "Today's Work",
+              });
+            } else if (due === todayDateStr) {
+              todayList.push({
+                id: taskId,
+                title: t.title || "Daily Task",
+                dueDate: due,
+                badge: t.priority || "Today",
+                category: "Today's Work",
+              });
+            } else {
+              upcomingList.push({
+                id: taskId,
+                title: t.title || "Upcoming Task",
+                dueDate: due,
+                badge: t.priority || "Upcoming",
+                category: "Upcoming Work",
+              });
+            }
           });
-        }
+        } catch {}
 
         // 2. Fetch Research items
         const researchList: TaskItem[] = [];

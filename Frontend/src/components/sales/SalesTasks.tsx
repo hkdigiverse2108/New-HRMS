@@ -3,7 +3,7 @@ import {
   CheckCircle2, Clock, AlertTriangle, Calendar, Phone, FileText,
   MessageCircle, Mail, Gift, Video, Users, Filter, Plus
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { type SalesTask } from "./sales-data";
 import { useSales } from "./SalesContext";

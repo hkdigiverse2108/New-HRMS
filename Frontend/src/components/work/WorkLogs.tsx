@@ -3,7 +3,7 @@ import { Search, Plus, Filter, Clock, CheckCircle2, XCircle, MoreHorizontal, Fil
 import { format } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";

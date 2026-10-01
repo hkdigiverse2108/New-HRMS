@@ -1,5 +1,5 @@
 import { Settings, Save } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 export function SettingsModule() {
   return (

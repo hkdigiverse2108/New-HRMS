@@ -1,4 +1,4 @@
-import { toast } from "react-toastify";
+import { toast } from "@/lib/toast";
 import { API_URL, getApiUrl } from "./config";
 
 export const TOKEN_STORAGE_KEY = "hrms_auth_token";

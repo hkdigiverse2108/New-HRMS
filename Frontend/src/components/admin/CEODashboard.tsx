@@ -5,7 +5,7 @@ import {
   Clock, ArrowDownRight, Activity
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { SearchableSelect } from "@/components/ui/select";
 
 export function CEODashboard({ active = "/ceo-dashboard" }: { active?: string }) {

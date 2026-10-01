@@ -2,7 +2,7 @@ import { useState } from "react";
 import { X, Plus, Filter, Users, Briefcase, MapPin, Clock, MoreHorizontal, ArrowUpRight, UserPlus } from "lucide-react";
 import { DialogClose, Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useDepartments } from "../employees/DepartmentContext";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { SearchableSelect } from "@/components/ui/select";
 import { SearchInput } from "@/components/common/SearchInput";
 

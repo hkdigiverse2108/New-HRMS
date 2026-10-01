@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { X,  UploadCloud, CheckCircle2  } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 export function QuickActionModals({ activeAction, onClose }: { activeAction: string | null; onClose: () => void }) {
   const { tasks, setTasks } = useSales();

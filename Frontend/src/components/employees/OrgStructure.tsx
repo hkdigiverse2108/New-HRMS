@@ -6,7 +6,7 @@ import { ManageDepartmentsModal } from "./ManageDepartmentsModal";
 import { AddOrgNodeModal } from "./AddOrgNodeModal";
 import { DeleteConfirmModal } from "./DeleteConfirmModal";
 import { UnassignedSidebar } from "./UnassignedSidebar";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { useEmployeesContext } from "./EmployeeContext";
 import { useModulePermissions } from "@/hooks/useModulePermissions";
 

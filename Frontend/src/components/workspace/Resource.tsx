@@ -42,7 +42,7 @@ import { Switch } from "@/components/ui/switch";
 import { useApi } from "@/hooks/useApi";
 import { useUser } from "@/hooks/useUser";
 import { API_URL } from "@/lib/config";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { PrintLabelsModal } from "./PrintLabelsModal";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";

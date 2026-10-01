@@ -1,5 +1,5 @@
 import { CalendarDays, Plus, Activity } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 export function MeetingsModule() {
   return (
