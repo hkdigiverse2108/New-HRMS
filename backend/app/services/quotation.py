@@ -9,12 +9,35 @@ from app.redis.service import get_cache, set_cache, delete_cache, clear_pattern,
 class QuotationService:
 
     @staticmethod
-    def _calculate_quotation_fields(data_dict: Dict[str, Any], existing_item: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def _calculate_quotation_fields(data_dict: Dict[str, Any], existing_item: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Auto-calculate line items, tax rates, tax amounts, round offs, and totals for quotation."""
         if existing_item:
             merged = {**existing_item, **data_dict}
         else:
             merged = data_dict
+
+        # 0. Client Details Auto-Lookup
+        client_id = merged.get("client_id")
+        if client_id:
+            from app.repository.client import ClientRepository
+            client_doc = await ClientRepository.get_by_id(client_id)
+            if client_doc:
+                if not merged.get("client_name"):
+                    merged["client_name"] = client_doc.get("contact_person_name") or client_doc.get("company_name") or client_doc.get("client_name") or ""
+                if not merged.get("client_email"):
+                    merged["client_email"] = client_doc.get("email_address") or client_doc.get("email") or client_doc.get("client_email")
+                if not merged.get("client_phone"):
+                    merged["client_phone"] = client_doc.get("phone_number") or client_doc.get("phone") or client_doc.get("client_phone")
+                if not merged.get("client_company"):
+                    merged["client_company"] = client_doc.get("company_name") or client_doc.get("brand_name") or client_doc.get("client_company")
+                if not merged.get("client_address"):
+                    merged["client_address"] = client_doc.get("address") or client_doc.get("client_address")
+                if not merged.get("client_gstin"):
+                    merged["client_gstin"] = client_doc.get("gstin") or client_doc.get("client_gstin")
+                if not merged.get("client_department"):
+                    merged["client_department"] = client_doc.get("department") or client_doc.get("client_department")
+                if not merged.get("state_ut"):
+                    merged["state_ut"] = client_doc.get("state_ut") or client_doc.get("state")
 
         state_ut = merged.get("state_ut", "") or ""
         state_str = str(state_ut).lower()
@@ -89,8 +112,7 @@ class QuotationService:
 
         # 4. Rounding and Final Total Amount
         add_disc = float(merged.get("additional_discount") or 0.0)
-        shipping = float(merged.get("shipping_charges") or 0.0)
-        raw_total = merged["total_before_tax"] - add_disc + shipping + merged["total_tax_amount"]
+        raw_total = merged["total_before_tax"] - add_disc + merged["total_tax_amount"]
         rounded_total = round(raw_total)
         round_off = round(rounded_total - raw_total, 2)
 
@@ -123,7 +145,7 @@ class QuotationService:
                 "role": user_role
             }
 
-        calculated_data = QuotationService._calculate_quotation_fields(data_dict)
+        calculated_data = await QuotationService._calculate_quotation_fields(data_dict)
         created = await QuotationRepository.create(calculated_data)
         await clear_pattern("quotations:list:*")
         return created
@@ -216,7 +238,7 @@ class QuotationService:
             return False
 
         update_dict = data.model_dump(exclude_unset=True)
-        calculated_data = QuotationService._calculate_quotation_fields(update_dict, existing_item=existing)
+        calculated_data = await QuotationService._calculate_quotation_fields(update_dict, existing_item=existing)
 
         success = await QuotationRepository.update(quotation_id, calculated_data)
         if success:
@@ -278,14 +300,12 @@ class QuotationService:
             client_department=req_dict.get("client_department") or quotation.get("client_department"),
             state_ut=req_dict.get("state_ut") or quotation.get("state_ut"),
             due_date=target_due_date,
-            po_number=req_dict.get("po_number") or f"QUO-REF:{quotation.get('quotation_number')}",
             line_items=items_objs,
             tax_option=req_dict.get("tax_option") or quotation.get("tax_option"),
             cgst_rate=req_dict.get("cgst_rate") if req_dict.get("cgst_rate") is not None else quotation.get("cgst_rate"),
             sgst_rate=req_dict.get("sgst_rate") if req_dict.get("sgst_rate") is not None else quotation.get("sgst_rate"),
             igst_rate=req_dict.get("igst_rate") if req_dict.get("igst_rate") is not None else quotation.get("igst_rate"),
             additional_discount=float(req_dict.get("additional_discount") if req_dict.get("additional_discount") is not None else (quotation.get("additional_discount") or 0.0)),
-            shipping_charges=float(req_dict.get("shipping_charges") if req_dict.get("shipping_charges") is not None else (quotation.get("shipping_charges") or 0.0)),
             bank_account_id=req_dict.get("bank_account_id"),
             notes=notes_content
         )

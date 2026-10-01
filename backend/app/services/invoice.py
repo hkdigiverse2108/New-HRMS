@@ -56,6 +56,27 @@ class InvoiceService:
         else:
             merged = data_dict
 
+        # 0. Client Details Auto-Lookup
+        client_id = merged.get("client_id")
+        if client_id:
+            from app.repository.client import ClientRepository
+            client_doc = await ClientRepository.get_by_id(client_id)
+            if client_doc:
+                if not merged.get("client_name"):
+                    merged["client_name"] = client_doc.get("contact_person_name") or client_doc.get("company_name") or client_doc.get("client_name") or ""
+                if not merged.get("client_email"):
+                    merged["client_email"] = client_doc.get("email_address") or client_doc.get("email") or client_doc.get("client_email")
+                if not merged.get("client_phone"):
+                    merged["client_phone"] = client_doc.get("phone_number") or client_doc.get("phone") or client_doc.get("client_phone")
+                if not merged.get("client_address"):
+                    merged["client_address"] = client_doc.get("address") or client_doc.get("client_address")
+                if not merged.get("client_gstin"):
+                    merged["client_gstin"] = client_doc.get("gstin") or client_doc.get("client_gstin")
+                if not merged.get("client_department"):
+                    merged["client_department"] = client_doc.get("department") or client_doc.get("client_department")
+                if not merged.get("state_ut"):
+                    merged["state_ut"] = client_doc.get("state_ut") or client_doc.get("state")
+
         invoice_type = merged.get("invoice_type", "Tax Invoice")
         state_ut = merged.get("state_ut", "") or ""
         state_str = str(state_ut).lower()
@@ -171,8 +192,7 @@ class InvoiceService:
 
         # 6. Rounding and Final Total Due
         add_disc = float(merged.get("additional_discount") or 0.0)
-        shipping = float(merged.get("shipping_charges") or 0.0)
-        raw_total = merged["total_before_tax"] - add_disc + shipping + merged["total_tax_amount"]
+        raw_total = merged["total_before_tax"] - add_disc + merged["total_tax_amount"]
         rounded_total = round(raw_total)
         round_off = round(rounded_total - raw_total, 2)
 

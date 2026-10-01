@@ -42,7 +42,6 @@ class InvoiceCreate(BaseModel):
     bank_details: Optional[BankDetailsSchema] = None
     issue_date: Optional[str] = None
     due_date: Optional[str] = None
-    po_number: Optional[str] = None
     status: Optional[str] = Field(None, description="Status (auto-set based on role if omitted)")
     line_items: List[LineItemSchema] = Field(default_factory=list)
     tax_option: Optional[str] = Field(None, description="'CGST + SGST' or 'IGST'")
@@ -50,7 +49,6 @@ class InvoiceCreate(BaseModel):
     sgst_rate: Optional[float] = None
     igst_rate: Optional[float] = None
     additional_discount: float = 0.0
-    shipping_charges: float = 0.0
     bank_name: Optional[str] = None
     account_number: Optional[str] = None
     ifsc_code: Optional[str] = None
@@ -73,7 +71,6 @@ class InvoiceUpdate(BaseModel):
     bank_details: Optional[BankDetailsSchema] = None
     issue_date: Optional[str] = None
     due_date: Optional[str] = None
-    po_number: Optional[str] = None
     status: Optional[str] = None
     line_items: Optional[List[LineItemSchema]] = None
     tax_option: Optional[str] = None
@@ -81,7 +78,6 @@ class InvoiceUpdate(BaseModel):
     sgst_rate: Optional[float] = None
     igst_rate: Optional[float] = None
     additional_discount: Optional[float] = None
-    shipping_charges: Optional[float] = None
     bank_name: Optional[str] = None
     account_number: Optional[str] = None
     ifsc_code: Optional[str] = None
@@ -114,7 +110,6 @@ class InvoiceResponse(BaseModel):
     bank_details: Optional[BankDetailsSchema] = None
     issue_date: Optional[str] = None
     due_date: Optional[str] = None
-    po_number: Optional[str] = None
     status: str = "paid"
     approval_status: Optional[str] = None # "pending", "approved", "rejected"
     created_by: Optional[Dict[str, Any]] = None
@@ -133,7 +128,6 @@ class InvoiceResponse(BaseModel):
     igst_rate: float = 0.0
     igst_amount: float = 0.0
     additional_discount: float = 0.0
-    shipping_charges: float = 0.0
     total_tax_amount: float = 0.0
     round_off: float = 0.0
     total_due: float = 0.0

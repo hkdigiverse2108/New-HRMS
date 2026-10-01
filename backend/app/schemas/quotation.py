@@ -24,7 +24,6 @@ class QuotationCreate(BaseModel):
     sgst_rate: Optional[float] = None
     igst_rate: Optional[float] = None
     additional_discount: float = 0.0
-    shipping_charges: float = 0.0
     notes: Optional[str] = Field(None, description="Notes and terms")
 
 class QuotationUpdate(BaseModel):
@@ -48,7 +47,6 @@ class QuotationUpdate(BaseModel):
     sgst_rate: Optional[float] = None
     igst_rate: Optional[float] = None
     additional_discount: Optional[float] = None
-    shipping_charges: Optional[float] = None
     notes: Optional[str] = None
 
 class QuotationStatusUpdate(BaseModel):
@@ -65,14 +63,12 @@ class ConvertToInvoiceRequest(BaseModel):
     client_gstin: Optional[str] = None
     client_department: Optional[str] = None
     state_ut: Optional[str] = None
-    po_number: Optional[str] = None
     line_items: Optional[List[LineItemSchema]] = None
     tax_option: Optional[str] = None
     cgst_rate: Optional[float] = None
     sgst_rate: Optional[float] = None
     igst_rate: Optional[float] = None
     additional_discount: Optional[float] = None
-    shipping_charges: Optional[float] = None
     bank_account_id: Optional[str] = None
     notes: Optional[str] = None
 
@@ -105,7 +101,6 @@ class QuotationResponse(BaseModel):
     igst_rate: float = 0.0
     igst_amount: float = 0.0
     additional_discount: float = 0.0
-    shipping_charges: float = 0.0
     total_tax_amount: float = 0.0
     round_off: float = 0.0
     total_amount: float = 0.0
