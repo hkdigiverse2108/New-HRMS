@@ -14,6 +14,7 @@ import { SearchableSelect, Select, SelectTrigger, SelectValue, SelectContent, Se
 import { api } from "@/lib/api";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useEmployeesContext } from "@/components/employees/EmployeeContext";
+import { useAuth } from "@/components/auth/AuthContext";
 
 type ProjectStatus = "In Progress" | "In Review" | "Completed" | "On Hold";
 type ClientStatus = "Active" | "Archived";
@@ -165,7 +166,14 @@ interface CalendarItem {
   postingLinkOfIg?: string | undefined;
   actualPostingDate?: string | undefined;
   remark?: string | undefined;
-  issues?: { id: string; text: string; timestamp: string }[] | undefined;
+  issues?: {
+    id: string;
+    text: string;
+    timestamp: string;
+    role?: string | undefined;
+    author?: string | undefined;
+    isClientIssue?: boolean | undefined;
+  }[] | undefined;
 }
 
 export const mapBackendContentToCalendarItem = (item: any): CalendarItem => {
@@ -204,8 +212,15 @@ export const mapBackendContentToCalendarItem = (item: any): CalendarItem => {
     remark: item.remark || "",
     issues: (item.issues || []).map((iss: any, idx: number) =>
       typeof iss === 'string'
-        ? { id: `iss-${idx}`, text: iss, timestamp: "" }
-        : iss
+        ? { id: `iss-${idx}`, text: iss, timestamp: "", role: "Shoot", author: "Team", isClientIssue: true }
+        : {
+            id: iss.id || `iss-${idx}`,
+            text: iss.text || "",
+            timestamp: iss.timestamp || "",
+            role: iss.role || "Shoot",
+            author: iss.author || "Team",
+            isClientIssue: iss.isClientIssue !== false
+          }
     ),
   };
 };
@@ -917,7 +932,18 @@ const CalendarIssuesCell = ({
   setProjects: (projs: any[]) => void;
   onLogActivity: (action: string, details?: string) => void;
 }) => {
+  const { user } = useAuth();
+  const currentUserName = useMemo(() => {
+    const personal = (user as any)?.personal_info || {};
+    const first = (personal.first_name || "").trim();
+    const last = (personal.last_name || "").trim();
+    const fullName = `${first} ${last}`.trim();
+    return fullName || (user as any)?.name || (user as any)?.username || "Team Member";
+  }, [user]);
+
   const [newIssueText, setNewIssueText] = useState("");
+  const [selectedRole, setSelectedRole] = useState("Shoot");
+  const [isClientIssue, setIsClientIssue] = useState(true);
   const issuesList = item.issues || [];
 
   const handleAddIssue = () => {
@@ -928,6 +954,9 @@ const CalendarIssuesCell = ({
     const newIssue = {
       id: `issue-${Date.now()}`,
       text: newIssueText.trim(),
+      role: selectedRole,
+      author: currentUserName,
+      isClientIssue: isClientIssue,
       timestamp: dateStr
     };
 
@@ -936,13 +965,28 @@ const CalendarIssuesCell = ({
       x.id === item.id ? { ...x, issues: updatedIssues } : x
     );
     setProjects(projects.map(p => p.id === project.id ? { ...p, contentCalendar: updatedCalendar } : p));
-    onLogActivity("Logged Issue", `Added issue "${newIssueText.trim()}" on content idea "${item.topic || 'Untitled'}"`);
+    onLogActivity("Logged Issue", `Added ${isClientIssue ? 'Client Issue' : 'Remark'} (${selectedRole}) "${newIssueText.trim()}" on content idea "${item.topic || 'Untitled'}" by ${currentUserName}`);
     setNewIssueText("");
 
     if (project.id && item.id) {
       api.put(`/projects/${project.id}/content/${item.id}`, {
-        issues: updatedIssues.map(i => i.text)
+        issues: updatedIssues
       }).catch(e => console.error("Failed to sync issue to backend:", e));
+    }
+  };
+
+  const handleToggleClientIssue = (issueId: string) => {
+    const updatedIssues = issuesList.map(iss => 
+      iss.id === issueId ? { ...iss, isClientIssue: !iss.isClientIssue } : iss
+    );
+    const updatedCalendar = projectCalendar.map((x: any) => 
+      x.id === item.id ? { ...x, issues: updatedIssues } : x
+    );
+    setProjects(projects.map(p => p.id === project.id ? { ...p, contentCalendar: updatedCalendar } : p));
+    if (project.id && item.id) {
+      api.put(`/projects/${project.id}/content/${item.id}`, {
+        issues: updatedIssues
+      }).catch(e => console.error("Failed to sync issue update to backend:", e));
     }
   };
 
@@ -959,52 +1003,126 @@ const CalendarIssuesCell = ({
 
     if (project.id && item.id) {
       api.put(`/projects/${project.id}/content/${item.id}`, {
-        issues: updatedIssues.map(i => i.text)
+        issues: updatedIssues
       }).catch(e => console.error("Failed to sync issue removal to backend:", e));
     }
   };
+
+  const activeClientIssues = issuesList.filter(i => i.isClientIssue !== false);
 
   return (
     <Popover>
       <PopoverTrigger asChild>
         <button className={cn(
-          "mx-auto px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider block text-center cursor-pointer transition-all border shadow-sm",
-          issuesList.length > 0 ? "bg-rose-500/10 text-rose-600 border-rose-500/25 hover:bg-rose-500/20" : "bg-muted text-muted-foreground hover:bg-muted/80 border-border/40"
+          "mx-auto px-2.5 py-1 rounded-full text-[10px] font-semibold tracking-wider block text-center cursor-pointer transition-all border shadow-xs",
+          activeClientIssues.length > 0 
+            ? "bg-rose-500/10 text-rose-600 border-rose-500/30 hover:bg-rose-500/20" 
+            : issuesList.length > 0
+            ? "bg-amber-500/10 text-amber-600 border-amber-500/30 hover:bg-amber-500/20"
+            : "bg-muted/60 text-muted-foreground hover:bg-muted border-border/40"
         )}>
-          {issuesList.length > 0 ? `⚠️ ${issuesList.length} Issues` : "+ Log Issue"}
+          {activeClientIssues.length > 0 
+            ? `⚠️ ${activeClientIssues.length} Client Issue${activeClientIssues.length > 1 ? 's' : ''}` 
+            : issuesList.length > 0 
+            ? `💬 ${issuesList.length} Remark${issuesList.length > 1 ? 's' : ''}` 
+            : "+ Issue / Remark"}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-[280px] p-4 bg-card border border-border rounded-2xl shadow-xl z-50 text-left" align="center">
+      <PopoverContent className="w-[320px] p-4 bg-card border border-border rounded-2xl shadow-xl z-50 text-left" align="center">
         <div className="space-y-3">
           <div className="flex justify-between items-center border-b border-border/40 pb-2">
-            <h4 className="text-xs font-black uppercase tracking-wider text-foreground">Logged Issues ({issuesList.length})</h4>
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">Issues & Remarks ({issuesList.length})</h4>
+              <p className="text-[10px] text-muted-foreground">Person-specific client issues & notes</p>
+            </div>
           </div>
           
-          <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+          <div className="space-y-2 max-h-[190px] overflow-y-auto pr-1">
             {issuesList.length === 0 ? (
-              <p className="text-[10px] text-muted-foreground italic font-medium">No active issues logged.</p>
+              <p className="text-[10px] text-muted-foreground italic font-medium py-2 text-center">No active issues or remarks logged.</p>
             ) : (
               issuesList.map((issue) => (
-                <div key={issue.id} className="p-2 bg-rose-500/5 rounded-xl border border-rose-500/10 flex justify-between items-start gap-2 group/issue">
-                  <div className="space-y-0.5">
-                    <p className="text-[11px] font-bold text-rose-700 leading-normal">{issue.text}</p>
-                    <span className="text-[9px] text-rose-400 font-mono block">{issue.timestamp}</span>
+                <div 
+                  key={issue.id} 
+                  className={cn(
+                    "p-2.5 rounded-xl border flex flex-col gap-1.5 transition-all",
+                    issue.isClientIssue !== false
+                      ? "bg-rose-500/5 border-rose-500/20 text-rose-700 dark:text-rose-400"
+                      : "bg-muted/40 border-border/50 text-foreground"
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                        {issue.role || "Task"}
+                      </span>
+                      {issue.author && (
+                        <span className="text-[10px] font-semibold text-foreground/80">
+                          {issue.author}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[9px] text-muted-foreground font-mono">{issue.timestamp}</span>
+                      <button 
+                        onClick={() => handleRemoveIssue(issue.id)}
+                        className="p-1 text-muted-foreground hover:text-rose-600 transition-colors"
+                        title="Delete issue"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   </div>
-                  <button 
-                    onClick={() => handleRemoveIssue(issue.id)}
-                    className="text-[9px] text-rose-500 hover:text-rose-700 font-black"
-                    title="Resolve/Delete Issue"
-                  >
-                    ✕
-                  </button>
+
+                  <p className="text-[11px] font-medium leading-relaxed">{issue.text}</p>
+
+                  <div className="pt-1 border-t border-border/30 flex items-center justify-between text-[10px]">
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={issue.isClientIssue !== false}
+                        onChange={() => handleToggleClientIssue(issue.id)}
+                        className="rounded border-border text-rose-600 focus:ring-rose-500 w-3 h-3"
+                      />
+                      <span className={cn("font-semibold", issue.isClientIssue !== false ? "text-rose-600 font-bold" : "text-muted-foreground")}>
+                        {issue.isClientIssue !== false ? "Client Issue (Pending)" : "Resolved / Normal"}
+                      </span>
+                    </label>
+                  </div>
                 </div>
               ))
             )}
           </div>
 
-          <div className="pt-2 border-t border-border/40 space-y-1.5">
+          <div className="pt-2 border-t border-border/40 space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Target Phase/Role</label>
+                <select
+                  value={selectedRole}
+                  onChange={(e) => setSelectedRole(e.target.value)}
+                  className="w-full px-2 py-1 bg-muted/40 border border-border/50 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  {["Shoot", "Scripting", "Editing", "Thumbnail", "Posting"].map(r => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col justify-end">
+                <label className="flex items-center gap-1.5 text-xs font-semibold cursor-pointer pb-1.5 select-none text-rose-600">
+                  <input
+                    type="checkbox"
+                    checked={isClientIssue}
+                    onChange={(e) => setIsClientIssue(e.target.checked)}
+                    className="rounded border-border text-rose-600 focus:ring-rose-500 w-3.5 h-3.5"
+                  />
+                  <span>Client Issue</span>
+                </label>
+              </div>
+            </div>
+
             <textarea
-              placeholder="Type issue details..."
+              placeholder="Type remark / issue reason..."
               value={newIssueText}
               onChange={(e) => setNewIssueText(e.target.value)}
               rows={2}
@@ -1012,9 +1130,9 @@ const CalendarIssuesCell = ({
             />
             <button
               onClick={handleAddIssue}
-              className="w-full py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl transition-colors shadow-sm"
+              className="w-full py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl transition-colors shadow-xs"
             >
-              Add Issue
+              Add Issue / Remark
             </button>
           </div>
         </div>
@@ -1465,8 +1583,9 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   const [isWhatsappModalOpen, setIsWhatsappModalOpen] = useState(false);
   const [whatsappLinkInput, setWhatsappLinkInput] = useState("");
   const [isCredentialsModalOpen, setIsCredentialsModalOpen] = useState(false);
-  const [newCredentialForm, setNewCredentialForm] = useState<{ platform: string; username: string; password: string; notes: string }>({
+  const [newCredentialForm, setNewCredentialForm] = useState<{ platform: string; customPlatform?: string; username: string; password: string; notes: string }>({
     platform: "Instagram",
+    customPlatform: "",
     username: "",
     password: "",
     notes: ""
@@ -2502,7 +2621,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       return;
     }
     try {
-      const text = followupNextDate ? `${followupText.trim()} (Next: ${followupNextDate})` : followupText.trim();
+      const formattedNextDate = followupNextDate ? followupNextDate.split("-").reverse().join("/") : "";
+      const text = formattedNextDate ? `${followupText.trim()} (Next: ${formattedNextDate})` : followupText.trim();
       await api.post(`/projects/${proj.id}/followups`, { text });
       setFollowupText("");
       setFollowupNextDate("");
@@ -3819,7 +3939,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 <h4 className="text-xs font-bold text-foreground">Add New Credential</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-muted-foreground">Platform</label>
+                    <label className="text-[11px] font-bold text-muted-foreground">Platform <span className="text-destructive font-black">*</span></label>
                     <Select
                       value={newCredentialForm.platform}
                       onValueChange={(val) => setNewCredentialForm(prev => ({ ...prev, platform: val }))}
@@ -3859,8 +3979,23 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     </Select>
                   </div>
 
+                  {newCredentialForm.platform === "Other" && (
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <label className="text-[11px] font-bold text-muted-foreground">
+                        Platform / Service Name <span className="text-destructive font-black">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={newCredentialForm.customPlatform || ""}
+                        onChange={(e) => setNewCredentialForm(prev => ({ ...prev, customPlatform: e.target.value }))}
+                        placeholder="e.g. Hostinger, Figma, AWS, Pinterest, Shopify"
+                        className="w-full h-10 px-3 bg-card border border-border/60 rounded-xl text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                      />
+                    </div>
+                  )}
+
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-muted-foreground">Username / Handle / Email</label>
+                    <label className="text-[11px] font-bold text-muted-foreground">Username / Handle / Email <span className="text-destructive font-black">*</span></label>
                     <input
                       type="text"
                       value={newCredentialForm.username}
@@ -3871,7 +4006,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-muted-foreground">Password</label>
+                    <label className="text-[11px] font-bold text-muted-foreground">Password <span className="text-destructive font-black">*</span></label>
                     <input
                       type="text"
                       value={newCredentialForm.password}
@@ -3897,6 +4032,10 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   <button
                     type="button"
                     onClick={() => {
+                      if (newCredentialForm.platform === "Other" && !newCredentialForm.customPlatform?.trim()) {
+                        toast.error("Please enter platform / service name");
+                        return;
+                      }
                       if (!newCredentialForm.username.trim() || !newCredentialForm.password.trim()) {
                         toast.error("Please enter username and password");
                         return;
@@ -3904,12 +4043,19 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       const targetProjId = activeProj?.id;
                       if (!targetProjId) return;
 
+                      const finalPlatform = newCredentialForm.platform === "Other"
+                        ? newCredentialForm.customPlatform?.trim() || "Other"
+                        : newCredentialForm.platform;
+
                       const updated = [
                         ...(activeProj?.credentials || []),
-                        { ...newCredentialForm }
+                        {
+                          ...newCredentialForm,
+                          platform: finalPlatform
+                        }
                       ];
                       handleSaveCredentials(targetProjId, updated);
-                      setNewCredentialForm({ platform: "Instagram", username: "", password: "", notes: "" });
+                      setNewCredentialForm({ platform: "Instagram", customPlatform: "", username: "", password: "", notes: "" });
                     }}
                     className="px-4 py-2.5 bg-primary text-primary-foreground font-bold text-xs rounded-xl shadow-sm hover:bg-primary/90 transition-all flex items-center gap-1.5 cursor-pointer"
                   >
@@ -4302,12 +4448,16 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 {projectFollowups.length === 0 && (
                   <p className="text-[11px] text-muted-foreground/60 font-medium">No follow-ups yet.</p>
                 )}
-                {projectFollowups.slice(0, 5).map((f: any, i: number) => (
-                  <p key={f.id || i} className="text-xs text-foreground bg-muted/30 border border-border/30 rounded-xl px-3 py-1.5">
-                    <span className="font-bold">{f.text}</span>
-                    <span className="text-muted-foreground font-mono text-[10px] ml-2">{f.created_at ? String(f.created_at).split("T")[0] : ""}</span>
-                  </p>
-                ))}
+                {projectFollowups.slice(0, 5).map((f: any, i: number) => {
+                  const rawDate = f.created_at ? String(f.created_at).split("T")[0] : "";
+                  const formattedDate = rawDate ? rawDate.split("-").reverse().join("/") : "";
+                  return (
+                    <p key={f.id || i} className="text-xs text-foreground bg-muted/30 border border-border/30 rounded-xl px-3 py-1.5 flex items-center justify-between">
+                      <span className="font-bold">{f.text}</span>
+                      {formattedDate && <span className="text-muted-foreground font-mono text-[10px] ml-2 shrink-0">{formattedDate}</span>}
+                    </p>
+                  );
+                })}
               </div>
               <div className="flex flex-col sm:flex-row gap-2">
                 <input
@@ -4763,6 +4913,29 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                           Clear
                         </button>
                       )}
+                      {/* Post / Reel Quick Filters (Audio Transcript) */}
+                      <div className="flex items-center gap-1 bg-muted/60 p-0.5 rounded-xl border border-border/50 shrink-0">
+                        {[
+                          { label: "All", value: "All" },
+                          { label: "📸 Posts", value: "Post" },
+                          { label: "🎥 Reels", value: "Reel" },
+                        ].map((btn) => (
+                          <button
+                            key={btn.value}
+                            type="button"
+                            onClick={() => setCalendarTypeFilter(btn.value)}
+                            className={cn(
+                              "h-7 px-2.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+                              calendarTypeFilter === btn.value
+                                ? "bg-card text-foreground shadow-xs font-bold border border-border/40"
+                                : "text-muted-foreground hover:text-foreground"
+                            )}
+                          >
+                            {btn.label}
+                          </button>
+                        ))}
+                      </div>
+
                       <Select value={calendarTypeFilter} onValueChange={(val) => setCalendarTypeFilter(val)}>
                         <SelectTrigger className="h-8 w-auto min-w-[95px] max-w-[120px] px-2.5 bg-card/90 hover:bg-card border border-border/60 rounded-xl text-xs font-semibold text-foreground shrink-0 shadow-sm transition-all focus:ring-1 focus:ring-primary/30 gap-1.5">
                           <SelectValue placeholder="All Types" />
@@ -4947,7 +5120,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                   className={cn(
                                     "hover:bg-muted/20 transition-all group cursor-pointer",
                                     isExpanded ? "bg-muted/10 align-top" : "h-[80px]",
-                                    explainMode && explainedIds.includes(item.id) && "bg-violet-500/10 ring-2 ring-inset ring-violet-500/60"
+                                    explainMode && "hover:bg-violet-500/15 hover:ring-2 hover:ring-inset hover:ring-violet-500/70 hover:shadow-md",
+                                    explainMode && explainedIds.includes(item.id) && "bg-violet-500/15 ring-2 ring-inset ring-violet-500/80"
                                   )}
                                 >
 
@@ -4959,14 +5133,18 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                           <DatePicker
                                             value={inlineEdit!.value}
                                             onChange={(val) => {
+                                              if (!val || !val.trim()) {
+                                                toast.error("Schedule date is compulsory and cannot be removed.");
+                                                return;
+                                              }
                                               setInlineEdit({ ...inlineEdit!, value: val });
                                               saveInlineEdit('postingDate', val);
                                             }}
-                                            className="w-[130px] h-7 text-xs font-bold bg-primary/5 border border-primary/40"
+                                            className="w-[130px] h-7 text-xs font-semibold bg-primary/5 border border-primary/40"
                                           />
                                         </div>
                                       ) : (
-                                        <span onClick={e => startEdit(e, 'postingDate', item.postingDate)} className="font-extrabold text-foreground block text-sm cursor-text hover:bg-primary/5 rounded px-1 py-0.5 transition-colors group/pd" title="Click to edit">
+                                        <span onClick={e => startEdit(e, 'postingDate', item.postingDate)} className="font-semibold text-foreground block text-sm cursor-text hover:bg-primary/5 rounded px-1 py-0.5 transition-colors group/pd" title="Click to edit">
                                           {safeFormat(item.postingDate, "dd/MM/yyyy")}
                                           <span className="ml-1 opacity-0 group-hover/pd:opacity-50 transition-opacity text-[9px]">✏️</span>
                                         </span>
@@ -4984,13 +5162,13 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                         {["Post", "Reel", "Story", "Carousel"].map(o => <option key={o} value={o}>{o}</option>)}
                                       </select>
                                     ) : (
-                                      <span onClick={e => startEdit(e, 'type', item.type)} className={cn("mx-auto px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest border rounded-full block text-center max-w-[90px] cursor-pointer hover:opacity-80", getCalTypeColor(item.type))} title="Click to change">{item.type}</span>
+                                      <span onClick={e => startEdit(e, 'type', item.type)} className={cn("mx-auto px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-widest border rounded-full block text-center max-w-[90px] cursor-pointer hover:opacity-80", getCalTypeColor(item.type))} title="Click to change">{item.type}</span>
                                     )}
                                   </td>
 
                                   {/* Topic / Concept */}
                                   <td className={cn("py-2 px-5 text-center min-w-[200px]", isExpanded ? "max-w-none" : "max-w-[240px]")}>
-                                    <InlineText field="topic" value={item.topic} placeholder="Enter topic..." cls={cn("font-bold text-foreground leading-normal", isExpanded ? "" : "line-clamp-1")} />
+                                    <InlineText field="topic" value={item.topic} placeholder="Enter topic..." cls={cn("font-medium text-foreground leading-normal", isExpanded ? "" : "line-clamp-1")} />
                                     <InlineText field="concept" value={item.concept} placeholder="+ concept" cls={cn("text-muted-foreground mt-0.5 leading-normal text-[11px]", isExpanded ? "" : "line-clamp-1")} />
                                     {isEd('reference') ? (
                                       <input
@@ -5037,7 +5215,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
                                   {/* Brand Person */}
                                   <td className="py-2 px-5 text-center whitespace-nowrap">
-                                    <InlineText field="_assignedTo" value={item.brand_person_details?.employee_name || (item.assignedTo || []).join(", ")} placeholder="Unassigned" cls="text-foreground font-bold text-[13px]" />
+                                    <InlineText field="_assignedTo" value={item.brand_person_details?.employee_name || (item.assignedTo || []).join(", ")} placeholder="Unassigned" cls="text-foreground font-medium text-[13px]" />
                                   </td>
 
                                   {/* Script */}
@@ -5123,7 +5301,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                         {["To Do", "In Progress", "Pending Approval", "Approved", "Published"].map(o => <option key={o} value={o}>{o}</option>)}
                                       </select>
                                     ) : (
-                                      <span onClick={e => startEdit(e, 'status', item.status)} className={cn("mx-auto px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider block text-center max-w-[110px] cursor-pointer hover:opacity-80", getCalStatusColor(item.status))} title="Click to change status">{item.status}</span>
+                                      <span onClick={e => startEdit(e, 'status', item.status)} className={cn("mx-auto px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider block text-center max-w-[110px] cursor-pointer hover:opacity-80", getCalStatusColor(item.status))} title="Click to change status">{item.status}</span>
                                     )}
                                   </td>
 
@@ -8824,25 +9002,43 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                           });
                         }}
                       />
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Category <span className="text-red-500">*</span></label>
-                          <Select 
-                            value={editingProject.category || "Creative"}
-                            onValueChange={(val) => setEditingProject({...editingProject, category: val})}
-                          >
-                            <SelectTrigger className={cn("w-full h-[46px] px-4 bg-muted/50 border rounded-xl text-sm font-medium", showEditProjectErrors && !editingProject.category ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}>
-                              <SelectValue placeholder="Select Category" />
-                            </SelectTrigger>
-                            <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
-                              {FIXED_DEPARTMENTS.map(cat => (
-                                <SelectItem key={cat} value={cat} className="text-sm font-medium rounded-lg cursor-pointer">
-                                  {cat}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                      <div>
+                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 flex items-center justify-between">
+                          <span>Departments / Categories <span className="text-red-500">*</span></span>
+                          <span className="text-[10px] text-muted-foreground font-normal">Select one or more</span>
+                        </label>
+                        <div className="flex flex-wrap gap-2 pt-0.5">
+                          {FIXED_DEPARTMENTS.map(cat => {
+                            const selectedDepts = parseDepartments(editingProject.category);
+                            const isSelected = selectedDepts.includes(cat);
+                            return (
+                              <button
+                                key={cat}
+                                type="button"
+                                onClick={() => {
+                                  let next: string[];
+                                  if (isSelected) {
+                                    next = selectedDepts.filter(d => d !== cat);
+                                    if (next.length === 0) next = [cat];
+                                  } else {
+                                    next = [...selectedDepts, cat];
+                                  }
+                                  setEditingProject({...editingProject, category: next.join(", ")});
+                                }}
+                                className={cn(
+                                  "px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer",
+                                  isSelected
+                                    ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                                    : "bg-muted/40 text-muted-foreground border-border hover:bg-muted"
+                                )}
+                              >
+                                {cat} {isSelected ? "✓" : "+"}
+                              </button>
+                            );
+                          })}
                         </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Status <span className="text-red-500">*</span></label>
                           <Select 
@@ -8883,16 +9079,13 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         </div>
                         <div>
                           <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 flex justify-between">
-                            <span>Progress</span>
-                            <span className="text-foreground">{editingProject.progress}%</span>
+                            <span>Dynamic Progress</span>
+                            <span className="text-primary font-black">{editingProject.progress}%</span>
                           </label>
-                          <input 
-                            type="range" 
-                            min="0" max="100" 
-                            value={editingProject.progress}
-                            onChange={(e) => setEditingProject({...editingProject, progress: parseInt(e.target.value)})}
-                            className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary mt-3"
-                          />
+                          <div className="w-full h-2 bg-muted rounded-full overflow-hidden mt-3 border border-border/40">
+                            <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${editingProject.progress}%` }} />
+                          </div>
+                          <span className="text-[10px] text-muted-foreground/60 italic block mt-1">Calculated dynamically from timeline & tasks</span>
                         </div>
                       </div>
                       {(editingProject.category === "Creative" || editingProject.category === "Digital Marketing") && (
@@ -8965,11 +9158,11 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     <>
                       <div className="space-y-2">
                         <label className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">Project Budget</label>
-                        <input type="text" value={editingProject.budget || ""} onChange={(e) => setEditingProject({...editingProject, budget: e.target.value})} placeholder="e.g. ₹10,000" className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium" />
+                        <input type="text" value={editingProject.budget || ""} onChange={(e) => setEditingProject({...editingProject, budget: e.target.value.replace(/[^0-9]/g, "")})} placeholder="e.g. 10000" className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium" />
                       </div>
                       <div className="space-y-2">
                         <label className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">Amount Received</label>
-                        <input type="text" value={editingProject.amountReceived || ""} onChange={(e) => setEditingProject({...editingProject, amountReceived: e.target.value})} placeholder="e.g. ₹5,000" className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium" />
+                        <input type="text" value={editingProject.amountReceived || ""} onChange={(e) => setEditingProject({...editingProject, amountReceived: e.target.value.replace(/[^0-9]/g, "")})} placeholder="e.g. 5000" className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium" />
                       </div>
                       <div className="space-y-2">
                         <label className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">Next Payment Date</label>
@@ -9556,25 +9749,43 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all resize-none"
                       />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Category <span className="text-red-500">*</span></label>
-                        <Select 
-                          value={newProjectCategory || "Creative"} 
-                          onValueChange={(val) => setNewProjectCategory(val)}
-                        >
-                          <SelectTrigger className={cn("w-full h-[42px] px-4 bg-muted/50 border rounded-xl text-sm font-medium", showNewProjectErrors && !newProjectCategory ? "border-red-500 ring-1 ring-red-500" : "border-border")}>
-                            <SelectValue placeholder="Select Category" />
-                          </SelectTrigger>
-                          <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
-                            {FIXED_DEPARTMENTS.map(cat => (
-                              <SelectItem key={cat} value={cat} className="text-sm font-medium rounded-lg cursor-pointer">
-                                {cat}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                    <div className="space-y-2">
+                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider flex items-center justify-between">
+                        <span>Departments / Categories <span className="text-red-500">*</span></span>
+                        <span className="text-[10px] text-muted-foreground font-normal">Select one or more</span>
+                      </label>
+                      <div className="flex flex-wrap gap-2 pt-0.5">
+                        {FIXED_DEPARTMENTS.map(cat => {
+                          const selectedDepts = parseDepartments(newProjectCategory);
+                          const isSelected = selectedDepts.includes(cat);
+                          return (
+                            <button
+                              key={cat}
+                              type="button"
+                              onClick={() => {
+                                let next: string[];
+                                if (isSelected) {
+                                  next = selectedDepts.filter(d => d !== cat);
+                                  if (next.length === 0) next = [cat];
+                                } else {
+                                  next = [...selectedDepts, cat];
+                                }
+                                setNewProjectCategory(next.join(", "));
+                              }}
+                              className={cn(
+                                "px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer",
+                                isSelected
+                                  ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                                  : "bg-muted/40 text-muted-foreground border-border hover:bg-muted"
+                              )}
+                            >
+                              {cat} {isSelected ? "✓" : "+"}
+                            </button>
+                          );
+                        })}
                       </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Priority</label>
                         <Select value={newProjectPriority} onValueChange={(val) => setNewProjectPriority(val as any)}>
@@ -9664,11 +9875,11 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   <>
                     <div className="space-y-2">
                       <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Project Budget</label>
-                      <input type="text" value={newProjectBudget} onChange={(e) => setNewProjectBudget(e.target.value)} placeholder="e.g. ₹10,000" className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
+                      <input type="text" value={newProjectBudget} onChange={(e) => setNewProjectBudget(e.target.value.replace(/[^0-9]/g, ""))} placeholder="e.g. 10000" className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
                     </div>
                     <div className="space-y-2">
                       <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Amount Received</label>
-                      <input type="text" value={newProjectAmountReceived} onChange={(e) => setNewProjectAmountReceived(e.target.value)} placeholder="e.g. ₹5,000" className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
+                      <input type="text" value={newProjectAmountReceived} onChange={(e) => setNewProjectAmountReceived(e.target.value.replace(/[^0-9]/g, ""))} placeholder="e.g. 5000" className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
                     </div>
                     <div className="space-y-2">
                       <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Next Payment Date</label>
@@ -10021,11 +10232,11 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     <>
                       <div className="space-y-2">
                         <label className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">Project Budget</label>
-                        <input type="text" value={editingProject.budget || ""} onChange={(e) => setEditingProject({...editingProject, budget: e.target.value})} placeholder="e.g. ₹10,000" className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium" />
+                        <input type="text" value={editingProject.budget || ""} onChange={(e) => setEditingProject({...editingProject, budget: e.target.value.replace(/[^0-9]/g, "")})} placeholder="e.g. 10000" className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium" />
                       </div>
                       <div className="space-y-2">
                         <label className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">Amount Received</label>
-                        <input type="text" value={editingProject.amountReceived || ""} onChange={(e) => setEditingProject({...editingProject, amountReceived: e.target.value})} placeholder="e.g. ₹5,000" className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium" />
+                        <input type="text" value={editingProject.amountReceived || ""} onChange={(e) => setEditingProject({...editingProject, amountReceived: e.target.value.replace(/[^0-9]/g, "")})} placeholder="e.g. 5000" className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium" />
                       </div>
                       <div className="space-y-2">
                         <label className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">Next Payment Date</label>

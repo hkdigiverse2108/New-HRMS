@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { 
   X, Plus, Filter, LayoutGrid, List as ListIcon, MoreHorizontal, Calendar, Clock, 
   CheckCircle2, AlertCircle, Hourglass, ArrowRightLeft, RefreshCw, Zap, Trash2, 
-  Search, ShieldAlert, Check, ChevronDown, UserCheck, Flame, Repeat, Info, History
+  Search, ShieldAlert, Check, ChevronDown, UserCheck, Flame, Repeat, Info, History, ExternalLink
 } from "lucide-react";
 import { SearchInput } from "@/components/common/SearchInput";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -68,9 +68,11 @@ interface BackendTask {
     details?: string;
   }>;
   project_details?: any;
+  project_id?: string;
   content_item_details?: any;
   content_item_id?: string;
   task_category?: string;
+  department?: string;
   is_deleted?: boolean;
 }
 
@@ -102,6 +104,7 @@ interface TaskItem {
   taskCategory: string;
   contentItemId: string;
   isAuto: boolean;
+  department?: string;
   rawBackend: BackendTask;
 }
 
@@ -124,7 +127,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     upcoming: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
-  const [employees, setEmployees] = useState<Array<{ id: string; name: string; avatar: string; role?: string }>>([]);
+  const [employees, setEmployees] = useState<Array<{ id: string; name: string; avatar: string; role?: string; department?: string }>>([]);
 
   const [view, setView] = useState<"board" | "list">("list");
   const [searchQuery, setSearchQuery] = useState("");
@@ -134,6 +137,12 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   const [timeframeFilter, setTimeframeFilter] = useState<TimeframeFilter>("all");
   // K15: category filter (transcript — category field)
   const [categoryFilter, setCategoryFilter] = useState<string>("All");
+
+  // Phase 2: TL / Head / Management My Tasks vs All Tasks + Dept & Person Filter
+  const [mainViewMode, setMainViewMode] = useState<"my_tasks" | "all_tasks">("all_tasks");
+  const [departmentFilter, setDepartmentFilter] = useState<string>("All");
+  const [personFilter, setPersonFilter] = useState<string>("All");
+
   const taskCategories = useMemo(() => {
     const s = new Set<string>();
     tasks.forEach(t => { if (t.taskCategory) s.add(t.taskCategory); });
@@ -150,6 +159,32 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   const [taskFormAssignee, setTaskFormAssignee] = useState("");
   const [taskFormRecurrence, setTaskFormRecurrence] = useState("none");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (isNew) {
+      setEditingTaskId(null);
+      setTaskFormTitle("");
+      setTaskFormDesc("");
+      setTaskFormPriority("Medium");
+      setTaskFormDueDate("");
+      setTaskFormAssignee(employees[0]?.id || "");
+      setIsNewTaskOpen(true);
+    }
+  }, [isNew, employees]);
+
+  useEffect(() => {
+    const handleOpenNewTask = () => {
+      setEditingTaskId(null);
+      setTaskFormTitle("");
+      setTaskFormDesc("");
+      setTaskFormPriority("Medium");
+      setTaskFormDueDate("");
+      setTaskFormAssignee(employees[0]?.id || "");
+      setIsNewTaskOpen(true);
+    };
+    window.addEventListener("hrms:open-new-task", handleOpenNewTask);
+    return () => window.removeEventListener("hrms:open-new-task", handleOpenNewTask);
+  }, [employees]);
 
   // Quick Assign state
   const [showQuickAssign, setShowQuickAssign] = useState(false);
@@ -201,6 +236,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
             name,
             avatar: emp.profile_picture || emp.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(name)}`,
             role: emp.work_details?.designation || emp.role || "Employee",
+            department: emp.work_details?.department || emp.department || "General",
           };
         });
         setEmployees(mapped);
@@ -220,6 +256,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
             name: e.name || `${e.firstName || ""} ${e.lastName || ""}`.trim() || "Employee",
             avatar: e.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(e.name || "User")}`,
             role: e.designation || e.role || "Employee",
+            department: e.department || e.work_details?.department || "General",
           }));
           setEmployees(mapped);
         } catch {}
@@ -299,6 +336,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
             taskCategory: t.task_category || "General",
             contentItemId: String(t.content_item_id || ""),
             isAuto: Boolean(t.content_item_id),
+            department: t.department || "",
             rawBackend: t,
           };
         });
@@ -330,6 +368,29 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     fetchTasksData();
   }, [fetchEmployees, fetchTasksData]);
 
+  // Employee Map by ID
+  const empMap = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; avatar: string; role?: string; department?: string }>();
+    employees.forEach((e) => map.set(e.id, e));
+    return map;
+  }, [employees]);
+
+  // All Unique Departments
+  const departmentList = useMemo(() => {
+    const deptSet = new Set<string>();
+    employees.forEach((e) => {
+      if (e.department && e.department.trim()) {
+        deptSet.add(e.department.trim());
+      }
+    });
+    tasks.forEach((t) => {
+      if (t.department && t.department.trim()) deptSet.add(t.department.trim());
+      if (t.rawBackend?.department && t.rawBackend.department.trim()) deptSet.add(t.rawBackend.department.trim());
+    });
+    ["Creative", "Development", "SMM", "Video Editing", "Sales", "HR"].forEach((d) => deptSet.add(d));
+    return ["All", ...Array.from(deptSet).sort()];
+  }, [employees, tasks]);
+
   // Pending transfers incoming count
   const pendingIncomingTransfersCount = useMemo(() => {
     return tasks.filter(
@@ -339,6 +400,41 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
         String(t.transferRequest.requested_to) === currentUserId
     ).length;
   }, [tasks, currentUserId]);
+
+  // Dynamically compute stats for "My Tasks" mode vs overall team stats
+  const displayStats = useMemo(() => {
+    if (mainViewMode === "my_tasks") {
+      const myTasks = tasks.filter((t) => t.assignedToId === currentUserId);
+      const todayStart = startOfDay(new Date());
+      let todo = 0, inprogress = 0, inreview = 0, completed = 0, today = 0, overdue = 0, upcoming = 0;
+      myTasks.forEach((t) => {
+        if (t.status === "Todo") todo++;
+        else if (t.status === "In Progress") inprogress++;
+        else if (t.status === "In Review") inreview++;
+        else if (t.status === "Done") completed++;
+
+        if (t.dueDate) {
+          try {
+            const d = new Date(t.dueDate);
+            if (isToday(d)) today++;
+            if (isBefore(d, todayStart) && t.status !== "Done") overdue++;
+            if (isAfter(d, todayStart) && t.status !== "Done") upcoming++;
+          } catch {}
+        }
+      });
+      return {
+        total: myTasks.length,
+        todo,
+        inprogress,
+        inreview,
+        completed,
+        today,
+        overdue,
+        upcoming,
+      };
+    }
+    return stats;
+  }, [mainViewMode, tasks, currentUserId, stats]);
 
   // Filtering Logic
   const filteredTasks = useMemo(() => {
@@ -355,20 +451,41 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
         if (!matchTitle && !matchDesc && !matchAssignee && !matchAssigner) return false;
       }
 
-      // 2. Scope Filter
-      if (scopeFilter === "my_tasks") {
+      // 2. Main View Mode & Scope Filter
+      if (mainViewMode === "my_tasks") {
         if (task.assignedToId !== currentUserId) return false;
-      } else if (scopeFilter === "assigned_by_me") {
-        if (task.assignedById !== currentUserId) return false;
-      } else if (scopeFilter === "transfers") {
-        const isPendingToMe =
-          task.transferRequest &&
-          task.transferRequest.status === "pending" &&
-          String(task.transferRequest.requested_to) === currentUserId;
-        const hasHistoryWithMe = task.transferHistory?.some(
-          (h) => String(h.to_employee) === currentUserId || String(h.from_employee) === currentUserId
-        );
-        if (!isPendingToMe && !hasHistoryWithMe) return false;
+      } else {
+        // All Tasks Mode
+        if (scopeFilter === "my_tasks") {
+          if (task.assignedToId !== currentUserId) return false;
+        } else if (scopeFilter === "assigned_by_me") {
+          if (task.assignedById !== currentUserId) return false;
+        } else if (scopeFilter === "transfers") {
+          const isPendingToMe =
+            task.transferRequest &&
+            task.transferRequest.status === "pending" &&
+            String(task.transferRequest.requested_to) === currentUserId;
+          const hasHistoryWithMe = task.transferHistory?.some(
+            (h) => String(h.to_employee) === currentUserId || String(h.from_employee) === currentUserId
+          );
+          if (!isPendingToMe && !hasHistoryWithMe) return false;
+        }
+
+        // Department Filter
+        if (departmentFilter !== "All") {
+          const assignee = empMap.get(task.assignedToId);
+          const taskDept = (task.department || task.rawBackend?.department || assignee?.department || "").toLowerCase().trim();
+          if (!taskDept || taskDept !== departmentFilter.toLowerCase().trim()) {
+            return false;
+          }
+        }
+
+        // Person Filter
+        if (personFilter !== "All") {
+          if (task.assignedToId !== personFilter) {
+            return false;
+          }
+        }
       }
 
       // 3. Status Filter
@@ -392,7 +509,9 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
         try {
           const taskDate = new Date(task.dueDate);
           if (timeframeFilter === "today") {
-            if (!isToday(taskDate)) return false;
+            const isDueToday = isToday(taskDate);
+            const isOverdue = isBefore(taskDate, todayStart) && task.status !== "Done";
+            if (!isDueToday && !isOverdue) return false;
           } else if (timeframeFilter === "overdue") {
             if (!isBefore(taskDate, todayStart) || task.status === "Done") return false;
           } else if (timeframeFilter === "upcoming") {
@@ -404,8 +523,31 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
       }
 
       return true;
+    }).sort((a, b) => {
+      // If Today's Work is selected, always show overdue tasks first at the top
+      if (timeframeFilter === "today") {
+        const aDate = a.dueDate ? new Date(a.dueDate) : null;
+        const bDate = b.dueDate ? new Date(b.dueDate) : null;
+        const aOverdue = aDate && isBefore(aDate, todayStart) && a.status !== "Done" ? 1 : 0;
+        const bOverdue = bDate && isBefore(bDate, todayStart) && b.status !== "Done" ? 1 : 0;
+        if (aOverdue !== bOverdue) return bOverdue - aOverdue;
+      }
+      return 0;
     });
-  }, [tasks, searchQuery, scopeFilter, statusFilter, priorityFilter, timeframeFilter, categoryFilter, currentUserId]);
+  }, [
+    tasks,
+    searchQuery,
+    mainViewMode,
+    scopeFilter,
+    departmentFilter,
+    personFilter,
+    statusFilter,
+    priorityFilter,
+    timeframeFilter,
+    categoryFilter,
+    currentUserId,
+    empMap,
+  ]);
 
   const { items: sortedTasks, requestSort, sortConfig } = useSortableData(filteredTasks);
 
@@ -513,6 +655,13 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
       };
 
       if (editingTaskId) {
+        const existingTask = tasks.find((t) => t.id === editingTaskId);
+        if (existingTask?.isAuto) {
+          toast.error("Auto-assigned tasks linked to Content Calendar cannot be edited directly from Tasks. Redirecting to Content Calendar...");
+          setIsSubmitting(false);
+          openEditModal(existingTask);
+          return;
+        }
         await api.put(`/tasks/${editingTaskId}`, payload);
         toast.success("Task updated successfully!");
       } else {
@@ -664,6 +813,26 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   // Open Edit Modal
   const openEditModal = (task: TaskItem, e?: React.MouseEvent) => {
     e?.stopPropagation();
+    if (task.isAuto) {
+      toast.info("This task is linked to Content Calendar. Redirecting to CC...");
+      const projId =
+        task.rawBackend?.project_id ||
+        (typeof task.projectDetails === "object"
+          ? task.projectDetails?.id || task.projectDetails?._id
+          : task.projectDetails);
+      if (projId) {
+        localStorage.setItem("hrms_selected_project_id", String(projId));
+        if (task.contentItemId) {
+          localStorage.setItem("hrms_cc_highlight_id", task.contentItemId);
+        }
+      }
+      if (setActive) {
+        setActive("/work/projects");
+      } else {
+        window.location.hash = "/work/projects";
+      }
+      return;
+    }
     setEditingTaskId(task.id);
     setTaskFormTitle(task.title);
     setTaskFormDesc(task.description);
@@ -909,7 +1078,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
         {[
           {
             label: "Total Tasks",
-            count: stats.total,
+            count: displayStats.total,
             isActive: timeframeFilter === "all" && statusFilter === "All",
             onClick: () => {
               setTimeframeFilter("all");
@@ -920,7 +1089,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
           },
           {
             label: "Today's Work",
-            count: stats.today,
+            count: (displayStats.today || 0) + (displayStats.overdue || 0),
             isActive: timeframeFilter === "today",
             onClick: () => {
               setTimeframeFilter("today");
@@ -930,8 +1099,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
             icon: Calendar,
           },
           {
-            label: "Pending / Overdue",
-            count: stats.overdue,
+            label: "Client Issue",
+            count: displayStats.overdue,
             isActive: timeframeFilter === "overdue",
             onClick: () => {
               setTimeframeFilter("overdue");
@@ -942,7 +1111,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
           },
           {
             label: "Upcoming Work",
-            count: stats.upcoming,
+            count: displayStats.upcoming,
             isActive: timeframeFilter === "upcoming",
             onClick: () => {
               setTimeframeFilter("upcoming");
@@ -953,7 +1122,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
           },
           {
             label: "In Review",
-            count: stats.inreview,
+            count: displayStats.inreview,
             isActive: statusFilter === "In Review",
             onClick: () => {
               setStatusFilter("In Review");
@@ -964,7 +1133,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
           },
           {
             label: "Completed",
-            count: stats.completed,
+            count: displayStats.completed,
             isActive: statusFilter === "Done",
             onClick: () => {
               setStatusFilter("Done");
@@ -996,68 +1165,140 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
         })}
       </div>
 
-      {/* Scope Filter Tabs & Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-muted/20 border border-border/50 rounded-2xl p-2 shrink-0">
-        <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar">
-          {[
-            { id: "all" as const, label: "All Tasks" },
-            { id: "my_tasks" as const, label: "Assigned to Me" },
-            { id: "assigned_by_me" as const, label: "Assigned by Me" },
-            {
-              id: "transfers" as const,
-              label: "Transfers",
-              badge: pendingIncomingTransfersCount > 0 ? pendingIncomingTransfersCount : undefined,
-            },
-          ].map((tab) => (
+      {/* Scope Filter Tabs & Controls (My Tasks vs All Tasks + Dept & Person Filters) */}
+      <div className="flex flex-col gap-2.5 bg-muted/20 border border-border/50 rounded-2xl p-2.5 shrink-0">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {/* Main View Mode Switcher: My Tasks vs All Tasks */}
+          <div className="flex items-center gap-1 p-1 bg-muted/50 dark:bg-muted/30 rounded-xl border border-border/60">
             <button
-              key={tab.id}
-              onClick={() => setScopeFilter(tab.id)}
+              type="button"
+              onClick={() => {
+                setMainViewMode("my_tasks");
+                setScopeFilter("my_tasks");
+              }}
               className={cn(
-                "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap",
-                scopeFilter === tab.id
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                "px-3.5 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5",
+                mainViewMode === "my_tasks"
+                  ? "bg-background text-primary shadow-sm ring-1 ring-border/60"
+                  : "text-muted-foreground hover:text-foreground"
               )}
             >
-              <span>{tab.label}</span>
-              {tab.badge && (
-                <span className="w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] flex items-center justify-center font-black animate-pulse">
-                  {tab.badge}
-                </span>
-              )}
+              <span>👤 My Tasks</span>
             </button>
-          ))}
+            <button
+              type="button"
+              onClick={() => {
+                setMainViewMode("all_tasks");
+                setScopeFilter("all");
+              }}
+              className={cn(
+                "px-3.5 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5",
+                mainViewMode === "all_tasks"
+                  ? "bg-background text-primary shadow-sm ring-1 ring-border/60"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <span>👥 All Tasks</span>
+            </button>
+          </div>
+
+          {/* Sub-Tabs when in All Tasks Mode */}
+          {mainViewMode === "all_tasks" && (
+            <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar">
+              {[
+                { id: "all" as const, label: "All Team Tasks" },
+                { id: "assigned_by_me" as const, label: "Assigned by Me" },
+                {
+                  id: "transfers" as const,
+                  label: "Transfers",
+                  badge: pendingIncomingTransfersCount > 0 ? pendingIncomingTransfersCount : undefined,
+                },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setScopeFilter(tab.id)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap",
+                    scopeFilter === tab.id
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  )}
+                >
+                  <span>{tab.label}</span>
+                  {tab.badge && (
+                    <span className="w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] flex items-center justify-center font-black animate-pulse">
+                      {tab.badge}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Priority Filter */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-bold text-muted-foreground uppercase">Priority:</span>
-            <SearchableSelect
-              value={priorityFilter}
-              onChange={(val) => setPriorityFilter(val as any)}
-              options={[
-                { label: "All", value: "All" },
-                { label: "High", value: "High" },
-                { label: "Medium", value: "Medium" },
-                { label: "Low", value: "Low" },
-              ]}
-              className="w-[110px] h-[32px] text-xs font-semibold"
-            />
+        {/* Filters Row: Department & Person (in All Tasks mode), Priority, Category, Reset */}
+        <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1.5 border-t border-border/40">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Department Filter (Visible in All Tasks mode) */}
+            {mainViewMode === "all_tasks" && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold text-muted-foreground uppercase">Dept:</span>
+                <SearchableSelect
+                  value={departmentFilter}
+                  onChange={(val) => setDepartmentFilter(val)}
+                  options={departmentList.map(d => ({ label: d, value: d }))}
+                  placeholder="Department"
+                  className="w-[125px] h-[32px] text-xs font-semibold"
+                />
+              </div>
+            )}
+
+            {/* Person Filter (Visible in All Tasks mode) */}
+            {mainViewMode === "all_tasks" && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold text-muted-foreground uppercase">Person:</span>
+                <SearchableSelect
+                  value={personFilter}
+                  onChange={(val) => setPersonFilter(val)}
+                  options={[
+                    { label: "All Members", value: "All" },
+                    ...employees.map(e => ({ label: e.name, value: e.id }))
+                  ]}
+                  placeholder="Person"
+                  className="w-[145px] h-[32px] text-xs font-semibold"
+                />
+              </div>
+            )}
+
+            {/* Priority Filter */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase">Priority:</span>
+              <SearchableSelect
+                value={priorityFilter}
+                onChange={(val) => setPriorityFilter(val as any)}
+                options={[
+                  { label: "All", value: "All" },
+                  { label: "High", value: "High" },
+                  { label: "Medium", value: "Medium" },
+                  { label: "Low", value: "Low" },
+                ]}
+                className="w-[100px] h-[32px] text-xs font-semibold"
+              />
+            </div>
+
+            {/* Category Filter */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase">Category:</span>
+              <SearchableSelect
+                value={categoryFilter}
+                onChange={(val) => setCategoryFilter(val)}
+                options={taskCategories.map(c => ({ label: c, value: c }))}
+                className="w-[120px] h-[32px] text-xs font-semibold"
+              />
+            </div>
           </div>
 
-          {/* K15: Category Filter */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-bold text-muted-foreground uppercase">Category:</span>
-            <SearchableSelect
-              value={categoryFilter}
-              onChange={(val) => setCategoryFilter(val)}
-              options={taskCategories.map(c => ({ label: c, value: c }))}
-              className="w-[130px] h-[32px] text-xs font-semibold"
-            />
-          </div>
-
-          {(statusFilter !== "All" || priorityFilter !== "All" || timeframeFilter !== "all" || scopeFilter !== "all" || categoryFilter !== "All") && (
+          {(statusFilter !== "All" || priorityFilter !== "All" || timeframeFilter !== "all" || scopeFilter !== "all" || categoryFilter !== "All" || departmentFilter !== "All" || personFilter !== "All" || mainViewMode !== "all_tasks") && (
             <button
               onClick={() => {
                 setStatusFilter("All");
@@ -1065,9 +1306,12 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                 setTimeframeFilter("all");
                 setScopeFilter("all");
                 setCategoryFilter("All");
+                setDepartmentFilter("All");
+                setPersonFilter("All");
+                setMainViewMode("all_tasks");
                 setSearchQuery("");
               }}
-              className="text-xs font-bold text-primary hover:underline px-2"
+              className="text-xs font-bold text-primary hover:underline px-2 ml-auto"
             >
               Reset Filters
             </button>
@@ -1152,9 +1396,15 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                                   </button>
                                   <button
                                     onClick={() => openEditModal(task)}
-                                    className="w-full text-left px-2.5 py-1.5 text-xs font-bold hover:bg-muted rounded-lg"
+                                    className="w-full text-left px-2.5 py-1.5 text-xs font-bold hover:bg-muted rounded-lg flex items-center gap-1.5"
                                   >
-                                    Edit Task
+                                    {task.isAuto ? (
+                                      <>
+                                        <ExternalLink className="w-3.5 h-3.5 text-primary" /> View in CC
+                                      </>
+                                    ) : (
+                                      "Edit Task"
+                                    )}
                                   </button>
                                   <button
                                     onClick={() => {
@@ -1249,10 +1499,23 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
                           {/* Footer Info */}
                           <div className="flex items-center justify-between border-t border-border/40 pt-2 text-[10px]">
-                            <div className="flex items-center gap-1.5 text-muted-foreground font-semibold">
-                              <Calendar className="w-3 h-3" />
-                              {task.dueDate || "No due date"}
-                            </div>
+                            {(() => {
+                              const isOverdue = Boolean(task.dueDate && isBefore(new Date(task.dueDate), startOfDay(new Date())) && task.status !== "Done");
+                              if (isOverdue) {
+                                return (
+                                  <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 font-bold text-[10px]" title="Overdue task!">
+                                    <AlertCircle className="w-3 h-3 text-rose-600 dark:text-rose-400 shrink-0" />
+                                    <span>{task.dueDate} (Overdue)</span>
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div className="flex items-center gap-1.5 text-muted-foreground font-semibold">
+                                  <Calendar className="w-3 h-3" />
+                                  {task.dueDate || "No due date"}
+                                </div>
+                              );
+                            })()}
                             <div className="flex items-center gap-1.5">
                               <img
                                 src={task.assignedToAvatar}
@@ -1305,13 +1568,22 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                     task.status === "In Review" &&
                     (isAdminOrHR || task.assignedById === currentUserId);
 
+                  const isTaskOverdue = Boolean(task.dueDate && isBefore(new Date(task.dueDate), startOfDay(new Date())) && task.status !== "Done");
+
                   return (
                     <tr
                       key={task.id}
-                      onClick={() => setInspectingTask(task)}
+                      onClick={() => {
+                        if (task.isAuto) {
+                          openEditModal(task);
+                        } else {
+                          setInspectingTask(task);
+                        }
+                      }}
                       className={cn(
                         "hover:bg-muted/30 transition-colors group cursor-pointer",
-                        isPendingTransferToMe && "bg-amber-500/5"
+                        isPendingTransferToMe && "bg-amber-500/5",
+                        isTaskOverdue && "bg-rose-500/[0.04] hover:bg-rose-500/[0.08]"
                       )}
                     >
                       {/* Title & Desc */}
@@ -1330,9 +1602,18 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                               </span>
                             )}
                             {task.isAuto && (
-                              <span className="text-[9px] font-bold bg-muted text-muted-foreground px-1.5 py-0.5 rounded" title="Auto-generated — delete na thay">
-                                Auto
-                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openEditModal(task);
+                                }}
+                                className="inline-flex items-center gap-1 text-[9px] font-bold bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 rounded hover:bg-primary/20 transition-colors"
+                                title="Auto-assigned from Content Calendar — Click to open in CC"
+                              >
+                                <span>CC Synced</span>
+                                <ExternalLink className="w-2.5 h-2.5" />
+                              </button>
                             )}
                           </div>
                           {task.description && (
@@ -1383,11 +1664,18 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                       </td>
 
                       {/* Due Date */}
-                      <td className="px-5 py-4 whitespace-nowrap text-muted-foreground font-semibold">
-                        <div className="flex items-center gap-1.5">
-                          <Calendar className="w-3.5 h-3.5 opacity-60" />
-                          <span>{task.dueDate || "No due date"}</span>
-                        </div>
+                      <td className="px-5 py-4 whitespace-nowrap font-semibold">
+                        {isTaskOverdue ? (
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 font-bold text-xs shadow-xs" title="Overdue Task!">
+                            <AlertCircle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
+                            <span>{task.dueDate} (Overdue)</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <Calendar className="w-3.5 h-3.5 opacity-60" />
+                            <span>{task.dueDate || "No due date"}</span>
+                          </div>
+                        )}
                       </td>
 
                       {/* Assigned To */}
@@ -1457,9 +1745,9 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                           <button
                             onClick={(e) => openEditModal(task, e)}
                             className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
-                            title="Edit task"
+                            title={task.isAuto ? "View in Content Calendar" : "Edit task"}
                           >
-                            <MoreHorizontal className="w-4 h-4" />
+                            {task.isAuto ? <ExternalLink className="w-4 h-4 text-primary" /> : <MoreHorizontal className="w-4 h-4" />}
                           </button>
 
                           {(isAdminOrHR || task.assignedById === currentUserId) && !task.isAuto && (
@@ -1755,7 +2043,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
             <div>
               <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 bg-muted/30">
                 <div className="space-y-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className={cn("text-[10px] font-black px-2 py-0.5 rounded-md uppercase border", getPriorityColor(inspectingTask.priority))}>
                       {inspectingTask.priority}
                     </span>
@@ -1765,6 +2053,11 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                     {inspectingTask.recurrence !== "none" && (
                       <span className="text-[10px] font-bold bg-muted px-2 py-0.5 rounded-md flex items-center gap-1">
                         <Repeat className="w-3 h-3" /> {inspectingTask.recurrence}
+                      </span>
+                    )}
+                    {inspectingTask.isAuto && (
+                      <span className="text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-md flex items-center gap-1">
+                        <ExternalLink className="w-3 h-3" /> Auto-Assigned (Content Calendar)
                       </span>
                     )}
                   </div>
@@ -1856,12 +2149,25 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                 >
                   <History className="w-3.5 h-3.5" /> View History
                 </button>
-                <button
-                  onClick={() => openEditModal(inspectingTask)}
-                  className="px-4 py-1.5 bg-card border border-border hover:bg-muted font-bold text-xs rounded-xl"
-                >
-                  Edit Task
-                </button>
+                {inspectingTask.isAuto ? (
+                  <button
+                    onClick={() => {
+                      const t = inspectingTask;
+                      setInspectingTask(null);
+                      openEditModal(t);
+                    }}
+                    className="px-4 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" /> View in CC
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => openEditModal(inspectingTask)}
+                    className="px-4 py-1.5 bg-card border border-border hover:bg-muted font-bold text-xs rounded-xl"
+                  >
+                    Edit Task
+                  </button>
+                )}
                 <button
                   onClick={() => setInspectingTask(null)}
                   className="px-4 py-1.5 bg-primary text-primary-foreground font-bold text-xs rounded-xl"

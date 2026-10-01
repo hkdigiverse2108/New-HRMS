@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { Check, X, Calendar, Clock, ChevronDown, CalendarDays, Activity, Plus, AlertCircle, RefreshCw } from "lucide-react";
+import { Check, X, Calendar, Clock, ChevronDown, CalendarDays, Activity, Plus, AlertCircle, RefreshCw, Upload, FileText, Trash2, Paperclip } from "lucide-react";
 import { DialogClose, Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { SearchableSelect } from "@/components/ui/select";
@@ -52,6 +52,7 @@ interface LeaveRequest {
   createdAt?: string | undefined;
   isConditional?: boolean | undefined;
   rejectionReason?: string | undefined;
+  attachment?: string | undefined;
 }
 
 const FALLBACK_REQUESTS: LeaveRequest[] = [
@@ -197,6 +198,9 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
   const [newEndDate, setNewEndDate] = useState("");
   const [newReason, setNewReason] = useState("");
   const [newIsConditional, setNewIsConditional] = useState(false);
+  const [attachmentUrl, setAttachmentUrl] = useState<string>("");
+  const [attachmentFileName, setAttachmentFileName] = useState<string>("");
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isAdminOrHR = user?.role === "Admin" || user?.role === "HR";
@@ -278,6 +282,7 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
             createdAt: item.created_at || item.applied_on || "",
             isConditional: item.day_type === "First Half" || item.day_type === "Second Half",
             rejectionReason: item.rejection_reason || undefined,
+            attachment: item.attachment || undefined,
           }));
           setRequests(mapped);
           if (tabStatus === "Pending") {
@@ -383,6 +388,18 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
     setRejectionReasonText("");
   };
 
+  const handleDeleteLeave = async (leaveId: string) => {
+    if (!window.confirm("Are you sure you want to cancel / delete this leave request?")) return;
+    try {
+      await api.delete(`/leaves/${leaveId}`);
+      toast.success("Leave request cancelled successfully");
+      fetchLeaves(activeTab);
+      fetchPendingCount();
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to cancel leave request");
+    }
+  };
+
   const handleAddLeave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStartDate || (!newEndDate && newDayType === "Full Day") || !newReason) {
@@ -418,12 +435,15 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
         duration_days: durationDays,
         reason: newReason,
         remarks: newIsConditional ? "Work from home requested" : undefined,
+        attachment: attachmentUrl || undefined,
       };
 
       const res = await api.post<any>("/leaves", payload);
 
       toast.success("Leave request submitted successfully (Pending review)");
       setIsAddOpen(false);
+      setAttachmentUrl("");
+      setAttachmentFileName("");
       fetchLeaves(activeTab);
       fetchPendingCount();
     } catch (err: any) {
@@ -541,7 +561,9 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
 
                   {/* Leave Type */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">Leave Type</label>
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
+                      Leave Type <span className="text-rose-500">*</span>
+                    </label>
                     <SearchableSelect
                       value={newLeaveType}
                       onChange={setNewLeaveType}
@@ -552,7 +574,9 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
 
                   {/* Day Type */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">Day Type</label>
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
+                      Day Type <span className="text-rose-500">*</span>
+                    </label>
                     <div className="grid grid-cols-3 gap-1 sm:gap-2">
                       {(["Full Day", "First Half", "Second Half"] as DayType[]).map((dtype) => (
                         <button
@@ -575,7 +599,7 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                   {/* Date Range or Single Date */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
-                      {newDayType === "Full Day" ? "Date Range (IST)" : "Leave Date (IST)"}
+                      {newDayType === "Full Day" ? "Date Range (IST)" : "Leave Date (IST)"} <span className="text-rose-500">*</span>
                     </label>
                     {newDayType === "Full Day" ? (
                       <DateRangeFilter
@@ -610,7 +634,9 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
 
                   {/* Reason */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">Reason</label>
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
+                      Reason <span className="text-rose-500">*</span>
+                    </label>
                     <textarea
                       required
                       value={newReason}
@@ -618,6 +644,73 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                       placeholder="Briefly describe the reason for taking leave..."
                       className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-muted/50 border border-border/50 rounded-xl text-xs sm:text-sm min-h-[80px] sm:min-h-[90px] resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium text-foreground"
                     />
+                  </div>
+
+                  {/* Attachment (Document / Medical Certificate / Image / PDF) */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
+                        Supporting Document / Certificate
+                        {(newLeaveType === "Sick Leave" || newLeaveType.toLowerCase().includes("medical")) && (
+                          <span className="text-rose-500 ml-1 font-black">* (Recommended)</span>
+                        )}
+                      </label>
+                      {attachmentUrl && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAttachmentUrl("");
+                            setAttachmentFileName("");
+                          }}
+                          className="text-[10px] font-bold text-rose-500 hover:underline"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    <label className="flex items-center justify-center gap-2 px-3 py-2.5 bg-muted/40 hover:bg-muted/70 border border-dashed border-border/80 rounded-xl cursor-pointer transition-colors text-xs font-medium text-foreground/80">
+                      <Upload className="w-4 h-4 text-primary" />
+                      <span className="truncate">
+                        {isUploadingDoc
+                          ? "Uploading document..."
+                          : attachmentFileName || "Attach Doctor Certificate / PDF / Image"}
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/*,.pdf,.doc,.docx"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          if (file.size > 25 * 1024 * 1024) {
+                            toast.error("File size cannot exceed 25MB");
+                            return;
+                          }
+                          try {
+                            setIsUploadingDoc(true);
+                            const safeName = file.name.replace(/[^\x00-\x7F]/g, "_") || "document.pdf";
+                            const uploadFile = safeName !== file.name ? new File([file], safeName, { type: file.type || "application/pdf" }) : file;
+                            const formData = new FormData();
+                            formData.append("file", uploadFile);
+
+                            const res: any = await api.post("/chat/upload", formData);
+                            const url = res?.url || res?.file_url;
+                            if (url) {
+                              setAttachmentUrl(url);
+                              setAttachmentFileName(file.name);
+                              toast.success("Document attached successfully!");
+                            } else {
+                              throw new Error("Upload failed");
+                            }
+                          } catch (err: any) {
+                            toast.error(err?.message || "Failed to upload document");
+                          } finally {
+                            setIsUploadingDoc(false);
+                          }
+                        }}
+                        disabled={isUploadingDoc}
+                      />
+                    </label>
                   </div>
 
                   {/* Optional WFH flag */}
@@ -740,10 +833,23 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                       </span>
                     </div>
 
-                    <div className="flex items-start gap-2 pt-1 border-t border-border/40">
+                    <div className="flex flex-col gap-1.5 pt-1 border-t border-border/40">
                       <p className="text-xs text-foreground/85 italic line-clamp-2 leading-relaxed">
                         "{request.reason}"
                       </p>
+                      {request.attachment && (
+                        <div>
+                          <a
+                            href={request.attachment}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors"
+                          >
+                            <Paperclip className="w-3.5 h-3.5" />
+                            <span>Attached Document</span>
+                          </a>
+                        </div>
+                      )}
                     </div>
 
                     {request.rejectionReason && (
@@ -818,19 +924,39 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                       </DropdownMenu>
                     )
                   ) : (
-                    /* Regular employee view-only badge */
-                    <span
-                      className={cn(
-                        "px-2.5 py-0.5 rounded text-[11px] font-black",
-                        request.status === "Approved"
-                          ? "bg-emerald-50 text-emerald-600"
-                          : request.status === "Rejected"
-                          ? "bg-rose-50 text-rose-600"
-                          : "bg-amber-50 text-amber-600"
+                    /* Regular employee view-only badge + cancel button for pending */
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={cn(
+                          "px-2.5 py-0.5 rounded text-[11px] font-black",
+                          request.status === "Approved"
+                            ? "bg-emerald-50 text-emerald-600"
+                            : request.status === "Rejected"
+                            ? "bg-rose-50 text-rose-600"
+                            : "bg-amber-50 text-amber-600"
+                        )}
+                      >
+                        {request.status}
+                      </span>
+                      {request.status === "Pending" && (
+                        <button
+                          onClick={() => handleDeleteLeave(request.id)}
+                          className="p-1 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-md transition-colors"
+                          title="Cancel Leave Request"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       )}
+                    </div>
+                  )}
+                  {isAdminOrHR && (
+                    <button
+                      onClick={() => handleDeleteLeave(request.id)}
+                      className="p-1 text-muted-foreground/60 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-md transition-colors"
+                      title="Delete Leave Request"
                     >
-                      {request.status}
-                    </span>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   )}
                 </div>
               </div>

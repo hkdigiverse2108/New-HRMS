@@ -22,6 +22,13 @@ export interface UserProfile {
   profile_photo?: string;
   avatar?: string;
   permissions?: Record<string, PermissionFlags>;
+  employee_id?: string;
+  employeeId?: string;
+  firstName?: string;
+  lastName?: string;
+  first_name?: string;
+  last_name?: string;
+  [key: string]: any;
 }
 
 interface AuthContextType {

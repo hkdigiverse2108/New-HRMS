@@ -488,9 +488,31 @@ export function AttendanceList() {
       return;
     }
 
+    // Build stable readable EMP-ID mapping for clean export (e.g. EMP-001, EMP-002)
+    const empIdToCodeMap = new Map<string, string>();
+    employees.forEach((emp: any, index: number) => {
+      const existingCode = emp.employee_id || emp.employeeId || emp.code;
+      if (existingCode && !/^[0-9a-f]{24}$/i.test(existingCode)) {
+        empIdToCodeMap.set(String(emp.id), String(existingCode).toUpperCase());
+      } else {
+        empIdToCodeMap.set(String(emp.id), `EMP-${String(index + 1).padStart(3, "0")}`);
+      }
+    });
+
+    const getCleanEmpId = (rawId: string) => {
+      if (!rawId) return "EMP-001";
+      if (empIdToCodeMap.has(rawId)) return empIdToCodeMap.get(rawId)!;
+      if (/^EMP-?\d+/i.test(rawId)) return rawId.toUpperCase();
+      const foundIdx = employees.findIndex((e: any) => String(e.id) === String(rawId));
+      if (foundIdx !== -1) {
+        return `EMP-${String(foundIdx + 1).padStart(3, "0")}`;
+      }
+      return `EMP-${rawId.slice(-4).toUpperCase()}`;
+    };
+
     const headers = ["Employee ID", "Name", "Role", "Department", "Date (IST)", "Status", "Check In", "Check Out", "Break Hours", "Total Hours", "Remarks"];
     const rows = filteredData.map((r) => [
-      `"${r.employeeId}"`,
+      `"${getCleanEmpId(r.employeeId)}"`,
       `"${r.employeeName}"`,
       `"${r.role}"`,
       `"${r.department}"`,

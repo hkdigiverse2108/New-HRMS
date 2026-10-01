@@ -31,6 +31,7 @@ function mapBackendToEmployee(be: any): Employee {
 
   return {
     id: String(be._id || be.id),
+    employeeId: be.employee_id || w.employee_id || (String(be.id || "").startsWith("EMP-") ? String(be.id) : ""),
     name: name,
     firstName: p.first_name || "",
     middleName: p.middle_name || "",

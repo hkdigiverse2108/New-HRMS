@@ -297,7 +297,18 @@ export default function SeatingArrangementPage() {
   const [modalStatus, setModalStatus] = useState<"available" | "allocated">("available");
   const [modalEmployeeId, setModalEmployeeId] = useState<string>("");
 
-  const isAdminOrHR = user?.role?.toLowerCase() === "admin" || user?.role?.toLowerCase() === "hr" || user?.designation?.toLowerCase() === 'hr' || user?.department?.toLowerCase() === 'hr';
+  const anyUser = user as any;
+  const userRole = String(anyUser?.role || anyUser?.work_details?.system_role || "Employee").toLowerCase();
+  const userDept = String(anyUser?.department || anyUser?.work_details?.department || "").toLowerCase();
+  const userDesig = String(anyUser?.designation || anyUser?.work_details?.designation || "").toLowerCase();
+
+  const isAdminOrHR = 
+    userRole === "admin" || 
+    userRole === "superadmin" || 
+    userRole === "hr" || 
+    userRole === "subadmin" ||
+    userDept === "hr" ||
+    userDesig.includes("hr");
 
   useEffect(() => {
     // Fetch seating arrangement from global database for all-employee sync
@@ -366,6 +377,10 @@ export default function SeatingArrangementPage() {
   };
 
   const handleAddDesk = () => {
+    if (!isAdminOrHR) {
+      toast.error("Access Denied: Only Admins or HR can add tables.");
+      return;
+    }
     const newId = Date.now();
     const newDesk = {
       id: newId,
@@ -403,6 +418,10 @@ export default function SeatingArrangementPage() {
   };
 
   const handleDeleteDesk = (deskId: number) => {
+    if (!isAdminOrHR) {
+      toast.error("Access Denied: Only Admins or HR can delete tables.");
+      return;
+    }
     const updatedDesks = desksState.filter(d => d.id !== deskId);
     setDesksState(updatedDesks);
     saveLayout(updatedDesks);
@@ -411,7 +430,7 @@ export default function SeatingArrangementPage() {
   };
 
   const handleDeskMouseDown = (e: React.MouseEvent, deskId: number) => {
-    if (!isLayoutEditMode) return;
+    if (!isAdminOrHR || !isLayoutEditMode) return;
     if (e.button !== 0) return; // left click only
     
     e.preventDefault();
@@ -633,11 +652,12 @@ export default function SeatingArrangementPage() {
   const checkIsMySeat = (employee: any) => {
     if (!employee || !user) return false;
     
-    const isIdMatch = employee.id === user.id || employee.employeeId === user.employeeId;
+    const anyUser = user as any;
+    const isIdMatch = employee.id === user.id || employee.employeeId === (user.employeeId || anyUser.employee_id);
     const isEmailMatch = employee.email && user.email && employee.email.toLowerCase() === user.email.toLowerCase();
     
-    const empFullName = (employee.name || `${employee.firstName} ${employee.lastName}`).toLowerCase();
-    const userFullName = (user.name || `${user.firstName} ${user.lastName}`).toLowerCase();
+    const empFullName = (employee.name || `${employee.firstName || ''} ${employee.lastName || ''}`).toLowerCase();
+    const userFullName = (user.name || `${anyUser.firstName || ''} ${anyUser.lastName || ''}`).toLowerCase();
     const isNameMatch = empFullName === userFullName;
 
     return isIdMatch || isEmailMatch || isNameMatch;

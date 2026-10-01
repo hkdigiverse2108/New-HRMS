@@ -56,6 +56,7 @@ export interface RequestOptions extends RequestInit {
   showLoader?: boolean;
   showErrorToast?: boolean;
   skipAuth?: boolean;
+  timeout?: number;
 }
 
 // Endpoints that are called periodically or in the background and should never trigger an error toast
@@ -156,7 +157,8 @@ async function apiRequest<T = any>(endpoint: string, options: RequestOptions = {
 
   const execute = async (): Promise<T> => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutDuration = options.timeout ?? (rest.body instanceof FormData ? 120000 : 15000);
+    const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
     try {
       const response = await fetch(url, {
         headers,

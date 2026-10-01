@@ -41,7 +41,7 @@ const COLUMN_OPTIONS = [
   { key: "parentName", label: "Parent/Guardian Name", default: false },
   { key: "parentNumber", label: "Parent/Guardian Number", default: false },
   { key: "relation", label: "Relation", default: false },
-  { key: "employeeId", label: "Employee ID", default: false },
+  { key: "employeeId", label: "Employee ID", default: true },
   { key: "aadharCard", label: "Aadhar Card", default: false },
   { key: "panCard", label: "PAN Card", default: false },
   { key: "designation", label: "Designation", default: false },
@@ -252,6 +252,14 @@ useEffect(() => {
           </span>
         );
       }
+      case "employeeId": {
+        const empCode = emp.employeeId || (emp.id && emp.id.startsWith("EMP-") ? emp.id : "");
+        return empCode ? (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold font-mono bg-blue-50 text-blue-700 border border-blue-200">
+            {empCode}
+          </span>
+        ) : <span className="text-[13px] text-foreground/80">-</span>;
+      }
       case "hasBond":
       case "hasNoticePeriod":
       case "hasResignation":
@@ -271,7 +279,9 @@ useEffect(() => {
     const matchesSearch = !query || 
       emp.name.toLowerCase().includes(query) || 
       emp.role.toLowerCase().includes(query) ||
-      (emp.email && emp.email.toLowerCase().includes(query));
+      (emp.email && emp.email.toLowerCase().includes(query)) ||
+      (emp.employeeId && emp.employeeId.toLowerCase().includes(query)) ||
+      emp.id.toLowerCase().includes(query);
 
     const matchesDept = selectedDept && selectedDept !== "All"
       ? (emp.department || "").trim().toLowerCase() === selectedDept.trim().toLowerCase()
@@ -583,9 +593,16 @@ useEffect(() => {
                 <h3 className="text-[16px] font-black text-foreground mb-1">{emp.name}</h3>
                 <p className="text-[12px] font-medium text-muted-foreground mb-4">{emp.role}</p>
                 
-                <span className="px-3 py-1 bg-muted/50 text-foreground/80 text-[10px] font-bold uppercase tracking-wider rounded-lg mb-4">
-                  {emp.department}
-                </span>
+                <div className="flex items-center gap-1.5 flex-wrap justify-center mb-4">
+                  {(emp.employeeId || (emp.id && emp.id.startsWith("EMP-") ? emp.id : "")) && (
+                    <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold font-mono rounded-lg">
+                      {emp.employeeId || emp.id}
+                    </span>
+                  )}
+                  <span className="px-3 py-0.5 bg-muted/50 text-foreground/80 text-[10px] font-bold uppercase tracking-wider rounded-lg">
+                    {emp.department}
+                  </span>
+                </div>
 
                 {(emp.hasBond || emp.hasResignation || emp.hasNoticePeriod) && (
                   <div className="w-full flex flex-col gap-1.5 mb-4 px-2">

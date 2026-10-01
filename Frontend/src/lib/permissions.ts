@@ -69,6 +69,9 @@ export function hasModulePermission(
   }
   if (perms[cleanUrl]) {
     const p = perms[cleanUrl];
+    if (cleanUrl === "/tasks" && action === "create") {
+      return Boolean(p.all || p.create || p.read);
+    }
     return Boolean(p.all || p[action]);
   }
 

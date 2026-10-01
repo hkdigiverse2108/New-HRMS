@@ -24,7 +24,7 @@ MAX_CHAT_FILE_SIZE_MB = 100
 
 @router.post("/upload")
 async def upload_chat_file(file: UploadFile = File(...)):
-    # Check file size (limit: 25MB)
+    # Check file size (limit: 100MB)
     file.file.seek(0, 2)
     file_size = file.file.tell()
     file.file.seek(0)
@@ -38,7 +38,31 @@ async def upload_chat_file(file: UploadFile = File(...)):
     chat_dir = IMAGES_DIR / "chat_documents"
     chat_dir.mkdir(parents=True, exist_ok=True)
     
-    file_ext = Path(file.filename or "").suffix.lower()
+    raw_name = file.filename or "image.png"
+    # Clean up non-ASCII or strange characters from ChatGPT/DALL-E filenames (e.g. middle dots, symbols)
+    safe_filename = re.sub(r'[^\w\s\.-]', '_', raw_name).strip() or "chat_file"
+    file_ext = Path(safe_filename).suffix.lower()
+    
+    # If no extension or invalid, infer from content_type
+    if not file_ext or file_ext not in [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".pdf", ".mp4", ".webm", ".mp3", ".wav", ".doc", ".docx"]:
+        ct = (file.content_type or "").lower()
+        if "png" in ct:
+            file_ext = ".png"
+        elif "jpeg" in ct or "jpg" in ct:
+            file_ext = ".jpg"
+        elif "webp" in ct:
+            file_ext = ".webp"
+        elif "gif" in ct:
+            file_ext = ".gif"
+        elif "pdf" in ct:
+            file_ext = ".pdf"
+        elif "webm" in ct:
+            file_ext = ".webm"
+        elif "audio" in ct:
+            file_ext = ".webm"
+        else:
+            file_ext = file_ext or ".png"
+
     unique_filename = f"{uuid.uuid4().hex}{file_ext}"
     target_path = chat_dir / unique_filename
     
@@ -46,14 +70,25 @@ async def upload_chat_file(file: UploadFile = File(...)):
         shutil.copyfileobj(file.file, buffer)
         
     file_url = f"/images/chat_documents/{unique_filename}"
+    
+    # Ensure correct content_type is returned
+    resp_content_type = file.content_type
+    if not resp_content_type or resp_content_type == "application/octet-stream":
+        if file_ext == ".png":
+            resp_content_type = "image/png"
+        elif file_ext in (".jpg", ".jpeg"):
+            resp_content_type = "image/jpeg"
+        elif file_ext == ".webp":
+            resp_content_type = "image/webp"
+
     # Return both new + legacy keys for frontend compatibility (url vs file_url)
     return {
         "file_url": file_url,
         "url": file_url,
-        "file_name": file.filename,
-        "fileName": file.filename,
-        "file_type": file.content_type,
-        "media_type": file.content_type,
+        "file_name": safe_filename,
+        "fileName": safe_filename,
+        "file_type": resp_content_type,
+        "media_type": resp_content_type,
         "file_size": file_size,
         "fileSize": file_size
     }

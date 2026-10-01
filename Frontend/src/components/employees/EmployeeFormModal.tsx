@@ -445,7 +445,14 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
         {/* Header - Fixed Height */}
         <div className="flex items-center justify-between px-4 sm:px-8 py-3.5 sm:py-5 border-b border-border/50 bg-muted/30 shrink-0">
           <div className="min-w-0 pr-2">
-            <h2 className="text-base sm:text-2xl font-black tracking-tight truncate">{initialData ? 'Edit Employee Profile' : 'Add New Employee'}</h2>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h2 className="text-base sm:text-2xl font-black tracking-tight truncate">{initialData ? 'Edit Employee Profile' : 'Add New Employee'}</h2>
+              {initialData && (initialData.employeeId || (initialData.id && initialData.id.startsWith("EMP-") ? initialData.id : "")) && (
+                <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold font-mono rounded-lg shadow-sm">
+                  {initialData.employeeId || initialData.id}
+                </span>
+              )}
+            </div>
             <p className="text-[11px] sm:text-sm text-muted-foreground mt-0.5 line-clamp-1 sm:line-clamp-none">Complete all sections to register a new member in the organization.</p>
           </div>
           <button 

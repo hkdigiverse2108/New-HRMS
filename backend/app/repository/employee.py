@@ -12,6 +12,37 @@ class EmployeeRepository:
         return db[cls.collection_name]
 
     @classmethod
+    async def get_next_employee_id(cls) -> str:
+        from pymongo import ReturnDocument
+        db = get_database()
+        collection = db[cls.collection_name]
+        counters = db["counters"]
+
+        # Atomically increment counter
+        counter = await counters.find_one_and_update(
+            {"_id": "employee_id"},
+            {"$inc": {"seq": 1}},
+            upsert=True,
+            return_document=ReturnDocument.AFTER
+        )
+        seq = counter.get("seq", 1)
+        emp_code = f"EMP-{seq:03d}"
+
+        # Ensure no collision with any existing document
+        existing = await collection.find_one({"employee_id": emp_code})
+        while existing:
+            counter = await counters.find_one_and_update(
+                {"_id": "employee_id"},
+                {"$inc": {"seq": 1}},
+                return_document=ReturnDocument.AFTER
+            )
+            seq = counter.get("seq", 1)
+            emp_code = f"EMP-{seq:03d}"
+            existing = await collection.find_one({"employee_id": emp_code})
+
+        return emp_code
+
+    @classmethod
     async def create_employee(cls, employee_data: dict):
         collection = await cls.get_collection()
         result = await collection.insert_one(employee_data)

@@ -133,6 +133,9 @@ function CreateMenu({ collapsed, onNavigate }: { collapsed: boolean; onNavigate:
                 key={a.url}
                 onClick={() => {
                   setOpen(false);
+                  if (a.url.includes("/tasks") && a.url.includes("new=1")) {
+                    window.dispatchEvent(new CustomEvent("hrms:open-new-task"));
+                  }
                   onNavigate(a.url);
                 }}
                 className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-sidebar-accent"

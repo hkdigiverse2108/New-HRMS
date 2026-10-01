@@ -71,7 +71,14 @@ export function EmployeeProfileModal({ employee, onClose }: EmployeeProfileModal
             
             
             <div className="flex-1 pt-2 md:pt-0 pb-1">
-              <h2 className="text-3xl font-black text-foreground tracking-tight">{employee.name}</h2>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h2 className="text-3xl font-black text-foreground tracking-tight">{employee.name}</h2>
+                {(employee.employeeId || (employee.id && employee.id.startsWith("EMP-") ? employee.id : "")) && (
+                  <span className="px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold font-mono rounded-lg shadow-sm">
+                    {employee.employeeId || employee.id}
+                  </span>
+                )}
+              </div>
               <p className="text-[15px] font-medium text-muted-foreground">{employee.role} · <span className="text-primary">{employee.department}</span></p>
             </div>
             

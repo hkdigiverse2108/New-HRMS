@@ -26,6 +26,7 @@ class PersonalInfoOut(PersonalInfo):
 
 class WorkDetails(BaseModel):
     system_role: SystemRole
+    employee_id: Optional[str] = None
     department: Optional[str] = None
     sub_department: Optional[str] = None
     designation: Optional[str] = None
@@ -64,6 +65,7 @@ class BondAndExit(BaseModel):
     has_resigned: bool = False
 
 class EmployeeCreate(BaseModel):
+    employee_id: Optional[str] = None
     personal_info: PersonalInfo
     work_details: WorkDetails
     bank_and_docs: Optional[BankAndDocs] = BankAndDocs()
@@ -91,6 +93,7 @@ class PersonalInfoSelfOut(PersonalInfoOut):
     password: Optional[str] = None  # type: ignore[assignment]
 
 class EmployeeUpdate(BaseModel):
+    employee_id: Optional[str] = None
     personal_info: Optional[PersonalInfoUpdate] = None
     work_details: Optional[WorkDetails] = None
     bank_and_docs: Optional[BankAndDocs] = None
@@ -100,6 +103,7 @@ class EmployeeUpdate(BaseModel):
 
 class EmployeeOut(BaseModel):
     id: str = Field(..., alias="_id")
+    employee_id: Optional[str] = None
     personal_info: PersonalInfoOut
     work_details: WorkDetails
     bank_and_docs: Optional[BankAndDocs] = None
