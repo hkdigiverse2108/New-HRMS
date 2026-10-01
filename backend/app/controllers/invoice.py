@@ -157,6 +157,38 @@ async def get_all_invoices(
         limit=limit
     )
 
+from fastapi.responses import FileResponse
+import os
+
+@router.get("/{invoice_id}/pdf")
+@router.get("/{invoice_id}/download")
+async def download_invoice_pdf(invoice_id: str, current_user: dict = Depends(get_current_employee)):
+    item = await InvoiceService.get_invoice_by_id(invoice_id)
+    if not item or item.get("is_deleted"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
+
+    if not InvoiceService.check_user_access(item, current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to view this invoice")
+
+    # Always regenerate with latest settings, logo, signature & template design
+    updated_item = await InvoiceService._generate_and_store_invoice_pdf(invoice_id, delete_old=True)
+    if updated_item:
+        pdf_path = updated_item.get("pdf_path")
+    else:
+        pdf_path = item.get("pdf_path")
+
+    if not pdf_path or not os.path.exists(os.path.abspath(pdf_path)):
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to locate or generate PDF file")
+
+    abs_path = os.path.abspath(pdf_path)
+    inv_num = item.get("invoice_number", "invoice")
+    return FileResponse(
+        path=abs_path,
+        media_type="application/pdf",
+        filename=f"{inv_num}.pdf",
+        content_disposition_type="inline"
+    )
+
 @router.get("/{invoice_id}", response_model=InvoiceResponse, response_model_exclude_none=True)
 async def get_invoice_by_id(invoice_id: str, current_user: dict = Depends(get_current_employee)):
     item = await InvoiceService.get_invoice_by_id(invoice_id)

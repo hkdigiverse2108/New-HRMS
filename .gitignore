@@ -59,3 +59,9 @@ check_*.py
 temp_*.js
 *.tmp
 
+# Uploads & User generated PDFs
+uploads/
+backend/uploads/
+*.pdf
+test_cache/
+

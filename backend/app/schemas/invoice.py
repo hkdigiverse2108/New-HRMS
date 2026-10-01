@@ -135,6 +135,8 @@ class InvoiceResponse(BaseModel):
     account_number: Optional[str] = None
     ifsc_code: Optional[str] = None
     notes: Optional[str] = None
+    pdf_path: Optional[str] = None
+    pdf_url: Optional[str] = None
     is_deleted: bool = False
     created_at: datetime
     updated_at: datetime

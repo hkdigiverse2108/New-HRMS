@@ -7,14 +7,8 @@ class QuotationCreate(BaseModel):
     quotation_number: Optional[str] = Field(None, description="Auto-generated if empty (QUO-001)")
     client_id: Optional[str] = None
     client_name: str = Field(..., description="Client or company name")
-    client_email: Optional[str] = None
     client_phone: Optional[str] = None
     client_company: Optional[str] = None
-    client_address: Optional[str] = None
-    client_gstin: Optional[str] = None
-    client_department: Optional[str] = None
-    state_ut: Optional[str] = Field(None, description="State / UT e.g. '24 - Gujarat'")
-    subject: Optional[str] = Field(None, description="Subject / Project title for quotation")
     quotation_date: Optional[str] = None
     valid_until: Optional[str] = None
     status: Optional[str] = Field("sent", description="draft, sent, accepted, declined, expired, converted")
@@ -30,14 +24,8 @@ class QuotationUpdate(BaseModel):
     quotation_number: Optional[str] = None
     client_id: Optional[str] = None
     client_name: Optional[str] = None
-    client_email: Optional[str] = None
     client_phone: Optional[str] = None
     client_company: Optional[str] = None
-    client_address: Optional[str] = None
-    client_gstin: Optional[str] = None
-    client_department: Optional[str] = None
-    state_ut: Optional[str] = None
-    subject: Optional[str] = None
     quotation_date: Optional[str] = None
     valid_until: Optional[str] = None
     status: Optional[str] = None
@@ -77,14 +65,8 @@ class QuotationResponse(BaseModel):
     quotation_number: str
     client_id: Optional[str] = None
     client_name: str
-    client_email: Optional[str] = None
     client_phone: Optional[str] = None
     client_company: Optional[str] = None
-    client_address: Optional[str] = None
-    client_gstin: Optional[str] = None
-    client_department: Optional[str] = None
-    state_ut: Optional[str] = None
-    subject: Optional[str] = None
     quotation_date: Optional[str] = None
     valid_until: Optional[str] = None
     status: str = "sent"
@@ -105,6 +87,8 @@ class QuotationResponse(BaseModel):
     round_off: float = 0.0
     total_amount: float = 0.0
     notes: Optional[str] = None
+    pdf_path: Optional[str] = None
+    pdf_url: Optional[str] = None
     is_deleted: bool = False
     created_at: datetime
     updated_at: datetime

@@ -5,8 +5,40 @@ from app.schemas.quotation import QuotationCreate, QuotationUpdate
 from app.schemas.invoice import InvoiceCreate, LineItemSchema
 from app.services.invoice import InvoiceService
 from app.redis.service import get_cache, set_cache, delete_cache, clear_pattern, make_list_key
+from app.services.pdf import PDFGeneratorService
+from app.utils.storage import save_pdf_file, delete_pdf_file
 
 class QuotationService:
+
+    @staticmethod
+    async def _generate_and_store_quotation_pdf(quotation_id: str, delete_old: bool = True) -> Optional[Dict[str, Any]]:
+        quo = await QuotationRepository.get_by_id(quotation_id)
+        if not quo:
+            return None
+
+        if delete_old and quo.get("pdf_path"):
+            delete_pdf_file(quo.get("pdf_path"))
+
+        try:
+            from app.services.settings import SettingsService
+            settings = await SettingsService.get_settings()
+            
+            merged_quo = {
+                **quo,
+                **settings
+            }
+            if not merged_quo.get("bank_details") and settings.get("default_bank_details"):
+                merged_quo["bank_details"] = settings.get("default_bank_details")
+
+            pdf_bytes = PDFGeneratorService.generate_quotation_pdf(merged_quo)
+            pdf_path, pdf_url = save_pdf_file(pdf_bytes, quo.get("quotation_number", f"QUO-{quotation_id[:6]}"), subfolder="quotations")
+            await QuotationRepository.update(quotation_id, {"pdf_path": pdf_path, "pdf_url": pdf_url})
+            quo["pdf_path"] = pdf_path
+            quo["pdf_url"] = pdf_url
+        except Exception as e:
+            print(f"Error generating PDF for quotation {quotation_id}: {e}")
+
+        return quo
 
     @staticmethod
     async def _calculate_quotation_fields(data_dict: Dict[str, Any], existing_item: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -24,20 +56,10 @@ class QuotationService:
             if client_doc:
                 if not merged.get("client_name"):
                     merged["client_name"] = client_doc.get("contact_person_name") or client_doc.get("company_name") or client_doc.get("client_name") or ""
-                if not merged.get("client_email"):
-                    merged["client_email"] = client_doc.get("email_address") or client_doc.get("email") or client_doc.get("client_email")
                 if not merged.get("client_phone"):
                     merged["client_phone"] = client_doc.get("phone_number") or client_doc.get("phone") or client_doc.get("client_phone")
                 if not merged.get("client_company"):
                     merged["client_company"] = client_doc.get("company_name") or client_doc.get("brand_name") or client_doc.get("client_company")
-                if not merged.get("client_address"):
-                    merged["client_address"] = client_doc.get("address") or client_doc.get("client_address")
-                if not merged.get("client_gstin"):
-                    merged["client_gstin"] = client_doc.get("gstin") or client_doc.get("client_gstin")
-                if not merged.get("client_department"):
-                    merged["client_department"] = client_doc.get("department") or client_doc.get("client_department")
-                if not merged.get("state_ut"):
-                    merged["state_ut"] = client_doc.get("state_ut") or client_doc.get("state")
 
         state_ut = merged.get("state_ut", "") or ""
         state_str = str(state_ut).lower()
@@ -147,8 +169,9 @@ class QuotationService:
 
         calculated_data = await QuotationService._calculate_quotation_fields(data_dict)
         created = await QuotationRepository.create(calculated_data)
+        updated_created = await QuotationService._generate_and_store_quotation_pdf(created["_id"], delete_old=False)
         await clear_pattern("quotations:list:*")
-        return created
+        return updated_created or created
 
     @staticmethod
     async def get_all_quotations(
@@ -242,6 +265,7 @@ class QuotationService:
 
         success = await QuotationRepository.update(quotation_id, calculated_data)
         if success:
+            await QuotationService._generate_and_store_quotation_pdf(quotation_id, delete_old=True)
             await clear_pattern("quotations:list:*")
             await delete_cache(f"quotation:{quotation_id}")
         return success
@@ -250,6 +274,7 @@ class QuotationService:
     async def update_status(quotation_id: str, status: str) -> bool:
         success = await QuotationRepository.update_status(quotation_id, status)
         if success:
+            await QuotationService._generate_and_store_quotation_pdf(quotation_id, delete_old=True)
             await clear_pattern("quotations:list:*")
             await delete_cache(f"quotation:{quotation_id}")
         return success
