@@ -65,6 +65,33 @@ async def get_all_quotations(
         limit=limit
     )
 
+from fastapi.responses import FileResponse
+import os
+
+@router.get("/{quotation_id}/pdf")
+async def download_quotation_pdf(quotation_id: str, current_user: dict = Depends(get_current_employee)):
+    item = await QuotationService.get_quotation_by_id(quotation_id)
+    if not item or item.get("is_deleted"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quotation not found")
+
+    updated_item = await QuotationService._generate_and_store_quotation_pdf(quotation_id, delete_old=True)
+    if updated_item:
+        pdf_path = updated_item.get("pdf_path")
+    else:
+        pdf_path = item.get("pdf_path")
+
+    if not pdf_path or not os.path.exists(os.path.abspath(pdf_path)):
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to locate or generate PDF file")
+
+    abs_path = os.path.abspath(pdf_path)
+    quo_num = item.get("quotation_number", "quotation")
+    return FileResponse(
+        path=abs_path,
+        media_type="application/pdf",
+        filename=f"{quo_num}.pdf",
+        content_disposition_type="inline"
+    )
+
 @router.get("/{quotation_id}", response_model=QuotationResponse, response_model_exclude_none=True)
 async def get_quotation_by_id(quotation_id: str, current_user: dict = Depends(get_current_employee)):
     item = await QuotationService.get_quotation_by_id(quotation_id)
@@ -87,6 +114,35 @@ async def update_quotation(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to update quotation")
 
     return await QuotationService.get_quotation_by_id(quotation_id)
+
+from fastapi.responses import FileResponse
+import os
+
+@router.get("/{quotation_id}/pdf")
+@router.get("/{quotation_id}/download")
+async def download_quotation_pdf(quotation_id: str, current_user: dict = Depends(get_current_employee)):
+    item = await QuotationService.get_quotation_by_id(quotation_id)
+    if not item or item.get("is_deleted"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quotation not found")
+
+    # Always regenerate with latest settings, logo, signature & template design
+    updated_item = await QuotationService._generate_and_store_quotation_pdf(quotation_id, delete_old=True)
+    if updated_item:
+        pdf_path = updated_item.get("pdf_path")
+    else:
+        pdf_path = item.get("pdf_path")
+
+    if not pdf_path or not os.path.exists(os.path.abspath(pdf_path)):
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to locate or generate PDF file")
+
+    abs_path = os.path.abspath(pdf_path)
+    quo_num = item.get("quotation_number", "quotation")
+    return FileResponse(
+        path=abs_path,
+        media_type="application/pdf",
+        filename=f"{quo_num}.pdf",
+        content_disposition_type="inline"
+    )
 
 @router.patch("/{quotation_id}/status", response_model=QuotationResponse, response_model_exclude_none=True)
 async def update_quotation_status(

@@ -4,8 +4,40 @@ from app.repository.invoice import InvoiceRepository
 from app.repository.bank_account import BankAccountRepository
 from app.schemas.invoice import InvoiceCreate, InvoiceUpdate
 from app.redis.service import get_cache, set_cache, delete_cache, clear_pattern, make_list_key
+from app.services.pdf import PDFGeneratorService
+from app.utils.storage import save_pdf_file, delete_pdf_file
 
 class InvoiceService:
+
+    @staticmethod
+    async def _generate_and_store_invoice_pdf(invoice_id: str, delete_old: bool = True) -> Optional[Dict[str, Any]]:
+        invoice = await InvoiceRepository.get_by_id(invoice_id)
+        if not invoice:
+            return None
+
+        if delete_old and invoice.get("pdf_path"):
+            delete_pdf_file(invoice.get("pdf_path"))
+
+        try:
+            from app.services.settings import SettingsService
+            settings = await SettingsService.get_settings()
+            
+            merged_invoice = {
+                **invoice,
+                **settings
+            }
+            if not merged_invoice.get("bank_details") and settings.get("default_bank_details"):
+                merged_invoice["bank_details"] = settings.get("default_bank_details")
+
+            pdf_bytes = PDFGeneratorService.generate_invoice_pdf(merged_invoice)
+            pdf_path, pdf_url = save_pdf_file(pdf_bytes, invoice.get("invoice_number", f"INV-{invoice_id[:6]}"), subfolder="invoices")
+            await InvoiceRepository.update(invoice_id, {"pdf_path": pdf_path, "pdf_url": pdf_url})
+            invoice["pdf_path"] = pdf_path
+            invoice["pdf_url"] = pdf_url
+        except Exception as e:
+            print(f"Error generating PDF for invoice {invoice_id}: {e}")
+
+        return invoice
 
     @staticmethod
     def _extract_user_info(user: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -239,9 +271,21 @@ class InvoiceService:
 
         calculated_data = await InvoiceService._calculate_invoice_fields(data_dict)
         
+        # Validation: Tax Invoice REQUIRES client_gstin, whereas Proforma Invoice does NOT.
+        inv_type = calculated_data.get("invoice_type", "Tax Invoice")
+        if inv_type == "Tax Invoice":
+            client_gst = str(calculated_data.get("client_gstin") or "").strip()
+            if not client_gst:
+                from fastapi import HTTPException, status
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Client GSTIN number (client_gstin) is required for Tax Invoice."
+                )
+
         created = await InvoiceRepository.create(calculated_data)
+        updated_created = await InvoiceService._generate_and_store_invoice_pdf(created["_id"], delete_old=False)
         await clear_pattern("invoices:list:*")
-        return created
+        return updated_created or created
 
     @staticmethod
     async def approve_invoice(invoice_id: str, admin_user: Dict[str, Any]) -> bool:
@@ -266,6 +310,7 @@ class InvoiceService:
                 "timestamp": datetime.utcnow()
             }
             await InvoiceRepository.append_log(invoice_id, log_entry)
+            await InvoiceService._generate_and_store_invoice_pdf(invoice_id, delete_old=True)
             await clear_pattern("invoices:list:*")
             await delete_cache(f"invoice:{invoice_id}")
         return success
@@ -295,6 +340,7 @@ class InvoiceService:
                 "timestamp": datetime.utcnow()
             }
             await InvoiceRepository.append_log(invoice_id, log_entry)
+            await InvoiceService._generate_and_store_invoice_pdf(invoice_id, delete_old=True)
             await clear_pattern("invoices:list:*")
             await delete_cache(f"invoice:{invoice_id}")
         return success
@@ -412,6 +458,7 @@ class InvoiceService:
                 "timestamp": datetime.utcnow()
             }
             await InvoiceRepository.append_log(invoice_id, log_entry)
+            await InvoiceService._generate_and_store_invoice_pdf(invoice_id, delete_old=True)
             await clear_pattern("invoices:list:*")
             await delete_cache(f"invoice:{invoice_id}")
         return success
@@ -428,6 +475,7 @@ class InvoiceService:
                 "timestamp": datetime.utcnow()
             }
             await InvoiceRepository.append_log(invoice_id, log_entry)
+            await InvoiceService._generate_and_store_invoice_pdf(invoice_id, delete_old=True)
             await clear_pattern("invoices:list:*")
             await delete_cache(f"invoice:{invoice_id}")
         return success

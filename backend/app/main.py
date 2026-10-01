@@ -29,6 +29,7 @@ from app.controllers.preset import router as preset_router
 from app.controllers.invoice import router as invoice_router
 from app.controllers.bank_account import router as bank_account_router
 from app.controllers.quotation import router as quotation_router
+from app.controllers.settings import router as settings_router
 from app.models.employee import setup_employee_indexes
 from app.models.department import setup_department_indexes
 from app.models.sub_department import setup_sub_department_indexes
@@ -98,9 +99,14 @@ app.add_middleware(ImageRouteMiddleware)
 from fastapi.staticfiles import StaticFiles
 from app.config import ROOT_DIR
 
-# Root images folder (outside frontend and backend)
+# Root uploads & images folders
 IMAGES_DIR = ROOT_DIR / "images"
 IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+
+UPLOADS_DIR = ROOT_DIR / "uploads"
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+(UPLOADS_DIR / "invoices").mkdir(parents=True, exist_ok=True)
+(UPLOADS_DIR / "quotations").mkdir(parents=True, exist_ok=True)
 
 # Register API routes FIRST so FastAPI matches endpoint routes before static file mounts
 app.include_router(auth_router)
@@ -132,10 +138,11 @@ app.include_router(preset_router)
 app.include_router(invoice_router)
 app.include_router(bank_account_router)
 app.include_router(quotation_router)
+app.include_router(settings_router)
 
-# Mount static image paths AFTER API routes
+# Mount static image & uploads paths AFTER API routes
 app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
-app.mount("/uploads", StaticFiles(directory=str(IMAGES_DIR)), name="uploads")
+app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
 @app.get("/")
 async def root():
