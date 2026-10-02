@@ -685,8 +685,28 @@ async def delete_chat_message(message_id: str, current_user: dict = Depends(get_
 async def websocket_endpoint(websocket: WebSocket, token: str):
     user_id = token 
     
+    # Resolve user details once on connect
+    current_user = None
+    try:
+        db = await ChatRepository.get_db()
+        from bson import ObjectId
+        if ObjectId.is_valid(user_id):
+            current_user = await db["employees"].find_one({"_id": ObjectId(user_id)})
+        if not current_user:
+            current_user = await db["employees"].find_one({"$or": [{"id": user_id}, {"employee_id": user_id}, {"_id": user_id}]})
+    except Exception:
+        pass
+    resolved_user_name = (current_user.get("name") if isinstance(current_user, dict) else None) or "User"
+
     try:
         await manager.connect(websocket, user_id)
+        # Send current online users list over websocket immediately (eliminates HTTP batch presence calls)
+        online_list = [uid for uid, conns in manager.active_connections.items() if len(conns) > 0]
+        await websocket.send_text(json.dumps({
+            "action": "presence_state",
+            "type": "presence_state",
+            "online_users": online_list
+        }))
     except Exception as e:
         print(f"WebSocket Connect Error for user {user_id}: {e}")
         return
@@ -707,6 +727,19 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
             if message_data.get("type") == "ping" or message_data.get("action") == "ping":
                 try:
                     await websocket.send_text(json.dumps({"type": "pong", "action": "pong"}))
+                except Exception:
+                    pass
+                continue
+
+            # Presence state request over WebSocket
+            if message_data.get("action") in ("get_presence", "presence_state"):
+                try:
+                    online_list = [uid for uid, conns in manager.active_connections.items() if len(conns) > 0]
+                    await websocket.send_text(json.dumps({
+                        "action": "presence_state",
+                        "type": "presence_state",
+                        "online_users": online_list
+                    }))
                 except Exception:
                     pass
                 continue
@@ -835,7 +868,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                             await manager.send_personal_message(err_msg, user_id)
                             continue
                             
-                        user_name = current_user.get("name") if isinstance(current_user, dict) else "User"
+                        user_name = message_data.get("user_name") or resolved_user_name or "User"
                         updated_msg = await ChatRepository.vote_poll_option(message_id, option_id, user_id, user_name=user_name)
                         if updated_msg:
                             updated_msg["action"] = "poll_updated"
@@ -846,7 +879,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                 if message_data.get("action") in ("mark_channel_read", "mark_read", "messages_read"):
                     ch_id = message_data.get("channel_id")
                     if ch_id:
-                        user_name = current_user.get("name") if isinstance(current_user, dict) else "User"
+                        user_name = message_data.get("user_name") or resolved_user_name or "User"
                         await ChatRepository.mark_messages_read(ch_id, user_id)
                         read_event = {
                             "action": "messages_read",
