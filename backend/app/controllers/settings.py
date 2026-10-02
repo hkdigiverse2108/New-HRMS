@@ -36,7 +36,7 @@ async def upload_company_logo(
 ):
     check_admin_role(current_user)
     upload_file = file or logo or image
-    if not upload_file:
+    if not upload_file or not upload_file.filename:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Please upload a valid logo file using key 'file' or 'logo'")
 
     os.makedirs("uploads/settings", exist_ok=True)
@@ -62,7 +62,7 @@ async def upload_authorized_signature(
 ):
     check_admin_role(current_user)
     upload_file = file or signature or image
-    if not upload_file:
+    if not upload_file or not upload_file.filename:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Please upload a valid signature file using key 'file' or 'signature'")
 
     os.makedirs("uploads/settings", exist_ok=True)
@@ -75,6 +75,32 @@ async def upload_authorized_signature(
     web_url = f"/uploads/settings/{filename}"
     current_settings = await SettingsService.get_settings()
     current_settings["signature_url"] = web_url
+
+    update_dto = SettingsCreateOrUpdate(**current_settings)
+    return await SettingsService.update_settings(update_dto)
+
+@router.post("/letterhead", response_model=SettingsResponse)
+async def upload_company_letterhead(
+    file: Optional[UploadFile] = File(None),
+    letterhead: Optional[UploadFile] = File(None),
+    image: Optional[UploadFile] = File(None),
+    current_user: dict = Depends(get_current_employee)
+):
+    check_admin_role(current_user)
+    upload_file = file or letterhead or image
+    if not upload_file or not upload_file.filename:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Please upload a valid letterhead file using key 'file' or 'letterhead'")
+
+    os.makedirs("uploads/settings", exist_ok=True)
+    filename = f"letterhead_{upload_file.filename}"
+    file_path = os.path.join("uploads", "settings", filename)
+
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(upload_file.file, buffer)
+
+    web_url = f"/uploads/settings/{filename}"
+    current_settings = await SettingsService.get_settings()
+    current_settings["letterhead_url"] = web_url
 
     update_dto = SettingsCreateOrUpdate(**current_settings)
     return await SettingsService.update_settings(update_dto)

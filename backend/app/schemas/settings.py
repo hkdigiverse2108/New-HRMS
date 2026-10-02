@@ -12,6 +12,7 @@ class SettingsCreateOrUpdate(BaseModel):
     company_llpin: Optional[str] = Field("ACK-1143", description="LLPIN / CIN")
     company_state_code: Optional[str] = Field("24", description="State Code")
     logo_url: Optional[str] = Field(None, description="URL or relative path to company logo image")
+    letterhead_url: Optional[str] = Field(None, description="URL or relative path to company letterhead header image")
     signature_url: Optional[str] = Field(None, description="URL or relative path to authorized signature image")
     signature_name: Optional[str] = Field("Authorized Signatory", description="Authorized signatory name / title")
     default_terms: Optional[str] = Field("1. Payment is due within 3 days of the invoice date.\n2. Late payments may incur additional charges.\n3. All disputes are subject to Gujarat Jurisdiction.", description="Default terms & conditions")
@@ -34,6 +35,7 @@ class SettingsResponse(BaseModel):
     company_llpin: str = "ACK-1143"
     company_state_code: str = "24"
     logo_url: Optional[str] = None
+    letterhead_url: Optional[str] = None
     signature_url: Optional[str] = None
     signature_name: str = "Authorized Signatory"
     default_terms: str = "1. Payment is due within 3 days of the invoice date.\n2. Late payments may incur additional charges.\n3. All disputes are subject to Gujarat Jurisdiction."
