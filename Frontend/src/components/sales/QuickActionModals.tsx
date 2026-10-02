@@ -1,7 +1,7 @@
 import { useSales } from "./SalesContext";
 import { useState, useEffect } from "react";
-import { type SalesTask } from "./sales-data";
-import { DialogClose,  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter  } from "@/components/ui/dialog";
+import { type SalesTask, type Lead } from "./sales-data";
+import { DialogClose,  Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,8 +11,15 @@ import { X,  UploadCloud, CheckCircle2  } from "lucide-react";
 import { toast } from "@/lib/toast";
 
 export function QuickActionModals({ activeAction, onClose }: { activeAction: string | null; onClose: () => void }) {
-  const { tasks, setTasks } = useSales();
+  const { tasks, setTasks, addLead } = useSales();
   
+  // Lead Form States
+  const [leadName, setLeadName] = useState("");
+  const [leadCompany, setLeadCompany] = useState("");
+  const [leadEmail, setLeadEmail] = useState("");
+  const [leadPhone, setLeadPhone] = useState("");
+  const [leadSource, setLeadSource] = useState("Website");
+
   // Create Task Form States
   const [taskDescription, setTaskDescription] = useState("");
   const [taskPriority, setTaskPriority] = useState("medium");
@@ -33,10 +40,34 @@ export function QuickActionModals({ activeAction, onClose }: { activeAction: str
     setTimeout(onClose, 200); // Give time for close animation
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     
+    if (activeAction === "Add Lead") {
+      try {
+        const leadPayload: Partial<Lead> = {
+          contact: leadName.trim() || leadCompany.trim(),
+          company: leadCompany.trim() || leadName.trim(),
+          source: leadSource,
+          stage: "Lead",
+          status: "Lead",
+          priority: "Medium",
+          category: "Others",
+          date: new Date().toISOString().split("T")[0] || "",
+        };
+        if (leadEmail.trim()) leadPayload.email = leadEmail.trim();
+        if (leadPhone.trim()) leadPayload.phone = leadPhone.trim();
+        await addLead(leadPayload);
+        setLeadName("");
+        setLeadCompany("");
+        setLeadEmail("");
+        setLeadPhone("");
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
     if (activeAction === "Create Task") {
       const dateParts = new Date().toISOString().split('T');
       const todayStr = dateParts[0] || "";
@@ -109,33 +140,59 @@ export function QuickActionModals({ activeAction, onClose }: { activeAction: str
             <>
               <div className="grid gap-2">
                 <Label htmlFor="name">Contact Name</Label>
-                <Input id="name" placeholder="John Doe" required />
+                <Input
+                  id="name"
+                  placeholder="John Doe"
+                  value={leadName}
+                  onChange={(e) => setLeadName(e.target.value)}
+                  required
+                />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="company">Company</Label>
-                <Input id="company" placeholder="Acme Corp" required />
+                <Input
+                  id="company"
+                  placeholder="Acme Corp"
+                  value={leadCompany}
+                  onChange={(e) => setLeadCompany(e.target.value)}
+                  required
+                />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" placeholder="john@acme.com" />
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="john@acme.com"
+                    value={leadEmail}
+                    onChange={(e) => setLeadEmail(e.target.value)}
+                  />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="phone">Phone</Label>
-                  <Input id="phone" type="tel" placeholder="+91 98765 43210" />
+                  <Input
+                    id="phone"
+                    type="tel"
+                    placeholder="+91 98765 43210"
+                    value={leadPhone}
+                    onChange={(e) => setLeadPhone(e.target.value)}
+                  />
                 </div>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="source">Lead Source</Label>
-                <Select defaultValue="organic">
+                <Select value={leadSource} onValueChange={setLeadSource}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select source" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="organic">Organic Search</SelectItem>
-                    <SelectItem value="referral">Referral</SelectItem>
-                    <SelectItem value="linkedin">LinkedIn</SelectItem>
-                    <SelectItem value="cold_call">Cold Call</SelectItem>
+                    <SelectItem value="Website">Website</SelectItem>
+                    <SelectItem value="Google Ads">Google Ads</SelectItem>
+                    <SelectItem value="Meta Ads">Meta Ads</SelectItem>
+                    <SelectItem value="Referral">Referral</SelectItem>
+                    <SelectItem value="LinkedIn">LinkedIn</SelectItem>
+                    <SelectItem value="Cold Call">Cold Call</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

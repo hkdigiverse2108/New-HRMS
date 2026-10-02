@@ -35,6 +35,33 @@ async def apply_leave(
 
     doc = await LeaveService.apply_leave(employee_id=target_employee_id, leave_data=payload.model_dump())
     
+    try:
+        from app.repository.notification import NotificationRepository
+        from app.database.db import get_database
+        db = get_database()
+        personal = current_employee.get("personal_info", {})
+        emp_name = f"{personal.get('first_name', '')} {personal.get('last_name', '')}".strip() or current_employee.get("name") or "An employee"
+        hr_admins = await db["employees"].find({
+            "$or": [
+                {"work_details.system_role": {"$in": ["Admin", "HR", "superadmin", "Sub-Admin"]}},
+                {"role": {"$in": ["Admin", "HR", "superadmin"]}}
+            ]
+        }).to_list(length=20)
+        curr_id = str(current_employee.get("_id") or current_employee.get("id") or "")
+        for hr_admin in hr_admins:
+            recipient_id = str(hr_admin.get("_id") or hr_admin.get("id") or "")
+            if recipient_id and recipient_id != curr_id:
+                await NotificationRepository.create_notification({
+                    "recipient_id": recipient_id,
+                    "title": f"Leave Request: {emp_name}",
+                    "message": f"{emp_name} requested {payload.type} ({payload.start_date} to {payload.end_date}).",
+                    "type": "leave",
+                    "action_url": "/employees/leave",
+                    "is_read": False
+                })
+    except Exception as e:
+        print(f"Error creating leave notification: {e}")
+
     # Invalidate leave and attendance caches
     await clear_pattern("leaves:list:*")
     await clear_pattern("attendance:*")
@@ -144,6 +171,22 @@ async def update_leave_status(
         rejection_reason=payload.rejection_reason,
         decided_by=decider_name
     )
+
+    try:
+        from app.repository.notification import NotificationRepository
+        target_emp_id = updated_doc.get("employee_id") if isinstance(updated_doc, dict) else None
+        if target_emp_id:
+            reason_note = f" Reason: {payload.rejection_reason}" if payload.rejection_reason else ""
+            await NotificationRepository.create_notification({
+                "recipient_id": str(target_emp_id),
+                "title": f"Leave Request {payload.status}",
+                "message": f"Your leave request has been {payload.status.lower()} by {decider_name}.{reason_note}",
+                "type": "leave",
+                "action_url": "/employees/leave",
+                "is_read": False
+            })
+    except Exception as e:
+        print(f"Error creating leave update notification: {e}")
 
     # Invalidate Redis caches
     await delete_cache(f"leave:{leave_id}")

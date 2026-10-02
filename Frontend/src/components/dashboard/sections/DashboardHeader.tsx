@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
-import { UserPlus, CheckSquare, Briefcase, Receipt, Clock, Settings, X, Plus, Search } from "lucide-react";
+import { UserPlus, CheckSquare, Briefcase, Receipt, Clock, Settings, X, Plus, Search, BellRing } from "lucide-react";
 import { formatDate, cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog";
 import { useAuth } from "@/components/auth/AuthContext";
+import { isUserAdmin } from "@/lib/permissions";
+import { SendUrgentMeetingModal } from "@/components/common/SendUrgentMeetingModal";
 
 import { navItems } from "@/components/nav-data";
 import { Link2 } from "lucide-react";
@@ -76,7 +78,12 @@ export function DashboardHeader({ setActive, onAction }: { setActive?: ((url: st
   const totalWorkdays = Array.from({ length: daysInMonth }, (_, i) => i + 1).filter(isWorkday).length;
   const passedWorkdays = Array.from({ length: istNow.getDate() }, (_, i) => i + 1).filter(isWorkday).length;
   const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
+  const [isSummonOpen, setIsSummonOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const isLeaderOrAdmin = Boolean(
+    isUserAdmin(user) || 
+    ["Admin", "HR", "Manager", "Sub-Admin", "Team Lead", "CEO", "CTO"].includes((user as any)?.role || (user as any)?.work_details?.system_role || "")
+  );
   const [selectedActionIds, setSelectedActionIds] = useState<string[]>(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("hrms_dashboard_actions");
@@ -109,7 +116,18 @@ export function DashboardHeader({ setActive, onAction }: { setActive?: ((url: st
           </h1>
           <p className="text-xs sm:text-[14px] text-muted-foreground">Today's overview — everything moving across the company, in one screen.</p>
         </div>
-        <div className="flex flex-wrap gap-2 sm:gap-3 justify-start lg:justify-end w-full lg:max-w-xl">
+        <div className="flex flex-wrap gap-2 sm:gap-3 justify-start lg:justify-end w-full lg:max-w-xl items-center">
+          {isLeaderOrAdmin && (
+            <button
+              type="button"
+              onClick={() => setIsSummonOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-full text-[12px] font-bold shadow-md shadow-rose-200 transition-all cursor-pointer animate-pulse hover:animate-none group"
+              title="Instant Emergency Meeting Summon to Team"
+            >
+              <BellRing className="h-3.5 w-3.5 text-white group-hover:rotate-12 transition-transform" />
+              <span>Urgent Summon</span>
+            </button>
+          )}
           {activeActions.map(action => (
             <button key={action.id} onClick={() => setActive?.(action.url)} className="flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-white border border-border/80 rounded-full text-[12px] font-bold text-foreground/80 shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:bg-muted/50 transition-colors cursor-pointer group">
               <action.icon className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors" /> {action.title}
@@ -207,6 +225,11 @@ export function DashboardHeader({ setActive, onAction }: { setActive?: ((url: st
           </div>
         </DialogContent>
       </Dialog>
+
+      <SendUrgentMeetingModal
+        isOpen={isSummonOpen}
+        onClose={() => setIsSummonOpen(false)}
+      />
     </>
   );
 }

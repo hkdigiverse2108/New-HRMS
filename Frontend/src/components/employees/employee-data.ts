@@ -40,6 +40,14 @@ export interface Employee {
   gender?: string;
   position?: string;
   requiredDocuments?: string[];
+  securityDepositExempt?: boolean;
+  securityDepositDirectPayments?: Array<{
+    amount: number;
+    date: string;
+    note?: string;
+    recordedBy?: string;
+  }>;
+  targetSecurityDeposit?: number;
   hasBond?: boolean;
   bondStartDate?: string;
   bondEndDate?: string;

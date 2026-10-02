@@ -28,7 +28,15 @@ import {
   Copy,
   Star,
   Pin,
-  Share2
+  Share2,
+  Info,
+  Sparkles,
+  ShieldCheck,
+  MessageSquare,
+  UserPlus,
+  FileText,
+  Bell,
+  BellOff
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
@@ -44,6 +52,7 @@ export interface PollOption {
   id: string;
   text: string;
   voters: string[];
+  voter_details?: Array<{ id: string; name: string; avatar?: string; time?: string }>;
   voters_count?: number;
   user_has_voted?: boolean;
 }
@@ -84,6 +93,7 @@ export interface ChatMessage {
   reply_to?: ReplyPreview | null | undefined;
   reactions: Record<string, string[]>;
   read_by: string[];
+  is_read_by?: any[];
   is_pinned?: boolean | undefined;
   poll?: PollData | null | undefined;
   created_at: string;
@@ -907,6 +917,14 @@ function ChatInner() {
   } | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
 
+  // Modals for Poll Votes and Message Info (WhatsApp style)
+  const [viewVotesPollMsg, setViewVotesPollMsg] = useState<ChatMessage | null>(null);
+  const [messageInfoMsg, setMessageInfoMsg] = useState<ChatMessage | null>(null);
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission>(
+    typeof Notification !== "undefined" ? Notification.permission : "default"
+  );
+  const hasUserDismissedActiveRef = useRef(false);
+
   const handleContextMenu = (
     e: React.MouseEvent,
     msg: ChatMessage,
@@ -1029,6 +1047,7 @@ function ChatInner() {
         reply_to: replyNorm,
         reactions,
         read_by: readBy,
+        is_read_by: Array.isArray(m?.is_read_by) ? m.is_read_by : readBy,
         is_pinned: Boolean(m?.is_pinned),
         poll: pollData,
         created_at: m?.created_at || m?.timestamp || m?.createdAt || new Date().toISOString(),
@@ -1038,16 +1057,114 @@ function ChatInner() {
     [myUserId, myEmployeeId, user?.name, user?.avatar, user?.profile_photo]
   );
 
-  // Ask Chrome notification permission once + close emoji on outside click
-  useEffect(() => {
+  // Explicit desktop notification permission requester (triggered by click gesture)
+  const requestDesktopNotificationPermission = async () => {
+    if (typeof Notification === "undefined") {
+      toast.error("Desktop notifications are not supported in this browser.");
+      return;
+    }
     try {
-      if (typeof Notification !== "undefined" && Notification.permission === "default") {
-        Notification.requestPermission().catch(() => {});
+      const perm = await Notification.requestPermission();
+      setNotifPermission(perm);
+      if (perm === "granted") {
+        toast.success("Desktop notifications enabled!");
+        try {
+          new Notification("HK DigiVerse HRMS", {
+            body: "Desktop notifications are now active. You will receive alerts when new messages arrive!",
+            icon: "/favicon.ico",
+          });
+        } catch {}
+      } else if (perm === "denied") {
+        toast.warning("Notifications blocked. Please allow notifications from your browser site settings.");
       }
     } catch {
       // ignore
     }
+  };
+
+  // Safe Desktop Notification dispatcher (works across desktop tabs and window unfocused)
+  const showDesktopNotification = useCallback((title: string, body: string, channelId: string) => {
+    if (typeof Notification === "undefined") return;
+    if (Notification.permission !== "granted") return;
+    try {
+      const n = new Notification(title, {
+        body,
+        icon: "/favicon.ico",
+        tag: `chat-${channelId}`,
+      });
+      n.onclick = () => {
+        try {
+          window.focus();
+        } catch {}
+        hasUserDismissedActiveRef.current = false;
+        setActiveChannelId(channelId);
+        n.close();
+      };
+    } catch {
+      if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.ready.then((reg) => {
+          reg.showNotification(title, {
+            body,
+            icon: "/favicon.ico",
+            tag: `chat-${channelId}`,
+          });
+        }).catch(() => {});
+      }
+    }
   }, []);
+
+  // Global ESC key listener to deselect active chat into WhatsApp empty state or close active modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (contextMenu) {
+          setContextMenu(null);
+          return;
+        }
+        if (reactionPickerMsgId) {
+          setReactionPickerMsgId(null);
+          return;
+        }
+        if (showEmojiPicker) {
+          setShowEmojiPicker(false);
+          return;
+        }
+        if (isSearchOpen) {
+          setIsSearchOpen(false);
+          setChatSearchQuery("");
+          return;
+        }
+        if (isPollModalOpen) {
+          setIsPollModalOpen(false);
+          return;
+        }
+        if (viewVotesPollMsg) {
+          setViewVotesPollMsg(null);
+          return;
+        }
+        if (messageInfoMsg) {
+          setMessageInfoMsg(null);
+          return;
+        }
+        // Deselect chat and show empty state (WhatsApp Web ESC behavior)
+        if (activeChannelId) {
+          hasUserDismissedActiveRef.current = true;
+          setActiveChannelId(null);
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    contextMenu,
+    reactionPickerMsgId,
+    showEmojiPicker,
+    isSearchOpen,
+    isPollModalOpen,
+    viewVotesPollMsg,
+    messageInfoMsg,
+    activeChannelId,
+  ]);
 
   useEffect(() => {
     if (!showEmojiPicker) return;
@@ -1283,7 +1400,7 @@ function ChatInner() {
       if (res && res.length > 0) {
         setChannels(res);
         const currentActive = activeChannelIdRef.current;
-        if (!currentActive) {
+        if (!currentActive && !hasUserDismissedActiveRef.current) {
           const firstChan = res[0] as ChatChannel | undefined;
           const firstId = firstChan?.id || (firstChan as any)?._id;
           if (firstId) setActiveChannelId(firstId);
@@ -1301,7 +1418,7 @@ function ChatInner() {
           { id: "chan-design", name: "design", is_dm: false, members: [], created_by: "system", created_at: "", unread_count: 1 }
         ];
         setChannels(defaultChannels);
-        if (!activeChannelIdRef.current) setActiveChannelId("chan-engineering");
+        if (!activeChannelIdRef.current && !hasUserDismissedActiveRef.current) setActiveChannelId("chan-engineering");
       }
 
       // Check online presence
@@ -1330,7 +1447,7 @@ function ChatInner() {
         { id: "chan-design", name: "design", is_dm: false, members: [], created_by: "system", created_at: "", unread_count: 1 }
       ];
       setChannels(defaultChannels);
-      if (!activeChannelIdRef.current) setActiveChannelId("chan-engineering");
+      if (!activeChannelIdRef.current && !hasUserDismissedActiveRef.current) setActiveChannelId("chan-engineering");
     }
   }, []);
 
@@ -1575,21 +1692,8 @@ function ChatInner() {
                 }
                 try {
                   const tabHidden = typeof document !== "undefined" && (document.hidden || !document.hasFocus());
-                  if (typeof Notification !== "undefined" && Notification.permission === "granted" && (tabHidden || !isViewingThisChat)) {
-                    const n = new Notification(msg.sender_name || "New message", {
-                      body: preview.slice(0, 150),
-                      tag: msg.id,
-                    });
-                    n.onclick = () => {
-                      try {
-                        window.focus();
-                      } catch {}
-                      setActiveChannelId(msg.channel_id);
-                      fetchMessages(msg.channel_id);
-                      try {
-                        n.close();
-                      } catch {}
-                    };
+                  if (tabHidden || !isViewingThisChat) {
+                    showDesktopNotification(msg.sender_name || "New message", preview.slice(0, 150), msg.channel_id);
                   }
                 } catch {
                   // ignore
@@ -1631,30 +1735,53 @@ function ChatInner() {
                 // active channel opened -> mark read immediately
                 api.post(`/chat/channels/${msg.channel_id}/read`, {}, { showErrorToast: false }).catch(() => {});
               }
-            } else if (data.type === "reaction_updated") {
+            } else if (data.type === "reaction_updated" || data.action === "reaction_updated") {
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === data.message_id ? { ...m, reactions: normalizeReactions(data.reactions) } : m
                 )
               );
-            } else if (data.type === "poll_voted") {
+            } else if (data.type === "poll_voted" || data.type === "poll_updated" || data.action === "poll_updated") {
               setMessages((prev) =>
                 prev.map((m) => (m.id === data.message_id ? { ...m, poll: data.poll } : m))
               );
+              setViewVotesPollMsg((prev) => (prev && prev.id === data.message_id ? { ...prev, poll: data.poll } : prev));
             } else if (data.type === "message_deleted" || data.action === "message_deleted") {
               setMessages((prev) => prev.filter((m) => m.id !== data.message_id));
-            } else if (data.type === "read_receipt" || data.action === "read_receipt") {
+            } else if (data.type === "read_receipt" || data.action === "read_receipt" || data.type === "messages_read" || data.action === "messages_read") {
               if (String(data.channel_id) === String(activeChannelIdRef.current)) {
                 const readerId = String(data.user_id);
+                const readerName = data.user_name || "";
+                const readAt = data.timestamp || new Date().toISOString();
                 setMessages((prev) =>
                   prev.map((m) => {
                     const currentRead = Array.isArray(m.read_by) ? [...m.read_by] : [];
-                    if (!currentRead.includes(readerId)) {
-                      return { ...m, read_by: [...currentRead, readerId] };
-                    }
-                    return m;
+                    const currentIsRead = Array.isArray(m.is_read_by) ? [...m.is_read_by] : [];
+                    const nextRead = currentRead.includes(readerId) ? currentRead : [...currentRead, readerId];
+                    const nextIsRead = currentIsRead.some((r: any) => (typeof r === "object" ? String(r.id) === readerId : String(r) === readerId))
+                      ? currentIsRead
+                      : [...currentIsRead, { id: readerId, name: readerName, time: readAt }];
+                    return {
+                      ...m,
+                      read_by: nextRead,
+                      is_read_by: nextIsRead
+                    };
                   })
                 );
+                setMessageInfoMsg((prev) => {
+                  if (!prev) return null;
+                  const currentRead = Array.isArray(prev.read_by) ? [...prev.read_by] : [];
+                  const currentIsRead = Array.isArray(prev.is_read_by) ? [...prev.is_read_by] : [];
+                  const nextRead = currentRead.includes(readerId) ? currentRead : [...currentRead, readerId];
+                  const nextIsRead = currentIsRead.some((r: any) => (typeof r === "object" ? String(r.id) === readerId : String(r) === readerId))
+                    ? currentIsRead
+                    : [...currentIsRead, { id: readerId, name: readerName, time: readAt }];
+                  return {
+                    ...prev,
+                    read_by: nextRead,
+                    is_read_by: nextIsRead
+                  };
+                });
               }
             } else if (data.type === "user_presence") {
               setPresenceMap((prev) => ({
@@ -2424,22 +2551,29 @@ function ChatInner() {
     const prevMessages = [...messages];
     const myId = myUserId;
 
-    // 1. Instant optimistic update (0ms delay)
+    // 1. Instant optimistic update (WhatsApp style: 1 reaction per person per message)
     setMessages((prev) =>
       prev.map((m) => {
         if (m.id !== messageId) return m;
-        const current = { ...(m.reactions || {}) };
-        const list = current[emoji] ? [...current[emoji]] : [];
-        if (list.includes(myId)) {
-          const filtered = list.filter((id) => id !== myId);
-          if (filtered.length > 0) {
-            current[emoji] = filtered;
-          } else {
-            delete current[emoji];
+        const current: Record<string, string[]> = {};
+        let hadThisEmoji = false;
+
+        // Clean out myId from all emojis
+        Object.entries(m.reactions || {}).forEach(([em, users]) => {
+          if (em === emoji && users.includes(myId)) {
+            hadThisEmoji = true;
           }
-        } else {
-          current[emoji] = [...list, myId];
+          const filtered = users.filter((id) => id !== myId);
+          if (filtered.length > 0) {
+            current[em] = filtered;
+          }
+        });
+
+        // Toggle: if I didn't already have this emoji, add it
+        if (!hadThisEmoji) {
+          current[emoji] = [...(current[emoji] || []), myId];
         }
+
         return { ...m, reactions: current };
       })
     );
@@ -2494,6 +2628,11 @@ function ChatInner() {
     const myId = myUserId;
     if (!myId) return;
 
+    const myEmp = (employees || []).find(
+      (e) => String(e.id) === myId || String((e as any)._id) === myId || (myEmployeeId && String(e.id) === myEmployeeId)
+    );
+    const myName = myEmp?.name || user?.name || "You";
+
     // 1. Instant optimistic update for poll vote (0ms delay)
     setMessages((prev) =>
       prev.map((m) => {
@@ -2501,18 +2640,25 @@ function ChatInner() {
         const allowMultiple = Boolean(m.poll.allow_multiple_answers);
         const options = (m.poll.options || []).map((opt) => {
           let voters = Array.isArray(opt.voters) ? [...opt.voters] : [];
+          let voter_details = Array.isArray(opt.voter_details) ? [...opt.voter_details] : [];
+          const hasVoted = voters.includes(myId);
+
           if (opt.id === optionId) {
-            if (voters.includes(myId)) {
+            if (hasVoted) {
               voters = voters.filter((id) => id !== myId);
+              voter_details = voter_details.filter((v) => (typeof v === "object" ? String(v.id) !== myId : String(v) !== myId));
             } else {
               voters.push(myId);
+              voter_details.push({ id: myId, name: myName, time: new Date().toISOString() });
             }
           } else if (!allowMultiple) {
             voters = voters.filter((id) => id !== myId);
+            voter_details = voter_details.filter((v) => (typeof v === "object" ? String(v.id) !== myId : String(v) !== myId));
           }
           return {
             ...opt,
             voters,
+            voter_details,
             voters_count: voters.length,
             user_has_voted: voters.includes(myId)
           };
@@ -2526,6 +2672,37 @@ function ChatInner() {
         };
       })
     );
+
+    // Sync open View Votes modal
+    setViewVotesPollMsg((prev) => {
+      if (!prev || prev.id !== messageId || !prev.poll) return prev;
+      const allowMultiple = Boolean(prev.poll.allow_multiple_answers);
+      const options = (prev.poll.options || []).map((opt) => {
+        let voters = Array.isArray(opt.voters) ? [...opt.voters] : [];
+        let voter_details = Array.isArray(opt.voter_details) ? [...opt.voter_details] : [];
+        const hasVoted = voters.includes(myId);
+        if (opt.id === optionId) {
+          if (hasVoted) {
+            voters = voters.filter((id) => id !== myId);
+            voter_details = voter_details.filter((v) => (typeof v === "object" ? String(v.id) !== myId : String(v) !== myId));
+          } else {
+            voters.push(myId);
+            voter_details.push({ id: myId, name: myName, time: new Date().toISOString() });
+          }
+        } else if (!allowMultiple) {
+          voters = voters.filter((id) => id !== myId);
+          voter_details = voter_details.filter((v) => (typeof v === "object" ? String(v.id) !== myId : String(v) !== myId));
+        }
+        return {
+          ...opt,
+          voters,
+          voter_details,
+          voters_count: voters.length,
+          user_has_voted: voters.includes(myId)
+        };
+      });
+      return { ...prev, poll: { ...prev.poll, options } };
+    });
 
     // 2. Network call
     try {
@@ -3039,7 +3216,7 @@ function ChatInner() {
         </div>
 
         {/* Jump to... Search Input */}
-        <div className="p-3">
+        <div className="p-3 pb-2">
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -3051,6 +3228,26 @@ function ChatInner() {
             />
           </div>
         </div>
+
+        {/* Desktop Notification Alert Enable Banner */}
+        {notifPermission === "default" && (
+          <div className="mx-3 mb-2 p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-between gap-2 shrink-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <Bell className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-foreground truncate">Desktop Alerts</p>
+                <p className="text-[11px] text-muted-foreground truncate">Alerts when app is in background</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={requestDesktopNotificationPermission}
+              className="px-2.5 py-1 text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-md shrink-0 shadow-xs cursor-pointer transition-all active:scale-95"
+            >
+              Enable
+            </button>
+          </div>
+        )}
 
         {/* Sidebar Navigation: CHANNELS & DIRECT MESSAGES */}
         <div className="flex-1 overflow-y-auto px-2 pb-4 space-y-6">
@@ -3185,9 +3382,58 @@ function ChatInner() {
       </div>
 
       {/* ======================================================== */}
-      {/* 2. MAIN CHAT AREA (EXACT HEADER & MESSAGE BUBBLES)       */}
+      {/* 2. MAIN CHAT AREA (OR WHATSAPP-STYLE BLANK SCREEN ON ESC) */}
       {/* ======================================================== */}
-      <div className="flex-1 flex flex-col bg-background min-w-0">
+      {!activeChannelId || !activeChannel ? (
+        <div className="flex-1 flex flex-col items-center justify-center bg-muted/10 p-8 text-center select-none relative overflow-hidden">
+          {/* Mobile open button */}
+          <button
+            type="button"
+            onClick={() => setIsMobileChannelsOpen(true)}
+            className="md:hidden absolute top-4 left-4 p-2 text-muted-foreground hover:text-foreground bg-card border border-border rounded-xl shadow-xs"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+
+          {/* WhatsApp Web style center illustration & text */}
+          <div className="w-20 h-20 rounded-full bg-emerald-500/10 flex items-center justify-center mb-5 ring-8 ring-emerald-500/5">
+            <MessageSquare className="w-10 h-10 text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <h2 className="text-xl font-bold text-foreground mb-2">HK DigiVerse Workplace Chat</h2>
+          <p className="text-sm text-muted-foreground max-w-sm mb-8 leading-relaxed">
+            Select a conversation from the sidebar to start chatting, or press <kbd className="px-1.5 py-0.5 text-xs font-semibold bg-background border border-border rounded shadow-xs">Esc</kbd> anytime to return to this screen.
+          </p>
+
+          <div className="flex items-center gap-8 text-xs text-muted-foreground">
+            <button
+              type="button"
+              onClick={() => setIsNewDmOpen(true)}
+              className="flex flex-col items-center gap-2 group cursor-pointer"
+            >
+              <div className="w-12 h-12 rounded-full bg-card border border-border flex items-center justify-center group-hover:border-emerald-500 group-hover:text-emerald-600 transition-all shadow-xs">
+                <UserPlus className="w-5 h-5" />
+              </div>
+              <span className="group-hover:text-foreground font-medium">New chat</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsNewChannelOpen(true)}
+              className="flex flex-col items-center gap-2 group cursor-pointer"
+            >
+              <div className="w-12 h-12 rounded-full bg-card border border-border flex items-center justify-center group-hover:border-emerald-500 group-hover:text-emerald-600 transition-all shadow-xs">
+                <Users className="w-5 h-5" />
+              </div>
+              <span className="group-hover:text-foreground font-medium">New group</span>
+            </button>
+          </div>
+
+          <div className="absolute bottom-6 flex items-center gap-1.5 text-xs text-muted-foreground/70">
+            <ShieldCheck className="w-4 h-4 text-emerald-600/70" />
+            <span>End-to-end encrypted internal team communication</span>
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 flex flex-col bg-background min-w-0">
         {/* Chat Header: # engineering + Menu & 3 Dots */}
         <div className="px-4 py-3.5 border-b border-border flex items-center justify-between bg-card shrink-0">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -3774,13 +4020,19 @@ function ChatInner() {
                                 const percent = Math.round((votes / totalVotes) * 100);
                                 const hasVoted = Array.isArray(opt.voters) && opt.voters.some((v) => String(v) === myUserId || (myEmployeeId && String(v) === myEmployeeId));
 
-                                // Resolve voter names (Task 43)
-                                const voterNames = (opt.voters || []).map((vid) => {
-                                  const sVid = String(vid);
-                                  if (sVid === myUserId || (myEmployeeId && sVid === myEmployeeId)) return "You";
-                                  const found = (employees || []).find((e) => String(e.id) === sVid || String((e as any)._id) === sVid);
-                                  return found?.name || "Colleague";
-                                });
+                                // Resolve voter names (WhatsApp voter details + employee lookup)
+                                const voterNames = (opt.voter_details && opt.voter_details.length > 0)
+                                  ? opt.voter_details.map((vd) => {
+                                      const sVid = String(vd.id);
+                                      if (sVid === myUserId || (myEmployeeId && sVid === myEmployeeId)) return "You";
+                                      return vd.name || "Colleague";
+                                    })
+                                  : (opt.voters || []).map((vid) => {
+                                      const sVid = String(vid);
+                                      if (sVid === myUserId || (myEmployeeId && sVid === myEmployeeId)) return "You";
+                                      const found = (employees || []).find((e) => String(e.id) === sVid || String((e as any)._id) === sVid);
+                                      return found?.name || "Colleague";
+                                    });
 
                                 return (
                                   <div key={opt.id} className="space-y-1">
@@ -3829,6 +4081,27 @@ function ChatInner() {
                                   </div>
                                 );
                               })}
+                            </div>
+
+                            {/* WhatsApp style View votes button */}
+                            <div className="pt-2 border-t border-border/40 flex items-center justify-between">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setViewVotesPollMsg(msg);
+                                }}
+                                className={cn(
+                                  "text-[11px] font-semibold hover:underline flex items-center gap-1 cursor-pointer transition-colors",
+                                  isMe ? "text-emerald-200 hover:text-white" : "text-emerald-600 dark:text-emerald-400"
+                                )}
+                              >
+                                <Users className="w-3.5 h-3.5" />
+                                <span>View votes</span>
+                              </button>
+                              <span className={cn("text-[10px]", isMe ? "text-white/70" : "text-muted-foreground")}>
+                                {msg.poll!.options.reduce((acc, o) => acc + (Array.isArray(o.voters) ? o.voters.length : 0), 0)} votes
+                              </span>
                             </div>
                           </div>
                         )}
@@ -4360,6 +4633,7 @@ function ChatInner() {
           </div>
         </div>
       </div>
+    )}
 
       {/* ======================================================== */}
       {/* 5. CLIPBOARD IMAGE PASTE MODAL (WhatsApp Web multi-image style) */}
@@ -5521,6 +5795,34 @@ function ChatInner() {
 
           {/* Context Menu Options */}
           <div className="py-0.5 space-y-0.5">
+            {/* WhatsApp style Message Info */}
+            <button
+              type="button"
+              onClick={() => {
+                setMessageInfoMsg(contextMenu.msg);
+                setContextMenu(null);
+              }}
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted dark:hover:bg-[#182229] text-foreground transition-colors cursor-pointer text-left font-medium"
+            >
+              <Info className="w-4 h-4 text-emerald-600" />
+              <span>Message info</span>
+            </button>
+
+            {/* Poll view votes */}
+            {contextMenu.msg.poll && (
+              <button
+                type="button"
+                onClick={() => {
+                  setViewVotesPollMsg(contextMenu.msg);
+                  setContextMenu(null);
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted dark:hover:bg-[#182229] text-foreground transition-colors cursor-pointer text-left font-medium"
+              >
+                <Users className="w-4 h-4 text-emerald-600" />
+                <span>View votes</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => {
@@ -5630,6 +5932,282 @@ function ChatInner() {
                 <span>Delete message</span>
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* 15. POLL VOTES DETAILS MODAL (WhatsApp style)            */}
+      {/* ======================================================== */}
+      {viewVotesPollMsg && viewVotesPollMsg.poll && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col max-h-[85vh]">
+            <div className="p-4 sm:p-5 border-b border-border flex items-center justify-between bg-muted/20 shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                  <BarChart2 className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="font-bold text-foreground text-sm sm:text-base truncate">Poll Details</h3>
+                  <p className="text-xs text-muted-foreground truncate">{viewVotesPollMsg.poll.question}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewVotesPollMsg(null)}
+                className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted cursor-pointer transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1">
+              {viewVotesPollMsg.poll.options.map((opt, oIdx) => {
+                const totalVotes =
+                  viewVotesPollMsg.poll!.options.reduce((acc, o) => acc + (Array.isArray(o.voters) ? o.voters.length : 0), 0) || 1;
+                const votesCount = Array.isArray(opt.voters) ? opt.voters.length : 0;
+                const pct = Math.round((votesCount / totalVotes) * 100);
+
+                const votersList = (opt.voter_details && opt.voter_details.length > 0)
+                  ? opt.voter_details
+                  : (opt.voters || []).map((vid) => {
+                      const sVid = String(vid);
+                      const found = (employees || []).find((e) => String(e.id) === sVid || String((e as any)._id) === sVid);
+                      return {
+                        id: sVid,
+                        name: sVid === myUserId || (myEmployeeId && sVid === myEmployeeId) ? "You" : found?.name || "Colleague",
+                        avatar: found?.profile_photo || found?.avatar,
+                        time: undefined
+                      };
+                    });
+
+                return (
+                  <div key={opt.id || oIdx} className="bg-muted/15 border border-border/80 rounded-2xl p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="font-bold text-foreground text-sm flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 text-xs flex items-center justify-center font-bold">
+                          {oIdx + 1}
+                        </span>
+                        <span>{opt.text}</span>
+                      </div>
+                      <span className="text-xs font-semibold text-muted-foreground font-mono">
+                        {votesCount} {votesCount === 1 ? "vote" : "votes"} ({pct}%)
+                      </span>
+                    </div>
+
+                    <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                      <div className="bg-emerald-600 h-2 rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
+                    </div>
+
+                    {votersList.length > 0 ? (
+                      <div className="pt-2 border-t border-border/60 space-y-2">
+                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                          Voted by ({votersList.length}):
+                        </p>
+                        <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                          {votersList.map((voter: any, vIdx: number) => {
+                            const vId = String(voter.id || voter);
+                            const isMe = vId === myUserId || (myEmployeeId && vId === myEmployeeId);
+                            const foundEmp = (employees || []).find((e) => String(e.id) === vId || String((e as any)._id) === vId);
+                            const name = isMe ? "You" : (voter.name || foundEmp?.name || "Colleague");
+                            const designation = (foundEmp as any)?.work_details?.designation || (foundEmp as any)?.designation || (foundEmp as any)?.role || "";
+
+                            return (
+                              <div key={vIdx} className="flex items-center justify-between p-1.5 rounded-lg hover:bg-muted/40 transition-colors">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div className="w-7 h-7 rounded-full bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden">
+                                    {foundEmp?.profile_photo || foundEmp?.avatar ? (
+                                      <img src={foundEmp.profile_photo || foundEmp.avatar} alt={name} className="w-full h-full object-cover" />
+                                    ) : (
+                                      name.charAt(0).toUpperCase()
+                                    )}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-medium text-foreground truncate flex items-center gap-1.5">
+                                      <span>{name}</span>
+                                      {isMe && <span className="text-[10px] text-emerald-600 bg-emerald-500/10 px-1 rounded">You</span>}
+                                    </p>
+                                    {designation && (
+                                      <p className="text-[10px] text-muted-foreground truncate">{designation}</p>
+                                    )}
+                                  </div>
+                                </div>
+                                {voter.time && (
+                                  <span className="text-[10px] text-muted-foreground shrink-0 font-mono">
+                                    {new Date(voter.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-muted-foreground italic">No votes yet for this option</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="p-3 border-t border-border bg-muted/10 text-right shrink-0">
+              <button
+                type="button"
+                onClick={() => setViewVotesPollMsg(null)}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* 16. MESSAGE INFO MODAL (WhatsApp style Read / Delivered) */}
+      {/* ======================================================== */}
+      {messageInfoMsg && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col max-h-[85vh]">
+            <div className="p-4 border-b border-border flex items-center justify-between bg-muted/20 shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                  <Info className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-foreground text-base">Message Info</h3>
+                  <p className="text-xs text-muted-foreground">Read receipts & delivery details</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMessageInfoMsg(null)}
+                className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted cursor-pointer transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 overflow-y-auto space-y-4 flex-1">
+              <div className="p-3 bg-muted/30 border border-border rounded-2xl">
+                <p className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider mb-1">Message</p>
+                <p className="text-xs text-foreground font-medium break-words">
+                  {messageInfoMsg.content || (messageInfoMsg.media_type ? `[${messageInfoMsg.media_type}] ${messageInfoMsg.file_name || ""}` : "Message")}
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-1.5 text-right font-mono">
+                  Sent: {new Date(messageInfoMsg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                </p>
+              </div>
+
+              {(() => {
+                const readIds = new Set<string>();
+                (messageInfoMsg.read_by || []).forEach((id) => readIds.add(String(id)));
+                (Array.isArray(messageInfoMsg.is_read_by) ? messageInfoMsg.is_read_by : []).forEach((item: any) => {
+                  if (typeof item === "object" && item.id) readIds.add(String(item.id));
+                  else if (typeof item === "string") readIds.add(String(item));
+                });
+                readIds.delete(String(messageInfoMsg.sender_id));
+                const readMembers = Array.from(readIds);
+
+                const allMembers = (activeChannel?.members || []).map(String);
+                const deliveredMembers = allMembers.filter(
+                  (mid) => !readIds.has(mid) && mid !== String(messageInfoMsg.sender_id)
+                );
+
+                return (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs font-bold text-foreground">
+                        <div className="flex items-center gap-1.5 text-sky-500">
+                          <CheckCheck className="w-4 h-4" />
+                          <span>Read by ({readMembers.length})</span>
+                        </div>
+                        <span className="text-[10px] text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full font-medium">
+                          Live sync
+                        </span>
+                      </div>
+
+                      {readMembers.length > 0 ? (
+                        <div className="space-y-1.5 bg-muted/15 border border-border rounded-xl p-2 max-h-44 overflow-y-auto">
+                          {readMembers.map((uid) => {
+                            const isMe = uid === myUserId || (myEmployeeId && uid === myEmployeeId);
+                            const emp = (employees || []).find((e) => String(e.id) === uid || String((e as any)._id) === uid);
+                            const name = isMe ? "You" : emp?.name || "Colleague";
+                            const designation = (emp as any)?.work_details?.designation || (emp as any)?.designation || (emp as any)?.role || "";
+
+                            return (
+                              <div key={uid} className="flex items-center justify-between p-1.5 rounded-lg hover:bg-muted/40 transition-colors">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div className="w-7 h-7 rounded-full bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden">
+                                    {emp?.profile_photo || emp?.avatar ? (
+                                      <img src={emp.profile_photo || emp.avatar} alt={name} className="w-full h-full object-cover" />
+                                    ) : (
+                                      name.charAt(0).toUpperCase()
+                                    )}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-semibold text-foreground truncate flex items-center gap-1.5">
+                                      <span>{name}</span>
+                                      {isMe && <span className="text-[10px] text-emerald-600 bg-emerald-500/10 px-1 rounded">You</span>}
+                                    </p>
+                                    {designation && <p className="text-[10px] text-muted-foreground truncate">{designation}</p>}
+                                  </div>
+                                </div>
+                                <span className="text-[10px] text-sky-500 font-medium shrink-0 flex items-center gap-1">
+                                  <CheckCheck className="w-3.5 h-3.5" /> Seen
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground italic pl-1">No one has seen this message yet</p>
+                      )}
+                    </div>
+
+                    {deliveredMembers.length > 0 && (
+                      <div className="space-y-2 pt-2 border-t border-border">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground">
+                          <Check className="w-4 h-4" />
+                          <span>Delivered to ({deliveredMembers.length})</span>
+                        </div>
+                        <div className="space-y-1.5 bg-muted/15 border border-border rounded-xl p-2 max-h-36 overflow-y-auto">
+                          {deliveredMembers.map((uid) => {
+                            const emp = (employees || []).find((e) => String(e.id) === uid || String((e as any)._id) === uid);
+                            const name = emp?.name || "Colleague";
+                            const designation = (emp as any)?.work_details?.designation || (emp as any)?.designation || (emp as any)?.role || "";
+                            return (
+                              <div key={uid} className="flex items-center justify-between p-1.5 rounded-lg opacity-85">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center font-bold text-xs shrink-0 text-muted-foreground">
+                                    {name.charAt(0).toUpperCase()}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-medium text-foreground truncate">{name}</p>
+                                    {designation && <p className="text-[10px] text-muted-foreground truncate">{designation}</p>}
+                                  </div>
+                                </div>
+                                <span className="text-[10px] text-muted-foreground shrink-0">Delivered</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div className="p-3 border-t border-border bg-muted/10 text-right shrink-0">
+              <button
+                type="button"
+                onClick={() => setMessageInfoMsg(null)}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

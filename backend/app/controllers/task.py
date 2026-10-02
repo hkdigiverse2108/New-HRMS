@@ -283,6 +283,22 @@ async def request_task_transfer(task_id: str, data: TransferRequestPayload, curr
     updated = await TaskService.request_transfer(task_id, data.requested_to, emp_id, data.reason)
     if not updated:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to request transfer")
+
+    try:
+        from app.repository.notification import NotificationRepository
+        task_title = item.get("title", "Task")
+        sender_name = current_user.get("personal_info", {}).get("first_name") or current_user.get("name") or "A team member"
+        reason_text = f" Reason: {data.reason}" if data.reason else ""
+        await NotificationRepository.create_notification({
+            "recipient_id": str(data.requested_to),
+            "title": "Task Transfer Request",
+            "message": f"{sender_name} requested to transfer task '{task_title}' to you.{reason_text}",
+            "type": "task",
+            "action_url": "/tasks",
+            "is_read": False
+        })
+    except Exception as e:
+        print(f"Error creating task transfer request notification: {e}")
         
     return await TaskService.get_task_by_id(task_id)
 
@@ -304,6 +320,23 @@ async def accept_task_transfer(task_id: str, current_user: dict = Depends(get_cu
     updated = await TaskService.accept_transfer(task_id, item)
     if not updated:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to accept transfer")
+
+    try:
+        from app.repository.notification import NotificationRepository
+        task_title = item.get("title", "Task")
+        accepter_name = current_user.get("personal_info", {}).get("first_name") or current_user.get("name") or "User"
+        orig_requester = req.get("requested_by")
+        if orig_requester:
+            await NotificationRepository.create_notification({
+                "recipient_id": str(orig_requester),
+                "title": "Task Transfer Accepted",
+                "message": f"{accepter_name} accepted the transfer of task '{task_title}'.",
+                "type": "task",
+                "action_url": "/tasks",
+                "is_read": False
+            })
+    except Exception as e:
+        print(f"Error creating task transfer accept notification: {e}")
         
     return await TaskService.get_task_by_id(task_id)
 
@@ -326,6 +359,23 @@ async def reject_task_transfer(task_id: str, current_user: dict = Depends(get_cu
     updated = await TaskService.reject_transfer(task_id, item)
     if not updated:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to reject transfer")
+
+    try:
+        from app.repository.notification import NotificationRepository
+        task_title = item.get("title", "Task")
+        rejecter_name = current_user.get("personal_info", {}).get("first_name") or current_user.get("name") or "User"
+        orig_requester = req.get("requested_by")
+        if orig_requester and orig_requester != emp_id:
+            await NotificationRepository.create_notification({
+                "recipient_id": str(orig_requester),
+                "title": "Task Transfer Declined",
+                "message": f"{rejecter_name} declined the transfer of task '{task_title}'.",
+                "type": "task",
+                "action_url": "/tasks",
+                "is_read": False
+            })
+    except Exception as e:
+        print(f"Error creating task transfer reject notification: {e}")
         
     return await TaskService.get_task_by_id(task_id)
 

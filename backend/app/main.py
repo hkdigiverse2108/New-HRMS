@@ -30,6 +30,7 @@ from app.controllers.invoice import router as invoice_router
 from app.controllers.bank_account import router as bank_account_router
 from app.controllers.quotation import router as quotation_router
 from app.controllers.settings import router as settings_router
+from app.controllers.sales import router as sales_router
 from app.models.employee import setup_employee_indexes
 from app.models.department import setup_department_indexes
 from app.models.sub_department import setup_sub_department_indexes
@@ -139,6 +140,7 @@ app.include_router(invoice_router)
 app.include_router(bank_account_router)
 app.include_router(quotation_router)
 app.include_router(settings_router)
+app.include_router(sales_router)
 
 # Mount static image & uploads paths AFTER API routes
 app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")

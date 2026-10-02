@@ -13,6 +13,7 @@ import { SalesOverview } from "./sections/SalesOverview";
 import { FinanceOverview } from "./sections/FinanceOverview";
 import { TasksAndClients } from "./sections/TasksAndClients";
 import { HRAndNews } from "./sections/HRAndNews";
+import { CalendarWidget } from "./sections/CalendarWidget";
 
 export function Dashboard({ setActive, onAction }: { setActive?: (url: string) => void, onAction?: (action: string) => void }) {
   const { user } = useAuth();
@@ -39,6 +40,7 @@ export function Dashboard({ setActive, onAction }: { setActive?: (url: string) =
       const defaultGeneralSections = [
         "time-tracker",
         "today-schedule",
+        "calendar-widget",
         "project-delivery",
         "tasks-clients",
         "attendance-analytics",
@@ -65,6 +67,9 @@ export function Dashboard({ setActive, onAction }: { setActive?: (url: string) =
       {/* K19: Today's Schedule + Today's Tasks (no need to open anything) */}
       {showSection("today-schedule") && <TodaySchedule setActive={setActive} />}
 
+      {/* SECTION 01c: Interactive Company Calendar Widget */}
+      {showSection("calendar-widget") && <CalendarWidget setActive={setActive} />}
+
       {/* SECTION 02: Company Health (12 Metrics) */}
       {showSection("company-health") && <CompanyHealth />}
 
@@ -87,7 +92,7 @@ export function Dashboard({ setActive, onAction }: { setActive?: (url: string) =
       {showSection("finance-overview") && <FinanceOverview />}
 
       {/* SECTIONS 09 & 10: Tasks and Clients */}
-      {showSection("tasks-clients") && <TasksAndClients />}
+      {showSection("tasks-clients") && <TasksAndClients setActive={setActive} />}
 
       {/* SECTIONS 11 & 12: HR Updates and Company News */}
       {showSection("hr-news") && <HRAndNews />}

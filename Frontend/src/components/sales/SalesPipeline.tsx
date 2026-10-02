@@ -3,7 +3,7 @@ import { Plus, LayoutGrid, Table2, Clock } from "lucide-react";
 import { SearchInput } from "@/components/common/SearchInput";
 import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
-import { formatCurrency, type Lead, } from "./sales-data";
+import { formatCurrency, type Lead } from "./sales-data";
 import { useSales } from "./SalesContext";
 import { SearchableSelect } from "@/components/ui/select";
 import { useSortableData } from "@/hooks/useSortableData";
@@ -22,10 +22,10 @@ function DealCard({ lead }: { lead: Lead }) {
       className="cursor-grab active:cursor-grabbing rounded-xl border border-border bg-white p-3 shadow-sm transition-all hover:border-emerald-300 hover:shadow-md"
     >
       <p className="text-sm font-semibold leading-snug">{lead.company}</p>
-      <p className="mt-0.5 text-[11px] text-muted-foreground">{lead.contact} · {lead.city}</p>
+      <p className="mt-0.5 text-[11px] text-muted-foreground">{lead.contact} · {lead.city || ""}</p>
       <div className="mt-2 flex items-center justify-between">
-        <span className="text-xs font-medium text-muted-foreground">{lead.owner}</span>
-        <span className="text-xs font-bold text-emerald-700">{formatCurrency(lead.budget)}</span>
+        <span className="text-xs font-medium text-muted-foreground">{lead.owner || ""}</span>
+        <span className="text-xs font-bold text-emerald-700">{formatCurrency(lead.budget || 0)}</span>
       </div>
     </div>
   );
@@ -34,7 +34,7 @@ function DealCard({ lead }: { lead: Lead }) {
 /* ─── Kanban Column ────────────────────────────────────────────────────── */
 
 function KanbanColumn({ stage, color, items, onDropCard }: { stage: string; color: string; items: Lead[]; onDropCard: (id: string, stage: string) => void }) {
-  const total = items.reduce((s, l) => s + l.budget, 0);
+  const total = items.reduce((s, l) => s + (l.budget || 0), 0);
   return (
     <div
       onDragOver={(e) => {
@@ -106,7 +106,7 @@ function TableView({ data, onStageChange, activeStages }: { data: Lead[]; onStag
           {sortedData.map((lead) => (
             <tr key={lead.id} className="border-b border-border transition-colors hover:bg-accent/50">
               <td className="px-4 py-3 font-medium">{lead.company}</td>
-              <td className="px-4 py-3 text-muted-foreground">{lead.contact} · {lead.city}</td>
+              <td className="px-4 py-3 text-muted-foreground">{lead.contact} · {lead.city || ""}</td>
               <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                 <SearchableSelect
                   value={lead.stage}
@@ -118,14 +118,14 @@ function TableView({ data, onStageChange, activeStages }: { data: Lead[]; onStag
                   )}
                 />
               </td>
-              <td className="px-4 py-3 text-muted-foreground">{lead.owner}</td>
-              <td className="px-4 py-3 text-right font-semibold">{formatCurrency(lead.budget)}</td>
+              <td className="px-4 py-3 text-muted-foreground">{lead.owner || ""}</td>
+              <td className="px-4 py-3 text-right font-semibold">{formatCurrency(lead.budget || 0)}</td>
               <td className="px-4 py-3 text-center">
                 <span className={cn(
                   "inline-flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold",
-                  lead.aiScore >= 80 ? "bg-emerald-100 text-emerald-700" : lead.aiScore >= 50 ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700",
+                  (lead.aiScore ?? 0) >= 80 ? "bg-emerald-100 text-emerald-700" : (lead.aiScore ?? 0) >= 50 ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700",
                 )}>
-                  {lead.aiScore}
+                  {lead.aiScore ?? "—"}
                 </span>
               </td>
             </tr>
@@ -139,7 +139,10 @@ function TableView({ data, onStageChange, activeStages }: { data: Lead[]; onStag
 /* ─── Timeline View ────────────────────────────────────────────────────── */
 
 function TimelineView({ data }: { data: Lead[] }) {
-  const sorted = useMemo(() => [...data].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [data]);
+  const sorted = useMemo(
+    () => [...data].sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || "")),
+    [data]
+  );
 
   return (
     <div className="space-y-0">
@@ -150,9 +153,9 @@ function TimelineView({ data }: { data: Lead[] }) {
             {i < sorted.length - 1 && <div className="w-px flex-1 bg-border" />}
           </div>
           <div className="pb-6">
-            <p className="text-xs text-muted-foreground">{lead.createdAt}</p>
+            <p className="text-xs text-muted-foreground">{lead.createdAt || lead.date || "—"}</p>
             <p className="mt-0.5 text-sm font-semibold">{lead.company}</p>
-            <p className="text-xs text-muted-foreground">{lead.contact} · {lead.city} · {lead.stage} · {formatCurrency(lead.budget)}</p>
+            <p className="text-xs text-muted-foreground">{lead.contact} · {lead.city || ""} · {lead.stage} · {formatCurrency(lead.budget || 0)}</p>
           </div>
         </div>
       ))}
@@ -177,9 +180,9 @@ export function SalesPipeline({ onAction }: { onAction?: (action: string) => voi
     if (!q) return leads;
     return leads.filter(
       (l) =>
-        l.company.toLowerCase().includes(q) ||
-        l.contact.toLowerCase().includes(q) ||
-        l.owner.toLowerCase().includes(q),
+        (l.company || "").toLowerCase().includes(q) ||
+        (l.contact || "").toLowerCase().includes(q) ||
+        (l.owner || "").toLowerCase().includes(q),
     );
   }, [search, leads]);
 
@@ -205,7 +208,7 @@ export function SalesPipeline({ onAction }: { onAction?: (action: string) => voi
     return map;
   }, [filtered, activeStages]);
 
-  const totalValue = filtered.reduce((s, l) => s + l.budget, 0);
+  const totalValue = filtered.reduce((s, l) => s + (l.budget || 0), 0);
 
   return (
     <div className="space-y-5">

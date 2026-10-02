@@ -67,21 +67,44 @@ export const teamMembers: TeamMember[] = [
   { name: "Simran Kaur", role: "Sales Executive", region: "East", avatar: "SK", target: 900000, achieved: 470000, assigned: 64, contacted: 44, meetings: 12, demos: 6, proposals: 5, won: 3, lost: 13, collection: 300000, conversionRate: 5, followUpDone: 61, avgResponse: 66 },
 ];
 
+export type FollowUp = {
+  id?: string | undefined;
+  note: string;
+  date: string;
+  performedBy?: string | undefined;
+  nextFollowUpDate?: string | null | undefined;
+};
+
 export type Lead = {
   id: string;
+  _id?: string | undefined;
   company: string;
   contact: string;
-  city: string;
-  state: string;
+  email?: string | undefined;
+  phone?: string | undefined;
+  city?: string | undefined;
+  state?: string | undefined;
   stage: LeadStage;
-  category: LeadCategory;
-  source: LeadSource;
-  owner: string;
+  status?: string | undefined;
+  category: LeadCategory | string;
+  source: LeadSource | string;
+  owner?: string | undefined;
+  assignedTo?: string[] | string | undefined;
   priority: "High" | "Medium" | "Low";
-  budget: number;
-  aiScore: number;
-  nextFollowUp: string;
-  createdAt: string;
+  budget?: number | undefined;
+  expectedIncome?: string | undefined;
+  remarks?: string | undefined;
+  aiScore?: number | undefined;
+  isHot?: boolean | undefined;
+  holdResumeDate?: string | null | undefined;
+  nextFollowUp?: string | undefined;
+  nextFollowUpDate?: string | null | undefined;
+  followUps?: FollowUp[] | undefined;
+  closedDate?: string | null | undefined;
+  createdBy?: string | undefined;
+  createdByUserName?: string | undefined;
+  createdAt?: string | undefined;
+  date?: string | undefined;
 };
 
 export const leads: Lead[] = [

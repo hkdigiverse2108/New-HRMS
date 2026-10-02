@@ -384,7 +384,7 @@ class ChatRepository:
             pass
 
     @classmethod
-    async def vote_poll_option(cls, message_id: str, option_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+    async def vote_poll_option(cls, message_id: str, option_id: str, user_id: str, user_name: Optional[str] = None) -> Optional[Dict[str, Any]]:
         db = await cls.get_db()
         try:
             msg_id_obj = ObjectId(message_id)
@@ -394,6 +394,18 @@ class ChatRepository:
         msg = await db[cls.messages_collection].find_one({"_id": msg_id_obj})
         if not msg or msg.get("message_type") != "poll" or "poll" not in msg:
             return None
+
+        # Resolve voter name if not provided
+        if not user_name or user_name == "User":
+            user_doc = None
+            if ObjectId.is_valid(user_id):
+                user_doc = await db["users"].find_one({"_id": ObjectId(user_id)})
+                if not user_doc:
+                    user_doc = await db["employees"].find_one({"_id": ObjectId(user_id)})
+            if user_doc:
+                user_name = user_doc.get("name") or user_doc.get("full_name") or "User"
+            else:
+                user_name = user_name or "User"
 
         poll = msg["poll"]
         options = poll.get("options", [])
@@ -409,16 +421,31 @@ class ChatRepository:
             return None
 
         voters = target_opt.get("voters", [])
-        if user_id in voters:
-            voters.remove(user_id)
+        voter_details = target_opt.get("voter_details", [])
+        
+        # Check if user already voted for this option
+        has_voted_this = user_id in voters or any(
+            (v.get("id") if isinstance(v, dict) else str(v)) == str(user_id) for v in voter_details
+        )
+
+        if has_voted_this:
+            # Toggle off
+            voters = [v for v in voters if str(v) != str(user_id)]
+            voter_details = [v for v in voter_details if (v.get("id") if isinstance(v, dict) else str(v)) != str(user_id)]
         else:
             if not allow_multiple:
                 for opt in options:
-                    if user_id in opt.get("voters", []):
-                        opt["voters"].remove(user_id)
+                    opt["voters"] = [v for v in opt.get("voters", []) if str(v) != str(user_id)]
+                    opt["voter_details"] = [v for v in opt.get("voter_details", []) if (v.get("id") if isinstance(v, dict) else str(v)) != str(user_id)]
             voters.append(user_id)
+            voter_details.append({
+                "id": str(user_id),
+                "name": str(user_name),
+                "time": datetime.utcnow().isoformat()
+            })
 
         target_opt["voters"] = voters
+        target_opt["voter_details"] = voter_details
 
         await db[cls.messages_collection].update_one(
             {"_id": msg_id_obj},
@@ -439,15 +466,12 @@ class ChatRepository:
 
         if sanitized_msg.get("message_type") == "poll" and "poll" in sanitized_msg:
             poll = sanitized_msg.get("poll", {})
-            hide_names = poll.get("hide_voters_name", False)
-            created_by = poll.get("created_by") or sanitized_msg.get("sender_id")
-
-            if hide_names and str(user_id) != str(created_by):
-                for opt in poll.get("options", []):
-                    voters_list = opt.get("voters", [])
-                    opt["voters_count"] = len(voters_list)
-                    opt["user_has_voted"] = user_id in voters_list
-                    opt["voters"] = [] # Hide voter names/IDs from non-creators
+            for opt in poll.get("options", []):
+                voters_list = opt.get("voters", [])
+                opt["voters_count"] = len(voters_list)
+                opt["user_has_voted"] = str(user_id) in [str(v) for v in voters_list] or any(
+                    (v.get("id") if isinstance(v, dict) else str(v)) == str(user_id) for v in opt.get("voter_details", [])
+                )
 
         return sanitized_msg
 
@@ -774,25 +798,34 @@ class ChatRepository:
             return None
 
         reactions = msg.get("reactions", [])
+        user_id_str = str(user_id)
         
-        found_reaction = None
+        # WhatsApp behavior: 1 person has at most 1 reaction per message.
+        # Check if user already had this exact emoji
+        already_had_this_emoji = False
         for r in reactions:
-            if r.get("emoji") == emoji:
-                found_reaction = r
+            users = [str(u) for u in r.get("users", [])]
+            if r.get("emoji") == emoji and user_id_str in users:
+                already_had_this_emoji = True
                 break
 
-        if found_reaction:
-            users = found_reaction.get("users", [])
-            if user_id in users:
-                users.remove(user_id)
-            else:
-                users.append(user_id)
-            found_reaction["users"] = users
-        else:
-            reactions.append({
-                "emoji": emoji,
-                "users": [user_id]
-            })
+        # Remove user from ALL reactions on this message
+        for r in reactions:
+            r["users"] = [u for u in r.get("users", []) if str(u) != user_id_str]
+
+        # If user did NOT already have this exact emoji, add them to the new emoji
+        if not already_had_this_emoji:
+            found_reaction = False
+            for r in reactions:
+                if r.get("emoji") == emoji:
+                    r["users"].append(user_id_str)
+                    found_reaction = True
+                    break
+            if not found_reaction:
+                reactions.append({
+                    "emoji": emoji,
+                    "users": [user_id_str]
+                })
 
         # Remove empty reaction items
         reactions = [r for r in reactions if r.get("users") and len(r.get("users")) > 0]

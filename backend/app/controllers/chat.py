@@ -348,6 +348,18 @@ async def get_channel_messages(
     messages.reverse()
     sanitized = [ChatRepository.sanitize_poll_for_user(msg, user_id) for msg in messages]
     await ChatRepository.mark_messages_read(channel_id, user_id)
+    try:
+        read_event = {
+            "action": "messages_read",
+            "type": "messages_read",
+            "channel_id": channel_id,
+            "user_id": user_id,
+            "user_name": current_user.get("name"),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        await manager.broadcast_to_channel(channel_id, read_event)
+    except Exception:
+        pass
     return sanitized
 
 class SendMessageRequest(BaseModel):
@@ -519,13 +531,15 @@ async def vote_poll_option(
     current_user: dict = Depends(get_current_employee)
 ):
     user_id = str(current_user.get("_id") or current_user.get("id"))
-    updated = await ChatRepository.vote_poll_option(message_id, data.option_id, user_id)
+    user_name = current_user.get("name") or "User"
+    updated = await ChatRepository.vote_poll_option(message_id, data.option_id, user_id, user_name=user_name)
     if updated and updated.get("channel_id"):
         ws_event = {
-            "type": "poll_voted",
-            "action": "poll_voted",
+            "type": "poll_updated",
+            "action": "poll_updated",
             "message_id": message_id,
-            "poll": updated.get("poll")
+            "poll": updated.get("poll"),
+            "channel_id": updated.get("channel_id")
         }
         await manager.broadcast_to_channel(updated["channel_id"], ws_event)
     return updated or {"status": "ok"}
@@ -819,10 +833,28 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                             await manager.send_personal_message(err_msg, user_id)
                             continue
                             
-                        updated_msg = await ChatRepository.vote_poll_option(message_id, option_id, user_id)
+                        user_name = current_user.get("name") if isinstance(current_user, dict) else "User"
+                        updated_msg = await ChatRepository.vote_poll_option(message_id, option_id, user_id, user_name=user_name)
                         if updated_msg:
                             updated_msg["action"] = "poll_updated"
                             await manager.broadcast_to_channel(channel_id, updated_msg)
+                    continue
+
+                # --- Handle Mark Messages Read Action ---
+                if message_data.get("action") in ("mark_channel_read", "mark_read", "messages_read"):
+                    ch_id = message_data.get("channel_id")
+                    if ch_id:
+                        user_name = current_user.get("name") if isinstance(current_user, dict) else "User"
+                        await ChatRepository.mark_messages_read(ch_id, user_id)
+                        read_event = {
+                            "action": "messages_read",
+                            "type": "messages_read",
+                            "channel_id": ch_id,
+                            "user_id": user_id,
+                            "user_name": user_name,
+                            "timestamp": datetime.utcnow().isoformat()
+                        }
+                        await manager.broadcast_to_channel(ch_id, read_event)
                     continue
 
                 content = message_data.get("content", "")
@@ -973,3 +1005,52 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                 
     except WebSocketDisconnect:
         await manager.disconnect(websocket, user_id)
+
+class MeetingSummonRequest(BaseModel):
+    target_ids: List[str]
+    location: str
+    notes: Optional[str] = "Urgent meeting requested immediately."
+    meet_link: Optional[str] = None
+
+@router.post("/meeting-summon")
+async def trigger_meeting_summon(data: MeetingSummonRequest, current_user: dict = Depends(get_current_employee)):
+    caller_name = current_user.get("personal_info", {}).get("first_name", "") + " " + current_user.get("personal_info", {}).get("last_name", "")
+    caller_name = caller_name.strip() or current_user.get("name") or "Team Leader"
+    caller_role = current_user.get("work_details", {}).get("designation") or current_user.get("work_details", {}).get("system_role") or "Admin"
+    
+    summon_id = str(uuid.uuid4())
+    sent_count = 0
+    now_iso = datetime.utcnow().isoformat()
+    
+    for tid in data.target_ids:
+        tid_str = str(tid).strip()
+        if not tid_str:
+            continue
+        payload = {
+            "type": "meeting_summon",
+            "action": "meeting_summon",
+            "summon_id": summon_id,
+            "caller_name": caller_name,
+            "caller_role": caller_role,
+            "location": data.location,
+            "notes": data.notes or "Urgent meeting requested immediately.",
+            "meet_link": data.meet_link,
+            "timestamp": now_iso,
+            "target_id": tid_str
+        }
+        await manager.send_personal_message(json.dumps(payload), tid_str)
+        try:
+            from app.repository.notification import NotificationRepository
+            await NotificationRepository.create_notification({
+                "recipient_id": tid_str,
+                "title": f"🚨 URGENT SUMMON: {caller_name}",
+                "message": f"Report immediately to {data.location}. Note: {data.notes or ''}",
+                "type": "meeting_summon",
+                "is_read": False,
+                "data": payload
+            })
+        except Exception:
+            pass
+        sent_count += 1
+        
+    return {"status": "success", "sent_to": sent_count, "summon_id": summon_id}
