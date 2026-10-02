@@ -72,7 +72,9 @@ interface EmployeeOption {
 
 export function Penalties() {
   const { user } = useAuth();
-  const isAdminOrHr = ["Admin", "Subadmin", "HR"].includes(user?.role || "");
+  const anyUser = user as any;
+  const userRole = String(anyUser?.role || anyUser?.work_details?.system_role || "Employee").toLowerCase();
+  const isAdminOrHr = ["admin", "subadmin", "hr", "superadmin"].includes(userRole);
 
   // Main Data States
   const [records, setRecords] = useState<PenaltyRecord[]>([]);

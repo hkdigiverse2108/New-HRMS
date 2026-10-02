@@ -1,8 +1,9 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
-import { Check, X, Calendar, Clock, ChevronDown, CalendarDays, Activity, Plus, AlertCircle, RefreshCw } from "lucide-react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { Check, X, Calendar, Clock, ChevronDown, CalendarDays, Activity, Plus, AlertCircle, RefreshCw, Upload, FileText, Trash2, Paperclip, Edit2, Eye, Users, User } from "lucide-react";
 import { DialogClose, Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { SearchableSelect } from "@/components/ui/select";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { useSettingsContext } from "../payroll/SettingsContext";
 import { useAuth } from "@/components/auth/AuthContext";
 import { cn } from "@/lib/utils";
@@ -12,6 +13,16 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { SearchInput } from "@/components/common/SearchInput";
 import { formatISTDate, formatAppliedOnIST } from "@/lib/timeUtils";
 import { api } from "@/lib/api";
+
+const getMediaUrl = (url?: string | null): string => {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:") || url.startsWith("blob:")) {
+    return url;
+  }
+  const clean = url.startsWith("/") ? url : `/${url}`;
+  const backendBase = (import.meta.env["VITE_BACKEND_URL"] || "http://localhost:8000").replace(/\/+$/, "");
+  return `${backendBase}${clean}`;
+};
 
 const toLocalYMD = (d: Date | null | undefined): string => {
   if (!d || isNaN(d.getTime())) return "";
@@ -52,6 +63,7 @@ interface LeaveRequest {
   createdAt?: string | undefined;
   isConditional?: boolean | undefined;
   rejectionReason?: string | undefined;
+  attachment?: string | undefined;
 }
 
 const FALLBACK_REQUESTS: LeaveRequest[] = [
@@ -197,9 +209,20 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
   const [newEndDate, setNewEndDate] = useState("");
   const [newReason, setNewReason] = useState("");
   const [newIsConditional, setNewIsConditional] = useState(false);
+  const [attachmentUrl, setAttachmentUrl] = useState<string>("");
+  const [attachmentFileName, setAttachmentFileName] = useState<string>("");
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const isAdminOrHR = user?.role === "Admin" || user?.role === "HR";
+  const anyUser = user as any;
+  const userRole = String(anyUser?.role || anyUser?.work_details?.system_role || "Employee").toLowerCase();
+  const isAdminOrHR = ["admin", "subadmin", "hr", "superadmin"].includes(userRole);
+  const isStrictAdmin = ["admin", "superadmin"].includes(userRole);
+
+  const [scopeFilter, setScopeFilter] = useState<"all" | "my">(isAdminOrHR ? "all" : "my");
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editingLeave, setEditingLeave] = useState<LeaveRequest | null>(null);
+  const [deleteLeaveId, setDeleteLeaveId] = useState<string | null>(null);
 
   // Fetch employees excluding Admin
   const fetchEmployeeOptions = useCallback(async () => {
@@ -278,6 +301,7 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
             createdAt: item.created_at || item.applied_on || "",
             isConditional: item.day_type === "First Half" || item.day_type === "Second Half",
             rejectionReason: item.rejection_reason || undefined,
+            attachment: item.attachment || undefined,
           }));
           setRequests(mapped);
           if (tabStatus === "Pending") {
@@ -383,19 +407,45 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
     setRejectionReasonText("");
   };
 
-  const handleAddLeave = async (e: React.FormEvent) => {
+  const confirmDeleteLeave = async () => {
+    if (!deleteLeaveId) return;
+    try {
+      await api.delete(`/leaves/${deleteLeaveId}`);
+      setRequests((prev) => prev.filter((r) => r.id !== deleteLeaveId));
+      toast.success("Leave request cancelled successfully");
+    } catch {
+      setRequests((prev) => prev.filter((r) => r.id !== deleteLeaveId));
+      toast.success("Leave request removed");
+    } finally {
+      setDeleteLeaveId(null);
+      fetchPendingCount();
+    }
+  };
+
+  const handleOpenEdit = (req: LeaveRequest) => {
+    setEditingLeave(req);
+    setNewLeaveType(req.type);
+    setNewDayType(req.dayType || "Full Day");
+    setNewStartDate(req.startDate);
+    setNewEndDate(req.endDate);
+    setNewReason(req.reason);
+    setAttachmentUrl(req.attachment || "");
+    setAttachmentFileName(req.attachment ? "Attached Document" : "");
+    setSelectedEmployeeId(req.employeeId);
+    setIsEditOpen(true);
+  };
+
+  const handleUpdateLeave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newStartDate || (!newEndDate && newDayType === "Full Day") || !newReason) {
-      toast.error("Please fill all required fields");
+    if (!editingLeave) return;
+
+    const isMonthly = newLeaveType === "Monthly Leave";
+    const effectiveEndDate = isMonthly || newDayType !== "Full Day" ? newStartDate : newEndDate || newStartDate;
+
+    if (isMonthly && newStartDate && newEndDate && newStartDate !== newEndDate) {
+      toast.error("Monthly leave allows maximum 1 day.");
       return;
     }
-
-    if (!selectedEmployeeId && employeeOptions.length > 0) {
-      toast.error("Please select an employee");
-      return;
-    }
-
-    const effectiveEndDate = newDayType !== "Full Day" ? newStartDate : newEndDate || newStartDate;
 
     let durationDays = 1;
     if (newDayType === "First Half" || newDayType === "Second Half") {
@@ -410,7 +460,76 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
     try {
       setIsSubmitting(true);
       const payload = {
-        employee_id: selectedEmployeeId || user?.id,
+        leave_type: newLeaveType,
+        day_type: newDayType,
+        start_date: newStartDate,
+        end_date: effectiveEndDate,
+        duration_days: durationDays,
+        reason: newReason,
+        attachment: attachmentUrl || undefined,
+      };
+
+      await api.put(`/leaves/${editingLeave.id}`, payload);
+      toast.success("Leave request updated successfully!");
+      setIsEditOpen(false);
+      setEditingLeave(null);
+      fetchLeaves(activeTab);
+    } catch {
+      setRequests((prev) =>
+        prev.map((r) =>
+          r.id === editingLeave.id
+            ? {
+                ...r,
+                type: newLeaveType,
+                dayType: newDayType,
+                startDate: newStartDate,
+                endDate: effectiveEndDate,
+                durationDays,
+                reason: newReason,
+                attachment: attachmentUrl || undefined,
+              }
+            : r
+        )
+      );
+      toast.success("Leave request updated!");
+      setIsEditOpen(false);
+      setEditingLeave(null);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAddLeave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newStartDate || (!newEndDate && newDayType === "Full Day" && newLeaveType !== "Monthly Leave") || !newReason) {
+      toast.error("Please fill all required fields");
+      return;
+    }
+
+    const targetEmpId = isStrictAdmin ? (selectedEmployeeId || user?.id) : user?.id;
+
+    const isMonthly = newLeaveType === "Monthly Leave";
+    const effectiveEndDate = isMonthly || newDayType !== "Full Day" ? newStartDate : newEndDate || newStartDate;
+
+    if (isMonthly && newStartDate && newEndDate && newStartDate !== newEndDate) {
+      toast.error("Monthly leave cannot be selected for more than 1 day.");
+      return;
+    }
+
+    let durationDays = 1;
+    if (newDayType === "First Half" || newDayType === "Second Half") {
+      durationDays = 0.5;
+    } else {
+      const start = new Date(newStartDate);
+      const end = new Date(effectiveEndDate);
+      const diffTime = Math.abs(end.getTime() - start.getTime());
+      durationDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const payload = {
+        employee_id: targetEmpId,
         leave_type: newLeaveType,
         day_type: newDayType,
         start_date: newStartDate,
@@ -418,24 +537,27 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
         duration_days: durationDays,
         reason: newReason,
         remarks: newIsConditional ? "Work from home requested" : undefined,
+        attachment: attachmentUrl || undefined,
       };
 
       const res = await api.post<any>("/leaves", payload);
 
       toast.success("Leave request submitted successfully (Pending review)");
       setIsAddOpen(false);
+      setAttachmentUrl("");
+      setAttachmentFileName("");
       fetchLeaves(activeTab);
       fetchPendingCount();
     } catch (err: any) {
       // Fallback optimistic addition
-      const targetEmp = employeeOptions.find((e) => e.id === selectedEmployeeId);
+      const targetEmp = isStrictAdmin ? employeeOptions.find((e) => e.id === selectedEmployeeId) : null;
       const optimistic: LeaveRequest = {
         id: `LR-${Math.random().toString(36).substr(2, 9)}`,
-        employeeId: selectedEmployeeId || user?.id || "EMP-CURRENT",
-        employeeName: targetEmp?.name || user?.name || "Current User",
-        avatar: user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(targetEmp?.name || "E")}&background=random`,
-        role: targetEmp?.role || user?.role || "Software Engineer",
-        department: targetEmp?.department || user?.department || "Engineering",
+        employeeId: (isStrictAdmin ? selectedEmployeeId : user?.id) || user?.id || "EMP-CURRENT",
+        employeeName: (isStrictAdmin && targetEmp?.name) ? targetEmp.name : (user?.name || "Current User"),
+        avatar: user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent((isStrictAdmin && targetEmp?.name) || user?.name || "E")}&background=random`,
+        role: (isStrictAdmin && targetEmp?.role) ? targetEmp.role : (user?.role || "Software Engineer"),
+        department: (isStrictAdmin && targetEmp?.department) ? targetEmp.department : (user?.department || "Engineering"),
         type: newLeaveType,
         dayType: newDayType,
         startDate: newStartDate,
@@ -466,15 +588,20 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
   };
 
   const filteredRequests = useMemo(() => {
-    if (!searchQuery.trim()) return requests;
-    const q = searchQuery.toLowerCase();
-    return requests.filter(
-      (r) =>
-        r.employeeName.toLowerCase().includes(q) ||
-        r.department.toLowerCase().includes(q) ||
-        r.type.toLowerCase().includes(q)
-    );
-  }, [requests, searchQuery]);
+    return requests.filter((r) => {
+      if (isAdminOrHR && scopeFilter === "my") {
+        if (r.employeeId !== (user?.id || "")) return false;
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchName = r.employeeName.toLowerCase().includes(q);
+        const matchDept = r.department.toLowerCase().includes(q);
+        const matchType = r.type.toLowerCase().includes(q);
+        if (!matchName && !matchDept && !matchType) return false;
+      }
+      return true;
+    });
+  }, [requests, searchQuery, isAdminOrHR, scopeFilter, user?.id]);
 
   return (
     <div className="h-full flex flex-col space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -486,6 +613,33 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
         </div>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+          {isAdminOrHR && (
+            <div className="flex items-center bg-muted/60 p-1 rounded-xl border border-border/50 shrink-0">
+              <button
+                type="button"
+                onClick={() => setScopeFilter("all")}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
+                  scopeFilter === "all" ? "bg-white text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>All Employees</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setScopeFilter("my")}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
+                  scopeFilter === "my" ? "bg-white text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <User className="w-3.5 h-3.5" />
+                <span>My Leaves</span>
+              </button>
+            </div>
+          )}
+
           <SearchInput
             value={searchQuery}
             onChange={setSearchQuery}
@@ -521,38 +675,59 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
               </div>
 
               <form onSubmit={handleAddLeave} className="flex flex-col max-h-[80vh]">
-                <div className="p-3.5 sm:p-6 space-y-3 sm:space-y-4 overflow-y-auto max-h-[65vh]">
-                  {/* Select Employee */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
-                      Employee <span className="text-rose-500">*</span>
-                    </label>
-                    <SearchableSelect
-                      value={selectedEmployeeId}
-                      onChange={setSelectedEmployeeId}
-                      options={employeeOptions.map((emp) => ({
-                        label: `${emp.name} (${emp.role}${emp.department ? ` • ${emp.department}` : ""})`,
-                        value: emp.id,
-                      }))}
-                      placeholder={isLoadingEmployees ? "Loading non-admin employees..." : "Select Employee"}
-                      className="w-full px-3 sm:px-4 h-[42px] sm:h-[44px] bg-muted/50 border border-border/50 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium"
-                    />
-                  </div>
+                <div className="p-3.5 sm:px-6 py-3.5 sm:py-5 space-y-3 sm:space-y-4 overflow-y-auto max-h-[65vh]">
+                  {/* Select Employee (Strictly Admin only. Non-admins, including HR, apply for self) */}
+                  {isStrictAdmin ? (
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
+                        Employee <span className="text-rose-500">*</span>
+                      </label>
+                      <SearchableSelect
+                        value={selectedEmployeeId}
+                        onChange={setSelectedEmployeeId}
+                        options={employeeOptions.map((emp) => ({
+                          label: `${emp.name} (${emp.role}${emp.department ? ` • ${emp.department}` : ""})`,
+                          value: emp.id,
+                        }))}
+                        placeholder={isLoadingEmployees ? "Loading employees..." : "Select Employee"}
+                        className="w-full px-3 sm:px-4 h-[42px] sm:h-[44px] bg-muted/50 border border-border/50 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium"
+                      />
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-muted/30 border border-border/50 rounded-xl flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Applying For</p>
+                        <p className="text-xs sm:text-sm font-bold text-foreground">{user?.name || "Self"}</p>
+                      </div>
+                      <span className="text-[11px] px-2.5 py-0.5 bg-primary/10 text-primary font-bold rounded-lg border border-primary/20">
+                        Self Only
+                      </span>
+                    </div>
+                  )}
 
                   {/* Leave Type */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">Leave Type</label>
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
+                      Leave Type <span className="text-rose-500">*</span>
+                    </label>
                     <SearchableSelect
                       value={newLeaveType}
                       onChange={setNewLeaveType}
                       options={LEAVE_TYPE_OPTIONS.map((type) => ({ label: type, value: type }))}
                       className="w-full px-3 sm:px-4 h-[42px] sm:h-[44px] bg-muted/50 border border-border/50 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium"
                     />
+                    {newLeaveType === "Monthly Leave" && (
+                      <p className="text-[11px] text-amber-600 font-bold bg-amber-50 p-2 rounded-lg border border-amber-200/60">
+                        ⚠️ Note: Monthly leave is restricted to a maximum of 1 day only.
+                      </p>
+                    )}
                   </div>
 
                   {/* Day Type */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">Day Type</label>
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
+                      Day Type <span className="text-rose-500">*</span>
+                    </label>
                     <div className="grid grid-cols-3 gap-1 sm:gap-2">
                       {(["Full Day", "First Half", "Second Half"] as DayType[]).map((dtype) => (
                         <button
@@ -575,9 +750,9 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                   {/* Date Range or Single Date */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
-                      {newDayType === "Full Day" ? "Date Range (IST)" : "Leave Date (IST)"}
+                      {newLeaveType === "Monthly Leave" ? "Monthly Leave Date (1 Day Max)" : newDayType === "Full Day" ? "Date Range (IST)" : "Leave Date (IST)"} <span className="text-rose-500">*</span>
                     </label>
-                    {newDayType === "Full Day" ? (
+                    {newLeaveType !== "Monthly Leave" && newDayType === "Full Day" ? (
                       <DateRangeFilter
                         value={{
                           from: parseYMDToDate(newStartDate),
@@ -608,9 +783,12 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                     )}
                   </div>
 
+
                   {/* Reason */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">Reason</label>
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
+                      Reason <span className="text-rose-500">*</span>
+                    </label>
                     <textarea
                       required
                       value={newReason}
@@ -618,6 +796,73 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                       placeholder="Briefly describe the reason for taking leave..."
                       className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-muted/50 border border-border/50 rounded-xl text-xs sm:text-sm min-h-[80px] sm:min-h-[90px] resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium text-foreground"
                     />
+                  </div>
+
+                  {/* Attachment (Document / Medical Certificate / Image / PDF) */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
+                        Supporting Document / Certificate
+                        {(newLeaveType === "Sick Leave" || newLeaveType.toLowerCase().includes("medical")) && (
+                          <span className="text-rose-500 ml-1 font-black">* (Recommended)</span>
+                        )}
+                      </label>
+                      {attachmentUrl && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAttachmentUrl("");
+                            setAttachmentFileName("");
+                          }}
+                          className="text-[10px] font-bold text-rose-500 hover:underline"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    <label className="flex items-center justify-center gap-2 px-3 py-2.5 bg-muted/40 hover:bg-muted/70 border border-dashed border-border/80 rounded-xl cursor-pointer transition-colors text-xs font-medium text-foreground/80">
+                      <Upload className="w-4 h-4 text-primary" />
+                      <span className="truncate">
+                        {isUploadingDoc
+                          ? "Uploading document..."
+                          : attachmentFileName || "Attach Doctor Certificate / PDF / Image"}
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/*,.pdf,.doc,.docx"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          if (file.size > 25 * 1024 * 1024) {
+                            toast.error("File size cannot exceed 25MB");
+                            return;
+                          }
+                          try {
+                            setIsUploadingDoc(true);
+                            const safeName = file.name.replace(/[^\x00-\x7F]/g, "_") || "document.pdf";
+                            const uploadFile = safeName !== file.name ? new File([file], safeName, { type: file.type || "application/pdf" }) : file;
+                            const formData = new FormData();
+                            formData.append("file", uploadFile);
+
+                            const res: any = await api.post("/chat/upload", formData);
+                            const url = res?.url || res?.file_url;
+                            if (url) {
+                              setAttachmentUrl(url);
+                              setAttachmentFileName(file.name);
+                              toast.success("Document attached successfully!");
+                            } else {
+                              throw new Error("Upload failed");
+                            }
+                          } catch (err: any) {
+                            toast.error(err?.message || "Failed to upload document");
+                          } finally {
+                            setIsUploadingDoc(false);
+                          }
+                        }}
+                        disabled={isUploadingDoc}
+                      />
+                    </label>
                   </div>
 
                   {/* Optional WFH flag */}
@@ -740,10 +985,23 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                       </span>
                     </div>
 
-                    <div className="flex items-start gap-2 pt-1 border-t border-border/40">
+                    <div className="flex flex-col gap-1.5 pt-1 border-t border-border/40">
                       <p className="text-xs text-foreground/85 italic line-clamp-2 leading-relaxed">
                         "{request.reason}"
                       </p>
+                      {request.attachment && (
+                        <div>
+                          <a
+                            href={getMediaUrl(request.attachment)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors"
+                          >
+                            <Paperclip className="w-3.5 h-3.5" />
+                            <span>Attached Document</span>
+                          </a>
+                        </div>
+                      )}
                     </div>
 
                     {request.rejectionReason && (
@@ -832,6 +1090,30 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                       {request.status}
                     </span>
                   )}
+
+                  {/* Edit and Delete Actions */}
+                  <div className="flex items-center gap-1">
+                    {(request.status === "Pending" || isAdminOrHR) && (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEdit(request)}
+                        className="p-1.5 text-muted-foreground hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors"
+                        title="Edit Leave Request"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    {(request.status === "Pending" || isAdminOrHR) && (
+                      <button
+                        type="button"
+                        onClick={() => setDeleteLeaveId(request.id)}
+                        className="p-1.5 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-colors"
+                        title="Cancel / Delete Leave Request"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -887,6 +1169,142 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Leave Modal */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="w-[calc(100vw-20px)] sm:w-full sm:max-w-[480px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card box-border">
+          <div className="flex items-center justify-between px-3.5 sm:px-6 py-3.5 sm:py-5 border-b border-border/50 bg-muted/30">
+            <div className="min-w-0 pr-2">
+              <h2 className="text-base sm:text-xl font-black tracking-tight truncate">Edit Leave Request</h2>
+              <p className="text-[11px] sm:text-xs text-muted-foreground truncate">Update dates, reason, or document</p>
+            </div>
+            <DialogClose asChild>
+              <button className="p-1.5 sm:p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors shrink-0">
+                <X className="w-5 h-5" />
+              </button>
+            </DialogClose>
+          </div>
+
+          <form onSubmit={handleUpdateLeave} className="flex flex-col max-h-[80vh]">
+            <div className="p-3.5 sm:p-6 space-y-3 sm:space-y-4 overflow-y-auto max-h-[65vh]">
+              {/* Leave Type */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
+                  Leave Type <span className="text-rose-500">*</span>
+                </label>
+                <SearchableSelect
+                  value={newLeaveType}
+                  onChange={setNewLeaveType}
+                  options={LEAVE_TYPE_OPTIONS.map((type) => ({ label: type, value: type }))}
+                  className="w-full px-3 sm:px-4 h-[42px] sm:h-[44px] bg-muted/50 border border-border/50 rounded-xl text-xs sm:text-sm font-medium"
+                />
+              </div>
+
+              {/* Day Type */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
+                  Day Type <span className="text-rose-500">*</span>
+                </label>
+                <div className="grid grid-cols-3 gap-1 sm:gap-2">
+                  {(["Full Day", "First Half", "Second Half"] as DayType[]).map((dtype) => (
+                    <button
+                      key={dtype}
+                      type="button"
+                      onClick={() => setNewDayType(dtype)}
+                      className={cn(
+                        "py-2 px-0.5 sm:px-2 text-[10px] sm:text-xs font-bold rounded-xl border transition-all text-center whitespace-nowrap leading-tight",
+                        newDayType === dtype
+                          ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                          : "bg-muted/30 text-foreground/80 border-border hover:bg-muted/60"
+                      )}
+                    >
+                      {dtype}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Dates */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
+                  {newLeaveType === "Monthly Leave" ? "Monthly Leave Date (1 Day Max)" : newDayType === "Full Day" ? "Date Range (IST)" : "Leave Date (IST)"} <span className="text-rose-500">*</span>
+                </label>
+                {newLeaveType !== "Monthly Leave" && newDayType === "Full Day" ? (
+                  <DateRangeFilter
+                    value={{
+                      from: parseYMDToDate(newStartDate),
+                      to: parseYMDToDate(newEndDate),
+                    }}
+                    onChange={(range) => {
+                      const fromStr = range?.from ? toLocalYMD(range.from) : "";
+                      const toStr = range?.to ? toLocalYMD(range.to) : fromStr;
+                      setNewStartDate(fromStr || "");
+                      setNewEndDate(toStr || "");
+                    }}
+                    placeholder="Select start and end date"
+                    className="w-full h-[42px] sm:h-[44px] justify-between text-xs sm:text-sm px-3 sm:px-3.5"
+                    align="center"
+                  />
+                ) : (
+                  <DatePicker
+                    value={newStartDate}
+                    onChange={(dateStr) => {
+                      setNewStartDate(dateStr);
+                      setNewEndDate(dateStr);
+                    }}
+                    placeholder="Select leave date"
+                    displayFormat="MMM dd, yyyy"
+                    className="w-full h-[42px] sm:h-[44px] text-xs sm:text-sm px-3 sm:px-3.5"
+                    align="center"
+                  />
+                )}
+              </div>
+
+              {/* Reason */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
+                  Reason <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  required
+                  value={newReason}
+                  onChange={(e) => setNewReason(e.target.value)}
+                  placeholder="Reason for leave..."
+                  className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-muted/50 border border-border/50 rounded-xl text-xs sm:text-sm min-h-[80px] resize-none font-medium text-foreground"
+                />
+              </div>
+            </div>
+
+            <div className="px-3.5 sm:px-6 py-3.5 sm:py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setIsEditOpen(false)}
+                className="px-4 py-2 text-xs sm:text-sm font-bold text-muted-foreground hover:bg-muted rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="px-5 py-2 bg-primary hover:bg-primary/95 text-primary-foreground text-xs sm:text-sm font-bold rounded-xl shadow-md transition-all flex items-center gap-2"
+              >
+                {isSubmitting ? "Updating..." : "Save Changes"}
+              </button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel/Delete Confirm Modal */}
+      <ConfirmModal
+        isOpen={!!deleteLeaveId}
+        onClose={() => setDeleteLeaveId(null)}
+        onConfirm={confirmDeleteLeave}
+        title="Cancel Leave Request"
+        description="Are you sure you want to cancel this leave request? This action cannot be undone."
+        confirmText="Cancel Leave"
+        variant="destructive"
+      />
     </div>
   );
 }

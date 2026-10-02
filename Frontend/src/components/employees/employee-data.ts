@@ -12,6 +12,7 @@ export interface Employee {
   avatar: string;
   profile_photo?: string;
   performanceScore: number; // Out of 100
+  employeeId?: string;
   
   // Extended HRMS-1 fields (optional for backward compatibility with mock data)
   firstName?: string;

@@ -445,7 +445,14 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
         {/* Header - Fixed Height */}
         <div className="flex items-center justify-between px-4 sm:px-8 py-3.5 sm:py-5 border-b border-border/50 bg-muted/30 shrink-0">
           <div className="min-w-0 pr-2">
-            <h2 className="text-base sm:text-2xl font-black tracking-tight truncate">{initialData ? 'Edit Employee Profile' : 'Add New Employee'}</h2>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h2 className="text-base sm:text-2xl font-black tracking-tight truncate">{initialData ? 'Edit Employee Profile' : 'Add New Employee'}</h2>
+              {initialData && (initialData.employeeId || (initialData.id && initialData.id.startsWith("EMP-") ? initialData.id : "")) && (
+                <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold font-mono rounded-lg shadow-sm">
+                  {initialData.employeeId || initialData.id}
+                </span>
+              )}
+            </div>
             <p className="text-[11px] sm:text-sm text-muted-foreground mt-0.5 line-clamp-1 sm:line-clamp-none">Complete all sections to register a new member in the organization.</p>
           </div>
           <button 
@@ -888,12 +895,31 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Monthly Salary</label>
+                      <div className="flex items-center justify-between">
+                        <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Monthly Salary</label>
+                        {formData.salary && Number(formData.salary) > 0 && (
+                          <span className="text-[11px] font-mono font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60">
+                            CTC: ₹{(Number(formData.salary) * 12).toLocaleString("en-IN")}/yr
+                          </span>
+                        )}
+                      </div>
                       <input 
                         type="number" disabled={isSelfEdit} value={formData.salary || ''} onChange={(e) => handleInputChange('salary', e.target.value)}
                         className={cn("w-full px-4 py-2.5 bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all", isSelfEdit && "opacity-60 cursor-not-allowed")}
                         placeholder="e.g. 50000"
                       />
+                      {formData.salary && Number(formData.salary) > 0 && (
+                        <div className="p-2.5 bg-primary/5 border border-primary/20 rounded-xl space-y-1 text-xs">
+                          <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
+                            <span>Per Day Rate (~30 days):</span>
+                            <span className="font-bold text-foreground font-mono">₹{Math.round(Number(formData.salary) / 30).toLocaleString("en-IN")}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
+                            <span>Hourly Rate (~8 hrs/day):</span>
+                            <span className="font-bold text-foreground font-mono">₹{Math.round(Number(formData.salary) / 240).toLocaleString("en-IN")}</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">UPI ID</label>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Clock, Coffee, LogIn, LogOut, CheckCircle2, ShieldCheck, AlertCircle, RefreshCw } from "lucide-react";
+import { Clock, Coffee, LogIn, LogOut, CheckCircle2, ShieldCheck, AlertCircle, RefreshCw, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useAuth } from "@/components/auth/AuthContext";
@@ -12,6 +12,7 @@ import {
   getTodayDateIST
 } from "@/lib/timeUtils";
 import { PendingPunchOutModal, PendingRecordInfo } from "@/components/attendance/PendingPunchOutModal";
+import { RecoverTimeModal } from "@/components/attendance/RecoverTimeModal";
 import { UpdateActivityModal, SelectedTaskInfo } from "./UpdateActivityModal";
 import { BreakOutChoiceModal } from "./BreakOutChoiceModal";
 
@@ -42,6 +43,7 @@ export function TimeTrackerWidget() {
   // Pending Punch-Out Modal state
   const [pendingRecord, setPendingRecord] = useState<PendingRecordInfo | null>(null);
   const [isPendingModalOpen, setIsPendingModalOpen] = useState(false);
+  const [isRecoverModalOpen, setIsRecoverModalOpen] = useState(false);
 
   // Check pending punch-out from previous day
   const checkPendingSession = useCallback(async (): Promise<boolean> => {
@@ -376,9 +378,9 @@ export function TimeTrackerWidget() {
 
             {/* Current Active Task Pill */}
             {(status === "Punched In" || status === "On Break") && (
-              <div className="flex items-center gap-2 mt-2 px-3 py-1 bg-muted/60 border border-border/80 rounded-xl text-xs">
-                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider shrink-0">Working on:</span>
-                <span className="font-semibold text-foreground max-w-[180px] sm:max-w-[260px] truncate" title={activeTaskTitle || "General Work"}>
+              <div className="flex items-center gap-2.5 mt-2.5 px-3.5 py-1.5 bg-primary/10 dark:bg-primary/15 border border-primary/25 rounded-2xl shadow-sm">
+                <span className="text-[11px] font-extrabold text-primary/80 uppercase tracking-wider shrink-0">Working on:</span>
+                <span className="font-bold text-foreground text-xs sm:text-sm max-w-[180px] sm:max-w-[280px] truncate" title={activeTaskTitle || "General Work"}>
                   {activeTaskTitle || "General Work"}
                 </span>
                 <button
@@ -387,10 +389,11 @@ export function TimeTrackerWidget() {
                     setIsChangeMode(true);
                     setIsActivityModalOpen(true);
                   }}
-                  className="ml-auto text-[11px] font-bold text-primary hover:text-primary/80 flex items-center gap-1 hover:underline cursor-pointer shrink-0"
+                  className="ml-auto px-3 py-1 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm shadow-primary/20 hover:scale-105 active:scale-95 transition-all cursor-pointer shrink-0"
                   title="Change current task"
                 >
-                  <RefreshCw className="w-3 h-3" /> Change
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Change Task</span>
                 </button>
               </div>
             )}
@@ -435,8 +438,21 @@ export function TimeTrackerWidget() {
           </div>
         </div>
 
-        {/* Actions (Break In, Break Out & Punch Actions) */}
-        <div className="flex items-center gap-3 w-full md:w-auto shrink-0">
+        {/* Actions (Break In, Break Out & Punch Actions + Recover Time) */}
+        <div className="flex items-center gap-2.5 w-full md:w-auto shrink-0 flex-wrap sm:flex-nowrap">
+          {/* Recover Time Button (Available anytime for employees) */}
+          {!isAdmin && (
+            <button
+              type="button"
+              onClick={() => setIsRecoverModalOpen(true)}
+              className="px-3.5 py-3 rounded-2xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 border border-border/80 hover:bg-muted/70 text-muted-foreground hover:text-foreground active:scale-95 shrink-0"
+              title="Recover missed break-out or correct break time"
+            >
+              <RotateCcw className="w-4 h-4 text-primary" />
+              <span className="hidden sm:inline">Recover Time</span>
+            </button>
+          )}
+
           {/* Status: Punched In -> Show Break In & Punch Out */}
           {status === "Punched In" && (
             <>
@@ -484,6 +500,14 @@ export function TimeTrackerWidget() {
           )}
         </div>
       </div>
+
+      {/* Recover Time Modal */}
+      <RecoverTimeModal
+        isOpen={isRecoverModalOpen}
+        onClose={() => setIsRecoverModalOpen(false)}
+        employeeId={employeeId}
+        onRecovered={syncTodayStatus}
+      />
 
       {/* Break Out Choice Modal: Previous Task vs New Task */}
       <BreakOutChoiceModal

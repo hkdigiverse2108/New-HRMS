@@ -1032,17 +1032,28 @@ function ChatInner() {
 
   // Keyboard navigation for Lightbox (Left/Right arrows to navigate, ESC to close)
   useEffect(() => {
-    if (!previewMediaUrl && !pdfUrl) return;
+    if (!previewMediaUrl && !pdfUrl && !pastePreviewUrl && pasteFiles.length === 0 && !pasteFile) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        setPreviewMediaUrl(null);
+        setPdfUrl(null);
+        setPastePreviewUrl(null);
+        setPastePreviewUrls([]);
+        setPasteFile(null);
+        setPasteFiles([]);
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+        return;
+      }
+
       const activeTag = (document.activeElement?.tagName || "").toLowerCase();
       if (activeTag === "input" || activeTag === "textarea") return;
 
-      if (e.key === "Escape") {
-        e.preventDefault();
-        setPreviewMediaUrl(null);
-        setPdfUrl(null);
-      } else if (e.key === "ArrowLeft") {
+      if (e.key === "ArrowLeft") {
         if (previewMediaUrl) {
           e.preventDefault();
           navigatePreview("prev");
@@ -1057,7 +1068,7 @@ function ChatInner() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [previewMediaUrl, pdfUrl, navigatePreview]);
+  }, [previewMediaUrl, pdfUrl, pastePreviewUrl, pasteFiles.length, pasteFile, navigatePreview]);
 
   const formatFileSize = (bytes?: number | null) => {
     if (!bytes || isNaN(Number(bytes))) return "";
@@ -1737,23 +1748,31 @@ function ChatInner() {
       for (let idx = 0; idx < files.length; idx++) {
         const file = files[idx] as File | undefined;
         if (!file) continue;
+        
+        // Sanitize filename to avoid multipart header issues with unicode/middle dots from ChatGPT
+        const rawName = file.name || "image.png";
+        const safeName = rawName.replace(/[^\x00-\x7F]/g, "_") || "image.png";
+        const uploadFile = safeName !== file.name ? new File([file], safeName, { type: file.type || "image/png" }) : file;
+
         const formData = new FormData();
-        formData.append("file", file);
+        formData.append("file", uploadFile);
 
         const uploadRes: any = await api.post(
           "/chat/upload",
-          formData,
-          { showErrorToast: false }
+          formData
         );
 
-        let mediaType: "image" | "video" | "audio" | "document" = "document";
-        if (file.type.startsWith("image/")) mediaType = "image";
-        else if (file.type.startsWith("video/")) mediaType = "video";
-        else if (file.type.startsWith("audio/")) mediaType = "audio";
-        else if (/\.(webm|mp3|wav|ogg|m4a|aac)$/i.test(file.name)) mediaType = "audio";
-
-        // Backend returns file_url / file_name / file_type — support both shapes
         const fileUrl = uploadRes?.url || uploadRes?.file_url || "";
+        if (!fileUrl) {
+          throw new Error(`Failed to upload ${file.name}. Please try again.`);
+        }
+
+        let mediaType: "image" | "video" | "audio" | "document" = "document";
+        const cType = (file.type || uploadRes?.file_type || "").toLowerCase();
+        if (cType.startsWith("image/") || /\.(png|jpe?g|webp|gif|svg)$/i.test(file.name)) mediaType = "image";
+        else if (cType.startsWith("video/") || /\.(mp4|webm|mov|mkv)$/i.test(file.name)) mediaType = "video";
+        else if (cType.startsWith("audio/") || /\.(webm|mp3|wav|ogg|m4a|aac)$/i.test(file.name)) mediaType = "audio";
+
         const fileName = uploadRes?.file_name || uploadRes?.fileName || file.name;
         const fileSize = uploadRes?.file_size || uploadRes?.fileSize || file.size;
 
@@ -1773,13 +1792,13 @@ function ChatInner() {
             sender_name: replyTo.sender_name,
             content: replyTo.content || `[${replyTo.media_type || "Media"}]`,
             media_type: replyTo.media_type || undefined,
-          media_url: replyTo.media_url || undefined,
-          file_name: replyTo.file_name || undefined
+            media_url: replyTo.media_url || undefined,
+            file_name: replyTo.file_name || undefined
           };
         }
 
         const res = await api.post<ChatMessage>(`/chat/channels/${activeChannelId}/messages`, payload, {
-          showErrorToast: false
+          showErrorToast: true
         });
         if (res) {
           const _fmt = formatMessage(res);
@@ -1793,8 +1812,8 @@ function ChatInner() {
       if (replyTo) setReplyTo(null);
       setInputText("");
       setTimeout(() => scrollToBottom("smooth"), 100);
-    } catch {
-      // quiet fail (file upload loop)
+    } catch (err: any) {
+      toast.error(err?.data?.detail || err?.message || "Failed to upload file(s)");
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -1954,7 +1973,7 @@ function ChatInner() {
   };
 
   // --- 6. CLIPBOARD IMAGE PASTE (Ctrl+V) — multi images + discard support ---
-  const handlePaste = (e: React.ClipboardEvent) => {
+  const handlePaste = async (e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (!items) return;
 
@@ -1966,6 +1985,25 @@ function ChatInner() {
         if (file) found.push(file);
       }
     }
+
+    // Fallback: If no direct image item found, check for HTML containing <img> (common with ChatGPT / web copy)
+    if (found.length === 0) {
+      const html = e.clipboardData?.getData("text/html");
+      if (html) {
+        const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+        if (match && match[1]) {
+          const src = match[1];
+          try {
+            if (src.startsWith("data:image/")) {
+              const res = await fetch(src);
+              const blob = await res.blob();
+              found.push(new File([blob], `chatgpt-image-${Date.now()}.png`, { type: blob.type || "image/png" }));
+            }
+          } catch {}
+        }
+      }
+    }
+
     if (found.length > 0) {
       e.preventDefault();
       const newUrls = found.map((f) => URL.createObjectURL(f));
@@ -2045,18 +2083,25 @@ function ChatInner() {
     try {
       for (let idx = 0; idx < filesToSend.length; idx++) {
         const pf = filesToSend[idx] as File;
+        const safeName = (pf.name || "image.png").replace(/[^\x00-\x7F]/g, "_") || "image.png";
+        const uploadFile = safeName !== pf.name ? new File([pf], safeName, { type: pf.type || "image/png" }) : pf;
+
         const formData = new FormData();
-        formData.append("file", pf);
+        formData.append("file", uploadFile);
         const uploadRes: any = await api.post(
           "/chat/upload",
-          formData,
-          { showErrorToast: false }
+          formData
         );
+
+        const fileUrl = uploadRes?.url || uploadRes?.file_url || "";
+        if (!fileUrl) {
+          throw new Error("Failed to upload image. Please try again.");
+        }
 
         const payload: any = {
           content: idx === filesToSend.length - 1 ? pasteCaption.trim() || pf.name || "" : pf.name || "",
           channel_id: activeChannelId,
-          media_url: uploadRes?.url || uploadRes?.file_url || "",
+          media_url: fileUrl,
           media_type: "image",
           file_name: uploadRes?.file_name || pf.name,
           file_size: uploadRes?.file_size || pf.size,
@@ -2069,13 +2114,13 @@ function ChatInner() {
             sender_name: replyTo.sender_name,
             content: replyTo.content || `[${replyTo.media_type || "Image"}]`,
             media_type: replyTo.media_type || undefined,
-          media_url: replyTo.media_url || undefined,
-          file_name: replyTo.file_name || undefined
+            media_url: replyTo.media_url || undefined,
+            file_name: replyTo.file_name || undefined
           };
         }
 
         const res = await api.post<ChatMessage>(`/chat/channels/${activeChannelId}/messages`, payload, {
-          showErrorToast: false
+          showErrorToast: true
         });
         if (res) {
           const _fmt = formatMessage(res);
@@ -2089,8 +2134,8 @@ function ChatInner() {
       if (replyTo) setReplyTo(null);
       closePasteModal();
       setTimeout(() => scrollToBottom("smooth"), 100);
-    } catch {
-      // quiet fail
+    } catch (err: any) {
+      toast.error(err?.data?.detail || err?.message || "Failed to send pasted image");
     } finally {
       setIsUploading(false);
     }

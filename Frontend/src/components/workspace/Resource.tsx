@@ -171,8 +171,21 @@ export default function ResourceManagementPage() {
   const [itemLogs, setItemLogs] = useState<any[]>([]);
   const [itemLogsLoading, setItemLogsLoading] = useState(false);
 
-  const { checkPermission, isAdmin, permissionsLoading } = { checkPermission: (a: any, b: any) => true, isAdmin: true, permissionsLoading: false };
-  const isEmployeeOnly = !isAdmin && user?.role?.toLowerCase() !== "hr";
+  const anyUser = user as any;
+  const userRole = String(anyUser?.role || anyUser?.work_details?.system_role || "Employee").toLowerCase();
+  const userDept = String(anyUser?.department || anyUser?.work_details?.department || "").toLowerCase();
+  const userDesig = String(anyUser?.designation || anyUser?.work_details?.designation || "").toLowerCase();
+
+  const isAdminOrHR = 
+    userRole === "admin" || 
+    userRole === "superadmin" || 
+    userRole === "hr" || 
+    userRole === "subadmin" ||
+    userDept === "hr" ||
+    userDesig.includes("hr");
+
+  const isAdmin = isAdminOrHR;
+  const isEmployeeOnly = !isAdminOrHR;
   
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -633,7 +646,7 @@ export default function ResourceManagementPage() {
     setRemoveResourceCount("");
   };
 
-  if (userLoading || permissionsLoading) {
+  if (userLoading) {
     return (
       <div className="flex items-center justify-center min-h-[70vh]">
         <RefreshCw className="w-8 h-8 text-brand-teal animate-spin" />
@@ -641,7 +654,7 @@ export default function ResourceManagementPage() {
     );
   }
 
-  const hasAccess = isAdmin || user?.role?.toLowerCase() === "hr" || checkPermission('resource-management', 'canView');
+  const hasAccess = Boolean(user);
 
   if (!hasAccess) {
     return (

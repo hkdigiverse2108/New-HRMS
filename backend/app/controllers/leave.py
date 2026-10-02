@@ -25,8 +25,10 @@ async def apply_leave(
     work = current_employee.get("work_details", {})
     user_role = work.get("system_role", "Employee")
 
-    # If employee_id is specified in payload and current user is Admin or HR, apply for that employee.
-    if payload.employee_id and user_role in ("Admin", "HR"):
+    # Only Admin (strict admin / superadmin) can apply on behalf of other employees.
+    # Non-admin roles (including HR, Managers, Employees) must strictly apply for themselves.
+    is_strict_admin = str(user_role).strip().lower() in ("admin", "superadmin")
+    if payload.employee_id and is_strict_admin:
         target_employee_id = payload.employee_id
     else:
         target_employee_id = str(current_employee.get("_id") or current_employee.get("id") or current_employee.get("email") or "")

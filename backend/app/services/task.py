@@ -1,5 +1,6 @@
 from typing import Optional
 from datetime import datetime, date
+from fastapi import HTTPException
 from app.repository.task import TaskRepository
 from app.repository.employee import EmployeeRepository
 from app.schemas.task import TaskCreate, TaskUpdate, TaskQuickAssign
@@ -412,6 +413,9 @@ class TaskService:
 
     @staticmethod
     async def delete_task(item_id: str):
+        existing = await TaskRepository.get_by_id(item_id)
+        if existing and existing.get("content_item_id"):
+            raise HTTPException(status_code=400, detail="Auto-assigned tasks linked to Content Calendar cannot be deleted.")
         res = await TaskRepository.soft_delete(item_id)
         await clear_pattern("tasks:*")
         return res

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List, Union
+from typing import Optional, List, Union, Any
 from datetime import date, timedelta
 import datetime
 from enum import Enum
@@ -50,7 +50,7 @@ class ContentItemBase(BaseModel):
     caption_text: Optional[str] = None
     
     instagram_link: Optional[str] = None
-    issues: List[str] = []
+    issues: List[Any] = []
     
     approval_status: ContentStatus = Field(default=ContentStatus.IN_PROGRESS)
     approved_by: Optional[str] = None # Employee ID
@@ -74,7 +74,7 @@ class ContentItemUpdate(BaseModel):
     caption_date: Optional[date] = None
     caption_text: Optional[str] = None
     instagram_link: Optional[str] = None
-    issues: Optional[List[str]] = None
+    issues: Optional[List[Any]] = None
     approval_status: Optional[ContentStatus] = None
     approved_by: Optional[str] = None
     actual_posting_date: Optional[date] = None

@@ -238,11 +238,11 @@ export function Index() {
                   {basePath === "/employees/org" && <OrgStructure />}
                   {(basePath === "/employees/departments-setup" || basePath === "/employees/sub-departments" || basePath === "/employees/designations" || basePath === "/employees/departments") && <DepartmentDesignationManager />}
                   {(basePath === "/employees/attendance" || basePath === "/attendance") && <AttendanceList />}
-                  {(basePath === "/employees/leave-requests" || basePath === "/leave") && <LeaveRequests isNew={isNew} />}
+                  {(basePath === "/employees/leave-requests" || basePath === "/leave" || basePath === "/approvals/leave-requests") && <LeaveRequests isNew={isNew} />}
                   {(basePath === "/employees/documents" || basePath === "/documents") && <Documents setActive={setActive} />}
                   {(basePath === "/employees/documents/generate" || basePath === "/documents/generate") && <DocumentGenerator onBack={() => setActive("/employees/documents")} />}
-                  {(active === "/penalty" || active === "/approvals/penalties") && <Penalties />}
-                  {basePath === "/approvals/daily-progress" && <DailyProgress />}
+                  {(basePath === "/penalty" || basePath === "/approvals/penalties" || basePath === "/employees/penalties") && <Penalties />}
+                  {(basePath === "/approvals/daily-progress" || basePath === "/daily-progress") && <DailyProgress />}
                   {basePath === "/approvals/history" && <ApprovalHistory />}
                   {basePath === "/approvals/invoices" && <InvoiceApprovals />}
                   {basePath === "/remarks" && <Remarks />}

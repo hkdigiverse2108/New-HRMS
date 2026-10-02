@@ -40,6 +40,13 @@ class EmployeeService:
         except Exception:
             pass
 
+        # Auto-generate unique sequential employee_id if not supplied
+        if not employee_dict.get("employee_id"):
+            new_emp_code = await EmployeeRepository.get_next_employee_id()
+            employee_dict["employee_id"] = new_emp_code
+            if "work_details" in employee_dict and employee_dict["work_details"]:
+                employee_dict["work_details"]["employee_id"] = new_emp_code
+
         created_emp = await EmployeeRepository.create_employee(employee_dict)
         try:
             emp_id = str(created_emp.get("_id") or created_emp.get("id"))
