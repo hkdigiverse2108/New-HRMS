@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { X, Search, Plus, Filter, Check, MoreHorizontal, LayoutGrid, List, Briefcase, Calendar, Clock, Star, Circle, Trash2, Edit2, Archive, ArchiveRestore, ArrowLeft, Users, IndianRupee, FolderGit2, CheckCircle2, Settings2, TrendingUp, MousePointerClick, Target, BarChart3, ChevronDown, User, Building2, CreditCard, FileText, ChevronRight, Video, Instagram, Layers, MessageSquare, Key, Copy, Eye, EyeOff, ExternalLink, Phone, ShieldCheck, Sparkles, Share2, AlertCircle, Sliders, Loader2, UserPlus, UserX } from "lucide-react";
+import { X, Search, Plus, Filter, Check, MoreHorizontal, LayoutGrid, List, Briefcase, Calendar, Clock, Star, Circle, Trash2, Edit2, Archive, ArchiveRestore, ArrowLeft, Users, IndianRupee, FolderGit2, CheckCircle2, Settings2, TrendingUp, MousePointerClick, Target, BarChart3, ChevronDown, User, Building2, CreditCard, FileText, ChevronRight, Video, Instagram, Layers, MessageSquare, Key, Copy, Eye, EyeOff, ExternalLink, Phone, ShieldCheck, Sparkles, Share2, AlertCircle, Sliders, Loader2, UserPlus, UserX, ChevronLeft, Download, Printer } from "lucide-react";
 import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -1141,6 +1141,43 @@ const CalendarIssuesCell = ({
   );
 };
 
+export const getWorkProgress = (project: any): { completed: number; total: number; pct: number } | null => {
+  if (!project) return null;
+  let totalWork = 0;
+  let completedWork = 0;
+
+  if (project.contentCalendar && Array.isArray(project.contentCalendar) && project.contentCalendar.length > 0) {
+    totalWork += project.contentCalendar.length;
+    completedWork += project.contentCalendar.filter(
+      (item: any) =>
+        item.status === "Published" ||
+        item.status === "Approved" ||
+        item.status === "Approved by Client" ||
+        item.is_posted ||
+        Boolean(item.actualPostingDate || item.postingLinkOfIg)
+    ).length;
+  }
+
+  if (project.modules) {
+    Object.values(project.modules).forEach((mod: any) => {
+      if (mod?.tasks && Array.isArray(mod.tasks) && mod.tasks.length > 0) {
+        totalWork += mod.tasks.length;
+        completedWork += mod.tasks.filter((t: any) => t.status === "Completed" || t.completed).length;
+      }
+    });
+  }
+
+  if (totalWork > 0) {
+    return {
+      completed: completedWork,
+      total: totalWork,
+      pct: Math.min(100, Math.round((completedWork / totalWork) * 100)),
+    };
+  }
+
+  return null;
+};
+
 const subtractDays = (startDate: Date, days: number) => {
   const d = new Date(startDate);
   d.setDate(d.getDate() - days);
@@ -1152,11 +1189,11 @@ const getPresetDates = (postingDateStr: string) => {
   const d = new Date(postingDateStr);
   if (isNaN(d.getTime())) return {};
   
-  let offsets = { script: 14, shoot: 12, editing: 6, approval: 5 };
+  let offsets = { script: 14, shoot: 12, editing: 6, thumbnail: 5, approval: 5 };
   if (typeof window !== 'undefined') {
     try {
       const saved = (typeof window !== 'undefined' ? localStorage.getItem('hrms_calendar_offsets') : null);
-      if (saved) offsets = JSON.parse(saved);
+      if (saved) offsets = { ...offsets, ...JSON.parse(saved) };
     } catch (e) {}
   }
 
@@ -1165,7 +1202,7 @@ const getPresetDates = (postingDateStr: string) => {
     shootDate: subtractDays(d, offsets.shoot),
     editingStart: subtractDays(d, offsets.editing),
     captionDate: subtractDays(d, offsets.editing),
-    thumbnailDate: subtractDays(d, offsets.editing),
+    thumbnailDate: subtractDays(d, offsets.thumbnail ?? 5),
     approval: subtractDays(d, offsets.approval)
   };
 };
@@ -1866,6 +1903,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             script: settings.script_days_before ?? 14,
             shoot: settings.shoot_days_before ?? 12,
             editing: settings.editing_graphics_days_before ?? 6,
+            thumbnail: settings.thumbnail_days_before ?? 5,
             approval: settings.approval_days_before ?? 5,
           });
         }
@@ -2511,6 +2549,202 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [inlineEdit, setInlineEdit] = useState<{ id: string; field: string; value: string } | null>(null);
   
+  // Task 24: CC Custom PDF Export States
+  const [isPdfExportModalOpen, setIsPdfExportModalOpen] = useState(false);
+  const [pdfSelectedColumns, setPdfSelectedColumns] = useState<string[]>([
+    "Schedule",
+    "Type",
+    "Topic / Concept",
+    "Brand Person",
+    "Script",
+    "Shoot",
+    "Editing",
+    "Thumbnail",
+    "Caption",
+    "Final Link",
+    "Status"
+  ]);
+
+  const handleGenerateCcPdf = () => {
+    const currentProject = projects.find(p => p.id === selectedProjectId);
+    if (!currentProject) {
+      toast.error("No active project selected");
+      return;
+    }
+    const currentClient = clients.find(c => c.id === currentProject.clientId);
+    const clientName = currentClient?.companyName || currentClient?.name || "Client";
+    const projName = currentProject.name || "Project";
+    const category = currentProject.category || "Creative";
+    const docTitle = `${clientName} - ${projName} (${category}) Content Calendar`;
+
+    const items = currentProject.contentCalendar || [];
+    if (items.length === 0) {
+      toast.error("No content calendar items to export");
+      return;
+    }
+
+    const columnsMap: Record<string, (item: any) => string> = {
+      "Schedule": (i) => `${i.postingDate || "-"} (${i.postingDay || ""})`,
+      "Type": (i) => i.type || "-",
+      "Topic / Concept": (i) => i.topic || "-",
+      "Brand Person": (i) => i.brand_person || "-",
+      "Script": (i) => `${i.scriptDate || ""} ${i.scriptLink ? '• Link' : ''}`.trim() || "-",
+      "Shoot": (i) => `${i.shootDate || ""} ${i.shootLink ? '• Link' : ''}`.trim() || "-",
+      "Editing": (i) => `${i.editingDate || ""} ${i.finalPostLink || i.finalReelLink ? '• Link' : ''}`.trim() || "-",
+      "Thumbnail": (i) => `${i.thumbnailDate || ""} ${i.thumbnailLink ? '• Link' : ''}`.trim() || "-",
+      "Caption": (i) => i.caption || "-",
+      "Final Link": (i) => i.finalPostLink || i.finalReelLink || i.postingLinkOfIg || "-",
+      "Status": (i) => i.status || "To Do",
+    };
+
+    const selectedCols = pdfSelectedColumns.filter(c => columnsMap[c]);
+    if (selectedCols.length === 0) {
+      toast.error("Please select at least one column to export");
+      return;
+    }
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error("Popup blocked! Please allow popups to export PDF.");
+      return;
+    }
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${docTitle}</title>
+          <meta charset="utf-8" />
+          <style>
+            @page {
+              size: landscape;
+              margin: 12mm;
+            }
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+              color: #1e293b;
+              margin: 0;
+              padding: 16px;
+              font-size: 11px;
+            }
+            .header {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              border-bottom: 2px solid #0284c7;
+              padding-bottom: 12px;
+              margin-bottom: 16px;
+            }
+            .title-area h1 {
+              margin: 0;
+              font-size: 18px;
+              color: #0f172a;
+              font-weight: 800;
+            }
+            .title-area p {
+              margin: 4px 0 0 0;
+              color: #64748b;
+              font-size: 11px;
+            }
+            .badge {
+              display: inline-block;
+              padding: 3px 10px;
+              background: #e0f2fe;
+              color: #0369a1;
+              border-radius: 9999px;
+              font-weight: 700;
+              font-size: 11px;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 10px;
+            }
+            th {
+              background-color: #f8fafc;
+              color: #334155;
+              font-weight: 700;
+              text-align: left;
+              padding: 8px 10px;
+              border: 1px solid #cbd5e1;
+              font-size: 10px;
+              text-transform: uppercase;
+              letter-spacing: 0.05em;
+            }
+            td {
+              padding: 8px 10px;
+              border: 1px solid #e2e8f0;
+              vertical-align: top;
+              line-height: 1.4;
+            }
+            tr:nth-child(even) {
+              background-color: #f8fafc;
+            }
+            .status-tag {
+              display: inline-block;
+              padding: 2px 6px;
+              border-radius: 4px;
+              font-size: 9px;
+              font-weight: 700;
+              background: #f1f5f9;
+              color: #475569;
+            }
+            .status-published { background: #dcfce7; color: #15803d; }
+            .status-approved { background: #e0e7ff; color: #4338ca; }
+            .status-progress { background: #e0f2fe; color: #0369a1; }
+            .status-todo { background: #fef3c7; color: #b45309; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="title-area">
+              <h1>${clientName} - ${projName} (${category}) Content Calendar</h1>
+              <p>Generated: ${new Date().toLocaleDateString("en-IN", { day: '2-digit', month: 'short', year: 'numeric' })} • Total Items: ${items.length}</p>
+            </div>
+            <div>
+              <span class="badge">${category}</span>
+            </div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                ${selectedCols.map(col => `<th>${col}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
+              ${items.map(item => `
+                <tr>
+                  ${selectedCols.map(col => {
+                    const fn = columnsMap[col];
+                    const val = fn ? fn(item) : "";
+                    if (col === "Status") {
+                      const st = String(val).toLowerCase();
+                      const cls = st.includes("published") ? "status-published" : st.includes("approved") ? "status-approved" : st.includes("progress") ? "status-progress" : "status-todo";
+                      return `<td><span class="status-tag ${cls}">${val}</span></td>`;
+                    }
+                    return `<td>${val}</td>`;
+                  }).join('')}
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+              }, 300);
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    setIsPdfExportModalOpen(false);
+    toast.success("PDF preview generated!");
+  };
   // Bulk Add States
   const [isBulkAddModalOpen, setIsBulkAddModalOpen] = useState(false);
   const [bulkAddTab, setBulkAddTab] = useState<'range' | 'visual'>('range');
@@ -2617,7 +2851,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   };
   const handleAddFollowup = async (proj: Project) => {
     if (!followupText.trim()) {
-      toast.error("Followup text lakho");
+      toast.error("Please enter follow-up notes or client feedback");
       return;
     }
     try {
@@ -2627,7 +2861,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       setFollowupText("");
       setFollowupNextDate("");
       fetchProjectFollowups(proj.id);
-      toast.success("Followup added");
+      toast.success("Follow-up added successfully");
     } catch (err: any) {
       toast.error(err?.message || "Failed to add followup");
     }
@@ -2635,11 +2869,11 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   
   const [isCalendarSettingsOpen, setIsCalendarSettingsOpen] = useState(false);
   const [calendarOffsets, setCalendarOffsets] = useState(() => {
-    let offsets = { script: 14, shoot: 12, editing: 6, approval: 5 };
+    let offsets = { script: 14, shoot: 12, editing: 6, thumbnail: 5, approval: 5 };
     if (typeof window !== 'undefined') {
       try {
         const saved = (typeof window !== 'undefined' ? localStorage.getItem('hrms_calendar_offsets') : null);
-        if (saved) offsets = JSON.parse(saved);
+        if (saved) offsets = { ...offsets, ...JSON.parse(saved) };
       } catch (e) {}
     }
     return offsets;
@@ -4282,20 +4516,28 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm">
                {(() => {
-                 // K8: start–end dates lakheli + eni pramane % (date-driven progress)
+                 // Task 13: Calculate progress from completed tasks / deliverables rather than purely elapsed days
+                 const wp = getWorkProgress(project);
                  const dp = getDateProgress(project.startDate, project.endDate);
-                 const pct = dp ? dp.pct : (project.progress || 0);
+                 const pct = wp !== null ? wp.pct : (dp ? dp.pct : (project.progress || 0));
                  return (
                    <>
                      <div className="flex justify-between items-end mb-2">
-                       <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Progress</span>
+                       <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
+                         {wp !== null ? "Work Progress" : "Progress"}
+                       </span>
                        <span className="text-3xl font-black text-foreground font-mono">{pct}%</span>
                      </div>
-                     {dp && (
+                     {wp !== null ? (
+                       <p className="text-[11px] font-bold text-emerald-600">
+                         {wp.completed} / {wp.total} items completed
+                         {dp && <span className="text-muted-foreground font-normal ml-1">({dp.elapsed}/{dp.total} days)</span>}
+                       </p>
+                     ) : dp ? (
                        <p className="text-[11px] font-bold text-muted-foreground">
                          {safeFormat(project.startDate, "dd/MM/yyyy")} → {safeFormat(project.endDate, "dd/MM/yyyy")} • {dp.elapsed}/{dp.total} days
                        </p>
-                     )}
+                     ) : null}
                      <div className="h-2 w-full bg-muted/60 rounded-full overflow-hidden mt-4">
                        <div
                          className={cn("h-full rounded-full transition-all duration-1000 ease-out", getProgressColor(project.status))}
@@ -4769,21 +5011,66 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         </span>
                         <span className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Deliverables</span>
                       </div>
-                      <div className="flex items-center justify-between text-[11px] pt-1 border-t border-border/40">
+                      <div className="flex items-center justify-between text-[11px] pt-1 border-t border-border/40 gap-1.5">
                         <span className="text-muted-foreground font-medium">Tracking Period:</span>
-                        <Select value={calendarMonthFilter} onValueChange={(val) => setCalendarMonthFilter(val)}>
-                          <SelectTrigger className="h-7 px-2 text-[11px] font-bold bg-background border-border/60 rounded-lg min-w-[120px]">
-                            <SelectValue placeholder="Period" />
-                          </SelectTrigger>
-                          <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
-                            <SelectItem value="Current" className="text-xs font-semibold">Current Month</SelectItem>
-                            <SelectItem value="All" className="text-xs font-semibold">All Items</SelectItem>
-                            {/* K16: project range months (e.g. 15th-cycle) */}
-                            {getProjectMonths(project.startDate, project.endDate).months.map(m => (
-                              <SelectItem key={m.value} value={m.value} className="text-xs font-semibold">{m.label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const monthsList = [
+                                "All",
+                                "Current",
+                                ...getProjectMonths(project.startDate, project.endDate).months.map(m => m.value)
+                              ];
+                              const currentIndex = monthsList.indexOf(calendarMonthFilter);
+                              if (currentIndex > 0) {
+                                const prevM = monthsList[currentIndex - 1];
+                                if (prevM) setCalendarMonthFilter(prevM);
+                              } else if (currentIndex === -1 && monthsList.length > 2) {
+                                const curM = monthsList[1];
+                                if (curM) setCalendarMonthFilter(curM);
+                              }
+                            }}
+                            title="Previous Month (Arrow navigation)"
+                            className="p-1 rounded-lg bg-background border border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                          >
+                            <ChevronLeft className="w-3.5 h-3.5" />
+                          </button>
+                          <Select value={calendarMonthFilter} onValueChange={(val) => setCalendarMonthFilter(val)}>
+                            <SelectTrigger className="h-7 px-2 text-[11px] font-bold bg-background border-border/60 rounded-lg min-w-[110px]">
+                              <SelectValue placeholder="Period" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                              <SelectItem value="Current" className="text-xs font-semibold">Current Month</SelectItem>
+                              <SelectItem value="All" className="text-xs font-semibold">All Items</SelectItem>
+                              {getProjectMonths(project.startDate, project.endDate).months.map(m => (
+                                <SelectItem key={m.value} value={m.value} className="text-xs font-semibold">{m.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const monthsList = [
+                                "All",
+                                "Current",
+                                ...getProjectMonths(project.startDate, project.endDate).months.map(m => m.value)
+                              ];
+                              const currentIndex = monthsList.indexOf(calendarMonthFilter);
+                              if (currentIndex >= 0 && currentIndex < monthsList.length - 1) {
+                                const nextM = monthsList[currentIndex + 1];
+                                if (nextM) setCalendarMonthFilter(nextM);
+                              } else if (currentIndex === -1 && monthsList.length > 2) {
+                                const defaultM = monthsList[2];
+                                if (defaultM) setCalendarMonthFilter(defaultM);
+                              }
+                            }}
+                            title="Next Month (Arrow navigation)"
+                            className="p-1 rounded-lg bg-background border border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                          >
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -4975,6 +5262,17 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
+                          setIsPdfExportModalOpen(true);
+                        }}
+                        className="h-8 px-2.5 bg-card/90 hover:bg-muted border border-border/60 rounded-xl text-xs font-semibold text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap shadow-sm"
+                        title="Export Content Calendar to PDF"
+                      >
+                        <Download className="w-3.5 h-3.5 shrink-0 text-primary" />
+                        <span className="whitespace-nowrap">Export PDF</span>
+                      </button>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
                           const today = new Date().toISOString().split('T')[0] || "";
                           const future = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] || "";
                           setBulkStartDate(today);
@@ -5005,31 +5303,34 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     </div>
                   </div>
 
-                  <div className="bg-card/40 border border-border/40 rounded-[2rem] shadow-xl overflow-hidden backdrop-blur-md">
-                    {filteredCalendar.length === 0 ? (
-                      <div className="text-center py-16 text-sm text-muted-foreground font-medium">
-                        No calendar items found matching the filters.
-                      </div>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-center border-collapse text-xs">
-                          <thead>
-                            <tr className="border-b border-border/40 text-muted-foreground font-extrabold uppercase tracking-widest bg-muted/30">
-                              <th className="py-4 px-5 text-center whitespace-nowrap">Schedule</th>
-                              <th className="py-4 px-5 text-center whitespace-nowrap">Type</th>
-                              <th className="py-4 px-5 text-center whitespace-nowrap">Topic / Concept</th>
-                              <th className="py-4 px-5 text-center whitespace-nowrap">Brand Person</th>
-                              <th className="py-4 px-5 text-center whitespace-nowrap">Script</th>
-                              <th className="py-4 px-5 text-center whitespace-nowrap">Shoot</th>
-                              <th className="py-4 px-5 text-center whitespace-nowrap">Editing</th>
-                              <th className="py-4 px-5 text-center whitespace-nowrap">Thumbnail</th>
-                              <th className="py-4 px-5 text-center whitespace-nowrap">Caption</th>
-                              <th className="py-4 px-5 text-center whitespace-nowrap">Instagram Status</th>
-                              <th className="py-4 px-5 text-center whitespace-nowrap">Issues</th>
-                              <th className="py-4 px-5 text-center whitespace-nowrap">Approval & Status</th>
-                              <th className="py-4 px-5 text-center whitespace-nowrap">Actions</th>
-                            </tr>
-                          </thead>
+                  {(() => {
+                    const hasApprovalQcAssigned = Boolean(project?.creativeTeam?.["approval_qc"] || project?.creativeTeam?.approval_qc);
+                    return (
+                      <div className="bg-card/40 border border-border/40 rounded-[2rem] shadow-xl overflow-hidden backdrop-blur-md">
+                        {filteredCalendar.length === 0 ? (
+                          <div className="text-center py-16 text-sm text-muted-foreground font-medium">
+                            No calendar items found matching the filters.
+                          </div>
+                        ) : (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-center border-collapse text-xs">
+                              <thead>
+                                <tr className="border-b border-border/40 text-muted-foreground font-extrabold uppercase tracking-widest bg-muted/30">
+                                  <th className="py-4 px-5 text-center whitespace-nowrap">Schedule</th>
+                                  <th className="py-4 px-5 text-center whitespace-nowrap">Type</th>
+                                  <th className="py-4 px-5 text-center whitespace-nowrap">Topic / Concept</th>
+                                  <th className="py-4 px-5 text-center whitespace-nowrap">Brand Person</th>
+                                  <th className="py-4 px-5 text-center whitespace-nowrap">Script</th>
+                                  <th className="py-4 px-5 text-center whitespace-nowrap">Shoot</th>
+                                  <th className="py-4 px-5 text-center whitespace-nowrap">Editing</th>
+                                  <th className="py-4 px-5 text-center whitespace-nowrap">Thumbnail</th>
+                                  <th className="py-4 px-5 text-center whitespace-nowrap">Caption</th>
+                                  <th className="py-4 px-5 text-center whitespace-nowrap">Instagram Status</th>
+                                  <th className="py-4 px-5 text-center whitespace-nowrap">Issues</th>
+                                  <th className="py-4 px-5 text-center whitespace-nowrap">{hasApprovalQcAssigned ? "Approval & Status" : "Status"}</th>
+                                  <th className="py-4 px-5 text-center whitespace-nowrap">Actions</th>
+                                </tr>
+                              </thead>
                           <tbody className="divide-y divide-border/20">
                             {filteredCalendar.map((item) => {
                               const isExpanded = expandedRowId === item.id;
@@ -5307,13 +5608,29 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
                                   {/* Approval & Status */}
                                   <td className="py-2 px-5 text-center whitespace-nowrap">
-                                    <InlineText field="approval" value={item.approved_by_details?.employee_name || item.approval} placeholder="+ feedback" cls="text-[11px] text-foreground font-semibold mb-1" />
+                                    {hasApprovalQcAssigned && (
+                                      <InlineText field="approval" value={item.approved_by_details?.employee_name || item.approval} placeholder="+ feedback" cls="text-[11px] text-foreground font-semibold mb-1" />
+                                    )}
                                     {isEd('status') ? (
                                       <select autoFocus value={inlineEdit!.value} onChange={e => saveInlineEdit('status', e.target.value)} onBlur={() => saveInlineEdit('status', inlineEdit!.value)} onKeyDown={e => { if (e.key === 'Escape') setInlineEdit(null); }} onClick={e => e.stopPropagation()} className="px-2 py-1 bg-primary/5 border border-primary/40 rounded-lg text-xs font-bold focus:outline-none mx-auto block">
                                         {["To Do", "In Progress", "Pending Approval", "Approved", "Published"].map(o => <option key={o} value={o}>{o}</option>)}
                                       </select>
                                     ) : (
-                                      <span onClick={e => startEdit(e, 'status', item.status)} className={cn("mx-auto px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider block text-center max-w-[110px] cursor-pointer hover:opacity-80", getCalStatusColor(item.status))} title="Click to change status">{item.status}</span>
+                                      <div className="flex flex-col items-center gap-1">
+                                        <span onClick={e => startEdit(e, 'status', item.status)} className={cn("mx-auto px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider block text-center max-w-[110px] cursor-pointer hover:opacity-80", getCalStatusColor(item.status))} title="Click to change status">{item.status}</span>
+                                        {(() => {
+                                          const todayStr = new Date().toISOString().split('T')[0] || '';
+                                          const isOverdue = Boolean(item.postingDate && todayStr && item.postingDate < todayStr && item.status !== 'Published' && item.status !== 'Approved');
+                                          if (isOverdue) {
+                                            return (
+                                              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-rose-500/15 text-rose-600 border border-rose-500/30 flex items-center gap-0.5 animate-pulse">
+                                                ⚠️ Overdue
+                                              </span>
+                                            );
+                                          }
+                                          return null;
+                                        })()}
+                                      </div>
                                     )}
                                   </td>
 
@@ -5361,6 +5678,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       </div>
                     )}
                   </div>
+                );
+              })()}
                   </>
                   )}
                 </div>
@@ -6527,6 +6846,10 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     <input type="number" min="0" value={calendarOffsets.editing} onChange={(e) => setCalendarOffsets({ ...calendarOffsets, editing: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
                   </div>
                   <div>
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Thumbnail (Days Before)</label>
+                    <input type="number" min="0" value={calendarOffsets.thumbnail ?? 5} onChange={(e) => setCalendarOffsets({ ...calendarOffsets, thumbnail: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
+                  </div>
+                  <div>
                     <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Approval (Days Before)</label>
                     <input type="number" min="0" value={calendarOffsets.approval} onChange={(e) => setCalendarOffsets({ ...calendarOffsets, approval: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
                   </div>
@@ -6544,6 +6867,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                           script_days_before: Number(calendarOffsets.script) || 0,
                           shoot_days_before: Number(calendarOffsets.shoot) || 0,
                           editing_graphics_days_before: Number(calendarOffsets.editing) || 0,
+                          thumbnail_days_before: Number(calendarOffsets.thumbnail) || 0,
                           approval_days_before: Number(calendarOffsets.approval) || 0,
                         });
                       } catch (err) {
@@ -6561,6 +6885,111 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             </div>
           </div>
         )}
+
+        {/* Task 24: CC Custom PDF Export Modal */}
+        {isPdfExportModalOpen && (() => {
+          const allColumns = [
+            "Schedule",
+            "Type",
+            "Topic / Concept",
+            "Brand Person",
+            "Script",
+            "Shoot",
+            "Editing",
+            "Thumbnail",
+            "Caption",
+            "Final Link",
+            "Status"
+          ];
+
+          return (
+            <div className="fixed inset-0 z-[200] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+              <div className="bg-card w-full max-w-md rounded-[2rem] border border-border/60 shadow-2xl overflow-hidden flex flex-col">
+                <div className="flex items-center justify-between px-6 py-5 border-b border-border/50">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-primary/10 text-primary rounded-xl">
+                      <Download className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-foreground">Export Content Calendar</h3>
+                      <p className="text-[11px] text-muted-foreground">Select columns to include in PDF export</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setIsPdfExportModalOpen(false)} className="p-2 text-muted-foreground hover:bg-muted rounded-full transition-colors">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="p-6 space-y-4">
+                  <div className="flex justify-between items-center pb-2 border-b border-border/40">
+                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Visible Columns ({pdfSelectedColumns.length}/{allColumns.length})</span>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPdfSelectedColumns([...allColumns])}
+                        className="text-[11px] font-bold text-primary hover:underline"
+                      >
+                        Select All
+                      </button>
+                      <span className="text-muted-foreground text-xs">•</span>
+                      <button
+                        type="button"
+                        onClick={() => setPdfSelectedColumns(["Schedule", "Topic / Concept", "Status"])}
+                        className="text-[11px] font-bold text-muted-foreground hover:text-foreground"
+                      >
+                        Reset Minimal
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5 max-h-[300px] overflow-y-auto pr-1">
+                    {allColumns.map((col) => {
+                      const isChecked = pdfSelectedColumns.includes(col);
+                      return (
+                        <label
+                          key={col}
+                          className={cn(
+                            "flex items-center gap-2.5 p-2.5 rounded-xl border text-xs font-semibold cursor-pointer transition-all",
+                            isChecked 
+                              ? "bg-primary/5 border-primary/40 text-foreground" 
+                              : "bg-muted/20 border-border/40 text-muted-foreground hover:bg-muted/40"
+                          )}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setPdfSelectedColumns([...pdfSelectedColumns, col]);
+                              } else {
+                                setPdfSelectedColumns(pdfSelectedColumns.filter(c => c !== col));
+                              }
+                            }}
+                            className="rounded border-border text-primary focus:ring-primary w-4 h-4"
+                          />
+                          <span>{col}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="px-6 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
+                  <button onClick={() => setIsPdfExportModalOpen(false)} className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors">
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleGenerateCcPdf}
+                    className="px-5 py-2 bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm rounded-xl transition-all shadow-sm flex items-center gap-1.5"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>Generate & Print PDF</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* SMM Content Calendar Modal - plain overlay */}
         {isAddCalendarItemModalOpen && (() => {
@@ -10979,10 +11408,11 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   </div>
                 )}
 
-                {/* Footer Summary (K8: date-driven progress) */}
+                {/* Footer Summary (Task 13: work/task-driven progress) */}
                 {(() => {
+                  const wp = getWorkProgress(project);
                   const dp = getDateProgress(project.startDate, project.endDate);
-                  const pct = dp ? dp.pct : (project.progress || 0);
+                  const pct = wp !== null ? wp.pct : (dp ? dp.pct : (project.progress || 0));
                   return (
                     <>
                       <div className="flex justify-between items-end pt-4 border-t border-border/40 relative z-10 gap-3">
@@ -10991,16 +11421,23 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                           <span className="text-base font-black text-foreground mt-0.5 font-mono truncate">{project.budget || "—"}</span>
                         </div>
                         <div className="flex flex-col text-right shrink-0">
-                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Progress</span>
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                            {wp !== null ? "Work Progress" : "Progress"}
+                          </span>
                           <span className="text-base font-black text-primary mt-0.5 font-mono">{pct}%</span>
                         </div>
                       </div>
                       <div className="h-1.5 rounded-full bg-muted mt-3 overflow-hidden relative z-10">
                         <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
                       </div>
-                      {dp && (
+                      {wp !== null ? (
+                        <p className="text-[10px] font-bold text-emerald-600 mt-1.5 relative z-10">
+                          {wp.completed}/{wp.total} items completed
+                          {dp && <span className="text-muted-foreground font-normal ml-1">({dp.elapsed}/{dp.total}d)</span>}
+                        </p>
+                      ) : dp ? (
                         <p className="text-[10px] font-bold text-muted-foreground mt-1.5 relative z-10">{dp.elapsed}/{dp.total} days</p>
-                      )}
+                      ) : null}
                     </>
                   );
                 })()}

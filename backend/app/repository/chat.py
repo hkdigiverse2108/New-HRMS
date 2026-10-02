@@ -569,25 +569,25 @@ class ChatRepository:
         return result
 
     @classmethod
-    async def delete_message(cls, message_id: str, user_id: str) -> bool:
+    async def delete_message(cls, message_id: str, user_id: str, is_admin: bool = False) -> Optional[Dict[str, Any]]:
         db = await cls.get_db()
         try:
             msg_id_obj = ObjectId(message_id)
         except Exception:
-            return False
+            return None
 
         msg = await db[cls.messages_collection].find_one({"_id": msg_id_obj})
         if not msg:
-            return False
+            return None
 
         channel_id = msg.get("channel_id")
         channel = await cls.get_channel_by_id(channel_id) if channel_id else None
         
         is_sender = str(msg.get("sender_id")) == str(user_id)
-        is_admin = channel and str(channel.get("created_by")) == str(user_id)
+        is_chan_admin = channel and str(channel.get("created_by")) == str(user_id)
         
-        if not is_sender and not is_admin:
-            return False
+        if not is_sender and not is_chan_admin and not is_admin:
+            return None
 
         await db[cls.messages_collection].delete_one({"_id": msg_id_obj})
         if channel_id:
@@ -598,7 +598,7 @@ class ChatRepository:
                         await delete_cache(f"chat:channels:{m_id}")
             except Exception:
                 pass
-        return True
+        return serialize_mongo(msg)
 
 
     @classmethod

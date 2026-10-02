@@ -51,6 +51,13 @@ export interface Employee {
   hasEmployment?: boolean;
   employmentStartDate?: string;
   bondsHistory?: any[];
+
+  // Security deposit tracking fields
+  depositAmount?: number;
+  depositPaid?: number;
+  depositStatus?: "Paid" | "Partial" | "Pending" | "Refunded";
+  depositPaymentDate?: string;
+  depositRemarks?: string;
 }
 
 export const AVAILABLE_DEPARTMENTS = [

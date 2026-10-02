@@ -22,6 +22,8 @@ import {
   BarChart2,
   Maximize2,
   ChevronDown,
+  ChevronUp,
+  EyeOff,
   AlertCircle,
   Copy,
   Star,
@@ -577,6 +579,74 @@ function ChatInner() {
     channelId: string;
   } | null>(null);
 
+  // User ID and Role checks
+  const myUserId = String((user as any)?._id || user?.id || "");
+  const myEmployeeId = String((user as any)?.employee_id || "");
+  const isAdminOrHR = user?.role === "admin" || user?.role === "superadmin" || user?.role === "hr";
+
+  // Task 41 & User Request: Strict Access Control check for deleting messages.
+  // Must be explicitly granted delete or all permission in user.permissions["/chat"].
+  // Role alone (admin/hr) does NOT grant delete if permission is not enabled in Access Control.
+  const canDeleteChatMessages = Boolean(
+    user?.permissions?.["/chat"]?.delete || 
+    user?.permissions?.["/chat"]?.all ||
+    user?.permissions?.["chat"]?.delete ||
+    user?.permissions?.["chat"]?.all
+  );
+
+  // Task 37: In-Chat Search State
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [chatSearchQuery, setChatSearchQuery] = useState("");
+  const [searchMatchIndex, setSearchMatchIndex] = useState(0);
+
+  // Task 36: New DM Modal Search State
+  const [newDmSearch, setNewDmSearch] = useState("");
+
+  // Task 42: New Channel Members Selection State
+  const [newChannelMembers, setNewChannelMembers] = useState<string[]>([]);
+  const [newChannelMemberSearch, setNewChannelMemberSearch] = useState("");
+
+  // Task 45: Hidden DMs State (persisted per user in localStorage)
+  const [hiddenDms, setHiddenDms] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem(`hrms_hidden_dms_${myUserId}`);
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const hideDm = useCallback((dmId: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setHiddenDms((prev) => {
+      const next = new Set(prev);
+      next.add(dmId);
+      try {
+        localStorage.setItem(`hrms_hidden_dms_${myUserId}`, JSON.stringify(Array.from(next)));
+      } catch {}
+      return next;
+    });
+    toast.success("Conversation hidden from sidebar");
+  }, [myUserId]);
+
+  const unhideDm = useCallback((dmId: string) => {
+    setHiddenDms((prev) => {
+      if (!prev.has(dmId)) return prev;
+      const next = new Set(prev);
+      next.delete(dmId);
+      try {
+        localStorage.setItem(`hrms_hidden_dms_${myUserId}`, JSON.stringify(Array.from(next)));
+      } catch {}
+      return next;
+    });
+  }, [myUserId]);
+
+  // Task 39: Reactions Lock / Debounce Ref
+  const reactingInProgressRef = useRef<Set<string>>(new Set());
+
+  // Task 38: Drag & Drop State
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+
   // Double-send guard + sending lock
   const isSendingRef = useRef(false);
   const lastSentRef = useRef<{ content: string; at: number } | null>(null);
@@ -680,9 +750,19 @@ function ChatInner() {
   const isMessageSeen = useCallback(
     (msg: ChatMessage) => {
       if (!msg || !Array.isArray(msg.read_by)) return false;
-      return msg.read_by.some((uid) => String(uid) !== String(user?.id));
+      return msg.read_by.some((uid) => {
+        const sUid = String(uid).trim();
+        return (
+          sUid !== "" &&
+          sUid !== myUserId &&
+          sUid !== myEmployeeId &&
+          sUid !== "me" &&
+          sUid !== "undefined" &&
+          sUid !== "null"
+        );
+      });
     },
-    [user?.id]
+    [myUserId, myEmployeeId]
   );
 
   // Clean display name - removes any bracket suffixes like "(admin)" or "(any role)" (Issue 1)
@@ -785,6 +865,26 @@ function ChatInner() {
               );
             }
 
+            // Highlight in-chat search query if active
+            if (chatSearchQuery.trim() && seg.toLowerCase().includes(chatSearchQuery.toLowerCase())) {
+              const q = chatSearchQuery.trim();
+              const regexQ = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
+              const parts = seg.split(regexQ);
+              return (
+                <span key={sIdx}>
+                  {parts.map((p, pIdx) =>
+                    p.toLowerCase() === q.toLowerCase() ? (
+                      <mark key={pIdx} className="bg-amber-300 dark:bg-amber-500 text-black px-0.5 rounded font-bold">
+                        {p}
+                      </mark>
+                    ) : (
+                      p
+                    )
+                  )}
+                </span>
+              );
+            }
+
             return <span key={sIdx}>{seg}</span>;
           });
 
@@ -796,7 +896,7 @@ function ChatInner() {
         })}
       </div>
     );
-  }, []);
+  }, [chatSearchQuery]);
 
   // WhatsApp-style Right Click Context Menu State
   const [contextMenu, setContextMenu] = useState<{
@@ -845,7 +945,8 @@ function ChatInner() {
   // --- SAFE FORMAT MESSAGE ---
   const formatMessage = useCallback(
     (m: any): ChatMessage => {
-      const isMe = String(m?.sender_id) === String(user?.id);
+      const sId = String(m?.sender_id || "").trim();
+      const isMe = sId === myUserId || (myEmployeeId !== "" && sId === myEmployeeId) || sId === "me";
       const reactions = normalizeReactions(m?.reactions);
       const readBy = Array.isArray(m?.read_by)
         ? m.read_by.map(String)
@@ -934,7 +1035,7 @@ function ChatInner() {
         isMe
       };
     },
-    [user?.id, user?.name, user?.avatar, user?.profile_photo]
+    [myUserId, myEmployeeId, user?.name, user?.avatar, user?.profile_photo]
   );
 
   // Ask Chrome notification permission once + close emoji on outside click
@@ -1540,15 +1641,16 @@ function ChatInner() {
               setMessages((prev) =>
                 prev.map((m) => (m.id === data.message_id ? { ...m, poll: data.poll } : m))
               );
-            } else if (data.type === "message_deleted") {
+            } else if (data.type === "message_deleted" || data.action === "message_deleted") {
               setMessages((prev) => prev.filter((m) => m.id !== data.message_id));
-            } else if (data.type === "read_receipt") {
+            } else if (data.type === "read_receipt" || data.action === "read_receipt") {
               if (String(data.channel_id) === String(activeChannelIdRef.current)) {
                 const readerId = String(data.user_id);
                 setMessages((prev) =>
                   prev.map((m) => {
-                    if (Array.isArray(m.read_by) && !m.read_by.includes(readerId)) {
-                      return { ...m, read_by: [...m.read_by, readerId] };
+                    const currentRead = Array.isArray(m.read_by) ? [...m.read_by] : [];
+                    if (!currentRead.includes(readerId)) {
+                      return { ...m, read_by: [...currentRead, readerId] };
                     }
                     return m;
                   })
@@ -2310,27 +2412,48 @@ function ChatInner() {
     });
   };
 
-  // --- 10. EMOJI REACTIONS ---
+  // --- 10. EMOJI REACTIONS (Instant optimistic update + debounce) ---
   const handleReact = async (messageId: string, emoji: string) => {
+    const lockKey = `${messageId}_${emoji}`;
+    if (reactingInProgressRef.current.has(lockKey)) return;
+    reactingInProgressRef.current.add(lockKey);
+
+    setShowEmojiPicker(false);
+    setReactionPickerMsgId(null);
+
+    const prevMessages = [...messages];
+    const myId = myUserId;
+
+    // 1. Instant optimistic update (0ms delay)
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== messageId) return m;
+        const current = { ...(m.reactions || {}) };
+        const list = current[emoji] ? [...current[emoji]] : [];
+        if (list.includes(myId)) {
+          const filtered = list.filter((id) => id !== myId);
+          if (filtered.length > 0) {
+            current[emoji] = filtered;
+          } else {
+            delete current[emoji];
+          }
+        } else {
+          current[emoji] = [...list, myId];
+        }
+        return { ...m, reactions: current };
+      })
+    );
+
+    // 2. Network call
     try {
       await api.post(`/chat/messages/${messageId}/react`, { emoji }, { showErrorToast: false });
-      setShowEmojiPicker(false);
     } catch {
-      // optimistic update
-      setMessages((prev) =>
-        prev.map((m) => {
-          if (m.id !== messageId) return m;
-          const current = { ...(m.reactions || {}) };
-          const list = current[emoji] || [];
-          const myId = String(user?.id);
-          if (list.includes(myId)) {
-            current[emoji] = list.filter((id) => id !== myId);
-          } else {
-            current[emoji] = [...list, myId];
-          }
-          return { ...m, reactions: current };
-        })
-      );
+      // Rollback on failure
+      setMessages(prevMessages);
+    } finally {
+      setTimeout(() => {
+        reactingInProgressRef.current.delete(lockKey);
+      }, 350);
     }
   };
 
@@ -2368,6 +2491,43 @@ function ChatInner() {
   };
 
   const handleVotePoll = async (messageId: string, optionId: string) => {
+    const myId = myUserId;
+    if (!myId) return;
+
+    // 1. Instant optimistic update for poll vote (0ms delay)
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== messageId || !m.poll) return m;
+        const allowMultiple = Boolean(m.poll.allow_multiple_answers);
+        const options = (m.poll.options || []).map((opt) => {
+          let voters = Array.isArray(opt.voters) ? [...opt.voters] : [];
+          if (opt.id === optionId) {
+            if (voters.includes(myId)) {
+              voters = voters.filter((id) => id !== myId);
+            } else {
+              voters.push(myId);
+            }
+          } else if (!allowMultiple) {
+            voters = voters.filter((id) => id !== myId);
+          }
+          return {
+            ...opt,
+            voters,
+            voters_count: voters.length,
+            user_has_voted: voters.includes(myId)
+          };
+        });
+        return {
+          ...m,
+          poll: {
+            ...m.poll,
+            options
+          }
+        };
+      })
+    );
+
+    // 2. Network call
     try {
       await api.post(`/chat/messages/${messageId}/vote`, { option_id: optionId }, { showErrorToast: false });
     } catch {
@@ -2400,6 +2560,8 @@ function ChatInner() {
     if (!newChannelName.trim()) return;
 
     const cleanName = newChannelName.trim().toLowerCase().replace(/\s+/g, "-");
+    const memberIds = Array.from(new Set([myUserId, ...newChannelMembers])).filter(Boolean);
+
     try {
       const res = await api.post<ChatChannel>(
         "/chat/channels",
@@ -2407,6 +2569,7 @@ function ChatInner() {
           name: cleanName,
           description: newChannelDesc.trim() || undefined,
           is_dm: false,
+          members: memberIds,
           auto_join_new_employees: newChannelAutoJoin
         },
         { showErrorToast: false }
@@ -2421,6 +2584,8 @@ function ChatInner() {
       setIsNewChannelOpen(false);
       setNewChannelName("");
       setNewChannelDesc("");
+      setNewChannelMembers([]);
+      setNewChannelMemberSearch("");
       setNewChannelAutoJoin(false);
     } catch {
       // Mock fallback
@@ -2428,8 +2593,8 @@ function ChatInner() {
         id: `chan-${Date.now()}`,
         name: cleanName,
         is_dm: false,
-        members: [String(user?.id)],
-        created_by: String(user?.id),
+        members: memberIds,
+        created_by: myUserId,
         created_at: new Date().toISOString(),
         auto_join_new_employees: newChannelAutoJoin
       };
@@ -2437,6 +2602,9 @@ function ChatInner() {
       setActiveChannelId(mockChan.id);
       setIsNewChannelOpen(false);
       setNewChannelName("");
+      setNewChannelDesc("");
+      setNewChannelMembers([]);
+      setNewChannelMemberSearch("");
       setNewChannelAutoJoin(false);
     }
   };
@@ -2609,6 +2777,7 @@ function ChatInner() {
         }
         focusMessageInput();
       }
+      unhideDm(empId);
       setIsNewDmOpen(false);
     } catch {
       // quiet fail
@@ -2632,8 +2801,8 @@ function ChatInner() {
     }))
     .filter((c) => (c.other_user?.name || c.name || "").toLowerCase().includes((searchQuery || "").toLowerCase()));
 
-  // If no DMs in DB yet, show fallback direct messages from employees
-  const displayDms =
+  // If no DMs in DB yet, show fallback direct messages from employees (filter out hidden DMs - Task 45)
+  const displayDms = (
     filteredDms.length > 0
       ? filteredDms
       : (employees || []).slice(0, 4).map((emp) => ({
@@ -2651,7 +2820,19 @@ function ChatInner() {
             avatar: emp.avatar || emp.profile_photo,
             is_online: presenceMap[emp.id] ?? false
           }
-        }));
+        }))
+  ).filter((dm) => {
+    const dmId = String(dm.id || (dm as any)._id);
+    const targetUserId = String(dm.other_user?.id || "");
+    if (
+      (hiddenDms.has(dmId) || hiddenDms.has(targetUserId)) &&
+      activeChannelId !== dmId &&
+      !dm.unread_count
+    ) {
+      return false;
+    }
+    return true;
+  });
 
   // Active channel details
   const activeChannel = channels.find((c) => (c.id || (c as any)._id) === activeChannelId);
@@ -2661,12 +2842,53 @@ function ChatInner() {
     ? currentDmUser?.name || activeChannel?.name || "Direct Message"
     : activeChannel?.name || "engineering";
 
-  // Members of active channel (for @ mentions & member list modal - Issues 3 & 4)
+  // Members of active channel (matches both emp.id and emp._id - Task 42)
   const activeChannelMemberEmployees = React.useMemo(() => {
     if (!activeChannel || isCurrentDm) return [];
     const memberIds = (activeChannel.members || []).map(String);
-    return (employees || []).filter((emp) => memberIds.includes(String(emp.id)));
+    return (employees || []).filter((emp) => {
+      const eId = String(emp.id);
+      const eAltId = String((emp as any)?._id || "");
+      return memberIds.includes(eId) || (eAltId && memberIds.includes(eAltId));
+    });
   }, [activeChannel, isCurrentDm, employees]);
+
+  // In-Chat Search matches & navigation (Task 37)
+  const matchingMessageIds = React.useMemo(() => {
+    if (!chatSearchQuery.trim()) return [];
+    const q = chatSearchQuery.toLowerCase();
+    return messages
+      .filter((m) =>
+        (m.content && m.content.toLowerCase().includes(q)) ||
+        (m.file_name && m.file_name.toLowerCase().includes(q))
+      )
+      .map((m) => m.id);
+  }, [messages, chatSearchQuery]);
+
+  const scrollToMessage = useCallback((msgId: string) => {
+    const el = document.getElementById(`msg-${msgId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightedMsgId(msgId);
+      setTimeout(() => setHighlightedMsgId(null), 2500);
+    }
+  }, []);
+
+  const handleNextSearchMatch = useCallback(() => {
+    if (matchingMessageIds.length === 0) return;
+    const nextIdx = (searchMatchIndex + 1) % matchingMessageIds.length;
+    setSearchMatchIndex(nextIdx);
+    const targetId = matchingMessageIds[nextIdx];
+    if (targetId) scrollToMessage(targetId);
+  }, [matchingMessageIds, searchMatchIndex, scrollToMessage]);
+
+  const handlePrevSearchMatch = useCallback(() => {
+    if (matchingMessageIds.length === 0) return;
+    const prevIdx = (searchMatchIndex - 1 + matchingMessageIds.length) % matchingMessageIds.length;
+    setSearchMatchIndex(prevIdx);
+    const targetId = matchingMessageIds[prevIdx];
+    if (targetId) scrollToMessage(targetId);
+  }, [matchingMessageIds, searchMatchIndex, scrollToMessage]);
 
   const matchingMentionMembers = React.useMemo(() => {
     if (mentionQuery === null) return [];
@@ -2920,7 +3142,7 @@ function ChatInner() {
                       focusMessageInput();
                     }}
                     className={cn(
-                      "w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-sm transition-colors cursor-pointer",
+                      "w-full group/dm flex items-center justify-between px-2 py-1.5 rounded-lg text-sm transition-colors cursor-pointer",
                       isActive
                         ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-bold"
                         : "text-muted-foreground hover:bg-muted font-medium hover:text-foreground"
@@ -2938,11 +3160,22 @@ function ChatInner() {
                       </div>
                       <span className="truncate">{cleanDisplayName(dmUser?.name || dm.name)}</span>
                     </div>
-                    {Boolean(dm.unread_count && dm.unread_count > 0) && (
-                      <span className="bg-emerald-600 text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full shrink-0">
-                        {dm.unread_count}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {Boolean(dm.unread_count && dm.unread_count > 0) ? (
+                        <span className="bg-emerald-600 text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full shrink-0">
+                          {dm.unread_count}
+                        </span>
+                      ) : (
+                        <span
+                          role="button"
+                          onClick={(e) => hideDm(String(dmId), e)}
+                          title="Hide chat from sidebar"
+                          className="opacity-0 group-hover/dm:opacity-100 p-0.5 rounded hover:bg-muted-foreground/20 text-muted-foreground hover:text-foreground transition-opacity cursor-pointer"
+                        >
+                          <EyeOff className="w-3.5 h-3.5" />
+                        </span>
+                      )}
+                    </div>
                   </button>
                 );
               })}
@@ -3007,6 +3240,25 @@ function ChatInner() {
                 </span>
               </button>
             )}
+
+            {/* Task 37: In-Chat Message Search Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setIsSearchOpen((prev) => !prev);
+                if (isSearchOpen) setChatSearchQuery("");
+              }}
+              className={cn(
+                "p-2 rounded-lg transition-colors cursor-pointer",
+                isSearchOpen
+                  ? "text-emerald-600 bg-emerald-500/10 font-bold"
+                  : "text-muted-foreground hover:text-emerald-600 hover:bg-muted"
+              )}
+              title="Search messages in this conversation"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+
             <button
               type="button"
               onClick={() => setIsPollModalOpen(true)}
@@ -3034,6 +3286,82 @@ function ChatInner() {
             </button>
           </div>
         </div>
+
+        {/* Task 37: In-Chat Search Bar Dropdown */}
+        {isSearchOpen && (
+          <div className="px-4 py-2 bg-muted/40 border-b border-border flex items-center justify-between gap-3 animate-in slide-in-from-top-1 duration-150 shrink-0">
+            <div className="relative flex-1 max-w-md">
+              <Search className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground" />
+              <input
+                type="text"
+                autoFocus
+                value={chatSearchQuery}
+                onChange={(e) => {
+                  setChatSearchQuery(e.target.value);
+                  setSearchMatchIndex(0);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    if (e.shiftKey) handlePrevSearchMatch();
+                    else handleNextSearchMatch();
+                  } else if (e.key === "Escape") {
+                    setIsSearchOpen(false);
+                    setChatSearchQuery("");
+                  }
+                }}
+                placeholder="Find in this chat... (Press Enter for next, Esc to close)"
+                className="w-full pl-9 pr-8 py-1.5 bg-background border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+              {chatSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setChatSearchQuery("")}
+                  className="absolute right-2.5 top-2 text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
+              {chatSearchQuery.trim() && (
+                <span className="font-mono text-[11px]">
+                  {matchingMessageIds.length > 0
+                    ? `${searchMatchIndex + 1} / ${matchingMessageIds.length}`
+                    : "No matches"}
+                </span>
+              )}
+              <button
+                type="button"
+                disabled={matchingMessageIds.length === 0}
+                onClick={handlePrevSearchMatch}
+                className="p-1 rounded hover:bg-muted disabled:opacity-30 cursor-pointer"
+                title="Previous match (Shift + Enter)"
+              >
+                <ChevronUp className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                disabled={matchingMessageIds.length === 0}
+                onClick={handleNextSearchMatch}
+                className="p-1 rounded hover:bg-muted disabled:opacity-30 cursor-pointer"
+                title="Next match (Enter)"
+              >
+                <ChevronDown className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSearchOpen(false);
+                  setChatSearchQuery("");
+                }}
+                className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer ml-1"
+                title="Close search"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* In-app slide-in notification (top-right) - click opens that chat */}
         {notifyToast && (
@@ -3069,9 +3397,38 @@ function ChatInner() {
         {/* 3. MESSAGE LIST (AVATAR + NAME + TIMESTAMP + BUBBLES)     */}
         {/* ======================================================== */}
         <div
-          className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6"
+          className={cn(
+            "flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 relative transition-colors",
+            isDraggingOver && "bg-emerald-500/10 ring-2 ring-emerald-500/50 ring-inset"
+          )}
           onPaste={handlePaste}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDraggingOver(true);
+          }}
+          onDragLeave={() => setIsDraggingOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDraggingOver(false);
+            const droppedFiles = e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [];
+            if (droppedFiles.length === 0) return;
+            const imgFiles = droppedFiles.filter(
+              (f) => f.type.startsWith("image/") || /\.(png|jpe?g|webp|gif|svg)$/i.test(f.name)
+            );
+            if (imgFiles.length > 0) {
+              addMorePasteImages(imgFiles);
+            } else {
+              handleFileUpload({ target: { files: e.dataTransfer.files } } as any);
+            }
+          }}
         >
+          {isDraggingOver && (
+            <div className="absolute inset-4 z-40 border-2 border-dashed border-emerald-500 bg-emerald-500/10 rounded-2xl flex flex-col items-center justify-center pointer-events-none backdrop-blur-xs animate-in fade-in">
+              <ImageIcon className="w-10 h-10 text-emerald-600 mb-2 animate-bounce" />
+              <p className="text-sm font-bold text-foreground">Drop images or files here to send</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Supports PNG, JPG, WebP, PDF & documents</p>
+            </div>
+          )}
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center p-6 text-muted-foreground">
               <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-600 mb-3">
@@ -3409,37 +3766,67 @@ function ChatInner() {
                                 <span className="text-[10px] opacity-75 font-normal">Multiple choices</span>
                               )}
                             </div>
-                            <div className="space-y-1.5">
+                            <div className="space-y-2">
                               {msg.poll!.options.map((opt) => {
                                 const totalVotes =
                                   msg.poll!.options.reduce((acc, o) => acc + (Array.isArray(o.voters) ? o.voters.length : 0), 0) || 1;
                                 const votes = Array.isArray(opt.voters) ? opt.voters.length : 0;
                                 const percent = Math.round((votes / totalVotes) * 100);
-                                const hasVoted = Array.isArray(opt.voters) && opt.voters.includes(String(user?.id));
+                                const hasVoted = Array.isArray(opt.voters) && opt.voters.some((v) => String(v) === myUserId || (myEmployeeId && String(v) === myEmployeeId));
+
+                                // Resolve voter names (Task 43)
+                                const voterNames = (opt.voters || []).map((vid) => {
+                                  const sVid = String(vid);
+                                  if (sVid === myUserId || (myEmployeeId && sVid === myEmployeeId)) return "You";
+                                  const found = (employees || []).find((e) => String(e.id) === sVid || String((e as any)._id) === sVid);
+                                  return found?.name || "Colleague";
+                                });
 
                                 return (
-                                  <button
-                                    key={opt.id}
-                                    type="button"
-                                    onClick={() => handleVotePoll(msg.id, opt.id)}
-                                    className={cn(
-                                      "w-full text-left relative overflow-hidden rounded-lg p-2 text-xs border transition-all cursor-pointer",
-                                      hasVoted
-                                        ? "border-emerald-500 font-bold"
-                                        : "border-border/60 hover:border-emerald-500/50"
+                                  <div key={opt.id} className="space-y-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleVotePoll(msg.id, opt.id)}
+                                      className={cn(
+                                        "w-full text-left relative overflow-hidden rounded-lg p-2.5 text-xs border transition-all cursor-pointer",
+                                        hasVoted
+                                          ? "border-emerald-500 font-bold bg-emerald-500/10 shadow-xs"
+                                          : "border-border/60 hover:border-emerald-500/50"
+                                      )}
+                                    >
+                                      <div
+                                        className="absolute inset-y-0 left-0 bg-emerald-500/20 transition-all duration-300"
+                                        style={{ width: `${percent}%` }}
+                                      />
+                                      <div className="relative flex items-center justify-between z-10">
+                                        <div className="flex items-center gap-2 truncate">
+                                          <span className={cn(
+                                            "w-3.5 h-3.5 rounded-full border flex items-center justify-center text-[9px] shrink-0",
+                                            hasVoted ? "border-emerald-600 bg-emerald-600 text-white font-bold" : "border-muted-foreground/40"
+                                          )}>
+                                            {hasVoted ? "✓" : ""}
+                                          </span>
+                                          <span className="truncate">{opt.text}</span>
+                                        </div>
+                                        <span className="text-[10px] opacity-80 font-mono ml-2 shrink-0">
+                                          {percent}% ({votes})
+                                        </span>
+                                      </div>
+                                    </button>
+                                    {/* Task 43: Voter names display / tooltip */}
+                                    {voterNames.length > 0 && !msg.poll?.hide_voters_name && (
+                                      <div
+                                        className="text-[10px] text-muted-foreground pl-1.5 flex items-center gap-1 truncate"
+                                        title={`Voted by: ${voterNames.join(", ")}`}
+                                      >
+                                        <Users className="w-3 h-3 text-emerald-600 shrink-0" />
+                                        <span className="truncate">
+                                          {voterNames.slice(0, 3).join(", ")}
+                                          {voterNames.length > 3 && ` +${voterNames.length - 3} more`}
+                                        </span>
+                                      </div>
                                     )}
-                                  >
-                                    <div
-                                      className="absolute inset-y-0 left-0 bg-emerald-500/20 transition-all duration-300"
-                                      style={{ width: `${percent}%` }}
-                                    />
-                                    <div className="relative flex items-center justify-between z-10">
-                                      <span className="truncate">{opt.text}</span>
-                                      <span className="text-[10px] opacity-80 font-mono ml-2">
-                                        {percent}% ({votes})
-                                      </span>
-                                    </div>
-                                  </button>
+                                  </div>
                                 );
                               })}
                             </div>
@@ -3641,11 +4028,11 @@ function ChatInner() {
                             +
                           </button>
                         </div>
-                        {isMe && (
+                        {canDeleteChatMessages && (
                           <button
                             type="button"
                             onClick={() => handleDeleteMessage(msg.id)}
-                            title="Delete"
+                            title="Delete message"
                             className="p-1 text-muted-foreground hover:text-destructive hover:bg-muted rounded transition-colors cursor-pointer"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -4190,7 +4577,7 @@ function ChatInner() {
       {/* ======================================================== */}
       {isNewChannelOpen && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-[400px] overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-[440px] overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="p-6 border-b border-border flex items-center justify-between">
               <h3 className="font-bold text-foreground">Create New Channel</h3>
               <button
@@ -4214,6 +4601,71 @@ function ChatInner() {
                   onChange={(e) => setNewChannelName(e.target.value)}
                   className="w-full px-3 py-2 bg-muted/50 border border-border rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 />
+              </div>
+
+              {/* Task 42: Member selection with search */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">
+                    Add Members ({newChannelMembers.length > 0 ? `${newChannelMembers.filter((m, i, a) => a.indexOf(m) === i).length} selected` : "Optional"})
+                  </label>
+                  {newChannelMembers.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setNewChannelMembers([])}
+                      className="text-[10px] text-emerald-600 hover:underline cursor-pointer"
+                    >
+                      Clear all
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
+                  <input
+                    type="text"
+                    value={newChannelMemberSearch}
+                    onChange={(e) => setNewChannelMemberSearch(e.target.value)}
+                    placeholder="Search colleagues to add..."
+                    className="w-full pl-8 pr-3 py-1.5 bg-muted/40 border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+                <div className="max-h-36 overflow-y-auto space-y-1 p-1 bg-muted/20 rounded-xl border border-border/60">
+                  {(employees || [])
+                    .filter((emp) => String(emp.id) !== myUserId && String((emp as any)._id) !== myUserId)
+                    .filter((emp) =>
+                      !newChannelMemberSearch.trim() ||
+                      (emp.name || "").toLowerCase().includes(newChannelMemberSearch.toLowerCase()) ||
+                      (emp.email || "").toLowerCase().includes(newChannelMemberSearch.toLowerCase())
+                    )
+                    .map((emp) => {
+                      const empKey = String((emp as any)._id || emp.id);
+                      const isSelected = newChannelMembers.includes(empKey) || newChannelMembers.includes(String(emp.id));
+                      return (
+                        <label
+                          key={emp.id}
+                          className="flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-muted cursor-pointer text-xs"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {
+                              setNewChannelMembers((prev) =>
+                                isSelected
+                                  ? prev.filter((id) => id !== empKey && id !== String(emp.id))
+                                  : [...prev, empKey, String(emp.id)]
+                              );
+                            }}
+                            className="accent-emerald-600 w-3.5 h-3.5 rounded cursor-pointer"
+                          />
+                          <UserAvatar name={emp.name} avatar={emp.avatar || emp.profile_photo} size="w-6 h-6" />
+                          <div className="min-w-0 flex-1">
+                            <span className="font-bold block truncate">{emp.name}</span>
+                            <span className="text-[10px] text-muted-foreground block truncate">{emp.designation || emp.email}</span>
+                          </div>
+                        </label>
+                      );
+                    })}
+                </div>
               </div>
 
               {/* Auto-join toggle for future new employees (Issue 5 - default off) */}
@@ -4724,7 +5176,7 @@ function ChatInner() {
       {/* ======================================================== */}
       {isNewDmOpen && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-[380px] overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-[390px] overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="p-4 border-b border-border flex items-center justify-between">
               <h3 className="font-bold text-foreground text-sm flex items-center gap-2">
                 <Users className="w-4 h-4 text-emerald-600" />
@@ -4732,33 +5184,92 @@ function ChatInner() {
               </h3>
               <button
                 type="button"
-                onClick={() => setIsNewDmOpen(false)}
-                className="p-1 text-muted-foreground hover:text-foreground rounded-lg"
+                onClick={() => {
+                  setIsNewDmOpen(false);
+                  setNewDmSearch("");
+                }}
+                className="p-1 text-muted-foreground hover:text-foreground rounded-lg cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
+            {/* Task 36: Search colleagues in modal */}
+            <div className="p-3 border-b border-border bg-muted/20">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-muted-foreground" />
+                <input
+                  type="text"
+                  autoFocus
+                  value={newDmSearch}
+                  onChange={(e) => setNewDmSearch(e.target.value)}
+                  placeholder="Search by name, email, designation..."
+                  className="w-full pl-8 pr-7 py-1.5 bg-background border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 font-medium"
+                />
+                {newDmSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setNewDmSearch("")}
+                    className="absolute right-2.5 top-2 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
             <div className="max-h-80 overflow-y-auto p-2 space-y-1">
-              {(employees || []).map((emp) => (
-                <button
-                  key={emp.id}
-                  type="button"
-                  onClick={() => handleStartDm(emp.id)}
-                  className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-muted text-left transition-colors cursor-pointer"
-                >
-                  <UserAvatar
-                    name={emp.name}
-                    avatar={emp.avatar || emp.profile_photo}
-                    size="w-8 h-8"
-                    isOnline={presenceMap[emp.id] ?? false}
-                    showStatus={true}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <span className="font-bold text-xs text-foreground block truncate">{emp.name}</span>
-                    <span className="text-[10px] text-muted-foreground block truncate">{emp.designation || emp.email}</span>
-                  </div>
-                </button>
-              ))}
+              {(employees || [])
+                .filter((emp) => String(emp.id) !== myUserId && String((emp as any)._id) !== myUserId)
+                .filter((emp) => {
+                  if (!newDmSearch.trim()) return true;
+                  const q = newDmSearch.toLowerCase();
+                  return (
+                    (emp.name || "").toLowerCase().includes(q) ||
+                    (emp.email || "").toLowerCase().includes(q) ||
+                    (emp.designation || "").toLowerCase().includes(q) ||
+                    String((emp as any).department || "").toLowerCase().includes(q)
+                  );
+                })
+                .map((emp) => (
+                  <button
+                    key={emp.id}
+                    type="button"
+                    onClick={() => {
+                      setNewDmSearch("");
+                      handleStartDm(emp.id);
+                    }}
+                    className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-muted text-left transition-colors cursor-pointer"
+                  >
+                    <UserAvatar
+                      name={emp.name}
+                      avatar={emp.avatar || emp.profile_photo}
+                      size="w-8 h-8"
+                      isOnline={presenceMap[emp.id] ?? false}
+                      showStatus={true}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <span className="font-bold text-xs text-foreground block truncate">{emp.name}</span>
+                      <span className="text-[10px] text-muted-foreground block truncate">
+                        {emp.designation || (emp as any).department || emp.email}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              {(employees || [])
+                .filter((emp) => String(emp.id) !== myUserId && String((emp as any)._id) !== myUserId)
+                .filter((emp) => {
+                  if (!newDmSearch.trim()) return true;
+                  const q = newDmSearch.toLowerCase();
+                  return (
+                    (emp.name || "").toLowerCase().includes(q) ||
+                    (emp.email || "").toLowerCase().includes(q) ||
+                    (emp.designation || "").toLowerCase().includes(q) ||
+                    String((emp as any).department || "").toLowerCase().includes(q)
+                  );
+                }).length === 0 && (
+                <div className="p-6 text-center text-xs text-muted-foreground">
+                  No colleagues found matching "{newDmSearch}"
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -5101,6 +5612,22 @@ function ChatInner() {
               >
                 <Download className="w-4 h-4 text-muted-foreground" />
                 <span>Save as…</span>
+              </button>
+            )}
+
+            {/* Task 41 & User Access Control: Delete message option strictly governed by Access Control permissions */}
+            {canDeleteChatMessages && (
+              <button
+                type="button"
+                onClick={() => {
+                  const msgId = contextMenu.msg.id;
+                  setContextMenu(null);
+                  handleDeleteMessage(msgId);
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-destructive/10 text-destructive transition-colors cursor-pointer text-left font-medium border-t border-border/60 pt-2 mt-1"
+              >
+                <Trash2 className="w-4 h-4 text-destructive" />
+                <span>Delete message</span>
               </button>
             )}
           </div>

@@ -3,6 +3,8 @@ import uuid
 from pathlib import Path
 from typing import List, Dict, Optional
 from fastapi import APIRouter, Depends, Request, status, Query, UploadFile, File, HTTPException
+from pydantic import BaseModel
+from datetime import datetime, date
 from app.schemas.enums import SystemRole, GenderEnum, RelationEnum, WorkModeEnum
 from app.schemas.employee import EmployeeCreate, EmployeeOut, EmployeeSelfOut, EmployeeUpdate
 from app.schemas.pagination import PaginatedResponse
@@ -273,3 +275,50 @@ async def delete_employee(employee_id: str, current_user: dict = Depends(Dynamic
     await clear_pattern("employees:list:*")
 
     return result
+
+# ==============================================================================
+# 6. URGENT MEETING SUMMON (Task [01:27:15])
+# ==============================================================================
+class MeetingSummonRequest(BaseModel):
+    location: Optional[str] = "Meeting Room"
+    notes: Optional[str] = "You are urgently requested to attend a meeting immediately."
+    meet_link: Optional[str] = None
+
+@router.post("/{employee_id}/summon")
+async def summon_employee_to_meeting(
+    employee_id: str,
+    body: MeetingSummonRequest,
+    current_user: dict = Depends(get_current_employee)
+):
+    caller_id = str(current_user.get("_id") or current_user.get("id"))
+    caller_name = (
+        f"{(current_user.get('personal_info') or {}).get('first_name', '')} {(current_user.get('personal_info') or {}).get('last_name', '')}".strip()
+        or current_user.get("name")
+        or "Team Leader"
+    )
+    caller_role = (current_user.get("work_details") or {}).get("designation") or current_user.get("role") or "Admin"
+
+    summon_event = {
+        "type": "meeting_summon",
+        "action": "meeting_summon",
+        "summon_id": str(uuid.uuid4()),
+        "caller_id": caller_id,
+        "caller_name": caller_name,
+        "caller_role": caller_role,
+        "location": body.location or "Meeting Room",
+        "notes": body.notes or "Urgent meeting requested",
+        "meet_link": body.meet_link,
+        "timestamp": datetime.now().isoformat()
+    }
+
+    try:
+        from app.services.websocket_manager import manager
+        import json
+        await manager.send_personal_message(json.dumps(summon_event, default=str), str(employee_id))
+    except Exception as e:
+        print(f"Failed to send personal summon ws event: {e}")
+
+    return {
+        "message": f"Urgent meeting summon sent to employee {employee_id}",
+        "summon_event": summon_event
+    }

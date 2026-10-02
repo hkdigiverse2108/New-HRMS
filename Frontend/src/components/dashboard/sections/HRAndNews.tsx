@@ -1,8 +1,32 @@
+import { useMemo } from "react";
 import { HR_UPDATES, COMPANY_NEWS } from "../dashboard-data";
 import { Gift, Award, CalendarDays, UserPlus, LogOut, CheckCircle2, FileText, Megaphone } from "lucide-react";
 import { CollapsibleSection } from "./CollapsibleSection";
+import { useEmployeesContext } from "@/components/employees/EmployeeContext";
 
 export function HRAndNews() {
+  const { employees } = useEmployeesContext();
+
+  const realBirthdays = useMemo(() => {
+    if (!employees || employees.length === 0) return HR_UPDATES.birthdays;
+    const withDob = employees.filter(e => e.dob);
+    if (withDob.length === 0) return HR_UPDATES.birthdays;
+    return withDob.slice(0, 5).map(e => ({
+      name: e.name,
+      date: e.dob || ""
+    }));
+  }, [employees]);
+
+  const realExits = useMemo(() => {
+    if (!employees || employees.length === 0) return HR_UPDATES.exit;
+    const exiting = employees.filter(e => e.hasResignation || (e as any).last_working_date || (e as any).work_details?.last_working_date);
+    if (exiting.length === 0) return HR_UPDATES.exit;
+    return exiting.slice(0, 5).map(e => ({
+      name: e.name,
+      date: (e as any).last_working_date || (e as any).work_details?.last_working_date || (e.resignationDate ? e.resignationDate : "Upcoming Exit")
+    }));
+  }, [employees]);
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 mb-12">
       {/* SECTION 11: HR Updates */}
@@ -18,7 +42,7 @@ export function HRAndNews() {
                 <h3 className="text-[13px] font-bold text-foreground">Upcoming Birthdays</h3>
               </div>
               <ul className="space-y-2">
-                {HR_UPDATES.birthdays.map((item, i) => (
+                {realBirthdays.map((item, i) => (
                   <li key={i} className="flex justify-between items-center text-[11px]">
                     <span className="font-medium text-foreground/80">{item.name}</span>
                     <span className="text-muted-foreground">{item.date}</span>
@@ -83,10 +107,10 @@ export function HRAndNews() {
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <LogOut className="h-4 w-4 text-rose-500" />
-                <h3 className="text-[13px] font-bold text-foreground">Employee Exit</h3>
+                <h3 className="text-[13px] font-bold text-foreground">Employee / Intern Exit</h3>
               </div>
               <ul className="space-y-2">
-                {HR_UPDATES.exit.map((item, i) => (
+                {realExits.map((item, i) => (
                   <li key={i} className="flex justify-between items-center text-[11px]">
                     <span className="font-medium text-foreground/80">{item.name}</span>
                     <span className="text-muted-foreground">{item.date}</span>

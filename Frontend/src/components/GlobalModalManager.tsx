@@ -13,6 +13,7 @@ import { useSettingsContext } from "@/components/payroll/SettingsContext";
 import { useEmployeesContext } from "@/components/employees/EmployeeContext";
 import { api } from "@/lib/api";
 import { useAuth } from "./auth/AuthContext";
+import { UrgentMeetingSummonModal } from "@/components/common/UrgentMeetingSummonModal";
 
 type Priority = "High" | "Medium" | "Low";
 
@@ -582,6 +583,7 @@ export function GlobalModalManager() {
         onClose={closeModal}
         onSave={(_event) => closeModal()}
       />
+      <UrgentMeetingSummonModal />
     </>
   );
 }

@@ -55,7 +55,9 @@ class ProjectRepository:
         if category:
             clean_category = category.lower().replace(" ", "").replace("_", "")
             cat_map = {"development": "Development", "creative": "Creative", "digitalmarketing": "Digital Marketing", "sales": "Sales"}
-            query["general.category"] = {"$in": [cat_map.get(clean_category, category), clean_category, category]}
+            target_cat = cat_map.get(clean_category, category)
+            import re
+            query["general.category"] = {"$regex": re.escape(target_cat), "$options": "i"}
         if priority:
             clean_priority = priority.lower().replace(" ", "").replace("_", "")
             pri_map = {"low": "Low", "medium": "Medium", "high": "High", "urgent": "Urgent"}
