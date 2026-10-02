@@ -759,7 +759,16 @@ function ChatInner() {
   // Check if message is seen (read by other users)
   const isMessageSeen = useCallback(
     (msg: ChatMessage) => {
-      if (!msg || !Array.isArray(msg.read_by)) return false;
+      if (!msg) return false;
+      const ch = channels.find((c) => (c.id || (c as any)._id) === activeChannelId);
+      const isSelfChat =
+        ch?.type === "self" ||
+        String(ch?.name || "").toLowerCase().includes("yourself") ||
+        ch?.name === "You" ||
+        ch?.name === "You (Message Yourself)";
+      if (isSelfChat) return true;
+
+      if (!Array.isArray(msg.read_by)) return false;
       return msg.read_by.some((uid) => {
         const sUid = String(uid).trim();
         return (
@@ -772,7 +781,7 @@ function ChatInner() {
         );
       });
     },
-    [myUserId, myEmployeeId]
+    [myUserId, myEmployeeId, channels, activeChannelId]
   );
 
   // Clean display name - removes any bracket suffixes like "(admin)" or "(any role)" (Issue 1)
@@ -1547,6 +1556,12 @@ function ChatInner() {
   useEffect(() => {
     if (activeChannelId) {
       fetchMessages(activeChannelId);
+      if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+        socketRef.current.send(JSON.stringify({
+          action: "messages_read",
+          channel_id: activeChannelId
+        }));
+      }
     }
   }, [activeChannelId, fetchMessages]);
 
@@ -1828,35 +1843,6 @@ function ChatInner() {
       }
     };
   }, [user?.id, formatMessage, fetchChannels, fetchMessages, playNotifySound]);
-
-  // Fallback background sync for active channel (every 3.5s)
-  // Ensures images, audio, video, pdf and text ALWAYS display seamlessly
-  useEffect(() => {
-    if (!activeChannelId) return;
-
-    const syncInterval = setInterval(() => {
-      if (typeof document !== "undefined" && document.hidden) return;
-      const currentCid = activeChannelIdRef.current;
-      if (!currentCid || currentCid.startsWith("chan-") || currentCid.startsWith("dm-")) return;
-
-      api.get<any[]>(`/chat/channels/${currentCid}/messages`, { showErrorToast: false })
-        .then((res) => {
-          if (Array.isArray(res) && String(activeChannelIdRef.current) === String(currentCid)) {
-            const list = res.map((m: any) => formatMessage(m));
-            list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-            setMessages((prev) => {
-              if (prev.length === list.length && prev.every((m, idx) => m.id === list[idx]?.id)) {
-                return prev;
-              }
-              return list;
-            });
-          }
-        })
-        .catch(() => {});
-    }, 3500);
-
-    return () => clearInterval(syncInterval);
-  }, [activeChannelId, formatMessage]);
 
   // Refetch channels and active messages when tab regains focus or visibility
   useEffect(() => {
@@ -3015,7 +3001,15 @@ function ChatInner() {
   const activeChannel = channels.find((c) => (c.id || (c as any)._id) === activeChannelId);
   const isCurrentDm = activeChannel ? isDirect(activeChannel) : false;
   const currentDmUser = activeChannel && isCurrentDm ? getDmOtherUser(activeChannel) : null;
-  const activeChannelName = isCurrentDm
+  const isSelfChat = Boolean(
+    activeChannel?.type === "self" ||
+    String(activeChannel?.name || "").toLowerCase().includes("yourself") ||
+    activeChannel?.name === "You" ||
+    activeChannel?.name === "You (Message Yourself)"
+  );
+  const activeChannelName = isSelfChat
+    ? "You (Message Yourself)"
+    : isCurrentDm
     ? currentDmUser?.name || activeChannel?.name || "Direct Message"
     : activeChannel?.name || "engineering";
 
@@ -3274,7 +3268,6 @@ function ChatInner() {
                     type="button"
                     onClick={() => {
                       setActiveChannelId(chanId);
-                      fetchMessages(chanId);
                       setIsMobileChannelsOpen(false);
                       focusMessageInput();
                     }}
@@ -3328,12 +3321,10 @@ function ChatInner() {
                       const targetId = (dm.id && !dm.id.startsWith("dm-")) ? dm.id : (dmId || "");
                       if (targetId && !targetId.startsWith("dm-")) {
                         setActiveChannelId(targetId);
-                        fetchMessages(targetId);
                       } else if (dmUser) {
                         handleStartDm(dmUser.id);
                       } else if (targetId) {
                         setActiveChannelId(targetId);
-                        fetchMessages(targetId);
                       }
                       setIsMobileChannelsOpen(false);
                       focusMessageInput();
@@ -3450,7 +3441,7 @@ function ChatInner() {
                 {!isCurrentDm && <Hash className="w-4 sm:w-5 h-4 sm:h-5 text-muted-foreground shrink-0" />}
                 <span className="truncate">{cleanDisplayName(activeChannelName)}</span>
               </h2>
-              {!isCurrentDm && activeChannel && (
+              {!isCurrentDm && !isSelfChat && activeChannel && (
                 <button
                   type="button"
                   onClick={() => {
@@ -3470,7 +3461,7 @@ function ChatInner() {
           </div>
 
           <div className="flex items-center gap-1 shrink-0">
-            {!isCurrentDm && activeChannel && (
+            {!isCurrentDm && !isSelfChat && activeChannel && (
               <button
                 type="button"
                 onClick={() => {
@@ -4560,7 +4551,7 @@ function ChatInner() {
                   }
                 }}
                 onPaste={handlePaste}
-                placeholder={isCurrentDm ? `Message ${cleanDisplayName(activeChannelName)}` : `Message #${cleanDisplayName(activeChannelName)}`}
+                placeholder={isSelfChat ? "Message yourself..." : isCurrentDm ? `Message ${cleanDisplayName(activeChannelName)}` : `Message #${cleanDisplayName(activeChannelName)}`}
                 className="w-full bg-transparent border-none focus:outline-none text-sm text-foreground placeholder:text-muted-foreground resize-none max-h-40 overflow-y-auto leading-relaxed py-1.5"
               />
 

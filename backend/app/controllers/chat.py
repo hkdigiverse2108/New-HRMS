@@ -254,6 +254,8 @@ async def add_channel_member(channel_id: str, member_id: str = Query(...), curre
     channel = await ChatRepository.get_channel_by_id(channel_id)
     if not channel or user_id not in channel.get("members", []):
         raise HTTPException(status_code=403, detail="Not authorized or channel not found")
+    if channel.get("type") == "self" or "yourself" in str(channel.get("name", "")).lower() or channel.get("name") == "You":
+        raise HTTPException(status_code=400, detail="Cannot add members to personal or self chat")
     
     await ChatRepository.add_member_to_channel(channel_id, member_id)
     updated_channel = await ChatRepository.get_channel_by_id(channel_id)
