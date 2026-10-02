@@ -482,6 +482,10 @@ class InvoiceService:
 
     @staticmethod
     async def delete_invoice(invoice_id: str, current_user: Optional[Dict[str, Any]] = None) -> bool:
+        existing = await InvoiceRepository.get_by_id(invoice_id)
+        if existing and existing.get("pdf_path"):
+            delete_pdf_file(existing.get("pdf_path"))
+
         user_info = InvoiceService._extract_user_info(current_user)
         success = await InvoiceRepository.delete(invoice_id)
         if success:

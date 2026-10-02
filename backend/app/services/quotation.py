@@ -347,6 +347,10 @@ class QuotationService:
 
     @staticmethod
     async def delete_quotation(quotation_id: str) -> bool:
+        existing = await QuotationRepository.get_by_id(quotation_id)
+        if existing and existing.get("pdf_path"):
+            delete_pdf_file(existing.get("pdf_path"))
+
         success = await QuotationRepository.delete(quotation_id)
         if success:
             await clear_pattern("quotations:list:*")
