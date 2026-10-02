@@ -22,11 +22,21 @@ import {
   BarChart2,
   Maximize2,
   ChevronDown,
+  ChevronUp,
+  EyeOff,
   AlertCircle,
   Copy,
   Star,
   Pin,
-  Share2
+  Share2,
+  Info,
+  Sparkles,
+  ShieldCheck,
+  MessageSquare,
+  UserPlus,
+  FileText,
+  Bell,
+  BellOff
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
@@ -42,6 +52,7 @@ export interface PollOption {
   id: string;
   text: string;
   voters: string[];
+  voter_details?: Array<{ id: string; name: string; avatar?: string; time?: string }>;
   voters_count?: number;
   user_has_voted?: boolean;
 }
@@ -82,6 +93,7 @@ export interface ChatMessage {
   reply_to?: ReplyPreview | null | undefined;
   reactions: Record<string, string[]>;
   read_by: string[];
+  is_read_by?: any[];
   is_pinned?: boolean | undefined;
   poll?: PollData | null | undefined;
   created_at: string;
@@ -577,6 +589,74 @@ function ChatInner() {
     channelId: string;
   } | null>(null);
 
+  // User ID and Role checks
+  const myUserId = String((user as any)?._id || user?.id || "");
+  const myEmployeeId = String((user as any)?.employee_id || "");
+  const isAdminOrHR = user?.role === "admin" || user?.role === "superadmin" || user?.role === "hr";
+
+  // Task 41 & User Request: Strict Access Control check for deleting messages.
+  // Must be explicitly granted delete or all permission in user.permissions["/chat"].
+  // Role alone (admin/hr) does NOT grant delete if permission is not enabled in Access Control.
+  const canDeleteChatMessages = Boolean(
+    user?.permissions?.["/chat"]?.delete || 
+    user?.permissions?.["/chat"]?.all ||
+    user?.permissions?.["chat"]?.delete ||
+    user?.permissions?.["chat"]?.all
+  );
+
+  // Task 37: In-Chat Search State
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [chatSearchQuery, setChatSearchQuery] = useState("");
+  const [searchMatchIndex, setSearchMatchIndex] = useState(0);
+
+  // Task 36: New DM Modal Search State
+  const [newDmSearch, setNewDmSearch] = useState("");
+
+  // Task 42: New Channel Members Selection State
+  const [newChannelMembers, setNewChannelMembers] = useState<string[]>([]);
+  const [newChannelMemberSearch, setNewChannelMemberSearch] = useState("");
+
+  // Task 45: Hidden DMs State (persisted per user in localStorage)
+  const [hiddenDms, setHiddenDms] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem(`hrms_hidden_dms_${myUserId}`);
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const hideDm = useCallback((dmId: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setHiddenDms((prev) => {
+      const next = new Set(prev);
+      next.add(dmId);
+      try {
+        localStorage.setItem(`hrms_hidden_dms_${myUserId}`, JSON.stringify(Array.from(next)));
+      } catch {}
+      return next;
+    });
+    toast.success("Conversation hidden from sidebar");
+  }, [myUserId]);
+
+  const unhideDm = useCallback((dmId: string) => {
+    setHiddenDms((prev) => {
+      if (!prev.has(dmId)) return prev;
+      const next = new Set(prev);
+      next.delete(dmId);
+      try {
+        localStorage.setItem(`hrms_hidden_dms_${myUserId}`, JSON.stringify(Array.from(next)));
+      } catch {}
+      return next;
+    });
+  }, [myUserId]);
+
+  // Task 39: Reactions Lock / Debounce Ref
+  const reactingInProgressRef = useRef<Set<string>>(new Set());
+
+  // Task 38: Drag & Drop State
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+
   // Double-send guard + sending lock
   const isSendingRef = useRef(false);
   const lastSentRef = useRef<{ content: string; at: number } | null>(null);
@@ -680,9 +760,19 @@ function ChatInner() {
   const isMessageSeen = useCallback(
     (msg: ChatMessage) => {
       if (!msg || !Array.isArray(msg.read_by)) return false;
-      return msg.read_by.some((uid) => String(uid) !== String(user?.id));
+      return msg.read_by.some((uid) => {
+        const sUid = String(uid).trim();
+        return (
+          sUid !== "" &&
+          sUid !== myUserId &&
+          sUid !== myEmployeeId &&
+          sUid !== "me" &&
+          sUid !== "undefined" &&
+          sUid !== "null"
+        );
+      });
     },
-    [user?.id]
+    [myUserId, myEmployeeId]
   );
 
   // Clean display name - removes any bracket suffixes like "(admin)" or "(any role)" (Issue 1)
@@ -785,6 +875,26 @@ function ChatInner() {
               );
             }
 
+            // Highlight in-chat search query if active
+            if (chatSearchQuery.trim() && seg.toLowerCase().includes(chatSearchQuery.toLowerCase())) {
+              const q = chatSearchQuery.trim();
+              const regexQ = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
+              const parts = seg.split(regexQ);
+              return (
+                <span key={sIdx}>
+                  {parts.map((p, pIdx) =>
+                    p.toLowerCase() === q.toLowerCase() ? (
+                      <mark key={pIdx} className="bg-amber-300 dark:bg-amber-500 text-black px-0.5 rounded font-bold">
+                        {p}
+                      </mark>
+                    ) : (
+                      p
+                    )
+                  )}
+                </span>
+              );
+            }
+
             return <span key={sIdx}>{seg}</span>;
           });
 
@@ -796,7 +906,7 @@ function ChatInner() {
         })}
       </div>
     );
-  }, []);
+  }, [chatSearchQuery]);
 
   // WhatsApp-style Right Click Context Menu State
   const [contextMenu, setContextMenu] = useState<{
@@ -806,6 +916,14 @@ function ChatInner() {
     mediaItem?: { url: string; name?: string; type?: string } | undefined;
   } | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
+
+  // Modals for Poll Votes and Message Info (WhatsApp style)
+  const [viewVotesPollMsg, setViewVotesPollMsg] = useState<ChatMessage | null>(null);
+  const [messageInfoMsg, setMessageInfoMsg] = useState<ChatMessage | null>(null);
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission>(
+    typeof Notification !== "undefined" ? Notification.permission : "default"
+  );
+  const hasUserDismissedActiveRef = useRef(false);
 
   const handleContextMenu = (
     e: React.MouseEvent,
@@ -845,7 +963,8 @@ function ChatInner() {
   // --- SAFE FORMAT MESSAGE ---
   const formatMessage = useCallback(
     (m: any): ChatMessage => {
-      const isMe = String(m?.sender_id) === String(user?.id);
+      const sId = String(m?.sender_id || "").trim();
+      const isMe = sId === myUserId || (myEmployeeId !== "" && sId === myEmployeeId) || sId === "me";
       const reactions = normalizeReactions(m?.reactions);
       const readBy = Array.isArray(m?.read_by)
         ? m.read_by.map(String)
@@ -928,25 +1047,124 @@ function ChatInner() {
         reply_to: replyNorm,
         reactions,
         read_by: readBy,
+        is_read_by: Array.isArray(m?.is_read_by) ? m.is_read_by : readBy,
         is_pinned: Boolean(m?.is_pinned),
         poll: pollData,
         created_at: m?.created_at || m?.timestamp || m?.createdAt || new Date().toISOString(),
         isMe
       };
     },
-    [user?.id, user?.name, user?.avatar, user?.profile_photo]
+    [myUserId, myEmployeeId, user?.name, user?.avatar, user?.profile_photo]
   );
 
-  // Ask Chrome notification permission once + close emoji on outside click
-  useEffect(() => {
+  // Explicit desktop notification permission requester (triggered by click gesture)
+  const requestDesktopNotificationPermission = async () => {
+    if (typeof Notification === "undefined") {
+      toast.error("Desktop notifications are not supported in this browser.");
+      return;
+    }
     try {
-      if (typeof Notification !== "undefined" && Notification.permission === "default") {
-        Notification.requestPermission().catch(() => {});
+      const perm = await Notification.requestPermission();
+      setNotifPermission(perm);
+      if (perm === "granted") {
+        toast.success("Desktop notifications enabled!");
+        try {
+          new Notification("HK DigiVerse HRMS", {
+            body: "Desktop notifications are now active. You will receive alerts when new messages arrive!",
+            icon: "/favicon.ico",
+          });
+        } catch {}
+      } else if (perm === "denied") {
+        toast.warning("Notifications blocked. Please allow notifications from your browser site settings.");
       }
     } catch {
       // ignore
     }
+  };
+
+  // Safe Desktop Notification dispatcher (works across desktop tabs and window unfocused)
+  const showDesktopNotification = useCallback((title: string, body: string, channelId: string) => {
+    if (typeof Notification === "undefined") return;
+    if (Notification.permission !== "granted") return;
+    try {
+      const n = new Notification(title, {
+        body,
+        icon: "/favicon.ico",
+        tag: `chat-${channelId}`,
+      });
+      n.onclick = () => {
+        try {
+          window.focus();
+        } catch {}
+        hasUserDismissedActiveRef.current = false;
+        setActiveChannelId(channelId);
+        n.close();
+      };
+    } catch {
+      if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.ready.then((reg) => {
+          reg.showNotification(title, {
+            body,
+            icon: "/favicon.ico",
+            tag: `chat-${channelId}`,
+          });
+        }).catch(() => {});
+      }
+    }
   }, []);
+
+  // Global ESC key listener to deselect active chat into WhatsApp empty state or close active modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (contextMenu) {
+          setContextMenu(null);
+          return;
+        }
+        if (reactionPickerMsgId) {
+          setReactionPickerMsgId(null);
+          return;
+        }
+        if (showEmojiPicker) {
+          setShowEmojiPicker(false);
+          return;
+        }
+        if (isSearchOpen) {
+          setIsSearchOpen(false);
+          setChatSearchQuery("");
+          return;
+        }
+        if (isPollModalOpen) {
+          setIsPollModalOpen(false);
+          return;
+        }
+        if (viewVotesPollMsg) {
+          setViewVotesPollMsg(null);
+          return;
+        }
+        if (messageInfoMsg) {
+          setMessageInfoMsg(null);
+          return;
+        }
+        // Deselect chat and show empty state (WhatsApp Web ESC behavior)
+        if (activeChannelId) {
+          hasUserDismissedActiveRef.current = true;
+          setActiveChannelId(null);
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    contextMenu,
+    reactionPickerMsgId,
+    showEmojiPicker,
+    isSearchOpen,
+    isPollModalOpen,
+    viewVotesPollMsg,
+    messageInfoMsg,
+    activeChannelId,
+  ]);
 
   useEffect(() => {
     if (!showEmojiPicker) return;
@@ -1182,7 +1400,7 @@ function ChatInner() {
       if (res && res.length > 0) {
         setChannels(res);
         const currentActive = activeChannelIdRef.current;
-        if (!currentActive) {
+        if (!currentActive && !hasUserDismissedActiveRef.current) {
           const firstChan = res[0] as ChatChannel | undefined;
           const firstId = firstChan?.id || (firstChan as any)?._id;
           if (firstId) setActiveChannelId(firstId);
@@ -1200,7 +1418,7 @@ function ChatInner() {
           { id: "chan-design", name: "design", is_dm: false, members: [], created_by: "system", created_at: "", unread_count: 1 }
         ];
         setChannels(defaultChannels);
-        if (!activeChannelIdRef.current) setActiveChannelId("chan-engineering");
+        if (!activeChannelIdRef.current && !hasUserDismissedActiveRef.current) setActiveChannelId("chan-engineering");
       }
 
       // Check online presence
@@ -1229,7 +1447,7 @@ function ChatInner() {
         { id: "chan-design", name: "design", is_dm: false, members: [], created_by: "system", created_at: "", unread_count: 1 }
       ];
       setChannels(defaultChannels);
-      if (!activeChannelIdRef.current) setActiveChannelId("chan-engineering");
+      if (!activeChannelIdRef.current && !hasUserDismissedActiveRef.current) setActiveChannelId("chan-engineering");
     }
   }, []);
 
@@ -1474,21 +1692,8 @@ function ChatInner() {
                 }
                 try {
                   const tabHidden = typeof document !== "undefined" && (document.hidden || !document.hasFocus());
-                  if (typeof Notification !== "undefined" && Notification.permission === "granted" && (tabHidden || !isViewingThisChat)) {
-                    const n = new Notification(msg.sender_name || "New message", {
-                      body: preview.slice(0, 150),
-                      tag: msg.id,
-                    });
-                    n.onclick = () => {
-                      try {
-                        window.focus();
-                      } catch {}
-                      setActiveChannelId(msg.channel_id);
-                      fetchMessages(msg.channel_id);
-                      try {
-                        n.close();
-                      } catch {}
-                    };
+                  if (tabHidden || !isViewingThisChat) {
+                    showDesktopNotification(msg.sender_name || "New message", preview.slice(0, 150), msg.channel_id);
                   }
                 } catch {
                   // ignore
@@ -1530,29 +1735,53 @@ function ChatInner() {
                 // active channel opened -> mark read immediately
                 api.post(`/chat/channels/${msg.channel_id}/read`, {}, { showErrorToast: false }).catch(() => {});
               }
-            } else if (data.type === "reaction_updated") {
+            } else if (data.type === "reaction_updated" || data.action === "reaction_updated") {
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === data.message_id ? { ...m, reactions: normalizeReactions(data.reactions) } : m
                 )
               );
-            } else if (data.type === "poll_voted") {
+            } else if (data.type === "poll_voted" || data.type === "poll_updated" || data.action === "poll_updated") {
               setMessages((prev) =>
                 prev.map((m) => (m.id === data.message_id ? { ...m, poll: data.poll } : m))
               );
-            } else if (data.type === "message_deleted") {
+              setViewVotesPollMsg((prev) => (prev && prev.id === data.message_id ? { ...prev, poll: data.poll } : prev));
+            } else if (data.type === "message_deleted" || data.action === "message_deleted") {
               setMessages((prev) => prev.filter((m) => m.id !== data.message_id));
-            } else if (data.type === "read_receipt") {
+            } else if (data.type === "read_receipt" || data.action === "read_receipt" || data.type === "messages_read" || data.action === "messages_read") {
               if (String(data.channel_id) === String(activeChannelIdRef.current)) {
                 const readerId = String(data.user_id);
+                const readerName = data.user_name || "";
+                const readAt = data.timestamp || new Date().toISOString();
                 setMessages((prev) =>
                   prev.map((m) => {
-                    if (Array.isArray(m.read_by) && !m.read_by.includes(readerId)) {
-                      return { ...m, read_by: [...m.read_by, readerId] };
-                    }
-                    return m;
+                    const currentRead = Array.isArray(m.read_by) ? [...m.read_by] : [];
+                    const currentIsRead = Array.isArray(m.is_read_by) ? [...m.is_read_by] : [];
+                    const nextRead = currentRead.includes(readerId) ? currentRead : [...currentRead, readerId];
+                    const nextIsRead = currentIsRead.some((r: any) => (typeof r === "object" ? String(r.id) === readerId : String(r) === readerId))
+                      ? currentIsRead
+                      : [...currentIsRead, { id: readerId, name: readerName, time: readAt }];
+                    return {
+                      ...m,
+                      read_by: nextRead,
+                      is_read_by: nextIsRead
+                    };
                   })
                 );
+                setMessageInfoMsg((prev) => {
+                  if (!prev) return null;
+                  const currentRead = Array.isArray(prev.read_by) ? [...prev.read_by] : [];
+                  const currentIsRead = Array.isArray(prev.is_read_by) ? [...prev.is_read_by] : [];
+                  const nextRead = currentRead.includes(readerId) ? currentRead : [...currentRead, readerId];
+                  const nextIsRead = currentIsRead.some((r: any) => (typeof r === "object" ? String(r.id) === readerId : String(r) === readerId))
+                    ? currentIsRead
+                    : [...currentIsRead, { id: readerId, name: readerName, time: readAt }];
+                  return {
+                    ...prev,
+                    read_by: nextRead,
+                    is_read_by: nextIsRead
+                  };
+                });
               }
             } else if (data.type === "user_presence") {
               setPresenceMap((prev) => ({
@@ -2310,27 +2539,55 @@ function ChatInner() {
     });
   };
 
-  // --- 10. EMOJI REACTIONS ---
+  // --- 10. EMOJI REACTIONS (Instant optimistic update + debounce) ---
   const handleReact = async (messageId: string, emoji: string) => {
+    const lockKey = `${messageId}_${emoji}`;
+    if (reactingInProgressRef.current.has(lockKey)) return;
+    reactingInProgressRef.current.add(lockKey);
+
+    setShowEmojiPicker(false);
+    setReactionPickerMsgId(null);
+
+    const prevMessages = [...messages];
+    const myId = myUserId;
+
+    // 1. Instant optimistic update (WhatsApp style: 1 reaction per person per message)
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== messageId) return m;
+        const current: Record<string, string[]> = {};
+        let hadThisEmoji = false;
+
+        // Clean out myId from all emojis
+        Object.entries(m.reactions || {}).forEach(([em, users]) => {
+          if (em === emoji && users.includes(myId)) {
+            hadThisEmoji = true;
+          }
+          const filtered = users.filter((id) => id !== myId);
+          if (filtered.length > 0) {
+            current[em] = filtered;
+          }
+        });
+
+        // Toggle: if I didn't already have this emoji, add it
+        if (!hadThisEmoji) {
+          current[emoji] = [...(current[emoji] || []), myId];
+        }
+
+        return { ...m, reactions: current };
+      })
+    );
+
+    // 2. Network call
     try {
       await api.post(`/chat/messages/${messageId}/react`, { emoji }, { showErrorToast: false });
-      setShowEmojiPicker(false);
     } catch {
-      // optimistic update
-      setMessages((prev) =>
-        prev.map((m) => {
-          if (m.id !== messageId) return m;
-          const current = { ...(m.reactions || {}) };
-          const list = current[emoji] || [];
-          const myId = String(user?.id);
-          if (list.includes(myId)) {
-            current[emoji] = list.filter((id) => id !== myId);
-          } else {
-            current[emoji] = [...list, myId];
-          }
-          return { ...m, reactions: current };
-        })
-      );
+      // Rollback on failure
+      setMessages(prevMessages);
+    } finally {
+      setTimeout(() => {
+        reactingInProgressRef.current.delete(lockKey);
+      }, 350);
     }
   };
 
@@ -2368,6 +2625,86 @@ function ChatInner() {
   };
 
   const handleVotePoll = async (messageId: string, optionId: string) => {
+    const myId = myUserId;
+    if (!myId) return;
+
+    const myEmp = (employees || []).find(
+      (e) => String(e.id) === myId || String((e as any)._id) === myId || (myEmployeeId && String(e.id) === myEmployeeId)
+    );
+    const myName = myEmp?.name || user?.name || "You";
+
+    // 1. Instant optimistic update for poll vote (0ms delay)
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== messageId || !m.poll) return m;
+        const allowMultiple = Boolean(m.poll.allow_multiple_answers);
+        const options = (m.poll.options || []).map((opt) => {
+          let voters = Array.isArray(opt.voters) ? [...opt.voters] : [];
+          let voter_details = Array.isArray(opt.voter_details) ? [...opt.voter_details] : [];
+          const hasVoted = voters.includes(myId);
+
+          if (opt.id === optionId) {
+            if (hasVoted) {
+              voters = voters.filter((id) => id !== myId);
+              voter_details = voter_details.filter((v) => (typeof v === "object" ? String(v.id) !== myId : String(v) !== myId));
+            } else {
+              voters.push(myId);
+              voter_details.push({ id: myId, name: myName, time: new Date().toISOString() });
+            }
+          } else if (!allowMultiple) {
+            voters = voters.filter((id) => id !== myId);
+            voter_details = voter_details.filter((v) => (typeof v === "object" ? String(v.id) !== myId : String(v) !== myId));
+          }
+          return {
+            ...opt,
+            voters,
+            voter_details,
+            voters_count: voters.length,
+            user_has_voted: voters.includes(myId)
+          };
+        });
+        return {
+          ...m,
+          poll: {
+            ...m.poll,
+            options
+          }
+        };
+      })
+    );
+
+    // Sync open View Votes modal
+    setViewVotesPollMsg((prev) => {
+      if (!prev || prev.id !== messageId || !prev.poll) return prev;
+      const allowMultiple = Boolean(prev.poll.allow_multiple_answers);
+      const options = (prev.poll.options || []).map((opt) => {
+        let voters = Array.isArray(opt.voters) ? [...opt.voters] : [];
+        let voter_details = Array.isArray(opt.voter_details) ? [...opt.voter_details] : [];
+        const hasVoted = voters.includes(myId);
+        if (opt.id === optionId) {
+          if (hasVoted) {
+            voters = voters.filter((id) => id !== myId);
+            voter_details = voter_details.filter((v) => (typeof v === "object" ? String(v.id) !== myId : String(v) !== myId));
+          } else {
+            voters.push(myId);
+            voter_details.push({ id: myId, name: myName, time: new Date().toISOString() });
+          }
+        } else if (!allowMultiple) {
+          voters = voters.filter((id) => id !== myId);
+          voter_details = voter_details.filter((v) => (typeof v === "object" ? String(v.id) !== myId : String(v) !== myId));
+        }
+        return {
+          ...opt,
+          voters,
+          voter_details,
+          voters_count: voters.length,
+          user_has_voted: voters.includes(myId)
+        };
+      });
+      return { ...prev, poll: { ...prev.poll, options } };
+    });
+
+    // 2. Network call
     try {
       await api.post(`/chat/messages/${messageId}/vote`, { option_id: optionId }, { showErrorToast: false });
     } catch {
@@ -2400,6 +2737,8 @@ function ChatInner() {
     if (!newChannelName.trim()) return;
 
     const cleanName = newChannelName.trim().toLowerCase().replace(/\s+/g, "-");
+    const memberIds = Array.from(new Set([myUserId, ...newChannelMembers])).filter(Boolean);
+
     try {
       const res = await api.post<ChatChannel>(
         "/chat/channels",
@@ -2407,6 +2746,7 @@ function ChatInner() {
           name: cleanName,
           description: newChannelDesc.trim() || undefined,
           is_dm: false,
+          members: memberIds,
           auto_join_new_employees: newChannelAutoJoin
         },
         { showErrorToast: false }
@@ -2421,6 +2761,8 @@ function ChatInner() {
       setIsNewChannelOpen(false);
       setNewChannelName("");
       setNewChannelDesc("");
+      setNewChannelMembers([]);
+      setNewChannelMemberSearch("");
       setNewChannelAutoJoin(false);
     } catch {
       // Mock fallback
@@ -2428,8 +2770,8 @@ function ChatInner() {
         id: `chan-${Date.now()}`,
         name: cleanName,
         is_dm: false,
-        members: [String(user?.id)],
-        created_by: String(user?.id),
+        members: memberIds,
+        created_by: myUserId,
         created_at: new Date().toISOString(),
         auto_join_new_employees: newChannelAutoJoin
       };
@@ -2437,6 +2779,9 @@ function ChatInner() {
       setActiveChannelId(mockChan.id);
       setIsNewChannelOpen(false);
       setNewChannelName("");
+      setNewChannelDesc("");
+      setNewChannelMembers([]);
+      setNewChannelMemberSearch("");
       setNewChannelAutoJoin(false);
     }
   };
@@ -2609,6 +2954,7 @@ function ChatInner() {
         }
         focusMessageInput();
       }
+      unhideDm(empId);
       setIsNewDmOpen(false);
     } catch {
       // quiet fail
@@ -2632,8 +2978,8 @@ function ChatInner() {
     }))
     .filter((c) => (c.other_user?.name || c.name || "").toLowerCase().includes((searchQuery || "").toLowerCase()));
 
-  // If no DMs in DB yet, show fallback direct messages from employees
-  const displayDms =
+  // If no DMs in DB yet, show fallback direct messages from employees (filter out hidden DMs - Task 45)
+  const displayDms = (
     filteredDms.length > 0
       ? filteredDms
       : (employees || []).slice(0, 4).map((emp) => ({
@@ -2651,7 +2997,19 @@ function ChatInner() {
             avatar: emp.avatar || emp.profile_photo,
             is_online: presenceMap[emp.id] ?? false
           }
-        }));
+        }))
+  ).filter((dm) => {
+    const dmId = String(dm.id || (dm as any)._id);
+    const targetUserId = String(dm.other_user?.id || "");
+    if (
+      (hiddenDms.has(dmId) || hiddenDms.has(targetUserId)) &&
+      activeChannelId !== dmId &&
+      !dm.unread_count
+    ) {
+      return false;
+    }
+    return true;
+  });
 
   // Active channel details
   const activeChannel = channels.find((c) => (c.id || (c as any)._id) === activeChannelId);
@@ -2661,12 +3019,53 @@ function ChatInner() {
     ? currentDmUser?.name || activeChannel?.name || "Direct Message"
     : activeChannel?.name || "engineering";
 
-  // Members of active channel (for @ mentions & member list modal - Issues 3 & 4)
+  // Members of active channel (matches both emp.id and emp._id - Task 42)
   const activeChannelMemberEmployees = React.useMemo(() => {
     if (!activeChannel || isCurrentDm) return [];
     const memberIds = (activeChannel.members || []).map(String);
-    return (employees || []).filter((emp) => memberIds.includes(String(emp.id)));
+    return (employees || []).filter((emp) => {
+      const eId = String(emp.id);
+      const eAltId = String((emp as any)?._id || "");
+      return memberIds.includes(eId) || (eAltId && memberIds.includes(eAltId));
+    });
   }, [activeChannel, isCurrentDm, employees]);
+
+  // In-Chat Search matches & navigation (Task 37)
+  const matchingMessageIds = React.useMemo(() => {
+    if (!chatSearchQuery.trim()) return [];
+    const q = chatSearchQuery.toLowerCase();
+    return messages
+      .filter((m) =>
+        (m.content && m.content.toLowerCase().includes(q)) ||
+        (m.file_name && m.file_name.toLowerCase().includes(q))
+      )
+      .map((m) => m.id);
+  }, [messages, chatSearchQuery]);
+
+  const scrollToMessage = useCallback((msgId: string) => {
+    const el = document.getElementById(`msg-${msgId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightedMsgId(msgId);
+      setTimeout(() => setHighlightedMsgId(null), 2500);
+    }
+  }, []);
+
+  const handleNextSearchMatch = useCallback(() => {
+    if (matchingMessageIds.length === 0) return;
+    const nextIdx = (searchMatchIndex + 1) % matchingMessageIds.length;
+    setSearchMatchIndex(nextIdx);
+    const targetId = matchingMessageIds[nextIdx];
+    if (targetId) scrollToMessage(targetId);
+  }, [matchingMessageIds, searchMatchIndex, scrollToMessage]);
+
+  const handlePrevSearchMatch = useCallback(() => {
+    if (matchingMessageIds.length === 0) return;
+    const prevIdx = (searchMatchIndex - 1 + matchingMessageIds.length) % matchingMessageIds.length;
+    setSearchMatchIndex(prevIdx);
+    const targetId = matchingMessageIds[prevIdx];
+    if (targetId) scrollToMessage(targetId);
+  }, [matchingMessageIds, searchMatchIndex, scrollToMessage]);
 
   const matchingMentionMembers = React.useMemo(() => {
     if (mentionQuery === null) return [];
@@ -2817,7 +3216,7 @@ function ChatInner() {
         </div>
 
         {/* Jump to... Search Input */}
-        <div className="p-3">
+        <div className="p-3 pb-2">
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -2829,6 +3228,26 @@ function ChatInner() {
             />
           </div>
         </div>
+
+        {/* Desktop Notification Alert Enable Banner */}
+        {notifPermission === "default" && (
+          <div className="mx-3 mb-2 p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-between gap-2 shrink-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <Bell className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-foreground truncate">Desktop Alerts</p>
+                <p className="text-[11px] text-muted-foreground truncate">Alerts when app is in background</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={requestDesktopNotificationPermission}
+              className="px-2.5 py-1 text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-md shrink-0 shadow-xs cursor-pointer transition-all active:scale-95"
+            >
+              Enable
+            </button>
+          </div>
+        )}
 
         {/* Sidebar Navigation: CHANNELS & DIRECT MESSAGES */}
         <div className="flex-1 overflow-y-auto px-2 pb-4 space-y-6">
@@ -2920,7 +3339,7 @@ function ChatInner() {
                       focusMessageInput();
                     }}
                     className={cn(
-                      "w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-sm transition-colors cursor-pointer",
+                      "w-full group/dm flex items-center justify-between px-2 py-1.5 rounded-lg text-sm transition-colors cursor-pointer",
                       isActive
                         ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-bold"
                         : "text-muted-foreground hover:bg-muted font-medium hover:text-foreground"
@@ -2938,11 +3357,22 @@ function ChatInner() {
                       </div>
                       <span className="truncate">{cleanDisplayName(dmUser?.name || dm.name)}</span>
                     </div>
-                    {Boolean(dm.unread_count && dm.unread_count > 0) && (
-                      <span className="bg-emerald-600 text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full shrink-0">
-                        {dm.unread_count}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {Boolean(dm.unread_count && dm.unread_count > 0) ? (
+                        <span className="bg-emerald-600 text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full shrink-0">
+                          {dm.unread_count}
+                        </span>
+                      ) : (
+                        <span
+                          role="button"
+                          onClick={(e) => hideDm(String(dmId), e)}
+                          title="Hide chat from sidebar"
+                          className="opacity-0 group-hover/dm:opacity-100 p-0.5 rounded hover:bg-muted-foreground/20 text-muted-foreground hover:text-foreground transition-opacity cursor-pointer"
+                        >
+                          <EyeOff className="w-3.5 h-3.5" />
+                        </span>
+                      )}
+                    </div>
                   </button>
                 );
               })}
@@ -2952,9 +3382,58 @@ function ChatInner() {
       </div>
 
       {/* ======================================================== */}
-      {/* 2. MAIN CHAT AREA (EXACT HEADER & MESSAGE BUBBLES)       */}
+      {/* 2. MAIN CHAT AREA (OR WHATSAPP-STYLE BLANK SCREEN ON ESC) */}
       {/* ======================================================== */}
-      <div className="flex-1 flex flex-col bg-background min-w-0">
+      {!activeChannelId || !activeChannel ? (
+        <div className="flex-1 flex flex-col items-center justify-center bg-muted/10 p-8 text-center select-none relative overflow-hidden">
+          {/* Mobile open button */}
+          <button
+            type="button"
+            onClick={() => setIsMobileChannelsOpen(true)}
+            className="md:hidden absolute top-4 left-4 p-2 text-muted-foreground hover:text-foreground bg-card border border-border rounded-xl shadow-xs"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+
+          {/* WhatsApp Web style center illustration & text */}
+          <div className="w-20 h-20 rounded-full bg-emerald-500/10 flex items-center justify-center mb-5 ring-8 ring-emerald-500/5">
+            <MessageSquare className="w-10 h-10 text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <h2 className="text-xl font-bold text-foreground mb-2">HK DigiVerse Workplace Chat</h2>
+          <p className="text-sm text-muted-foreground max-w-sm mb-8 leading-relaxed">
+            Select a conversation from the sidebar to start chatting, or press <kbd className="px-1.5 py-0.5 text-xs font-semibold bg-background border border-border rounded shadow-xs">Esc</kbd> anytime to return to this screen.
+          </p>
+
+          <div className="flex items-center gap-8 text-xs text-muted-foreground">
+            <button
+              type="button"
+              onClick={() => setIsNewDmOpen(true)}
+              className="flex flex-col items-center gap-2 group cursor-pointer"
+            >
+              <div className="w-12 h-12 rounded-full bg-card border border-border flex items-center justify-center group-hover:border-emerald-500 group-hover:text-emerald-600 transition-all shadow-xs">
+                <UserPlus className="w-5 h-5" />
+              </div>
+              <span className="group-hover:text-foreground font-medium">New chat</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsNewChannelOpen(true)}
+              className="flex flex-col items-center gap-2 group cursor-pointer"
+            >
+              <div className="w-12 h-12 rounded-full bg-card border border-border flex items-center justify-center group-hover:border-emerald-500 group-hover:text-emerald-600 transition-all shadow-xs">
+                <Users className="w-5 h-5" />
+              </div>
+              <span className="group-hover:text-foreground font-medium">New group</span>
+            </button>
+          </div>
+
+          <div className="absolute bottom-6 flex items-center gap-1.5 text-xs text-muted-foreground/70">
+            <ShieldCheck className="w-4 h-4 text-emerald-600/70" />
+            <span>End-to-end encrypted internal team communication</span>
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 flex flex-col bg-background min-w-0">
         {/* Chat Header: # engineering + Menu & 3 Dots */}
         <div className="px-4 py-3.5 border-b border-border flex items-center justify-between bg-card shrink-0">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -3007,6 +3486,25 @@ function ChatInner() {
                 </span>
               </button>
             )}
+
+            {/* Task 37: In-Chat Message Search Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setIsSearchOpen((prev) => !prev);
+                if (isSearchOpen) setChatSearchQuery("");
+              }}
+              className={cn(
+                "p-2 rounded-lg transition-colors cursor-pointer",
+                isSearchOpen
+                  ? "text-emerald-600 bg-emerald-500/10 font-bold"
+                  : "text-muted-foreground hover:text-emerald-600 hover:bg-muted"
+              )}
+              title="Search messages in this conversation"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+
             <button
               type="button"
               onClick={() => setIsPollModalOpen(true)}
@@ -3034,6 +3532,82 @@ function ChatInner() {
             </button>
           </div>
         </div>
+
+        {/* Task 37: In-Chat Search Bar Dropdown */}
+        {isSearchOpen && (
+          <div className="px-4 py-2 bg-muted/40 border-b border-border flex items-center justify-between gap-3 animate-in slide-in-from-top-1 duration-150 shrink-0">
+            <div className="relative flex-1 max-w-md">
+              <Search className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground" />
+              <input
+                type="text"
+                autoFocus
+                value={chatSearchQuery}
+                onChange={(e) => {
+                  setChatSearchQuery(e.target.value);
+                  setSearchMatchIndex(0);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    if (e.shiftKey) handlePrevSearchMatch();
+                    else handleNextSearchMatch();
+                  } else if (e.key === "Escape") {
+                    setIsSearchOpen(false);
+                    setChatSearchQuery("");
+                  }
+                }}
+                placeholder="Find in this chat... (Press Enter for next, Esc to close)"
+                className="w-full pl-9 pr-8 py-1.5 bg-background border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+              {chatSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setChatSearchQuery("")}
+                  className="absolute right-2.5 top-2 text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
+              {chatSearchQuery.trim() && (
+                <span className="font-mono text-[11px]">
+                  {matchingMessageIds.length > 0
+                    ? `${searchMatchIndex + 1} / ${matchingMessageIds.length}`
+                    : "No matches"}
+                </span>
+              )}
+              <button
+                type="button"
+                disabled={matchingMessageIds.length === 0}
+                onClick={handlePrevSearchMatch}
+                className="p-1 rounded hover:bg-muted disabled:opacity-30 cursor-pointer"
+                title="Previous match (Shift + Enter)"
+              >
+                <ChevronUp className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                disabled={matchingMessageIds.length === 0}
+                onClick={handleNextSearchMatch}
+                className="p-1 rounded hover:bg-muted disabled:opacity-30 cursor-pointer"
+                title="Next match (Enter)"
+              >
+                <ChevronDown className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSearchOpen(false);
+                  setChatSearchQuery("");
+                }}
+                className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer ml-1"
+                title="Close search"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* In-app slide-in notification (top-right) - click opens that chat */}
         {notifyToast && (
@@ -3069,9 +3643,38 @@ function ChatInner() {
         {/* 3. MESSAGE LIST (AVATAR + NAME + TIMESTAMP + BUBBLES)     */}
         {/* ======================================================== */}
         <div
-          className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6"
+          className={cn(
+            "flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 relative transition-colors",
+            isDraggingOver && "bg-emerald-500/10 ring-2 ring-emerald-500/50 ring-inset"
+          )}
           onPaste={handlePaste}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDraggingOver(true);
+          }}
+          onDragLeave={() => setIsDraggingOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDraggingOver(false);
+            const droppedFiles = e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [];
+            if (droppedFiles.length === 0) return;
+            const imgFiles = droppedFiles.filter(
+              (f) => f.type.startsWith("image/") || /\.(png|jpe?g|webp|gif|svg)$/i.test(f.name)
+            );
+            if (imgFiles.length > 0) {
+              addMorePasteImages(imgFiles);
+            } else {
+              handleFileUpload({ target: { files: e.dataTransfer.files } } as any);
+            }
+          }}
         >
+          {isDraggingOver && (
+            <div className="absolute inset-4 z-40 border-2 border-dashed border-emerald-500 bg-emerald-500/10 rounded-2xl flex flex-col items-center justify-center pointer-events-none backdrop-blur-xs animate-in fade-in">
+              <ImageIcon className="w-10 h-10 text-emerald-600 mb-2 animate-bounce" />
+              <p className="text-sm font-bold text-foreground">Drop images or files here to send</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Supports PNG, JPG, WebP, PDF & documents</p>
+            </div>
+          )}
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center p-6 text-muted-foreground">
               <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-600 mb-3">
@@ -3409,39 +4012,96 @@ function ChatInner() {
                                 <span className="text-[10px] opacity-75 font-normal">Multiple choices</span>
                               )}
                             </div>
-                            <div className="space-y-1.5">
+                            <div className="space-y-2">
                               {msg.poll!.options.map((opt) => {
                                 const totalVotes =
                                   msg.poll!.options.reduce((acc, o) => acc + (Array.isArray(o.voters) ? o.voters.length : 0), 0) || 1;
                                 const votes = Array.isArray(opt.voters) ? opt.voters.length : 0;
                                 const percent = Math.round((votes / totalVotes) * 100);
-                                const hasVoted = Array.isArray(opt.voters) && opt.voters.includes(String(user?.id));
+                                const hasVoted = Array.isArray(opt.voters) && opt.voters.some((v) => String(v) === myUserId || (myEmployeeId && String(v) === myEmployeeId));
+
+                                // Resolve voter names (WhatsApp voter details + employee lookup)
+                                const voterNames = (opt.voter_details && opt.voter_details.length > 0)
+                                  ? opt.voter_details.map((vd) => {
+                                      const sVid = String(vd.id);
+                                      if (sVid === myUserId || (myEmployeeId && sVid === myEmployeeId)) return "You";
+                                      return vd.name || "Colleague";
+                                    })
+                                  : (opt.voters || []).map((vid) => {
+                                      const sVid = String(vid);
+                                      if (sVid === myUserId || (myEmployeeId && sVid === myEmployeeId)) return "You";
+                                      const found = (employees || []).find((e) => String(e.id) === sVid || String((e as any)._id) === sVid);
+                                      return found?.name || "Colleague";
+                                    });
 
                                 return (
-                                  <button
-                                    key={opt.id}
-                                    type="button"
-                                    onClick={() => handleVotePoll(msg.id, opt.id)}
-                                    className={cn(
-                                      "w-full text-left relative overflow-hidden rounded-lg p-2 text-xs border transition-all cursor-pointer",
-                                      hasVoted
-                                        ? "border-emerald-500 font-bold"
-                                        : "border-border/60 hover:border-emerald-500/50"
+                                  <div key={opt.id} className="space-y-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleVotePoll(msg.id, opt.id)}
+                                      className={cn(
+                                        "w-full text-left relative overflow-hidden rounded-lg p-2.5 text-xs border transition-all cursor-pointer",
+                                        hasVoted
+                                          ? "border-emerald-500 font-bold bg-emerald-500/10 shadow-xs"
+                                          : "border-border/60 hover:border-emerald-500/50"
+                                      )}
+                                    >
+                                      <div
+                                        className="absolute inset-y-0 left-0 bg-emerald-500/20 transition-all duration-300"
+                                        style={{ width: `${percent}%` }}
+                                      />
+                                      <div className="relative flex items-center justify-between z-10">
+                                        <div className="flex items-center gap-2 truncate">
+                                          <span className={cn(
+                                            "w-3.5 h-3.5 rounded-full border flex items-center justify-center text-[9px] shrink-0",
+                                            hasVoted ? "border-emerald-600 bg-emerald-600 text-white font-bold" : "border-muted-foreground/40"
+                                          )}>
+                                            {hasVoted ? "✓" : ""}
+                                          </span>
+                                          <span className="truncate">{opt.text}</span>
+                                        </div>
+                                        <span className="text-[10px] opacity-80 font-mono ml-2 shrink-0">
+                                          {percent}% ({votes})
+                                        </span>
+                                      </div>
+                                    </button>
+                                    {/* Task 43: Voter names display / tooltip */}
+                                    {voterNames.length > 0 && !msg.poll?.hide_voters_name && (
+                                      <div
+                                        className="text-[10px] text-muted-foreground pl-1.5 flex items-center gap-1 truncate"
+                                        title={`Voted by: ${voterNames.join(", ")}`}
+                                      >
+                                        <Users className="w-3 h-3 text-emerald-600 shrink-0" />
+                                        <span className="truncate">
+                                          {voterNames.slice(0, 3).join(", ")}
+                                          {voterNames.length > 3 && ` +${voterNames.length - 3} more`}
+                                        </span>
+                                      </div>
                                     )}
-                                  >
-                                    <div
-                                      className="absolute inset-y-0 left-0 bg-emerald-500/20 transition-all duration-300"
-                                      style={{ width: `${percent}%` }}
-                                    />
-                                    <div className="relative flex items-center justify-between z-10">
-                                      <span className="truncate">{opt.text}</span>
-                                      <span className="text-[10px] opacity-80 font-mono ml-2">
-                                        {percent}% ({votes})
-                                      </span>
-                                    </div>
-                                  </button>
+                                  </div>
                                 );
                               })}
+                            </div>
+
+                            {/* WhatsApp style View votes button */}
+                            <div className="pt-2 border-t border-border/40 flex items-center justify-between">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setViewVotesPollMsg(msg);
+                                }}
+                                className={cn(
+                                  "text-[11px] font-semibold hover:underline flex items-center gap-1 cursor-pointer transition-colors",
+                                  isMe ? "text-emerald-200 hover:text-white" : "text-emerald-600 dark:text-emerald-400"
+                                )}
+                              >
+                                <Users className="w-3.5 h-3.5" />
+                                <span>View votes</span>
+                              </button>
+                              <span className={cn("text-[10px]", isMe ? "text-white/70" : "text-muted-foreground")}>
+                                {msg.poll!.options.reduce((acc, o) => acc + (Array.isArray(o.voters) ? o.voters.length : 0), 0)} votes
+                              </span>
                             </div>
                           </div>
                         )}
@@ -3641,11 +4301,11 @@ function ChatInner() {
                             +
                           </button>
                         </div>
-                        {isMe && (
+                        {canDeleteChatMessages && (
                           <button
                             type="button"
                             onClick={() => handleDeleteMessage(msg.id)}
-                            title="Delete"
+                            title="Delete message"
                             className="p-1 text-muted-foreground hover:text-destructive hover:bg-muted rounded transition-colors cursor-pointer"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -3973,6 +4633,7 @@ function ChatInner() {
           </div>
         </div>
       </div>
+    )}
 
       {/* ======================================================== */}
       {/* 5. CLIPBOARD IMAGE PASTE MODAL (WhatsApp Web multi-image style) */}
@@ -4190,7 +4851,7 @@ function ChatInner() {
       {/* ======================================================== */}
       {isNewChannelOpen && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-[400px] overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-[440px] overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="p-6 border-b border-border flex items-center justify-between">
               <h3 className="font-bold text-foreground">Create New Channel</h3>
               <button
@@ -4214,6 +4875,71 @@ function ChatInner() {
                   onChange={(e) => setNewChannelName(e.target.value)}
                   className="w-full px-3 py-2 bg-muted/50 border border-border rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 />
+              </div>
+
+              {/* Task 42: Member selection with search */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">
+                    Add Members ({newChannelMembers.length > 0 ? `${newChannelMembers.filter((m, i, a) => a.indexOf(m) === i).length} selected` : "Optional"})
+                  </label>
+                  {newChannelMembers.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setNewChannelMembers([])}
+                      className="text-[10px] text-emerald-600 hover:underline cursor-pointer"
+                    >
+                      Clear all
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
+                  <input
+                    type="text"
+                    value={newChannelMemberSearch}
+                    onChange={(e) => setNewChannelMemberSearch(e.target.value)}
+                    placeholder="Search colleagues to add..."
+                    className="w-full pl-8 pr-3 py-1.5 bg-muted/40 border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+                <div className="max-h-36 overflow-y-auto space-y-1 p-1 bg-muted/20 rounded-xl border border-border/60">
+                  {(employees || [])
+                    .filter((emp) => String(emp.id) !== myUserId && String((emp as any)._id) !== myUserId)
+                    .filter((emp) =>
+                      !newChannelMemberSearch.trim() ||
+                      (emp.name || "").toLowerCase().includes(newChannelMemberSearch.toLowerCase()) ||
+                      (emp.email || "").toLowerCase().includes(newChannelMemberSearch.toLowerCase())
+                    )
+                    .map((emp) => {
+                      const empKey = String((emp as any)._id || emp.id);
+                      const isSelected = newChannelMembers.includes(empKey) || newChannelMembers.includes(String(emp.id));
+                      return (
+                        <label
+                          key={emp.id}
+                          className="flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-muted cursor-pointer text-xs"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {
+                              setNewChannelMembers((prev) =>
+                                isSelected
+                                  ? prev.filter((id) => id !== empKey && id !== String(emp.id))
+                                  : [...prev, empKey, String(emp.id)]
+                              );
+                            }}
+                            className="accent-emerald-600 w-3.5 h-3.5 rounded cursor-pointer"
+                          />
+                          <UserAvatar name={emp.name} avatar={emp.avatar || emp.profile_photo} size="w-6 h-6" />
+                          <div className="min-w-0 flex-1">
+                            <span className="font-bold block truncate">{emp.name}</span>
+                            <span className="text-[10px] text-muted-foreground block truncate">{emp.designation || emp.email}</span>
+                          </div>
+                        </label>
+                      );
+                    })}
+                </div>
               </div>
 
               {/* Auto-join toggle for future new employees (Issue 5 - default off) */}
@@ -4724,7 +5450,7 @@ function ChatInner() {
       {/* ======================================================== */}
       {isNewDmOpen && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-[380px] overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-[390px] overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="p-4 border-b border-border flex items-center justify-between">
               <h3 className="font-bold text-foreground text-sm flex items-center gap-2">
                 <Users className="w-4 h-4 text-emerald-600" />
@@ -4732,33 +5458,92 @@ function ChatInner() {
               </h3>
               <button
                 type="button"
-                onClick={() => setIsNewDmOpen(false)}
-                className="p-1 text-muted-foreground hover:text-foreground rounded-lg"
+                onClick={() => {
+                  setIsNewDmOpen(false);
+                  setNewDmSearch("");
+                }}
+                className="p-1 text-muted-foreground hover:text-foreground rounded-lg cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
+            {/* Task 36: Search colleagues in modal */}
+            <div className="p-3 border-b border-border bg-muted/20">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-muted-foreground" />
+                <input
+                  type="text"
+                  autoFocus
+                  value={newDmSearch}
+                  onChange={(e) => setNewDmSearch(e.target.value)}
+                  placeholder="Search by name, email, designation..."
+                  className="w-full pl-8 pr-7 py-1.5 bg-background border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 font-medium"
+                />
+                {newDmSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setNewDmSearch("")}
+                    className="absolute right-2.5 top-2 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
             <div className="max-h-80 overflow-y-auto p-2 space-y-1">
-              {(employees || []).map((emp) => (
-                <button
-                  key={emp.id}
-                  type="button"
-                  onClick={() => handleStartDm(emp.id)}
-                  className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-muted text-left transition-colors cursor-pointer"
-                >
-                  <UserAvatar
-                    name={emp.name}
-                    avatar={emp.avatar || emp.profile_photo}
-                    size="w-8 h-8"
-                    isOnline={presenceMap[emp.id] ?? false}
-                    showStatus={true}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <span className="font-bold text-xs text-foreground block truncate">{emp.name}</span>
-                    <span className="text-[10px] text-muted-foreground block truncate">{emp.designation || emp.email}</span>
-                  </div>
-                </button>
-              ))}
+              {(employees || [])
+                .filter((emp) => String(emp.id) !== myUserId && String((emp as any)._id) !== myUserId)
+                .filter((emp) => {
+                  if (!newDmSearch.trim()) return true;
+                  const q = newDmSearch.toLowerCase();
+                  return (
+                    (emp.name || "").toLowerCase().includes(q) ||
+                    (emp.email || "").toLowerCase().includes(q) ||
+                    (emp.designation || "").toLowerCase().includes(q) ||
+                    String((emp as any).department || "").toLowerCase().includes(q)
+                  );
+                })
+                .map((emp) => (
+                  <button
+                    key={emp.id}
+                    type="button"
+                    onClick={() => {
+                      setNewDmSearch("");
+                      handleStartDm(emp.id);
+                    }}
+                    className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-muted text-left transition-colors cursor-pointer"
+                  >
+                    <UserAvatar
+                      name={emp.name}
+                      avatar={emp.avatar || emp.profile_photo}
+                      size="w-8 h-8"
+                      isOnline={presenceMap[emp.id] ?? false}
+                      showStatus={true}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <span className="font-bold text-xs text-foreground block truncate">{emp.name}</span>
+                      <span className="text-[10px] text-muted-foreground block truncate">
+                        {emp.designation || (emp as any).department || emp.email}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              {(employees || [])
+                .filter((emp) => String(emp.id) !== myUserId && String((emp as any)._id) !== myUserId)
+                .filter((emp) => {
+                  if (!newDmSearch.trim()) return true;
+                  const q = newDmSearch.toLowerCase();
+                  return (
+                    (emp.name || "").toLowerCase().includes(q) ||
+                    (emp.email || "").toLowerCase().includes(q) ||
+                    (emp.designation || "").toLowerCase().includes(q) ||
+                    String((emp as any).department || "").toLowerCase().includes(q)
+                  );
+                }).length === 0 && (
+                <div className="p-6 text-center text-xs text-muted-foreground">
+                  No colleagues found matching "{newDmSearch}"
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -5010,6 +5795,34 @@ function ChatInner() {
 
           {/* Context Menu Options */}
           <div className="py-0.5 space-y-0.5">
+            {/* WhatsApp style Message Info */}
+            <button
+              type="button"
+              onClick={() => {
+                setMessageInfoMsg(contextMenu.msg);
+                setContextMenu(null);
+              }}
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted dark:hover:bg-[#182229] text-foreground transition-colors cursor-pointer text-left font-medium"
+            >
+              <Info className="w-4 h-4 text-emerald-600" />
+              <span>Message info</span>
+            </button>
+
+            {/* Poll view votes */}
+            {contextMenu.msg.poll && (
+              <button
+                type="button"
+                onClick={() => {
+                  setViewVotesPollMsg(contextMenu.msg);
+                  setContextMenu(null);
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted dark:hover:bg-[#182229] text-foreground transition-colors cursor-pointer text-left font-medium"
+              >
+                <Users className="w-4 h-4 text-emerald-600" />
+                <span>View votes</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => {
@@ -5103,6 +5916,298 @@ function ChatInner() {
                 <span>Save as…</span>
               </button>
             )}
+
+            {/* Task 41 & User Access Control: Delete message option strictly governed by Access Control permissions */}
+            {canDeleteChatMessages && (
+              <button
+                type="button"
+                onClick={() => {
+                  const msgId = contextMenu.msg.id;
+                  setContextMenu(null);
+                  handleDeleteMessage(msgId);
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-destructive/10 text-destructive transition-colors cursor-pointer text-left font-medium border-t border-border/60 pt-2 mt-1"
+              >
+                <Trash2 className="w-4 h-4 text-destructive" />
+                <span>Delete message</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* 15. POLL VOTES DETAILS MODAL (WhatsApp style)            */}
+      {/* ======================================================== */}
+      {viewVotesPollMsg && viewVotesPollMsg.poll && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col max-h-[85vh]">
+            <div className="p-4 sm:p-5 border-b border-border flex items-center justify-between bg-muted/20 shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                  <BarChart2 className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="font-bold text-foreground text-sm sm:text-base truncate">Poll Details</h3>
+                  <p className="text-xs text-muted-foreground truncate">{viewVotesPollMsg.poll.question}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewVotesPollMsg(null)}
+                className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted cursor-pointer transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1">
+              {viewVotesPollMsg.poll.options.map((opt, oIdx) => {
+                const totalVotes =
+                  viewVotesPollMsg.poll!.options.reduce((acc, o) => acc + (Array.isArray(o.voters) ? o.voters.length : 0), 0) || 1;
+                const votesCount = Array.isArray(opt.voters) ? opt.voters.length : 0;
+                const pct = Math.round((votesCount / totalVotes) * 100);
+
+                const votersList = (opt.voter_details && opt.voter_details.length > 0)
+                  ? opt.voter_details
+                  : (opt.voters || []).map((vid) => {
+                      const sVid = String(vid);
+                      const found = (employees || []).find((e) => String(e.id) === sVid || String((e as any)._id) === sVid);
+                      return {
+                        id: sVid,
+                        name: sVid === myUserId || (myEmployeeId && sVid === myEmployeeId) ? "You" : found?.name || "Colleague",
+                        avatar: found?.profile_photo || found?.avatar,
+                        time: undefined
+                      };
+                    });
+
+                return (
+                  <div key={opt.id || oIdx} className="bg-muted/15 border border-border/80 rounded-2xl p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="font-bold text-foreground text-sm flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 text-xs flex items-center justify-center font-bold">
+                          {oIdx + 1}
+                        </span>
+                        <span>{opt.text}</span>
+                      </div>
+                      <span className="text-xs font-semibold text-muted-foreground font-mono">
+                        {votesCount} {votesCount === 1 ? "vote" : "votes"} ({pct}%)
+                      </span>
+                    </div>
+
+                    <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                      <div className="bg-emerald-600 h-2 rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
+                    </div>
+
+                    {votersList.length > 0 ? (
+                      <div className="pt-2 border-t border-border/60 space-y-2">
+                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                          Voted by ({votersList.length}):
+                        </p>
+                        <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                          {votersList.map((voter: any, vIdx: number) => {
+                            const vId = String(voter.id || voter);
+                            const isMe = vId === myUserId || (myEmployeeId && vId === myEmployeeId);
+                            const foundEmp = (employees || []).find((e) => String(e.id) === vId || String((e as any)._id) === vId);
+                            const name = isMe ? "You" : (voter.name || foundEmp?.name || "Colleague");
+                            const designation = (foundEmp as any)?.work_details?.designation || (foundEmp as any)?.designation || (foundEmp as any)?.role || "";
+
+                            return (
+                              <div key={vIdx} className="flex items-center justify-between p-1.5 rounded-lg hover:bg-muted/40 transition-colors">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div className="w-7 h-7 rounded-full bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden">
+                                    {foundEmp?.profile_photo || foundEmp?.avatar ? (
+                                      <img src={foundEmp.profile_photo || foundEmp.avatar} alt={name} className="w-full h-full object-cover" />
+                                    ) : (
+                                      name.charAt(0).toUpperCase()
+                                    )}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-medium text-foreground truncate flex items-center gap-1.5">
+                                      <span>{name}</span>
+                                      {isMe && <span className="text-[10px] text-emerald-600 bg-emerald-500/10 px-1 rounded">You</span>}
+                                    </p>
+                                    {designation && (
+                                      <p className="text-[10px] text-muted-foreground truncate">{designation}</p>
+                                    )}
+                                  </div>
+                                </div>
+                                {voter.time && (
+                                  <span className="text-[10px] text-muted-foreground shrink-0 font-mono">
+                                    {new Date(voter.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-muted-foreground italic">No votes yet for this option</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="p-3 border-t border-border bg-muted/10 text-right shrink-0">
+              <button
+                type="button"
+                onClick={() => setViewVotesPollMsg(null)}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* 16. MESSAGE INFO MODAL (WhatsApp style Read / Delivered) */}
+      {/* ======================================================== */}
+      {messageInfoMsg && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col max-h-[85vh]">
+            <div className="p-4 border-b border-border flex items-center justify-between bg-muted/20 shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                  <Info className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-foreground text-base">Message Info</h3>
+                  <p className="text-xs text-muted-foreground">Read receipts & delivery details</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMessageInfoMsg(null)}
+                className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted cursor-pointer transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 overflow-y-auto space-y-4 flex-1">
+              <div className="p-3 bg-muted/30 border border-border rounded-2xl">
+                <p className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider mb-1">Message</p>
+                <p className="text-xs text-foreground font-medium break-words">
+                  {messageInfoMsg.content || (messageInfoMsg.media_type ? `[${messageInfoMsg.media_type}] ${messageInfoMsg.file_name || ""}` : "Message")}
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-1.5 text-right font-mono">
+                  Sent: {new Date(messageInfoMsg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                </p>
+              </div>
+
+              {(() => {
+                const readIds = new Set<string>();
+                (messageInfoMsg.read_by || []).forEach((id) => readIds.add(String(id)));
+                (Array.isArray(messageInfoMsg.is_read_by) ? messageInfoMsg.is_read_by : []).forEach((item: any) => {
+                  if (typeof item === "object" && item.id) readIds.add(String(item.id));
+                  else if (typeof item === "string") readIds.add(String(item));
+                });
+                readIds.delete(String(messageInfoMsg.sender_id));
+                const readMembers = Array.from(readIds);
+
+                const allMembers = (activeChannel?.members || []).map(String);
+                const deliveredMembers = allMembers.filter(
+                  (mid) => !readIds.has(mid) && mid !== String(messageInfoMsg.sender_id)
+                );
+
+                return (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs font-bold text-foreground">
+                        <div className="flex items-center gap-1.5 text-sky-500">
+                          <CheckCheck className="w-4 h-4" />
+                          <span>Read by ({readMembers.length})</span>
+                        </div>
+                        <span className="text-[10px] text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full font-medium">
+                          Live sync
+                        </span>
+                      </div>
+
+                      {readMembers.length > 0 ? (
+                        <div className="space-y-1.5 bg-muted/15 border border-border rounded-xl p-2 max-h-44 overflow-y-auto">
+                          {readMembers.map((uid) => {
+                            const isMe = uid === myUserId || (myEmployeeId && uid === myEmployeeId);
+                            const emp = (employees || []).find((e) => String(e.id) === uid || String((e as any)._id) === uid);
+                            const name = isMe ? "You" : emp?.name || "Colleague";
+                            const designation = (emp as any)?.work_details?.designation || (emp as any)?.designation || (emp as any)?.role || "";
+
+                            return (
+                              <div key={uid} className="flex items-center justify-between p-1.5 rounded-lg hover:bg-muted/40 transition-colors">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div className="w-7 h-7 rounded-full bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden">
+                                    {emp?.profile_photo || emp?.avatar ? (
+                                      <img src={emp.profile_photo || emp.avatar} alt={name} className="w-full h-full object-cover" />
+                                    ) : (
+                                      name.charAt(0).toUpperCase()
+                                    )}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-semibold text-foreground truncate flex items-center gap-1.5">
+                                      <span>{name}</span>
+                                      {isMe && <span className="text-[10px] text-emerald-600 bg-emerald-500/10 px-1 rounded">You</span>}
+                                    </p>
+                                    {designation && <p className="text-[10px] text-muted-foreground truncate">{designation}</p>}
+                                  </div>
+                                </div>
+                                <span className="text-[10px] text-sky-500 font-medium shrink-0 flex items-center gap-1">
+                                  <CheckCheck className="w-3.5 h-3.5" /> Seen
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground italic pl-1">No one has seen this message yet</p>
+                      )}
+                    </div>
+
+                    {deliveredMembers.length > 0 && (
+                      <div className="space-y-2 pt-2 border-t border-border">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground">
+                          <Check className="w-4 h-4" />
+                          <span>Delivered to ({deliveredMembers.length})</span>
+                        </div>
+                        <div className="space-y-1.5 bg-muted/15 border border-border rounded-xl p-2 max-h-36 overflow-y-auto">
+                          {deliveredMembers.map((uid) => {
+                            const emp = (employees || []).find((e) => String(e.id) === uid || String((e as any)._id) === uid);
+                            const name = emp?.name || "Colleague";
+                            const designation = (emp as any)?.work_details?.designation || (emp as any)?.designation || (emp as any)?.role || "";
+                            return (
+                              <div key={uid} className="flex items-center justify-between p-1.5 rounded-lg opacity-85">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center font-bold text-xs shrink-0 text-muted-foreground">
+                                    {name.charAt(0).toUpperCase()}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-medium text-foreground truncate">{name}</p>
+                                    {designation && <p className="text-[10px] text-muted-foreground truncate">{designation}</p>}
+                                  </div>
+                                </div>
+                                <span className="text-[10px] text-muted-foreground shrink-0">Delivered</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div className="p-3 border-t border-border bg-muted/10 text-right shrink-0">
+              <button
+                type="button"
+                onClick={() => setMessageInfoMsg(null)}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

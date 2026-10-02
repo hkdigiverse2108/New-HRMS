@@ -34,6 +34,7 @@ class WorkDetails(BaseModel):
     is_block: bool = False
     work_mode: Optional[WorkModeEnum] = None
     joining_date: Optional[date] = None
+    last_working_date: Optional[date] = None
     start_time: Optional[time] = None
     end_time: Optional[time] = None
 
@@ -64,6 +65,15 @@ class BondAndExit(BaseModel):
     serving_notice_period: bool = False
     has_resigned: bool = False
 
+class DepositDetails(BaseModel):
+    deposit_type: Optional[str] = "Employee"  # "Intern" (₹2,000) or "Employee" (₹10,000)
+    deposit_amount: Optional[float] = 10000.0
+    amount_paid: Optional[float] = 0.0
+    status: Optional[str] = "Pending"  # "Pending", "Partial", "Paid", "Refunded"
+    payment_date: Optional[date] = None
+    payment_mode: Optional[str] = None  # "Cash", "UPI", "Bank Transfer", "Cheque"
+    remarks: Optional[str] = None
+
 class EmployeeCreate(BaseModel):
     employee_id: Optional[str] = None
     personal_info: PersonalInfo
@@ -71,6 +81,7 @@ class EmployeeCreate(BaseModel):
     bank_and_docs: Optional[BankAndDocs] = BankAndDocs()
     document_checklist: Optional[DocumentChecklist] = DocumentChecklist()
     bond_and_exit: Optional[BondAndExit] = BondAndExit()
+    deposit_details: Optional[DepositDetails] = DepositDetails()
     profile_photo: Optional[str] = None
 
 class PersonalInfoUpdate(BaseModel):
@@ -99,6 +110,7 @@ class EmployeeUpdate(BaseModel):
     bank_and_docs: Optional[BankAndDocs] = None
     document_checklist: Optional[DocumentChecklist] = None
     bond_and_exit: Optional[BondAndExit] = None
+    deposit_details: Optional[DepositDetails] = None
     profile_photo: Optional[str] = None
 
 class EmployeeOut(BaseModel):
@@ -109,6 +121,7 @@ class EmployeeOut(BaseModel):
     bank_and_docs: Optional[BankAndDocs] = None
     document_checklist: Optional[DocumentChecklist] = None
     bond_and_exit: Optional[BondAndExit] = None
+    deposit_details: Optional[DepositDetails] = None
     profile_photo: Optional[str] = None
 
     model_config = ConfigDict(populate_by_name=True)

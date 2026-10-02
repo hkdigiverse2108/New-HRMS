@@ -21,6 +21,7 @@ import { QuickActionModals } from "@/components/sales/QuickActionModals";
 import { SalesProvider } from "@/components/sales/SalesContext";
 import { Dashboard } from "@/components/dashboard/Dashboard";
 import { EmployeeList } from "@/components/employees/EmployeeList";
+import { DepositTracking } from "@/components/employees/DepositTracking";
 import { OrgStructure } from "@/components/employees/OrgStructure";
 import { DepartmentDesignationManager } from "@/components/employees/DepartmentDesignationManager";
 import { AttendanceList } from "@/components/employees/AttendanceList";
@@ -235,6 +236,7 @@ export function Index() {
 
                   {/* Render Employee pages */}
                   {basePath === "/employees/list" && <EmployeeList isNew={isNew} />}
+                  {basePath === "/employees/deposits" && <DepositTracking />}
                   {basePath === "/employees/org" && <OrgStructure />}
                   {(basePath === "/employees/departments-setup" || basePath === "/employees/sub-departments" || basePath === "/employees/designations" || basePath === "/employees/departments") && <DepartmentDesignationManager />}
                   {(basePath === "/employees/attendance" || basePath === "/attendance") && <AttendanceList />}

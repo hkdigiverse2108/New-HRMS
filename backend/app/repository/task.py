@@ -72,7 +72,16 @@ class TaskRepository:
         and_conditions = [{"is_deleted": is_deleted}]
         
         if involved_emp_id:
-            and_conditions.append({"$or": [{"assigned_to": involved_emp_id}, {"assigned_by": involved_emp_id}]})
+            and_conditions.append({
+                "$or": [
+                    {"assigned_to": involved_emp_id},
+                    {"assigned_by": involved_emp_id},
+                    {"transfer_request.requested_to": involved_emp_id},
+                    {"transfer_request.requested_by": involved_emp_id},
+                    {"transfer_history.to_employee": involved_emp_id},
+                    {"transfer_history.from_employee": involved_emp_id},
+                ]
+            })
             
         if team_employee_ids is not None:
             and_conditions.append({"assigned_to": {"$in": team_employee_ids}})
@@ -197,7 +206,14 @@ class TaskRepository:
         collection = await cls.get_collection()
         base_query = {"is_deleted": False}
         if involved_emp_id:
-            base_query["$or"] = [{"assigned_to": involved_emp_id}, {"assigned_by": involved_emp_id}]
+            base_query["$or"] = [
+                {"assigned_to": involved_emp_id},
+                {"assigned_by": involved_emp_id},
+                {"transfer_request.requested_to": involved_emp_id},
+                {"transfer_request.requested_by": involved_emp_id},
+                {"transfer_history.to_employee": involved_emp_id},
+                {"transfer_history.from_employee": involved_emp_id},
+            ]
         
         now = datetime.utcnow()
         start_of_today = datetime(now.year, now.month, now.day)

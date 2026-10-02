@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { DialogClose,  Dialog, DialogContent  } from "@/components/ui/dialog";
 import { 
@@ -12,6 +12,7 @@ import {
 import { toast } from "@/lib/toast";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { useSales } from "./SalesContext";
+import { useEmployeesContext } from "@/components/employees/EmployeeContext";
 import { moveToRecycleBin } from "@/lib/recycle-bin";
 
 const TABS = ["Pipeline Stages", "Lead Categories", "Lead Sources", "Assignment", "Notifications", "Permissions", "Audit Log"] as const;
@@ -133,8 +134,50 @@ function ToggleSwitch({ active }: { active: boolean }) {
 }
 
 export function SalesSettings() {
-  const { stages, setStages } = useSales();
+  const { stages, setStages, leads, todayFollowUps } = useSales();
+  const { employees } = useEmployeesContext();
   const [activeTab, setActiveTab] = useState<Tab>("Lead Categories");
+
+  const eligibleOwners = useMemo(() => {
+    if (employees && employees.length > 0) {
+      return employees.map((e) => `${e.name} · ${e.role || e.designation || e.department || "Team Member"}`);
+    }
+    return ELIGIBLE_OWNERS;
+  }, [employees]);
+
+  const dynamicNotifications = useMemo(() => {
+    return [
+      { title: "New Lead Assigned", subtitle: "Instant alerts when leads are assigned to you", active: true },
+      { title: "Follow-up Reminder", subtitle: `${todayFollowUps} follow-ups are due today`, active: true },
+      { title: "Meeting Reminder", subtitle: "Reminders for scheduled demos & client visits", active: true },
+      { title: "Target Achieved", subtitle: "Alerts when members cross monthly revenue milestones", active: true },
+      { title: "Lead Converted", subtitle: "Live notifications when a deal moves to Won", active: true },
+      { title: "Payment Received", subtitle: "Alerts when collection amounts are confirmed", active: true },
+      { title: "Proposal Approved", subtitle: "Notifications when quotations are accepted", active: true },
+    ];
+  }, [todayFollowUps]);
+
+  const dynamicAuditLogs = useMemo(() => {
+    const logs: { action: string; by: string; time: string }[] = [];
+    leads.slice(0, 10).forEach((l) => {
+      if (l.followUps && l.followUps.length > 0) {
+        l.followUps.slice(0, 2).forEach((f) => {
+          logs.push({
+            action: `Follow-up on ${l.company || l.contact}: "${f.note}"`,
+            by: `by ${f.performedBy || l.owner || "Sales User"}`,
+            time: f.date || "Recent",
+          });
+        });
+      } else {
+        logs.push({
+          action: `Lead "${l.company || l.contact}" in stage ${l.stage || l.status || "Pipeline"}`,
+          by: `by ${l.createdByUserName || l.owner || "Sales User"}`,
+          time: l.date || l.createdAt || "Recent",
+        });
+      }
+    });
+    return logs.length > 0 ? logs.slice(0, 8) : AUDIT_LOG;
+  }, [leads]);
 
   const moveStage = (index: number, direction: 'up' | 'down') => {
     const nextIndex = direction === 'up' ? index - 1 : index + 1;
@@ -726,7 +769,7 @@ export function SalesSettings() {
             <div className="mt-8">
               <h3 className="mb-3 text-sm font-bold">Eligible owners</h3>
               <div className="flex flex-wrap gap-2">
-                {ELIGIBLE_OWNERS.map((owner, i) => (
+                {eligibleOwners.map((owner, i) => (
                   <span key={i} className="rounded-full border border-emerald-100 bg-emerald-50/50 px-3 py-1 text-xs font-semibold">
                     {owner}
                   </span>
@@ -744,7 +787,7 @@ export function SalesSettings() {
             </h2>
             
             <div className="space-y-3">
-              {NOTIFICATIONS.map((notif, i) => (
+              {dynamicNotifications.map((notif, i) => (
                 <div key={i} className="flex items-center justify-between rounded-xl border border-border bg-white p-4">
                   <div>
                     <p className="font-medium text-sm">{notif.title}</p>
@@ -800,7 +843,7 @@ export function SalesSettings() {
             </h2>
             
             <div className="space-y-3">
-              {AUDIT_LOG.map((log, i) => (
+              {dynamicAuditLogs.map((log, i) => (
                 <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-border bg-white p-4">
                   <div>
                     <p className="font-medium text-sm">{log.action}</p>

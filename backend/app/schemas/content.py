@@ -10,6 +10,7 @@ class ContentTimelineSettings(BaseModel):
     script_days_before: int = 0
     shoot_days_before: int = 12
     editing_graphics_days_before: int = 6
+    thumbnail_days_before: int = 5
     approval_days_before: int = 5
 
 # --- Content Item Schema ---

@@ -92,6 +92,23 @@ async def punch_in(
         task_title=task_title,
         task_type=task_type
     )
+
+    if result and result.get("is_late"):
+        try:
+            from app.repository.notification import NotificationRepository
+            in_time = result.get("in_time") or "now"
+            emp_name = result.get("employee_name") or "Employee"
+            # 1. Notify the employee
+            await NotificationRepository.create_notification({
+                "recipient_id": str(employee_id),
+                "title": "⚠️ Late Punch-in Recorded",
+                "message": f"Your check-in at {in_time} was registered past the 09:40 AM buffer.",
+                "type": "attendance",
+                "action_url": "/employees/attendance",
+                "is_read": False
+            })
+        except Exception as e:
+            print(f"Error creating late punch notification: {e}")
     
     # Invalidate Redis caches
     await delete_cache(f"attendance:last:{employee_id}")

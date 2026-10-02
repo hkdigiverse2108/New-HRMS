@@ -48,10 +48,17 @@ async def get_all_projects(
     cc_status: Optional[str] = Query(None, description="Filter by content calendar approval status (pending, approved_by_client, changes_requested, rejected)"),
     current_user: dict = Depends(get_current_employee)
 ):
+    user_role = str(current_user.get("role", "")).lower()
+    user_dept = str(current_user.get("department", "") or current_user.get("work_details", {}).get("department", ""))
+    is_admin_or_hr = user_role in ["admin", "superadmin", "hr"]
+    effective_category = category
+    if not is_admin_or_hr and user_dept and not category:
+        effective_category = user_dept
+
     return await ProjectService.get_all_projects(
         is_deleted=False, 
         client_id=client_id,
-        category=category,
+        category=effective_category,
         priority=priority,
         status=status,
         search=search,

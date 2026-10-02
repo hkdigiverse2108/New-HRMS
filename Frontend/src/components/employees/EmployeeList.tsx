@@ -1,5 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
-import { Search, X, Filter, LayoutGrid, List, MoreVertical, Phone, Mail, Plus, MapPin, Edit2, Trash2, Key, UserMinus, UserCheck, Shield, FileText, LogOut, Clock, Columns, Eye, EyeOff, Users } from "lucide-react";
+import { Search, X, Filter, LayoutGrid, List, MoreVertical, Phone, Mail, Plus, MapPin, Edit2, Trash2, Key, UserMinus, UserCheck, Shield, FileText, LogOut, Clock, Columns, Eye, EyeOff, Users, Zap, AlertTriangle } from "lucide-react";
+import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog";
+import { api } from "@/lib/api";
 import { EMPLOYEES, Employee } from "./employee-data";
 import { useDepartments } from "./DepartmentContext";
 import { EmployeeProfileModal } from "./EmployeeProfileModal";
@@ -98,6 +100,31 @@ useEffect(() => {
   const [selectedDept, setSelectedDept] = useState<string>("All");
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [permissionEmployee, setPermissionEmployee] = useState<Employee | null>(null);
+
+  const userRole = String((user as any)?.role || (user as any)?.work_details?.system_role || "").toLowerCase();
+  const canSummon = isAdmin || ["admin", "superadmin", "hr", "manager", "team lead", "lead"].some(r => userRole.includes(r));
+  const [summonTarget, setSummonTarget] = useState<Employee | null>(null);
+  const [summonLocation, setSummonLocation] = useState("Conference Room A");
+  const [summonReason, setSummonReason] = useState("Urgent meeting required immediately");
+  const [isSummoning, setIsSummoning] = useState(false);
+
+  const handleSendSummon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!summonTarget) return;
+    try {
+      setIsSummoning(true);
+      await api.post(`/employees/${summonTarget.id}/summon`, {
+        room_location: summonLocation,
+        reason: summonReason,
+      });
+      toast.success(`⚡ Urgent summon alert sent to ${summonTarget.name}!`);
+      setSummonTarget(null);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to send summon alert");
+    } finally {
+      setIsSummoning(false);
+    }
+  };
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     COLUMN_OPTIONS.forEach(col => {
@@ -195,6 +222,19 @@ useEffect(() => {
                   title="Edit Employee"
                 >
                   <Edit2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+              {canSummon && (
+                <button 
+                  onClick={() => {
+                    setSummonTarget(emp);
+                    setSummonLocation("Conference Room A");
+                    setSummonReason("Urgent meeting required immediately");
+                  }}
+                  className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-md transition-all active:scale-95"
+                  title="⚡ Urgent Meeting Summon"
+                >
+                  <Zap className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
                 </button>
               )}
               {isAdmin && (
@@ -559,6 +599,19 @@ useEffect(() => {
                     {emp.status === 'Inactive' ? <UserCheck className="w-4 h-4" /> : <UserMinus className="w-4 h-4" />}
                   </button>
                 )}
+                {canSummon && (
+                  <button
+                    onClick={() => {
+                      setSummonTarget(emp);
+                      setSummonLocation("Conference Room A");
+                      setSummonReason("Urgent meeting required immediately");
+                    }}
+                    className="p-2 text-amber-600 hover:bg-amber-50 rounded-full transition-colors"
+                    title="⚡ Urgent Meeting Summon"
+                  >
+                    <Zap className="w-4 h-4 fill-amber-500 text-amber-500" />
+                  </button>
+                )}
                 {isAdmin && (
                   <button
                     onClick={() => setPermissionEmployee(emp)}
@@ -759,6 +812,91 @@ useEffect(() => {
           isOpen={Boolean(permissionEmployee)}
           onClose={() => setPermissionEmployee(null)}
         />
+      )}
+
+      {/* Urgent Meeting Summon Modal */}
+      {summonTarget && (
+        <Dialog open={Boolean(summonTarget)} onOpenChange={(v) => { if (!v) setSummonTarget(null); }}>
+          <DialogContent className="sm:max-w-[460px] p-0 overflow-hidden rounded-[2rem] gap-0 border-amber-500/30 shadow-2xl [&>button]:hidden bg-card">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-border/50 bg-amber-500/10">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 flex items-center justify-center font-bold">
+                  <Zap className="w-5 h-5 fill-amber-500 text-amber-500" />
+                </div>
+                <div>
+                  <h2 className="text-base font-black tracking-tight text-foreground">Urgent Meeting Summon</h2>
+                  <p className="text-xs text-muted-foreground">Send high-priority audio alert to employee screen</p>
+                </div>
+              </div>
+              <DialogClose asChild>
+                <button className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </DialogClose>
+            </div>
+
+            <form onSubmit={handleSendSummon} className="p-6 space-y-4">
+              <div className="p-3.5 bg-muted/40 rounded-2xl border border-border/40 flex items-center gap-3">
+                <img
+                  src={getAvatarUrl(summonTarget.avatar || summonTarget.profile_photo, summonTarget.name)}
+                  alt={summonTarget.name}
+                  className="w-12 h-12 rounded-full object-cover border-2 border-white shadow"
+                  onError={handleAvatarError}
+                />
+                <div>
+                  <p className="text-sm font-black text-foreground">{summonTarget.name}</p>
+                  <p className="text-xs text-muted-foreground font-medium">{summonTarget.role} • {summonTarget.department}</p>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
+                  Location / Room <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={summonLocation}
+                  onChange={(e) => setSummonLocation(e.target.value)}
+                  placeholder="e.g. Conference Room A / Cabin 2 / Online Meet"
+                  className="w-full px-3.5 py-2.5 bg-muted/50 border border-border/60 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
+                  Reason / Notes <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={summonReason}
+                  onChange={(e) => setSummonReason(e.target.value)}
+                  placeholder="e.g. Critical client escalations review. Come immediately."
+                  className="w-full px-3.5 py-2.5 bg-muted/50 border border-border/60 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-amber-500/30 resize-none"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setSummonTarget(null)}
+                  className="px-4 py-2 text-sm font-bold text-muted-foreground hover:bg-muted rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSummoning}
+                  className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-sm font-black rounded-xl transition-all shadow-md shadow-amber-500/20 flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Zap className="w-4 h-4 fill-white" />
+                  {isSummoning ? "Broadcasting Alert..." : "Send Urgent Summon"}
+                </button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

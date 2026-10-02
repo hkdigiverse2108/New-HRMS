@@ -79,7 +79,7 @@ class CreativeStats(BaseModel):
 class ProjectGeneralDetails(BaseModel):
     project_name: str = Field(..., description="Name of the project")
     description: Optional[str] = None
-    category: ProjectCategory = Field(..., description="Category of the project")
+    category: str = Field(..., description="Category or comma-separated departments of the project")
     status: ProjectStatus = Field(default=ProjectStatus.NOT_STARTED, description="Current status of the project")
     priority: ProjectPriority = Field(default=ProjectPriority.MEDIUM)
     progress: int = Field(default=0, ge=0, le=100, description="Project completion percentage")
@@ -91,7 +91,7 @@ class ProjectGeneralDetails(BaseModel):
     @field_validator('category', mode='before')
     def parse_category(cls, v):
         if isinstance(v, str):
-            clean_v = v.lower().replace(" ", "").replace("_", "").replace("/", "")
+            parts = [p.strip() for p in v.split(",") if p.strip()]
             cat_map = {
                 "development": "Development",
                 "creative": "Creative",
@@ -107,7 +107,13 @@ class ProjectGeneralDetails(BaseModel):
                 "socialmediamarketing": "Digital Marketing",
                 "general": "Development",
             }
-            return cat_map.get(clean_v, v)
+            normalized = []
+            for p in parts:
+                clean_p = p.lower().replace(" ", "").replace("_", "").replace("/", "")
+                norm = cat_map.get(clean_p, p)
+                if norm not in normalized:
+                    normalized.append(norm)
+            return ", ".join(normalized) if normalized else v
         return v
 
     @field_validator('status', mode='before')
@@ -336,7 +342,7 @@ class ProjectCreate(ProjectBase):
 class ProjectGeneralUpdate(BaseModel):
     project_name: Optional[str] = None
     description: Optional[str] = None
-    category: Optional[ProjectCategory] = None
+    category: Optional[str] = None
     status: Optional[ProjectStatus] = None
     priority: Optional[ProjectPriority] = None
     progress: Optional[int] = Field(None, ge=0, le=100)
@@ -350,7 +356,7 @@ class ProjectGeneralUpdate(BaseModel):
         if v is None:
             return None
         if isinstance(v, str):
-            clean_v = v.lower().replace(" ", "").replace("_", "").replace("/", "")
+            parts = [p.strip() for p in v.split(",") if p.strip()]
             cat_map = {
                 "development": "Development",
                 "creative": "Creative",
@@ -366,7 +372,13 @@ class ProjectGeneralUpdate(BaseModel):
                 "socialmediamarketing": "Digital Marketing",
                 "general": "Development",
             }
-            return cat_map.get(clean_v, v)
+            normalized = []
+            for p in parts:
+                clean_p = p.lower().replace(" ", "").replace("_", "").replace("/", "")
+                norm = cat_map.get(clean_p, p)
+                if norm not in normalized:
+                    normalized.append(norm)
+            return ", ".join(normalized) if normalized else v
         return v
 
     @field_validator('status', mode='before')

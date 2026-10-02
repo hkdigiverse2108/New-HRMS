@@ -229,6 +229,7 @@ async def get_google_auth_status(
         "google_email": None
     }
 
+@router.get("/google/auth")
 @router.get("/google/login")
 async def google_auth_login(
     request: Request,

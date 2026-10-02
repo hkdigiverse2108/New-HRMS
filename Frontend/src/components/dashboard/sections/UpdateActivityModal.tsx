@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Plus, Calendar, Check, Briefcase, BookOpen, Users, Clock } from "lucide-react";
+import { X, Plus, Calendar, Check, Briefcase, BookOpen, Users, Clock, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
@@ -29,6 +29,7 @@ interface TaskItem {
   dueDate?: string | undefined;
   badge?: string | undefined;
   category: WorkActivityType;
+  isCustom?: boolean | undefined;
 }
 
 export function UpdateActivityModal({
@@ -202,6 +203,31 @@ export function UpdateActivityModal({
           { id: "meet-3", title: "Client Product Demo", dueDate: todayDateStr, badge: "Meeting", category: "Meeting" },
         ];
 
+        // 5. Load saved custom activities from localStorage (Task 34)
+        if (typeof window !== "undefined") {
+          try {
+            const savedStr = localStorage.getItem("hrms_custom_activities");
+            if (savedStr) {
+              const savedItems: Array<{ id: string; title: string; category: WorkActivityType; dueDate?: string }> = JSON.parse(savedStr);
+              savedItems.forEach(item => {
+                const customItem: TaskItem = {
+                  id: item.id,
+                  title: item.title,
+                  dueDate: item.dueDate || todayDateStr,
+                  badge: "Custom",
+                  category: item.category,
+                  isCustom: true,
+                };
+                if (item.category === "Today's Work") todayList.unshift(customItem);
+                else if (item.category === "Upcoming Work") upcomingList.unshift(customItem);
+                else if (item.category === "Research") researchList.unshift(customItem);
+                else if (item.category === "Activity") activityList.unshift(customItem);
+                else if (item.category === "Meeting") meetingList.unshift(customItem);
+              });
+            }
+          } catch {}
+        }
+
         if (isMounted) {
           setTasks({
             "Today's Work": todayList,
@@ -251,21 +277,92 @@ export function UpdateActivityModal({
     });
   };
 
-  const handleAddCustom = () => {
+  // Task 26 & Task 34: Sync custom task with backend /tasks and save locally
+  const handleAddCustom = async () => {
     if (!customTaskTitle.trim()) {
       toast.error("Please enter a custom task title");
       return;
     }
-    const newCustomTask: SelectedTaskInfo = {
-      taskId: `custom-${Date.now()}`,
-      taskTitle: customTaskTitle.trim(),
+    const cleanTitle = customTaskTitle.trim();
+    let createdTaskId = `custom-${Date.now()}`;
+    const todayStr = new Date().toISOString().split("T")[0];
+
+    // Task 26: Sync custom task to main tasks list (/tasks)
+    try {
+      const res = await api.post<any>("/tasks", {
+        title: cleanTitle,
+        priority: "Medium",
+        status: "In Progress",
+        assigned_to: employeeId,
+        due_date: todayStr,
+        description: `Created during Punch-In activity tracking (${activeTab})`,
+        task_category: activeTab === "Research" ? "Research" : "General",
+      }, { showErrorToast: false });
+      if (res?._id || res?.id) {
+        createdTaskId = String(res._id || res.id);
+      }
+    } catch (err) {
+      console.warn("Could not sync custom task to tasks endpoint:", err);
+    }
+
+    const newCustomItem: TaskItem = {
+      id: createdTaskId,
+      title: cleanTitle,
+      dueDate: todayStr,
+      badge: "Custom Task",
+      category: activeTab,
+      isCustom: true,
+    };
+
+    // Save in state
+    setTasks(prev => ({
+      ...prev,
+      [activeTab]: [newCustomItem, ...(prev[activeTab] || [])]
+    }));
+
+    // Task 34: Persist in localStorage so it remains available in dropdown/list
+    try {
+      const savedStr = localStorage.getItem("hrms_custom_activities");
+      const currentSaved = savedStr ? JSON.parse(savedStr) : [];
+      const updated = [
+        { id: createdTaskId, title: cleanTitle, category: activeTab, dueDate: todayStr },
+        ...currentSaved.filter((x: any) => x.title.toLowerCase() !== cleanTitle.toLowerCase())
+      ].slice(0, 30);
+      localStorage.setItem("hrms_custom_activities", JSON.stringify(updated));
+    } catch {}
+
+    const selected: SelectedTaskInfo = {
+      taskId: createdTaskId,
+      taskTitle: cleanTitle,
       taskType: activeTab,
-      dueDate: new Date().toISOString().split("T")[0],
+      dueDate: todayStr,
       badge: "Custom Task",
     };
-    setSelectedTask(newCustomTask);
+    setSelectedTask(selected);
     setIsAddingCustom(false);
     setCustomTaskTitle("");
+    toast.success("Custom task created and synced to tasks list!");
+  };
+
+  // Task 34: Delete saved custom activity
+  const handleDeleteCustom = (e: React.MouseEvent, item: TaskItem) => {
+    e.stopPropagation();
+    setTasks(prev => ({
+      ...prev,
+      [activeTab]: (prev[activeTab] || []).filter(t => t.id !== item.id)
+    }));
+    try {
+      const savedStr = localStorage.getItem("hrms_custom_activities");
+      if (savedStr) {
+        const currentSaved = JSON.parse(savedStr);
+        const updated = currentSaved.filter((x: any) => x.id !== item.id && x.title !== item.title);
+        localStorage.setItem("hrms_custom_activities", JSON.stringify(updated));
+      }
+    } catch {}
+    if (selectedTask?.taskTitle === item.title) {
+      setSelectedTask(null);
+    }
+    toast.info("Custom entry removed.");
   };
 
   const handleSave = () => {
@@ -383,11 +480,28 @@ export function UpdateActivityModal({
                         </div>
                       </div>
 
-                      {t.badge && (
-                        <span className="text-[11px] font-medium text-muted-foreground bg-muted/80 px-2.5 py-0.5 rounded-lg border border-border/40 shrink-0">
-                          {t.badge}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {t.badge && (
+                          <span className={cn(
+                            "text-[11px] font-medium px-2.5 py-0.5 rounded-lg border",
+                            t.isCustom
+                              ? "bg-primary/10 text-primary border-primary/20 font-bold"
+                              : "text-muted-foreground bg-muted/80 border-border/40"
+                          )}>
+                            {t.badge}
+                          </span>
+                        )}
+                        {t.isCustom && (
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteCustom(e, t)}
+                            className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                            title="Delete custom activity"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}

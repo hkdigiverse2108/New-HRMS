@@ -30,6 +30,7 @@ from app.controllers.invoice import router as invoice_router
 from app.controllers.bank_account import router as bank_account_router
 from app.controllers.quotation import router as quotation_router
 from app.controllers.settings import router as settings_router
+from app.controllers.sales import router as sales_router
 from app.controllers.document_type import router as document_type_router
 from app.controllers.document_template import router as document_template_router
 from app.controllers.generated_document import router as generated_document_router
@@ -144,6 +145,7 @@ app.include_router(invoice_router)
 app.include_router(bank_account_router)
 app.include_router(quotation_router)
 app.include_router(settings_router)
+app.include_router(sales_router)
 app.include_router(document_type_router)
 app.include_router(document_template_router)
 app.include_router(generated_document_router)

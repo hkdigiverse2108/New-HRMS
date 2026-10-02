@@ -70,6 +70,7 @@ export const navItems: NavItem[] = [
     icon: Users,
     children: [
       { title: "Employee List", url: "/employees/list" },
+      { title: "Deposits & Documents", url: "/employees/deposits" },
       { title: "Org Structure", url: "/employees/org" },
       { title: "Sub-Departments & Designations", url: "/employees/departments-setup" },
     ],

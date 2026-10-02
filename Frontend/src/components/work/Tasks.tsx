@@ -456,11 +456,21 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
       // 2. Main View Mode & Scope Filter
       if (mainViewMode === "my_tasks") {
-        if (task.assignedToId !== currentUserId) return false;
+        const isMine = task.assignedToId === currentUserId;
+        const isPendingTransferToMe =
+          task.transferRequest &&
+          task.transferRequest.status === "pending" &&
+          String(task.transferRequest.requested_to) === currentUserId;
+        if (!isMine && !isPendingTransferToMe) return false;
       } else {
         // All Tasks Mode
         if (scopeFilter === "my_tasks") {
-          if (task.assignedToId !== currentUserId) return false;
+          const isMine = task.assignedToId === currentUserId;
+          const isPendingTransferToMe =
+            task.transferRequest &&
+            task.transferRequest.status === "pending" &&
+            String(task.transferRequest.requested_to) === currentUserId;
+          if (!isMine && !isPendingTransferToMe) return false;
         } else if (scopeFilter === "assigned_by_me") {
           if (task.assignedById !== currentUserId) return false;
         } else if (scopeFilter === "transfers") {
@@ -1510,12 +1520,22 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                           {/* Footer Info */}
                           <div className="flex items-center justify-between border-t border-border/40 pt-2 text-[10px]">
                             {(() => {
-                              const isOverdue = Boolean(task.dueDate && isBefore(new Date(task.dueDate), startOfDay(new Date())) && task.status !== "Done");
+                              const taskDate = task.dueDate ? new Date(task.dueDate) : null;
+                              const isOverdue = Boolean(taskDate && isBefore(taskDate, startOfDay(new Date())) && task.status !== "Done");
+                              const isDueToday = Boolean(taskDate && isToday(taskDate) && task.status !== "Done");
                               if (isOverdue) {
                                 return (
-                                  <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 font-bold text-[10px]" title="Overdue task!">
+                                  <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 font-bold text-[10px]" title="Overdue task!">
                                     <AlertCircle className="w-3 h-3 text-rose-600 dark:text-rose-400 shrink-0" />
                                     <span>{task.dueDate} (Overdue)</span>
+                                  </div>
+                                );
+                              }
+                              if (isDueToday) {
+                                return (
+                                  <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 font-bold text-[10px]" title="Due today!">
+                                    <Clock className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" />
+                                    <span>Due Today</span>
                                   </div>
                                 );
                               }
@@ -1675,17 +1695,33 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
                       {/* Due Date */}
                       <td className="px-5 py-4 whitespace-nowrap font-semibold">
-                        {isTaskOverdue ? (
-                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 font-bold text-xs shadow-xs" title="Overdue Task!">
-                            <AlertCircle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
-                            <span>{task.dueDate} (Overdue)</span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1.5 text-muted-foreground">
-                            <Calendar className="w-3.5 h-3.5 opacity-60" />
-                            <span>{task.dueDate || "No due date"}</span>
-                          </div>
-                        )}
+                        {(() => {
+                          const taskDate = task.dueDate ? new Date(task.dueDate) : null;
+                          const isOverdue = Boolean(taskDate && isBefore(taskDate, startOfDay(new Date())) && task.status !== "Done");
+                          const isDueToday = Boolean(taskDate && isToday(taskDate) && task.status !== "Done");
+                          if (isOverdue) {
+                            return (
+                              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 font-bold text-xs shadow-xs" title="Overdue Task!">
+                                <AlertCircle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
+                                <span>{task.dueDate} (Overdue)</span>
+                              </div>
+                            );
+                          }
+                          if (isDueToday) {
+                            return (
+                              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 font-bold text-xs shadow-xs" title="Due Today!">
+                                <Clock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                                <span>Due Today</span>
+                              </div>
+                            );
+                          }
+                          return (
+                            <div className="flex items-center gap-1.5 text-muted-foreground">
+                              <Calendar className="w-3.5 h-3.5 opacity-60" />
+                              <span>{task.dueDate || "No due date"}</span>
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       {/* Assigned To */}

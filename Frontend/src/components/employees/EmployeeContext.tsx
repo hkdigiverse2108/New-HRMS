@@ -70,7 +70,17 @@ function mapBackendToEmployee(be: any): Employee {
     hasBond: !!e.has_active_bond,
     hasNoticePeriod: !!e.serving_notice_period,
     hasResignation: !!e.has_resigned,
-    activelyUsingHRMS: !w.is_block && !w.is_delete
+    activelyUsingHRMS: !w.is_block && !w.is_delete,
+
+    requiredDocuments: be.required_documents || be.requiredDocuments || (d ? Object.entries(d).filter(([_, v]) => v).map(([k]) => k.replace(/_/g, ' ')) : []),
+    securityDepositExempt: be.security_deposit_exempt ?? be.securityDepositExempt ?? false,
+    securityDepositDirectPayments: be.security_deposit_direct_payments || be.securityDepositDirectPayments || [],
+    targetSecurityDeposit: be.target_security_deposit || be.targetSecurityDeposit || be.deposit_details?.deposit_amount,
+    depositAmount: be.deposit_details?.deposit_amount || be.depositAmount,
+    depositPaid: be.deposit_details?.amount_paid || be.depositPaid || 0,
+    depositStatus: be.deposit_details?.status || be.depositStatus || "Pending",
+    depositPaymentDate: be.deposit_details?.payment_date ? String(be.deposit_details.payment_date) : (be.depositPaymentDate || ""),
+    depositRemarks: be.deposit_details?.remarks || be.depositRemarks || ""
   };
 }
 
@@ -136,7 +146,19 @@ function mapEmployeeToBackendPayload(fe: Partial<Employee>) {
       serving_notice_period: !!fe.hasNoticePeriod,
       has_resigned: !!fe.hasResignation
     },
-    profile_photo: photo || null
+    profile_photo: photo || null,
+    required_documents: fe.requiredDocuments || [],
+    security_deposit_exempt: fe.securityDepositExempt ?? false,
+    security_deposit_direct_payments: fe.securityDepositDirectPayments || [],
+    target_security_deposit: fe.targetSecurityDeposit || null,
+    deposit_details: {
+      deposit_type: fe.designation?.toLowerCase().includes("intern") || fe.role?.toLowerCase().includes("intern") ? "Intern" : "Employee",
+      deposit_amount: fe.depositAmount || fe.targetSecurityDeposit || (fe.designation?.toLowerCase().includes("intern") ? 2000 : 10000),
+      amount_paid: fe.depositPaid || 0,
+      status: fe.depositStatus || "Pending",
+      payment_date: fe.depositPaymentDate || null,
+      remarks: fe.depositRemarks || null
+    }
   };
 }
 

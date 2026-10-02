@@ -1,9 +1,14 @@
+import { useMemo } from "react";
 import { Award, TrendingDown, Phone, Clock, CheckCircle2, XCircle, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { teamMembers, formatCurrency } from "./sales-data";
+import { toast } from "@/lib/toast";
+import { teamMembers, formatCurrency, type TeamMember } from "./sales-data";
+import { useSales } from "./SalesContext";
+import { useEmployeesContext } from "@/components/employees/EmployeeContext";
 
-function MemberCard({ member }: { member: (typeof teamMembers)[0] }) {
-  const pct = Math.round((member.achieved / member.target) * 100);
+function MemberCard({ member }: { member: TeamMember }) {
+  const targetVal = member.target > 0 ? member.target : 1;
+  const pct = Math.round((member.achieved / targetVal) * 100);
   const isTop = pct >= 100;
   const isLow = pct < 60;
 
@@ -77,9 +82,128 @@ function MemberCard({ member }: { member: (typeof teamMembers)[0] }) {
 }
 
 export function SalesTeamPerformance({ onAction }: { onAction?: (action: string) => void }) {
-  const sorted = [...teamMembers].sort((a, b) => (b.achieved / b.target) - (a.achieved / a.target));
+  const { leads, targets } = useSales();
+  const { employees } = useEmployeesContext();
+
+  // Dynamic Members Calculation
+  const dynamicMembers = useMemo<TeamMember[]>(() => {
+    const candidateEmps = employees.length > 0 ? employees : [];
+
+    const assigneeNames = new Set<string>();
+    leads.forEach((l) => {
+      const list = Array.isArray(l.assignedTo) ? l.assignedTo : [l.assignedTo || l.owner];
+      list.forEach((name) => {
+        if (name && typeof name === "string") assigneeNames.add(name.trim().toLowerCase());
+      });
+    });
+
+    const membersList = candidateEmps.filter((e) => {
+      const dept = (e.department || "").toLowerCase();
+      const role = (e.role || "").toLowerCase();
+      const isSales = dept.includes("sale") || dept.includes("bd") || role.includes("sale") || role.includes("bde");
+      const hasLeads = assigneeNames.has(e.name.toLowerCase());
+      return isSales || hasLeads;
+    });
+
+    const finalEmps = membersList.length > 0 
+      ? membersList 
+      : candidateEmps.length > 0 
+        ? candidateEmps.slice(0, 8) 
+        : [];
+
+    if (finalEmps.length === 0) {
+      return teamMembers;
+    }
+
+    return finalEmps.map((emp) => {
+      const empName = emp.name;
+      const empLeads = leads.filter((l) => {
+        const assigned = Array.isArray(l.assignedTo) ? l.assignedTo : [l.assignedTo || l.owner];
+        return assigned.some((a: any) => String(a).toLowerCase().includes(empName.toLowerCase()));
+      });
+
+      const assignedCount = empLeads.length;
+      const won = empLeads.filter((l) => ["Client Won", "Won"].includes(l.status || l.stage || ""));
+      const lost = empLeads.filter((l) => ["Client Lost", "Lost"].includes(l.status || l.stage || ""));
+      const contacted = empLeads.filter((l) => !["New Lead", "New"].includes(l.status || l.stage || ""));
+      const meetings = empLeads.filter((l) => (l.stage || "").toLowerCase().includes("meet") || (l.stage || "").toLowerCase().includes("demo"));
+      const demos = empLeads.filter((l) => (l.stage || "").toLowerCase().includes("demo"));
+      const proposals = empLeads.filter((l) => (l.stage || "").toLowerCase().includes("proposal") || (l.stage || "").toLowerCase().includes("review"));
+
+      const achieved = won.reduce((acc, l) => acc + (Number(l.budget || l.expectedIncome) || 0), 0);
+      const matchedTarget = targets.find((t) => t.employeeId === emp.id || t.employeeName?.toLowerCase() === empName.toLowerCase());
+      const target = Number(matchedTarget?.targetAmount) || 1000000;
+
+      const followUpsDoneCount = empLeads.filter((l) => (l.followUps && l.followUps.length > 0) || l.nextFollowUpDate).length;
+      const followUpPct = assignedCount > 0 ? Math.round((followUpsDoneCount / assignedCount) * 100) : 100;
+      const conversionPct = assignedCount > 0 ? Math.round((won.length / assignedCount) * 100) : 0;
+
+      const initials = empName
+        .split(" ")
+        .map((p) => p[0])
+        .filter(Boolean)
+        .slice(0, 2)
+        .join("")
+        .toUpperCase() || "EM";
+
+      return {
+        name: empName,
+        role: emp.role || "Sales Executive",
+        region: emp.department || "Ahmedabad",
+        avatar: initials,
+        target,
+        achieved,
+        assigned: assignedCount,
+        contacted: contacted.length,
+        meetings: meetings.length,
+        demos: demos.length,
+        proposals: proposals.length,
+        won: won.length,
+        lost: lost.length,
+        collection: achieved,
+        conversionRate: conversionPct,
+        followUpDone: followUpPct,
+        avgResponse: 18,
+      };
+    });
+  }, [employees, leads, targets]);
+
+  const sorted = useMemo(() => {
+    return [...dynamicMembers].sort((a, b) => {
+      const aTarget = a.target > 0 ? a.target : 1;
+      const bTarget = b.target > 0 ? b.target : 1;
+      return (b.achieved / bTarget) - (a.achieved / aTarget);
+    });
+  }, [dynamicMembers]);
+
   const top = sorted[0];
-  const bottom = sorted[sorted.length - 1];
+  const bottom = sorted.length > 1 ? sorted[sorted.length - 1] : undefined;
+
+  const handleExportReport = () => {
+    const headers = ["Employee", "Role", "Region", "Target", "Achieved", "Achievement %", "Assigned Leads", "Won", "Lost", "Conversion Rate %", "Follow-up Done %"];
+    const rows = sorted.map((m) => [
+      `"${m.name}"`,
+      `"${m.role}"`,
+      `"${m.region}"`,
+      `"${m.target}"`,
+      `"${m.achieved}"`,
+      `"${Math.round((m.achieved / (m.target || 1)) * 100)}%"`,
+      `"${m.assigned}"`,
+      `"${m.won}"`,
+      `"${m.lost}"`,
+      `"${m.conversionRate}%"`,
+      `"${m.followUpDone}%"`,
+    ]);
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `sales_team_performance_${new Date().toISOString().split("T")[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success("Sales performance report downloaded!");
+  };
 
   return (
     <div className="space-y-6">
@@ -89,7 +213,10 @@ export function SalesTeamPerformance({ onAction }: { onAction?: (action: string)
           <h1 className="text-2xl font-black tracking-tight sm:text-3xl">Employee Performance</h1>
           <p className="text-sm text-muted-foreground">Leaderboard, scorecards and follow-up discipline across the sales org</p>
         </div>
-        <button onClick={() => onAction?.("Export Excel")} className="flex items-center gap-1.5 self-start rounded-xl border border-border bg-white px-4 py-2 text-sm font-semibold transition-colors hover:bg-accent hover:text-emerald-700">
+        <button 
+          onClick={handleExportReport} 
+          className="flex items-center gap-1.5 self-start rounded-xl border border-border bg-white px-4 py-2 text-sm font-semibold transition-colors hover:bg-accent hover:text-emerald-700 shadow-sm"
+        >
           <Download className="h-4 w-4" /> Export Report
         </button>
       </div>
@@ -97,27 +224,31 @@ export function SalesTeamPerformance({ onAction }: { onAction?: (action: string)
       {/* Top & Bottom Highlights */}
       <div className="grid gap-4 sm:grid-cols-2">
         {top && (
-          <div className="flex items-center gap-4 rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-white p-5">
+          <div className="flex items-center gap-4 rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-white p-5 shadow-sm">
             <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-emerald-100">
               <Award className="h-6 w-6 text-emerald-600" />
             </div>
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-emerald-600">Top Performer</p>
               <p className="text-lg font-black">{top.name}</p>
-              <p className="text-xs text-muted-foreground">{Math.round((top.achieved / top.target) * 100)}% of target · {formatCurrency(top.achieved)}</p>
+              <p className="text-xs text-muted-foreground">
+                {Math.round((top.achieved / (top.target || 1)) * 100)}% of target · {formatCurrency(top.achieved)}
+              </p>
             </div>
           </div>
         )}
 
         {bottom && (
-          <div className="flex items-center gap-4 rounded-2xl border border-rose-200 bg-gradient-to-r from-rose-50 to-white p-5">
+          <div className="flex items-center gap-4 rounded-2xl border border-rose-200 bg-gradient-to-r from-rose-50 to-white p-5 shadow-sm">
             <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-rose-100">
               <TrendingDown className="h-6 w-6 text-rose-600" />
             </div>
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-rose-600">Needs Support</p>
               <p className="text-lg font-black">{bottom.name}</p>
-              <p className="text-xs text-muted-foreground">{Math.round((bottom.achieved / bottom.target) * 100)}% of target · {formatCurrency(bottom.achieved)}</p>
+              <p className="text-xs text-muted-foreground">
+                {Math.round((bottom.achieved / (bottom.target || 1)) * 100)}% of target · {formatCurrency(bottom.achieved)}
+              </p>
             </div>
           </div>
         )}

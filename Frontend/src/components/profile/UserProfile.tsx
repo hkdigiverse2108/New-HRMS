@@ -1,16 +1,29 @@
-import { useState } from "react";
-import { User, Briefcase, CreditCard, FileText, Mail, Phone, MapPin, Building, Calendar, Key, Shield, CheckCircle2, ChevronRight, Edit2, Eye, EyeOff } from "lucide-react";
+import { useState, useMemo } from "react";
+import { User, Briefcase, CreditCard, FileText, Mail, Phone, MapPin, Building, Calendar, Key, Shield, CheckCircle2, ChevronRight, Edit2, Eye, EyeOff, Lock } from "lucide-react";
 import { cn, formatDate } from "@/lib/utils";
 import { useEmployeesContext } from "@/components/employees/EmployeeContext";
 import { EmployeeFormModal } from "@/components/employees/EmployeeFormModal";
+import { useAuth } from "@/components/auth/AuthContext";
 import { toast } from "@/lib/toast";
 
 type TabType = 'overview' | 'personal' | 'financial' | 'offboarding';
 
 export function UserProfile() {
+  const { user: authUser } = useAuth();
   const { employees, updateEmployee } = useEmployeesContext();
-  // Use EMP-002 (Aarav Mehta) as the current logged in user
-  const user = employees.find(e => e.id === "EMP-002") || employees[0];
+
+  // Dynamically resolve current logged-in employee record
+  const user = useMemo(() => {
+    if (!authUser) return employees[0];
+    const byId = employees.find(e => e.id === authUser.id || (e as any)._id === authUser.id);
+    if (byId) return byId;
+    const byEmail = employees.find(e => e.email?.toLowerCase() === authUser.email?.toLowerCase());
+    if (byEmail) return byEmail;
+    return employees[0];
+  }, [authUser, employees]);
+
+  const isAdminOrHR = authUser?.role === "admin" || authUser?.role === "superadmin" || authUser?.role === "hr";
+
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [showProfilePassword, setShowProfilePassword] = useState(false);
@@ -26,33 +39,32 @@ export function UserProfile() {
     { id: 'offboarding', label: 'Offboarding', icon: Shield }
   ];
   
-  // Mock some of the extensive fields for Aarav since dummy data doesn't have them yet
   const profileData = {
-    firstName: "Aarav",
-    lastName: "R.",
-    dob: "1992-05-15",
-    gender: "Male",
-    parentName: "Rajesh R.",
-    parentNumber: "+91 98765 11111",
-    relation: "Father",
+    firstName: user.firstName || user.name?.split(" ")[0] || "",
+    lastName: user.lastName || user.name?.split(" ").slice(1).join(" ") || "",
+    dob: user.dob || "—",
+    gender: user.gender || "—",
+    parentName: user.parentName || "—",
+    parentNumber: user.parentNumber || "—",
+    relation: user.relation || "Parent",
     password: "••••••••",
-    salary: "85000",
-    bankName: "HDFC Bank",
-    accountNumber: "50100293847561",
-    ifscCode: "HDFC0001234",
-    upiId: "aarav.r@okhdfc",
-    aadharCard: "1234 5678 9012",
-    panCard: "ABCDE1234F",
-    sub_department: "Core HR",
-    designation: "HR Administrator",
-    startTime: "10:00",
-    endTime: "19:00",
-    workMode: "Hybrid",
-    hasBond: true,
-    bondStartDate: "2020-02-15",
-    bondEndDate: "2022-02-15",
-    hasNoticePeriod: false,
-    requiredDocuments: ["10th Marksheet", "12th Marksheet", "Degree Certificate", "Aadhar Card", "PAN Card"],
+    salary: user.salary || "—",
+    bankName: user.bankName || "—",
+    accountNumber: user.accountNumber || "—",
+    ifscCode: user.ifscCode || "—",
+    upiId: user.upiId || "—",
+    aadharCard: user.aadharCard || "—",
+    panCard: user.panCard || "—",
+    sub_department: user.sub_department || "—",
+    designation: user.designation || user.role || "Employee",
+    startTime: user.startTime || "10:00",
+    endTime: user.endTime || "19:00",
+    workMode: user.workMode || "Office",
+    hasBond: user.hasBond || false,
+    bondStartDate: user.bondStartDate || "—",
+    bondEndDate: user.bondEndDate || "—",
+    hasNoticePeriod: user.hasNoticePeriod || false,
+    requiredDocuments: user.requiredDocuments || ["Aadhar Card", "PAN Card"],
     ...user
   };
 
@@ -370,7 +382,7 @@ export function UserProfile() {
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
         initialData={profileData as any}
-        isSelfEdit={true}
+        isSelfEdit={!isAdminOrHR}
         onSubmit={async (updatedData) => {
           try {
             await updateEmployee(user.id, updatedData);
