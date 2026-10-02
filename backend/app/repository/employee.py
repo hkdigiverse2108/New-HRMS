@@ -133,6 +133,10 @@ class EmployeeRepository:
             return None
 
     @classmethod
+    async def get_by_id(cls, employee_id: str):
+        return await cls.get_employee_by_id(employee_id)
+
+    @classmethod
     async def get_employees_by_dept_and_desig(cls, department_id: str, designation_id: str) -> List[dict]:
         from app.repository.access_control import resolve_department_values, resolve_designation_values
         collection = await cls.get_collection()

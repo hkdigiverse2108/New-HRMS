@@ -29,6 +29,7 @@ class SettingsRepository:
             "company_llpin": "ACK-1143",
             "company_state_code": "24",
             "logo_url": None,
+            "letterhead_url": None,
             "signature_url": None,
             "signature_name": "Authorized Signatory",
             "default_terms": "1. Payment is due within 3 days of the invoice date.\n2. Late payments may incur additional charges.\n3. All disputes are subject to Gujarat Jurisdiction.",

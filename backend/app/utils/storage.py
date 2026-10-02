@@ -6,6 +6,8 @@ UPLOADS_DIR = os.path.abspath("uploads")
 def ensure_upload_dirs() -> None:
     os.makedirs(os.path.join(UPLOADS_DIR, "invoices"), exist_ok=True)
     os.makedirs(os.path.join(UPLOADS_DIR, "quotations"), exist_ok=True)
+    os.makedirs(os.path.join(UPLOADS_DIR, "documents", "generated"), exist_ok=True)
+    os.makedirs(os.path.join(UPLOADS_DIR, "documents", "submitted"), exist_ok=True)
 
 def save_pdf_file(pdf_bytes: bytes, filename: str, subfolder: str = "invoices") -> Tuple[str, str]:
     """
