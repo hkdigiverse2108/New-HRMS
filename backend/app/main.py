@@ -20,6 +20,7 @@ from app.controllers.activity import router as activity_router
 from app.controllers.research import router as research_router
 from app.controllers.remark import router as remark_router
 from app.controllers.notification import router as notification_router
+from app.controllers.push_notifications import router as push_notifications_router
 from app.controllers.daily_progress import router as daily_progress_router
 from app.controllers.chat import router as chat_router
 from app.controllers.dashboard import router as dashboard_router
@@ -134,6 +135,7 @@ app.include_router(activity_router)
 app.include_router(research_router)
 app.include_router(remark_router)
 app.include_router(notification_router)
+app.include_router(push_notifications_router)
 app.include_router(daily_progress_router)
 app.include_router(chat_router)
 app.include_router(dashboard_router)

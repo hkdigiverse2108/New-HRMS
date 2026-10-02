@@ -9,6 +9,9 @@ class NotificationBase(BaseModel):
     type: str = "general"
     is_read: bool = False
     action_url: Optional[str] = None
+    sender_id: Optional[str] = None
+    sender_name: Optional[str] = None
+    sender_avatar: Optional[str] = None
 
 class NotificationCreate(NotificationBase):
     pass
