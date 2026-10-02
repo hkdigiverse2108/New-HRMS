@@ -1004,12 +1004,11 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                         channel = await ChatRepository.get_direct_channel(user_id, receiver_id)
                         if not channel:
                             db = await ChatRepository.get_db()
-                            import datetime
                             doc = {
                                 "name": f"Direct: {user_id} & {receiver_id}",
                                 "type": "direct",
                                 "members": [user_id, receiver_id],
-                                "created_at": datetime.datetime.utcnow()
+                                "created_at": datetime.utcnow()
                             }
                             result = await db[ChatRepository.channels_collection].insert_one(doc)
                             channel_id = str(result.inserted_id)
