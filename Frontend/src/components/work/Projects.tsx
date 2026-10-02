@@ -5103,6 +5103,18 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                 ) : value ? (
                                   <div className="flex items-center justify-center gap-0.5 group/lc">
                                     <a href={value} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className={cn("px-2 py-0.5 font-bold rounded-md text-[10px] flex items-center gap-1 border", cc)}>{label}</a>
+                                    <button
+                                      type="button"
+                                      title="Copy link"
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        navigator.clipboard.writeText(value);
+                                        toast.success("Link copied!");
+                                      }}
+                                      className="opacity-0 group-hover/lc:opacity-70 hover:opacity-100 p-0.5 hover:text-primary transition-opacity text-[10px]"
+                                    >
+                                      <Copy className="w-2.5 h-2.5" />
+                                    </button>
                                     <button onClick={e => startEdit(e, field, value)} className="opacity-0 group-hover/lc:opacity-60 text-[9px] hover:opacity-100 transition-opacity ml-0.5">✏️</button>
                                   </div>
                                 ) : (

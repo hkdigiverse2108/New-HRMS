@@ -34,6 +34,7 @@ interface BackendTask {
   assigned_to: string;
   assigned_by: string;
   created_by?: string;
+  created_at?: string;
   recurrence?: string;
   approved_by?: string;
   approved_at?: string;
@@ -105,6 +106,7 @@ interface TaskItem {
   contentItemId: string;
   isAuto: boolean;
   department?: string;
+  createdAt?: string | undefined;
   rawBackend: BackendTask;
 }
 
@@ -337,6 +339,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
             contentItemId: String(t.content_item_id || ""),
             isAuto: Boolean(t.content_item_id),
             department: t.department || "",
+            createdAt: t.created_at || (t as any).createdAt || "",
             rawBackend: t,
           };
         });
@@ -532,7 +535,14 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
         const bOverdue = bDate && isBefore(bDate, todayStart) && b.status !== "Done" ? 1 : 0;
         if (aOverdue !== bOverdue) return bOverdue - aOverdue;
       }
-      return 0;
+
+      // Latest tasks on top (by createdAt descending or id descending)
+      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (timeA && timeB && timeA !== timeB) {
+        return timeB - timeA;
+      }
+      return b.id.localeCompare(a.id);
     });
   }, [
     tasks,

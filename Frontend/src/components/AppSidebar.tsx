@@ -462,42 +462,7 @@ function SidebarBody({
           </div>
         )}
 
-        {(() => {
-          const allowedRecents = recents.filter((r) => hasModulePermission(user, r.url, "read"));
-          if (collapsed || q || allowedRecents.length === 0) return null;
-          return (
-            <div className="mb-2">
-              <button
-                onClick={() => toggleSection("Recents")}
-                className="flex w-full items-center justify-between px-2 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wider text-sidebar-muted hover:text-sidebar-foreground"
-              >
-                <span>Recents</span>
-                <ChevronDown
-                  className={cn(
-                    "h-3.5 w-3.5 transition-transform",
-                    collapsedSections.includes("Recents") ? "-rotate-90" : "",
-                  )}
-                />
-              </button>
-              {!collapsedSections.includes("Recents") &&
-                allowedRecents.map((r) => (
-                  <button
-                    key={r.url}
-                    onClick={() => go(r.url)}
-                    className={cn(
-                      "group flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors",
-                      active === r.url
-                        ? "bg-sidebar-primary font-semibold text-sidebar-primary-foreground"
-                        : "hover:bg-sidebar-accent",
-                    )}
-                  >
-                    <Clock className={cn("h-3.5 w-3.5 shrink-0", active === r.url ? "text-sidebar-primary-foreground" : "text-sidebar-muted")} />
-                    <span className="truncate">{r.title}</span>
-                  </button>
-                ))}
-            </div>
-          );
-        })()}
+
 
         {filtered.map((item) => {
           const isOpen = openGroups.includes(item.title) || Boolean(q);

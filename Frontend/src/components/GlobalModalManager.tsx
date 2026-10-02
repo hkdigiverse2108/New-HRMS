@@ -172,8 +172,15 @@ function ApplyLeaveModal({ open, onClose }: { open: boolean; onClose: () => void
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const userRole = String((user as any)?.role || (user as any)?.work_details?.system_role || "Employee").toLowerCase();
+  const isStrictAdmin = ["admin", "superadmin"].includes(userRole);
+
   useEffect(() => {
     if (!open) return;
+    if (!isStrictAdmin) {
+      if (user?.id) setSelectedEmployeeId(user.id);
+      return;
+    }
     const fetchEmployees = async () => {
       try {
         setIsLoadingEmployees(true);
@@ -209,12 +216,14 @@ function ApplyLeaveModal({ open, onClose }: { open: boolean; onClose: () => void
       }
     };
     fetchEmployees();
-  }, [open, user?.id, user?.email]);
+  }, [open, isStrictAdmin, user?.id, user?.email]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!startDate || !endDate || !reason) { toast.error("Please fill all required fields"); return; }
-    if (!selectedEmployeeId && employeeOptions.length > 0) { toast.error("Please select an employee"); return; }
+    if (isStrictAdmin && !selectedEmployeeId && employeeOptions.length > 0) { toast.error("Please select an employee"); return; }
+
+    const targetEmpId = isStrictAdmin ? (selectedEmployeeId || user?.id) : user?.id;
 
     const start = new Date(startDate);
     const end = new Date(endDate);
@@ -223,7 +232,7 @@ function ApplyLeaveModal({ open, onClose }: { open: boolean; onClose: () => void
     try {
       setIsSubmitting(true);
       await api.post("/leaves", {
-        employee_id: selectedEmployeeId || user?.id,
+        employee_id: targetEmpId,
         leave_type: leaveType,
         day_type: "Full Day",
         start_date: startDate,
@@ -260,22 +269,34 @@ function ApplyLeaveModal({ open, onClose }: { open: boolean; onClose: () => void
         </div>
         <form onSubmit={handleSubmit} className="flex flex-col max-h-[75vh]">
           <div className="p-8 space-y-5 overflow-y-auto">
-            {/* Employee Selector */}
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">
-                Employee <span className="text-rose-500">*</span>
-              </label>
-              <SearchableSelect
-                value={selectedEmployeeId}
-                onChange={setSelectedEmployeeId}
-                options={employeeOptions.map((emp) => ({
-                  label: `${emp.name} (${emp.role}${emp.department ? ` • ${emp.department}` : ""})`,
-                  value: emp.id,
-                }))}
-                placeholder={isLoadingEmployees ? "Loading non-admin employees..." : "Select Employee"}
-                className="w-full px-4 h-[46px] bg-muted/50 border border-border/50 rounded-xl text-sm font-medium"
-              />
-            </div>
+            {/* Employee Selector (Strictly Admin only) */}
+            {isStrictAdmin ? (
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">
+                  Employee <span className="text-rose-500">*</span>
+                </label>
+                <SearchableSelect
+                  value={selectedEmployeeId}
+                  onChange={setSelectedEmployeeId}
+                  options={employeeOptions.map((emp) => ({
+                    label: `${emp.name} (${emp.role}${emp.department ? ` • ${emp.department}` : ""})`,
+                    value: emp.id,
+                  }))}
+                  placeholder={isLoadingEmployees ? "Loading non-admin employees..." : "Select Employee"}
+                  className="w-full px-4 h-[46px] bg-muted/50 border border-border/50 rounded-xl text-sm font-medium"
+                />
+              </div>
+            ) : (
+              <div className="p-3.5 bg-muted/30 border border-border/50 rounded-xl flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Applying For</p>
+                  <p className="text-sm font-bold text-foreground">{user?.name || "Self"}</p>
+                </div>
+                <span className="text-[11px] px-2.5 py-0.5 bg-primary/10 text-primary font-bold rounded-lg border border-primary/20">
+                  Self Only
+                </span>
+              </div>
+            )}
 
             <div className="space-y-2">
               <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Leave Type</label>

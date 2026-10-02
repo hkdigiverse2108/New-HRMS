@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Clock, RotateCcw, AlertTriangle, CheckCircle2, Calendar as CalendarIcon, Loader2 } from "lucide-react";
+import { DatePicker } from "@/components/ui/date-picker";
 import { api } from "@/lib/api";
 import { toast } from "@/lib/toast";
 import { getTodayDateIST, formatISTTime } from "@/lib/timeUtils";
@@ -177,18 +178,16 @@ export function RecoverTimeModal({
             <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
               Select Date
             </label>
-            <div className="relative">
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => {
-                  setSelectedDate(e.target.value);
-                  fetchBreaks(e.target.value);
-                }}
-                className="w-full h-10 px-3.5 py-2 rounded-xl bg-muted/40 border border-border/80 text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-              />
-              <CalendarIcon className="w-4 h-4 text-muted-foreground absolute right-3 top-3 pointer-events-none" />
-            </div>
+            <DatePicker
+              value={selectedDate}
+              onChange={(val) => {
+                const nextDate = val || getTodayDateIST();
+                setSelectedDate(nextDate);
+                fetchBreaks(nextDate);
+              }}
+              placeholder="Select date"
+              className="w-full h-10 px-3.5 py-2 rounded-xl bg-muted/40 border border-border/80 text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
           </div>
 
           {/* Breaks Selection */}
@@ -206,7 +205,7 @@ export function RecoverTimeModal({
                 <AlertTriangle className="w-5 h-5 text-amber-500 mx-auto mb-1" />
                 <p className="text-xs font-semibold text-foreground">No breaks found for this date.</p>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
-                  You did not record any break in on {selectedDate}.
+                  You did not record any break in on this selected date.
                 </p>
               </div>
             ) : (

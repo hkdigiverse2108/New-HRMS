@@ -1032,17 +1032,28 @@ function ChatInner() {
 
   // Keyboard navigation for Lightbox (Left/Right arrows to navigate, ESC to close)
   useEffect(() => {
-    if (!previewMediaUrl && !pdfUrl) return;
+    if (!previewMediaUrl && !pdfUrl && !pastePreviewUrl && pasteFiles.length === 0 && !pasteFile) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        setPreviewMediaUrl(null);
+        setPdfUrl(null);
+        setPastePreviewUrl(null);
+        setPastePreviewUrls([]);
+        setPasteFile(null);
+        setPasteFiles([]);
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+        return;
+      }
+
       const activeTag = (document.activeElement?.tagName || "").toLowerCase();
       if (activeTag === "input" || activeTag === "textarea") return;
 
-      if (e.key === "Escape") {
-        e.preventDefault();
-        setPreviewMediaUrl(null);
-        setPdfUrl(null);
-      } else if (e.key === "ArrowLeft") {
+      if (e.key === "ArrowLeft") {
         if (previewMediaUrl) {
           e.preventDefault();
           navigatePreview("prev");
@@ -1057,7 +1068,7 @@ function ChatInner() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [previewMediaUrl, pdfUrl, navigatePreview]);
+  }, [previewMediaUrl, pdfUrl, pastePreviewUrl, pasteFiles.length, pasteFile, navigatePreview]);
 
   const formatFileSize = (bytes?: number | null) => {
     if (!bytes || isNaN(Number(bytes))) return "";
