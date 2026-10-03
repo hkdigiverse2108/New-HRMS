@@ -15,6 +15,18 @@ class DailyProgressService:
         return role in ["admin", "hr", "subadmin", "sub-admin"] or top_role in ["admin", "hr", "subadmin"] or dept == "hr" or user_id == "default-admin-id"
 
     @staticmethod
+    async def _can_manage_progress(current_user: dict, action: str = "read") -> bool:
+        if DailyProgressService._is_admin_or_hr(current_user):
+            return True
+        from app.controllers.auth import resolve_effective_permissions_for_employee
+        perms = await resolve_effective_permissions_for_employee(current_user)
+        for mod in ["/approvals/daily-progress", "/daily-progress", "/approvals"]:
+            p = perms.get(mod, {})
+            if p.get("all") or p.get(action):
+                return True
+        return False
+
+    @staticmethod
     async def create_progress(data: DailyProgressCreate, current_user: dict) -> Dict[str, Any]:
         user_id = str(current_user.get("_id") or current_user.get("id"))
         personal = current_user.get("personal_info", {})
@@ -234,7 +246,7 @@ class DailyProgressService:
         view_type: Optional[str] = None,
         department: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        is_admin = DailyProgressService._is_admin_or_hr(current_user)
+        is_admin = await DailyProgressService._can_manage_progress(current_user, "read")
         user_id = str(current_user.get("_id") or current_user.get("id"))
         
         query = {}
@@ -467,7 +479,7 @@ class DailyProgressService:
         if not progress:
             return None
             
-        is_admin = DailyProgressService._is_admin_or_hr(current_user)
+        is_admin = await DailyProgressService._can_manage_progress(current_user, "read")
         user_id = str(current_user.get("_id") or current_user.get("id"))
         
         if not is_admin and progress.get("employee_id") != user_id:
@@ -505,7 +517,7 @@ class DailyProgressService:
 
     @staticmethod
     async def approve_progress(progress_id: str, data: DailyProgressApprove, current_user: dict) -> Optional[Dict[str, Any]]:
-        if not DailyProgressService._is_admin_or_hr(current_user):
+        if not await DailyProgressService._can_manage_progress(current_user, "update"):
             return None
             
         progress = await DailyProgressRepository.get_progress_by_id(progress_id)

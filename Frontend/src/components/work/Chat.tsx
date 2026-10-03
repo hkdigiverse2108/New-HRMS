@@ -45,6 +45,7 @@ import { useEmployeesContext } from "@/components/employees/EmployeeContext";
 import { api, getAuthToken } from "@/lib/api";
 import { getApiUrl, resolveApiUrl } from "@/lib/config";
 import { WhatsAppEmojiPicker } from "./WhatsAppEmojiPicker";
+import { hasModulePermission, isUserAdmin } from "@/lib/permissions";
 
 export const DEFAULT_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
@@ -594,10 +595,12 @@ function ChatInner() {
   const myEmployeeId = String((user as any)?.employee_id || "");
   const isAdminOrHR = user?.role === "admin" || user?.role === "superadmin" || user?.role === "hr";
 
-  // Task 41 & User Request: Strict Access Control check for deleting messages.
-  // Must be explicitly granted delete or all permission in user.permissions["/chat"].
-  // Role alone (admin/hr) does NOT grant delete if permission is not enabled in Access Control.
+  // User Request & Access Control check for deleting messages:
+  // Admin can always delete messages.
+  // Other employees can ONLY delete if granted delete permission in Access Control (department preset or employee override).
   const canDeleteChatMessages = Boolean(
+    isUserAdmin(user) ||
+    hasModulePermission(user, "/chat", "delete") ||
     user?.permissions?.["/chat"]?.delete || 
     user?.permissions?.["/chat"]?.all ||
     user?.permissions?.["chat"]?.delete ||
@@ -3526,15 +3529,17 @@ function ChatInner() {
               <Search className="w-4 h-4" />
             </button>
 
-            <button
-              type="button"
-              onClick={() => setIsPollModalOpen(true)}
-              className="p-2 text-muted-foreground hover:text-emerald-600 hover:bg-muted rounded-lg transition-colors cursor-pointer"
-              title="Create a Poll"
-            >
-              <BarChart2 className="w-4 h-4" />
-            </button>
-            {!isCurrentDm && activeChannel && isChannelCreator(activeChannel) && (
+            {!isSelfChat && !isCurrentDm && (
+              <button
+                type="button"
+                onClick={() => setIsPollModalOpen(true)}
+                className="p-2 text-muted-foreground hover:text-emerald-600 hover:bg-muted rounded-lg transition-colors cursor-pointer"
+                title="Create a Poll"
+              >
+                <BarChart2 className="w-4 h-4" />
+              </button>
+            )}
+            {!isCurrentDm && !isSelfChat && activeChannel && isChannelCreator(activeChannel) && (
               <button
                 type="button"
                 onClick={openEditChannel}

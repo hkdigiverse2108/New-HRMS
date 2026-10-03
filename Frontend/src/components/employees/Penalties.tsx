@@ -11,6 +11,7 @@ import { SearchableSelect } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { api } from "@/lib/api";
 import { useAuth } from "@/components/auth/AuthContext";
+import { hasModulePermission, isUserAdmin } from "@/lib/permissions";
 
 type RecordType = "Penalty" | "Warning";
 type RecordStatus = "Active" | "Resolved" | "Waived";
@@ -75,7 +76,12 @@ export function Penalties() {
   const anyUser = user as any;
   const userDept = String(anyUser?.department || anyUser?.work_details?.department || "").toLowerCase();
   const userRole = String(anyUser?.role || anyUser?.work_details?.system_role || (userDept === "hr" ? "hr" : "Employee")).toLowerCase();
-  const isAdminOrHr = ["admin", "subadmin", "hr", "superadmin"].includes(userRole) || userDept === "hr";
+
+  const canReadPenalties = isUserAdmin(user) || userDept === "hr" || hasModulePermission(user, "/penalty", "read") || hasModulePermission(user, "/approvals/penalties", "read") || hasModulePermission(user, "/employees/penalties", "read");
+  const canCreatePenalty = isUserAdmin(user) || userDept === "hr" || hasModulePermission(user, "/penalty", "create") || hasModulePermission(user, "/approvals/penalties", "create") || hasModulePermission(user, "/employees/penalties", "create");
+  const canUpdatePenalty = isUserAdmin(user) || userDept === "hr" || hasModulePermission(user, "/penalty", "update") || hasModulePermission(user, "/approvals/penalties", "update") || hasModulePermission(user, "/employees/penalties", "update");
+  const canDeletePenalty = isUserAdmin(user) || userDept === "hr" || hasModulePermission(user, "/penalty", "delete") || hasModulePermission(user, "/approvals/penalties", "delete") || hasModulePermission(user, "/employees/penalties", "delete");
+  const isAdminOrHr = canReadPenalties;
 
   // Main Data States
   const [records, setRecords] = useState<PenaltyRecord[]>([]);
@@ -664,7 +670,7 @@ export function Penalties() {
                 <span className="hidden sm:inline">Leaderboard</span>
               </button>
               
-              {isAdminOrHr && (
+              {canCreatePenalty && (
                 <Dialog open={isNewOpen} onOpenChange={setIsNewOpen}>
                   <DialogTrigger asChild>
                     <button className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm shrink-0">
@@ -920,10 +926,10 @@ export function Penalties() {
                           {record.status}
                         </div>
                         
-                        {/* Action Buttons (Admin / HR only) */}
-                        {isAdminOrHr && (
+                        {/* Action Buttons (Governed by Employee-wise & Preset Permissions) */}
+                        {((canUpdatePenalty && record.status === "Active") || canDeletePenalty) && (
                           <div className="flex items-center gap-1.5 opacity-90 group-hover:opacity-100 transition-opacity">
-                            {record.status === "Active" && (
+                            {record.status === "Active" && canUpdatePenalty && (
                               <>
                                 {!isRecordWarning && (
                                   <button 
@@ -962,16 +968,18 @@ export function Penalties() {
                               </>
                             )}
 
-                            <button 
-                              onClick={() => {
-                                setDeleteRecordId(record.id);
-                                setIsDeleteOpen(true);
-                              }}
-                              title="Delete penalty record"
-                              className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            {canDeletePenalty && (
+                              <button 
+                                onClick={() => {
+                                  setDeleteRecordId(record.id);
+                                  setIsDeleteOpen(true);
+                                }}
+                                title="Delete penalty record"
+                                className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>

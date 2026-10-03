@@ -9,6 +9,7 @@ import { SortableHeader } from "@/components/ui/sortable-header";
 import { DateRangeFilter } from "@/components/common/DateRangeFilter";
 import { SearchInput } from "@/components/common/SearchInput";
 import { useAuth } from "@/components/auth/AuthContext";
+import { hasModulePermission, isUserAdmin } from "@/lib/permissions";
 
 type WorkLog = {
   id: string;
@@ -97,7 +98,9 @@ export function WorkLogs() {
 
   const { user } = useAuth();
   const userRole = String((user as any)?.role || (user as any)?.work_details?.system_role || "Employee").toLowerCase();
-  const isAdminOrHR = ["admin", "superadmin", "hr"].includes(userRole);
+  const userDept = String((user as any)?.department || (user as any)?.work_details?.department || "").toLowerCase();
+  const canViewAllLogs = isUserAdmin(user) || ["admin", "superadmin", "hr"].includes(userRole) || userDept === "hr" || hasModulePermission(user, "/work/logs", "read");
+  const isAdminOrHR = canViewAllLogs;
   const currentUserName = user?.name || "Current User";
 
   const [searchQuery, setSearchQuery] = useState("");

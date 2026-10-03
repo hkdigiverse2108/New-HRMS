@@ -42,7 +42,7 @@ const GROUP_PARENT_MODULES = new Set([
 export function hasModulePermission(
   user: UserProfile | null,
   url?: string,
-  action: "read" | "create" | "update" | "delete" = "read"
+  action: "read" | "create" | "update" | "delete" | "all" = "read"
 ): boolean {
   if (!user) return false;
 
@@ -61,7 +61,7 @@ export function hasModulePermission(
   }
 
   // Dashboard read is always accessible for any logged in user
-  if (cleanUrl === "/dashboard" && action === "read") {
+  if (cleanUrl === "/dashboard" && (action === "read" || action === "all")) {
     return true;
   }
 
@@ -75,10 +75,11 @@ export function hasModulePermission(
   // 1. Direct match on exact URL
   if (perms[url]) {
     const p = perms[url];
-    return Boolean(p.all || p[action]);
+    return action === "all" ? Boolean(p.all) : Boolean(p.all || p[action]);
   }
   if (perms[cleanUrl]) {
     const p = perms[cleanUrl];
+    if (action === "all") return Boolean(p.all);
     if (cleanUrl === "/tasks" && action === "create") {
       return Boolean(p.all || p.create || p.read);
     }

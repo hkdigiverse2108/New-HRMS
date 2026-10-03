@@ -710,13 +710,15 @@ async def forward_messages(body: ForwardMessageRequest, current_user: dict = Dep
 @router.delete("/messages/{message_id}")
 async def delete_chat_message(message_id: str, current_user: dict = Depends(get_current_employee)):
     user_id = str(current_user.get("_id") or current_user.get("id"))
+    role = str(current_user.get("work_details", {}).get("system_role") or current_user.get("role") or "").lower()
     
-    # Task 41 & User Instruction: Message delete permission is strictly controlled via Access Control.
-    # User must have explicit delete or all permission in their module_permissions for "/chat" (or "chat").
-    user_perm = await UserPermissionRepository.get_user_permission(user_id)
-    perms = (user_perm.get("module_permissions") or {}) if user_perm else {}
-    chat_perm = perms.get("/chat") or perms.get("chat") or {}
-    can_delete = bool(chat_perm.get("delete") or chat_perm.get("all"))
+    if role == "admin":
+        can_delete = True
+    else:
+        from app.controllers.auth import _resolve_effective_permissions
+        perms = await _resolve_effective_permissions(current_user)
+        chat_perm = perms.get("/chat") or perms.get("chat") or {}
+        can_delete = bool(chat_perm.get("delete") or chat_perm.get("all"))
     
     if not can_delete:
         raise HTTPException(
@@ -868,10 +870,14 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                     message_id = message_data.get("message_id")
                     channel_id = message_data.get("channel_id")
                     if message_id:
-                        user_perm = await UserPermissionRepository.get_user_permission(user_id)
-                        perms = (user_perm.get("module_permissions") or {}) if user_perm else {}
-                        chat_perm = perms.get("/chat") or perms.get("chat") or {}
-                        can_del = bool(chat_perm.get("delete") or chat_perm.get("all"))
+                        role = str(current_user.get("work_details", {}).get("system_role") or current_user.get("role") or "").lower() if current_user else ""
+                        if role == "admin":
+                            can_del = True
+                        else:
+                            from app.controllers.auth import _resolve_effective_permissions
+                            perms = await _resolve_effective_permissions(current_user) if current_user else {}
+                            chat_perm = perms.get("/chat") or perms.get("chat") or {}
+                            can_del = bool(chat_perm.get("delete") or chat_perm.get("all"))
                         if can_del:
                             deleted = await ChatRepository.delete_message(message_id, user_id, is_admin=True)
                             if deleted:

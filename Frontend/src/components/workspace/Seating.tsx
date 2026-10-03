@@ -11,6 +11,7 @@ import { toast } from "@/lib/toast";
 import { API_URL, getAvatarUrl, handleAvatarError } from "@/lib/config";
 import { DeleteConfirmDialog } from "@/components/hrms/delete-confirm-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { hasModulePermission, isUserAdmin } from "@/lib/permissions";
 
 interface Seat {
   id: string;
@@ -303,12 +304,15 @@ export default function SeatingArrangementPage() {
   const userDesig = String(anyUser?.designation || anyUser?.work_details?.designation || "").toLowerCase();
 
   const isAdminOrHR = 
+    isUserAdmin(user) ||
     userRole === "admin" || 
     userRole === "superadmin" || 
     userRole === "hr" || 
     userRole === "subadmin" ||
     userDept === "hr" ||
-    userDesig.includes("hr");
+    userDesig.includes("hr") ||
+    hasModulePermission(user, "/workspace/seating", "update") ||
+    hasModulePermission(user, "/workspace", "all");
 
   useEffect(() => {
     // Fetch seating arrangement from global database for all-employee sync

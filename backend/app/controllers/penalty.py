@@ -115,9 +115,18 @@ async def get_all_employee_penalties(
     end_date = clean_param(end_date)
     penalty_type_id = clean_param(penalty_type_id)
 
-    # If regular Employee, force filter by their own ID
+    # Check effective permissions (resolves Employee-wise custom override + Department preset)
+    from app.controllers.auth import resolve_effective_permissions_for_employee
+    perms = await resolve_effective_permissions_for_employee(current_user)
+    has_penalty_read = (
+        role in ["Admin", "Subadmin", "HR"] or
+        dept.lower() == "hr" or
+        any(perms.get(m, {}).get("read") or perms.get(m, {}).get("all") for m in ["/penalty", "/approvals/penalties", "/employees/penalties"])
+    )
+
+    # If regular Employee without penalty access, force filter by their own ID
     effective_emp_id = clean_param(employee_id)
-    if role not in ["Admin", "Subadmin", "HR"] and dept.lower() != "hr":
+    if not has_penalty_read:
         effective_emp_id = current_uid
 
     cache_key = make_list_key(
@@ -132,7 +141,7 @@ async def get_all_employee_penalties(
         start=start_date,
         end=end_date,
         role=role,
-        uid=current_uid if role not in ["Admin", "Subadmin", "HR"] else None
+        uid=current_uid if not has_penalty_read else None
     )
 
     cached = await get_cache(cache_key)

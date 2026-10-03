@@ -17,6 +17,7 @@ import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { useAuth } from "@/components/auth/AuthContext";
 import { api } from "@/lib/api";
+import { hasModulePermission, isUserAdmin } from "@/lib/permissions";
 
 type TaskStatus = "Todo" | "In Progress" | "In Review" | "Done";
 type Priority = "High" | "Medium" | "Low";
@@ -115,9 +116,9 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   const anyUser = user as any;
   const currentUserId = String(anyUser?._id || anyUser?.id || "");
   const userRole = String(anyUser?.role || anyUser?.work_details?.system_role || "Employee").toLowerCase();
-  const isAdminOrHR = userRole === "admin" || userRole === "superadmin" || userRole === "hr" || userRole === "subadmin";
-  const userDesignation = String(anyUser?.work_details?.designation || anyUser?.designation || "").trim().toLowerCase();
   const userDepartment = String(anyUser?.work_details?.department || anyUser?.department || "").trim();
+  const isAdminOrHR = isUserAdmin(user) || userRole === "admin" || userRole === "superadmin" || userRole === "hr" || userRole === "subadmin" || (userDepartment && userDepartment.toLowerCase() === "hr") || hasModulePermission(user, "/tasks", "update");
+  const userDesignation = String(anyUser?.work_details?.designation || anyUser?.designation || "").trim().toLowerCase();
 
   // Role checks requested by user:
   // 1. Team Leader:

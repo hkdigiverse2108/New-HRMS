@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from typing import Optional, List, Dict, Any
 from app.repository.employee import EmployeeRepository
 from app.repository.access_control import UserPermissionRepository, PresetPermissionRepository, has_manual_permissions
 import bcrypt
@@ -126,28 +127,64 @@ async def get_current_employee(token: str = Depends(oauth2_scheme)):
     }
 
 class RoleChecker:
-    def __init__(self, allowed_roles: list[str]):
+    def __init__(self, allowed_roles: list[str], module_url: Optional[str] = None, required_action: Optional[str] = None):
         self.allowed_roles = allowed_roles
+        self.module_url = module_url
+        self.required_action = required_action
 
-    def __call__(self, employee: dict = Depends(get_current_employee)):
+    async def __call__(self, request: Request, employee: dict = Depends(get_current_employee)):
         if not employee:
             return True
-        role = employee.get("work_details", {}).get("system_role", "Admin")
-        dept = employee.get("work_details", {}).get("department", "")
+        work = employee.get("work_details", {})
+        role = work.get("system_role", "Admin")
+        dept = str(work.get("department", "")).strip()
 
         if role == "Admin":
             return employee
 
         # HR department employees have HR/Admin management privileges
-        if dept == "HR" and any(r in ["Admin", "HR", "Subadmin", "Sub-Admin"] for r in self.allowed_roles):
+        if dept.lower() == "hr" and any(r.lower() in ["admin", "hr", "subadmin", "sub-admin"] for r in self.allowed_roles):
             return employee
 
-        if self.allowed_roles and role not in self.allowed_roles:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Operation not permitted for this role"
-            )
-        return employee
+        if self.allowed_roles and role in self.allowed_roles:
+            return employee
+
+        # Dynamic Access Control: Check resolved permissions (incorporates Employee-wise custom override + Department preset)
+        perms = await resolve_effective_permissions_for_employee(employee)
+        if perms:
+            method_map = {
+                "GET": "read",
+                "POST": "create",
+                "PUT": "update",
+                "PATCH": "update",
+                "DELETE": "delete"
+            }
+            action = self.required_action or method_map.get(request.method, "read")
+            
+            # Module candidates
+            path_parts = request.url.path.strip("/").split("/")
+            base_mod = "/" + path_parts[0] if path_parts and path_parts[0] else "/"
+            prefix_mod = "/" + "/".join(path_parts[:2]) if len(path_parts) >= 2 else base_mod
+            
+            candidates = [self.module_url, prefix_mod, base_mod]
+            if base_mod == "/penalties":
+                candidates.extend(["/penalty", "/approvals/penalties", "/employees/penalties"])
+            elif base_mod == "/leaves":
+                candidates.extend(["/employees/leave-requests", "/approvals"])
+            elif base_mod == "/attendance":
+                candidates.extend(["/employees/attendance"])
+
+            for cand in candidates:
+                if not cand:
+                    continue
+                p = perms.get(cand, {})
+                if p.get("all") or p.get(action):
+                    return employee
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Operation not permitted for this role or employee"
+        )
 
 async def resolve_effective_permissions_for_employee(employee: dict) -> dict:
     """Unified single source of truth for resolving dynamic employee permissions."""
@@ -165,9 +202,9 @@ async def resolve_effective_permissions_for_employee(employee: dict) -> dict:
     if cached_perms:
         return cached_perms
 
-    # 1. Check Custom Manual Permissions (only if is_custom is explicitly True)
+    # 1. Check Custom Manual Permissions (Employee-wise: if is_custom is explicitly True)
     user_perm_doc = await UserPermissionRepository.get_user_permission(emp_id)
-    if user_perm_doc and user_perm_doc.get("is_custom") is True and has_manual_permissions(user_perm_doc.get("module_permissions")):
+    if user_perm_doc and user_perm_doc.get("is_custom") is True and user_perm_doc.get("module_permissions") is not None:
         perms = user_perm_doc["module_permissions"]
     else:
         # 2. Inherit dynamically from Department Preset

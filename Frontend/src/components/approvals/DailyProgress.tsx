@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { toast } from "@/lib/toast";
 import { useAuth } from "@/components/auth/AuthContext";
+import { hasModulePermission, isUserAdmin } from "@/lib/permissions";
 
 type VerificationStatus = "Pending" | "Verified" | "Rejected";
 
@@ -70,7 +71,10 @@ export function DailyProgress() {
   const anyUser = user as any;
   const userDept = String(anyUser?.department || anyUser?.work_details?.department || "").toLowerCase();
   const userRole = String(anyUser?.role || anyUser?.work_details?.system_role || (userDept === "hr" ? "hr" : "Employee")).toLowerCase();
-  const isAdminOrHr = ["admin", "subadmin", "hr", "superadmin"].includes(userRole) || userDept === "hr";
+
+  const canReadProgress = isUserAdmin(user) || userDept === "hr" || hasModulePermission(user, "/approvals/daily-progress", "read") || hasModulePermission(user, "/daily-progress", "read");
+  const canManageProgress = isUserAdmin(user) || userDept === "hr" || hasModulePermission(user, "/approvals/daily-progress", "update") || hasModulePermission(user, "/daily-progress", "update") || hasModulePermission(user, "/approvals/daily-progress", "all");
+  const isAdminOrHr = canReadProgress || canManageProgress;
 
   const [search, setSearch] = useState("");
   // Default = TODAY
@@ -650,8 +654,8 @@ export function DailyProgress() {
             </div>
           </div>
 
-          {/* Modal Footer */}
-          {isAdminOrHr && (
+          {/* Modal Footer (Governed by Employee-wise & Preset Permissions) */}
+          {canManageProgress && (
           <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-between gap-3 mt-auto shrink-0">
             <div>
               {selectedRecord && selectedRecord.verificationStatus !== "Pending" && (

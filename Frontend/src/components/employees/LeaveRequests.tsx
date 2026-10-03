@@ -13,6 +13,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { SearchInput } from "@/components/common/SearchInput";
 import { formatISTDate, formatAppliedOnIST } from "@/lib/timeUtils";
 import { api } from "@/lib/api";
+import { hasModulePermission, isUserAdmin } from "@/lib/permissions";
 
 const getMediaUrl = (url?: string | null): string => {
   if (!url) return "";
@@ -218,8 +219,12 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
   const userDept = String(anyUser?.department || anyUser?.work_details?.department || "").toLowerCase();
   const userRole = String(anyUser?.role || anyUser?.work_details?.system_role || (userDept === "hr" ? "hr" : "Employee")).toLowerCase();
   const isHRUser = userRole === "hr" || userDept === "hr";
-  const isStrictAdmin = ["admin", "superadmin", "subadmin"].includes(userRole);
-  const isAdminOrHR = isStrictAdmin || isHRUser;
+  const isStrictAdmin = ["admin", "superadmin", "subadmin"].includes(userRole) || isUserAdmin(user);
+
+  const canManageLeaves = isStrictAdmin || isHRUser || hasModulePermission(user, "/employees/leave-requests", "update") || hasModulePermission(user, "/approvals", "update") || hasModulePermission(user, "/employees/leave-requests", "all");
+  const canReadLeaves = isStrictAdmin || isHRUser || hasModulePermission(user, "/employees/leave-requests", "read") || hasModulePermission(user, "/approvals", "read");
+  const canDeleteLeaves = isStrictAdmin || isHRUser || hasModulePermission(user, "/employees/leave-requests", "delete") || hasModulePermission(user, "/employees/leave-requests", "all");
+  const isAdminOrHR = canManageLeaves || canReadLeaves;
 
   const [scopeFilter, setScopeFilter] = useState<"all" | "my">(isAdminOrHR ? "all" : "my");
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -1028,9 +1033,9 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                       (request.employeeId && anyUser?.employee_id && request.employeeId === anyUser.employee_id) ||
                       (user?.email && request.employeeId === user.email)
                     );
-                    const canApproveThisRequest = isStrictAdmin || (isHRUser && !isOwnRequest);
+                    const canApproveThisRequest = isStrictAdmin || ((isHRUser || canManageLeaves) && !isOwnRequest);
 
-                    if (isAdminOrHR) {
+                    if (canManageLeaves) {
                       if (request.status === "Pending") {
                         if (canApproveThisRequest) {
                           return (
@@ -1117,7 +1122,7 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
 
                   {/* Edit and Delete Actions */}
                   <div className="flex items-center gap-1">
-                    {(request.status === "Pending" || isAdminOrHR) && (
+                    {(request.status === "Pending" || canManageLeaves) && (
                       <button
                         type="button"
                         onClick={() => handleOpenEdit(request)}
@@ -1127,7 +1132,7 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
                     )}
-                    {(request.status === "Pending" || isAdminOrHR) && (
+                    {(canDeleteLeaves || (request.status === "Pending" && (request.employeeId === user?.id || !request.employeeId))) && (
                       <button
                         type="button"
                         onClick={() => setDeleteLeaveId(request.id)}

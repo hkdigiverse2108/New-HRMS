@@ -97,6 +97,16 @@ async def get_leaves(
         user_role = "HR"
     current_id = str(current_employee.get("_id") or current_employee.get("id") or current_employee.get("email") or "")
 
+    from app.controllers.auth import resolve_effective_permissions_for_employee
+    perms = await resolve_effective_permissions_for_employee(current_employee)
+    can_view_all_leaves = (
+        user_role in ("Admin", "superadmin") or
+        dept.lower() == "hr" or
+        perms.get("/employees/leave-requests", {}).get("read") or
+        perms.get("/employees/leave-requests", {}).get("all") or
+        perms.get("/approvals", {}).get("all")
+    )
+
     cache_key = make_list_key(
         "leaves",
         emp=employee_id,
@@ -106,8 +116,8 @@ async def get_leaves(
         end=end_date,
         page=page,
         limit=limit,
-        role=user_role,
-        uid=current_id
+        role="Admin" if can_view_all_leaves else user_role,
+        uid=current_id if not can_view_all_leaves else None
     )
     
     cached = await get_cache(cache_key)
@@ -122,7 +132,7 @@ async def get_leaves(
         end_date=end_date,
         page=page,
         limit=limit,
-        current_user_role=user_role,
+        current_user_role="Admin" if can_view_all_leaves else user_role,
         current_user_id=current_id
     )
     
@@ -157,7 +167,7 @@ async def update_leave_status(
 ):
     """
     Approve or Reject leave request.
-    Restricted to HR and Admin roles.
+    Restricted to HR, Admin, or authorized employees via Access Control.
     CRITICAL: Approving a leave automatically updates/creates attendance records for those dates!
     """
     work = current_employee.get("work_details", {})
@@ -166,10 +176,20 @@ async def update_leave_status(
     if dept.lower() == "hr" or current_employee.get("role") == "HR":
         user_role = "HR"
 
-    if user_role not in ("Admin", "HR", "Sub-Admin", "superadmin") and dept.lower() != "hr":
+    from app.controllers.auth import resolve_effective_permissions_for_employee
+    perms = await resolve_effective_permissions_for_employee(current_employee)
+    can_approve = (
+        user_role in ("Admin", "superadmin") or
+        dept.lower() == "hr" or
+        perms.get("/employees/leave-requests", {}).get("update") or
+        perms.get("/employees/leave-requests", {}).get("all") or
+        perms.get("/approvals", {}).get("all")
+    )
+
+    if not can_approve:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only HR or Admin can approve or reject leave requests."
+            detail="You do not have permission to approve or reject leave requests."
         )
 
     # Transcript requirement: HR cannot approve or reject their own leave requests
@@ -260,11 +280,21 @@ async def delete_leave(
     employee_id = str(current_employee.get("_id") or current_employee.get("id") or current_employee.get("email") or "")
     work = current_employee.get("work_details", {})
     user_role = work.get("system_role", "Employee")
+    dept = str(work.get("department", ""))
+    
+    from app.controllers.auth import resolve_effective_permissions_for_employee
+    perms = await resolve_effective_permissions_for_employee(current_employee)
+    can_delete_any = (
+        user_role in ("Admin", "superadmin") or
+        dept.lower() == "hr" or
+        perms.get("/employees/leave-requests", {}).get("delete") or
+        perms.get("/employees/leave-requests", {}).get("all")
+    )
     
     deleted = await LeaveService.delete_leave(
         leave_id=leave_id,
         current_user_id=employee_id,
-        current_user_role=user_role
+        current_user_role="Admin" if can_delete_any else user_role
     )
     
     if not deleted:

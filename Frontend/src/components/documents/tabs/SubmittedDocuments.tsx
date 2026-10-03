@@ -28,6 +28,7 @@ import { useAuth } from "@/components/auth/AuthContext";
 import { getAvatarUrl, handleAvatarError } from "@/lib/config";
 import { toast } from "@/lib/toast";
 import { api } from "@/lib/api";
+import { hasModulePermission, isUserAdmin } from "@/lib/permissions";
 import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog";
 
 type DocStatus = "Accepted" | "Pending Review" | "Pending to Submit" | "Rejected" | "Returned to Employee";
@@ -65,7 +66,8 @@ export function SubmittedDocuments() {
   const { user } = useAuth();
 
   const userRole = String((user as any)?.role || (user as any)?.work_details?.system_role || "").toLowerCase();
-  const isAdminOrHR = ["admin", "superadmin", "hr"].some(r => userRole.includes(r));
+  const userDept = String((user as any)?.department || (user as any)?.work_details?.department || "").toLowerCase();
+  const isAdminOrHR = isUserAdmin(user) || ["admin", "superadmin", "hr"].some(r => userRole.includes(r)) || userDept === "hr" || hasModulePermission(user, "/employees/documents", "read");
 
   const [search, setSearch] = useState("");
   const [filterEmployee, setFilterEmployee] = useState<string>("all");
