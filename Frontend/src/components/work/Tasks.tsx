@@ -116,6 +116,16 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   const currentUserId = String(anyUser?._id || anyUser?.id || "");
   const userRole = String(anyUser?.role || anyUser?.work_details?.system_role || "Employee").toLowerCase();
   const isAdminOrHR = userRole === "admin" || userRole === "superadmin" || userRole === "hr" || userRole === "subadmin";
+  const userDesignation = String(anyUser?.work_details?.designation || anyUser?.designation || "").trim().toLowerCase();
+  const userDepartment = String(anyUser?.work_details?.department || anyUser?.department || "").trim();
+
+  // Role checks requested by user:
+  // 1. Team Leader:
+  const isTeamLeader = userDesignation.includes("team leader") || userRole.includes("team leader");
+  // 2. Head: "only ne only head biju kai pn na hoi to tene aa badhu jem che am j show thase"
+  const isHead = !isTeamLeader && (userDesignation.includes("head") || userRole.includes("head") || isAdminOrHR);
+  // 3. Neither Head nor Team Leader (Other employees):
+  const isOther = !isTeamLeader && !isHead;
 
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [stats, setStats] = useState({
@@ -130,6 +140,14 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   });
   const [isLoading, setIsLoading] = useState(true);
   const [employees, setEmployees] = useState<Array<{ id: string; name: string; avatar: string; role?: string; department?: string }>>([]);
+
+  // Employees filtered for Team Leader (only employees in Team Leader's department):
+  const teamLeaderEmployees = useMemo(() => {
+    if (!isTeamLeader || !userDepartment) return employees;
+    return employees.filter(
+      (e) => (e.department || "").trim().toLowerCase() === userDepartment.trim().toLowerCase()
+    );
+  }, [isTeamLeader, userDepartment, employees]);
 
   const [view, setView] = useState<"board" | "list">("list");
   const [searchQuery, setSearchQuery] = useState("");
@@ -484,8 +502,17 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
           if (!isPendingToMe && !hasHistoryWithMe) return false;
         }
 
-        // Department Filter
-        if (departmentFilter !== "All") {
+        // For Team Leader: always scope to Team Leader's department
+        if (isTeamLeader && userDepartment) {
+          const assignee = empMap.get(task.assignedToId);
+          const taskDept = (task.department || task.rawBackend?.department || assignee?.department || "").toLowerCase().trim();
+          if (!taskDept || taskDept !== userDepartment.toLowerCase().trim()) {
+            return false;
+          }
+        }
+
+        // Department Filter (for Head / Admin)
+        if (isHead && departmentFilter !== "All") {
           const assignee = empMap.get(task.assignedToId);
           const taskDept = (task.department || task.rawBackend?.department || assignee?.department || "").toLowerCase().trim();
           if (!taskDept || taskDept !== departmentFilter.toLowerCase().trim()) {
@@ -493,8 +520,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
           }
         }
 
-        // Person Filter
-        if (personFilter !== "All") {
+        // Person Filter (for Head or Team Leader)
+        if ((isHead || isTeamLeader) && personFilter !== "All") {
           if (task.assignedToId !== personFilter) {
             return false;
           }
@@ -567,6 +594,9 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     categoryFilter,
     currentUserId,
     empMap,
+    isTeamLeader,
+    userDepartment,
+    isHead,
   ]);
 
   const { items: sortedTasks, requestSort, sortConfig } = useSortableData(filteredTasks);
@@ -1259,8 +1289,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
         {/* Filters Row: Department & Person (in All Tasks mode), Priority, Category, Reset */}
         <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1.5 border-t border-border/40">
           <div className="flex flex-wrap items-center gap-2">
-            {/* Department Filter (Visible in All Tasks mode) */}
-            {mainViewMode === "all_tasks" && (
+            {/* Department Filter (Visible only for Head / Admin, NOT Team Leader and NOT other employees) */}
+            {mainViewMode === "all_tasks" && isHead && (
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] font-bold text-muted-foreground uppercase">Dept:</span>
                 <SearchableSelect
@@ -1273,8 +1303,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
               </div>
             )}
 
-            {/* Person Filter (Visible in All Tasks mode) */}
-            {mainViewMode === "all_tasks" && (
+            {/* Person Filter (Visible for Head / Admin and Team Leader, NOT other employees) */}
+            {mainViewMode === "all_tasks" && (isHead || isTeamLeader) && (
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] font-bold text-muted-foreground uppercase">Person:</span>
                 <SearchableSelect
@@ -1282,7 +1312,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                   onChange={(val) => setPersonFilter(val)}
                   options={[
                     { label: "All Members", value: "All" },
-                    ...employees.map(e => ({ label: e.name, value: e.id }))
+                    ...(isTeamLeader ? teamLeaderEmployees : employees).map(e => ({ label: e.name, value: e.id }))
                   ]}
                   placeholder="Person"
                   className="w-[145px] h-[32px] text-xs font-semibold"
@@ -1290,7 +1320,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
               </div>
             )}
 
-            {/* Priority Filter */}
+            {/* Priority Filter (Visible to all, including other employees) */}
             <div className="flex items-center gap-1.5">
               <span className="text-[10px] font-bold text-muted-foreground uppercase">Priority:</span>
               <SearchableSelect
@@ -1306,16 +1336,18 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
               />
             </div>
 
-            {/* Category Filter */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase">Category:</span>
-              <SearchableSelect
-                value={categoryFilter}
-                onChange={(val) => setCategoryFilter(val)}
-                options={taskCategories.map(c => ({ label: c, value: c }))}
-                className="w-[120px] h-[32px] text-xs font-semibold"
-              />
-            </div>
+            {/* Category Filter (Visible for Head / Admin and Team Leader) */}
+            {(isHead || isTeamLeader) && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold text-muted-foreground uppercase">Category:</span>
+                <SearchableSelect
+                  value={categoryFilter}
+                  onChange={(val) => setCategoryFilter(val)}
+                  options={taskCategories.map(c => ({ label: c, value: c }))}
+                  className="w-[120px] h-[32px] text-xs font-semibold"
+                />
+              </div>
+            )}
           </div>
 
           {(statusFilter !== "All" || priorityFilter !== "All" || timeframeFilter !== "all" || scopeFilter !== "all" || categoryFilter !== "All" || departmentFilter !== "All" || personFilter !== "All" || mainViewMode !== "all_tasks") && (

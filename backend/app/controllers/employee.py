@@ -231,7 +231,8 @@ async def get_employee(employee_id: str, current_user: dict = Depends(DynamicPer
 async def update_employee(employee_id: str, employee: EmployeeUpdate, request: Request, current_user: dict = Depends(get_current_employee)):
     requester_id = str(current_user.get("_id") or current_user.get("id") or "")
     role = (current_user.get("work_details") or {}).get("system_role", "Employee")
-    is_self = bool(requester_id) and requester_id == str(employee_id)
+    requester_emp_id = str((current_user.get("work_details") or {}).get("employee_id") or "")
+    is_self = (bool(requester_id) and requester_id == str(employee_id)) or (bool(requester_emp_id) and requester_emp_id == str(employee_id))
 
     if is_self and role != "Admin":
         # Self-update: whitelist own profile fields only (no role/salary/dept changes).
@@ -308,7 +309,7 @@ async def summon_employee_to_meeting(
         "location": body.location or "Meeting Room",
         "notes": body.notes or "Urgent meeting requested",
         "meet_link": body.meet_link,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.utcnow().isoformat() + "Z"
     }
 
     try:

@@ -196,6 +196,21 @@ class TaskService:
         created = await TaskRepository.create(insert_data)
         created_id = str(created.get("_id") or created.get("id"))
         
+        if insert_data.get("assigned_to") and str(insert_data["assigned_to"]) != str(assigned_by):
+            try:
+                from app.repository.notification import NotificationRepository
+                await NotificationRepository.create_notification({
+                    "recipient_id": str(insert_data["assigned_to"]),
+                    "title": "New Task Assigned",
+                    "message": f"You were assigned: {insert_data.get('title', 'New Task')}",
+                    "type": "task",
+                    "action_url": "/tasks",
+                    "sender_id": str(assigned_by),
+                    "is_read": False
+                })
+            except Exception as ne:
+                print(f"[TASK NOTIF ERROR] {ne}")
+
         if str(insert_data.get("status", "")).lower() == "inprogress" and insert_data.get("assigned_to"):
             await TaskService._enforce_single_inprogress_task(insert_data["assigned_to"], created_id, assigned_by)
 

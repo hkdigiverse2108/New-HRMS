@@ -57,6 +57,7 @@ async def apply_leave(
                     "message": f"{emp_name} requested {payload.type} ({payload.start_date} to {payload.end_date}).",
                     "type": "leave",
                     "action_url": "/employees/leave",
+                    "sender_id": curr_id,
                     "is_read": False
                 })
     except Exception as e:
@@ -177,12 +178,14 @@ async def update_leave_status(
         target_emp_id = updated_doc.get("employee_id") if isinstance(updated_doc, dict) else None
         if target_emp_id:
             reason_note = f" Reason: {payload.rejection_reason}" if payload.rejection_reason else ""
+            decider_id = str(current_employee.get("_id") or current_employee.get("id") or "")
             await NotificationRepository.create_notification({
                 "recipient_id": str(target_emp_id),
                 "title": f"Leave Request {payload.status}",
                 "message": f"Your leave request has been {payload.status.lower()} by {decider_name}.{reason_note}",
                 "type": "leave",
                 "action_url": "/employees/leave",
+                "sender_id": decider_id,
                 "is_read": False
             })
     except Exception as e:

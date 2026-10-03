@@ -58,16 +58,30 @@ async def unsubscribe(
 async def test_push(current_user: dict = Depends(get_current_employee)):
     """Send a test push notification to the current user"""
     user_id = str(current_user.get("_id") or current_user.get("id"))
-    user_name = current_user.get("personal_info", {}).get("first_name", "User")
-    profile_photo = current_user.get("personal_info", {}).get("profile_photo")
+    p_info = current_user.get("personal_info", {}) if isinstance(current_user.get("personal_info"), dict) else {}
+    first_name = p_info.get("first_name", "")
+    last_name = p_info.get("last_name", "")
+    user_name = f"{first_name} {last_name}".strip() or current_user.get("name") or "User"
+    
+    profile_photo = (
+        current_user.get("avatar") or 
+        current_user.get("profile_photo") or 
+        p_info.get("profile_photo") or 
+        p_info.get("avatar")
+    )
     
     count = await send_push_to_user(
         user_id=user_id,
-        title="Test Notification",
-        body=f"Hello {user_name}! Push notifications are working correctly.",
-        icon=profile_photo or "/favicon.ico",
+        title="HRMS Test Notification",
+        body=f"Hello {user_name}! Background notifications are active even when HRMS is closed.",
+        icon=profile_photo,
         action_url="/notifications",
         data={"type": "test"}
     )
     
-    return {"sent": count, "message": f"Test push sent to {count} device(s)"}
+    if count == 0:
+        return {
+            "sent": 0,
+            "message": "No active device subscriptions found. Please enable Push Notifications in Settings first!"
+        }
+    return {"sent": count, "message": f"Test push sent successfully to {count} device(s)!"}

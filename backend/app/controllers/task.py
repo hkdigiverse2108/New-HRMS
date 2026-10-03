@@ -146,7 +146,8 @@ async def get_all_tasks(
     
     if role not in ["Admin", "Subadmin", "HR"]:
         emp_id = str(current_user.get("_id") or current_user.get("id"))
-        is_leader = str(designation).lower() in ["team leader", "head"]
+        desig_lower = str(designation or "").lower()
+        is_leader = "team leader" in desig_lower or "head" in desig_lower
         
         if is_leader and view == "team":
             from app.repository.employee import EmployeeRepository
@@ -288,13 +289,14 @@ async def request_task_transfer(task_id: str, data: TransferRequestPayload, curr
         from app.repository.notification import NotificationRepository
         task_title = item.get("title", "Task")
         sender_name = current_user.get("personal_info", {}).get("first_name") or current_user.get("name") or "A team member"
-        reason_text = f" Reason: {data.reason}" if data.reason else ""
+        sender_id = str(current_user.get("_id") or current_user.get("id"))
         await NotificationRepository.create_notification({
             "recipient_id": str(data.requested_to),
             "title": "Task Transfer Request",
             "message": f"{sender_name} requested to transfer task '{task_title}' to you.{reason_text}",
             "type": "task",
             "action_url": "/tasks",
+            "sender_id": sender_id,
             "is_read": False
         })
     except Exception as e:
@@ -327,12 +329,14 @@ async def accept_task_transfer(task_id: str, current_user: dict = Depends(get_cu
         accepter_name = current_user.get("personal_info", {}).get("first_name") or current_user.get("name") or "User"
         orig_requester = req.get("requested_by")
         if orig_requester:
+            accepter_id = str(current_user.get("_id") or current_user.get("id"))
             await NotificationRepository.create_notification({
                 "recipient_id": str(orig_requester),
                 "title": "Task Transfer Accepted",
                 "message": f"{accepter_name} accepted the transfer of task '{task_title}'.",
                 "type": "task",
                 "action_url": "/tasks",
+                "sender_id": accepter_id,
                 "is_read": False
             })
     except Exception as e:
@@ -372,6 +376,7 @@ async def reject_task_transfer(task_id: str, current_user: dict = Depends(get_cu
                 "message": f"{rejecter_name} declined the transfer of task '{task_title}'.",
                 "type": "task",
                 "action_url": "/tasks",
+                "sender_id": emp_id,
                 "is_read": False
             })
     except Exception as e:

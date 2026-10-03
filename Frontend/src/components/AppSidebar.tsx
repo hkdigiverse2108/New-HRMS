@@ -568,26 +568,57 @@ function SidebarBody({
       <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} />
       <div className="border-t border-sidebar-border p-2 shrink-0">
         {isAuthenticated && user ? (
-          <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-sidebar-accent/40">
+          <div
+            onClick={() => go("/profile")}
+            className={cn(
+              "flex items-center justify-between gap-2 p-2 rounded-xl transition-all cursor-pointer group select-none",
+              active === "/profile"
+                ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20 ring-1 ring-primary"
+                : "bg-sidebar-accent/40 hover:bg-sidebar-accent hover:shadow-sm"
+            )}
+            title="Click to view and edit your profile"
+          >
             <div className="flex items-center gap-2.5 min-w-0">
               <img
                 src={getAvatarUrl(user.profile_photo || user.avatar, user.name || "User")}
                 alt={user.name}
-                className="w-8 h-8 rounded-full object-cover shrink-0 border border-border"
+                className={cn(
+                  "w-8 h-8 rounded-full object-cover shrink-0 border transition-transform group-hover:scale-105",
+                  active === "/profile" ? "border-white/80" : "border-border"
+                )}
                 onError={handleAvatarError}
               />
               {!collapsed && (
                 <div className="min-w-0 text-left">
-                  <p className="text-xs font-bold text-sidebar-foreground truncate">{user.name}</p>
-                  <p className="text-[10px] text-sidebar-muted truncate">{user.role}</p>
+                  <p className={cn(
+                    "text-xs font-bold truncate transition-colors",
+                    active === "/profile" ? "text-primary-foreground" : "text-sidebar-foreground group-hover:text-primary"
+                  )}>
+                    {user.name}
+                  </p>
+                  <p className={cn(
+                    "text-[10px] truncate",
+                    active === "/profile" ? "text-primary-foreground/80" : "text-sidebar-muted"
+                  )}>
+                    {user.role} · View Profile
+                  </p>
                 </div>
               )}
             </div>
             {!collapsed && (
               <button
-                onClick={logout}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  logout();
+                }}
                 title="Sign Out"
-                className="p-1.5 text-sidebar-muted hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                className={cn(
+                  "p-1.5 rounded-lg transition-colors cursor-pointer shrink-0",
+                  active === "/profile"
+                    ? "text-primary-foreground/80 hover:text-white hover:bg-white/20"
+                    : "text-sidebar-muted hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                )}
               >
                 <LogOut className="w-4 h-4" />
               </button>

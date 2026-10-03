@@ -80,6 +80,10 @@ const SelectContent = React.forwardRef<
   <SelectPrimitive.Portal>
     <SelectPrimitive.Content
       ref={ref}
+      onWheel={(e) => {
+        e.currentTarget.scrollTop += e.deltaY;
+        e.stopPropagation();
+      }}
       className={cn(
         "relative z-[300] max-h-(--radix-select-content-available-height) min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-xl border border-border/60 bg-popover/95 backdrop-blur-md text-popover-foreground shadow-2xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-(--radix-select-content-transform-origin)",
         position === "popper" &&
@@ -216,10 +220,11 @@ export function SearchableSelect({
         className="w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-24px)] min-w-[200px] p-0 z-[300] rounded-xl border border-border/60 shadow-2xl bg-background/95 backdrop-blur-md"
         align="start"
         collisionPadding={8}
+        onWheel={(e) => e.stopPropagation()}
       >
         <Command>
           <CommandInput placeholder={`Search ${placeholder.toLowerCase()}...`} />
-          <CommandList>
+          <CommandList onWheel={(e) => { e.currentTarget.scrollTop += e.deltaY; e.stopPropagation(); }}>
             <CommandEmpty>{emptyMessage}</CommandEmpty>
             <CommandGroup>
               {options.map((option) => (

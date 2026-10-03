@@ -20,41 +20,101 @@ interface VapidPublicKeyResponse {
 export function usePushNotifications() {
   const [isSupported, setIsSupported] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission>("default");
-  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [isSubscribed, setIsSubscribed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("hrms_notifications_enabled") === "true";
+  });
   const [subscriptions, setSubscriptions] = useState<PushSubscription[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [vapidPublicKey, setVapidPublicKey] = useState("");
 
-  // Check support and permission on mount
-  useEffect(() => {
-    const supported = "Notification" in window && "serviceWorker" in navigator && "PushManager" in window;
-    setIsSupported(supported);
-    
-    if (supported) {
-      setPermission(Notification.permission);
-      loadVapidKey();
-      loadSubscriptions();
-    }
-  }, []);
-
-  const loadVapidKey = async () => {
+  const loadVapidKey = useCallback(async (): Promise<string> => {
+    if (vapidPublicKey) return vapidPublicKey;
     try {
       const res = await api.get<VapidPublicKeyResponse>("/push/vapid-public-key", { showErrorToast: false });
-      setVapidPublicKey(res.public_key);
+      if (res?.public_key) {
+        setVapidPublicKey(res.public_key);
+        return res.public_key;
+      }
     } catch (err) {
       console.error("[Push] Failed to load VAPID key:", err);
     }
-  };
+    return "";
+  }, [vapidPublicKey]);
 
-  const loadSubscriptions = async () => {
+  const loadSubscriptions = useCallback(async () => {
     try {
       const res = await api.get<PushSubscription[]>("/push/subscriptions", { showErrorToast: false });
-      setSubscriptions(res);
-      setIsSubscribed(res.length > 0);
+      const activeSubs = Array.isArray(res) ? res : [];
+      setSubscriptions(activeSubs);
+      
+      const prefEnabled = localStorage.getItem("hrms_notifications_enabled") !== "false";
+      const hasActive = activeSubs.length > 0;
+      const permGranted = typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted";
+      setIsSubscribed((hasActive || (permGranted && localStorage.getItem("hrms_notifications_enabled") === "true")) && prefEnabled);
+      return activeSubs;
     } catch (err) {
       console.error("[Push] Failed to load subscriptions:", err);
+      return [];
     }
-  };
+  }, []);
+
+  // Check support and permission on mount + auto-sync if granted
+  useEffect(() => {
+    const supported = typeof window !== "undefined" && "Notification" in window && "serviceWorker" in navigator && "PushManager" in window;
+    setIsSupported(supported);
+    
+    if (supported) {
+      const currentPerm = Notification.permission;
+      setPermission(currentPerm);
+      
+      const prefEnabled = localStorage.getItem("hrms_notifications_enabled") !== "false";
+      
+      // Auto-sync if user previously enabled or permission is granted
+      if (currentPerm === "granted" && prefEnabled) {
+        (async () => {
+          try {
+            const key = await loadVapidKey();
+            try {
+              await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+            } catch (e) {
+              console.warn("[Push] Auto-register SW notice:", e);
+            }
+            const reg = await navigator.serviceWorker.ready;
+            let pushSub = await reg.pushManager.getSubscription();
+            
+            if (!pushSub && key) {
+              // Subscribe browser to push
+              pushSub = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(key),
+              });
+            }
+            
+            if (pushSub) {
+              const rawP256dh = pushSub.getKey("p256dh");
+              const rawAuth = pushSub.getKey("auth");
+              if (rawP256dh && rawAuth) {
+                const subscriptionData = {
+                  endpoint: pushSub.endpoint,
+                  p256dh: arrayBufferToBase64(rawP256dh),
+                  auth: arrayBufferToBase64(rawAuth),
+                };
+                await api.post("/push/subscribe", subscriptionData, { showErrorToast: false });
+                setIsSubscribed(true);
+                localStorage.setItem("hrms_notifications_enabled", "true");
+              }
+            }
+            await loadSubscriptions();
+          } catch (e) {
+            console.warn("[Push] Auto-sync notice:", e);
+          }
+        })();
+      } else {
+        loadSubscriptions();
+      }
+    }
+  }, [loadVapidKey, loadSubscriptions]);
 
   const requestPermission = useCallback(async () => {
     if (!isSupported) {
@@ -67,10 +127,10 @@ export function usePushNotifications() {
       setPermission(perm);
       
       if (perm === "granted") {
-        toast.success("Notifications enabled!");
+        toast.success("Notification permission granted!");
         return true;
       } else if (perm === "denied") {
-        toast.warning("Notifications blocked. Please enable them in browser settings.");
+        toast.warning("Notifications blocked. Please enable them in browser site settings.");
         return false;
       }
       return false;
@@ -81,56 +141,108 @@ export function usePushNotifications() {
     }
   }, [isSupported]);
 
-  const subscribe = useCallback(async () => {
-    if (!isSupported || !vapidPublicKey) {
-      toast.error("Push notifications not available.");
-      return;
+  const subscribe = useCallback(async (silent = false): Promise<boolean> => {
+    if (!isSupported) {
+      if (!silent) toast.error("Push notifications are not supported in this browser.");
+      return false;
     }
 
-    if (permission !== "granted") {
+    let currentKey = vapidPublicKey;
+    if (!currentKey) {
+      currentKey = await loadVapidKey();
+    }
+    if (!currentKey) {
+      if (!silent) toast.error("Push notification service is temporarily unavailable.");
+      return false;
+    }
+
+    if (Notification.permission !== "granted") {
       const granted = await requestPermission();
-      if (!granted) return;
+      if (!granted) return false;
     }
 
     setIsLoading(true);
     try {
-      // Register service worker first
+      // 1. Ensure service worker is registered
+      try {
+        await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+      } catch (swErr) {
+        console.warn("[Push] SW register notice:", swErr);
+      }
       const registration = await navigator.serviceWorker.ready;
       
-      // Subscribe to push
-      const pushSubscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
-      });
+      // 2. Check existing or create new push subscription
+      let pushSubscription = await registration.pushManager.getSubscription();
+      if (!pushSubscription) {
+        pushSubscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(currentKey),
+        });
+      }
 
-      // Send to backend
+      const rawP256dh = pushSubscription.getKey("p256dh");
+      const rawAuth = pushSubscription.getKey("auth");
+      if (!rawP256dh || !rawAuth) {
+        throw new Error("Unable to obtain browser push encryption keys.");
+      }
+
       const subscriptionData = {
         endpoint: pushSubscription.endpoint,
-        p256dh: arrayBufferToBase64(pushSubscription.getKey("p256dh")!),
-        auth: arrayBufferToBase64(pushSubscription.getKey("auth")!),
+        p256dh: arrayBufferToBase64(rawP256dh),
+        auth: arrayBufferToBase64(rawAuth),
       };
 
       await api.post("/push/subscribe", subscriptionData);
+      localStorage.setItem("hrms_notifications_enabled", "true");
+      setIsSubscribed(true);
       
-      toast.success("Push notifications enabled!");
+      if (!silent) toast.success("Push notifications enabled! You will receive alerts even when HRMS is closed.");
       await loadSubscriptions();
+      return true;
     } catch (err: any) {
       console.error("[Push] Subscribe failed:", err);
-      if (err.name === "AbortError" || err.message?.includes("permission")) {
-        toast.error("Permission denied for push notifications.");
-      } else {
-        toast.error("Failed to enable push notifications. Please try again.");
+      if (!silent) {
+        if (err.name === "AbortError" || err.message?.includes("permission")) {
+          toast.error("Permission denied for push notifications.");
+        } else {
+          toast.error(err.message || "Failed to enable push notifications. Please check site permissions.");
+        }
       }
+      return false;
     } finally {
       setIsLoading(false);
     }
-  }, [isSupported, vapidPublicKey, permission, requestPermission]);
+  }, [isSupported, vapidPublicKey, loadVapidKey, requestPermission, loadSubscriptions]);
 
-  const unsubscribe = useCallback(async (subscriptionId: string) => {
+  const unsubscribe = useCallback(async (subscriptionId?: string) => {
     setIsLoading(true);
     try {
-      await api.delete(`/push/subscriptions/${subscriptionId}`);
-      toast.success("Push subscription removed.");
+      // 1. Unsubscribe from browser PushManager
+      if ("serviceWorker" in navigator) {
+        try {
+          const reg = await navigator.serviceWorker.ready;
+          const sub = await reg.pushManager.getSubscription();
+          if (sub) {
+            await sub.unsubscribe();
+          }
+        } catch (be) {
+          console.warn("[Push] Browser unsubscribe error:", be);
+        }
+      }
+
+      // 2. Remove on backend
+      if (subscriptionId) {
+        await api.delete(`/push/subscriptions/${subscriptionId}`, { showErrorToast: false });
+      } else {
+        const subs = await loadSubscriptions();
+        for (const s of subs) {
+          await api.delete(`/push/subscriptions/${s.id}`, { showErrorToast: false });
+        }
+      }
+
+      localStorage.setItem("hrms_notifications_enabled", "false");
+      setIsSubscribed(false);
+      toast.success("Notifications turned off.");
       await loadSubscriptions();
     } catch (err) {
       console.error("[Push] Unsubscribe failed:", err);
@@ -138,12 +250,24 @@ export function usePushNotifications() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [loadSubscriptions]);
+
+  const toggleNotifications = useCallback(async (enable: boolean) => {
+    if (enable) {
+      await subscribe(false);
+    } else {
+      await unsubscribe();
+    }
+  }, [subscribe, unsubscribe]);
 
   const testPush = useCallback(async () => {
     try {
       const res = await api.post<{ sent: number; message: string }>("/push/test");
-      toast.success(res.message);
+      if (res.sent > 0) {
+        toast.success("Test notification sent! Check your desktop notifications.");
+      } else {
+        toast.warning(res.message);
+      }
     } catch (err) {
       console.error("[Push] Test push failed:", err);
       toast.error("Failed to send test notification.");
@@ -159,6 +283,7 @@ export function usePushNotifications() {
     requestPermission,
     subscribe,
     unsubscribe,
+    toggleNotifications,
     testPush,
     loadSubscriptions,
   };
@@ -180,7 +305,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer) {
   const bytes = new Uint8Array(buffer);
   let binary = "";
   for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
+    binary += String.fromCharCode(bytes[i] ?? 0);
   }
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }

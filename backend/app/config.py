@@ -7,6 +7,8 @@ ROOT_DIR = BACKEND_DIR.parent
 class Settings(BaseSettings):
     # Application configuration
     PORT: int = 8000
+    VITE_API_URL: str = "http://localhost:8000"
+    admin_email: str = "admin@hrms.local"
     
     # Redis configuration
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -18,6 +20,7 @@ class Settings(BaseSettings):
     # JWT Settings
     SECRET_KEY: str = "8a84ec3d0b10d94752c9ecebbcfca8857d9b2837f5ba1e8c3627b675afd42c99"
     ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_HOURS: int = 10
 
     # Email Settings
     SMTP_SERVER: str = "smtp.gmail.com"

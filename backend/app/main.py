@@ -99,6 +99,8 @@ class ImageRouteMiddleware:
                 scope["path"] = "/upload"
             elif path in ("/images/list", "/images/list/"):
                 scope["path"] = "/api/images/list"
+            elif path in ("/images/delete", "/images/delete/"):
+                scope["path"] = "/api/images/delete"
         await self.app(scope, receive, send)
 
 app.add_middleware(ImageRouteMiddleware)
@@ -154,9 +156,32 @@ app.include_router(generated_document_router)
 app.include_router(submitted_document_router)
 app.include_router(letter_request_router)
 
+from starlette.responses import Response
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+class SafeStaticFiles(StaticFiles):
+    """Serves static files; if an image is missing, serves a clean SVG placeholder with 200 OK to avoid 404 console spam."""
+    async def get_response(self, path: str, scope):
+        try:
+            response = await super().get_response(path, scope)
+            if response.status_code == 404:
+                raise StarletteHTTPException(status_code=404)
+            return response
+        except (StarletteHTTPException, Exception) as exc:
+            status_code = getattr(exc, "status_code", None)
+            if status_code == 404 or isinstance(exc, FileNotFoundError):
+                svg = (
+                    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">'
+                    '<rect width="100" height="100" rx="20" fill="#6366f1"/>'
+                    '<text x="50" y="55" font-family="sans-serif" font-size="36" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="middle">HR</text>'
+                    '</svg>'
+                )
+                return Response(content=svg, media_type="image/svg+xml", status_code=200)
+            raise
+
 # Mount static image & uploads paths AFTER API routes
-app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
-app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
+app.mount("/images", SafeStaticFiles(directory=str(IMAGES_DIR)), name="images")
+app.mount("/uploads", SafeStaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
 @app.get("/")
 async def root():

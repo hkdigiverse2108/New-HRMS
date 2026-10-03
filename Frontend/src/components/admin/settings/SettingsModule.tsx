@@ -18,25 +18,17 @@ export function SettingsModule() {
     requestPermission,
     subscribe,
     unsubscribe,
+    toggleNotifications,
     testPush,
   } = usePushNotifications();
 
   const [generalSettings, setGeneralSettings] = useState({
     emailNotifications: true,
     desktopNotifications: true,
-    pushNotifications: isSubscribed,
   });
 
   const handlePushToggle = async (enabled: boolean) => {
-    if (enabled) {
-      await subscribe();
-    } else {
-      // Unsubscribe from all
-      for (const sub of subscriptions) {
-        await unsubscribe(sub.id);
-      }
-    }
-    setGeneralSettings(prev => ({ ...prev, pushNotifications: enabled }));
+    await toggleNotifications(enabled);
   };
 
   const getPermissionStatus = () => {

@@ -273,6 +273,24 @@ export const api = {
     });
   },
 
+  deleteImage: async (url: string): Promise<any> => {
+    if (!url || typeof url !== "string") return;
+    const query = `?url=${encodeURIComponent(url)}`;
+    try {
+      return await apiRequest(`/images/delete${query}`, {
+        method: "DELETE",
+        showLoader: false,
+        showErrorToast: false,
+      });
+    } catch {
+      return await apiRequest(`/images${query}`, {
+        method: "DELETE",
+        showLoader: false,
+        showErrorToast: false,
+      }).catch(() => null);
+    }
+  },
+
   /**
    * Common method to list images by folder for re-use
    */

@@ -106,11 +106,16 @@ head: () => ({
           // Register service worker
           inner: `
             if ('serviceWorker' in navigator) {
-              window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
+              const registerSW = () => {
+                navigator.serviceWorker.register('/sw.js', { scope: '/' })
                   .then(reg => console.log('[SW] Registered:', reg.scope))
                   .catch(err => console.error('[SW] Registration failed:', err));
-              });
+              };
+              if (document.readyState === 'complete' || document.readyState === 'interactive') {
+                registerSW();
+              } else {
+                window.addEventListener('load', registerSW);
+              }
             }
           `,
         },

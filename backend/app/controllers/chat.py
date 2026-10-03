@@ -398,6 +398,60 @@ def extract_employee_avatar(emp: dict) -> Optional[str]:
     p_info = emp.get("personal_info", {}) if isinstance(emp.get("personal_info"), dict) else {}
     return p_info.get("profile_photo") or p_info.get("avatar")
 
+async def send_chat_push_notifications(
+    channel: dict,
+    sender_emp: dict,
+    content: str,
+    file_name: Optional[str] = None,
+    mentions: Optional[List[str]] = None,
+    channel_id: Optional[str] = None
+):
+    """Deliver push notifications for direct chat messages or channel mentions when HRMS tab is closed"""
+    try:
+        from app.utils.push_notifications import send_push_to_user
+        sender_id = str(sender_emp.get("_id") or sender_emp.get("id"))
+        sender_name = extract_employee_name(sender_emp)
+        sender_avatar = extract_employee_avatar(sender_emp)
+        
+        preview = (content or "").strip()
+        if not preview and file_name:
+            preview = f"📎 Sent a file: {file_name}"
+        elif not preview:
+            preview = "Sent a message"
+        if len(preview) > 120:
+            preview = preview[:117] + "..."
+
+        targets = set()
+        channel_type = channel.get("type", "channel")
+        channel_name = channel.get("name", "Chat")
+
+        if channel_type == "direct":
+            for m in channel.get("members", []):
+                if str(m) != sender_id:
+                    targets.add(str(m))
+        elif mentions:
+            for m in mentions:
+                if str(m) != sender_id:
+                    targets.add(str(m))
+
+        cid = str(channel_id or channel.get("id") or channel.get("_id", ""))
+        for target_id in targets:
+            title = sender_name if channel_type == "direct" else f"{sender_name} (#{channel_name})"
+            await send_push_to_user(
+                user_id=target_id,
+                title=title,
+                body=preview,
+                icon=sender_avatar,
+                action_url=f"/chat?channel={cid}",
+                data={
+                    "type": "chat",
+                    "channel_id": cid,
+                    "sender_id": sender_id
+                }
+            )
+    except Exception as e:
+        print(f"[CHAT PUSH ERROR] {e}")
+
 @router.post("/channels/{channel_id}/messages")
 async def send_channel_message(
     channel_id: str,
@@ -437,6 +491,13 @@ async def send_channel_message(
         "message": saved_msg
     }
     await manager.broadcast_to_channel(channel_id, ws_event)
+    await send_chat_push_notifications(
+        channel=channel,
+        sender_emp=current_user,
+        content=data.content or "",
+        file_name=data.file_name,
+        channel_id=channel_id
+    )
     return saved_msg
 
 @router.post("/channels/{channel_id}/read")
@@ -997,6 +1058,17 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                             "reply_to_id": reply_to_id
                         })
                         await manager.broadcast_to_channel(channel_id, saved_msg)
+                        if mentions:
+                            sender_emp = await ChatRepository.get_employee_by_id(user_id)
+                            if sender_emp and channel:
+                                await send_chat_push_notifications(
+                                    channel=channel,
+                                    sender_emp=sender_emp,
+                                    content=content,
+                                    file_name=file_name,
+                                    mentions=mentions,
+                                    channel_id=channel_id
+                                )
                     
                     elif "receiver_id" in message_data:
                         # 1-to-1 Direct Message
@@ -1031,6 +1103,15 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                         await manager.send_personal_message(msg_str, user_id)
                         if user_id != receiver_id:
                             await manager.send_personal_message(msg_str, receiver_id)
+                            sender_emp = await ChatRepository.get_employee_by_id(user_id)
+                            if sender_emp:
+                                await send_chat_push_notifications(
+                                    channel={"type": "direct", "members": [user_id, receiver_id], "name": "Direct"},
+                                    sender_emp=sender_emp,
+                                    content=content,
+                                    file_name=file_name,
+                                    channel_id=channel_id
+                                )
             except Exception as err:
                 import traceback
                 print(f"Error handling WS msg for user {user_id}: {err}\n{traceback.format_exc()}")
@@ -1054,7 +1135,9 @@ async def trigger_meeting_summon(data: MeetingSummonRequest, current_user: dict 
     
     summon_id = str(uuid.uuid4())
     sent_count = 0
-    now_iso = datetime.utcnow().isoformat()
+    now_iso = datetime.utcnow().isoformat() + "Z"
+    caller_id = str(current_user.get("_id") or current_user.get("id"))
+    caller_avatar = extract_employee_avatar(current_user)
     
     for tid in data.target_ids:
         tid_str = str(tid).strip()
@@ -1064,8 +1147,10 @@ async def trigger_meeting_summon(data: MeetingSummonRequest, current_user: dict 
             "type": "meeting_summon",
             "action": "meeting_summon",
             "summon_id": summon_id,
+            "caller_id": caller_id,
             "caller_name": caller_name,
             "caller_role": caller_role,
+            "caller_avatar": caller_avatar,
             "location": data.location,
             "notes": data.notes or "Urgent meeting requested immediately.",
             "meet_link": data.meet_link,
@@ -1075,16 +1160,33 @@ async def trigger_meeting_summon(data: MeetingSummonRequest, current_user: dict 
         await manager.send_personal_message(json.dumps(payload), tid_str)
         try:
             from app.repository.notification import NotificationRepository
+            import urllib.parse
+            summon_params = urllib.parse.urlencode({
+                "meeting_summon": "1",
+                "summon_id": summon_id,
+                "caller_name": caller_name,
+                "caller_role": caller_role,
+                "caller_avatar": caller_avatar or "",
+                "location": data.location or "Meeting Room",
+                "notes": data.notes or "",
+                "meet_link": data.meet_link or "",
+                "timestamp": now_iso
+            })
+            action_url = f"/?{summon_params}"
+
             await NotificationRepository.create_notification({
                 "recipient_id": tid_str,
                 "title": f"🚨 URGENT SUMMON: {caller_name}",
                 "message": f"Report immediately to {data.location}. Note: {data.notes or ''}",
                 "type": "meeting_summon",
+                "action_url": action_url,
                 "is_read": False,
+                "sender_id": caller_id,
+                "sender_avatar": caller_avatar,
                 "data": payload
             })
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[SUMMON] Error creating notification: {e}")
         sent_count += 1
         
     return {"status": "success", "sent_to": sent_count, "summon_id": summon_id}

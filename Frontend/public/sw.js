@@ -42,9 +42,10 @@ self.addEventListener('push', (event) => {
   }
 
   const title = data.title || 'HRMS Notification';
+  const icon = data.icon || '/favicon.ico';
   const options = {
     body: data.body || 'You have a new notification',
-    icon: data.icon || '/favicon.ico',
+    icon: icon,
     badge: data.badge || '/favicon.ico',
     image: data.image,
     data: data.data || {},
@@ -53,7 +54,7 @@ self.addEventListener('push', (event) => {
       { action: 'close', title: 'Dismiss' }
     ],
     requireInteraction: data.requireInteraction !== false,
-    tag: data.tag || 'hrms-notification',
+    tag: (data.data && data.data.notificationId) ? `hrms-${data.data.notificationId}` : `hrms-${Date.now()}`,
     renotify: true,
     vibrate: [100, 50, 100],
     timestamp: Date.now(),
@@ -72,26 +73,47 @@ self.addEventListener('notificationclick', (event) => {
   
   const action = event.action;
   const notificationData = event.notification.data || {};
-  const url = notificationData.url || '/';
+  let targetUrl = notificationData.url || '/';
+
+  // For meeting summons, ensure query parameters are present on targetUrl so newly opened windows render it immediately
+  if (notificationData.type === 'meeting_summon' || notificationData.action === 'meeting_summon') {
+    if (!targetUrl.includes('meeting_summon')) {
+      const sep = targetUrl.includes('?') ? '&' : '?';
+      targetUrl = `${targetUrl}${sep}meeting_summon=1&summon_id=${encodeURIComponent(notificationData.summon_id || '')}&caller_name=${encodeURIComponent(notificationData.caller_name || '')}&caller_role=${encodeURIComponent(notificationData.caller_role || '')}&location=${encodeURIComponent(notificationData.location || '')}&notes=${encodeURIComponent(notificationData.notes || '')}&timestamp=${encodeURIComponent(notificationData.timestamp || '')}`;
+    }
+  }
+
+  if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+    targetUrl = new URL(targetUrl, self.location.origin).href;
+  }
   
   if (action === 'close') {
     return;
   }
   
-  // Focus existing window or open new one
+  // Focus existing window and bring to front, or open new one
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true })
       .then((clientList) => {
         // Try to find an existing HRMS window
         for (const client of clientList) {
           if (client.url.includes(self.location.origin) && 'focus' in client) {
-            client.postMessage({ type: 'NOTIFICATION_CLICK', url, data: notificationData });
+            client.postMessage({ 
+              type: 'OPEN_MEETING_SUMMON', 
+              summonData: notificationData,
+              url: targetUrl 
+            });
+            client.postMessage({ 
+              type: 'NOTIFICATION_CLICK', 
+              url: targetUrl, 
+              data: notificationData 
+            });
             return client.focus();
           }
         }
         // No existing window, open new one
         if (clients.openWindow) {
-          return clients.openWindow(url);
+          return clients.openWindow(targetUrl);
         }
       })
   );

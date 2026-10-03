@@ -4,7 +4,7 @@ from datetime import datetime
 
 
 class PushSubscriptionBase(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None
     endpoint: str
     p256dh: str
     auth: str

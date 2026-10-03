@@ -53,18 +53,23 @@ class NotificationRepository:
 
     @classmethod
     async def _send_push_notification(cls, user_id: str, notification: Dict[str, Any]) -> None:
-        """Send push notification to user's devices"""
+        """Send push notification to user's devices with sender's avatar if available, otherwise default icon"""
         try:
-            # Get user's profile photo for notification icon
             db = get_database()
-            user = await db["employees"].find_one({"_id": ObjectId(user_id)})
-            profile_photo = None
-            user_name = "User"
-            if user:
-                profile_photo = user.get("personal_info", {}).get("profile_photo")
-                first_name = user.get("personal_info", {}).get("first_name", "")
-                last_name = user.get("personal_info", {}).get("last_name", "")
-                user_name = f"{first_name} {last_name}".strip() or "User"
+            sender_photo = notification.get("icon") or notification.get("sender_avatar")
+            
+            # If not provided directly in notification, check sender_id
+            sender_id = notification.get("sender_id") or notification.get("created_by")
+            if not sender_photo and sender_id and ObjectId.is_valid(str(sender_id)):
+                sender = await db["employees"].find_one({"_id": ObjectId(str(sender_id))})
+                if sender:
+                    p_info = sender.get("personal_info", {}) if isinstance(sender.get("personal_info"), dict) else {}
+                    sender_photo = (
+                        sender.get("avatar") or 
+                        sender.get("profile_photo") or 
+                        p_info.get("profile_photo") or 
+                        p_info.get("avatar")
+                    )
             
             action_url = notification.get("action_url") or "/notifications"
             
@@ -72,10 +77,10 @@ class NotificationRepository:
                 user_id=user_id,
                 title=notification.get("title", "Notification"),
                 body=notification.get("message", ""),
-                icon=profile_photo,
+                icon=sender_photo,
                 action_url=action_url,
                 data={
-                    "notificationId": notification.get("id"),
+                    "notificationId": str(notification.get("id") or notification.get("_id", "")),
                     "type": notification.get("type", "general"),
                 }
             )

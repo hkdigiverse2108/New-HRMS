@@ -117,24 +117,49 @@ async def list_images(
         "data": results
     }
 
+@router.delete("")
 @router.delete("/")
+@upload_router.delete("/images/delete")
+@upload_router.delete("/api/images/delete")
 async def delete_image(
     url: str = Query(..., description="Image URL or relative path (e.g. /images/employee/xyz.png)")
 ):
     """Deletes an image file from the images folder."""
-    clean_url = url.replace("\\", "/").strip("/")
-    # Clean leading 'images/' if present
+    if not url or not str(url).strip():
+        return {"status": "skipped", "message": "No URL provided"}
+
+    clean_url = str(url).replace("\\", "/").strip()
+
+    # Skip external avatar placeholders
+    if "ui-avatars.com" in clean_url or "dicebear.com" in clean_url:
+        return {"status": "skipped", "message": "External placeholder ignored"}
+
+    # Strip scheme and host if present
+    if "://" in clean_url:
+        clean_url = clean_url.split("://", 1)[1]
+        clean_url = clean_url.split("/", 1)[1] if "/" in clean_url else ""
+
+    clean_url = clean_url.strip("/")
     parts = [p for p in clean_url.split("/") if p and p != ".."]
     if parts and parts[0] == "images":
         parts = parts[1:]
 
+    if not parts:
+        return {"status": "skipped", "message": "Invalid path"}
+
     file_path = IMAGES_DIR.joinpath(*parts)
-    
+
+    # If single filename provided without folder, search under common subfolders
+    if not file_path.exists() and len(parts) == 1:
+        emp_path = IMAGES_DIR / "employee" / parts[0]
+        if emp_path.exists():
+            file_path = emp_path
+
     if file_path.exists() and file_path.is_file():
         try:
             file_path.unlink()
             return {"status": "success", "message": "Image deleted successfully"}
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")
-            
-    raise HTTPException(status_code=404, detail="Image not found")
+
+    return {"status": "skipped", "message": "Image not found or already deleted"}

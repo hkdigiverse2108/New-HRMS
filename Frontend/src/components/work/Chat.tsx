@@ -43,7 +43,7 @@ import { toast } from "@/lib/toast";
 import { useAuth } from "@/components/auth/AuthContext";
 import { useEmployeesContext } from "@/components/employees/EmployeeContext";
 import { api, getAuthToken } from "@/lib/api";
-import { resolveApiUrl } from "@/lib/config";
+import { getApiUrl, resolveApiUrl } from "@/lib/config";
 import { WhatsAppEmojiPicker } from "./WhatsAppEmojiPicker";
 
 export const DEFAULT_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
@@ -1092,14 +1092,27 @@ function ChatInner() {
   };
 
   // Safe Desktop Notification dispatcher (works across desktop tabs and window unfocused)
-  const showDesktopNotification = useCallback((title: string, body: string, channelId: string) => {
+  const showDesktopNotification = useCallback((title: string, body: string, channelId: string, avatarUrl?: string | null) => {
     if (typeof Notification === "undefined") return;
     if (Notification.permission !== "granted") return;
+    
+    let finalIcon = "/favicon.ico";
+    if (avatarUrl && typeof avatarUrl === "string" && avatarUrl.trim()) {
+      const clean = avatarUrl.trim();
+      if (clean.startsWith("http://") || clean.startsWith("https://") || clean.startsWith("data:")) {
+        finalIcon = clean;
+      } else {
+        const base = getApiUrl().replace(/\/+$/, "");
+        const path = clean.startsWith("/") ? clean : `/${clean}`;
+        finalIcon = `${base}${path}`;
+      }
+    }
+    
     try {
       const n = new Notification(title, {
         body,
-        icon: "/favicon.ico",
-        tag: `chat-${channelId}`,
+        icon: finalIcon,
+        tag: `chat-${channelId}-${Date.now()}`,
       });
       n.onclick = () => {
         try {
@@ -1114,8 +1127,8 @@ function ChatInner() {
         navigator.serviceWorker.ready.then((reg) => {
           reg.showNotification(title, {
             body,
-            icon: "/favicon.ico",
-            tag: `chat-${channelId}`,
+            icon: finalIcon,
+            tag: `chat-${channelId}-${Date.now()}`,
           });
         }).catch(() => {});
       }
@@ -1704,7 +1717,7 @@ function ChatInner() {
                 try {
                   const tabHidden = typeof document !== "undefined" && (document.hidden || !document.hasFocus());
                   if (tabHidden || !isViewingThisChat) {
-                    showDesktopNotification(msg.sender_name || "New message", preview.slice(0, 150), msg.channel_id);
+                    showDesktopNotification(msg.sender_name || "New message", preview.slice(0, 150), msg.channel_id, msg.sender_avatar);
                   }
                 } catch {
                   // ignore

@@ -3,6 +3,26 @@ from datetime import datetime
 from bson import ObjectId
 from typing import Optional, List, Dict, Any
 
+def serialize_mongo(data: Any) -> Any:
+    if isinstance(data, list):
+        return [serialize_mongo(item) for item in data]
+    if isinstance(data, dict):
+        res = {}
+        for k, v in data.items():
+            if isinstance(v, ObjectId):
+                res[k] = str(v)
+            elif isinstance(v, (dict, list)):
+                res[k] = serialize_mongo(v)
+            else:
+                res[k] = v
+        if "_id" in res:
+            res["id"] = str(res["_id"])
+            res["_id"] = str(res["_id"])
+        return res
+    if isinstance(data, ObjectId):
+        return str(data)
+    return data
+
 class SalesRepository:
     collection_name = "sales_leads"
     targets_collection_name = "sales_targets"
@@ -21,6 +41,7 @@ class SalesRepository:
     def _normalize_lead(cls, doc: dict) -> dict:
         if not doc:
             return doc
+        doc = serialize_mongo(doc)
         doc["id"] = str(doc.get("_id", ""))
         # Normalize fields for frontend consistency
         if "assigned_to" in doc and not doc.get("assignedTo"):
@@ -59,6 +80,7 @@ class SalesRepository:
             doc["follow_ups"] = doc["followUps"]
 
         return doc
+
 
     @classmethod
     async def create_lead(cls, data: dict) -> dict:

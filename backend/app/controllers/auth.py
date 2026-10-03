@@ -43,10 +43,11 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=15)
+        expire = datetime.utcnow() + timedelta(hours=getattr(settings, "ACCESS_TOKEN_EXPIRE_HOURS", 10))
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
+
 
 # Default mock employee for requests without token (frontend dev / preview)
 DEFAULT_ADMIN_EMPLOYEE = {
@@ -379,8 +380,8 @@ async def verify_otp(verify_data: VerifyOTPRequest):
         pass
     await EmployeeRepository.update_employee(employee["_id"], {"otp": None})
     
-    # Create token - 7 days expiry
-    access_token_expires = timedelta(days=7)
+    # Create token - 10 hours expiry
+    access_token_expires = timedelta(hours=getattr(settings, "ACCESS_TOKEN_EXPIRE_HOURS", 10))
     access_token = create_access_token(
         data={"sub": verify_data.email}, expires_delta=access_token_expires
     )
