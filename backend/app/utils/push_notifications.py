@@ -192,7 +192,18 @@ async def send_push_to_user(
     success_count = 0
     expired_subscriptions = []
     
+    # Send to active subscriptions (unique endpoints only, latest first, max 2 devices per user)
+    unique_subs = []
+    seen_endpoints = set()
     for sub in subscriptions:
+        ep = sub.get("endpoint", "")
+        if ep and ep not in seen_endpoints:
+            seen_endpoints.add(ep)
+            unique_subs.append(sub)
+        if len(unique_subs) >= 2:
+            break
+
+    for sub in unique_subs:
         subscription_info = {
             "endpoint": sub["endpoint"],
             "keys": {
@@ -204,9 +215,10 @@ async def send_push_to_user(
         if result is True:
             success_count += 1
         elif result == "expired":
-            expired_subscriptions.append(sub["_id"])
+            dead_ref = str(sub.get("_id") or sub.get("id") or sub.get("endpoint"))
+            expired_subscriptions.append(dead_ref)
     
     if expired_subscriptions:
-        await PushSubscriptionRepository.deactivate_subscriptions(expired_subscriptions)
+        await PushSubscriptionRepository.delete_dead_subscriptions(expired_subscriptions)
     
     return success_count

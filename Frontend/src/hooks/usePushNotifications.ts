@@ -44,8 +44,11 @@ export function usePushNotifications() {
 
   const loadSubscriptions = useCallback(async () => {
     try {
-      const res = await api.get<PushSubscription[]>("/push/subscriptions", { showErrorToast: false });
-      const activeSubs = Array.isArray(res) ? res : [];
+      const res = await api.get<any[]>("/push/subscriptions", { showErrorToast: false });
+      const activeSubs: PushSubscription[] = (Array.isArray(res) ? res : []).map(s => ({
+        ...s,
+        id: s.id || s._id || "",
+      }));
       setSubscriptions(activeSubs);
       
       const prefEnabled = localStorage.getItem("hrms_notifications_enabled") !== "false";
@@ -231,13 +234,11 @@ export function usePushNotifications() {
       }
 
       // 2. Remove on backend
-      if (subscriptionId) {
-        await api.delete(`/push/subscriptions/${subscriptionId}`, { showErrorToast: false });
+      const targetId = subscriptionId && subscriptionId !== "undefined" ? subscriptionId : undefined;
+      if (targetId) {
+        await api.delete(`/push/subscriptions/${targetId}`, { showErrorToast: false });
       } else {
-        const subs = await loadSubscriptions();
-        for (const s of subs) {
-          await api.delete(`/push/subscriptions/${s.id}`, { showErrorToast: false });
-        }
+        await api.delete("/push/subscriptions/all", { showErrorToast: false });
       }
 
       localStorage.setItem("hrms_notifications_enabled", "false");

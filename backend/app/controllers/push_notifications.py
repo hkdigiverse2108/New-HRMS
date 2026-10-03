@@ -42,16 +42,16 @@ async def get_subscriptions(current_user: dict = Depends(get_current_employee)):
     return await PushSubscriptionRepository.get_active_subscriptions(user_id)
 
 
+@router.delete("/subscriptions", status_code=status.HTTP_204_NO_CONTENT)
 @router.delete("/subscriptions/{subscription_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def unsubscribe(
-    subscription_id: str,
+    subscription_id: str = "all",
     current_user: dict = Depends(get_current_employee)
 ):
     """Unsubscribe from push notifications"""
     user_id = str(current_user.get("_id") or current_user.get("id"))
-    success = await PushSubscriptionRepository.delete_subscription(subscription_id, user_id)
-    if not success:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found")
+    await PushSubscriptionRepository.delete_subscription(subscription_id, user_id)
+    return None
 
 
 @router.post("/test", status_code=status.HTTP_200_OK)
