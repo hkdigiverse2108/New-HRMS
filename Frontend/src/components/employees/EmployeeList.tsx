@@ -572,64 +572,67 @@ useEffect(() => {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {sortedEmployees.map((emp) => (
-            <div key={emp.id} className="group bg-white border border-border/50 rounded-3xl p-6 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 relative">
-              <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                {canUpdate && (
-                  <button 
-                    onClick={() => openEditForm(emp)}
-                    className="p-2 text-muted-foreground hover:bg-muted hover:text-foreground/80 rounded-full transition-colors"
-                    title="Edit"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                )}
-                {canUpdate && (
-                  <button
-                    onClick={() => {
-                      const newStatus = emp.status === 'Inactive' ? 'Active' : 'Inactive';
-                      updateEmployee(emp.id, { status: newStatus });
-                      toast.success(`${emp.name} is now ${newStatus}`);
-                    }}
-                    className={cn(
-                      "p-2 rounded-full transition-colors",
-                      emp.status === 'Inactive' ? "text-amber-500 hover:bg-amber-50" : "text-muted-foreground hover:bg-amber-50 hover:text-amber-600"
-                    )}
-                    title={emp.status === 'Inactive' ? "Mark as Active" : "Mark as Inactive"}
-                  >
-                    {emp.status === 'Inactive' ? <UserCheck className="w-4 h-4" /> : <UserMinus className="w-4 h-4" />}
-                  </button>
-                )}
-                {canSummon && (
-                  <button
-                    onClick={() => {
-                      setSummonTarget(emp);
-                      setSummonLocation("Conference Room A");
-                      setSummonReason("Urgent meeting required immediately");
-                    }}
-                    className="p-2 text-amber-600 hover:bg-amber-50 rounded-full transition-colors"
-                    title="⚡ Urgent Meeting Summon"
-                  >
-                    <Zap className="w-4 h-4 fill-amber-500 text-amber-500" />
-                  </button>
-                )}
-                {isAdmin && (
-                  <button
-                    onClick={() => setPermissionEmployee(emp)}
-                    className="p-2 text-muted-foreground hover:bg-blue-50 hover:text-blue-600 rounded-full transition-colors"
-                    title="Manage Permissions"
-                  >
-                    <Shield className="w-4 h-4" />
-                  </button>
-                )}
-                {canDelete && (
-                  <button 
-                    onClick={() => handleDeleteEmployee(emp.id, emp.name)}
-                    className="p-2 text-muted-foreground hover:bg-red-50 hover:text-red-600 rounded-full transition-colors"
-                    title="Delete"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
+            <div key={emp.id} className="group bg-white border border-border/50 rounded-3xl p-5 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 relative flex flex-col justify-between">
+              {/* Card Top Header: Action buttons cleanly right-aligned, no left-corner badge */}
+              <div className="flex items-center justify-end w-full min-h-[28px] mb-2">
+                <div className="flex items-center gap-0.5 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                  {canUpdate && (
+                    <button 
+                      onClick={() => openEditForm(emp)}
+                      className="p-1.5 text-muted-foreground hover:bg-slate-100 hover:text-foreground rounded-full transition-colors"
+                      title="Edit"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {canUpdate && (
+                    <button
+                      onClick={() => {
+                        const newStatus = emp.status === 'Inactive' ? 'Active' : 'Inactive';
+                        updateEmployee(emp.id, { status: newStatus });
+                        toast.success(`${emp.name} is now ${newStatus}`);
+                      }}
+                      className={cn(
+                        "p-1.5 rounded-full transition-colors",
+                        emp.status === 'Inactive' ? "text-amber-500 hover:bg-amber-50" : "text-muted-foreground hover:bg-amber-50 hover:text-amber-600"
+                      )}
+                      title={emp.status === 'Inactive' ? "Mark as Active" : "Mark as Inactive"}
+                    >
+                      {emp.status === 'Inactive' ? <UserCheck className="w-3.5 h-3.5" /> : <UserMinus className="w-3.5 h-3.5" />}
+                    </button>
+                  )}
+                  {canSummon && (
+                    <button
+                      onClick={() => {
+                        setSummonTarget(emp);
+                        setSummonLocation("Conference Room A");
+                        setSummonReason("Urgent meeting required immediately");
+                      }}
+                      className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-full transition-colors"
+                      title="⚡ Urgent Meeting Summon"
+                    >
+                      <Zap className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                    </button>
+                  )}
+                  {isAdmin && (
+                    <button
+                      onClick={() => setPermissionEmployee(emp)}
+                      className="p-1.5 text-muted-foreground hover:bg-blue-50 hover:text-blue-600 rounded-full transition-colors"
+                      title="Manage Permissions"
+                    >
+                      <Shield className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {canDelete && (
+                    <button 
+                      onClick={() => handleDeleteEmployee(emp.id, emp.name)}
+                      className="p-1.5 text-muted-foreground hover:bg-red-50 hover:text-red-600 rounded-full transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
               
               <div className="flex flex-col items-center text-center">
@@ -647,7 +650,7 @@ useEffect(() => {
                 <p className="text-[12px] font-medium text-muted-foreground mb-4">{emp.role}</p>
                 
                 <div className="flex items-center gap-1.5 flex-wrap justify-center mb-4">
-                  {(emp.employeeId || (emp.id && emp.id.startsWith("EMP-") ? emp.id : "")) && (
+                  {emp.role !== 'Admin' && (emp.employeeId || (emp.id && emp.id.startsWith("EMP-") ? emp.id : "")) && (
                     <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold font-mono rounded-lg">
                       {emp.employeeId || emp.id}
                     </span>

@@ -24,6 +24,9 @@ async def apply_leave(
     """
     work = current_employee.get("work_details", {})
     user_role = work.get("system_role", "Employee")
+    dept = work.get("department", "")
+    if dept.lower() == "hr" or current_employee.get("role") == "HR":
+        user_role = "HR"
 
     # Only Admin (strict admin / superadmin) can apply on behalf of other employees.
     # Non-admin roles (including HR, Managers, Employees) must strictly apply for themselves.
@@ -56,7 +59,7 @@ async def apply_leave(
                     "title": f"Leave Request: {emp_name}",
                     "message": f"{emp_name} requested {payload.type} ({payload.start_date} to {payload.end_date}).",
                     "type": "leave",
-                    "action_url": "/employees/leave",
+                    "action_url": "/employees/leave-requests",
                     "sender_id": curr_id,
                     "is_read": False
                 })
@@ -89,6 +92,9 @@ async def get_leaves(
     """
     work = current_employee.get("work_details", {})
     user_role = work.get("system_role", "Employee")
+    dept = work.get("department", "")
+    if dept.lower() == "hr" or current_employee.get("role") == "HR":
+        user_role = "HR"
     current_id = str(current_employee.get("_id") or current_employee.get("id") or current_employee.get("email") or "")
 
     cache_key = make_list_key(
@@ -156,12 +162,37 @@ async def update_leave_status(
     """
     work = current_employee.get("work_details", {})
     user_role = work.get("system_role", "Employee")
+    dept = work.get("department", "")
+    if dept.lower() == "hr" or current_employee.get("role") == "HR":
+        user_role = "HR"
 
-    if user_role not in ("Admin", "HR", "Sub-Admin"):
+    if user_role not in ("Admin", "HR", "Sub-Admin", "superadmin") and dept.lower() != "hr":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only HR or Admin can approve or reject leave requests."
         )
+
+    # Transcript requirement: HR cannot approve or reject their own leave requests
+    is_strict_admin = user_role in ("Admin", "superadmin", "Sub-Admin")
+    if not is_strict_admin:
+        from app.repository.leave import LeaveRepository
+        existing_leave = await LeaveRepository.get_by_id(leave_id)
+        if not existing_leave:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Leave request not found.")
+
+        target_emp_id = str(existing_leave.get("employee_id") or "")
+        curr_ids = [
+            str(current_employee.get("_id", "")),
+            str(current_employee.get("id", "")),
+            str(current_employee.get("email", "")),
+            str(current_employee.get("personal_info", {}).get("email_address", "")),
+            str(current_employee.get("work_details", {}).get("employee_id", ""))
+        ]
+        if target_emp_id and target_emp_id in curr_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="HR cannot approve or reject their own leave request. An Admin must approve it."
+            )
 
     personal = current_employee.get("personal_info", {})
     decider_name = f"{personal.get('first_name', '')} {personal.get('last_name', '')}".strip() or user_role
@@ -184,7 +215,7 @@ async def update_leave_status(
                 "title": f"Leave Request {payload.status}",
                 "message": f"Your leave request has been {payload.status.lower()} by {decider_name}.{reason_note}",
                 "type": "leave",
-                "action_url": "/employees/leave",
+                "action_url": "/employees/leave-requests",
                 "sender_id": decider_id,
                 "is_read": False
             })

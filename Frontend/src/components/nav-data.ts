@@ -105,7 +105,7 @@ export const navItems: NavItem[] = [
     title: "Recruitment",
     icon: Briefcase,
     children: [
-      { title: "Interviews", url: "/recruitment/interviews", badge: 2 },
+      { title: "Interviews", url: "/recruitment/interviews" },
     ],
   },
 
@@ -163,7 +163,7 @@ export const navItems: NavItem[] = [
   },
 
   // 15. Chat
-  { title: "Chat", url: "/chat", icon: MessagesSquare, badge: 3 },
+  { title: "Chat", url: "/chat", icon: MessagesSquare },
 
   // 16. Tasks
   { title: "Tasks", url: "/tasks", icon: ClipboardList },
@@ -216,10 +216,9 @@ export const navItems: NavItem[] = [
     title: "Approvals Hub",
     url: "/approvals",
     icon: CheckCheck,
-    badge: 9,
     children: [
-      { title: "Leave Requests", url: "/employees/leave-requests", badge: 4 },
-      { title: "Penalties", url: "/approvals/penalties", badge: 2 },
+      { title: "Leave Requests", url: "/employees/leave-requests" },
+      { title: "Penalties", url: "/approvals/penalties" },
       { title: "Daily Progress", url: "/approvals/daily-progress" },
       { title: "Approval History", url: "/approvals/history" },
     ],

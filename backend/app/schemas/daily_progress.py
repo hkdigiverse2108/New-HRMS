@@ -29,7 +29,7 @@ class DailyProgressUpdate(BaseModel):
 
 class DailyProgressApprove(BaseModel):
     rating: float = Field(..., ge=1, le=10)
-    remarks: Optional[str] = None
+    remarks: str = Field(..., min_length=1)
 
 class DailyProgressResponse(DailyProgressBase):
     id: str = Field(alias="_id")

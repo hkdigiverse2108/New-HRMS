@@ -94,7 +94,11 @@ async def get_all_employee_penalties(
     end_date: Optional[str] = Query(None, description="End date in YYYY-MM-DD format"),
     current_user: dict = Depends(get_current_employee)
 ):
-    role = current_user.get("work_details", {}).get("system_role", "Employee")
+    work = current_user.get("work_details", {})
+    role = work.get("system_role", "Employee")
+    dept = work.get("department", "")
+    if dept.lower() == "hr" or current_user.get("role") == "HR":
+        role = "HR"
     current_uid = str(current_user.get("_id") or current_user.get("id"))
     
     def clean_param(val):
@@ -113,7 +117,7 @@ async def get_all_employee_penalties(
 
     # If regular Employee, force filter by their own ID
     effective_emp_id = clean_param(employee_id)
-    if role not in ["Admin", "Subadmin", "HR"]:
+    if role not in ["Admin", "Subadmin", "HR"] and dept.lower() != "hr":
         effective_emp_id = current_uid
 
     cache_key = make_list_key(

@@ -65,6 +65,9 @@ async def auto_assign_missing_employee_ids(db):
         max_seq = 0
         unassigned = []
         for emp in all_emps:
+            role = str((emp.get("work_details") or {}).get("system_role") or "Employee")
+            if role == "Admin":
+                continue # Admins do not have employee IDs
             emp_id_val = emp.get("employee_id") or (emp.get("work_details") or {}).get("employee_id")
             if emp_id_val and isinstance(emp_id_val, str):
                 match = re.search(r"EMP-(\d+)", emp_id_val, re.IGNORECASE)
@@ -115,8 +118,8 @@ async def setup_employee_indexes(db):
             ("personal_info.first_name", 1), 
             ("personal_info.last_name", 1)
         ])
-        # 4. Employee ID Unique index
-        await collection.create_index("employee_id", unique=True)
+        # 4. Employee ID Unique index (sparse for non-admin employees only)
+        await collection.create_index("employee_id", unique=True, sparse=True)
         await collection.create_index("work_details.employee_id")
         logger.info("Employee database indexes and IDs setup successfully.")
     except Exception as e:

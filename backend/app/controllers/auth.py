@@ -268,6 +268,9 @@ async def get_me(current_employee: dict = Depends(get_current_employee)):
     personal = current_employee.get("personal_info", {})
     work = current_employee.get("work_details", {})
     role = work.get("system_role", "Employee")
+    dept = work.get("department", "")
+    if dept.lower() == "hr" and role not in ("Admin", "superadmin", "Sub-Admin"):
+        role = "HR"
     emp_id = str(current_employee.get("_id", ""))
 
     perms = await resolve_effective_permissions_for_employee(current_employee)

@@ -73,8 +73,9 @@ interface EmployeeOption {
 export function Penalties() {
   const { user } = useAuth();
   const anyUser = user as any;
-  const userRole = String(anyUser?.role || anyUser?.work_details?.system_role || "Employee").toLowerCase();
-  const isAdminOrHr = ["admin", "subadmin", "hr", "superadmin"].includes(userRole);
+  const userDept = String(anyUser?.department || anyUser?.work_details?.department || "").toLowerCase();
+  const userRole = String(anyUser?.role || anyUser?.work_details?.system_role || (userDept === "hr" ? "hr" : "Employee")).toLowerCase();
+  const isAdminOrHr = ["admin", "subadmin", "hr", "superadmin"].includes(userRole) || userDept === "hr";
 
   // Main Data States
   const [records, setRecords] = useState<PenaltyRecord[]>([]);
@@ -224,7 +225,7 @@ export function Penalties() {
   // Fetch Employee options for modal
   const fetchEmployeesList = useCallback(async () => {
     try {
-      const res = await api.get<{ data?: any[] } | any[]>("/employees?limit=200", {
+      const res = await api.get<{ data?: any[] } | any[]>("/employees", {
         showLoader: false,
         showErrorToast: false
       });

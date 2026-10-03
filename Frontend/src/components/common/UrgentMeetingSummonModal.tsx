@@ -217,6 +217,12 @@ export function UrgentMeetingSummonModal() {
                 timestamp: data.timestamp || new Date().toISOString()
               };
               triggerSummonAlert(summon);
+            } else if (data.action === "new_message" || (data.type === "message" && data.content) || (data.content && data.channel_id)) {
+              // Real-time chat message broadcast event (actual messages only)
+              window.dispatchEvent(new CustomEvent("hrms:chat_message", { detail: data }));
+            } else if (data.type === "notification" || data.type === "leave" || data.type === "penalty") {
+              // Real-time notification update event
+              window.dispatchEvent(new CustomEvent("hrms:notification_update", { detail: data }));
             }
           } catch {
             // quiet ignore non-json

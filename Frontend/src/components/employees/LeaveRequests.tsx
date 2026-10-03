@@ -215,9 +215,11 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const anyUser = user as any;
-  const userRole = String(anyUser?.role || anyUser?.work_details?.system_role || "Employee").toLowerCase();
-  const isAdminOrHR = ["admin", "subadmin", "hr", "superadmin"].includes(userRole);
-  const isStrictAdmin = ["admin", "superadmin"].includes(userRole);
+  const userDept = String(anyUser?.department || anyUser?.work_details?.department || "").toLowerCase();
+  const userRole = String(anyUser?.role || anyUser?.work_details?.system_role || (userDept === "hr" ? "hr" : "Employee")).toLowerCase();
+  const isHRUser = userRole === "hr" || userDept === "hr";
+  const isStrictAdmin = ["admin", "superadmin", "subadmin"].includes(userRole);
+  const isAdminOrHR = isStrictAdmin || isHRUser;
 
   const [scopeFilter, setScopeFilter] = useState<"all" | "my">(isAdminOrHR ? "all" : "my");
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -1020,76 +1022,98 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                   </p>
 
                   {/* Role-based action buttons: Admin / HR can Approve or Reject */}
-                  {isAdminOrHR ? (
-                    request.status === "Pending" ? (
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => setRejectingId(request.id)}
-                          className="px-2.5 py-1.5 text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
-                          title="Reject Leave"
-                        >
-                          <X className="w-3.5 h-3.5" /> Reject
-                        </button>
-                        <button
-                          onClick={() => handleAction(request.id, "Approved")}
-                          className="px-3 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
-                          title="Approve Leave"
-                        >
-                          <Check className="w-3.5 h-3.5" /> Approve
-                        </button>
-                      </div>
-                    ) : (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button className="flex items-center gap-1 hover:bg-muted/50 px-2 py-1 rounded-lg transition-colors text-xs font-bold">
-                            <span
-                              className={cn(
-                                "px-2.5 py-0.5 rounded text-[11px] font-black",
-                                request.status === "Approved" ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
-                              )}
-                            >
-                              {request.status}
+                  {(() => {
+                    const isOwnRequest = Boolean(
+                      (request.employeeId && user?.id && request.employeeId === user.id) ||
+                      (request.employeeId && anyUser?.employee_id && request.employeeId === anyUser.employee_id) ||
+                      (user?.email && request.employeeId === user.email)
+                    );
+                    const canApproveThisRequest = isStrictAdmin || (isHRUser && !isOwnRequest);
+
+                    if (isAdminOrHR) {
+                      if (request.status === "Pending") {
+                        if (canApproveThisRequest) {
+                          return (
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => setRejectingId(request.id)}
+                                className="px-2.5 py-1.5 text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
+                                title="Reject Leave"
+                              >
+                                <X className="w-3.5 h-3.5" /> Reject
+                              </button>
+                              <button
+                                onClick={() => handleAction(request.id, "Approved")}
+                                className="px-3 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+                                title="Approve Leave"
+                              >
+                                <Check className="w-3.5 h-3.5" /> Approve
+                              </button>
+                            </div>
+                          );
+                        } else {
+                          return (
+                            <span className="px-2.5 py-1 text-[11px] font-bold text-amber-700 bg-amber-50 dark:bg-amber-950/40 rounded-lg border border-amber-200/70">
+                              Pending Admin Approval
                             </span>
-                            <ChevronDown className="w-3 h-3 opacity-50" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-[190px] rounded-xl p-1.5 shadow-xl border-border/60">
-                          <DropdownMenuItem
-                            onClick={() => handleAction(request.id, "Approved")}
-                            className="text-emerald-600 font-medium cursor-pointer rounded-lg mb-1"
-                          >
-                            <Check className="w-4 h-4 mr-2" /> Mark Approved
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => setRejectingId(request.id)}
-                            className="text-rose-600 font-medium cursor-pointer rounded-lg mb-1"
-                          >
-                            <X className="w-4 h-4 mr-2" /> Mark Rejected
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleAction(request.id, "Pending")}
-                            className="text-amber-600 font-medium cursor-pointer rounded-lg"
-                          >
-                            <Activity className="w-4 h-4 mr-2" /> Revert to Pending
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )
-                  ) : (
-                    /* Regular employee view-only badge */
-                    <span
-                      className={cn(
-                        "px-2.5 py-0.5 rounded text-[11px] font-black",
-                        request.status === "Approved"
-                          ? "bg-emerald-50 text-emerald-600"
-                          : request.status === "Rejected"
-                          ? "bg-rose-50 text-rose-600"
-                          : "bg-amber-50 text-amber-600"
-                      )}
-                    >
-                      {request.status}
-                    </span>
-                  )}
+                          );
+                        }
+                      } else if (canApproveThisRequest) {
+                        return (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="flex items-center gap-1 hover:bg-muted/50 px-2 py-1 rounded-lg transition-colors text-xs font-bold">
+                                <span
+                                  className={cn(
+                                    "px-2.5 py-0.5 rounded text-[11px] font-black",
+                                    request.status === "Approved" ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
+                                  )}
+                                >
+                                  {request.status}
+                                </span>
+                                <ChevronDown className="w-3 h-3 opacity-50" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-[190px] rounded-xl p-1.5 shadow-xl border-border/60">
+                              <DropdownMenuItem
+                                onClick={() => handleAction(request.id, "Approved")}
+                                className="text-emerald-600 font-medium cursor-pointer rounded-lg mb-1"
+                              >
+                                <Check className="w-4 h-4 mr-2" /> Mark Approved
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => setRejectingId(request.id)}
+                                className="text-rose-600 font-medium cursor-pointer rounded-lg mb-1"
+                              >
+                                <X className="w-4 h-4 mr-2" /> Mark Rejected
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleAction(request.id, "Pending")}
+                                className="text-amber-600 font-medium cursor-pointer rounded-lg"
+                              >
+                                <Activity className="w-4 h-4 mr-2" /> Revert to Pending
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        );
+                      }
+                    }
+
+                    return (
+                      <span
+                        className={cn(
+                          "px-2.5 py-0.5 rounded text-[11px] font-black",
+                          request.status === "Approved"
+                            ? "bg-emerald-50 text-emerald-600"
+                            : request.status === "Rejected"
+                            ? "bg-rose-50 text-rose-600"
+                            : "bg-amber-50 text-amber-600"
+                        )}
+                      >
+                        {request.status}
+                      </span>
+                    );
+                  })()}
 
                   {/* Edit and Delete Actions */}
                   <div className="flex items-center gap-1">

@@ -190,18 +190,19 @@ export function UpdateActivityModal({
           );
         }
 
-        // 3. Fetch Activity items
+        // 3. Fetch Activity items (Updated per transcript)
         const activityList: TaskItem[] = [
-          { id: "act-1", title: "Code Review & PR Reviews", dueDate: todayDateStr, badge: "Activity", category: "Activity" },
-          { id: "act-2", title: "Client Communication & Follow-up", dueDate: todayDateStr, badge: "Activity", category: "Activity" },
-          { id: "act-3", title: "Team Coordination & Standup", dueDate: todayDateStr, badge: "Activity", category: "Activity" },
+          { id: "act-1", title: "Client Communication", dueDate: todayDateStr, badge: "Activity", category: "Activity" },
+          { id: "act-2", title: "Stream Coordination", dueDate: todayDateStr, badge: "Activity", category: "Activity" },
+          { id: "act-3", title: "CC Creation", dueDate: todayDateStr, badge: "Activity", category: "Activity" },
+          { id: "act-4", title: "Cake Cutting", dueDate: todayDateStr, badge: "Activity", category: "Activity" },
+          { id: "act-5", title: "Game Session", dueDate: todayDateStr, badge: "Activity", category: "Activity" },
         ];
 
-        // 4. Fetch Meeting items
+        // 4. Fetch Meeting items (Updated per transcript)
         const meetingList: TaskItem[] = [
-          { id: "meet-1", title: "Daily Morning Sync / Standup", dueDate: todayDateStr, badge: "Meeting", category: "Meeting" },
-          { id: "meet-2", title: "Weekly Sprint Planning", dueDate: todayDateStr, badge: "Meeting", category: "Meeting" },
-          { id: "meet-3", title: "Client Product Demo", dueDate: todayDateStr, badge: "Meeting", category: "Meeting" },
+          { id: "meet-1", title: "Admin Meeting", dueDate: todayDateStr, badge: "Meeting", category: "Meeting" },
+          { id: "meet-2", title: "Client Meeting", dueDate: todayDateStr, badge: "Meeting", category: "Meeting" },
         ];
 
         // 5. Load saved custom activities from localStorage (Task 34)

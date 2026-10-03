@@ -9,8 +9,10 @@ class DailyProgressService:
     @staticmethod
     def _is_admin_or_hr(current_user: dict) -> bool:
         role = str(current_user.get("work_details", {}).get("system_role", "")).lower()
+        dept = str(current_user.get("work_details", {}).get("department", "")).lower()
+        top_role = str(current_user.get("role", "")).lower()
         user_id = str(current_user.get("_id") or current_user.get("id"))
-        return role in ["admin", "hr", "subadmin", "sub-admin"] or user_id == "default-admin-id"
+        return role in ["admin", "hr", "subadmin", "sub-admin"] or top_role in ["admin", "hr", "subadmin"] or dept == "hr" or user_id == "default-admin-id"
 
     @staticmethod
     async def create_progress(data: DailyProgressCreate, current_user: dict) -> Dict[str, Any]:
@@ -229,7 +231,8 @@ class DailyProgressService:
         date_filter: Optional[str] = None,
         from_date: Optional[str] = None,
         to_date: Optional[str] = None,
-        view_type: Optional[str] = None
+        view_type: Optional[str] = None,
+        department: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         is_admin = DailyProgressService._is_admin_or_hr(current_user)
         user_id = str(current_user.get("_id") or current_user.get("id"))
@@ -239,9 +242,9 @@ class DailyProgressService:
         if view_type == "my":
             query["employee_id"] = user_id
         elif view_type == "team":
-            department = current_user.get("work_details", {}).get("department")
-            if department:
-                query["department"] = department
+            dept = current_user.get("work_details", {}).get("department")
+            if dept:
+                query["department"] = dept
             else:
                 query["employee_id"] = user_id
         else:
@@ -249,6 +252,15 @@ class DailyProgressService:
                 query["employee_id"] = user_id
             elif employee_id:
                 query["employee_id"] = employee_id
+            else:
+                from app.repository.employee import EmployeeRepository
+                admin_res = await EmployeeRepository.get_all_employees(role="Admin")
+                admin_ids = [str(a.get("_id") or a.get("id")) for a in admin_res.get("data", [])]
+                if admin_ids:
+                    query["employee_id"] = {"$nin": admin_ids}
+                
+        if department:
+            query["department"] = {"$regex": f"^{department}$", "$options": "i"}
                 
         if search:
             search_regex = {"$regex": search, "$options": "i"}
@@ -310,12 +322,13 @@ class DailyProgressService:
                 from app.repository.employee import EmployeeRepository
                 from app.repository.task import TaskRepository
                 
-                emp_res = await EmployeeRepository.get_all_employees(limit=1000)
+                emp_res = await EmployeeRepository.get_all_employees(exclude_role="Admin")
                 all_emps = emp_res.get("data", [])
                 
-                # Fetch all tasks in one go to optimize? Or just fetch per employee since we need to.
-                # Actually, we should just update existing records if they are PENDING, and create if missing.
                 for emp in all_emps:
+                    emp_role = str(emp.get("work_details", {}).get("system_role", "")).strip().lower()
+                    if emp_role == "admin":
+                        continue
                     emp_id_str = str(emp.get("_id") or emp.get("id"))
                     
                     if view_type == "my" and emp_id_str != user_id:
@@ -501,10 +514,24 @@ class DailyProgressService:
             
         user_id = str(current_user.get("_id") or current_user.get("id"))
         
+        from fastapi import HTTPException, status
+        if not data.rating or data.rating <= 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Rating is required.")
+
+        if not data.remarks or not data.remarks.strip():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Manager remarks note is required.")
+
+        # Head / Manager cannot approve their own daily progress report
+        if str(progress.get("employee_id")) == user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Heads or Managers cannot verify their own daily progress report. An Admin or another Head must verify it."
+            )
+        
         update_data = {
             "status": "VERIFIED",
             "rating": data.rating,
-            "remarks": data.remarks,
+            "remarks": data.remarks.strip(),
             "verified_by_id": user_id,
             "verified_at": datetime.utcnow()
         }

@@ -22,10 +22,8 @@ class PersonalInfoOut(PersonalInfo):
     password: str = Field(exclude=True) # Exclude password from responses
     password_enc: str = Field(default="", exclude=True) # Exclude vault copy too
 
-
-
 class WorkDetails(BaseModel):
-    system_role: SystemRole
+    system_role: SystemRole = SystemRole.EMPLOYEE
     employee_id: Optional[str] = None
     department: Optional[str] = None
     sub_department: Optional[str] = None

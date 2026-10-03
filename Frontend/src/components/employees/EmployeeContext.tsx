@@ -29,9 +29,12 @@ function mapBackendToEmployee(be: any): Employee {
   const name = [p.first_name, p.middle_name, p.last_name].filter(Boolean).join(" ") || "Unnamed Employee";
   const photo = be.profile_photo || p.profile_photo || be.avatar || "";
 
+  const role = w.system_role || "Employee";
+  const employeeId = role === "Admin" ? "" : (be.employee_id || w.employee_id || (String(be.id || "").startsWith("EMP-") ? String(be.id) : ""));
+
   return {
     id: String(be._id || be.id),
-    employeeId: be.employee_id || w.employee_id || (String(be.id || "").startsWith("EMP-") ? String(be.id) : ""),
+    employeeId: employeeId,
     name: name,
     firstName: p.first_name || "",
     middleName: p.middle_name || "",
@@ -47,7 +50,7 @@ function mapBackendToEmployee(be: any): Employee {
     avatar: photo,
     profile_photo: photo,
 
-    role: w.system_role || "Employee",
+    role: role,
     department: w.department || "Development",
     sub_department: w.sub_department || "",
     designation: w.designation || "",

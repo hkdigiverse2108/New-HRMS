@@ -206,6 +206,9 @@ async def get_attendance_list(
     """
     work = current_employee.get("work_details", {})
     user_role = work.get("system_role", "Employee")
+    dept = work.get("department", "")
+    if dept.lower() == "hr" or current_employee.get("role") == "HR":
+        user_role = "HR"
     current_id = str(current_employee.get("_id") or current_employee.get("id") or current_employee.get("email") or "")
 
     cache_key = make_list_key(
@@ -250,6 +253,9 @@ async def get_eom_summary(
     """
     work = current_employee.get("work_details", {})
     user_role = work.get("system_role", "Employee")
+    dept = work.get("department", "")
+    if dept.lower() == "hr" or current_employee.get("role") == "HR":
+        user_role = "HR"
     current_id = str(current_employee.get("_id") or current_employee.get("id") or current_employee.get("email") or "")
 
     cache_key = f"attendance:eom:{month}:{year}:{employee_id or 'all'}:{user_role}:{current_id}"
