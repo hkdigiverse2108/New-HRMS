@@ -206,7 +206,21 @@ async def get_attendance_list(
     """
     work = current_employee.get("work_details", {})
     user_role = work.get("system_role", "Employee")
+    dept = work.get("department", "")
+    if dept.lower() == "hr" or current_employee.get("role") == "HR":
+        user_role = "HR"
     current_id = str(current_employee.get("_id") or current_employee.get("id") or current_employee.get("email") or "")
+
+    from app.controllers.auth import resolve_effective_permissions_for_employee
+    perms = await resolve_effective_permissions_for_employee(current_employee)
+    can_view_all_attendance = (
+        user_role in ("Admin", "superadmin") or
+        dept.lower() == "hr" or
+        perms.get("/employees/attendance", {}).get("read") or
+        perms.get("/employees/attendance", {}).get("all") or
+        perms.get("/attendance", {}).get("read") or
+        perms.get("/attendance", {}).get("all")
+    )
 
     cache_key = make_list_key(
         "attendance",
@@ -216,8 +230,8 @@ async def get_attendance_list(
         stat=status,
         page=page,
         limit=limit,
-        role=user_role,
-        uid=current_id
+        role="Admin" if can_view_all_attendance else user_role,
+        uid=current_id if not can_view_all_attendance else None
     )
 
     cached = await get_cache(cache_key)
@@ -231,7 +245,7 @@ async def get_attendance_list(
         status=status,
         page=page,
         limit=limit,
-        current_user_role=user_role,
+        current_user_role="Admin" if can_view_all_attendance else user_role,
         current_user_id=current_id
     )
 
@@ -250,9 +264,23 @@ async def get_eom_summary(
     """
     work = current_employee.get("work_details", {})
     user_role = work.get("system_role", "Employee")
+    dept = work.get("department", "")
+    if dept.lower() == "hr" or current_employee.get("role") == "HR":
+        user_role = "HR"
     current_id = str(current_employee.get("_id") or current_employee.get("id") or current_employee.get("email") or "")
 
-    cache_key = f"attendance:eom:{month}:{year}:{employee_id or 'all'}:{user_role}:{current_id}"
+    from app.controllers.auth import resolve_effective_permissions_for_employee
+    perms = await resolve_effective_permissions_for_employee(current_employee)
+    can_view_all_attendance = (
+        user_role in ("Admin", "superadmin") or
+        dept.lower() == "hr" or
+        perms.get("/employees/attendance", {}).get("read") or
+        perms.get("/employees/attendance", {}).get("all") or
+        perms.get("/attendance", {}).get("read") or
+        perms.get("/attendance", {}).get("all")
+    )
+
+    cache_key = f"attendance:eom:{month}:{year}:{employee_id or 'all'}:{'Admin' if can_view_all_attendance else user_role}:{current_id if not can_view_all_attendance else 'all'}"
     cached = await get_cache(cache_key)
     if cached is not None:
         return cached
@@ -261,7 +289,7 @@ async def get_eom_summary(
         month=month,
         year=year,
         employee_id=employee_id,
-        current_user_role=user_role,
+        current_user_role="Admin" if can_view_all_attendance else user_role,
         current_user_id=current_id
     )
 

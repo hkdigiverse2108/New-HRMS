@@ -339,9 +339,11 @@ export function Remarks() {
   return (
     <div className="space-y-5 h-[calc(100vh-4rem)] flex flex-col overflow-hidden pb-0">
       {/* Header/Stats */}
-      <div className="shrink-0 bg-white border border-border rounded-3xl p-6 shadow-sm relative overflow-hidden">
-        <div className="absolute -top-12 -right-12 p-12 opacity-5 pointer-events-none rotate-12">
-          <MessageSquareHeart className="w-64 h-64 text-indigo-900" />
+      <div className="shrink-0 bg-white border border-border rounded-3xl p-6 shadow-sm relative">
+        <div className="absolute inset-0 overflow-hidden rounded-3xl pointer-events-none">
+          <div className="absolute -top-12 -right-12 p-12 opacity-5 rotate-12">
+            <MessageSquareHeart className="w-64 h-64 text-indigo-900" />
+          </div>
         </div>
 
         <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-6">

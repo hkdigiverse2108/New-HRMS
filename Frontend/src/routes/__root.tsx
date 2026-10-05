@@ -77,32 +77,50 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
-  head: () => ({
-    meta: [
-      { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
-    ],
-    links: [
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
-    ],
-    scripts: [
-      {
-        src: "/env-config.js",
-      },
-    ],
-  }),
+head: () => ({
+      meta: [
+        { charSet: "utf-8" },
+        { name: "viewport", content: "width=device-width, initial-scale=1" },
+        { title: "HRMS" },
+        { name: "description", content: "HK DigiVerse HRMS" },
+        { name: "theme-color", content: "#2563eb" },
+        { name: "mobile-web-app-capable", content: "yes" },
+        { name: "apple-mobile-web-app-capable", content: "yes" },
+        { name: "apple-mobile-web-app-status-bar-style", content: "default" },
+        { name: "apple-mobile-web-app-title", content: "HRMS" },
+      ],
+      links: [
+        {
+          rel: "stylesheet",
+          href: appCss,
+        },
+        { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+        { rel: "manifest", href: "/manifest.json" },
+        { rel: "apple-touch-icon", href: "/favicon.ico" },
+      ],
+      scripts: [
+        {
+          src: "/env-config.js",
+        },
+        {
+          // Register service worker
+          inner: `
+            if ('serviceWorker' in navigator) {
+              const registerSW = () => {
+                navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                  .then(reg => console.log('[SW] Registered:', reg.scope))
+                  .catch(err => console.error('[SW] Registration failed:', err));
+              };
+              if (document.readyState === 'complete' || document.readyState === 'interactive') {
+                registerSW();
+              } else {
+                window.addEventListener('load', registerSW);
+              }
+            }
+          `,
+        },
+      ],
+    }),
   shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,

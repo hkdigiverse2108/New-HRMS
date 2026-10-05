@@ -40,12 +40,18 @@ class EmployeeService:
         except Exception:
             pass
 
-        # Auto-generate unique sequential employee_id if not supplied
-        if not employee_dict.get("employee_id"):
-            new_emp_code = await EmployeeRepository.get_next_employee_id()
-            employee_dict["employee_id"] = new_emp_code
+        # Auto-generate unique sequential employee_id only for Employee role (never for Admin)
+        role = str((employee_dict.get("work_details") or {}).get("system_role") or "Employee")
+        if role != "Admin":
+            if not employee_dict.get("employee_id"):
+                new_emp_code = await EmployeeRepository.get_next_employee_id()
+                employee_dict["employee_id"] = new_emp_code
+                if "work_details" in employee_dict and employee_dict["work_details"]:
+                    employee_dict["work_details"]["employee_id"] = new_emp_code
+        else:
+            employee_dict["employee_id"] = None
             if "work_details" in employee_dict and employee_dict["work_details"]:
-                employee_dict["work_details"]["employee_id"] = new_emp_code
+                employee_dict["work_details"]["employee_id"] = None
 
         created_emp = await EmployeeRepository.create_employee(employee_dict)
         try:
@@ -143,6 +149,12 @@ class EmployeeService:
                 if old_pi.get("password_enc"):
                     update_data["personal_info"]["password_enc"] = old_pi["password_enc"]
             
+        new_role = update_data.get("work_details", {}).get("system_role")
+        if new_role == "Admin":
+            update_data["employee_id"] = None
+            if "work_details" in update_data:
+                update_data["work_details"]["employee_id"] = None
+
         updated_emp = await EmployeeRepository.update_employee(
             employee_id, EmployeeService._flatten_update(update_data)
         )

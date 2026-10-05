@@ -42,7 +42,7 @@ const GROUP_PARENT_MODULES = new Set([
 export function hasModulePermission(
   user: UserProfile | null,
   url?: string,
-  action: "read" | "create" | "update" | "delete" = "read"
+  action: "read" | "create" | "update" | "delete" | "all" = "read"
 ): boolean {
   if (!user) return false;
 
@@ -53,22 +53,33 @@ export function hasModulePermission(
 
   if (!url) return false;
 
-  const perms = user.permissions;
+  const cleanUrl = (url.split("?")[0] ?? "").replace(/\/+$/, "") || "/";
 
-  // Strict fallback: if no permissions are configured for the employee, only profile view is permitted
-  if (!perms || Object.keys(perms).length === 0) {
-    return action === "read" && url.startsWith("/profile");
+  // Every logged-in user (Admin, Employee, Team Leader, etc.) ALWAYS has access to their own profile
+  if (cleanUrl === "/profile" || cleanUrl.startsWith("/profile")) {
+    return true;
   }
 
-  const cleanUrl = (url.split("?")[0] ?? "").replace(/\/+$/, "") || "/";
+  // Dashboard read is always accessible for any logged in user
+  if (cleanUrl === "/dashboard" && (action === "read" || action === "all")) {
+    return true;
+  }
+
+  const perms = user.permissions;
+
+  // Strict fallback: if no permissions are configured for the employee, profile view is permitted
+  if (!perms || Object.keys(perms).length === 0) {
+    return action === "read";
+  }
 
   // 1. Direct match on exact URL
   if (perms[url]) {
     const p = perms[url];
-    return Boolean(p.all || p[action]);
+    return action === "all" ? Boolean(p.all) : Boolean(p.all || p[action]);
   }
   if (perms[cleanUrl]) {
     const p = perms[cleanUrl];
+    if (action === "all") return Boolean(p.all);
     if (cleanUrl === "/tasks" && action === "create") {
       return Boolean(p.all || p.create || p.read);
     }

@@ -125,7 +125,17 @@ class EmployeeRepository:
     async def get_employee_by_id(cls, employee_id: str):
         collection = await cls.get_collection()
         try:
-            employee = await collection.find_one({"_id": ObjectId(employee_id)})
+            if ObjectId.is_valid(str(employee_id)):
+                employee = await collection.find_one({"_id": ObjectId(str(employee_id))})
+                if employee:
+                    employee["_id"] = str(employee["_id"])
+                    return employee
+            employee = await collection.find_one({
+                "$or": [
+                    {"work_details.employee_id": str(employee_id)},
+                    {"employee_id": str(employee_id)}
+                ]
+            })
             if employee:
                 employee["_id"] = str(employee["_id"])
             return employee
@@ -223,7 +233,12 @@ class EmployeeRepository:
     async def update_employee(cls, employee_id: str, update_data: dict):
         collection = await cls.get_collection()
         try:
-            await collection.update_one({"_id": ObjectId(employee_id)}, {"$set": update_data})
+            query = None
+            if ObjectId.is_valid(str(employee_id)):
+                query = {"_id": ObjectId(str(employee_id))}
+            else:
+                query = {"$or": [{"work_details.employee_id": str(employee_id)}, {"employee_id": str(employee_id)}]}
+            await collection.update_one(query, {"$set": update_data})
             return await cls.get_employee_by_id(employee_id)
         except Exception:
             return None

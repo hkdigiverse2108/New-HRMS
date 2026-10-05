@@ -43,8 +43,9 @@ import { toast } from "@/lib/toast";
 import { useAuth } from "@/components/auth/AuthContext";
 import { useEmployeesContext } from "@/components/employees/EmployeeContext";
 import { api, getAuthToken } from "@/lib/api";
-import { resolveApiUrl } from "@/lib/config";
+import { getApiUrl, resolveApiUrl } from "@/lib/config";
 import { WhatsAppEmojiPicker } from "./WhatsAppEmojiPicker";
+import { hasModulePermission, isUserAdmin } from "@/lib/permissions";
 
 export const DEFAULT_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
@@ -594,10 +595,12 @@ function ChatInner() {
   const myEmployeeId = String((user as any)?.employee_id || "");
   const isAdminOrHR = user?.role === "admin" || user?.role === "superadmin" || user?.role === "hr";
 
-  // Task 41 & User Request: Strict Access Control check for deleting messages.
-  // Must be explicitly granted delete or all permission in user.permissions["/chat"].
-  // Role alone (admin/hr) does NOT grant delete if permission is not enabled in Access Control.
+  // User Request & Access Control check for deleting messages:
+  // Admin can always delete messages.
+  // Other employees can ONLY delete if granted delete permission in Access Control (department preset or employee override).
   const canDeleteChatMessages = Boolean(
+    isUserAdmin(user) ||
+    hasModulePermission(user, "/chat", "delete") ||
     user?.permissions?.["/chat"]?.delete || 
     user?.permissions?.["/chat"]?.all ||
     user?.permissions?.["chat"]?.delete ||
@@ -759,7 +762,16 @@ function ChatInner() {
   // Check if message is seen (read by other users)
   const isMessageSeen = useCallback(
     (msg: ChatMessage) => {
-      if (!msg || !Array.isArray(msg.read_by)) return false;
+      if (!msg) return false;
+      const ch = channels.find((c) => (c.id || (c as any)._id) === activeChannelId);
+      const isSelfChat =
+        ch?.type === "self" ||
+        String(ch?.name || "").toLowerCase().includes("yourself") ||
+        ch?.name === "You" ||
+        ch?.name === "You (Message Yourself)";
+      if (isSelfChat) return true;
+
+      if (!Array.isArray(msg.read_by)) return false;
       return msg.read_by.some((uid) => {
         const sUid = String(uid).trim();
         return (
@@ -772,7 +784,7 @@ function ChatInner() {
         );
       });
     },
-    [myUserId, myEmployeeId]
+    [myUserId, myEmployeeId, channels, activeChannelId]
   );
 
   // Clean display name - removes any bracket suffixes like "(admin)" or "(any role)" (Issue 1)
@@ -1083,14 +1095,27 @@ function ChatInner() {
   };
 
   // Safe Desktop Notification dispatcher (works across desktop tabs and window unfocused)
-  const showDesktopNotification = useCallback((title: string, body: string, channelId: string) => {
+  const showDesktopNotification = useCallback((title: string, body: string, channelId: string, avatarUrl?: string | null) => {
     if (typeof Notification === "undefined") return;
     if (Notification.permission !== "granted") return;
+    
+    let finalIcon = "/favicon.ico";
+    if (avatarUrl && typeof avatarUrl === "string" && avatarUrl.trim()) {
+      const clean = avatarUrl.trim();
+      if (clean.startsWith("http://") || clean.startsWith("https://") || clean.startsWith("data:")) {
+        finalIcon = clean;
+      } else {
+        const base = getApiUrl().replace(/\/+$/, "");
+        const path = clean.startsWith("/") ? clean : `/${clean}`;
+        finalIcon = `${base}${path}`;
+      }
+    }
+    
     try {
       const n = new Notification(title, {
         body,
-        icon: "/favicon.ico",
-        tag: `chat-${channelId}`,
+        icon: finalIcon,
+        tag: `chat-${channelId}-${Date.now()}`,
       });
       n.onclick = () => {
         try {
@@ -1105,8 +1130,8 @@ function ChatInner() {
         navigator.serviceWorker.ready.then((reg) => {
           reg.showNotification(title, {
             body,
-            icon: "/favicon.ico",
-            tag: `chat-${channelId}`,
+            icon: finalIcon,
+            tag: `chat-${channelId}-${Date.now()}`,
           });
         }).catch(() => {});
       }
@@ -1420,24 +1445,6 @@ function ChatInner() {
         setChannels(defaultChannels);
         if (!activeChannelIdRef.current && !hasUserDismissedActiveRef.current) setActiveChannelId("chan-engineering");
       }
-
-      // Check online presence
-      const memberIds = new Set<string>();
-      res?.forEach((c) => (c.members || []).forEach((m) => memberIds.add(m)));
-      if (memberIds.size > 0) {
-        try {
-          const pres = await api.post<any[]>("/chat/presence/batch", {
-            user_ids: Array.from(memberIds)
-          }, { showErrorToast: false });
-          const pMap: Record<string, boolean> = {};
-          pres?.forEach((p) => {
-            pMap[p.user_id] = p.is_online;
-          });
-          setPresenceMap(pMap);
-        } catch {
-          // ignore
-        }
-      }
     } catch {
       // Default fallback
       const defaultChannels: ChatChannel[] = [
@@ -1474,8 +1481,16 @@ function ChatInner() {
         }
         setTimeout(() => scrollToBottom("auto"), 100);
 
-        // Mark read + clear unread badge locally for this channel
-        api.post(`/chat/channels/${channelId}/read`, {}, { showErrorToast: false }).catch(() => {});
+        // Mark read via WebSocket (0 HTTP requests, 0 CORS preflight)
+        if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+          try {
+            socketRef.current.send(JSON.stringify({
+              action: "mark_read",
+              channel_id: channelId,
+              user_name: user?.name
+            }));
+          } catch {}
+        }
         setChannels((prev) =>
           prev.map((c) =>
             (c.id || (c as any)._id) === channelId ? { ...c, unread_count: 0 } : c
@@ -1547,6 +1562,12 @@ function ChatInner() {
   useEffect(() => {
     if (activeChannelId) {
       fetchMessages(activeChannelId);
+      if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+        socketRef.current.send(JSON.stringify({
+          action: "messages_read",
+          channel_id: activeChannelId
+        }));
+      }
     }
   }, [activeChannelId, fetchMessages]);
 
@@ -1571,11 +1592,17 @@ function ChatInner() {
         socketRef.current = socket;
 
         socket.onopen = () => {
-          // Connected! Refresh channels & active messages to guarantee zero message loss
-          fetchChannels();
-          if (activeChannelIdRef.current) {
-            fetchMessages(activeChannelIdRef.current);
-          }
+          // Connected! Request presence & send read receipt over WebSocket
+          try {
+            socket.send(JSON.stringify({ action: "get_presence" }));
+            if (activeChannelIdRef.current) {
+              socket.send(JSON.stringify({
+                action: "mark_read",
+                channel_id: activeChannelIdRef.current,
+                user_name: user?.name
+              }));
+            }
+          } catch {}
           // Heartbeat ping every 20 seconds
           if (pingInterval) clearInterval(pingInterval);
           pingInterval = setInterval(() => {
@@ -1693,7 +1720,7 @@ function ChatInner() {
                 try {
                   const tabHidden = typeof document !== "undefined" && (document.hidden || !document.hasFocus());
                   if (tabHidden || !isViewingThisChat) {
-                    showDesktopNotification(msg.sender_name || "New message", preview.slice(0, 150), msg.channel_id);
+                    showDesktopNotification(msg.sender_name || "New message", preview.slice(0, 150), msg.channel_id, msg.sender_avatar);
                   }
                 } catch {
                   // ignore
@@ -1732,8 +1759,16 @@ function ChatInner() {
                   return next;
                 });
                 setTimeout(() => scrollToBottom("smooth"), 100);
-                // active channel opened -> mark read immediately
-                api.post(`/chat/channels/${msg.channel_id}/read`, {}, { showErrorToast: false }).catch(() => {});
+                // active channel opened -> mark read immediately via WebSocket
+                if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+                  try {
+                    socketRef.current.send(JSON.stringify({
+                      action: "mark_read",
+                      channel_id: msg.channel_id,
+                      user_name: user?.name
+                    }));
+                  } catch {}
+                }
               }
             } else if (data.type === "reaction_updated" || data.action === "reaction_updated") {
               setMessages((prev) =>
@@ -1783,11 +1818,24 @@ function ChatInner() {
                   };
                 });
               }
-            } else if (data.type === "user_presence") {
-              setPresenceMap((prev) => ({
-                ...prev,
-                [data.user_id]: data.is_online
-              }));
+            } else if (data.action === "presence_state" || data.type === "presence_state") {
+              if (Array.isArray(data.online_users)) {
+                const pMap: Record<string, boolean> = {};
+                data.online_users.forEach((uid: string) => {
+                  pMap[String(uid)] = true;
+                });
+                setPresenceMap((prev) => ({ ...prev, ...pMap }));
+              }
+            } else if (data.type === "user_presence" || data.action === "user_presence_updated" || data.type === "user_presence_updated") {
+              const pDoc = data.presence || data;
+              const uid = String(pDoc.user_id || data.user_id || "");
+              const isOnline = pDoc.is_online !== undefined ? pDoc.is_online : data.is_online;
+              if (uid) {
+                setPresenceMap((prev) => ({
+                  ...prev,
+                  [uid]: Boolean(isOnline)
+                }));
+              }
             }
           } catch {
             // ignore
@@ -1828,35 +1876,6 @@ function ChatInner() {
       }
     };
   }, [user?.id, formatMessage, fetchChannels, fetchMessages, playNotifySound]);
-
-  // Fallback background sync for active channel (every 3.5s)
-  // Ensures images, audio, video, pdf and text ALWAYS display seamlessly
-  useEffect(() => {
-    if (!activeChannelId) return;
-
-    const syncInterval = setInterval(() => {
-      if (typeof document !== "undefined" && document.hidden) return;
-      const currentCid = activeChannelIdRef.current;
-      if (!currentCid || currentCid.startsWith("chan-") || currentCid.startsWith("dm-")) return;
-
-      api.get<any[]>(`/chat/channels/${currentCid}/messages`, { showErrorToast: false })
-        .then((res) => {
-          if (Array.isArray(res) && String(activeChannelIdRef.current) === String(currentCid)) {
-            const list = res.map((m: any) => formatMessage(m));
-            list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-            setMessages((prev) => {
-              if (prev.length === list.length && prev.every((m, idx) => m.id === list[idx]?.id)) {
-                return prev;
-              }
-              return list;
-            });
-          }
-        })
-        .catch(() => {});
-    }, 3500);
-
-    return () => clearInterval(syncInterval);
-  }, [activeChannelId, formatMessage]);
 
   // Refetch channels and active messages when tab regains focus or visibility
   useEffect(() => {
@@ -2926,7 +2945,7 @@ function ChatInner() {
         setMessages([]);
         setIsEditChannelOpen(false);
       }
-    });
+    }); 
   };
 
   // --- 14. START DIRECT MESSAGE (guard against double-click creating duplicates) ---
@@ -3015,7 +3034,15 @@ function ChatInner() {
   const activeChannel = channels.find((c) => (c.id || (c as any)._id) === activeChannelId);
   const isCurrentDm = activeChannel ? isDirect(activeChannel) : false;
   const currentDmUser = activeChannel && isCurrentDm ? getDmOtherUser(activeChannel) : null;
-  const activeChannelName = isCurrentDm
+  const isSelfChat = Boolean(
+    activeChannel?.type === "self" ||
+    String(activeChannel?.name || "").toLowerCase().includes("yourself") ||
+    activeChannel?.name === "You" ||
+    activeChannel?.name === "You (Message Yourself)"
+  );
+  const activeChannelName = isSelfChat
+    ? "You (Message Yourself)"
+    : isCurrentDm
     ? currentDmUser?.name || activeChannel?.name || "Direct Message"
     : activeChannel?.name || "engineering";
 
@@ -3274,7 +3301,6 @@ function ChatInner() {
                     type="button"
                     onClick={() => {
                       setActiveChannelId(chanId);
-                      fetchMessages(chanId);
                       setIsMobileChannelsOpen(false);
                       focusMessageInput();
                     }}
@@ -3328,12 +3354,10 @@ function ChatInner() {
                       const targetId = (dm.id && !dm.id.startsWith("dm-")) ? dm.id : (dmId || "");
                       if (targetId && !targetId.startsWith("dm-")) {
                         setActiveChannelId(targetId);
-                        fetchMessages(targetId);
                       } else if (dmUser) {
                         handleStartDm(dmUser.id);
                       } else if (targetId) {
                         setActiveChannelId(targetId);
-                        fetchMessages(targetId);
                       }
                       setIsMobileChannelsOpen(false);
                       focusMessageInput();
@@ -3450,7 +3474,7 @@ function ChatInner() {
                 {!isCurrentDm && <Hash className="w-4 sm:w-5 h-4 sm:h-5 text-muted-foreground shrink-0" />}
                 <span className="truncate">{cleanDisplayName(activeChannelName)}</span>
               </h2>
-              {!isCurrentDm && activeChannel && (
+              {!isCurrentDm && !isSelfChat && activeChannel && (
                 <button
                   type="button"
                   onClick={() => {
@@ -3470,7 +3494,7 @@ function ChatInner() {
           </div>
 
           <div className="flex items-center gap-1 shrink-0">
-            {!isCurrentDm && activeChannel && (
+            {!isCurrentDm && !isSelfChat && activeChannel && (
               <button
                 type="button"
                 onClick={() => {
@@ -3505,15 +3529,17 @@ function ChatInner() {
               <Search className="w-4 h-4" />
             </button>
 
-            <button
-              type="button"
-              onClick={() => setIsPollModalOpen(true)}
-              className="p-2 text-muted-foreground hover:text-emerald-600 hover:bg-muted rounded-lg transition-colors cursor-pointer"
-              title="Create a Poll"
-            >
-              <BarChart2 className="w-4 h-4" />
-            </button>
-            {!isCurrentDm && activeChannel && isChannelCreator(activeChannel) && (
+            {!isSelfChat && !isCurrentDm && (
+              <button
+                type="button"
+                onClick={() => setIsPollModalOpen(true)}
+                className="p-2 text-muted-foreground hover:text-emerald-600 hover:bg-muted rounded-lg transition-colors cursor-pointer"
+                title="Create a Poll"
+              >
+                <BarChart2 className="w-4 h-4" />
+              </button>
+            )}
+            {!isCurrentDm && !isSelfChat && activeChannel && isChannelCreator(activeChannel) && (
               <button
                 type="button"
                 onClick={openEditChannel}
@@ -3998,20 +4024,26 @@ function ChatInner() {
                           </div>
                         )}
 
-                        {/* POLL INTERFACE */}
+                        {/* POLL INTERFACE - WhatsApp Style */}
                         {Boolean(msg.poll && Array.isArray(msg.poll.options) && msg.poll.options.length > 0) && (
-                          <div
-                            className={cn(
-                              "p-3 rounded-xl min-w-[240px] sm:min-w-[280px] space-y-2 mb-1",
-                              isMe ? "bg-black/20 text-white" : "bg-card border border-border text-foreground"
-                            )}
-                          >
-                            <div className="font-bold text-xs flex items-center justify-between">
-                              <span>📊 {msg.poll!.question}</span>
-                              {msg.poll!.allow_multiple_answers && (
-                                <span className="text-[10px] opacity-75 font-normal">Multiple choices</span>
-                              )}
+                          <div className="min-w-[260px] sm:min-w-[300px] max-w-[360px] space-y-2.5 py-0.5">
+                            {/* Poll Header: Question + Selection Mode */}
+                            <div className="space-y-0.5 pr-1">
+                              <h4 className={cn(
+                                "font-bold text-[15px] leading-snug tracking-tight select-text",
+                                isMe ? "text-white" : "text-[#111b21] dark:text-foreground"
+                              )}>
+                                {msg.poll!.question}
+                              </h4>
+                              <p className={cn(
+                                "text-[11px] font-normal tracking-wide",
+                                isMe ? "text-white/80" : "text-muted-foreground"
+                              )}>
+                                {msg.poll!.allow_multiple_answers ? "Select one or more" : "Select one"}
+                              </p>
                             </div>
+
+                            {/* Options List */}
                             <div className="space-y-2">
                               {msg.poll!.options.map((opt) => {
                                 const totalVotes =
@@ -4020,62 +4052,119 @@ function ChatInner() {
                                 const percent = Math.round((votes / totalVotes) * 100);
                                 const hasVoted = Array.isArray(opt.voters) && opt.voters.some((v) => String(v) === myUserId || (myEmployeeId && String(v) === myEmployeeId));
 
-                                // Resolve voter names (WhatsApp voter details + employee lookup)
-                                const voterNames = (opt.voter_details && opt.voter_details.length > 0)
+                                // Resolve voter names with fallback
+                                const voterItems: Array<{ id: string; name: string }> = (opt.voter_details && opt.voter_details.length > 0)
                                   ? opt.voter_details.map((vd) => {
                                       const sVid = String(vd.id);
-                                      if (sVid === myUserId || (myEmployeeId && sVid === myEmployeeId)) return "You";
-                                      return vd.name || "Colleague";
+                                      const isSelf = sVid === myUserId || (myEmployeeId && sVid === myEmployeeId);
+                                      return { id: sVid, name: isSelf ? "You" : (vd.name || "Colleague") };
                                     })
                                   : (opt.voters || []).map((vid) => {
                                       const sVid = String(vid);
-                                      if (sVid === myUserId || (myEmployeeId && sVid === myEmployeeId)) return "You";
+                                      const isSelf = sVid === myUserId || (myEmployeeId && sVid === myEmployeeId);
                                       const found = (employees || []).find((e) => String(e.id) === sVid || String((e as any)._id) === sVid);
-                                      return found?.name || "Colleague";
+                                      return { id: sVid, name: isSelf ? "You" : (found?.name || "Colleague") };
                                     });
 
                                 return (
-                                  <div key={opt.id} className="space-y-1">
+                                  <div key={opt.id} className="space-y-1.5">
                                     <button
                                       type="button"
                                       onClick={() => handleVotePoll(msg.id, opt.id)}
                                       className={cn(
-                                        "w-full text-left relative overflow-hidden rounded-lg p-2.5 text-xs border transition-all cursor-pointer",
-                                        hasVoted
-                                          ? "border-emerald-500 font-bold bg-emerald-500/10 shadow-xs"
-                                          : "border-border/60 hover:border-emerald-500/50"
+                                        "w-full text-left relative overflow-hidden rounded-xl p-2.5 sm:p-3 text-xs transition-all duration-200 cursor-pointer border select-none group",
+                                        isMe
+                                          ? hasVoted
+                                            ? "bg-black/25 border-white/50 shadow-xs ring-1 ring-white/30"
+                                            : "bg-black/15 hover:bg-black/25 border-white/20 hover:border-white/40"
+                                          : hasVoted
+                                            ? "bg-emerald-500/10 border-emerald-600/60 shadow-xs ring-1 ring-emerald-500/30 dark:bg-emerald-500/15"
+                                            : "bg-white dark:bg-card hover:bg-card/80 border-border/80 hover:border-emerald-500/40"
                                       )}
                                     >
+                                      {/* Smooth Progress Fill */}
                                       <div
-                                        className="absolute inset-y-0 left-0 bg-emerald-500/20 transition-all duration-300"
+                                        className={cn(
+                                          "absolute inset-y-0 left-0 transition-all duration-300 rounded-xl",
+                                          isMe ? "bg-white/20" : "bg-emerald-500/15 dark:bg-emerald-500/25"
+                                        )}
                                         style={{ width: `${percent}%` }}
                                       />
-                                      <div className="relative flex items-center justify-between z-10">
-                                        <div className="flex items-center gap-2 truncate">
-                                          <span className={cn(
-                                            "w-3.5 h-3.5 rounded-full border flex items-center justify-center text-[9px] shrink-0",
-                                            hasVoted ? "border-emerald-600 bg-emerald-600 text-white font-bold" : "border-muted-foreground/40"
-                                          )}>
-                                            {hasVoted ? "✓" : ""}
+
+                                      {/* Option Info Row */}
+                                      <div className="relative flex items-center justify-between gap-3 z-10">
+                                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                          {/* Checkbox / Radio Circle */}
+                                          <span
+                                            className={cn(
+                                              "w-4 h-4 rounded-full flex items-center justify-center shrink-0 transition-all duration-150",
+                                              hasVoted
+                                                ? isMe
+                                                  ? "bg-white text-emerald-800 shadow-xs"
+                                                  : "bg-emerald-600 text-white shadow-xs"
+                                                : isMe
+                                                  ? "border-2 border-white/60 group-hover:border-white"
+                                                  : "border-2 border-muted-foreground/50 group-hover:border-emerald-600"
+                                            )}
+                                          >
+                                            {hasVoted && <Check className="w-2.5 h-2.5 stroke-[3.5]" />}
                                           </span>
-                                          <span className="truncate">{opt.text}</span>
+                                          <span className={cn(
+                                            "text-[13px] font-semibold truncate",
+                                            isMe ? "text-white" : "text-foreground"
+                                          )}>
+                                            {opt.text}
+                                          </span>
                                         </div>
-                                        <span className="text-[10px] opacity-80 font-mono ml-2 shrink-0">
-                                          {percent}% ({votes})
-                                        </span>
+
+                                        {/* Percentage and Vote Count */}
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                          <span className={cn(
+                                            "text-[11px] font-mono",
+                                            isMe ? "text-white/80" : "text-muted-foreground"
+                                          )}>
+                                            {votes > 0 ? `${votes}` : ""}
+                                          </span>
+                                          <span className={cn(
+                                            "text-[11.5px] font-bold font-mono px-1.5 py-0.5 rounded-md",
+                                            isMe ? "bg-white/20 text-white" : "bg-muted text-foreground"
+                                          )}>
+                                            {percent}%
+                                          </span>
+                                        </div>
                                       </div>
                                     </button>
-                                    {/* Task 43: Voter names display / tooltip */}
-                                    {voterNames.length > 0 && !msg.poll?.hide_voters_name && (
-                                      <div
-                                        className="text-[10px] text-muted-foreground pl-1.5 flex items-center gap-1 truncate"
-                                        title={`Voted by: ${voterNames.join(", ")}`}
-                                      >
-                                        <Users className="w-3 h-3 text-emerald-600 shrink-0" />
-                                        <span className="truncate">
-                                          {voterNames.slice(0, 3).join(", ")}
-                                          {voterNames.length > 3 && ` +${voterNames.length - 3} more`}
-                                        </span>
+
+                                    {/* High-Contrast Voter Badges */}
+                                    {voterItems.length > 0 && !msg.poll?.hide_voters_name && (
+                                      <div className="flex items-center flex-wrap gap-1 px-1 pt-0.5">
+                                        {voterItems.slice(0, 3).map((voter, vIdx) => (
+                                          <span
+                                            key={vIdx}
+                                            className={cn(
+                                              "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10.5px] font-medium transition-colors",
+                                              isMe
+                                                ? "bg-black/35 text-white border border-white/25 shadow-xs"
+                                                : "bg-card text-foreground border border-border/80 shadow-2xs"
+                                            )}
+                                          >
+                                            <span className={cn(
+                                              "w-3.5 h-3.5 rounded-full text-[9px] font-bold flex items-center justify-center shrink-0",
+                                              isMe ? "bg-white/25 text-white" : "bg-emerald-600/15 text-emerald-700 dark:text-emerald-400"
+                                            )}>
+                                              {voter.name.charAt(0).toUpperCase()}
+                                            </span>
+                                            <span className="max-w-[120px] truncate">{voter.name}</span>
+                                          </span>
+                                        ))}
+                                        {voterItems.length > 3 && (
+                                          <span className={cn(
+                                            "text-[10px] font-medium px-1.5 py-0.5 rounded-full",
+                                            isMe ? "bg-black/30 text-white/90" : "bg-muted text-muted-foreground"
+                                          )}>
+                                            +{voterItems.length - 3} more
+                                          </span>
+                                        )}
                                       </div>
                                     )}
                                   </div>
@@ -4083,8 +4172,11 @@ function ChatInner() {
                               })}
                             </div>
 
-                            {/* WhatsApp style View votes button */}
-                            <div className="pt-2 border-t border-border/40 flex items-center justify-between">
+                            {/* WhatsApp Style Footer: "View votes" + Count + Time & Status Tick */}
+                            <div className={cn(
+                              "pt-2 mt-2 border-t flex items-center justify-between gap-2",
+                              isMe ? "border-white/20" : "border-border/60"
+                            )}>
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -4092,22 +4184,39 @@ function ChatInner() {
                                   setViewVotesPollMsg(msg);
                                 }}
                                 className={cn(
-                                  "text-[11px] font-semibold hover:underline flex items-center gap-1 cursor-pointer transition-colors",
-                                  isMe ? "text-emerald-200 hover:text-white" : "text-emerald-600 dark:text-emerald-400"
+                                  "text-[11.5px] font-semibold flex items-center gap-1.5 cursor-pointer transition-colors px-2 py-1 rounded-lg",
+                                  isMe
+                                    ? "bg-white/15 text-white hover:bg-white/25"
+                                    : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20"
                                 )}
                               >
                                 <Users className="w-3.5 h-3.5" />
                                 <span>View votes</span>
                               </button>
-                              <span className={cn("text-[10px]", isMe ? "text-white/70" : "text-muted-foreground")}>
-                                {msg.poll!.options.reduce((acc, o) => acc + (Array.isArray(o.voters) ? o.voters.length : 0), 0)} votes
-                              </span>
+
+                              <div className="flex items-center gap-2">
+                                <span className={cn("text-[11px] font-medium", isMe ? "text-white/85" : "text-muted-foreground")}>
+                                  {msg.poll!.options.reduce((acc, o) => acc + (Array.isArray(o.voters) ? o.voters.length : 0), 0)} votes
+                                </span>
+                                <span className={cn("text-[10px] flex items-center gap-1 ml-0.5", isMe ? "text-white/75" : "text-muted-foreground")}>
+                                  <span>{formatMsgTime(msg.created_at)}</span>
+                                  {isMe && (
+                                    <span title={isMessageSeen(msg) ? "Seen / Read" : "Delivered"}>
+                                      {isMessageSeen(msg) ? (
+                                        <CheckCheck className="w-3.5 h-3.5 text-[#53bdeb]" strokeWidth={2.5} />
+                                      ) : (
+                                        <CheckCheck className="w-3.5 h-3.5 text-white/70" strokeWidth={2} />
+                                      )}
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
                             </div>
                           </div>
                         )}
 
                         {/* TEXT MESSAGE CONTENT - WhatsApp style (tick inline, no extra line) */}
-                        {msg.content && (
+                        {msg.content && !msg.poll && (
                           <div className={cn("break-words select-text relative", isMe && "pr-6")}>
                             {msg.content.length > 700 && !expandedMessages.has(msg.id) ? (
                               <>
@@ -4560,7 +4669,7 @@ function ChatInner() {
                   }
                 }}
                 onPaste={handlePaste}
-                placeholder={isCurrentDm ? `Message ${cleanDisplayName(activeChannelName)}` : `Message #${cleanDisplayName(activeChannelName)}`}
+                placeholder={isSelfChat ? "Message yourself..." : isCurrentDm ? `Message ${cleanDisplayName(activeChannelName)}` : `Message #${cleanDisplayName(activeChannelName)}`}
                 className="w-full bg-transparent border-none focus:outline-none text-sm text-foreground placeholder:text-muted-foreground resize-none max-h-40 overflow-y-auto leading-relaxed py-1.5"
               />
 

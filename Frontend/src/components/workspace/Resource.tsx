@@ -46,6 +46,7 @@ import { toast } from "@/lib/toast";
 import { PrintLabelsModal } from "./PrintLabelsModal";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";
+import { hasModulePermission, isUserAdmin } from "@/lib/permissions";
 
 const getStatusBadge = (status: string) => {
   switch (status) {
@@ -177,12 +178,15 @@ export default function ResourceManagementPage() {
   const userDesig = String(anyUser?.designation || anyUser?.work_details?.designation || "").toLowerCase();
 
   const isAdminOrHR = 
+    isUserAdmin(user) ||
     userRole === "admin" || 
     userRole === "superadmin" || 
     userRole === "hr" || 
     userRole === "subadmin" ||
     userDept === "hr" ||
-    userDesig.includes("hr");
+    userDesig.includes("hr") ||
+    hasModulePermission(user, "/workspace/resource", "update") ||
+    hasModulePermission(user, "/workspace", "all");
 
   const isAdmin = isAdminOrHR;
   const isEmployeeOnly = !isAdminOrHR;

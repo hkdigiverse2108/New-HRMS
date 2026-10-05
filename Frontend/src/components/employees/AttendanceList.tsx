@@ -16,7 +16,7 @@ import { EOMSummaryView } from "@/components/attendance/EOMSummaryView";
 import { formatISTDate, formatISTTime, formatDurationSeconds, parseTimeToMinutes } from "@/lib/timeUtils";
 import { api } from "@/lib/api";
 import { toast } from "@/lib/toast";
-import { isUserAdmin } from "@/lib/permissions";
+import { isUserAdmin, hasModulePermission } from "@/lib/permissions";
 import { DatePicker } from "@/components/ui/date-picker";
 import { SearchableSelect } from "@/components/ui/select";
 
@@ -144,10 +144,23 @@ export function AttendanceList() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const itemsPerPage = 10;
 
-  const isAdminOrHR =
+  const canReadAttendance =
     isUserAdmin(user) ||
     ["admin", "super admin", "superadmin", "hr"].includes(String(user?.role || (user as any)?.system_role || "").toLowerCase().trim()) ||
-    String(user?.department || "").toLowerCase().trim() === "hr";
+    String(user?.department || "").toLowerCase().trim() === "hr" ||
+    hasModulePermission(user, "/employees/attendance", "read") ||
+    hasModulePermission(user, "/attendance", "read");
+
+  const canManageAttendance =
+    isUserAdmin(user) ||
+    ["admin", "super admin", "superadmin", "hr"].includes(String(user?.role || (user as any)?.system_role || "").toLowerCase().trim()) ||
+    String(user?.department || "").toLowerCase().trim() === "hr" ||
+    hasModulePermission(user, "/employees/attendance", "create") ||
+    hasModulePermission(user, "/employees/attendance", "update") ||
+    hasModulePermission(user, "/attendance", "create") ||
+    hasModulePermission(user, "/attendance", "update");
+
+  const isAdminOrHR = canReadAttendance || canManageAttendance;
 
   // Manual Attendance Modal State (for HR/Admin to mark day attendance / holiday / closed office)
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
@@ -591,7 +604,7 @@ export function AttendanceList() {
               >
                 <Download className="w-4 h-4" /> Export
               </button>
-              {isAdminOrHR && (
+              {canManageAttendance && (
                 <button
                   onClick={() => setIsManualModalOpen(true)}
                   className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs sm:text-sm rounded-xl shadow-sm flex items-center gap-2 transition-colors"

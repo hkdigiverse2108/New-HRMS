@@ -106,7 +106,34 @@ class PenaltyService:
             insert_data["impact_payroll"] = not insert_data.get("is_warning", False) and (float(insert_data.get("price", 0)) > 0)
             
         insert_data["status"] = insert_data.get("status", "Active")
-        return await EmployeePenaltyRepository.create(insert_data)
+        created_penalty = await EmployeePenaltyRepository.create(insert_data)
+
+        # Notify strictly the penalized employee
+        try:
+            from app.repository.notification import NotificationRepository
+            emp_id = str(data.employee_id)
+            is_warn = insert_data.get("is_warning", False)
+            price_val = insert_data.get("price", 0)
+            reason_text = insert_data.get("reason", "")
+            
+            title = "Formal Warning Issued" if is_warn else "Penalty Recorded"
+            if is_warn:
+                msg = f"A formal warning has been issued: {reason_text}" if reason_text else "A formal warning has been recorded."
+            else:
+                msg = f"A penalty of ₹{int(price_val)} has been recorded: {reason_text}" if reason_text else f"A penalty of ₹{int(price_val)} has been applied."
+                
+            await NotificationRepository.create_notification({
+                "recipient_id": emp_id,
+                "title": title,
+                "message": msg,
+                "type": "penalty",
+                "action_url": "/penalty",
+                "is_read": False
+            })
+        except Exception as e:
+            print(f"[PENALTY NOTIFICATION ERROR] Failed to create notification: {e}")
+
+        return created_penalty
 
     @staticmethod
     async def get_all_penalties(

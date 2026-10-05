@@ -7,6 +7,7 @@ import { useTheme } from "../ThemeProvider";
 import { useSettingsContext } from "../payroll/SettingsContext";
 import { moveToRecycleBin } from "@/lib/recycle-bin";
 import { SearchableSelect } from "@/components/ui/select";
+import { NotificationSettingsCard } from "@/components/notifications/NotificationSettingsCard";
 
 const FONTS = [
   { value: "System", label: "System Default" },
@@ -227,6 +228,9 @@ export function AdminSettings() {
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
         
+        {/* Notification Preferences Card */}
+        <NotificationSettingsCard className="md:col-span-2 lg:col-span-2 xl:col-span-3" />
+
         {/* Theme Color Card */}
         <div className="bg-card border border-border/50 rounded-3xl p-6 shadow-sm flex flex-col">
           <div className="flex items-center gap-2 mb-4">

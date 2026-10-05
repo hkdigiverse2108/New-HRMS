@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { toast } from "@/lib/toast";
 import { useAuth } from "@/components/auth/AuthContext";
+import { hasModulePermission, isUserAdmin } from "@/lib/permissions";
 
 type VerificationStatus = "Pending" | "Verified" | "Rejected";
 
@@ -67,16 +68,57 @@ const taskLabel = (t: DailyTask) => t.title || t.description || "Task";
 
 export function DailyProgress() {
   const { user } = useAuth();
-  const isAdminOrHr = ["Admin", "Subadmin", "HR"].includes(user?.role || "");
+  const anyUser = user as any;
+  const userDept = String(anyUser?.department || anyUser?.work_details?.department || "").toLowerCase();
+  const userRole = String(anyUser?.role || anyUser?.work_details?.system_role || (userDept === "hr" ? "hr" : "Employee")).toLowerCase();
+
+  const canReadProgress = isUserAdmin(user) || userDept === "hr" || hasModulePermission(user, "/approvals/daily-progress", "read") || hasModulePermission(user, "/daily-progress", "read");
+  const canManageProgress = isUserAdmin(user) || userDept === "hr" || hasModulePermission(user, "/approvals/daily-progress", "update") || hasModulePermission(user, "/daily-progress", "update") || hasModulePermission(user, "/approvals/daily-progress", "all");
+  const isAdminOrHr = canReadProgress || canManageProgress;
 
   const [search, setSearch] = useState("");
-  // Default = TODAY (Audio PDF)
+  // Default = TODAY
   const [startDate, setStartDate] = useState(todayStr());
   const [endDate, setEndDate] = useState(todayStr());
   const [statusFilter, setStatusFilter] = useState<VerificationStatus | "All">("All");
+  const [employeeFilter, setEmployeeFilter] = useState<string>("All");
+  const [departmentFilter, setDepartmentFilter] = useState<string>("All");
+  const [employeeOptions, setEmployeeOptions] = useState<{ label: string; value: string }[]>([]);
+  const [departmentOptions, setDepartmentOptions] = useState<{ label: string; value: string }[]>([]);
   const [records, setRecords] = useState<DailyRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [avgRating, setAvgRating] = useState<string>("N/A");
+
+  // Load employee & department list for filters
+  useEffect(() => {
+    if (!isAdminOrHr) return;
+    const loadFilters = async () => {
+      try {
+        const res = await api.get<any>("/employees?exclude_role=Admin", { showLoader: false, showErrorToast: false });
+        const list = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+        const nonAdminList = list.filter((e: any) => {
+          const role = String(e.work_details?.system_role || e.role || "").toLowerCase().trim();
+          return role !== "admin";
+        });
+        const emps = nonAdminList.map((e: any) => {
+          const p = e.personal_info || {};
+          const name = `${p.first_name || ""} ${p.last_name || ""}`.trim() || e.name || "Employee";
+          const id = String(e._id || e.id || "");
+          return { label: name, value: id };
+        }).filter((e: any) => e.value);
+        setEmployeeOptions([{ label: "All Employees", value: "All" }, ...emps]);
+
+        const depts = new Set<string>();
+        list.forEach((e: any) => {
+          const d = e.work_details?.department || e.department;
+          if (d && typeof d === "string") depts.add(d.trim());
+        });
+        const deptOpts = Array.from(depts).filter(Boolean).sort().map(d => ({ label: d, value: d }));
+        setDepartmentOptions([{ label: "All Departments / Heads", value: "All" }, ...deptOpts]);
+      } catch {}
+    };
+    loadFilters();
+  }, [isAdminOrHr]);
 
   // Modal State
   const [verifyModalOpen, setVerifyModalOpen] = useState(false);
@@ -90,6 +132,12 @@ export function DailyProgress() {
     setIsLoading(true);
     try {
       const params = new URLSearchParams();
+      if (!isAdminOrHr) {
+        params.set("view_type", "my");
+      } else {
+        if (employeeFilter !== "All") params.set("employee_id", employeeFilter);
+        if (departmentFilter !== "All") params.set("department", departmentFilter);
+      }
       if (search.trim()) params.set("search", search.trim());
       if (statusFilter !== "All") params.set("status", statusFilter);
       if (startDate && endDate && startDate === endDate) {
@@ -110,7 +158,7 @@ export function DailyProgress() {
     } finally {
       setIsLoading(false);
     }
-  }, [search, statusFilter, startDate, endDate]);
+  }, [search, statusFilter, startDate, endDate, employeeFilter, departmentFilter, isAdminOrHr]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -133,9 +181,12 @@ export function DailyProgress() {
   }, [fetchRecords, fetchStats]);
 
   const filteredRecords = records.filter(rec => {
+    if (!isAdminOrHr && rec.employee_id !== user?.id) return false;
     const matchesSearch = rec.employeeName.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === "All" || rec.verificationStatus === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesEmp = employeeFilter === "All" || rec.employee_id === employeeFilter;
+    const matchesDept = departmentFilter === "All" || rec.department.toLowerCase() === departmentFilter.toLowerCase();
+    return matchesSearch && matchesStatus && matchesEmp && matchesDept;
   });
 
   const pendingCount = records.filter(r => r.verificationStatus === "Pending").length;
@@ -154,13 +205,20 @@ export function DailyProgress() {
   };
 
   const handleVerifySubmit = async () => {
-    if (!selectedRecord || currentRating === 0) return;
+    if (!selectedRecord || currentRating === 0 || !currentRemarks.trim()) {
+      toast.error("Both KRA-KPI Rating and Manager Remarks are required.");
+      return;
+    }
+    if (selectedRecord.employee_id === user?.id) {
+      toast.error("You cannot approve your own daily progress report.");
+      return;
+    }
     setIsSubmitting(true);
     try {
       // KRA-KPI: stars(1-5) → rating /10
       await api.put(`/daily-progress/${selectedRecord.id}/approve`, {
         rating: currentRating * 2,
-        remarks: currentRemarks,
+        remarks: currentRemarks.trim(),
       });
       toast.success("Verified with KRA-KPI rating");
       setVerifyModalOpen(false);
@@ -263,19 +321,39 @@ export function DailyProgress() {
             className="w-full pl-9 pr-4 py-2.5 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium"
           />
         </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          {isAdminOrHr && (
+            <>
+              <div className="relative w-full sm:w-[170px]">
+                <SearchableSelect
+                  value={employeeFilter}
+                  onChange={(val) => setEmployeeFilter(val)}
+                  options={employeeOptions.length > 0 ? employeeOptions : [{ label: "All Employees", value: "All" }]}
+                  className="w-full h-[42px] bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-xs font-bold cursor-pointer"
+                />
+              </div>
+              <div className="relative w-full sm:w-[190px]">
+                <SearchableSelect
+                  value={departmentFilter}
+                  onChange={(val) => setDepartmentFilter(val)}
+                  options={departmentOptions.length > 0 ? departmentOptions : [{ label: "All Departments / Heads", value: "All" }]}
+                  className="w-full h-[42px] bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-xs font-bold cursor-pointer"
+                />
+              </div>
+            </>
+          )}
           <DatePicker
             value={startDate}
             onChange={(val) => setStartDate(val)}
             placeholder="Start date"
-            className="w-full sm:w-[145px]"
+            className="w-full sm:w-[135px]"
           />
           <span className="text-muted-foreground text-sm font-bold">to</span>
           <DatePicker
             value={endDate}
             onChange={(val) => setEndDate(val)}
             placeholder="End date"
-            className="w-full sm:w-[145px]"
+            className="w-full sm:w-[135px]"
           />
           <div className="relative w-full sm:w-auto">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />
@@ -288,7 +366,7 @@ export function DailyProgress() {
                 { label: "Verified", value: "Verified" },
                 { label: "Rejected", value: "Rejected" },
               ]}
-              className="w-[200px] h-[42px] pl-9 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-bold cursor-pointer"
+              className="w-[180px] h-[42px] pl-9 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-bold cursor-pointer"
             />
           </div>
         </div>
@@ -404,9 +482,18 @@ export function DailyProgress() {
 
               <button
                 onClick={() => handleOpenVerify(record)}
-                className="px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold rounded-lg transition-colors flex items-center gap-2"
+                className={cn(
+                  "px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-2",
+                  record.verificationStatus === "Pending"
+                    ? (record.employee_id === user?.id
+                        ? "bg-muted text-muted-foreground hover:bg-muted/80"
+                        : "bg-primary/10 hover:bg-primary/20 text-primary")
+                    : "bg-muted/50 hover:bg-muted text-foreground"
+                )}
               >
-                {record.verificationStatus === "Pending" ? "Verify & Rate" : "View Details"}
+                {record.verificationStatus === "Pending"
+                  ? (record.employee_id === user?.id ? "Self Report" : "Verify & Rate")
+                  : "View Details"}
               </button>
             </div>
           </div>
@@ -494,17 +581,24 @@ export function DailyProgress() {
               </div>
 
               {/* Rating & Verification Section */}
-              <div className="bg-muted/10 p-6 rounded-2xl border border-border/50 flex flex-col space-y-6">
+              <div className="bg-muted/10 p-6 rounded-2xl border border-border/50 flex flex-col space-y-5">
+                {selectedRecord && selectedRecord.employee_id === user?.id && (
+                  <div className="bg-amber-500/10 border border-amber-500/20 text-amber-700 p-3.5 rounded-xl text-xs font-bold flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
+                    <span>You cannot approve or verify your own daily progress report. An Admin or another Head must verify it.</span>
+                  </div>
+                )}
+
                 <div>
-                  <h3 className="font-bold flex items-center gap-2 mb-4">
+                  <h3 className="font-bold flex items-center gap-2 mb-3">
                     <Star className="w-5 h-5 text-primary" />
-                    KRA-KPI Rating
+                    <span>KRA-KPI Rating <span className="text-rose-500 font-black">*</span></span>
                   </h3>
                   <div className="flex items-center gap-2">
                     {Array.from({ length: 5 }).map((_, i) => (
                       <button
                         key={i}
-                        disabled={!isAdminOrHr}
+                        disabled={!isAdminOrHr || (selectedRecord?.employee_id === user?.id)}
                         onClick={() => setCurrentRating(i + 1)}
                         className={cn(
                           "p-2 rounded-xl transition-all hover:scale-110 disabled:cursor-default disabled:hover:scale-100",
@@ -517,25 +611,30 @@ export function DailyProgress() {
                       </button>
                     ))}
                   </div>
-                  {currentRating > 0 && (
-                    <p className="text-sm font-bold text-emerald-600 mt-3">
+                  {currentRating > 0 ? (
+                    <p className="text-sm font-bold text-emerald-600 mt-2">
                       KRA-KPI {currentRating * 2}/10
                     </p>
+                  ) : (
+                    <p className="text-xs text-rose-500 font-semibold mt-2">* Please choose a star rating (1-5 stars)</p>
                   )}
                 </div>
 
                 <div className="flex-grow flex flex-col">
-                  <h3 className="font-bold flex items-center gap-2 mb-3">
+                  <h3 className="font-bold flex items-center gap-2 mb-2">
                     <MessageSquare className="w-5 h-5 text-primary" />
-                    Manager Remarks
+                    <span>Manager Remarks <span className="text-rose-500 font-black">*</span></span>
                   </h3>
                   <textarea
                     value={currentRemarks}
                     onChange={(e) => setCurrentRemarks(e.target.value)}
-                    disabled={!isAdminOrHr}
-                    placeholder="Add constructive feedback or notes about today's work..."
-                    className="w-full flex-grow min-h-[120px] px-4 py-3 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium resize-none disabled:opacity-70"
+                    disabled={!isAdminOrHr || (selectedRecord?.employee_id === user?.id)}
+                    placeholder="Add constructive feedback or notes about today's work (required)..."
+                    className="w-full flex-grow min-h-[110px] px-4 py-3 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium resize-none disabled:opacity-70"
                   />
+                  {!currentRemarks.trim() && (
+                    <p className="text-xs text-rose-500 font-semibold mt-1.5">* Manager remarks note is required to verify</p>
+                  )}
                 </div>
 
                 {selectedRecord?.verificationStatus === "Verified" && (
@@ -555,8 +654,8 @@ export function DailyProgress() {
             </div>
           </div>
 
-          {/* Modal Footer */}
-          {isAdminOrHr && (
+          {/* Modal Footer (Governed by Employee-wise & Preset Permissions) */}
+          {canManageProgress && (
           <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-between gap-3 mt-auto shrink-0">
             <div>
               {selectedRecord && selectedRecord.verificationStatus !== "Pending" && (
@@ -582,7 +681,16 @@ export function DailyProgress() {
               )}
               <button
                 onClick={handleVerifySubmit}
-                disabled={currentRating === 0 || isSubmitting}
+                disabled={currentRating === 0 || !currentRemarks.trim() || isSubmitting || (selectedRecord?.employee_id === user?.id)}
+                title={
+                  selectedRecord?.employee_id === user?.id
+                    ? "You cannot approve your own report"
+                    : currentRating === 0
+                      ? "KRA-KPI Rating is required"
+                      : !currentRemarks.trim()
+                        ? "Manager remarks note is required"
+                        : undefined
+                }
                 className="px-6 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 font-bold rounded-xl transition-colors disabled:opacity-50 shadow-sm flex items-center gap-2"
               >
                 {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}

@@ -59,10 +59,19 @@ export function uiAvatar(name: string) {
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'User')}&background=random`;
 }
 
-export function getAvatarUrl(_url: string | null | undefined, fallbackName: string) {
-  // Employee photos REMOVED (no need) — always initials avatar.
-  // This guarantees the browser never fires /images/* requests for legacy photo names.
-  return uiAvatar(fallbackName);
+export function getAvatarUrl(url: string | null | undefined, fallbackName: string) {
+  if (!url || typeof url !== "string" || !url.trim() || url === "null" || url === "undefined") {
+    return uiAvatar(fallbackName);
+  }
+  const clean = url.trim();
+  if (clean.startsWith("http://") || clean.startsWith("https://") || clean.startsWith("data:") || clean.startsWith("blob:")) {
+    return clean;
+  }
+  const apiBase = resolveApiUrl();
+  if (clean.startsWith("/")) {
+    return `${apiBase}${clean}`;
+  }
+  return `${apiBase}/images/employee/${clean}`;
 }
 
 // <img onError={handleAvatarError} /> — legacy /images/* paths whose files are

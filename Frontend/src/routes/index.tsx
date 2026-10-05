@@ -181,8 +181,8 @@ export function Index() {
     }
   };
 
-  // 1. If still running SSR or validating existing session token on the client, show clean loader
-  if (!isClient || (token && isAuthLoading)) {
+  // 1. If still running SSR or validating existing session token on the client (and no cached user), show clean loader
+  if (!isClient || (token && isAuthLoading && !user)) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-background">
         <div className="w-8 h-8 rounded-full border-4 border-primary border-r-transparent animate-spin" />

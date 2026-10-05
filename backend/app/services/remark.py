@@ -7,8 +7,9 @@ class RemarkService:
     @staticmethod
     def _apply_visibility_rules(remark: Dict[str, Any], current_user: dict) -> Dict[str, Any]:
         role = current_user.get("work_details", {}).get("system_role", "")
+        dept = current_user.get("work_details", {}).get("department", "")
         user_id = str(current_user.get("_id") or current_user.get("id"))
-        is_admin = role in ["Admin", "Super Admin"] or user_id == "default-admin-id"
+        is_admin = role in ["Admin", "Super Admin", "HR"] or dept == "HR" or user_id == "default-admin-id"
 
         # If the user is the one who submitted it, they can see everything natively.
         if remark.get("submitted_by_id") == user_id:
@@ -47,8 +48,9 @@ class RemarkService:
             return None
             
         role = current_user.get("work_details", {}).get("system_role", "")
+        dept = current_user.get("work_details", {}).get("department", "")
         user_id = str(current_user.get("_id") or current_user.get("id"))
-        is_admin = role in ["Admin", "Super Admin"] or user_id == "default-admin-id"
+        is_admin = role in ["Admin", "Super Admin", "HR"] or dept == "HR" or user_id == "default-admin-id"
 
         # Employee can only see their own submitted remarks. Admin can see all.
         if not is_admin and remark.get("submitted_by_id") != user_id:
@@ -91,8 +93,9 @@ class RemarkService:
         avg_satisfaction: bool = False
     ) -> List[Dict[str, Any]]:
         role = current_user.get("work_details", {}).get("system_role", "")
+        dept = current_user.get("work_details", {}).get("department", "")
         user_id = str(current_user.get("_id") or current_user.get("id"))
-        is_admin = role in ["Admin", "Super Admin"] or user_id == "default-admin-id"
+        is_admin = role in ["Admin", "Super Admin", "HR"] or dept == "HR" or user_id == "default-admin-id"
 
         query = {}
         # If not admin, restrict to their own submissions

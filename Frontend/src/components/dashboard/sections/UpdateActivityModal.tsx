@@ -12,6 +12,7 @@ export interface SelectedTaskInfo {
   taskType: WorkActivityType;
   dueDate?: string | undefined;
   badge?: string | undefined;
+  isCustom?: boolean | undefined;
 }
 
 interface UpdateActivityModalProps {
@@ -189,18 +190,19 @@ export function UpdateActivityModal({
           );
         }
 
-        // 3. Fetch Activity items
+        // 3. Fetch Activity items (Updated per transcript)
         const activityList: TaskItem[] = [
-          { id: "act-1", title: "Code Review & PR Reviews", dueDate: todayDateStr, badge: "Activity", category: "Activity" },
-          { id: "act-2", title: "Client Communication & Follow-up", dueDate: todayDateStr, badge: "Activity", category: "Activity" },
-          { id: "act-3", title: "Team Coordination & Standup", dueDate: todayDateStr, badge: "Activity", category: "Activity" },
+          { id: "act-1", title: "Client Communication", dueDate: todayDateStr, badge: "Activity", category: "Activity" },
+          { id: "act-2", title: "Stream Coordination", dueDate: todayDateStr, badge: "Activity", category: "Activity" },
+          { id: "act-3", title: "CC Creation", dueDate: todayDateStr, badge: "Activity", category: "Activity" },
+          { id: "act-4", title: "Cake Cutting", dueDate: todayDateStr, badge: "Activity", category: "Activity" },
+          { id: "act-5", title: "Game Session", dueDate: todayDateStr, badge: "Activity", category: "Activity" },
         ];
 
-        // 4. Fetch Meeting items
+        // 4. Fetch Meeting items (Updated per transcript)
         const meetingList: TaskItem[] = [
-          { id: "meet-1", title: "Daily Morning Sync / Standup", dueDate: todayDateStr, badge: "Meeting", category: "Meeting" },
-          { id: "meet-2", title: "Weekly Sprint Planning", dueDate: todayDateStr, badge: "Meeting", category: "Meeting" },
-          { id: "meet-3", title: "Client Product Demo", dueDate: todayDateStr, badge: "Meeting", category: "Meeting" },
+          { id: "meet-1", title: "Admin Meeting", dueDate: todayDateStr, badge: "Meeting", category: "Meeting" },
+          { id: "meet-2", title: "Client Meeting", dueDate: todayDateStr, badge: "Meeting", category: "Meeting" },
         ];
 
         // 5. Load saved custom activities from localStorage (Task 34)
@@ -237,16 +239,20 @@ export function UpdateActivityModal({
             "Meeting": meetingList,
           });
 
-          // Pre-select first task in Today's Work if none selected
-          const firstToday = todayList[0];
-          if (!selectedTask && firstToday) {
-            setSelectedTask({
-              taskId: firstToday.id,
-              taskTitle: firstToday.title,
-              taskType: "Today's Work",
-              dueDate: firstToday.dueDate,
-              badge: firstToday.badge,
-            });
+          // If editing an existing task, preselect only that one
+          if (currentTaskTitle) {
+            const allItems = [...todayList, ...upcomingList, ...researchList, ...activityList, ...meetingList];
+            const found = allItems.find(x => x.title.toLowerCase() === currentTaskTitle.toLowerCase());
+            if (found) {
+              setSelectedTask({
+                taskId: found.id,
+                taskTitle: found.title,
+                taskType: found.category,
+                dueDate: found.dueDate,
+                badge: found.badge,
+                isCustom: found.isCustom,
+              });
+            }
           }
         }
       } catch (err) {
@@ -266,6 +272,7 @@ export function UpdateActivityModal({
 
   const currentList = tasks[activeTab] || [];
 
+  // Strictly select ONLY 1 task at a time (Radio behavior)
   const handleSelect = (t: TaskItem) => {
     setIsAddingCustom(false);
     setSelectedTask({
@@ -274,36 +281,19 @@ export function UpdateActivityModal({
       taskType: activeTab,
       dueDate: t.dueDate,
       badge: t.badge,
+      isCustom: t.isCustom,
     });
   };
 
-  // Task 26 & Task 34: Sync custom task with backend /tasks and save locally
-  const handleAddCustom = async () => {
+  // Add custom task locally - ONLY sync to backend when final Save is clicked!
+  const handleAddCustom = () => {
     if (!customTaskTitle.trim()) {
       toast.error("Please enter a custom task title");
       return;
     }
     const cleanTitle = customTaskTitle.trim();
-    let createdTaskId = `custom-${Date.now()}`;
+    const createdTaskId = `custom-${Date.now()}`;
     const todayStr = new Date().toISOString().split("T")[0];
-
-    // Task 26: Sync custom task to main tasks list (/tasks)
-    try {
-      const res = await api.post<any>("/tasks", {
-        title: cleanTitle,
-        priority: "Medium",
-        status: "In Progress",
-        assigned_to: employeeId,
-        due_date: todayStr,
-        description: `Created during Punch-In activity tracking (${activeTab})`,
-        task_category: activeTab === "Research" ? "Research" : "General",
-      }, { showErrorToast: false });
-      if (res?._id || res?.id) {
-        createdTaskId = String(res._id || res.id);
-      }
-    } catch (err) {
-      console.warn("Could not sync custom task to tasks endpoint:", err);
-    }
 
     const newCustomItem: TaskItem = {
       id: createdTaskId,
@@ -314,34 +304,25 @@ export function UpdateActivityModal({
       isCustom: true,
     };
 
-    // Save in state
+    // Save in local state
     setTasks(prev => ({
       ...prev,
       [activeTab]: [newCustomItem, ...(prev[activeTab] || [])]
     }));
 
-    // Task 34: Persist in localStorage so it remains available in dropdown/list
-    try {
-      const savedStr = localStorage.getItem("hrms_custom_activities");
-      const currentSaved = savedStr ? JSON.parse(savedStr) : [];
-      const updated = [
-        { id: createdTaskId, title: cleanTitle, category: activeTab, dueDate: todayStr },
-        ...currentSaved.filter((x: any) => x.title.toLowerCase() !== cleanTitle.toLowerCase())
-      ].slice(0, 30);
-      localStorage.setItem("hrms_custom_activities", JSON.stringify(updated));
-    } catch {}
-
+    // Exclusively select this one task
     const selected: SelectedTaskInfo = {
       taskId: createdTaskId,
       taskTitle: cleanTitle,
       taskType: activeTab,
       dueDate: todayStr,
       badge: "Custom Task",
+      isCustom: true,
     };
     setSelectedTask(selected);
     setIsAddingCustom(false);
     setCustomTaskTitle("");
-    toast.success("Custom task created and synced to tasks list!");
+    toast.success("Task selected for this session!");
   };
 
   // Task 34: Delete saved custom activity
@@ -359,18 +340,53 @@ export function UpdateActivityModal({
         localStorage.setItem("hrms_custom_activities", JSON.stringify(updated));
       }
     } catch {}
-    if (selectedTask?.taskTitle === item.title) {
+    if (selectedTask?.taskId === item.id || selectedTask?.taskTitle === item.title) {
       setSelectedTask(null);
     }
     toast.info("Custom entry removed.");
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!selectedTask || !selectedTask.taskTitle.trim()) {
-      toast.error("Please select or enter the task you will be working on.");
+      toast.error("Please select 1 task to continue.");
       return;
     }
-    onSave(selectedTask);
+
+    const taskToSave = { ...selectedTask };
+
+    // If custom task, sync to backend tasks collection now (only for the 1 selected task!)
+    if (taskToSave.isCustom) {
+      try {
+        const todayStr = new Date().toISOString().split("T")[0];
+        const res = await api.post<any>("/tasks", {
+          title: taskToSave.taskTitle,
+          priority: "Medium",
+          status: "In Progress",
+          assigned_to: employeeId,
+          due_date: todayStr,
+          description: `Created during Punch-In activity tracking (${taskToSave.taskType})`,
+          task_category: taskToSave.taskType === "Research" ? "Research" : "General",
+        }, { showErrorToast: false });
+        if (res?._id || res?.id) {
+          taskToSave.taskId = String(res._id || res.id);
+        }
+
+        // Persist in localStorage
+        try {
+          const savedStr = localStorage.getItem("hrms_custom_activities");
+          const currentSaved = savedStr ? JSON.parse(savedStr) : [];
+          const updated = [
+            { id: taskToSave.taskId, title: taskToSave.taskTitle, category: taskToSave.taskType, dueDate: todayStr },
+            ...currentSaved.filter((x: any) => x.title.toLowerCase() !== taskToSave.taskTitle.toLowerCase())
+          ].slice(0, 30);
+          localStorage.setItem("hrms_custom_activities", JSON.stringify(updated));
+        } catch {}
+      } catch (err) {
+        console.warn("Could not sync custom task to tasks endpoint:", err);
+      }
+    }
+
+    onSave(taskToSave);
     onClose();
   };
 
@@ -426,9 +442,14 @@ export function UpdateActivityModal({
         {/* Content Body */}
         <div className="p-6 overflow-y-auto flex-1 space-y-4">
           <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-3">
-              Select Task
-            </span>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Select 1 Task Only
+              </span>
+              <span className="text-[10px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
+                Single Task Selection
+              </span>
+            </div>
 
             {isLoading ? (
               <div className="py-12 flex flex-col items-center justify-center gap-2 text-muted-foreground">
@@ -445,7 +466,7 @@ export function UpdateActivityModal({
             ) : (
               <div className="space-y-2.5">
                 {currentList.map((t) => {
-                  const isSelected = selectedTask?.taskTitle === t.title && !isAddingCustom;
+                  const isSelected = selectedTask?.taskId === t.id && !isAddingCustom;
                   return (
                     <div
                       key={t.id}
@@ -458,17 +479,18 @@ export function UpdateActivityModal({
                       )}
                     >
                       <div className="flex items-center gap-3 min-w-0 pr-2">
+                        {/* Radio Button Circle (Single Selection) */}
                         <span className={cn(
-                          "w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors",
-                          isSelected ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"
+                          "w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
+                          isSelected ? "border-primary bg-primary/10" : "border-muted-foreground/40 bg-transparent"
                         )}>
-                          {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                          {isSelected && <span className="w-2 h-2 rounded-full bg-primary" />}
                         </span>
                         
                         <div className="flex items-center gap-2 flex-wrap min-w-0">
                           <span className={cn(
                             "text-sm font-semibold truncate",
-                            isSelected ? "text-primary" : "text-foreground"
+                            isSelected ? "text-primary font-bold" : "text-foreground"
                           )}>
                             {t.title}
                           </span>
@@ -530,14 +552,14 @@ export function UpdateActivityModal({
                 <button
                   type="button"
                   onClick={handleAddCustom}
-                  className="px-4 py-2.5 bg-primary text-primary-foreground text-xs font-bold rounded-xl hover:bg-primary/90 transition-colors"
+                  className="px-4 py-2.5 bg-primary text-primary-foreground text-xs font-bold rounded-xl hover:bg-primary/90 transition-colors cursor-pointer"
                 >
-                  Confirm
+                  Select This
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsAddingCustom(false)}
-                  className="px-3 py-2.5 text-xs text-muted-foreground hover:text-foreground font-semibold"
+                  className="px-3 py-2.5 text-xs text-muted-foreground hover:text-foreground font-semibold cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -557,15 +579,29 @@ export function UpdateActivityModal({
             </button>
           )}
 
-          {/* Active selection summary */}
-          {selectedTask && (
-            <div className="p-3 bg-muted/40 rounded-xl border border-border/40 flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">
-                Selected for this session: <strong className="text-foreground">{selectedTask.taskTitle}</strong>
-              </span>
-              <span className="font-bold text-primary px-2 py-0.5 bg-primary/10 rounded-md">
-                {selectedTask.taskType}
-              </span>
+          {/* Active single selection summary */}
+          {selectedTask ? (
+            <div className="p-3 bg-primary/5 rounded-xl border border-primary/20 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2 truncate pr-2">
+                <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
+                <span className="text-muted-foreground truncate">
+                  Selected for this session: <strong className="text-foreground">{selectedTask.taskTitle}</strong>
+                </span>
+                <span className="font-bold text-primary px-2 py-0.5 bg-primary/10 rounded-md shrink-0">
+                  {selectedTask.taskType}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedTask(null)}
+                className="text-muted-foreground hover:text-destructive text-[11px] font-semibold underline shrink-0 cursor-pointer"
+              >
+                Clear
+              </button>
+            </div>
+          ) : (
+            <div className="p-3 bg-muted/30 rounded-xl border border-border/40 text-xs text-muted-foreground text-center">
+              Please click on 1 task from the list above or add custom work to select it.
             </div>
           )}
         </div>
@@ -575,17 +611,17 @@ export function UpdateActivityModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2.5 text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded-xl transition-colors"
+            className="px-5 py-2.5 text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded-xl transition-colors cursor-pointer"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={handleSave}
-            disabled={!selectedTask && !customTaskTitle.trim()}
+            disabled={!selectedTask || !selectedTask.taskTitle.trim()}
             className="px-6 py-2.5 text-sm font-bold bg-primary text-primary-foreground hover:bg-primary/95 rounded-xl shadow-md shadow-primary/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isChangeMode ? "Save Changes" : "Save"}
+            {isChangeMode ? "Save Changes" : "Confirm & Punch In"}
           </button>
         </div>
       </div>

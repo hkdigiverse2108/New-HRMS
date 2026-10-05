@@ -1,31 +1,72 @@
 import { useState, useMemo } from "react";
-import { User, Briefcase, CreditCard, FileText, Mail, Phone, MapPin, Building, Calendar, Key, Shield, CheckCircle2, ChevronRight, Edit2, Eye, EyeOff, Lock } from "lucide-react";
+import { User, Briefcase, CreditCard, FileText, Mail, Phone, MapPin, Building, Calendar, Key, Shield, CheckCircle2, ChevronRight, Edit2, Eye, EyeOff, Lock, Bell, Camera } from "lucide-react";
 import { cn, formatDate } from "@/lib/utils";
 import { useEmployeesContext } from "@/components/employees/EmployeeContext";
 import { EmployeeFormModal } from "@/components/employees/EmployeeFormModal";
 import { useAuth } from "@/components/auth/AuthContext";
 import { toast } from "@/lib/toast";
+import { NotificationSettingsCard } from "@/components/notifications/NotificationSettingsCard";
+import { getAvatarUrl, handleAvatarError } from "@/lib/config";
+import { ChangePhotoModal } from "./ChangePhotoModal";
 
-type TabType = 'overview' | 'personal' | 'financial' | 'offboarding';
+type TabType = 'overview' | 'personal' | 'financial' | 'offboarding' | 'notifications';
 
 export function UserProfile() {
-  const { user: authUser } = useAuth();
+  const { user: authUser, refreshProfile } = useAuth();
   const { employees, updateEmployee } = useEmployeesContext();
 
-  // Dynamically resolve current logged-in employee record
+  // Dynamically resolve current logged-in employee record with robust authUser fallback
   const user = useMemo(() => {
-    if (!authUser) return employees[0];
-    const byId = employees.find(e => e.id === authUser.id || (e as any)._id === authUser.id);
-    if (byId) return byId;
-    const byEmail = employees.find(e => e.email?.toLowerCase() === authUser.email?.toLowerCase());
-    if (byEmail) return byEmail;
-    return employees[0];
+    if (authUser) {
+      const byId = employees.find(e => 
+        e.id === authUser.id || 
+        (e as any)._id === authUser.id ||
+        e.employeeId === authUser.employee_id ||
+        e.employeeId === authUser.employeeId ||
+        e.employeeId === authUser.id ||
+        e.id === authUser.employee_id
+      );
+      if (byId) return byId;
+
+      const byEmail = employees.find(e => e.email?.toLowerCase() === authUser.email?.toLowerCase());
+      if (byEmail) return byEmail;
+
+      // Construct robust fallback object from authUser so it ALWAYS displays for any logged in role
+      const rawAuth: any = authUser;
+      const nameParts = (rawAuth.name || "").trim().split(/\s+/);
+      const fallbackUser: any = {
+        ...rawAuth,
+        id: rawAuth.id || "current-user",
+        employeeId: rawAuth.employee_id || rawAuth.employeeId || rawAuth.id || "",
+        name: rawAuth.name || "User",
+        firstName: rawAuth.first_name || rawAuth.firstName || nameParts[0] || "",
+        lastName: rawAuth.last_name || rawAuth.lastName || (nameParts.length > 1 ? nameParts.slice(1).join(" ") : ""),
+        email: rawAuth.email || "",
+        role: rawAuth.role || "Employee",
+        department: rawAuth.department || "—",
+        sub_department: rawAuth.sub_department || "—",
+        designation: rawAuth.designation || rawAuth.role || "Employee",
+        avatar: rawAuth.profile_photo || rawAuth.avatar || "",
+        profile_photo: rawAuth.profile_photo || rawAuth.avatar || "",
+        status: "Active",
+        phone: rawAuth.phone || rawAuth.phone_number || "—",
+        dob: rawAuth.dob || "—",
+        gender: rawAuth.gender || "—",
+        workMode: rawAuth.work_mode || rawAuth.workMode || "WFO",
+        startTime: rawAuth.start_time || "09:30",
+        endTime: rawAuth.end_time || "18:30",
+      };
+      return fallbackUser;
+    }
+    return employees[0] || null;
   }, [authUser, employees]);
 
-  const isAdminOrHR = authUser?.role === "admin" || authUser?.role === "superadmin" || authUser?.role === "hr";
+  const roleLower = (authUser?.role || "").toLowerCase();
+  const isAdminOrHR = roleLower === "admin" || roleLower === "superadmin" || roleLower === "hr";
 
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [showProfilePassword, setShowProfilePassword] = useState(false);
 
   if (!user) {
@@ -36,7 +77,8 @@ export function UserProfile() {
     { id: 'overview', label: 'Overview', icon: User },
     { id: 'personal', label: 'Personal Details', icon: FileText },
     { id: 'financial', label: 'Financial & Docs', icon: CreditCard },
-    { id: 'offboarding', label: 'Offboarding', icon: Shield }
+    { id: 'offboarding', label: 'Offboarding', icon: Shield },
+    { id: 'notifications', label: 'Notifications', icon: Bell }
   ];
   
   const profileData = {
@@ -77,13 +119,25 @@ export function UserProfile() {
         
         <div className="px-4 sm:px-8 pb-6 sm:pb-8">
           <div className="flex flex-col md:flex-row gap-6 items-start md:items-end -mt-12 relative z-10">
-            <div className="relative">
-              <img 
-                src={profileData.avatar} 
-                alt={profileData.name} 
-                className="w-24 sm:w-28 h-24 sm:h-28 rounded-2xl object-cover border-4 border-white shadow-md bg-white" 
-              />
-              <span className="absolute -bottom-2 -right-2 px-3 py-1 bg-emerald-500 text-white rounded-xl text-[10px] font-bold border-2 border-white shadow-sm">
+            <div className="relative group">
+              <div className="w-24 sm:w-28 h-24 sm:h-28 rounded-2xl overflow-hidden border-4 border-white shadow-md bg-white relative">
+                <img 
+                  src={getAvatarUrl(profileData.avatar || profileData.profile_photo, profileData.name)} 
+                  alt={profileData.name} 
+                  className="w-full h-full object-cover" 
+                  onError={handleAvatarError}
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsPhotoModalOpen(true)}
+                  className="absolute inset-0 bg-black/50 backdrop-blur-[2px] flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-white cursor-pointer"
+                  title="Change profile photo"
+                >
+                  <Camera className="w-6 h-6 drop-shadow-md" />
+                  <span className="text-[10px] font-bold mt-1 drop-shadow-md">Change</span>
+                </button>
+              </div>
+              <span className="absolute -bottom-2 -right-2 px-3 py-1 bg-emerald-500 text-white rounded-xl text-[10px] font-bold border-2 border-white shadow-sm pointer-events-none z-10">
                 {profileData.status}
               </span>
             </div>
@@ -98,12 +152,30 @@ export function UserProfile() {
             </div>
             
             <div className="flex gap-3 w-full md:w-auto mt-2 md:mt-0">
-              <button 
-                onClick={() => setIsEditModalOpen(true)}
-                className="flex items-center justify-center gap-2 bg-muted hover:bg-muted/80 text-foreground/80 px-4 py-2.5 rounded-xl font-bold transition-colors text-sm w-full md:w-auto"
-              >
-                <Edit2 className="w-4 h-4" /> Edit Profile
-              </button>
+              {isAdminOrHR ? (
+                <>
+                  <button 
+                    onClick={() => setIsPhotoModalOpen(true)}
+                    className="flex items-center justify-center gap-2 bg-muted hover:bg-muted/80 text-foreground/80 px-4 py-2.5 rounded-xl font-bold transition-colors text-sm w-full md:w-auto"
+                    title="Change Profile Photo"
+                  >
+                    <Camera className="w-4 h-4" /> Change Photo
+                  </button>
+                  <button 
+                    onClick={() => setIsEditModalOpen(true)}
+                    className="flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2.5 rounded-xl font-bold transition-colors text-sm w-full md:w-auto shadow-sm"
+                  >
+                    <Edit2 className="w-4 h-4" /> Edit Profile
+                  </button>
+                </>
+              ) : (
+                <button 
+                  onClick={() => setIsPhotoModalOpen(true)}
+                  className="flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2.5 rounded-xl font-bold transition-colors text-sm w-full md:w-auto shadow-sm"
+                >
+                  <Camera className="w-4 h-4" /> Change Photo
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -305,9 +377,9 @@ export function UserProfile() {
                 <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Submitted Documents</h3>
                 <div className="flex flex-wrap gap-2 p-5 bg-muted/20 border border-border/50 rounded-2xl">
                   {profileData.requiredDocuments && profileData.requiredDocuments.length > 0 ? (
-                    profileData.requiredDocuments.map(doc => (
-                      <span key={doc} className="px-3 py-1.5 bg-primary/10 text-primary border border-primary/20 rounded-lg text-xs font-bold">
-                        {doc}
+                    profileData.requiredDocuments.map((doc: any) => (
+                      <span key={String(doc)} className="px-3 py-1.5 bg-primary/10 text-primary border border-primary/20 rounded-lg text-xs font-bold">
+                        {String(doc)}
                       </span>
                     ))
                   ) : (
@@ -374,25 +446,51 @@ export function UserProfile() {
               </div>
             </div>
           )}
-
+          
+          {/* Notifications Tab */}
+          {activeTab === 'notifications' && (
+            <NotificationSettingsCard className="w-full" />
+          )}
         </div>
       </div>
 
-      <EmployeeFormModal
-        isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
-        initialData={profileData as any}
-        isSelfEdit={!isAdminOrHR}
-        onSubmit={async (updatedData) => {
+      {/* Change Photo Modal for Employee & Admin */}
+      <ChangePhotoModal
+        isOpen={isPhotoModalOpen}
+        onClose={() => setIsPhotoModalOpen(false)}
+        currentPhotoUrl={profileData.avatar || profileData.profile_photo}
+        userName={profileData.name}
+        employeeId={user.id}
+        onPhotoSaved={async (newPhotoUrl) => {
           try {
-            await updateEmployee(user.id, updatedData);
-            setIsEditModalOpen(false);
-            return true;
+            await updateEmployee(user.id, { avatar: newPhotoUrl, profile_photo: newPhotoUrl });
           } catch {
-            return false;
+            // ignore if already synced
+          }
+          if (refreshProfile) {
+            await refreshProfile();
           }
         }}
       />
+
+      {/* Admin/HR Full Edit Modal ONLY */}
+      {isAdminOrHR && (
+        <EmployeeFormModal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          initialData={profileData as any}
+          isSelfEdit={false}
+          onSubmit={async (updatedData) => {
+            try {
+              await updateEmployee(user.id, updatedData);
+              setIsEditModalOpen(false);
+              return true;
+            } catch {
+              return false;
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

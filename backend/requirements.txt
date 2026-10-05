@@ -24,6 +24,9 @@ pytz==2026.1.post1
 # HTTP Client
 httpx==0.28.1
 
+# Web Push Notifications
+pywebpush==2.5.0
+
 # PDF & Image Generation
 Pillow>=10.2.0
 reportlab>=4.1.0

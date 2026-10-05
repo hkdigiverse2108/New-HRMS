@@ -357,7 +357,7 @@ async def get_user_permission(employee_id: str):
 
     # 2. Check if employee has custom permissions explicitly configured
     item = await UserPermissionRepository.get_user_permission(employee_id)
-    if item and item.get("is_custom") is True and has_manual_permissions(item.get("module_permissions")):
+    if item and item.get("is_custom") is True and item.get("module_permissions") is not None:
         res = {
             "_id": str(item["_id"]),
             "employee_id": employee_id,

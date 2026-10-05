@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import {
   ChevronDown,
   ChevronsLeft,
@@ -32,21 +32,23 @@ import {
   type QuickAction
 } from "./nav-data";
 import { useTheme } from "./ThemeProvider";
-import { triggerGlobalModal, type GlobalModalType } from "./GlobalModalContext";
 import { useAuth } from "./auth/AuthContext";
 import { LoginModal } from "./auth/LoginModal";
 import { getAvatarUrl, handleAvatarError } from "@/lib/config";
 import { LogIn, LogOut } from "lucide-react";
 import { filterNavigationForUser, hasModulePermission } from "@/lib/permissions";
+import { api } from "@/lib/api";
 
 
-function Badge({ count }: { count: number }) {
-  if (count <= 0) return null;
+function Badge({ count }: { count?: number }) {
+  if (!count || count <= 0) return null;
   return (
     <span 
-      className="ml-auto shrink-0 rounded-full bg-primary w-2.5 h-2.5 shadow-sm shadow-primary/30" 
+      className="ml-auto shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-emerald-500 text-white text-[10px] font-black flex items-center justify-center shadow-sm shadow-emerald-500/30 animate-pulse" 
       aria-label={`${count} notifications`} 
-    />
+    >
+      {count > 99 ? "99+" : count}
+    </span>
   );
 }
 
@@ -251,6 +253,7 @@ function SidebarBody({
   }, [active]);
   const [pinned, setPinned] = useState<string[]>(["Attendance"]);
   const [collapsedSections, setCollapsedSections] = useState<string[]>([]);
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [recents, setRecents] = useState<{ title: string; url: string }[]>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("sidebar-recents");
@@ -259,14 +262,205 @@ function SidebarBody({
     return [];
   });
 
+  const lastFetchTimeRef = useRef<number>(0);
+  const inFlightRef = useRef<boolean>(false);
+  const activeRef = useRef<string>(active);
+
+  useEffect(() => {
+    activeRef.current = active;
+  }, [active]);
+
+  // Fetch real-time live notification & unread counts (throttled & deduplicated)
+  useEffect(() => {
+    if (!isAuthenticated || isMobile) return;
+    let isSubscribed = true;
+
+    const fetchCounts = async (force: boolean = false) => {
+      const now = Date.now();
+      // Minimum 10-second cooldown between calls to prevent request flooding
+      if (!force && now - lastFetchTimeRef.current < 10000) return;
+      if (inFlightRef.current) return;
+
+      inFlightRef.current = true;
+      lastFetchTimeRef.current = now;
+
+      try {
+        const counts: Record<string, number> = {};
+
+        // 1. Fetch Chat unread count
+        try {
+          const chatRes = await api.get<Array<{ count?: number }>>("/chat/unread-counts", {
+            showLoader: false,
+            showErrorToast: false,
+          });
+          if (Array.isArray(chatRes)) {
+            const totalChatUnread = chatRes.reduce((acc, c) => acc + (c.count || 0), 0);
+            counts["/chat"] = totalChatUnread;
+          }
+        } catch {}
+
+        // 2. Identify Role: HR and Admin detection
+        const anyUser = user as any;
+        const userDept = String(anyUser?.department || anyUser?.work_details?.department || "").toLowerCase().trim();
+        const userRole = String(anyUser?.role || anyUser?.system_role || anyUser?.work_details?.system_role || "").toLowerCase().trim();
+        const isHRorAdmin = ["admin", "subadmin", "hr", "superadmin", "sub-admin"].includes(userRole) || userDept === "hr";
+        const userId = String(anyUser?.id || anyUser?._id || "user");
+        const currActive = activeRef.current;
+
+        // 3. Unread Notifications for current user (Penalties, Leave status updates)
+        let unreadPenaltyNotifs = 0;
+        let unreadLeaveNotifs = 0;
+        try {
+          const notifs = await api.get<any[]>("/notifications/me", {
+            showLoader: false,
+            showErrorToast: false,
+          });
+          if (Array.isArray(notifs)) {
+            const unread = notifs.filter((n) => !n.is_read);
+            unreadPenaltyNotifs = unread.filter((n) => n.type === "penalty").length;
+            unreadLeaveNotifs = unread.filter((n) => n.type === "leave").length;
+          }
+        } catch {}
+
+        // 4. Leave Requests Count
+        if (isHRorAdmin) {
+          // Admin & HR both see all pending leave requests waiting for review
+          try {
+            const leavesRes = await api.get<any[]>("/leaves?status=Pending", {
+              showLoader: false,
+              showErrorToast: false,
+            });
+            const pendingCount = Array.isArray(leavesRes) ? leavesRes.length : 0;
+            if (currActive === "/employees/leave-requests") {
+              if (typeof window !== "undefined") {
+                localStorage.setItem(`hrms_ack_leaves_${userId}`, String(pendingCount));
+              }
+              counts["/employees/leave-requests"] = 0;
+            } else {
+              const ackCount = typeof window !== "undefined"
+                ? Number(localStorage.getItem(`hrms_ack_leaves_${userId}`) || 0)
+                : 0;
+              counts["/employees/leave-requests"] = Math.max(0, pendingCount - ackCount);
+            }
+          } catch {}
+
+          // Daily Progress approvals for HR / Admin
+          try {
+            const dpRes = await api.get<any[]>("/daily-progress?status=pending_verification", {
+              showLoader: false,
+              showErrorToast: false,
+            });
+            if (Array.isArray(dpRes)) {
+              counts["/approvals/daily-progress"] = dpRes.length;
+            }
+          } catch {}
+        } else {
+          // Regular employee sees their own leave status updates
+          counts["/employees/leave-requests"] = unreadLeaveNotifs;
+        }
+
+        // 5. Penalties Count: "proper jeni penalty hoi tene j show thai"
+        let penaltyCount = 0;
+        if (!isHRorAdmin) {
+          // For regular employee, get active penalties strictly assigned to them
+          try {
+            const penRes = await api.get<{ data?: any[]; total?: number }>("/penalties?status=Active&limit=100", {
+              showLoader: false,
+              showErrorToast: false,
+            });
+            const myActivePenalties = penRes?.total || (Array.isArray(penRes?.data) ? penRes.data.length : 0);
+            if (currActive === "/penalty" || currActive === "/approvals/penalties") {
+              if (typeof window !== "undefined") {
+                localStorage.setItem(`hrms_ack_penalties_${userId}`, String(myActivePenalties));
+              }
+              penaltyCount = 0;
+            } else {
+              const ackPenalties = typeof window !== "undefined"
+                ? Number(localStorage.getItem(`hrms_ack_penalties_${userId}`) || 0)
+                : 0;
+              const unreadActivePenalties = Math.max(0, myActivePenalties - ackPenalties);
+              penaltyCount = Math.max(unreadPenaltyNotifs, unreadActivePenalties);
+            }
+          } catch {
+            penaltyCount = unreadPenaltyNotifs;
+          }
+        } else {
+          // HR and Admin do NOT receive other employees' penalties as personal alerts!
+          penaltyCount = unreadPenaltyNotifs;
+        }
+
+        counts["/penalty"] = penaltyCount;
+        counts["/approvals/penalties"] = penaltyCount;
+
+        if (isSubscribed) {
+          setUnreadCounts(counts);
+        }
+      } catch {} finally {
+        inFlightRef.current = false;
+      }
+    };
+
+    // Fetch initial counts once on mount
+    fetchCounts(true);
+
+    // Socket-driven real-time updates (Zero periodic polling / HTTP spam)
+    const handleChatMessage = () => {
+      if (activeRef.current === "/chat") {
+        setUnreadCounts((prev) => ({ ...prev, "/chat": 0 }));
+      } else {
+        setUnreadCounts((prev) => ({ ...prev, "/chat": (prev["/chat"] || 0) + 1 }));
+      }
+    };
+
+    const handleNotificationUpdate = (e: any) => {
+      const notifType = e?.detail?.type;
+      if (notifType === "leave") {
+        if (activeRef.current !== "/employees/leave-requests") {
+          setUnreadCounts((prev) => ({ ...prev, "/employees/leave-requests": (prev["/employees/leave-requests"] || 0) + 1 }));
+        }
+      } else if (notifType === "penalty") {
+        if (activeRef.current !== "/penalty" && activeRef.current !== "/approvals/penalties") {
+          setUnreadCounts((prev) => ({
+            ...prev,
+            "/penalty": (prev["/penalty"] || 0) + 1,
+            "/approvals/penalties": (prev["/approvals/penalties"] || 0) + 1,
+          }));
+        }
+      } else if (notifType === "daily_progress") {
+        if (activeRef.current !== "/approvals/daily-progress") {
+          setUnreadCounts((prev) => ({ ...prev, "/approvals/daily-progress": (prev["/approvals/daily-progress"] || 0) + 1 }));
+        }
+      }
+    };
+
+    window.addEventListener("hrms:chat_message", handleChatMessage);
+    window.addEventListener("hrms:notification_update", handleNotificationUpdate);
+
+    return () => {
+      isSubscribed = false;
+      window.removeEventListener("hrms:chat_message", handleChatMessage);
+      window.removeEventListener("hrms:notification_update", handleNotificationUpdate);
+    };
+  }, [isAuthenticated, user?.id, user?.role, isMobile]);
+
   const q = query.trim().toLowerCase();
 
-  const go = (url: string) => {
+  const go = async (url: string) => {
     setActive(url);
+    // Clear unread count for this tab immediately in state
+    setUnreadCounts((prev) => ({ ...prev, [url]: 0 }));
+    if (url === "/penalty" || url === "/approvals/penalties") {
+      setUnreadCounts((prev) => ({ ...prev, "/penalty": 0, "/approvals/penalties": 0 }));
+    }
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("navigate_tab", { detail: url }));
     }
     onClose?.();
+
+    // Mark notifications as read silently without making extra GET queries
+    try {
+      api.put("/notifications/read-all", {}, { showLoader: false, showErrorToast: false }).catch(() => {});
+    } catch {}
 
     // Find title of item being navigated to
     let title = "";
@@ -470,6 +664,13 @@ function SidebarBody({
           const selfActive = item.url === active;
           const childActive = item.children?.some((c) => c.url === active);
 
+          // Dynamic badge calculation: If active, count is 0. If parent, sum children counts.
+          const itemDynamicCount = selfActive
+            ? 0
+            : (hasChildren
+                ? item.children!.reduce((acc, c) => acc + (c.url === active ? 0 : (unreadCounts[c.url] || c.badge || 0)), 0)
+                : (unreadCounts[item.url || ""] || item.badge || 0));
+
           return (
             <div key={item.title} className="mb-0.5">
               <button
@@ -485,11 +686,16 @@ function SidebarBody({
                       : "hover:bg-sidebar-accent",
                 )}
               >
-                <item.icon className="h-4.5 w-4.5 shrink-0" />
+                <div className="relative shrink-0">
+                  <item.icon className="h-4.5 w-4.5" />
+                  {collapsed && itemDynamicCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse border-2 border-background" />
+                  )}
+                </div>
                 {!collapsed && (
                   <>
                     <span className="min-w-0 flex-1 truncate text-left">{item.title}</span>
-                    {item.badge ? <Badge count={item.badge} /> : null}
+                    <Badge count={itemDynamicCount} />
                     {hasChildren && (
                       <ChevronDown
                         className={cn(
@@ -517,42 +723,47 @@ function SidebarBody({
 
               {!collapsed && hasChildren && isOpen && (
                 <div className="my-0.5 ml-[19px] border-l border-sidebar-border pl-2">
-                  {item.children!.map((child) => (
-                    <button
-                      key={child.url}
-                      onClick={() => go(child.url)}
-                      className={cn(
-                        "group flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors",
-                        child.url === active
-                          ? "bg-sidebar-surface font-semibold text-sidebar-accent-foreground shadow-sm"
-                          : "text-sidebar-foreground/80 hover:bg-sidebar-accent",
-                      )}
-                    >
-                      {child.icon && (
-                        <child.icon
-                          className={cn(
-                            "h-4 w-4 shrink-0 transition-colors",
-                            child.url === active
-                              ? "text-sidebar-accent-foreground"
-                              : "text-sidebar-muted group-hover:text-sidebar-accent-foreground",
-                          )}
-                        />
-                      )}
-                      <span className="min-w-0 flex-1 truncate text-left">{child.title}</span>
-                      {child.badge ? <Badge count={child.badge} /> : null}
-                      <span
-                        role="button"
-                        aria-label={`Pin ${child.title}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          togglePin(`${item.title} — ${child.title}`);
-                        }}
-                        className="hidden shrink-0 text-sidebar-muted group-hover:block"
+                  {item.children!.map((child) => {
+                    const isChildActive = child.url === active;
+                    const childDynamicCount = isChildActive ? 0 : (unreadCounts[child.url] || child.badge || 0);
+
+                    return (
+                      <button
+                        key={child.url}
+                        onClick={() => go(child.url)}
+                        className={cn(
+                          "group flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors",
+                          isChildActive
+                            ? "bg-sidebar-surface font-semibold text-sidebar-accent-foreground shadow-sm"
+                            : "text-sidebar-foreground/80 hover:bg-sidebar-accent",
+                        )}
                       >
-                        <Pin className="h-3.5 w-3.5" />
-                      </span>
-                    </button>
-                  ))}
+                        {child.icon && (
+                          <child.icon
+                            className={cn(
+                              "h-4 w-4 shrink-0 transition-colors",
+                              isChildActive
+                                ? "text-sidebar-accent-foreground"
+                                : "text-sidebar-muted group-hover:text-sidebar-accent-foreground",
+                            )}
+                          />
+                        )}
+                        <span className="min-w-0 flex-1 truncate text-left">{child.title}</span>
+                        <Badge count={childDynamicCount} />
+                        <span
+                          role="button"
+                          aria-label={`Pin ${child.title}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            togglePin(`${item.title} — ${child.title}`);
+                          }}
+                          className="hidden shrink-0 text-sidebar-muted group-hover:block"
+                        >
+                          <Pin className="h-3.5 w-3.5" />
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -568,26 +779,57 @@ function SidebarBody({
       <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} />
       <div className="border-t border-sidebar-border p-2 shrink-0">
         {isAuthenticated && user ? (
-          <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-sidebar-accent/40">
+          <div
+            onClick={() => go("/profile")}
+            className={cn(
+              "flex items-center justify-between gap-2 p-2 rounded-xl transition-all cursor-pointer group select-none",
+              active === "/profile"
+                ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20 ring-1 ring-primary"
+                : "bg-sidebar-accent/40 hover:bg-sidebar-accent hover:shadow-sm"
+            )}
+            title="Click to view and edit your profile"
+          >
             <div className="flex items-center gap-2.5 min-w-0">
               <img
                 src={getAvatarUrl(user.profile_photo || user.avatar, user.name || "User")}
                 alt={user.name}
-                className="w-8 h-8 rounded-full object-cover shrink-0 border border-border"
+                className={cn(
+                  "w-8 h-8 rounded-full object-cover shrink-0 border transition-transform group-hover:scale-105",
+                  active === "/profile" ? "border-white/80" : "border-border"
+                )}
                 onError={handleAvatarError}
               />
               {!collapsed && (
                 <div className="min-w-0 text-left">
-                  <p className="text-xs font-bold text-sidebar-foreground truncate">{user.name}</p>
-                  <p className="text-[10px] text-sidebar-muted truncate">{user.role}</p>
+                  <p className={cn(
+                    "text-xs font-bold truncate transition-colors",
+                    active === "/profile" ? "text-primary-foreground" : "text-sidebar-foreground group-hover:text-primary"
+                  )}>
+                    {user.name}
+                  </p>
+                  <p className={cn(
+                    "text-[10px] truncate",
+                    active === "/profile" ? "text-primary-foreground/80" : "text-sidebar-muted"
+                  )}>
+                    {user.role} · View Profile
+                  </p>
                 </div>
               )}
             </div>
             {!collapsed && (
               <button
-                onClick={logout}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  logout();
+                }}
                 title="Sign Out"
-                className="p-1.5 text-sidebar-muted hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                className={cn(
+                  "p-1.5 rounded-lg transition-colors cursor-pointer shrink-0",
+                  active === "/profile"
+                    ? "text-primary-foreground/80 hover:text-white hover:bg-white/20"
+                    : "text-sidebar-muted hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                )}
               >
                 <LogOut className="w-4 h-4" />
               </button>
