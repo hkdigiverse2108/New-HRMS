@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import Optional, List
-from app.schemas.gallery import GalleryEventCreate, GalleryEventUpdate, GalleryEventResponse
+from app.schemas.gallery import (
+    GalleryEventCreate, GalleryEventUpdate, GalleryEventResponse, GalleryPaginatedResponse
+)
 from app.services.gallery import GalleryService
 from app.controllers.auth import get_current_employee
 
@@ -14,13 +16,28 @@ async def create_gallery_event(
     """Create a new Gallery Event item (Requires 'create' permission)."""
     return await GalleryService.create_event(data, current_user)
 
-@router.get("", response_model=List[GalleryEventResponse])
+@router.get("", response_model=GalleryPaginatedResponse)
 async def get_all_gallery_events(
-    search: Optional[str] = Query(None, description="Search by event name or link"),
+    search: Optional[str] = Query(None, description="Search by event name, link, or date"),
+    date: Optional[str] = Query(None, description="Filter by exact or partial date (e.g. 05-10-2026)"),
+    start_date: Optional[str] = Query(None, description="Filter by range start date (e.g. 2026-10-01)"),
+    end_date: Optional[str] = Query(None, description="Filter by range end date (e.g. 2026-10-31)"),
+    page: int = Query(1, ge=1, description="Page number (default: 1)"),
+    limit: int = Query(10, ge=1, le=100, description="Items per page (default: 10, max: 100)"),
     current_user: dict = Depends(get_current_employee)
 ):
-    """Get all gallery events (Requires 'read' permission)."""
-    return await GalleryService.get_all_events(current_user, search=search)
+    """
+    Get all gallery events with date filters and pagination (Requires 'read' permission).
+    """
+    return await GalleryService.get_all_events(
+        current_user,
+        search=search,
+        date=date,
+        start_date=start_date,
+        end_date=end_date,
+        page=page,
+        limit=limit
+    )
 
 @router.get("/{item_id}", response_model=GalleryEventResponse)
 async def get_gallery_event_by_id(

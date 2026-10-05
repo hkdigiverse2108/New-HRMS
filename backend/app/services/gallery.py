@@ -71,17 +71,41 @@ class GalleryService:
         return created
 
     @staticmethod
-    async def get_all_events(current_user: dict, search: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def get_all_events(
+        current_user: dict,
+        search: Optional[str] = None,
+        date: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        page: int = 1,
+        limit: int = 10
+    ) -> Dict[str, Any]:
         await GalleryService.check_user_permission(current_user, "read")
 
-        cache_key = make_list_key("gallery_events:list", search=search)
+        cache_key = make_list_key(
+            "gallery_events:list",
+            search=search,
+            date=date,
+            start_date=start_date,
+            end_date=end_date,
+            page=page,
+            limit=limit
+        )
         cached = await get_cache(cache_key)
         if cached is not None:
             return cached
 
-        items = await GalleryEventRepository.get_all(is_deleted=False, search=search)
-        await set_cache(cache_key, items, ttl=1800)
-        return items
+        res = await GalleryEventRepository.get_all(
+            is_deleted=False,
+            search=search,
+            date=date,
+            start_date=start_date,
+            end_date=end_date,
+            page=page,
+            limit=limit
+        )
+        await set_cache(cache_key, res, ttl=1800)
+        return res
 
     @staticmethod
     async def get_by_id(item_id: str, current_user: dict) -> Optional[Dict[str, Any]]:
