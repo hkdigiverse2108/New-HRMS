@@ -37,6 +37,7 @@ from app.controllers.document_template import router as document_template_router
 from app.controllers.generated_document import router as generated_document_router
 from app.controllers.submitted_document import router as submitted_document_router
 from app.controllers.letter_request import router as letter_request_router
+from app.controllers.gallery import router as gallery_router
 from app.models.employee import setup_employee_indexes
 from app.models.department import setup_department_indexes
 from app.models.sub_department import setup_sub_department_indexes
@@ -155,6 +156,7 @@ app.include_router(document_template_router)
 app.include_router(generated_document_router)
 app.include_router(submitted_document_router)
 app.include_router(letter_request_router)
+app.include_router(gallery_router)
 
 from starlette.responses import Response
 from starlette.exceptions import HTTPException as StarletteHTTPException

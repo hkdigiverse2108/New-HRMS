@@ -62,6 +62,7 @@ SYSTEM_MODULES: List[Dict[str, Any]] = [
     {"id": "/work/sales/settings", "name": "Sales Settings", "section": "Work", "parent_id": "/work/sales"},
 
     {"id": "/tasks", "name": "Tasks", "section": "Work", "is_parent": False},
+    {"id": "/gallery", "name": "Gallery & Events", "section": "Work", "is_parent": False},
     {"id": "/chat", "name": "Chat", "section": "Work", "is_parent": False},
 
     # --- FINANCE ---
