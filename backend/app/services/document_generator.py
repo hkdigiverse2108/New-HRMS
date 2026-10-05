@@ -314,7 +314,9 @@ class DocumentGeneratorService:
             return None
 
         emp_mapping = DocumentGeneratorService._extract_employee_data(employee)
-        custom_vars = req.variables or getattr(req, "placeholder_values", {}) or {}
+        custom_vars = dict(req.variables or {})
+        if getattr(req, "placeholder_values", None):
+            custom_vars.update(req.placeholder_values)
         merged_variables = {**emp_mapping, **custom_vars}
 
         # Validate that all placeholders present in template are provided / filled
