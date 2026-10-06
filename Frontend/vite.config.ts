@@ -44,6 +44,9 @@ export default defineConfig({
     define: viteEnvDefines,
     server: {
       port: frontendPort,
+      allowedHosts: [
+        "new-hrms.hkdigiverse.com",
+      ],
     },
   },
 });
