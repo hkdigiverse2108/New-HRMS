@@ -20,7 +20,7 @@ export function TasksAndClients({ setActive }: { setActive?: ((url: string) => v
   const satisfaction = Number(tc.satisfaction || 0);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-12 mb-12">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-12 mb-12">
       {/* SECTION 09: Tasks */}
       <div>
         <CollapsibleSection section="Section 09" title="Tasks & Deadlines">

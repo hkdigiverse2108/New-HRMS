@@ -184,7 +184,7 @@ export function Index() {
   // 1. If still running SSR or validating existing session token on the client (and no cached user), show clean loader
   if (!isClient || (token && isAuthLoading && !user)) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-background">
+      <div className="h-dvh w-screen flex items-center justify-center bg-background">
         <div className="w-8 h-8 rounded-full border-4 border-primary border-r-transparent animate-spin" />
       </div>
     );
@@ -209,10 +209,11 @@ export function Index() {
         <DepartmentProvider>
           <EmployeeProvider>
             <SalesProvider>
-              <div className="flex h-screen overflow-hidden bg-gradient-to-br from-background via-background to-primary/5">
+              <div className="flex h-dvh overflow-hidden bg-gradient-to-br from-background via-background to-primary/5">
                 <AppSidebar active={active} setActive={setActive} />
                 <GlobalModalManager />
-                <main className="min-w-0 flex-1 overflow-x-hidden px-3.5 sm:px-6 md:px-8 lg:px-10 pb-24 pt-20 md:pb-8 md:pt-8">
+                <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-3.5 sm:px-6 md:px-8 lg:px-10 pb-24 pt-20 md:pb-8 md:pt-8">
+                  <div className="mx-auto w-full max-w-[1600px] min-[1920px]:max-w-[1800px]">
                   {/* Main Dashboard */}
                   {basePath === "/dashboard" && <Dashboard setActive={setActive} onAction={handleQuickAction} />}
 
@@ -341,6 +342,7 @@ export function Index() {
                       </section>
                     </>
                   )}
+                  </div>
                 </main>
                 <QuickActionModals activeAction={activeAction} onClose={() => setActiveAction(null)} />
               </div>

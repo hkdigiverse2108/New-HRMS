@@ -29,8 +29,8 @@ function DealCard({ lead }: { lead: any }) {
       }}
       className="cursor-grab active:cursor-grabbing rounded-xl border border-border bg-white p-3 shadow-sm transition-all hover:border-emerald-300 hover:shadow-md"
     >
-      <p className="text-sm font-semibold leading-snug">{lead.company}</p>
-      <p className="mt-0.5 text-[11px] text-muted-foreground">{lead.contact} · {lead.city || ""}</p>
+      <p className="text-sm font-semibold leading-snug truncate" title={lead.company}>{lead.company}</p>
+      <p className="mt-0.5 text-[11px] text-muted-foreground truncate">{lead.contact} · {lead.city || ""}</p>
       <div className="mt-2 flex items-center justify-between">
         <span className="text-xs font-medium text-muted-foreground">{lead.owner || ""}</span>
         <span className="text-xs font-bold text-emerald-700">{formatCurrency(leadAmount(lead))}</span>
@@ -63,7 +63,7 @@ function KanbanColumn({ stage, color, items, onDropCard }: { stage: string; colo
         <span className="text-sm font-bold">{stage}</span>
         <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold">{items.length}</span>
       </div>
-      <div className="flex-1 space-y-2 overflow-y-auto p-3" style={{ maxHeight: "calc(100vh - 320px)" }}>
+      <div className="flex-1 space-y-2 overflow-y-auto p-3" style={{ maxHeight: "calc(100dvh - 320px)" }}>
         {items.map((lead: any) => (
           <DealCard key={lead.id || lead._id} lead={lead} />
         ))}
@@ -117,12 +117,12 @@ function TableView({ data, onStageChange, activeStages }: { data: Lead[]; onStag
               <td className="px-4 py-3 text-muted-foreground">{lead.contact} · {lead.city || ""}</td>
               <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                 <SearchableSelect
-                  value={lead.stage}
+                  value={lead.stage || "New Lead"}
                   onChange={(val) => onStageChange(lead.id, val)}
-                  options={Array.from(new Set([...stages, lead.stage])).map((s) => ({ label: s, value: s }))}
+                  options={Array.from(new Set([...stages, lead.stage || "New Lead"])).map((s) => ({ label: s, value: s }))}
                   className={cn(
                     "w-[120px] h-[30px] px-2 text-[10px] font-semibold",
-                    stageColor[lead.stage] || "bg-emerald-100 text-emerald-700"
+                    stageColor[lead.stage || "New Lead"] || "bg-emerald-100 text-emerald-700"
                   )}
                 />
               </td>
@@ -143,8 +143,6 @@ function TableView({ data, onStageChange, activeStages }: { data: Lead[]; onStag
     </div>
   );
 }
-
-/* ─── Timeline View — per-lead stage-shift history + follow-ups ─────────── */
 
 function TimelineView({ data }: { data: Lead[] }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -173,7 +171,7 @@ function TimelineView({ data }: { data: Lead[] }) {
                 <p className="text-sm font-bold truncate">{lead.company || lead.contact} <span className="text-[11px] font-semibold text-muted-foreground">· {lead.contact !== lead.company ? lead.contact : ""} {lead.phone ? `· ${lead.phone}` : ""}</span></p>
                 <p className="text-[11px] text-muted-foreground">Current: <span className="font-bold text-foreground">{lead.stage || lead.status}</span> · {history.length} shifts · {fus.length} follow-ups · Owner: {lead.owner || "—"}</p>
               </div>
-              <span className="text-[11px] font-bold text-emerald-700">{isOpen ? "Hide ▲" : "History ▼"}</span>
+              <span className="text-[11px] font-bold text-emerald-700 shrink-0">{isOpen ? "Hide ▲" : "History ▼"}</span>
             </button>
             {isOpen && (
               <div className="border-t border-border bg-muted/20 p-4">
@@ -321,7 +319,7 @@ export function SalesPipeline({ onAction }: { onAction?: (action: string) => voi
               key={v}
               onClick={() => setView(v)}
               className={cn(
-                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap",
+                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap min-h-[44px] sm:min-h-0",
                 view === v ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
               )}
             >
@@ -330,22 +328,22 @@ export function SalesPipeline({ onAction }: { onAction?: (action: string) => voi
           ))}
         </div>
 
-        <button onClick={() => onAction?.("Add Lead")} className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 shrink-0 self-start sm:self-auto">
+        <button onClick={() => onAction?.("Add Lead")} className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 shrink-0 w-full sm:w-auto min-h-[44px] sm:min-h-0">
           <Plus className="h-4 w-4" /> Add Deal
         </button>
       </div>
 
       {/* Filters — business category / source / date-wise */}
       <div className="flex flex-wrap items-center gap-2">
-        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="h-9 text-xs font-semibold border border-border rounded-xl px-2.5 bg-background">
+        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="min-h-[44px] sm:min-h-0 sm:h-9 flex-1 sm:flex-none min-w-[140px] text-xs font-semibold border border-border rounded-xl px-2.5 bg-background">
           <option value="all">All Categories</option>
           {availableCategories.map((c: string) => <option key={c} value={c}>{c}</option>)}
         </select>
-        <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className="h-9 text-xs font-semibold border border-border rounded-xl px-2.5 bg-background">
+        <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className="min-h-[44px] sm:min-h-0 sm:h-9 flex-1 sm:flex-none min-w-[140px] text-xs font-semibold border border-border rounded-xl px-2.5 bg-background">
           <option value="all">All Sources</option>
           {availableSources.map((s: string) => <option key={s} value={s}>{s}</option>)}
         </select>
-        <select value={dateFilter} onChange={(e) => setDateFilter(e.target.value as any)} className="h-9 text-xs font-semibold border border-border rounded-xl px-2.5 bg-background">
+        <select value={dateFilter} onChange={(e) => setDateFilter(e.target.value as any)} className="min-h-[44px] sm:min-h-0 sm:h-9 flex-1 sm:flex-none min-w-[140px] text-xs font-semibold border border-border rounded-xl px-2.5 bg-background">
           <option value="all">All Dates</option>
           <option value="today">Today</option>
           <option value="this_month">This Month</option>

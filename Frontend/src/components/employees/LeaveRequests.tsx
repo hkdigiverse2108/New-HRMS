@@ -662,27 +662,27 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
             <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin text-primary")} />
           </button>
 
-          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+<Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
             <DialogTrigger asChild>
-              <button className="px-4 py-2 bg-primary hover:bg-primary/95 text-primary-foreground rounded-xl text-xs sm:text-sm font-bold shadow-sm flex items-center justify-center gap-2 transition-all shrink-0">
+              <button className="px-4 py-2 bg-primary hover:bg-primary/95 text-primary-foreground rounded-xl text-xs sm:text-sm font-bold shadow-sm flex items-center justify-center gap-2 transition-colors shrink-0">
                 <Plus className="w-4 h-4" /> Apply Leave
               </button>
             </DialogTrigger>
-            <DialogContent className="w-[calc(100vw-20px)] sm:w-full sm:max-w-[480px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card box-border">
+            <DialogContent className="w-[calc(100vw-20px)] sm:w-full sm:max-w-[480px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card box-border max-h-[90dvh]">
               <div className="flex items-center justify-between px-3.5 sm:px-6 py-3.5 sm:py-5 border-b border-border/50 bg-muted/30">
                 <div className="min-w-0 pr-2">
                   <h2 className="text-base sm:text-xl font-black tracking-tight truncate">Apply for Leave</h2>
                   <p className="text-[11px] sm:text-xs text-muted-foreground truncate">Requests default to Pending review</p>
                 </div>
-                <DialogClose asChild>
-                  <button className="p-1.5 sm:p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors shrink-0">
-                    <X className="w-5 h-5" />
-                  </button>
-                </DialogClose>
-              </div>
+            <DialogClose asChild>
+              <button className="p-1.5 sm:p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors shrink-0">
+                <X className="w-5 h-5" />
+              </button>
+            </DialogClose>
+          </div>
 
-              <form onSubmit={handleAddLeave} className="flex flex-col max-h-[80vh]">
-                <div className="p-3.5 sm:px-6 py-3.5 sm:py-5 space-y-3 sm:space-y-4 overflow-y-auto max-h-[65vh]">
+          <form onSubmit={handleAddLeave} className="flex flex-col min-h-0 max-h-[90dvh]">
+                <div className="p-3.5 sm:px-6 py-3.5 sm:py-5 space-y-3 sm:space-y-4 overflow-y-auto flex-1 min-h-0 max-h-[65dvh]">
                   {/* Select Employee (Strictly Admin only. Non-admins, including HR, apply for self) */}
                   {isStrictAdmin ? (
                     <div className="space-y-1.5">
@@ -742,7 +742,7 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                           type="button"
                           onClick={() => setNewDayType(dtype)}
                           className={cn(
-                            "py-2 px-0.5 sm:px-2 text-[10px] sm:text-xs font-bold rounded-xl border transition-all text-center whitespace-nowrap leading-tight",
+                            "py-2 min-h-[44px] sm:min-h-0 inline-flex items-center justify-center px-0.5 sm:px-2 text-[10px] sm:text-xs font-bold rounded-xl border transition-all text-center whitespace-normal sm:whitespace-nowrap leading-tight break-words",
                             newDayType === dtype
                               ? "bg-primary text-primary-foreground border-primary shadow-sm"
                               : "bg-muted/30 text-foreground/80 border-border hover:bg-muted/60"
@@ -948,7 +948,7 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
             <p className="text-muted-foreground text-xs mt-1">There are currently no leaves in this category.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4">
             {filteredRequests.map((request) => (
               <div
                 key={request.id}
@@ -1039,17 +1039,17 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                       if (request.status === "Pending") {
                         if (canApproveThisRequest) {
                           return (
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex flex-wrap items-center gap-1.5">
                               <button
                                 onClick={() => setRejectingId(request.id)}
-                                className="px-2.5 py-1.5 text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
+                                className="px-2.5 py-1.5 min-h-[44px] sm:min-h-0 text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
                                 title="Reject Leave"
                               >
                                 <X className="w-3.5 h-3.5" /> Reject
                               </button>
                               <button
                                 onClick={() => handleAction(request.id, "Approved")}
-                                className="px-3 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+                                className="px-3 py-1.5 min-h-[44px] sm:min-h-0 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
                                 title="Approve Leave"
                               >
                                 <Check className="w-3.5 h-3.5" /> Approve
@@ -1067,7 +1067,7 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                         return (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <button className="flex items-center gap-1 hover:bg-muted/50 px-2 py-1 rounded-lg transition-colors text-xs font-bold">
+                              <button className="flex items-center gap-1 hover:bg-muted/50 px-2 py-1 min-h-[44px] sm:min-h-0 rounded-lg transition-colors text-xs font-bold">
                                 <span
                                   className={cn(
                                     "px-2.5 py-0.5 rounded text-[11px] font-black",
@@ -1152,7 +1152,7 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
 
       {/* Reject Reason Modal */}
       <Dialog open={!!rejectingId} onOpenChange={(open) => !open && setRejectingId(null)}>
-        <DialogContent className="w-full max-w-[calc(100vw-24px)] sm:max-w-[420px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+        <DialogContent className="w-full max-w-[calc(100vw-16px)] sm:max-w-[420px] max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
           <div className="flex items-center justify-between px-6 py-5 border-b border-border/50 bg-rose-50/50">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-full bg-rose-100 flex items-center justify-center text-rose-600">
@@ -1164,13 +1164,13 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
               </div>
             </div>
             <DialogClose asChild>
-              <button className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
+              <button className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </DialogClose>
           </div>
 
-          <div className="p-6 space-y-4">
+          <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">Reason for Rejection</label>
               <textarea
@@ -1182,16 +1182,16 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
             </div>
           </div>
 
-          <div className="px-6 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-2.5">
+          <div className="px-6 py-4 bg-muted/30 border-t border-border/50 flex flex-col-reverse sm:flex-row sm:justify-end gap-2.5">
             <button
               onClick={() => setRejectingId(null)}
-              className="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-muted-foreground hover:bg-muted transition-colors"
+              className="px-4 py-2 min-h-[44px] sm:min-h-0 w-full sm:w-auto rounded-xl text-xs sm:text-sm font-bold text-muted-foreground hover:bg-muted transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleConfirmReject}
-              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs sm:text-sm font-bold rounded-xl shadow-md transition-all"
+              className="px-4 py-2 min-h-[44px] sm:min-h-0 w-full sm:w-auto bg-rose-600 hover:bg-rose-700 text-white text-xs sm:text-sm font-bold rounded-xl shadow-md transition-all"
             >
               Confirm Rejection
             </button>
@@ -1201,7 +1201,7 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
 
       {/* Edit Leave Modal */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="w-[calc(100vw-20px)] sm:w-full sm:max-w-[480px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card box-border">
+        <DialogContent className="w-[calc(100vw-16px)] sm:w-full sm:max-w-[480px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card box-border max-h-[90dvh]">
           <div className="flex items-center justify-between px-3.5 sm:px-6 py-3.5 sm:py-5 border-b border-border/50 bg-muted/30">
             <div className="min-w-0 pr-2">
               <h2 className="text-base sm:text-xl font-black tracking-tight truncate">Edit Leave Request</h2>
@@ -1214,8 +1214,8 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
             </DialogClose>
           </div>
 
-          <form onSubmit={handleUpdateLeave} className="flex flex-col max-h-[80vh]">
-            <div className="p-3.5 sm:p-6 space-y-3 sm:space-y-4 overflow-y-auto max-h-[65vh]">
+          <form onSubmit={handleUpdateLeave} className="flex flex-col min-h-0 max-h-[90dvh]">
+            <div className="p-3.5 sm:p-6 space-y-3 sm:space-y-4 overflow-y-auto flex-1 min-h-0 max-h-[65dvh]">
               {/* Leave Type */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
@@ -1241,7 +1241,7 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                       type="button"
                       onClick={() => setNewDayType(dtype)}
                       className={cn(
-                        "py-2 px-0.5 sm:px-2 text-[10px] sm:text-xs font-bold rounded-xl border transition-all text-center whitespace-nowrap leading-tight",
+                        "py-2 min-h-[44px] sm:min-h-0 inline-flex items-center justify-center px-0.5 sm:px-2 text-[10px] sm:text-xs font-bold rounded-xl border transition-all text-center whitespace-normal sm:whitespace-nowrap leading-tight break-words",
                         newDayType === dtype
                           ? "bg-primary text-primary-foreground border-primary shadow-sm"
                           : "bg-muted/30 text-foreground/80 border-border hover:bg-muted/60"

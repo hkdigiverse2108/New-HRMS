@@ -259,7 +259,7 @@ export function SubDepartmentsManager({ onSubDepartmentsCountChange }: SubDepart
                         setEditSubName(sub.name);
                         setEditSubDept(sub.department_name || "");
                       }}
-                      className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl transition-colors"
+                      className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl transition-colors"
                       title="Edit Sub-Department"
                     >
                       <Edit2 className="w-4 h-4" />
@@ -268,7 +268,7 @@ export function SubDepartmentsManager({ onSubDepartmentsCountChange }: SubDepart
                   {canDelete && (
                     <button
                       onClick={() => setDeleteConfirm({ isOpen: true, sub })}
-                      className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl transition-colors"
+                      className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl transition-colors"
                       title="Delete Sub-Department"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -283,7 +283,7 @@ export function SubDepartmentsManager({ onSubDepartmentsCountChange }: SubDepart
 
       {/* Add Sub-Department Modal */}
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-        <DialogContent className="max-w-md p-0 overflow-hidden rounded-3xl gap-0 border-border bg-card shadow-2xl [&>button]:hidden">
+        <DialogContent className="w-[calc(100vw-24px)] sm:max-w-md max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-3xl gap-0 border-border bg-card shadow-2xl [&>button]:hidden">
           <div className="flex items-center justify-between px-6 py-5 border-b border-border/50 bg-muted/40">
             <div>
               <h3 className="text-base font-black text-foreground">Add Sub-Department</h3>
@@ -291,13 +291,13 @@ export function SubDepartmentsManager({ onSubDepartmentsCountChange }: SubDepart
             </div>
             <button
               onClick={() => setIsAddOpen(false)}
-              className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors"
+              className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
 
-          <form onSubmit={handleAdd} className="p-6 space-y-4">
+          <form onSubmit={handleAdd} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
             <div className="space-y-2">
               <label className="text-xs font-bold text-foreground/80 uppercase tracking-wider">
                 Parent Department <span className="text-destructive">*</span>
@@ -325,7 +325,7 @@ export function SubDepartmentsManager({ onSubDepartmentsCountChange }: SubDepart
               />
             </div>
 
-            <div className="flex justify-end gap-3 pt-2">
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2 [&>button]:w-full sm:[&>button]:w-auto [&>button]:min-h-[44px] sm:[&>button]:min-h-0">
               <button
                 type="button"
                 onClick={() => setIsAddOpen(false)}
@@ -348,7 +348,7 @@ export function SubDepartmentsManager({ onSubDepartmentsCountChange }: SubDepart
 
       {/* Edit Sub-Department Modal */}
       <Dialog open={Boolean(editingSub)} onOpenChange={(open) => !open && setEditingSub(null)}>
-        <DialogContent className="max-w-md p-0 overflow-hidden rounded-3xl gap-0 border-border bg-card shadow-2xl [&>button]:hidden">
+        <DialogContent className="w-[calc(100vw-24px)] sm:max-w-md max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-3xl gap-0 border-border bg-card shadow-2xl [&>button]:hidden">
           <div className="flex items-center justify-between px-6 py-5 border-b border-border/50 bg-muted/40">
             <div>
               <h3 className="text-base font-black text-foreground">Edit Sub-Department</h3>
@@ -356,13 +356,13 @@ export function SubDepartmentsManager({ onSubDepartmentsCountChange }: SubDepart
             </div>
             <button
               onClick={() => setEditingSub(null)}
-              className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors"
+              className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
 
-          <form onSubmit={handleEdit} className="p-6 space-y-4">
+          <form onSubmit={handleEdit} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
             <div className="space-y-2">
               <label className="text-xs font-bold text-foreground/80 uppercase tracking-wider">
                 Parent Department <span className="text-destructive">*</span>
@@ -389,7 +389,7 @@ export function SubDepartmentsManager({ onSubDepartmentsCountChange }: SubDepart
               />
             </div>
 
-            <div className="flex justify-end gap-3 pt-2">
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2 [&>button]:w-full sm:[&>button]:w-auto [&>button]:min-h-[44px] sm:[&>button]:min-h-0">
               <button
                 type="button"
                 onClick={() => setEditingSub(null)}

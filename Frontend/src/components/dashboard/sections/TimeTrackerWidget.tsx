@@ -378,9 +378,9 @@ export function TimeTrackerWidget() {
 
             {/* Current Active Task Pill */}
             {(status === "Punched In" || status === "On Break") && (
-              <div className="flex items-center gap-2.5 mt-2.5 px-3.5 py-1.5 bg-primary/10 dark:bg-primary/15 border border-primary/25 rounded-2xl shadow-sm">
+              <div className="flex flex-wrap items-center gap-2.5 mt-2.5 px-3.5 py-1.5 max-w-full bg-primary/10 dark:bg-primary/15 border border-primary/25 rounded-2xl shadow-sm">
                 <span className="text-[11px] font-extrabold text-primary/80 uppercase tracking-wider shrink-0">Working on:</span>
-                <span className="font-bold text-foreground text-xs sm:text-sm max-w-[180px] sm:max-w-[280px] truncate" title={activeTaskTitle || "General Work"}>
+                <span className="font-bold text-foreground text-xs sm:text-sm max-w-[120px] min-[400px]:max-w-[180px] sm:max-w-[280px] truncate" title={activeTaskTitle || "General Work"}>
                   {activeTaskTitle || "General Work"}
                 </span>
                 <button
@@ -401,12 +401,12 @@ export function TimeTrackerWidget() {
         </div>
 
         {/* Timers & Times in IST */}
-        <div className="flex flex-1 items-center justify-around px-4 sm:px-8 border-y md:border-y-0 md:border-x border-border/50 py-4 md:py-0 gap-4">
+        <div className="flex flex-1 flex-wrap items-center justify-around px-4 sm:px-8 border-y md:border-y-0 md:border-x border-border/50 py-4 md:py-0 gap-4">
           <div className="flex flex-col items-center sm:items-start">
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-none">
               Net Work Time
             </p>
-            <p className="text-xl sm:text-2xl font-mono font-black text-foreground mt-1">
+            <p className="text-xl sm:text-2xl font-mono font-black text-foreground mt-1 whitespace-nowrap tabular-nums">
               {formatStopwatchTime(workSeconds)}
             </p>
             <span className="text-[10px] text-muted-foreground font-semibold">
@@ -418,7 +418,7 @@ export function TimeTrackerWidget() {
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-none">
               Total Break
             </p>
-            <p className="text-xl sm:text-2xl font-mono font-black text-amber-500 mt-1">
+            <p className="text-xl sm:text-2xl font-mono font-black text-amber-500 mt-1 whitespace-nowrap tabular-nums">
               {formatDurationSeconds(breakSeconds)}
             </p>
             <span className="text-[10px] text-muted-foreground font-semibold">

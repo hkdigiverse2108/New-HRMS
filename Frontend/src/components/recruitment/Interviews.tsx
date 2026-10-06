@@ -207,20 +207,20 @@ export function Interviews() {
           <h1 className="text-2xl font-black text-foreground tracking-tight">Interviews</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage candidate pipeline and schedules</p>
         </div>
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <SearchInput 
-            placeholder="Search candidates..." 
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+          <SearchInput
+            placeholder="Search candidates..."
             value={searchQuery}
             onChange={setSearchQuery}
-            className="w-full sm:w-64"
+            className="w-full sm:w-64 flex-1 min-w-[180px]"
           />
           <Dialog open={isScheduleOpen} onOpenChange={setIsScheduleOpen}>
             <DialogTrigger asChild>
-              <button className="px-4 py-2 bg-primary hover:bg-primary text-primary-foreground rounded-xl text-sm font-bold shadow-sm flex items-center gap-2 transition-colors whitespace-nowrap">
+              <button className="px-4 py-2 min-h-[44px] sm:min-h-0 bg-primary hover:bg-primary text-primary-foreground rounded-xl text-sm font-bold shadow-sm flex items-center gap-2 transition-colors whitespace-nowrap">
                 <Plus className="w-4 h-4" /> Schedule
               </button>
             </DialogTrigger>
-            <DialogContent className="w-[calc(100vw-24px)] sm:w-full sm:max-w-[425px] md:max-w-[500px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+            <DialogContent className="w-[calc(100vw-16px)] sm:w-full sm:max-w-[425px] md:max-w-[500px] max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
               <div className="flex items-center justify-between px-4 sm:px-8 py-4 sm:py-6 border-b border-border/50 bg-muted/30">
           <div>
             <h2 className="text-lg sm:text-2xl font-black tracking-tight">Schedule Interview</h2>
@@ -231,8 +231,8 @@ export function Interviews() {
             </button>
           </DialogClose>
         </div>
-              <form onSubmit={handleSchedule} className="flex flex-col max-h-[70vh]">
-                <div className="p-6 md:p-8 space-y-6 overflow-y-auto">
+              <form onSubmit={handleSchedule} className="flex flex-col min-h-0 max-h-[90dvh]">
+                <div className="p-4 sm:p-6 md:p-8 space-y-6 overflow-y-auto flex-1 min-h-0">
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Candidate Name</label>
                   <input 
@@ -262,7 +262,7 @@ export function Interviews() {
                     className="w-full h-[38px] px-3 bg-white border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Date</label>
                     <input 
@@ -395,11 +395,11 @@ export function Interviews() {
                       className="bg-white p-4 rounded-xl border border-border shadow-sm hover:shadow-md hover:border-primary/30 transition-all group cursor-grab active:cursor-grabbing"
                     >
                       <div className="flex justify-between items-start mb-3">
-                        <div className="flex items-center gap-3">
-                          <img src={candidate.avatar} alt={candidate.name} className="w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm" />
-                          <div>
-                            <h4 className="text-sm font-bold text-foreground group-hover:text-primary transition-colors">{candidate.name}</h4>
-                            <p className="text-xs font-medium text-muted-foreground">{candidate.role}</p>
+                        <div className="flex items-center gap-3 min-w-0">
+                          <img src={candidate.avatar} alt={candidate.name} className="w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm shrink-0" />
+                          <div className="min-w-0">
+                            <h4 className="text-sm font-bold text-foreground group-hover:text-primary transition-colors truncate">{candidate.name}</h4>
+                            <p className="text-xs font-medium text-muted-foreground truncate">{candidate.role}</p>
                           </div>
                         </div>
                       </div>

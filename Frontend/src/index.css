@@ -139,3 +139,14 @@
 .animate-fireworks {
   animation: fireworks-expand cubic-bezier(0.1, 0.9, 0.2, 1) forwards;
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-glitter,
+  .animate-popper-left,
+  .animate-popper-right,
+  .animate-sparkle-rain,
+  .animate-sparkle-stars,
+  .animate-fireworks {
+    animation: none !important;
+  }
+}

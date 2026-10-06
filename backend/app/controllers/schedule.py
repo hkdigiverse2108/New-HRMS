@@ -61,6 +61,19 @@ async def get_bulk_options(
     options = await ScheduleRepository.get_bulk_options()
     return options
 
+@router.get("/team-users", response_model=List[Dict[str, Any]])
+async def get_schedule_team_users(
+    q: Optional[str] = Query(None, description="Search active users by name or employee ID"),
+    current_employee: dict = Depends(get_current_employee)
+):
+    """
+    Team Calendars user list (Admin/HR only): all active, non-deleted users.
+    """
+    user_role = (current_employee.get("work_details", {}).get("system_role") or current_employee.get("role") or "Employee")
+    if user_role not in ("Admin", "SuperAdmin", "HR", "Sub-Admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Admin/HR can view the team list.")
+    return await ScheduleRepository.get_team_users(query_str=q)
+
 @router.get("/feed", response_model=Dict[str, Any])
 @router.get("/calendar", response_model=Dict[str, Any])
 async def get_my_calendar_feed(
@@ -68,6 +81,7 @@ async def get_my_calendar_feed(
     view_mode: str = Query("month", description="View mode: month, week, day, today"),
     categories: Optional[str] = Query(None, description="Comma-separated category filters: my_schedule,work_anniversary,birthday"),
     q: Optional[str] = Query(None, description="Search query string"),
+    employee_ids: Optional[str] = Query(None, description="Admin/HR only: comma-separated employee IDs for multi-user team view"),
     current_employee: dict = Depends(get_current_employee)
 ):
     """
@@ -78,31 +92,29 @@ async def get_my_calendar_feed(
     - Search: Filter events by title/search query
     """
     user_id = str(current_employee.get("work_details", {}).get("employee_id") or current_employee.get("_id") or current_employee.get("id"))
+    user_role = (current_employee.get("work_details", {}).get("system_role") or current_employee.get("role") or "Employee")
+    is_admin_or_hr = user_role in ("Admin", "SuperAdmin", "HR", "Sub-Admin")
     ref_d = reference_date or date.today()
-    
+
     cat_list = [c.strip() for c in categories.split(",")] if categories else None
+
+    # Multi-user team view: admin/HR only. Non-admin always sees only self.
+    targets: Optional[List[str]] = None
+    if employee_ids:
+        if not is_admin_or_hr:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Admin/HR can view other users' calendars.")
+        targets = [t.strip() for t in employee_ids.split(",") if t.strip()][:50]
 
     feed = await ScheduleRepository.get_calendar_feed(
         user_id=user_id,
         reference_date=ref_d,
         view_mode=view_mode.lower(),
         categories=cat_list,
-        search_query=q
+        search_query=q,
+        target_user_ids=targets,
+        is_admin_or_hr=is_admin_or_hr
     )
     return feed
-
-@router.get("/events/{event_id}", response_model=ScheduleEventResponse)
-async def get_event_by_id(
-    event_id: str,
-    current_employee: dict = Depends(get_current_employee)
-):
-    """
-    Get single schedule event by ID.
-    """
-    event = await ScheduleRepository.get_event_by_id(event_id)
-    if not event:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Schedule event not found")
-    return event
 
 @router.get("/employee-events", response_model=Dict[str, Any])
 async def get_other_employee_schedule(
@@ -150,6 +162,21 @@ async def search_employees_for_schedule(
         limit=limit
     )
     return results
+
+@router.get("/events/{event_id}", response_model=ScheduleEventResponse)
+async def get_event_by_id(
+    event_id: str,
+    current_employee: dict = Depends(get_current_employee)
+):
+    """
+    Get single schedule event by ID.
+    NOTE: declared after /employee-events and /employees/search so those
+    static routes are matched first (Starlette matches in declaration order).
+    """
+    event = await ScheduleRepository.get_event_by_id(event_id)
+    if not event:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Schedule event not found")
+    return event
 
 @router.put("/events/{event_id}", response_model=Dict[str, str])
 async def update_schedule_event(
@@ -229,6 +256,29 @@ async def get_google_auth_status(
         "google_email": None
     }
 
+@router.get("/google/config", response_model=Dict[str, Any])
+async def google_oauth_config(
+    request: Request,
+    current_employee: dict = Depends(get_current_employee)
+):
+    """
+    Non-secret OAuth diagnostics for the Schedule setup helper.
+    Shows which redirect URI Google must have registered and whether keys exist.
+    """
+    client_id = (settings.GOOGLE_CLIENT_ID or "").strip()
+    has_secret = bool((settings.GOOGLE_CLIENT_SECRET or "").strip())
+    redirect_uri = GoogleCalendarService.get_redirect_uri(str(request.base_url))
+    return {
+        "configured": bool(client_id and has_secret),
+        "client_id_hint": (client_id[:14] + "…") if client_id else "",
+        "redirect_uri": redirect_uri,
+        "steps": [
+            "Google Cloud Console → APIs & Services → OAuth consent screen → Test users → Add each Gmail that signs in (Testing mode blocks others with 403 access_denied).",
+            "Credentials → OAuth client → Authorized redirect URIs → add exactly: " + redirect_uri,
+            "Enable 'Google Calendar API' in Library for the project.",
+        ],
+    }
+
 @router.get("/google/auth")
 @router.get("/google/login")
 async def google_auth_login(
@@ -270,6 +320,17 @@ async def google_auth_callback(
     """
     if error or not code or not state:
         err_msg = error or "Missing authorization code or state"
+        denied_help = ""
+        if str(error or "") == "access_denied":
+            denied_help = """
+            <p style="text-align:left; font-size:13px;">Google blocked the sign-in (403 access_denied). Usual cause: the OAuth
+            consent screen is in <strong>Testing</strong> mode and this Gmail is not added under
+            <strong>Test users</strong>.</p>
+            <ol style="text-align:left; font-size:13px; color:#94a3b8; line-height:1.7;">
+              <li>Google Cloud Console → APIs &amp; Services → OAuth consent screen → Test users → <strong>Add users</strong> (add this Gmail).</li>
+              <li>Credentials → OAuth client → Authorized redirect URIs must contain the backend callback URL.</li>
+              <li>Library → enable <strong>Google Calendar API</strong>.</li>
+            </ol>"""
         return HTMLResponse(content=f"""
         <!DOCTYPE html>
         <html>
@@ -277,7 +338,7 @@ async def google_auth_callback(
           <title>Google Connection Failed</title>
           <style>
             body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; background: #0f172a; color: #f8fafc; margin: 0; }}
-            .card {{ background: #1e293b; padding: 40px; border-radius: 16px; text-align: center; max-width: 480px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid #334155; }}
+            .card {{ background: #1e293b; padding: 40px; border-radius: 16px; text-align: center; max-width: 520px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid #334155; }}
             h2 {{ color: #ef4444; margin-top: 0; }}
             p {{ color: #94a3b8; line-height: 1.5; }}
           </style>
@@ -286,6 +347,7 @@ async def google_auth_callback(
           <div class="card">
             <h2>❌ Connection Failed</h2>
             <p>Error: <strong>{err_msg}</strong></p>
+            {denied_help}
             <p>Please try connecting again from HRMS.</p>
           </div>
         </body>
@@ -324,6 +386,12 @@ async def google_auth_callback(
             <div class="badge">✓ Auto-Sync Active</div>
             <p style="margin-top: 24px; font-size: 13px; color: #64748b;">You can close this tab and return to HRMS.</p>
           </div>
+          <script>
+            try {{
+              if (window.opener) window.opener.postMessage({{ type: "hrms-google-connected", email: "{google_email}" }}, "*");
+            }} catch (e) {{}}
+            setTimeout(function() {{ try {{ window.close(); }} catch (e) {{}} }}, 1800);
+          </script>
         </body>
         </html>
         """)

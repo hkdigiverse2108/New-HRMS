@@ -441,7 +441,7 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
   return (
     <>
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="w-[calc(100vw-16px)] sm:w-full max-w-5xl p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card h-[92dvh] sm:h-[85vh] max-h-[850px] flex flex-col">
+      <DialogContent className="w-[calc(100vw-16px)] sm:w-full max-w-5xl p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card h-[90dvh] sm:h-[85vh] max-h-[850px] flex flex-col">
         {/* Header - Fixed Height */}
         <div className="flex items-center justify-between px-4 sm:px-8 py-3.5 sm:py-5 border-b border-border/50 bg-muted/30 shrink-0">
           <div className="min-w-0 pr-2">
@@ -479,7 +479,7 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                   type="button"
                   onClick={() => setActiveTab(tab.id as TabType)}
                   className={cn(
-                    "flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold transition-all text-center relative",
+                    "flex items-center justify-center gap-1.5 px-2.5 py-2 min-h-[44px] rounded-xl text-xs font-bold transition-all text-center relative",
                     isActive 
                       ? "bg-primary text-primary-foreground shadow-sm" 
                       : "bg-background text-muted-foreground hover:bg-muted hover:text-foreground border border-border/60",
@@ -542,7 +542,7 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                     {/* Profile photo REMOVED (no need) — initials avatar everywhere. */}
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                     <div className="space-y-2">
                       <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider flex items-center gap-1">
                         <span>First Name</span>
@@ -705,7 +705,7 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
 
                   <div className="pt-6 border-t border-border/50 space-y-6">
                     <h4 className="text-sm font-bold">Emergency Contact / Parent</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                       <div className="space-y-2">
                         <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Parent/Guardian Name</label>
                         <input 
@@ -751,7 +751,7 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                   </div>
                   
                   <fieldset disabled={isSelfEdit} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                     <div className="space-y-2">
                       <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider flex items-center gap-1">
                         <span>System Role</span>
@@ -857,7 +857,7 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 border-t border-border/50">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 pt-4 sm:pt-6 border-t border-border/50">
                     <div className="space-y-2">
                       <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Joining Date</label>
                       <DatePicker 
@@ -893,7 +893,7 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                     <p className="text-sm text-muted-foreground">Salary, banking details, and IDs.</p>
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Monthly Salary</label>
@@ -1022,7 +1022,7 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-border/50">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 pt-4 sm:pt-6 border-t border-border/50">
                     <div className="space-y-2">
                       <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Aadhar Card Number</label>
                       <input 
@@ -1046,7 +1046,7 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                       <h4 className="text-sm font-bold">Required Documents Checklist</h4>
                       {isSelfEdit && <span className="bg-muted px-3 py-1 rounded-lg text-xs font-bold text-muted-foreground">Read Only</span>}
                     </div>
-                    <fieldset disabled={isSelfEdit} className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-muted/20 p-5 rounded-2xl border border-border/50">
+                    <fieldset disabled={isSelfEdit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 p-5 rounded-2xl border border-border/50">
                       {REQUIRED_DOCUMENTS_LIST.map((docName) => {
                         const isChecked = formData.requiredDocuments?.includes(docName) || false;
                         return (
@@ -1096,7 +1096,7 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                     </label>
 
                     {formData.hasBond && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in zoom-in-95 duration-200 pt-2 border-t border-border/50">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 animate-in fade-in zoom-in-95 duration-200 pt-4 border-t border-border/50">
                         <div className="space-y-2">
                           <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Bond Start Date</label>
                           <DatePicker 
@@ -1136,7 +1136,7 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                     </label>
 
                     {formData.hasNoticePeriod && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in zoom-in-95 duration-200 pt-2 border-t border-border/50">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 animate-in fade-in zoom-in-95 duration-200 pt-4 border-t border-border/50">
                         <div className="space-y-2">
                           <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Notice Period Days</label>
                           <input 
@@ -1198,15 +1198,15 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
           </div>
           
           {/* Footer Actions - Fixed Height */}
-          <div className="p-3 sm:p-5 border-t border-border/50 bg-muted/30 flex items-center justify-between shrink-0 gap-2">
+          <div className="p-3 sm:p-5 border-t border-border/50 bg-muted/30 flex flex-wrap items-center justify-between shrink-0 gap-2">
             <div className="text-xs text-muted-foreground hidden md:block">
               Tip: Navigate between sections using the tabs on the left.
             </div>
-            <div className="flex items-center gap-2 sm:gap-3 ml-auto w-full sm:w-auto justify-end">
-              <button 
+            <div className="flex items-center gap-2 sm:gap-3 ml-auto w-full sm:w-auto justify-end flex-wrap">
+              <button
                 type="button"
                 onClick={onClose}
-                className="px-3 sm:px-6 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-foreground/80 hover:bg-muted rounded-xl transition-colors shrink-0"
+                className="px-3 sm:px-6 py-2 sm:py-2.5 min-h-[44px] sm:min-h-0 text-xs sm:text-sm font-bold text-foreground/80 hover:bg-muted rounded-xl transition-colors shrink-0"
               >
                 Cancel
               </button>

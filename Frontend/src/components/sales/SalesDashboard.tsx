@@ -71,8 +71,8 @@ function StatCard({
         <div className="mt-2 flex items-center gap-1 text-[11px]">
           {trend === "up" ? <TrendingUp className="h-3 w-3 text-emerald-500" /> : <TrendingDown className="h-3 w-3 text-rose-500" />}
           <div className="relative inline-block">
-            <button 
-              onClick={() => setIsOpen(!isOpen)} 
+            <button
+              onClick={() => setIsOpen(!isOpen)}
               className={cn(
                 "flex items-center gap-0.5 hover:underline decoration-dashed underline-offset-2 transition-colors",
                 trend === "up" ? "text-emerald-700 hover:text-emerald-800" : "text-rose-700 hover:text-rose-800"
@@ -83,8 +83,8 @@ function StatCard({
             {isOpen && (
               <div className="absolute left-0 top-full mt-1 z-20 w-28 rounded-lg border border-border bg-white shadow-lg overflow-hidden animate-in fade-in zoom-in-95">
                 {periods.map(p => (
-                  <button 
-                    key={p} 
+                  <button
+                    key={p}
                     onClick={() => { setPeriod(p); setIsOpen(false); }}
                     className={cn(
                       "block w-full text-left px-3 py-2 text-[11px] font-medium transition-colors hover:bg-muted",
@@ -251,7 +251,7 @@ export function SalesDashboard({ setActive, onAction }: { setActive?: (path: str
       const mIdx = d.getMonth();
       const mName = months[mIdx] ?? "";
       const monthPrefix = `${d.getFullYear()}-${String(mIdx + 1).padStart(2, "0")}`;
-      
+
       const monthWon = leads.filter((l) => {
         const isWon = ["Client Won", "Won"].includes(l.status || l.stage || "");
         const closed = l.closedDate || l.date || "";
@@ -279,9 +279,9 @@ export function SalesDashboard({ setActive, onAction }: { setActive?: (path: str
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative z-50">
-            <button 
+            <button
               onClick={() => setIsQuickActionsOpen(!isQuickActionsOpen)}
-              className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700"
+              className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 min-h-[44px] sm:min-h-0 text-sm font-semibold text-white transition-colors hover:bg-emerald-700"
             >
               <Zap className="h-4 w-4" /> Quick Actions <ChevronDown className="h-3 w-3" />
             </button>
@@ -292,7 +292,7 @@ export function SalesDashboard({ setActive, onAction }: { setActive?: (path: str
                 </div>
                 <div className="max-h-[300px] overflow-y-auto">
                   {quickActionList.map(({ label, icon: Icon }) => (
-                    <button 
+                    <button
                       key={label}
                       onClick={() => { onAction?.(label); setIsQuickActionsOpen(false); }}
                       className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted"
@@ -305,8 +305,8 @@ export function SalesDashboard({ setActive, onAction }: { setActive?: (path: str
               </div>
             )}
           </div>
-          <button onClick={() => setActive?.("/work/sales/analytics")} className="rounded-lg border border-border px-3 sm:px-4 py-2 text-sm font-semibold transition-colors hover:bg-accent">Analytics</button>
-          <button onClick={() => setActive?.("/work/sales/pipeline")} className="rounded-lg border border-border px-3 sm:px-4 py-2 text-sm font-semibold transition-colors hover:bg-accent">Pipeline</button>
+          <button onClick={() => setActive?.("/work/sales/analytics")} className="rounded-lg border border-border px-3 sm:px-4 py-2 min-h-[44px] sm:min-h-0 text-sm font-semibold transition-colors hover:bg-accent">Analytics</button>
+          <button onClick={() => setActive?.("/work/sales/pipeline")} className="rounded-lg border border-border px-3 sm:px-4 py-2 min-h-[44px] sm:min-h-0 text-sm font-semibold transition-colors hover:bg-accent">Pipeline</button>
         </div>
       </div>
 
@@ -437,12 +437,12 @@ export function SalesDashboard({ setActive, onAction }: { setActive?: (path: str
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {hotLeads.slice(0, 4).map((lead) => (
                 <div key={lead.id || lead._id} className="group cursor-pointer rounded-xl border border-border bg-background p-4 transition-all hover:border-emerald-300 hover:shadow-md">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="font-semibold">{lead.company}</p>
-                      <p className="text-xs text-muted-foreground">{lead.contact} · {lead.city || lead.source || ""}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold truncate">{lead.company}</p>
+                      <p className="text-xs text-muted-foreground truncate">{lead.contact} · {lead.city || lead.source || ""}</p>
                     </div>
-                    <span className="inline-flex items-center text-xs">🔥</span>
+                    <span className="inline-flex items-center text-xs shrink-0">🔥</span>
                   </div>
                   <div className="mt-3 flex items-center justify-between text-xs">
                     <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">

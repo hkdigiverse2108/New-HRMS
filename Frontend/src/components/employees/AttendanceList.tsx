@@ -664,7 +664,7 @@ export function AttendanceList() {
               </div>
 
               {/* Top Punctual Employees / Hall of Fame */}
-              <div className="bg-card border border-border/60 rounded-3xl shadow-sm p-5 h-[160px] flex flex-col relative overflow-hidden">
+              <div className="bg-card border border-border/60 rounded-3xl shadow-sm p-5 h-auto sm:h-[160px] sm:min-h-[160px] flex flex-col relative overflow-hidden">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
                     <Award className="w-4 h-4 text-emerald-600" />
@@ -673,7 +673,7 @@ export function AttendanceList() {
                   <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">This Month</p>
                 </div>
                 <div className="flex-1 overflow-y-auto pr-2">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-5 gap-3">
                     {[
                       { name: "Sneha Pillai", dept: "Operations", streak: "14 Days" },
                       { name: "Rahul Sharma", dept: "Marketing", streak: "12 Days" },
@@ -730,7 +730,7 @@ export function AttendanceList() {
                       key={status}
                       onClick={() => setStatusFilter(status)}
                       className={cn(
-                        "px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-200 shrink-0",
+                        "px-3 py-1.5 min-h-[44px] sm:min-h-0 inline-flex items-center rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-200 shrink-0",
                         statusFilter === status
                           ? "bg-primary text-primary-foreground shadow-md"
                           : "bg-card text-foreground/80 border border-border hover:bg-muted/50 hover:text-foreground"
@@ -873,7 +873,7 @@ export function AttendanceList() {
                         <td className="px-6 py-4 text-right whitespace-nowrap">
                           <button
                             onClick={() => setSelectedRecord(record)}
-                            className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                            className="p-2 min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:focus-within:opacity-100"
                             title="View log details"
                           >
                             <MoreHorizontal className="w-5 h-5" />
@@ -921,7 +921,7 @@ export function AttendanceList() {
 
       {/* Log Details Modal */}
       <Dialog open={!!selectedRecord} onOpenChange={(open) => !open && setSelectedRecord(null)}>
-        <DialogContent className="w-full max-w-[calc(100vw-24px)] sm:max-w-[480px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+        <DialogContent className="w-full max-w-[calc(100vw-24px)] sm:max-w-[480px] max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
           <div className="flex items-center justify-between px-6 py-5 border-b border-border/50 bg-muted/30">
             <div>
               <h2 className="text-lg sm:text-xl font-black tracking-tight">Attendance Timeline (IST)</h2>
@@ -936,7 +936,7 @@ export function AttendanceList() {
             </DialogClose>
           </div>
 
-          <div className="px-6 py-6 max-h-[70vh] overflow-y-auto">
+          <div className="px-6 py-6 max-h-[70dvh] overflow-y-auto flex-1 min-h-0">
             {selectedRecord && (
               <>
                 <div className="flex items-center gap-4 mb-6 pb-4 border-b border-border/50">
@@ -1013,7 +1013,7 @@ export function AttendanceList() {
 
       {/* HR Manual Attendance Dialog */}
       <Dialog open={isManualModalOpen} onOpenChange={setIsManualModalOpen}>
-        <DialogContent className="sm:max-w-[480px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+        <DialogContent className="w-[calc(100vw-16px)] sm:max-w-[480px] max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
           <div className="flex items-center justify-between px-6 md:px-8 py-5 border-b border-border/50 bg-muted/30">
             <div>
               <h2 className="text-xl font-black tracking-tight">Manual Attendance</h2>
@@ -1029,7 +1029,7 @@ export function AttendanceList() {
           </div>
 
           <form onSubmit={handleManualAttendanceSubmit} className="flex flex-col">
-            <div className="p-6 md:p-8 space-y-4 max-h-[70vh] overflow-y-auto">
+            <div className="p-6 md:p-8 space-y-4 max-h-[70dvh] overflow-y-auto flex-1 min-h-0">
               {/* Employee Selection - Multi-Select with Admin Exclusion */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
@@ -1089,7 +1089,7 @@ export function AttendanceList() {
 
                   <PopoverContent
                     align="start"
-                    className="w-[360px] p-0 rounded-2xl shadow-2xl border-border/60 bg-card overflow-hidden z-[80]"
+                    className="w-[360px] max-w-[calc(100vw-32px)] p-0 rounded-2xl shadow-2xl border-border/60 bg-card overflow-hidden z-[80]"
                   >
                     {/* Search Bar */}
                     <div className="p-3 border-b border-border/60 bg-muted/20">
@@ -1220,7 +1220,7 @@ export function AttendanceList() {
 
               {/* Check In / Out (only for Present/Half Day) */}
               {(manualForm.status === "Present" || manualForm.status === "Half Day") && (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 min-[380px]:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
                       Check-In Time

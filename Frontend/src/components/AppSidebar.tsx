@@ -566,7 +566,7 @@ function SidebarBody({
           <button
             onClick={onClose}
             aria-label="Close menu"
-            className="ml-auto grid h-8 w-8 shrink-0 place-items-center rounded-lg text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            className="ml-auto grid h-11 w-11 sm:h-8 sm:w-8 shrink-0 place-items-center rounded-lg text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
           >
             <X className="h-4 w-4" />
           </button>
@@ -875,6 +875,15 @@ export function AppSidebar({ active = "/dashboard", setActive }: { active?: stri
     };
   }, [drawerOpen]);
 
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDrawerOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [drawerOpen]);
+
   return (
     <>
       {/* Mobile top bar */}
@@ -943,7 +952,7 @@ export function AppSidebar({ active = "/dashboard", setActive }: { active?: stri
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         className={cn(
-          "hidden h-screen shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 md:sticky md:top-0 md:flex",
+          "hidden h-dvh shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 md:sticky md:top-0 md:flex",
           effectivelyCollapsed ? "w-[68px]" : "w-[268px]",
         )}
       >

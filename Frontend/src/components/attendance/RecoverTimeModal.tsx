@@ -155,7 +155,7 @@ export function RecoverTimeModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-md w-full p-6 rounded-3xl border border-border/80 shadow-2xl bg-card">
+      <DialogContent className="w-[calc(100vw-16px)] sm:max-w-md max-h-[90dvh] overflow-y-auto flex flex-col p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-border/80 shadow-2xl bg-card">
         <DialogHeader>
           <div className="flex items-center gap-2.5 text-primary mb-1">
             <div className="p-2 rounded-xl bg-primary/10 border border-primary/20">
@@ -280,7 +280,7 @@ export function RecoverTimeModal({
                     key={mins}
                     type="button"
                     onClick={() => handleQuickAddMinutes(mins)}
-                    className="px-2.5 py-1 rounded-lg bg-muted/60 hover:bg-muted text-[11px] font-semibold text-foreground transition-colors border border-border/50"
+                    className="px-2.5 py-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center rounded-lg bg-muted/60 hover:bg-muted text-[11px] font-semibold text-foreground transition-colors border border-border/50"
                   >
                     +{mins}m
                   </button>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Download, ChevronDown, CheckCircle2, TrendingUp, TrendingDown, DollarSign, Target, Calendar, BarChart2, Plus, Edit3, Save, X, Search, Info, Trash2, ArrowRight } from "lucide-react";
-import { DialogClose,  Dialog, DialogContent  } from "@/components/ui/dialog";
+import { DialogClose, Dialog, DialogContent } from "@/components/ui/dialog";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { moveToRecycleBin } from "@/lib/recycle-bin";
 import { SearchableSelect } from "@/components/ui/select";
@@ -34,10 +34,10 @@ export function FinancialPlan() {
     const saved = (typeof window !== 'undefined' ? localStorage.getItem('hrms_financial_plan') : null);
     return saved ? JSON.parse(saved) : mockPlanData;
   });
-  
+
   useEffect(() => { localStorage.setItem('hrms_financial_plan', JSON.stringify(planData)); }, [planData]);
 
-  const [deleteConfirm, setDeleteConfirm] = useState<{isOpen: boolean, category: string}>({isOpen: false, category: ""});
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean, category: string }>({ isOpen: false, category: "" });
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
   const [isAddRowOpen, setIsAddRowOpen] = useState(false);
   const [isEditRowOpen, setIsEditRowOpen] = useState(false);
@@ -48,7 +48,7 @@ export function FinancialPlan() {
     if (deleteConfirm.category) {
       const newPlanData = { ...planData };
       const dataToDelete = newPlanData[deleteConfirm.category];
-      
+
       // Moving entire category to recycle bin.
       moveToRecycleBin('Financial Plan Category', deleteConfirm.category, dataToDelete, 'hrms_financial_plan', {
         parentId: deleteConfirm.category,
@@ -58,7 +58,7 @@ export function FinancialPlan() {
       // Wait, since Financial Plan is an object map, it doesn't quite fit our array-based RecycleBin logic perfectly without special handling.
       // We will handle it by just keeping it simple: We store { categoryName: data } and it will require custom restore if we want.
       // For now, let's just pass it to the recycle bin so it's not lost.
-      
+
       delete newPlanData[deleteConfirm.category];
       setPlanData(newPlanData);
     }
@@ -67,7 +67,7 @@ export function FinancialPlan() {
 
   return (
     <div className="w-full space-y-6 animate-in fade-in duration-500 pb-12 relative min-w-0">
-      
+
       {/* Header */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
         <div>
@@ -83,7 +83,7 @@ export function FinancialPlan() {
           <button className="px-3 sm:px-4 py-2 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center gap-2 text-xs sm:text-sm">
             <Download className="w-4 h-4 text-indigo-500" /> Export Plan
           </button>
-          <button 
+          <button
             onClick={() => setIsAddCategoryOpen(true)}
             className="px-3 sm:px-4 py-2 bg-primary text-primary-foreground font-bold rounded-lg hover:opacity-90 transition-opacity shadow-sm flex items-center gap-2 text-xs sm:text-sm"
           >
@@ -120,9 +120,10 @@ export function FinancialPlan() {
                     <td colSpan={6} className="px-4 py-3 uppercase tracking-wide text-xs">
                       <div className="flex items-center justify-between">
                         <span>{categoryName}</span>
-                        <button 
+                        <button
                           onClick={() => setDeleteConfirm({ isOpen: true, category: categoryName })}
-                          className="text-rose-500 hover:text-rose-600 text-xs font-bold flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-rose-500/10 border-none outline-none">
+                          className="text-rose-500 hover:text-rose-600 text-xs font-bold flex items-center gap-1 opacity-100 xl:opacity-0 xl:group-hover:opacity-100 xl:focus-within:opacity-100 transition-opacity p-1 min-h-[44px] rounded-md hover:bg-rose-500/10 border-none outline-none"
+                        >
                           <Trash2 className="w-3.5 h-3.5" /> Remove Category
                         </button>
                       </div>
@@ -141,7 +142,7 @@ export function FinancialPlan() {
                       <td className="p-4 text-xs font-bold text-muted-foreground border-r border-border/50">
                         <span className="px-2 py-0.5 rounded bg-background border border-border/50">{row.unit}</span>
                       </td>
-                      <td 
+                      <td
                         className="p-4 text-right font-black text-emerald-600 border-r border-border/50 cursor-pointer hover:bg-muted/50 transition-colors group-hover:bg-muted/40"
                         onClick={() => setIsEditRowOpen(true)}
                       >
@@ -149,9 +150,9 @@ export function FinancialPlan() {
                       </td>
                       <td className="p-4 text-center">
                         <div className="flex items-center justify-center gap-2">
-                          <button 
+                          <button
                             onClick={() => setIsEditRowOpen(true)}
-                            className="text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-md hover:bg-muted"
+                            className="text-muted-foreground hover:text-foreground transition-colors p-1.5 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center rounded-md hover:bg-muted"
                           >
                             <Edit3 className="w-4 h-4" />
                           </button>
@@ -162,7 +163,7 @@ export function FinancialPlan() {
                   {/* Add Row Button for Category */}
                   <tr>
                     <td colSpan={6} className="p-2 border-r border-border/50 bg-muted/10 text-center">
-                      <button 
+                      <button
                         onClick={() => {
                           setActiveCategory(categoryName);
                           setIsAddRowOpen(true);
@@ -182,77 +183,77 @@ export function FinancialPlan() {
 
       {/* --- ADD CATEGORY MODAL --- */}
       <Dialog open={isAddCategoryOpen} onOpenChange={setIsAddCategoryOpen}>
-        <DialogContent className="max-w-sm p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+        <DialogContent className="w-[calc(100vw-16px)] sm:w-full sm:max-w-sm max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
           <div className="p-4 border-b border-border/50 flex justify-between items-center bg-indigo-500/5">
-              <h3 className="font-black text-lg text-foreground flex items-center gap-2">
-                <Plus className="w-5 h-5 text-indigo-600" /> Add Category
-              </h3>
-              <button onClick={() => setIsAddCategoryOpen(false)} className="p-2 hover:bg-muted rounded-full transition-colors">
-                <X className="w-4 h-4 text-muted-foreground" />
-              </button>
+            <h3 className="font-black text-lg text-foreground flex items-center gap-2">
+              <Plus className="w-5 h-5 text-indigo-600" /> Add Category
+            </h3>
+            <button onClick={() => setIsAddCategoryOpen(false)} className="p-2 hover:bg-muted rounded-full transition-colors">
+              <X className="w-4 h-4 text-muted-foreground" />
+            </button>
+          </div>
+          <div className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[70vh]">
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Category Name</label>
+              <input type="text" placeholder="e.g. MARKETING EXPENSES" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 uppercase" />
             </div>
-            <div className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[70vh]">
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Category Name</label>
-                <input type="text" placeholder="e.g. MARKETING EXPENSES" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 uppercase" />
-              </div>
-            </div>
-            <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
-              <button onClick={() => setIsAddCategoryOpen(false)} className="px-4 py-2 font-bold text-sm bg-background border border-border/50 rounded-lg hover:bg-muted transition-colors text-muted-foreground">Cancel</button>
-              <button onClick={() => setIsAddCategoryOpen(false)} className="px-4 py-2 font-bold text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm">Save Category</button>
-            </div>
+          </div>
+          <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
+            <button onClick={() => setIsAddCategoryOpen(false)} className="px-4 py-2 font-bold text-sm bg-background border border-border/50 rounded-lg hover:bg-muted transition-colors text-muted-foreground">Cancel</button>
+            <button onClick={() => setIsAddCategoryOpen(false)} className="px-4 py-2 font-bold text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm">Save Category</button>
+          </div>
         </DialogContent>
       </Dialog>
 
       {/* --- ADD/EDIT ROW MODAL --- */}
       <Dialog open={isAddRowOpen || isEditRowOpen} onOpenChange={(open) => { if (!open) { setIsAddRowOpen(false); setIsEditRowOpen(false); } }}>
-        <DialogContent className="max-w-md p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+        <DialogContent className="w-[calc(100vw-16px)] sm:w-full sm:max-w-md max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
           <div className="p-4 border-b border-border/50 flex justify-between items-center bg-primary/5">
-              <h3 className="font-black text-lg text-foreground flex items-center gap-2">
-                {isEditRowOpen ? <Edit3 className="w-5 h-5 text-primary" /> : <Plus className="w-5 h-5 text-primary" />}
-                {isEditRowOpen ? "Edit Target / Metric" : `Add Row to ${activeCategory}`}
-              </h3>
-              <button onClick={() => { setIsAddRowOpen(false); setIsEditRowOpen(false); }} className="p-2 hover:bg-muted rounded-full transition-colors">
-                <X className="w-4 h-4 text-muted-foreground" />
-              </button>
+            <h3 className="font-black text-lg text-foreground flex items-center gap-2">
+              {isEditRowOpen ? <Edit3 className="w-5 h-5 text-primary" /> : <Plus className="w-5 h-5 text-primary" />}
+              {isEditRowOpen ? "Edit Target / Metric" : `Add Row to ${activeCategory}`}
+            </h3>
+            <button onClick={() => { setIsAddRowOpen(false); setIsEditRowOpen(false); }} className="p-2 hover:bg-muted rounded-full transition-colors">
+              <X className="w-4 h-4 text-muted-foreground" />
+            </button>
+          </div>
+          <div className="p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 overflow-y-auto max-h-[70vh]">
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Sub-Category</label>
+              <input type="text" placeholder="e.g. Headcount" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20" />
             </div>
-            <div className="p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 overflow-y-auto max-h-[70vh]">
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Metric Name</label>
+              <input type="text" placeholder="e.g. Developers" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Sub-Category</label>
-                <input type="text" placeholder="e.g. Headcount" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Unit</label>
+                <SearchableSelect
+                  value={rowUnit}
+                  onChange={setRowUnit}
+                  options={[
+                    { label: "INR", value: "INR" },
+                    { label: "Number", value: "Number" },
+                    { label: "Active", value: "Active" }
+                  ]}
+                  className="w-full h-[40px] px-3 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Metric Name</label>
-                <input type="text" placeholder="e.g. Developers" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20" />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Unit</label>
-                  <SearchableSelect
-                    value={rowUnit}
-                    onChange={setRowUnit}
-                    options={[
-                      { label: "INR", value: "INR" },
-                      { label: "Number", value: "Number" },
-                      { label: "Active", value: "Active" }
-                    ]}
-                    className="w-full h-[40px] px-3 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Target Value</label>
-                  <input type="text" placeholder="Value" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 text-emerald-600" />
-                </div>
+                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Target Value</label>
+                <input type="text" placeholder="Value" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 text-emerald-600" />
               </div>
             </div>
-            <div className="px-4 sm:px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
-              <button onClick={() => { setIsAddRowOpen(false); setIsEditRowOpen(false); }} className="px-4 py-2 font-bold text-sm bg-background border border-border/50 rounded-lg hover:bg-muted transition-colors text-muted-foreground">Cancel</button>
-              <button onClick={() => { setIsAddRowOpen(false); setIsEditRowOpen(false); }} className="px-4 py-2 font-bold text-sm bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity shadow-sm">Save Row</button>
-            </div>
+          </div>
+          <div className="px-4 sm:px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
+            <button onClick={() => { setIsAddRowOpen(false); setIsEditRowOpen(false); }} className="px-4 py-2 font-bold text-sm bg-background border border-border/50 rounded-lg hover:bg-muted transition-colors text-muted-foreground">Cancel</button>
+            <button onClick={() => { setIsAddRowOpen(false); setIsEditRowOpen(false); }} className="px-4 py-2 font-bold text-sm bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity shadow-sm">Save Row</button>
+          </div>
         </DialogContent>
       </Dialog>
 
-      <ConfirmModal 
+      <ConfirmModal
         isOpen={deleteConfirm.isOpen}
         onClose={() => setDeleteConfirm({ isOpen: false, category: "" })}
         onConfirm={confirmDeleteCategory}

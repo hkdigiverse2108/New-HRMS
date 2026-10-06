@@ -275,8 +275,8 @@ export function DailyProgress() {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-foreground flex items-center gap-2">
-            <Activity className="w-8 h-8 text-primary" />
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground flex items-center gap-2">
+            <Activity className="w-6 h-6 sm:w-8 sm:h-8 text-primary shrink-0" />
             Daily Progress Hub
           </h1>
           <p className="text-muted-foreground mt-1 text-sm font-medium">
@@ -508,7 +508,7 @@ export function DailyProgress() {
 
       {/* Verification Modal */}
       <Dialog open={verifyModalOpen} onOpenChange={(open) => !open && setVerifyModalOpen(false)}>
-        <DialogContent className="max-w-3xl p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+        <DialogContent className="w-[calc(100vw-16px)] sm:w-full sm:max-w-3xl max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
 
           {/* Modal Header */}
           <div className="flex items-center justify-between p-6 border-b border-border/50 shrink-0">
@@ -601,7 +601,7 @@ export function DailyProgress() {
                         disabled={!isAdminOrHr || (selectedRecord?.employee_id === user?.id)}
                         onClick={() => setCurrentRating(i + 1)}
                         className={cn(
-                          "p-2 rounded-xl transition-all hover:scale-110 disabled:cursor-default disabled:hover:scale-100",
+                          "p-3 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 sm:p-2 inline-flex items-center justify-center rounded-xl transition-all hover:scale-110 disabled:cursor-default disabled:hover:scale-100",
                           currentRating > i
                             ? "text-emerald-500 bg-emerald-500/10"
                             : "text-muted-foreground bg-muted/50 hover:bg-muted"
@@ -705,7 +705,7 @@ export function DailyProgress() {
 
       {/* Pending List Modal */}
       <Dialog open={pendingListModalOpen} onOpenChange={setPendingListModalOpen}>
-        <DialogContent className="max-w-md p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+        <DialogContent className="w-[calc(100vw-16px)] sm:max-w-md max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
           <div className="p-6 border-b border-border/50 bg-muted/10 flex justify-between items-center shrink-0">
             <div>
               <h2 className="text-xl font-black text-foreground flex items-center gap-2">

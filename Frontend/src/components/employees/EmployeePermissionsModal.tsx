@@ -267,7 +267,7 @@ export function EmployeePermissionsModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="w-[calc(100vw-20px)] sm:w-full sm:max-w-[760px] p-0 overflow-hidden rounded-2xl sm:rounded-3xl gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card box-border">
+      <DialogContent className="w-[calc(100vw-20px)] sm:w-full sm:max-w-[760px] max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-3xl gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card box-border">
         {/* Header */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-4 sm:py-5 border-b border-border/50 bg-muted/20">
           <div className="flex items-center gap-3 min-w-0 pr-2">
@@ -476,7 +476,7 @@ export function EmployeePermissionsModal({
                         {/* Permission Toggles Grid */}
                         <div className="sm:col-span-7 grid grid-cols-5 gap-1.5 sm:gap-0 text-center items-center">
                           {/* Read */}
-                          <label className="flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer py-1 select-none">
+                          <label className="flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer py-1 min-h-[44px] min-w-[44px] select-none">
                             <span className="text-[9px] font-bold text-muted-foreground sm:hidden">Read</span>
                             <input
                               type="checkbox"
@@ -487,7 +487,7 @@ export function EmployeePermissionsModal({
                           </label>
 
                           {/* Create */}
-                          <label className="flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer py-1 select-none">
+                          <label className="flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer py-1 min-h-[44px] min-w-[44px] select-none">
                             <span className="text-[9px] font-bold text-muted-foreground sm:hidden">Add</span>
                             <input
                               type="checkbox"
@@ -498,7 +498,7 @@ export function EmployeePermissionsModal({
                           </label>
 
                           {/* Update */}
-                          <label className="flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer py-1 select-none">
+                          <label className="flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer py-1 min-h-[44px] min-w-[44px] select-none">
                             <span className="text-[9px] font-bold text-muted-foreground sm:hidden">Edit</span>
                             <input
                               type="checkbox"
@@ -509,7 +509,7 @@ export function EmployeePermissionsModal({
                           </label>
 
                           {/* Delete */}
-                          <label className="flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer py-1 select-none">
+                          <label className="flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer py-1 min-h-[44px] min-w-[44px] select-none">
                             <span className="text-[9px] font-bold text-muted-foreground sm:hidden">Del</span>
                             <input
                               type="checkbox"
@@ -520,7 +520,7 @@ export function EmployeePermissionsModal({
                           </label>
 
                           {/* All */}
-                          <label className="flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer py-1 select-none">
+                          <label className="flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer py-1 min-h-[44px] min-w-[44px] select-none">
                             <span className="text-[9px] font-bold text-primary sm:hidden">All</span>
                             <input
                               type="checkbox"
@@ -546,11 +546,11 @@ export function EmployeePermissionsModal({
             <span>Checking <strong>All</strong> grants complete read/write access.</span>
           </div>
 
-          <div className="flex items-center justify-end gap-2 ml-auto">
+          <div className="flex items-center justify-end gap-2 ml-auto flex-wrap">
             <button
               type="button"
               onClick={onClose}
-              className="px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-muted-foreground hover:bg-muted transition-colors shrink-0"
+              className="px-3 sm:px-4 py-2 min-h-[44px] sm:min-h-0 rounded-xl text-xs sm:text-sm font-bold text-muted-foreground hover:bg-muted transition-colors shrink-0"
             >
               Cancel
             </button>
@@ -558,7 +558,7 @@ export function EmployeePermissionsModal({
               type="button"
               onClick={handleSave}
               disabled={isSaving || isLoading}
-              className="px-4 sm:px-5 py-2 bg-primary text-primary-foreground text-xs sm:text-sm font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0 whitespace-nowrap active:scale-95"
+              className="px-4 sm:px-5 py-2 min-h-[44px] sm:min-h-0 bg-primary text-primary-foreground text-xs sm:text-sm font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0 whitespace-nowrap active:scale-95"
             >
               {isSaving ? (
                 <>

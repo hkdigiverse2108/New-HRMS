@@ -128,7 +128,7 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex w-full cursor-pointer select-none items-center rounded-lg py-2 pl-3 pr-8 text-xs font-semibold outline-none focus:bg-primary/10 focus:text-primary data-[disabled]:pointer-events-none data-[disabled]:opacity-50 transition-colors",
+      "relative flex w-full cursor-pointer select-none items-center rounded-lg py-3 sm:py-2 pl-3 pr-8 text-xs font-semibold outline-none focus:bg-primary/10 focus:text-primary data-[disabled]:pointer-events-none data-[disabled]:opacity-50 transition-colors",
       className,
     )}
     {...props}
@@ -175,7 +175,7 @@ export type Option = {
 
 export interface SearchableSelectProps {
   options: Option[];
-  value: string;
+  value?: string;
   onChange: (value: string) => void;
   placeholder?: string;
   emptyMessage?: string;

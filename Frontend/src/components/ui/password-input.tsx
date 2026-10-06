@@ -39,7 +39,7 @@ export const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputPro
           tabIndex={-1}
           aria-label={showPassword ? "Hide password" : "Show password"}
           title={showPassword ? "Hide password" : "Show password"}
-          className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors focus:outline-none focus:ring-1 focus:ring-primary/30"
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 p-2.5 sm:p-1.5 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 grid place-items-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors focus:outline-none focus:ring-1 focus:ring-primary/30"
         >
           {showPassword ? (
             <EyeOff className="w-4 h-4 text-primary" />

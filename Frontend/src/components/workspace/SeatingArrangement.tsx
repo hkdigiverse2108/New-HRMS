@@ -189,7 +189,7 @@ export function SeatingArrangement() {
 
       {/* Desk Assignment Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="w-[calc(100vw-24px)] sm:w-full sm:max-w-[400px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+        <DialogContent className="w-[calc(100vw-16px)] sm:w-full sm:max-w-[400px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
           <div className="flex items-center justify-between px-4 sm:px-8 py-4 sm:py-6 border-b border-border/50 bg-muted/30">
             <div className="flex items-center gap-2">
               <h2 className="text-lg sm:text-2xl font-black tracking-tight">Desk Assignment</h2>

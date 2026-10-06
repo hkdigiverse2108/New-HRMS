@@ -35,7 +35,7 @@ export function BonusDeductions() {
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Bonus & Deductions</h1>
           <p className="mt-1 sm:mt-1.5 text-xs sm:text-[13px] text-muted-foreground/80">Apply to an individual, a department or the entire company</p>
         </div>
-        <button className="flex items-center gap-2 bg-card hover:bg-primary text-primary-foreground px-4 sm:px-5 py-2 rounded-lg text-[13px] font-bold shadow-sm transition-colors shrink-0">
+        <button className="flex items-center justify-center gap-2 bg-card hover:bg-primary text-primary-foreground px-4 sm:px-5 py-2 min-h-[44px] sm:min-h-0 w-full sm:w-auto rounded-lg text-[13px] font-bold shadow-sm transition-colors shrink-0">
           <Plus className="h-4 w-4" /> Add Entry
         </button>
       </div>

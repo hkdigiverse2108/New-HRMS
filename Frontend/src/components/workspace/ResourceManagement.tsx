@@ -138,7 +138,7 @@ export function ResourceManagement() {
           <h1 className="text-4xl font-black tracking-tight text-foreground">Resource Management</h1>
           <p className="text-muted-foreground mt-2 font-medium">Book meeting rooms and office equipment.</p>
         </div>
-        <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-none">
           <button 
             onClick={() => setIsAddModalOpen(true)}
             className="px-5 py-2.5 bg-foreground text-background font-bold text-sm rounded-xl hover:bg-foreground/90 transition-all shadow-sm flex items-center gap-2"
@@ -164,7 +164,7 @@ export function ResourceManagement() {
       <div className="flex items-center gap-3">
         <button 
           onClick={() => setFilterType(null)}
-          className={cn("px-4 py-2 rounded-xl font-bold text-sm transition-all border", !filterType ? "bg-foreground text-background border-transparent" : "bg-card border-border/60 text-muted-foreground hover:bg-muted/50")}
+          className={cn("px-4 py-2 min-h-[44px] sm:min-h-0 whitespace-nowrap shrink-0 rounded-xl font-bold text-sm transition-all border", !filterType ? "bg-foreground text-background border-transparent" : "bg-card border-border/60 text-muted-foreground hover:bg-muted/50")}
         >
           All Resources
         </button>
@@ -172,7 +172,7 @@ export function ResourceManagement() {
           <button 
             key={type}
             onClick={() => setFilterType(type)}
-            className={cn("px-4 py-2 rounded-xl font-bold text-sm transition-all border", filterType === type ? "bg-foreground text-background border-transparent" : "bg-card border-border/60 text-muted-foreground hover:bg-muted/50")}
+            className={cn("px-4 py-2 min-h-[44px] sm:min-h-0 whitespace-nowrap shrink-0 rounded-xl font-bold text-sm transition-all border", filterType === type ? "bg-foreground text-background border-transparent" : "bg-card border-border/60 text-muted-foreground hover:bg-muted/50")}
           >
             {type}
           </button>
@@ -245,7 +245,7 @@ export function ResourceManagement() {
 
       {/* Add Resource Modal */}
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-        <DialogContent className="w-[calc(100vw-24px)] sm:w-full sm:max-w-[425px] md:max-w-[500px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+        <DialogContent className="w-[calc(100vw-16px)] sm:w-full sm:max-w-[425px] md:max-w-[500px] max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
           <div className="flex items-center justify-between px-4 sm:px-8 py-4 sm:py-6 border-b border-border/50 bg-muted/30">
             <div>
               <h2 className="text-lg sm:text-2xl font-black tracking-tight">Add Resource</h2>
@@ -332,7 +332,7 @@ export function ResourceManagement() {
 
       {/* Manage Types Modal */}
       <Dialog open={isManageTypesModalOpen} onOpenChange={setIsManageTypesModalOpen}>
-        <DialogContent className="w-[calc(100vw-24px)] sm:w-full sm:max-w-[400px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+        <DialogContent className="w-[calc(100vw-16px)] sm:w-full sm:max-w-[400px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
           <div className="flex items-center justify-between px-4 sm:px-8 py-4 sm:py-6 border-b border-border/50 bg-muted/30">
             <div>
               <h2 className="text-lg sm:text-2xl font-black tracking-tight">Manage Resource Types</h2>

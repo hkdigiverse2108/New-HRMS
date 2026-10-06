@@ -76,14 +76,14 @@ export function DocumentTemplates() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
         <div>
           <h2 className="text-xl font-bold">Document Templates</h2>
           <p className="text-sm text-muted-foreground mt-1">Manage standard templates used across the organization.</p>
         </div>
-        <button 
+        <button
           onClick={() => setIsAddMode(true)}
-          className="px-4 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm"
+          className="px-4 py-2.5 min-h-[44px] sm:min-h-0 w-full sm:w-auto bg-primary text-primary-foreground hover:bg-primary/90 font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm"
         >
           <Plus className="w-4 h-4" />
           Create Template
@@ -91,7 +91,7 @@ export function DocumentTemplates() {
       </div>
 
       <Dialog open={isAddMode} onOpenChange={setIsAddMode}>
-        <DialogContent className="max-w-2xl p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+        <DialogContent className="w-[calc(100vw-16px)] sm:max-w-2xl max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
           <div className="flex items-center justify-between p-6 border-b border-border/50">
               <h2 className="text-xl font-bold">Create Document Template</h2>
               <button 
@@ -102,7 +102,7 @@ export function DocumentTemplates() {
               </button>
             </div>
             
-            <div className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[70vh]">
+            <div className="p-4 sm:p-6 md:p-8 space-y-6 overflow-y-auto flex-1 min-h-0 max-h-[70dvh]">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Template Name</label>
@@ -138,17 +138,17 @@ export function DocumentTemplates() {
               </div>
             </div>
 
-            <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
-              <button 
+            <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex flex-col-reverse sm:flex-row sm:justify-end gap-3 mt-auto shrink-0">
+              <button
                 onClick={() => setIsAddMode(false)}
-                className="px-4 py-2 font-bold text-muted-foreground hover:bg-muted/50 rounded-xl transition-colors"
+                className="px-4 py-2 min-h-[44px] w-full sm:w-auto font-bold text-muted-foreground hover:bg-muted/50 rounded-xl transition-colors"
               >
                 Cancel
               </button>
-              <button 
+              <button
                 onClick={handleCreateTemplate}
                 disabled={!newTempName.trim() || !newTempContent.trim()}
-                className="px-6 py-2 bg-primary text-primary-foreground hover:bg-primary/90 font-bold rounded-xl transition-colors disabled:opacity-50 shadow-sm"
+                className="px-6 py-2 min-h-[44px] w-full sm:w-auto bg-primary text-primary-foreground hover:bg-primary/90 font-bold rounded-xl transition-colors disabled:opacity-50 shadow-sm"
               >
                 Save Template
               </button>
@@ -163,13 +163,13 @@ export function DocumentTemplates() {
               <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0">
                 <FileType2 className="w-5 h-5" />
               </div>
-              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors">
+              <div className="flex gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:focus-within:opacity-100 transition-opacity">
+                <button className="p-1.5 min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors">
                   <Edit2 className="w-4 h-4" />
                 </button>
-                <button 
+                <button
                   onClick={() => confirmDelete(tpl.id, tpl.name)}
-                  className="p-1.5 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors"
+                  className="p-1.5 min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>

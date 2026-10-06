@@ -26,20 +26,20 @@ export function HiringFunnel() {
   const [timeRange, setTimeRange] = useState("Last 6 Months");
 
   return (
-    <div className="w-full space-y-8 animate-in fade-in duration-500">
-      
+    <div className="w-full min-w-0 space-y-6 sm:space-y-8 animate-in fade-in duration-500">
+
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-black tracking-tight text-foreground flex items-center gap-2">
-            <UserPlus className="w-8 h-8 text-primary" />
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground flex items-center gap-2">
+            <UserPlus className="w-6 h-6 sm:w-8 sm:h-8 text-primary shrink-0" />
             Hiring Funnel Analytics
           </h1>
           <p className="text-muted-foreground mt-1 text-sm font-medium">
             Track recruitment efficiency, conversion rates, and time-to-hire metrics.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row w-full md:w-auto items-stretch sm:items-center gap-3">
           <SearchableSelect
             value={timeRange}
             onChange={setTimeRange}
@@ -48,7 +48,7 @@ export function HiringFunnel() {
               { label: "This Year", value: "This Year" },
               { label: "Last Year", value: "Last Year" }
             ]}
-            className="w-[180px] h-[44px] bg-card border border-border/50 text-foreground font-bold rounded-xl shadow-sm outline-none"
+            className="w-full sm:w-[180px] h-[44px] bg-card border border-border/50 text-foreground font-bold rounded-xl shadow-sm outline-none"
           />
         </div>
       </div>
@@ -106,12 +106,12 @@ export function HiringFunnel() {
       <div className="grid gap-6 lg:grid-cols-2">
         
         {/* Funnel Chart */}
-        <div className="bg-card border border-border/50 rounded-3xl p-6 shadow-sm">
+        <div className="bg-card border border-border/50 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm overflow-hidden min-w-0">
           <h3 className="font-bold flex items-center gap-2 mb-6">
             <Target className="w-5 h-5 text-primary" />
             Recruitment Funnel
           </h3>
-          <div className="h-[350px] w-full">
+          <div className="h-[280px] sm:h-[350px] w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={funnelData} layout="vertical" margin={{ top: 0, right: 30, left: 20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.5} />
@@ -133,12 +133,12 @@ export function HiringFunnel() {
         </div>
 
         {/* Time to Hire Trend */}
-        <div className="bg-card border border-border/50 rounded-3xl p-6 shadow-sm">
+        <div className="bg-card border border-border/50 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm overflow-hidden min-w-0">
           <h3 className="font-bold flex items-center gap-2 mb-6">
             <TrendingDown className="w-5 h-5 text-blue-500" />
             Time to Hire Trend (Days)
           </h3>
-          <div className="h-[350px] w-full">
+          <div className="h-[280px] sm:h-[350px] w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={timeToHireData} margin={{ top: 20, right: 30, left: -20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.5} />

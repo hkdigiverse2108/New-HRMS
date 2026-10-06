@@ -24,24 +24,24 @@ export function BreakOutChoiceModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div 
-        className="w-full max-w-lg bg-card border border-border/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col"
+        className="w-full max-w-lg max-h-[90dvh] bg-card border border-border/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-border/60">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             <div className="w-10 h-10 rounded-2xl bg-amber-500/15 flex items-center justify-center text-amber-500 shrink-0">
               <Coffee className="w-5 h-5" />
             </div>
-            <div>
-              <h2 className="text-lg font-black text-foreground tracking-tight">Break Out - Resume Work</h2>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg font-black text-foreground tracking-tight truncate sm:whitespace-normal">Break Out - Resume Work</h2>
               <p className="text-xs text-muted-foreground">Select how you would like to resume your session</p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 text-muted-foreground hover:text-foreground rounded-xl hover:bg-muted/80 transition-colors"
+            className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground rounded-xl hover:bg-muted/80 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -65,7 +65,7 @@ export function BreakOutChoiceModal({
         </div>
 
         {/* Options */}
-        <div className="p-6 space-y-3">
+        <div className="p-6 space-y-3 overflow-y-auto flex-1 min-h-0">
           {/* Option 1: Continue Previous Task */}
           <button
             type="button"
@@ -76,11 +76,11 @@ export function BreakOutChoiceModal({
               <ArrowRight className="w-5 h-5" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-black text-foreground group-hover:text-primary transition-colors">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-black text-foreground group-hover:text-primary transition-colors min-w-0 truncate">
                   Continue with Current Task
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/15 text-primary">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/15 text-primary shrink-0">
                   Previous Task
                 </span>
               </div>
@@ -100,11 +100,11 @@ export function BreakOutChoiceModal({
               <RefreshCw className="w-5 h-5" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-black text-foreground group-hover:text-emerald-500 transition-colors">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-black text-foreground group-hover:text-emerald-500 transition-colors min-w-0 truncate">
                   Switch to New Task
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 shrink-0">
                   New Task
                 </span>
               </div>

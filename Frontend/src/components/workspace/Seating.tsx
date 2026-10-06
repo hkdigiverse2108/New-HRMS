@@ -750,7 +750,7 @@ export default function SeatingArrangementPage() {
         )}
       </div>
       </div>
-      <div className="flex-1 overflow-x-auto min-w-0">
+      <div className="flex-1 overflow-x-auto touch-pan-x touch-pan-y min-w-0">
         <div className="bg-[#e4dfcd] rounded-xl overflow-hidden shadow-sm relative min-h-[600px] min-w-[850px] border border-border">
         {!isMounted ? (
           <div className="w-full h-full flex items-center justify-center bg-[#e4dfcd]">
@@ -917,7 +917,7 @@ export default function SeatingArrangementPage() {
 
                           {/* Tooltip Content */}
                           <div className={cn(
-                            "absolute w-64 bg-white border border-brand-teal/20 rounded-xl p-4 shadow-xl pointer-events-auto before:absolute before:content-[''] before:left-0 before:right-0 before:-top-4 before:-bottom-4 before:bg-transparent before:z-[-1] opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 transform scale-95 group-hover:scale-100 text-left",
+                            "absolute w-64 max-w-[calc(100vw-32px)] bg-white border border-brand-teal/20 rounded-xl p-4 shadow-xl pointer-events-auto before:absolute before:content-[''] before:left-0 before:right-0 before:-top-4 before:-bottom-4 before:bg-transparent before:z-[-1] opacity-0 invisible group-hover:opacity-100 group-hover:visible group-focus-within:opacity-100 group-focus-within:visible transition-all duration-200 z-50 transform scale-95 group-hover:scale-100 text-left",
                             xAlignClass,
                             yAlignClass,
                             originClass
@@ -1042,7 +1042,7 @@ export default function SeatingArrangementPage() {
 
                           {/* Tooltip Content */}
                           <div className={cn(
-                            "absolute w-64 bg-white border border-brand-teal/20 rounded-xl p-4 shadow-xl pointer-events-auto before:absolute before:content-[''] before:left-0 before:right-0 before:-top-4 before:-bottom-4 before:bg-transparent before:z-[-1] opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 transform scale-95 group-hover:scale-100 text-left",
+                            "absolute w-64 max-w-[calc(100vw-32px)] bg-white border border-brand-teal/20 rounded-xl p-4 shadow-xl pointer-events-auto before:absolute before:content-[''] before:left-0 before:right-0 before:-top-4 before:-bottom-4 before:bg-transparent before:z-[-1] opacity-0 invisible group-hover:opacity-100 group-hover:visible group-focus-within:opacity-100 group-focus-within:visible transition-all duration-200 z-50 transform scale-95 group-hover:scale-100 text-left",
                             xAlignClass,
                             yAlignClass,
                             originClass
@@ -1406,7 +1406,7 @@ export default function SeatingArrangementPage() {
 
       {/* Add Floor Modal */}
       <Dialog open={isAddFloorOpen} onOpenChange={setIsAddFloorOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[425px] max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
           <DialogHeader>
             <DialogTitle>Add New Floor</DialogTitle>
             <DialogDescription>

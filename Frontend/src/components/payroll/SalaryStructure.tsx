@@ -105,7 +105,7 @@ export function SalaryStructure() {
       
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-black tracking-tight">Salary Structure</h1>
+        <h1 className="text-2xl sm:text-3xl font-black tracking-tight">Salary Structure</h1>
         <p className="mt-1 text-sm text-muted-foreground">Salary is auto-fetched from the employee profile and applied by effective date</p>
       </div>
 
@@ -159,7 +159,7 @@ export function SalaryStructure() {
       </div>
 
       {/* Main Split Layout */}
-      <div className="grid grid-cols-[1.5fr_1fr] gap-6 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-[1.5fr_1fr] gap-6 items-start">
         
         {/* Left Pane - Employee Table */}
         <div className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
@@ -177,7 +177,7 @@ export function SalaryStructure() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[700px] whitespace-nowrap text-sm">
               <thead className="bg-white text-muted-foreground/70 border-b border-border">
                 <tr>
                   <SortableHeader label="Employee" sortKey="name" currentSort={sortConfig} onSort={requestSort} className="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider" />
@@ -230,7 +230,7 @@ export function SalaryStructure() {
 
         {/* Right Pane - Salary Details */}
         {selectedEmp && (
-          <div className="rounded-2xl border border-border bg-white shadow-sm p-8 sticky top-8">
+          <div className="rounded-2xl border border-border bg-white shadow-sm p-4 sm:p-8 lg:sticky lg:top-8">
             <div className="flex items-start justify-between mb-8 pb-6 border-b border-border/60">
               <div>
                 <h2 className="text-xl font-bold text-foreground">{selectedEmp.name}</h2>

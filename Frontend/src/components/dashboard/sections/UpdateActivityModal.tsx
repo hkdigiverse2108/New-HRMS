@@ -393,7 +393,7 @@ export function UpdateActivityModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div 
-        className="w-full max-w-xl bg-card border border-border/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        className="w-full max-w-xl bg-card border border-border/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90dvh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -440,7 +440,7 @@ export function UpdateActivityModal({
         </div>
 
         {/* Content Body */}
-        <div className="p-6 overflow-y-auto flex-1 space-y-4">
+        <div className="p-6 overflow-y-auto flex-1 min-h-0 space-y-4">
           <div>
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -537,7 +537,7 @@ export function UpdateActivityModal({
               <span className="text-xs font-bold text-foreground block">
                 Enter Custom Work ({activeTab})
               </span>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                 <input
                   type="text"
                   value={customTaskTitle}
@@ -547,19 +547,19 @@ export function UpdateActivityModal({
                   onKeyDown={(e) => {
                     if (e.key === "Enter") handleAddCustom();
                   }}
-                  className="flex-1 px-3.5 py-2.5 text-sm bg-background border border-border rounded-xl outline-none focus:ring-2 focus:ring-primary/30"
+                  className="w-full flex-1 px-3.5 py-2.5 text-sm bg-background border border-border rounded-xl outline-none focus:ring-2 focus:ring-primary/30"
                 />
                 <button
                   type="button"
                   onClick={handleAddCustom}
-                  className="px-4 py-2.5 bg-primary text-primary-foreground text-xs font-bold rounded-xl hover:bg-primary/90 transition-colors cursor-pointer"
+                  className="w-full sm:w-auto justify-center px-4 py-2.5 bg-primary text-primary-foreground text-xs font-bold rounded-xl hover:bg-primary/90 transition-colors cursor-pointer"
                 >
                   Select This
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsAddingCustom(false)}
-                  className="px-3 py-2.5 text-xs text-muted-foreground hover:text-foreground font-semibold cursor-pointer"
+                  className="w-full sm:w-auto justify-center px-3 py-2.5 text-xs text-muted-foreground hover:text-foreground font-semibold cursor-pointer"
                 >
                   Cancel
                 </button>

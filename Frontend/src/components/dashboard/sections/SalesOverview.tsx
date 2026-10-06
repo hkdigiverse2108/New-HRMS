@@ -47,14 +47,14 @@ export function SalesOverview() {
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-4 mb-6">
                 <div>
                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Monthly Collection (Live)</p>
-                  <p className="text-xl font-black text-emerald-600">{fmtSales(monthRevenue)}</p>
+                  <p className="text-xl font-black text-emerald-600 whitespace-nowrap">{fmtSales(monthRevenue)}</p>
                 </div>
                 <div>
                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Sales Target</p>
-                  <p className="text-xl font-black text-foreground">{fmtSales(totalTarget)}</p>
+                  <p className="text-xl font-black text-foreground whitespace-nowrap">{fmtSales(totalTarget)}</p>
                 </div>
               </div>
 

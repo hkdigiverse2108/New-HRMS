@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Download, Plus, Edit3, Trash2, ChevronRight, X, Users, Filter, ChevronDown, Landmark, Calendar } from "lucide-react";
-import { Dialog, DialogContent  } from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { moveToRecycleBin } from "@/lib/recycle-bin";
 import { SearchableSelect } from "@/components/ui/select";
@@ -36,10 +36,10 @@ export function OtherTransactions() {
     const saved = (typeof window !== 'undefined' ? localStorage.getItem('hrms_other_transactions') : null);
     return saved ? JSON.parse(saved) : mockClientData;
   });
-  
+
   useEffect(() => { localStorage.setItem('hrms_other_transactions', JSON.stringify(clientData)); }, [clientData]);
 
-  const [deleteConfirm, setDeleteConfirm] = useState<{isOpen: boolean, clientId: string, txId: string, desc: string}>({isOpen: false, clientId: "", txId: "", desc: ""});
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean, clientId: string, txId: string, desc: string }>({ isOpen: false, clientId: "", txId: "", desc: "" });
   const [searchQuery, setSearchQuery] = useState("");
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
     from: undefined,
@@ -59,7 +59,7 @@ export function OtherTransactions() {
     const saved = (typeof window !== 'undefined' ? localStorage.getItem('hrms_banks') : null);
     return saved ? JSON.parse(saved) : [{ id: 'b1', name: 'HDFC Bank', openingBalance: 500000 }];
   });
-  
+
   useEffect(() => { localStorage.setItem('hrms_banks', JSON.stringify(banksData)); }, [banksData]);
 
   const [newBankName, setNewBankName] = useState("");
@@ -68,14 +68,14 @@ export function OtherTransactions() {
   const [addTxType, setAddTxType] = useState("Inflow (Received)");
   const [addTxMethod, setAddTxMethod] = useState("Wire Transfer");
   const [addTxBank, setAddTxBank] = useState("b1");
-  
+
   const [manageTxType, setManageTxType] = useState("Inflow (Received)");
   const [manageTxMethod, setManageTxMethod] = useState("Wire Transfer");
   const [manageTxBank, setManageTxBank] = useState("b1");
 
   const toggleExpand = (clientName: string) => {
-    setExpandedClients(prev => 
-      prev.includes(clientName) 
+    setExpandedClients(prev =>
+      prev.includes(clientName)
         ? prev.filter(c => c !== clientName)
         : [...prev, clientName]
     );
@@ -106,7 +106,7 @@ export function OtherTransactions() {
 
   return (
     <div className="w-full space-y-6 animate-in fade-in duration-500 pb-12 relative min-w-0">
-      
+
       {/* Header */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
         <div>
@@ -119,7 +119,7 @@ export function OtherTransactions() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2 sm:gap-2.5 w-full xl:w-auto">
-          <button 
+          <button
             onClick={() => setIsManageBanksOpen(true)}
             className="px-3 sm:px-4 py-2 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center gap-2 text-xs sm:text-sm"
           >
@@ -128,7 +128,7 @@ export function OtherTransactions() {
           <button className="px-3 sm:px-4 py-2 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center gap-2 text-xs sm:text-sm">
             <Download className="w-4 h-4 text-indigo-500" /> Export Ledgers
           </button>
-          <button 
+          <button
             onClick={() => setIsAddTxOpen(true)}
             className="px-3 sm:px-4 py-2 bg-primary text-primary-foreground font-bold rounded-lg hover:opacity-90 transition-opacity shadow-sm flex items-center gap-2 text-xs sm:text-sm"
           >
@@ -150,7 +150,7 @@ export function OtherTransactions() {
             className="w-full sm:w-auto"
           />
         </div>
-        
+
         <SearchInput
           placeholder="Search clients or entities..."
           value={searchQuery}
@@ -166,28 +166,28 @@ export function OtherTransactions() {
             <thead className="bg-muted/30 text-muted-foreground font-extrabold uppercase tracking-wider text-xs border-b border-border/50">
               <tr>
                 <th className="p-4 w-12 text-center"></th>
-                <SortableHeader 
+                <SortableHeader
                   label="Category"
                   sortKey="clientName"
                   currentSort={sortConfig}
                   onSort={requestSort}
                   className="p-4"
                 />
-                <SortableHeader 
+                <SortableHeader
                   label="Total Inflow"
                   sortKey="totalInflow"
                   currentSort={sortConfig}
                   onSort={requestSort}
                   className="p-4 text-emerald-600 dark:text-emerald-500"
                 />
-                <SortableHeader 
+                <SortableHeader
                   label="Total Outflow"
                   sortKey="totalOutflow"
                   currentSort={sortConfig}
                   onSort={requestSort}
                   className="p-4 text-rose-600 dark:text-rose-500"
                 />
-                <SortableHeader 
+                <SortableHeader
                   label="Net Balance"
                   sortKey="netBalance"
                   currentSort={sortConfig}
@@ -200,11 +200,11 @@ export function OtherTransactions() {
             <tbody className="divide-y divide-border/50">
               {sortedClients.filter((c: any) => c.clientName.toLowerCase().includes(searchQuery.toLowerCase())).map((client: any, idx: number) => {
                 const isExpanded = expandedClients.includes(client.clientName);
-                
+
                 return (
                   <div key={client.clientName} className="contents">
                     {/* Summary Row */}
-                    <tr 
+                    <tr
                       onClick={() => toggleExpand(client.clientName)}
                       className="hover:bg-muted/30 cursor-pointer transition-colors group"
                     >
@@ -230,7 +230,7 @@ export function OtherTransactions() {
                         ₹{client.netBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="p-4 pr-6 text-center" onClick={(e) => e.stopPropagation()}>
-                        <button 
+                        <button
                           onClick={() => setIsManageClientOpen(true)}
                           className="px-3 py-1.5 text-xs font-bold bg-background border border-border/50 hover:bg-muted transition-colors rounded-md shadow-sm"
                         >
@@ -242,9 +242,9 @@ export function OtherTransactions() {
                     {/* Nested Transactions Row */}
                     {isExpanded && (
                       <tr className="bg-muted/10">
-                        <td colSpan={6} className="p-4 pl-12 pr-6">
-                          <div className="border border-border/50 rounded-xl overflow-hidden shadow-inner bg-card">
-                            <table className="w-full text-left">
+                        <td colSpan={6} className="p-2 sm:p-4 sm:pl-12 sm:pr-6">
+                          <div className="border border-border/50 rounded-xl overflow-x-auto shadow-inner bg-card">
+                            <table className="w-full min-w-[720px] whitespace-nowrap text-left">
                               <thead className="bg-muted/30 border-b border-border/50 text-muted-foreground text-[10px] font-black uppercase tracking-widest">
                                 <tr>
                                   <th className="p-3 pl-4">Date</th>
@@ -265,17 +265,15 @@ export function OtherTransactions() {
                                       {tx.date}
                                     </td>
                                     <td className="p-3">
-                                      <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
-                                        tx.type === "inflow" 
-                                          ? "bg-emerald-500/10 text-emerald-600" 
-                                          : "bg-rose-500/10 text-rose-600"
-                                      }`}>
+                                      <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${tx.type === "inflow"
+                                        ? "bg-emerald-500/10 text-emerald-600"
+                                        : "bg-rose-500/10 text-rose-600"
+                                        }`}>
                                         {tx.type}
                                       </span>
                                     </td>
-                                    <td className={`p-3 text-right font-black ${
-                                      tx.type === "inflow" ? "text-emerald-600" : "text-rose-600"
-                                    }`}>
+                                    <td className={`p-3 text-right font-black ${tx.type === "inflow" ? "text-emerald-600" : "text-rose-600"
+                                      }`}>
                                       ₹{tx.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                     </td>
                                     <td className="p-3 font-bold text-foreground">{tx.desc}</td>
@@ -286,7 +284,7 @@ export function OtherTransactions() {
                                     <td className="p-3 font-medium text-muted-foreground">{tx.remarks}</td>
                                     <td className="p-3 pr-4 text-center">
                                       <div className="flex items-center justify-center gap-2">
-                                        <button 
+                                        <button
                                           onClick={() => {
                                             setAddTxType(tx.type === "inflow" ? "Inflow (Received)" : "Outflow (Paid)");
                                             setAddTxMethod(tx.method);
@@ -305,14 +303,14 @@ export function OtherTransactions() {
                                               if (descInput) descInput.value = tx.desc;
                                               if (remarksInput) remarksInput.value = tx.remarks;
                                             }, 50);
-                                          }} 
-                                          className="text-muted-foreground hover:text-foreground transition-colors"
+                                          }}
+                                          className="text-muted-foreground hover:text-foreground transition-colors p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center"
                                         >
                                           <Edit3 className="w-3.5 h-3.5" />
                                         </button>
-                                        <button 
+                                        <button
                                           onClick={() => setDeleteConfirm({ isOpen: true, clientId: client.clientName, txId: tx.id, desc: tx.desc })}
-                                          className="text-rose-500 hover:text-rose-600 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                                          className="text-rose-500 hover:text-rose-600 transition-colors p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center"><Trash2 className="w-3.5 h-3.5" /></button>
                                       </div>
                                     </td>
                                   </tr>
@@ -333,56 +331,156 @@ export function OtherTransactions() {
 
       {/* --- ADD / EDIT TRANSACTION MODAL --- */}
       <Dialog open={isAddTxOpen} onOpenChange={setIsAddTxOpen}>
-        <DialogContent className="max-w-lg p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+        <DialogContent className="w-[calc(100vw-16px)] sm:w-full sm:max-w-lg max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
           <div className="p-4 border-b border-border/50 flex justify-between items-center bg-primary/5">
-              <div>
-                <h3 className="font-black text-lg text-foreground">Add/Edit Client Transaction</h3>
-                <p className="text-xs font-medium text-muted-foreground">Record a new inflow or outflow.</p>
-              </div>
-              <button onClick={() => setIsAddTxOpen(false)} className="p-2 hover:bg-muted rounded-full transition-colors">
-                <X className="w-4 h-4 text-muted-foreground" />
-              </button>
+            <div>
+              <h3 className="font-black text-lg text-foreground">Add/Edit Client Transaction</h3>
+              <p className="text-xs font-medium text-muted-foreground">Record a new inflow or outflow.</p>
             </div>
-            <div className="p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 overflow-y-auto max-h-[70vh]">
+            <button onClick={() => setIsAddTxOpen(false)} className="p-2 hover:bg-muted rounded-full transition-colors">
+              <X className="w-4 h-4 text-muted-foreground" />
+            </button>
+          </div>
+          <div className="p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 overflow-y-auto max-h-[70vh]">
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Category *</label>
+              <input type="text" placeholder="e.g. Software Sales" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Category *</label>
-                <input type="text" placeholder="e.g. Software Sales" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Date *</label>
+                <input type="date" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20" />
               </div>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Transaction Type *</label>
+                <SearchableSelect
+                  value={addTxType}
+                  onChange={setAddTxType}
+                  options={[
+                    { label: "Inflow (Received)", value: "Inflow (Received)" },
+                    { label: "Outflow (Paid)", value: "Outflow (Paid)" }
+                  ]}
+                  className="w-full h-[40px] px-3 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Amount (₹) *</label>
+                <input type="number" placeholder="0.00" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Payment Method</label>
+                <SearchableSelect
+                  value={addTxMethod}
+                  onChange={setAddTxMethod}
+                  options={[
+                    { label: "Wire Transfer", value: "Wire Transfer" },
+                    { label: "Bank Transfer", value: "Bank Transfer" },
+                    { label: "ACH", value: "ACH" },
+                    { label: "Cash", value: "Cash" }
+                  ]}
+                  className="w-full h-[40px] px-3 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Bank Account *</label>
+                <SearchableSelect
+                  value={addTxBank}
+                  onChange={setAddTxBank}
+                  options={banksData.map((b: any) => ({ label: b.name, value: b.id }))}
+                  className="w-full h-[40px] px-3 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Description</label>
+                <input type="text" placeholder="Short description" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20" />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Remarks / Notes</label>
+              <textarea rows={2} placeholder="Any additional notes" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20" />
+            </div>
+          </div>
+          <div className="px-4 sm:px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
+            <button onClick={() => setIsAddTxOpen(false)} className="px-4 py-2 font-bold text-sm bg-background border border-border/50 rounded-lg hover:bg-muted transition-colors text-muted-foreground">Cancel</button>
+            <button onClick={() => setIsAddTxOpen(false)} className="px-4 py-2 font-bold text-sm bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity shadow-sm">Save Transaction</button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- MANAGE CLIENT MODAL --- */}
+      <Dialog open={isManageClientOpen} onOpenChange={setIsManageClientOpen}>
+        <DialogContent className="w-[calc(100vw-24px)] sm:w-full sm:max-w-2xl max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+          <div className="p-4 border-b border-border/50 flex justify-between items-center bg-indigo-500/5 shrink-0">
+            <div>
+              <h3 className="font-black text-lg text-foreground">Manage Category: Software Sales</h3>
+              <p className="text-xs font-medium text-muted-foreground">View summaries and add new transactions quickly.</p>
+            </div>
+            <button onClick={() => setIsManageClientOpen(false)} className="p-2 hover:bg-muted rounded-full transition-colors">
+              <X className="w-4 h-4 text-muted-foreground" />
+            </button>
+          </div>
+
+          <div className="p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 overflow-y-auto max-h-[70vh]">
+            {/* Summary Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 sm:p-4">
+                <div className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-500 mb-1">Total Inflow</div>
+                <div className="text-lg sm:text-xl font-black text-emerald-700 dark:text-emerald-400">₹150,000</div>
+              </div>
+              <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-3 sm:p-4">
+                <div className="text-[10px] font-black uppercase tracking-widest text-rose-600 dark:text-rose-500 mb-1">Total Outflow</div>
+                <div className="text-lg sm:text-xl font-black text-rose-700 dark:text-rose-400">₹10,000</div>
+              </div>
+              <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-3 sm:p-4">
+                <div className="text-[10px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400 mb-1">Net Balance</div>
+                <div className="text-lg sm:text-xl font-black text-indigo-700 dark:text-indigo-300">₹140,000</div>
+              </div>
+            </div>
+
+            <div className="h-px bg-border/50 w-full" />
+
+            {/* Quick Add Form */}
+            <div className="space-y-4">
+              <h4 className="text-sm font-bold text-foreground">Add New Transaction</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Date *</label>
-                  <input type="date" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                  <input type="date" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Transaction Type *</label>
                   <SearchableSelect
-                    value={addTxType}
-                    onChange={setAddTxType}
+                    value={manageTxType}
+                    onChange={setManageTxType}
                     options={[
                       { label: "Inflow (Received)", value: "Inflow (Received)" },
                       { label: "Outflow (Paid)", value: "Outflow (Paid)" }
                     ]}
-                    className="w-full h-[40px] px-3 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    className="w-full h-[40px] px-3 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                   />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Amount (₹) *</label>
-                  <input type="number" placeholder="0.00" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                  <input type="number" placeholder="0.00" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Payment Method</label>
                   <SearchableSelect
-                    value={addTxMethod}
-                    onChange={setAddTxMethod}
+                    value={manageTxMethod}
+                    onChange={setManageTxMethod}
                     options={[
                       { label: "Wire Transfer", value: "Wire Transfer" },
                       { label: "Bank Transfer", value: "Bank Transfer" },
                       { label: "ACH", value: "ACH" },
                       { label: "Cash", value: "Cash" }
                     ]}
-                    className="w-full h-[40px] px-3 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    className="w-full h-[40px] px-3 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                   />
                 </div>
               </div>
@@ -390,130 +488,30 @@ export function OtherTransactions() {
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Bank Account *</label>
                   <SearchableSelect
-                    value={addTxBank}
-                    onChange={setAddTxBank}
+                    value={manageTxBank}
+                    onChange={setManageTxBank}
                     options={banksData.map((b: any) => ({ label: b.name, value: b.id }))}
-                    className="w-full h-[40px] px-3 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    className="w-full h-[40px] px-3 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Description</label>
-                  <input type="text" placeholder="Short description" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Description & Remarks</label>
+                  <input type="text" placeholder="Short description or narrative" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Remarks / Notes</label>
-                <textarea rows={2} placeholder="Any additional notes" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20" />
-              </div>
             </div>
-            <div className="px-4 sm:px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
-              <button onClick={() => setIsAddTxOpen(false)} className="px-4 py-2 font-bold text-sm bg-background border border-border/50 rounded-lg hover:bg-muted transition-colors text-muted-foreground">Cancel</button>
-              <button onClick={() => setIsAddTxOpen(false)} className="px-4 py-2 font-bold text-sm bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity shadow-sm">Save Transaction</button>
-            </div>
-        </DialogContent>
-      </Dialog>
+          </div>
 
-      {/* --- MANAGE CLIENT MODAL --- */}
-      <Dialog open={isManageClientOpen} onOpenChange={setIsManageClientOpen}>
-        <DialogContent className="max-w-2xl p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
-          <div className="p-4 border-b border-border/50 flex justify-between items-center bg-indigo-500/5 shrink-0">
-              <div>
-                <h3 className="font-black text-lg text-foreground">Manage Category: Software Sales</h3>
-                <p className="text-xs font-medium text-muted-foreground">View summaries and add new transactions quickly.</p>
-              </div>
-              <button onClick={() => setIsManageClientOpen(false)} className="p-2 hover:bg-muted rounded-full transition-colors">
-                <X className="w-4 h-4 text-muted-foreground" />
-              </button>
-            </div>
-            
-            <div className="p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 overflow-y-auto max-h-[70vh]">
-              {/* Summary Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 sm:p-4">
-                  <div className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-500 mb-1">Total Inflow</div>
-                  <div className="text-lg sm:text-xl font-black text-emerald-700 dark:text-emerald-400">₹150,000</div>
-                </div>
-                <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-3 sm:p-4">
-                  <div className="text-[10px] font-black uppercase tracking-widest text-rose-600 dark:text-rose-500 mb-1">Total Outflow</div>
-                  <div className="text-lg sm:text-xl font-black text-rose-700 dark:text-rose-400">₹10,000</div>
-                </div>
-                <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-3 sm:p-4">
-                  <div className="text-[10px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400 mb-1">Net Balance</div>
-                  <div className="text-lg sm:text-xl font-black text-indigo-700 dark:text-indigo-300">₹140,000</div>
-                </div>
-              </div>
-
-              <div className="h-px bg-border/50 w-full" />
-
-              {/* Quick Add Form */}
-              <div className="space-y-4">
-                <h4 className="text-sm font-bold text-foreground">Add New Transaction</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Date *</label>
-                    <input type="date" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Transaction Type *</label>
-                    <SearchableSelect
-                      value={manageTxType}
-                      onChange={setManageTxType}
-                      options={[
-                        { label: "Inflow (Received)", value: "Inflow (Received)" },
-                        { label: "Outflow (Paid)", value: "Outflow (Paid)" }
-                      ]}
-                      className="w-full h-[40px] px-3 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Amount (₹) *</label>
-                    <input type="number" placeholder="0.00" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Payment Method</label>
-                    <SearchableSelect
-                      value={manageTxMethod}
-                      onChange={setManageTxMethod}
-                      options={[
-                        { label: "Wire Transfer", value: "Wire Transfer" },
-                        { label: "Bank Transfer", value: "Bank Transfer" },
-                        { label: "ACH", value: "ACH" },
-                        { label: "Cash", value: "Cash" }
-                      ]}
-                      className="w-full h-[40px] px-3 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Bank Account *</label>
-                    <SearchableSelect
-                      value={manageTxBank}
-                      onChange={setManageTxBank}
-                      options={banksData.map((b: any) => ({ label: b.name, value: b.id }))}
-                      className="w-full h-[40px] px-3 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Description & Remarks</label>
-                    <input type="text" placeholder="Short description or narrative" className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="px-4 sm:px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
-              <button onClick={() => setIsManageClientOpen(false)} className="px-4 py-2 font-bold text-sm bg-background border border-border/50 rounded-lg hover:bg-muted transition-colors text-muted-foreground">Close</button>
-              <button onClick={() => setIsManageClientOpen(false)} className="px-4 py-2 font-bold text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm">Save Transaction</button>
-            </div>
+          <div className="px-4 sm:px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
+            <button onClick={() => setIsManageClientOpen(false)} className="px-4 py-2 font-bold text-sm bg-background border border-border/50 rounded-lg hover:bg-muted transition-colors text-muted-foreground">Close</button>
+            <button onClick={() => setIsManageClientOpen(false)} className="px-4 py-2 font-bold text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm">Save Transaction</button>
+          </div>
         </DialogContent>
       </Dialog>
 
       {/* --- MANAGE BANKS MODAL --- */}
       <Dialog open={isManageBanksOpen} onOpenChange={setIsManageBanksOpen}>
-        <DialogContent className="max-w-2xl p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+        <DialogContent className="w-[calc(100vw-16px)] sm:w-full sm:max-w-2xl max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
           <div className="p-4 border-b border-border/50 flex justify-between items-center bg-emerald-500/5 shrink-0">
             <div>
               <h3 className="font-black text-lg text-foreground">Manage Bank Accounts</h3>
@@ -523,7 +521,7 @@ export function OtherTransactions() {
               <X className="w-4 h-4 text-muted-foreground" />
             </button>
           </div>
-          
+
           <div className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[70vh]">
             {/* Add Bank Form */}
             <div className="bg-muted/30 border border-border/50 rounded-xl p-4 space-y-4">
@@ -531,26 +529,26 @@ export function OtherTransactions() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                 <div className="space-y-1.5 md:col-span-2">
                   <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Bank Name *</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={newBankName}
                     onChange={(e) => setNewBankName(e.target.value)}
-                    placeholder="e.g. HDFC Current Account" 
-                    className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/20" 
+                    placeholder="e.g. HDFC Current Account"
+                    className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                   />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Opening Balance (₹) *</label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     value={newBankBalance}
                     onChange={(e) => setNewBankBalance(e.target.value)}
-                    placeholder="0.00" 
-                    className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/20" 
+                    placeholder="0.00"
+                    className="w-full px-3 py-2 bg-background border border-border/50 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                   />
                 </div>
               </div>
-              <button 
+              <button
                 onClick={() => {
                   if (newBankName && newBankBalance) {
                     const newBank = {
@@ -609,7 +607,7 @@ export function OtherTransactions() {
                             ₹{currentBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                           </td>
                           <td className="p-3 pr-4 text-center">
-                            <button 
+                            <button
                               disabled={hasTransactions}
                               onClick={() => {
                                 if (!hasTransactions) {
@@ -633,7 +631,7 @@ export function OtherTransactions() {
         </DialogContent>
       </Dialog>
 
-      <ConfirmModal 
+      <ConfirmModal
         isOpen={deleteConfirm.isOpen}
         onClose={() => setDeleteConfirm({ isOpen: false, clientId: "", txId: "", desc: "" })}
         onConfirm={confirmDelete}

@@ -33,20 +33,20 @@ export function ReportsOverview() {
   const [timeRange, setTimeRange] = useState("Last 6 Months");
 
   return (
-    <div className="w-full space-y-8 animate-in fade-in duration-500">
-      
+    <div className="w-full min-w-0 space-y-6 sm:space-y-8 animate-in fade-in duration-500">
+
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-black tracking-tight text-foreground flex items-center gap-2">
-            <BarChart3 className="w-8 h-8 text-primary" />
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground flex items-center gap-2">
+            <BarChart3 className="w-6 h-6 sm:w-8 sm:h-8 text-primary shrink-0" />
             Reports & Analytics Overview
           </h1>
           <p className="text-muted-foreground mt-1 text-sm font-medium">
             High-level metrics across Payroll, Hiring, Attendance, and Operations.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row w-full md:w-auto items-stretch sm:items-center gap-3">
           <SearchableSelect
             value={timeRange}
             onChange={setTimeRange}
@@ -55,7 +55,7 @@ export function ReportsOverview() {
               { label: "This Year", value: "This Year" },
               { label: "Last Year", value: "Last Year" }
             ]}
-            className="w-[180px] h-[44px] bg-card border border-border/50 text-foreground font-bold rounded-xl shadow-sm outline-none"
+            className="w-full sm:w-[180px] h-[44px] bg-card border border-border/50 text-foreground font-bold rounded-xl shadow-sm outline-none"
           />
         </div>
       </div>
@@ -119,12 +119,12 @@ export function ReportsOverview() {
       <div className="grid gap-6 lg:grid-cols-2">
         
         {/* Payroll Trend */}
-        <div className="bg-card border border-border/50 rounded-3xl p-6 shadow-sm">
+        <div className="bg-card border border-border/50 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm overflow-hidden min-w-0">
           <h3 className="font-bold flex items-center gap-2 mb-6">
             <TrendingUp className="w-5 h-5 text-emerald-500" />
             Payroll Trend (6 Months)
           </h3>
-          <div className="h-[300px] w-full">
+          <div className="h-[280px] sm:h-[300px] w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={payrollData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>
@@ -155,12 +155,12 @@ export function ReportsOverview() {
         </div>
 
         {/* Hiring Trend */}
-        <div className="bg-card border border-border/50 rounded-3xl p-6 shadow-sm">
+        <div className="bg-card border border-border/50 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm overflow-hidden min-w-0">
           <h3 className="font-bold flex items-center gap-2 mb-6">
             <UserPlus className="w-5 h-5 text-amber-500" />
             New Hires (6 Months)
           </h3>
-          <div className="h-[300px] w-full">
+          <div className="h-[280px] sm:h-[300px] w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={hiringData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.5} />

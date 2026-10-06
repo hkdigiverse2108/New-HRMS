@@ -163,7 +163,7 @@ export function PayrollProcessing() {
           onClick={handleGenerate}
           disabled={stage === "locked"}
           className={cn(
-            "flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-bold shadow-sm transition-colors whitespace-nowrap",
+            "flex items-center gap-2 px-4 py-2 min-h-[44px] sm:min-h-0 rounded-lg text-[13px] font-bold shadow-sm transition-colors whitespace-nowrap",
             stage === "locked"
               ? "bg-muted text-muted-foreground opacity-50 cursor-not-allowed"
               : "bg-primary hover:bg-[#00925e] text-primary-foreground"
@@ -177,7 +177,7 @@ export function PayrollProcessing() {
           onClick={handleApprove}
           disabled={stage !== "generated"}
           className={cn(
-            "flex items-center gap-2 border px-4 py-2 rounded-lg text-[13px] font-semibold transition-colors whitespace-nowrap",
+            "flex items-center gap-2 border px-4 py-2 min-h-[44px] sm:min-h-0 rounded-lg text-[13px] font-semibold transition-colors whitespace-nowrap",
             stage === "generated"
               ? "bg-white border-emerald-400 text-emerald-700 hover:bg-emerald-50"
               : "bg-white border-border/60 text-muted-foreground opacity-50 cursor-not-allowed"
@@ -191,7 +191,7 @@ export function PayrollProcessing() {
           onClick={handleLock}
           disabled={stage !== "approved"}
           className={cn(
-            "flex items-center gap-2 border px-4 py-2 rounded-lg text-[13px] font-semibold transition-colors whitespace-nowrap",
+            "flex items-center gap-2 border px-4 py-2 min-h-[44px] sm:min-h-0 rounded-lg text-[13px] font-semibold transition-colors whitespace-nowrap",
             stage === "approved"
               ? "bg-white border-slate-400 text-slate-700 hover:bg-slate-50"
               : "bg-white border-border/60 text-muted-foreground opacity-50 cursor-not-allowed"
@@ -202,13 +202,13 @@ export function PayrollProcessing() {
 
         <button
           onClick={handleExcelExport}
-          className="flex items-center gap-2 bg-white border border-border/80 px-3 sm:px-4 py-2 rounded-lg text-foreground/80 text-[13px] font-semibold hover:bg-muted/50 transition-colors shadow-sm whitespace-nowrap"
+          className="flex items-center gap-2 bg-white border border-border/80 px-3 sm:px-4 py-2 min-h-[44px] sm:min-h-0 rounded-lg text-foreground/80 text-[13px] font-semibold hover:bg-muted/50 transition-colors shadow-sm whitespace-nowrap"
         >
           <FileSpreadsheet className="h-4 w-4" /> Export Excel
         </button>
         <button
           onClick={handlePdfExport}
-          className="flex items-center gap-2 bg-white border border-border/80 px-3 sm:px-4 py-2 rounded-lg text-foreground/80 text-[13px] font-semibold hover:bg-muted/50 transition-colors shadow-sm whitespace-nowrap"
+          className="flex items-center gap-2 bg-white border border-border/80 px-3 sm:px-4 py-2 min-h-[44px] sm:min-h-0 rounded-lg text-foreground/80 text-[13px] font-semibold hover:bg-muted/50 transition-colors shadow-sm whitespace-nowrap"
         >
           <FileText className="h-4 w-4" /> Export PDF
         </button>

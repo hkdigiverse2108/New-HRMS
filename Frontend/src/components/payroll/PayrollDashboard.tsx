@@ -25,7 +25,7 @@ import { MOCK_PAYROLL_TRENDS, MOCK_DEPARTMENT_COSTS, MOCK_AUDIT_LOGS } from "./p
 
 export function PayrollDashboard() {
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="w-full min-w-0 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Header */}
       <div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">

@@ -165,6 +165,95 @@ class GoogleCalendarService:
         return events
 
     @classmethod
+    async def fetch_holiday_events(
+        cls,
+        employee_id: str,
+        start_date: date,
+        end_date: date
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch festival/holiday events (e.g. 'Holidays in India', Diwali, Dussehra)
+        from the Google calendars the user is subscribed to.
+        Returns [] when Google is not connected — never raises.
+        """
+        access_token = await GoogleAuthRepository.get_valid_access_token(employee_id)
+        if not access_token:
+            return []
+
+        time_min = f"{start_date.isoformat()}T00:00:00Z"
+        time_max = f"{end_date.isoformat()}T23:59:59Z"
+
+        events: List[Dict[str, Any]] = []
+        try:
+            async with httpx.AsyncClient() as client:
+                # 1. Discover subscribed calendars, keep holiday ones
+                cal_resp = await client.get(
+                    "https://www.googleapis.com/calendar/v3/users/me/calendarList",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                    timeout=10.0
+                )
+                if cal_resp.status_code != 200:
+                    return []
+                calendars = cal_resp.json().get("items", [])
+                holiday_cals = [
+                    c for c in calendars
+                    if "holiday" in str(c.get("id", "")).lower()
+                    or "holiday" in str(c.get("summary", "")).lower()
+                ]
+
+                # 2. Pull events from each holiday calendar
+                for cal in holiday_cals:
+                    cal_id = cal.get("id")
+                    try:
+                        resp = await client.get(
+                            f"https://www.googleapis.com/calendar/v3/calendars/{urllib.parse.quote(cal_id, safe='')}/events",
+                            headers={"Authorization": f"Bearer {access_token}"},
+                            params={
+                                "timeMin": time_min,
+                                "timeMax": time_max,
+                                "singleEvents": "true",
+                                "orderBy": "startTime",
+                            },
+                            timeout=10.0
+                        )
+                        if resp.status_code != 200:
+                            continue
+                        for item in resp.json().get("items", []):
+                            start_info = item.get("start", {})
+                            start_raw = start_info.get("dateTime") or start_info.get("date")
+                            if not start_raw:
+                                continue
+                            if "T" in start_raw:
+                                dt_start = datetime.fromisoformat(start_raw.replace("Z", "+00:00"))
+                                ev_date = dt_start.date().isoformat()
+                            else:
+                                ev_date = start_raw
+                            summary = item.get("summary") or "Holiday"
+                            events.append({
+                                "_id": f"ghol_{item.get('id')}",
+                                "id": f"ghol_{item.get('id')}",
+                                "title": f"🎊 {summary}",
+                                "primary_employee_id": employee_id,
+                                "attendees": [],
+                                "date": ev_date,
+                                "type": "Holiday",
+                                "start_time": "09:00",
+                                "end_time": "18:00",
+                                "description": f"{cal.get('summary', 'Holiday calendar')}",
+                                "category": "google_holidays",
+                                "color": "#0b8043",
+                                "created_by": "google",
+                                "is_auto_generated": True
+                            })
+                    except Exception as e:
+                        print(f"[GOOGLE HOLIDAY FETCH WARNING] {cal.get('summary')}: {e}")
+                        continue
+        except Exception as e:
+            print(f"[GOOGLE HOLIDAY FETCH ERROR] Failed for {employee_id}: {e}")
+
+        return events
+
+    @classmethod
     async def push_hrms_event_to_google(
         cls,
         employee_id: str,

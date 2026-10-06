@@ -718,7 +718,7 @@ export function SalesReports({ onAction }: { onAction?: (action: string) => void
             type="button"
             onClick={fetchReportData}
             disabled={isLoading}
-            className="flex items-center gap-1.5 px-3 py-2 border border-border rounded-xl text-xs font-semibold bg-white hover:bg-muted text-foreground transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-2 min-h-[44px] sm:min-h-0 border border-border rounded-xl text-xs font-semibold bg-white hover:bg-muted text-foreground transition-colors disabled:opacity-50"
           >
             <RefreshCw className={cn("w-3.5 h-3.5", isLoading && "animate-spin text-emerald-600")} />
             Refresh
@@ -772,7 +772,7 @@ export function SalesReports({ onAction }: { onAction?: (action: string) => void
             </div>
 
             {selectedReport === "revenue" && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="rounded-xl bg-slate-50 border border-slate-200/60 p-3">
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Total Deals Won</span>
                   <span className="text-lg font-extrabold text-foreground mt-1 block">
@@ -801,7 +801,7 @@ export function SalesReports({ onAction }: { onAction?: (action: string) => void
             )}
 
             {selectedReport === "performance" && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="rounded-xl bg-slate-50 border border-slate-200/60 p-3">
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Sales Reps</span>
                   <span className="text-lg font-extrabold text-foreground mt-1 block">
@@ -830,7 +830,7 @@ export function SalesReports({ onAction }: { onAction?: (action: string) => void
             )}
 
             {selectedReport === "activity" && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="rounded-xl bg-slate-50 border border-slate-200/60 p-3">
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Total Interactions</span>
                   <span className="text-lg font-extrabold text-foreground mt-1 block">
@@ -859,7 +859,7 @@ export function SalesReports({ onAction }: { onAction?: (action: string) => void
             )}
 
             {selectedReport === "leads" && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="rounded-xl bg-slate-50 border border-slate-200/60 p-3">
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Total Inflow</span>
                   <span className="text-lg font-extrabold text-foreground mt-1 block">
@@ -935,7 +935,7 @@ export function SalesReports({ onAction }: { onAction?: (action: string) => void
                   type="button"
                   onClick={() => setDateRange(range)}
                   className={cn(
-                    "rounded-xl border px-3 py-2 text-xs font-semibold transition-all text-center",
+                    "rounded-xl border px-3 py-2 min-h-[44px] sm:min-h-0 text-xs font-semibold transition-all text-center",
                     dateRange === range
                       ? "border-emerald-500 bg-emerald-50 text-emerald-800 font-bold shadow-sm"
                       : "border-border bg-white text-muted-foreground hover:bg-muted",
@@ -957,7 +957,7 @@ export function SalesReports({ onAction }: { onAction?: (action: string) => void
                   type="button"
                   onClick={() => setFormat(fmt)}
                   className={cn(
-                    "rounded-xl border px-3 py-2 text-xs font-semibold transition-all text-center",
+                    "rounded-xl border px-3 py-2 min-h-[44px] sm:min-h-0 text-xs font-semibold transition-all text-center",
                     format === fmt
                       ? "border-emerald-500 bg-emerald-50 text-emerald-800 font-bold shadow-sm"
                       : "border-border bg-white text-muted-foreground hover:bg-muted",

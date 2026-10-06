@@ -962,7 +962,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                 <span>Quick Assign</span>
               </button>
             </DialogTrigger>
-            <DialogContent className="w-[calc(100vw-24px)] sm:w-full max-w-[820px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card flex flex-col max-h-[90dvh]">
+            <DialogContent className="w-[calc(100vw-16px)] sm:w-full max-w-[820px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card flex flex-col max-h-[90dvh]">
               <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 bg-muted/30 shrink-0">
                 <div>
                   <h2 className="text-base sm:text-lg font-black tracking-tight">Quick Bulk Task Assign</h2>
@@ -1873,7 +1873,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
       {/* Create / Edit Task Modal */}
       <Dialog open={isNewTaskOpen} onOpenChange={setIsNewTaskOpen}>
-        <DialogContent className="w-[calc(100vw-24px)] sm:w-full max-w-lg p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] border-border/60 shadow-2xl [&>button]:hidden bg-card">
+        <DialogContent className="w-[calc(100vw-16px)] sm:w-full max-w-lg p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
           <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 bg-muted/30">
             <div>
               <h2 className="text-base sm:text-lg font-black tracking-tight">
@@ -2261,7 +2261,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
       {/* Dedicated Task History & Activity Audit Trail Modal */}
       <Dialog open={!!selectedHistoryTask} onOpenChange={(open) => !open && setSelectedHistoryTask(null)}>
-        <DialogContent className="w-[calc(100vw-24px)] sm:w-full max-w-xl p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] border-border/60 shadow-2xl [&>button]:hidden bg-card flex flex-col max-h-[85vh]">
+        <DialogContent className="w-[calc(100vw-16px)] sm:w-full max-w-xl p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] border-border/60 shadow-2xl [&>button]:hidden bg-card flex flex-col max-h-[85vh]">
           {selectedHistoryTask && (
             <div className="flex flex-col h-full overflow-hidden">
               <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 bg-muted/30 shrink-0">

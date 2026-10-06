@@ -131,7 +131,7 @@ export function BulkImportModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-xl rounded-2xl bg-card border border-border p-6 shadow-2xl">
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl max-h-[90dvh] overflow-y-auto rounded-2xl bg-card border border-border p-4 sm:p-6 shadow-2xl">
         <DialogHeader>
           <DialogTitle className="text-xl font-black text-foreground">
             Import Leads from CSV
@@ -144,8 +144,8 @@ export function BulkImportModal({
         <div className="py-3 space-y-4">
           <label className="flex flex-col items-center justify-center gap-3 p-6 border-2 border-dashed border-border rounded-xl cursor-pointer hover:bg-muted/30 transition-colors">
             <UploadCloud className="w-10 h-10 text-emerald-600" />
-            <div className="text-center">
-              <span className="text-sm font-bold text-foreground">
+            <div className="text-center min-w-0 max-w-full overflow-hidden">
+              <span className="block max-w-full truncate text-sm font-bold text-foreground">
                 {fileName ? fileName : "Click to select a CSV file"}
               </span>
               <p className="text-xs text-muted-foreground mt-0.5">
@@ -168,17 +168,17 @@ export function BulkImportModal({
               </div>
               <div className="max-h-48 overflow-y-auto border border-border rounded-xl divide-y divide-border/60 bg-muted/20 text-xs">
                 {parsedRows.slice(0, 10).map((r, i) => (
-                  <div key={i} className="p-2.5 flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold text-foreground">
+                  <div key={i} className="p-2.5 flex items-center justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-foreground truncate">
                         {r.company} <span className="text-muted-foreground">({r.contact})</span>
                       </p>
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-[11px] text-muted-foreground truncate">
                         {r.phone} {r.email ? `· ${r.email}` : ""} {r.category ? `· ${r.category}` : ""}
                       </p>
                     </div>
                     {r.budget > 0 && (
-                      <span className="font-bold text-emerald-600">₹{r.budget.toLocaleString()}</span>
+                      <span className="font-bold text-emerald-600 shrink-0 ml-2">₹{r.budget.toLocaleString()}</span>
                     )}
                   </div>
                 ))}
@@ -192,7 +192,7 @@ export function BulkImportModal({
           )}
         </div>
 
-        <DialogFooter className="pt-2 gap-2">
+        <DialogFooter className="pt-2 gap-2 flex-col-reverse sm:flex-row sm:justify-end [&>button]:w-full sm:[&>button]:w-auto [&>button]:min-h-[44px] sm:[&>button]:min-h-0">
           <Button
             type="button"
             variant="outline"

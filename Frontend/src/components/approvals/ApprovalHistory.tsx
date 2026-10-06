@@ -113,8 +113,8 @@ export function ApprovalHistory() {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-foreground flex items-center gap-2">
-            <History className="w-8 h-8 text-primary" />
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground flex items-center gap-2">
+            <History className="w-6 h-6 sm:w-8 sm:h-8 text-primary shrink-0" />
             Approval History
           </h1>
           <p className="text-muted-foreground mt-1 text-sm font-medium">
@@ -182,7 +182,7 @@ export function ApprovalHistory() {
                   <div className="text-sm text-foreground font-medium mb-2">{log.details}</div>
                   
                   {log.notes && (
-                    <div className="text-sm text-muted-foreground bg-muted/30 p-2.5 rounded-lg border border-border/30 inline-block mb-1">
+                    <div className="text-sm text-muted-foreground bg-muted/30 p-2.5 rounded-lg border border-border/30 inline-block mb-1 max-w-full break-words">
                       <span className="font-bold mr-1">Remarks:</span> {log.notes}
                     </div>
                   )}

@@ -133,7 +133,7 @@ export function EmployeePerformance() {
                   </div>
                 </div>
               )}
-              <p className={cn("text-3xl font-black mb-1 animate-in fade-in slide-in-from-right-4 duration-500", (spotlight && 'image' in spotlight && spotlight.image) ? "text-white" : "text-white")} key={`name-${spotlight?.name}`}>
+              <p className={cn("text-2xl sm:text-3xl font-black mb-1 break-words leading-tight animate-in fade-in slide-in-from-right-4 duration-500", (spotlight && 'image' in spotlight && spotlight.image) ? "text-white" : "text-white")} key={`name-${spotlight?.name}`}>
                 {spotlight?.name}
               </p>
               <p className={cn("text-sm animate-in fade-in slide-in-from-right-4 duration-500 delay-75", (spotlight && 'image' in spotlight && spotlight.image) ? "text-white/80" : "text-white/80")} key={`role-${spotlight?.role}`}>

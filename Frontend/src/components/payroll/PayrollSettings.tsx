@@ -96,15 +96,15 @@ export function PayrollSettings() {
       </div>
 
       {/* Tabs Bar */}
-      <div className="flex items-center gap-1.5 bg-[#F6F8F7] p-1.5 rounded-xl w-full border-b border-border/50">
+      <div className="flex items-center gap-1.5 bg-[#F6F8F7] p-1.5 rounded-xl w-full max-w-full overflow-x-auto border-b border-border/50">
         {TABS.map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={cn(
-              "px-5 py-2 text-[13px] font-semibold rounded-lg transition-all",
-              activeTab === tab 
-                ? "bg-white text-foreground shadow-sm" 
+              "px-5 py-2 min-h-[44px] sm:min-h-0 whitespace-nowrap shrink-0 text-[13px] font-semibold rounded-lg transition-all",
+              activeTab === tab
+                ? "bg-white text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground/80"
             )}
           >
@@ -126,7 +126,7 @@ export function PayrollSettings() {
               </div>
               <div className="h-px w-full bg-border/40 mb-6" />
               
-              <div className="grid grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div>
                   <label className="text-[12px] font-semibold text-muted-foreground mb-2 block">Working days</label>
                   <SearchableSelect 
@@ -237,7 +237,7 @@ export function PayrollSettings() {
               </div>
               <div className="h-px w-full bg-border/40 mb-6" />
               
-              <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                 <div>
                   <label className="text-[12px] font-semibold text-muted-foreground mb-2 block">Paid leave / year</label>
                   <input type="text" value={settings.paidLeave} onChange={(e) => setSettings({...settings, paidLeave: e.target.value})} className="w-full rounded-[10px] border border-border/80 p-2.5 text-[13px] font-medium text-foreground/80 outline-none focus:border-emerald-500 bg-white shadow-sm" />
@@ -341,7 +341,7 @@ export function PayrollSettings() {
               </div>
               <div className="h-px w-full bg-border/40 mb-6" />
               
-              <div className="grid grid-cols-2 gap-5 mb-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
                 <div>
                   <label className="text-[12px] font-semibold text-muted-foreground mb-2 block">Late coming grace (minutes)</label>
                   <input type="text" value={settings.lateGrace} onChange={(e) => setSettings({...settings, lateGrace: e.target.value})} className="w-full rounded-[10px] border border-border/80 p-2.5 text-[13px] font-medium text-foreground/80 outline-none focus:border-emerald-500 bg-white shadow-sm" />
@@ -357,7 +357,7 @@ export function PayrollSettings() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-5 mb-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
                 <div>
                   <label className="text-[12px] font-semibold text-muted-foreground mb-2 block">Half day rule</label>
                   <SearchableSelect
@@ -406,7 +406,7 @@ export function PayrollSettings() {
                 <Switch checked={settings.enableOT} onChange={() => setSettings({...settings, enableOT: !settings.enableOT})} />
               </div>
               
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="text-[12px] font-semibold text-muted-foreground mb-2 block">OT rate / hour</label>
                   <input type="text" value={settings.otRate} onChange={(e) => setSettings({...settings, otRate: e.target.value})} className="w-full rounded-[10px] border border-border/80 p-2.5 text-[13px] font-medium text-foreground/80 outline-none focus:border-emerald-500 bg-white shadow-sm" />

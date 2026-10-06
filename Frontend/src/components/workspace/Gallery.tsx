@@ -82,7 +82,7 @@ export function Gallery() {
     <div className="w-full space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-4xl font-black tracking-tight text-foreground">Media Gallery</h1>
+          <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-foreground">Media Gallery</h1>
           <p className="text-muted-foreground mt-2 font-medium">Company events, office tours, and team moments.</p>
         </div>
         <div className="flex items-center gap-3">
@@ -211,14 +211,14 @@ export function Gallery() {
             <X className="w-6 h-6" />
           </button>
 
-          <button 
+          <button
             onClick={handlePrev}
-            className="absolute left-6 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors backdrop-blur-md"
+            className="absolute left-2 sm:left-6 p-2.5 sm:p-3 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors backdrop-blur-md"
           >
             <ChevronLeft className="w-8 h-8" />
           </button>
 
-          <div className="w-full max-w-5xl px-12 flex items-center justify-center relative h-full">
+          <div className="w-full max-w-5xl px-4 sm:px-12 flex items-center justify-center relative h-full">
             <img 
               src={MOCK_PHOTOS[currentImageIndex!]} 
               alt="Gallery Image" 
@@ -229,9 +229,9 @@ export function Gallery() {
             </div>
           </div>
 
-          <button 
+          <button
             onClick={handleNext}
-            className="absolute right-6 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors backdrop-blur-md"
+            className="absolute right-2 sm:right-6 p-2.5 sm:p-3 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors backdrop-blur-md"
           >
             <ChevronRight className="w-8 h-8" />
           </button>

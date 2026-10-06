@@ -4697,7 +4697,7 @@ function ChatInner() {
                           focusMessageInput();
                         }}
                         onClose={() => setShowEmojiPicker(false)}
-                        className="w-[92vw] sm:w-[380px] max-w-[380px]"
+                        className="w-[calc(100vw-32px)] sm:w-[380px] sm:max-w-[380px]"
                       />
                     </div>
                   )}

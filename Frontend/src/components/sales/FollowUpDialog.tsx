@@ -29,11 +29,11 @@ export function FollowUpDialog({ lead, userName, trigger }: FollowUpDialogProps)
 
   const PRESETS = (salesSettings?.follow_up_types && salesSettings.follow_up_types.length > 0
     ? salesSettings.follow_up_types.filter((f: any) => f.active !== false).map((f: any) => ({
-        label: f.label,
-        note: f.note || f.label,
-        action: f.action || f.label,
-        defaultOffsetHours: f.offset_hours ?? 24,
-      }))
+      label: f.label,
+      note: f.note || f.label,
+      action: f.action || f.label,
+      defaultOffsetHours: f.offset_hours ?? 24,
+    }))
     : [
       { label: "CNR (Call Not Received)", note: "Called but call was not received (CNR).", action: "CNR", defaultOffsetHours: 24 },
       { label: "Call Later (Client Busy)", note: "Client is currently busy and asked to call back later.", action: "Call Later", defaultOffsetHours: 2 },
@@ -124,11 +124,11 @@ export function FollowUpDialog({ lead, userName, trigger }: FollowUpDialogProps)
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="max-w-lg p-6 max-h-[88vh] overflow-y-auto rounded-3xl bg-card border border-border shadow-2xl">
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-lg p-4 sm:p-6 max-h-[90dvh] overflow-y-auto rounded-3xl bg-card border border-border shadow-2xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
+          <DialogTitle className="flex flex-wrap items-center gap-2 text-base font-bold text-foreground min-w-0">
             Follow-up Management:{" "}
-            <span className="text-emerald-600 font-extrabold truncate max-w-[260px]">
+            <span className="text-emerald-600 font-extrabold truncate min-w-0 max-w-[40vw] sm:max-w-[260px]">
               {lead.company || lead.contact}
             </span>
           </DialogTitle>
@@ -208,7 +208,7 @@ export function FollowUpDialog({ lead, userName, trigger }: FollowUpDialogProps)
                 size="sm"
                 onClick={handleAddFollowUp}
                 disabled={isSubmitting || !note.trim()}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-5 h-8.5 rounded-xl shadow-xs"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-5 min-h-[44px] sm:min-h-0 sm:h-8 w-full sm:w-auto rounded-xl shadow-xs"
               >
                 {isSubmitting ? "Saving..." : "Log Follow-up"}
               </Button>
@@ -232,12 +232,12 @@ export function FollowUpDialog({ lead, userName, trigger }: FollowUpDialogProps)
                     key={idx}
                     className="p-3.5 bg-background rounded-2xl border border-border/80 space-y-1.5 text-xs shadow-xs"
                   >
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="flex items-center gap-1 font-bold text-foreground">
-                        <User className="w-3.5 h-3.5 text-emerald-600" />
-                        {fu.performedBy || userName || "Sales Rep"}
+                    <div className="flex items-center justify-between text-[11px] gap-2">
+                      <span className="flex items-center gap-1 font-bold text-foreground min-w-0 truncate">
+                        <User className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span className="truncate">{fu.performedBy || userName || "Sales Rep"}</span>
                       </span>
-                      <span className="flex items-center gap-1 text-[10px] text-muted-foreground font-mono">
+                      <span className="flex items-center gap-1 text-[10px] text-muted-foreground font-mono shrink-0 ml-2">
                         <Clock className="w-3 h-3 text-muted-foreground" />
                         {formatDate(fu.date)}
                       </span>

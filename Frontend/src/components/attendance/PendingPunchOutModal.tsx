@@ -75,7 +75,7 @@ export function PendingPunchOutModal({
     <Dialog open={isOpen} onOpenChange={() => {}}>
       {/* Non-dismissible / blocking modal without close button */}
       <DialogContent
-        className="max-w-md w-[calc(100vw-24px)] p-0 rounded-3xl overflow-hidden border border-amber-500/40 shadow-2xl bg-card [&>button]:hidden"
+        className="w-[calc(100vw-16px)] sm:max-w-md max-h-[90dvh] overflow-y-auto rounded-2xl sm:rounded-3xl p-0 border border-amber-500/40 shadow-2xl bg-card [&>button]:hidden"
         onPointerDownOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >

@@ -248,7 +248,7 @@ export function WorkLogs() {
         /* Standard Timeline View */
         <div className="bg-card rounded-[2.5rem] border border-border/50 overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full min-w-[700px] whitespace-nowrap text-left border-collapse">
               <thead className="bg-muted/30 border-b border-border/50">
                 <tr>
                   <SortableHeader label="Employee" sortKey="employee" currentSort={sortConfig} onSort={requestSort} className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider" />

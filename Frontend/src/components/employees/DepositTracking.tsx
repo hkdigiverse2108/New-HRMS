@@ -343,7 +343,7 @@ export function DepositTracking() {
                 key={t}
                 onClick={() => setTypeFilter(t)}
                 className={cn(
-                  "px-3 py-1 rounded-xl text-xs font-bold transition-all",
+                  "px-3 py-1 min-h-[44px] sm:min-h-0 inline-flex items-center rounded-xl text-xs font-bold transition-all",
                   typeFilter === t
                     ? "bg-card text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
@@ -358,7 +358,7 @@ export function DepositTracking() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-9 px-3 bg-muted/30 border border-border/60 rounded-xl text-xs font-bold text-foreground focus:outline-none"
+            className="min-h-[44px] sm:min-h-0 sm:h-9 px-3 bg-muted/30 border border-border/60 rounded-xl text-xs font-bold text-foreground focus:outline-none"
           >
             <option value="All">All Deposit Statuses</option>
             <option value="Paid">Paid</option>
@@ -371,7 +371,7 @@ export function DepositTracking() {
           <select
             value={docFilter}
             onChange={(e) => setDocFilter(e.target.value as any)}
-            className="h-9 px-3 bg-muted/30 border border-border/60 rounded-xl text-xs font-bold text-foreground focus:outline-none"
+            className="min-h-[44px] sm:min-h-0 sm:h-9 px-3 bg-muted/30 border border-border/60 rounded-xl text-xs font-bold text-foreground focus:outline-none"
           >
             <option value="All">All Documents Status</option>
             <option value="Complete">Complete (10/10)</option>
@@ -389,7 +389,7 @@ export function DepositTracking() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
+            <table className="w-full min-w-[900px] text-left border-collapse text-xs">
               <thead>
                 <tr className="border-b border-border/50 text-muted-foreground font-black uppercase tracking-wider bg-muted/20">
                   <th className="py-4 px-6">Candidate / Employee</th>
@@ -422,11 +422,11 @@ export function DepositTracking() {
                             onError={handleAvatarError}
                             className="w-9 h-9 rounded-xl object-cover border border-border/50 shrink-0"
                           />
-                          <div>
-                            <div className="font-extrabold text-foreground text-sm leading-snug">
+                          <div className="min-w-0">
+                            <div className="font-extrabold text-foreground text-sm leading-snug truncate max-w-[180px] sm:max-w-[220px]" title={emp.name}>
                               {emp.name}
                             </div>
-                            <div className="text-[11px] text-muted-foreground font-mono">
+                            <div className="text-[11px] text-muted-foreground font-mono truncate max-w-[180px] sm:max-w-[220px]">
                               {emp.employeeId || emp.id} • {emp.email || "No email"}
                             </div>
                           </div>
@@ -522,7 +522,7 @@ export function DepositTracking() {
                       <td className="py-3.5 px-6 text-center">
                         <button
                           onClick={() => handleOpenDepositModal(emp)}
-                          className="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary font-bold text-xs rounded-xl transition-colors inline-flex items-center gap-1.5"
+                          className="px-3 py-1.5 min-h-[44px] sm:min-h-0 inline-flex items-center gap-1.5 bg-primary/10 hover:bg-primary/20 text-primary font-bold text-xs rounded-xl transition-colors"
                           title="Update Deposit & Documents"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
@@ -541,7 +541,7 @@ export function DepositTracking() {
       {/* Modal 1: Update Deposit & Docs */}
       {isDepositModalOpen && selectedEmp && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-card w-full max-w-lg rounded-[2.5rem] border border-border/60 shadow-2xl overflow-hidden flex flex-col">
+          <div className="bg-card w-[calc(100vw-32px)] sm:w-full max-w-lg rounded-2xl sm:rounded-[2.5rem] border border-border/60 shadow-2xl overflow-hidden flex flex-col max-h-[90dvh]">
             <div className="flex items-center justify-between px-6 py-5 border-b border-border/50">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-primary/10 text-primary rounded-xl">
@@ -557,13 +557,13 @@ export function DepositTracking() {
               </button>
             </div>
 
-            <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+            <div className="p-4 sm:p-6 space-y-4 max-h-[70dvh] overflow-y-auto flex-1 min-h-0 pr-2">
               {/* Candidate Type selector */}
               <div>
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
                   Candidate Classification
                 </label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
                   <button
                     type="button"
                     onClick={() => {
@@ -598,7 +598,7 @@ export function DepositTracking() {
               </div>
 
               {/* Amount Paid & Status */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
                 <div>
                   <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
                     Amount Received (₹)
@@ -630,7 +630,7 @@ export function DepositTracking() {
               </div>
 
               {/* Payment Date & Mode */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
                 <div>
                   <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
                     Payment Date
@@ -735,7 +735,7 @@ export function DepositTracking() {
       {/* Modal 2: Quick Documents Checklist View/Edit */}
       {isDocModalOpen && selectedEmp && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-card w-full max-w-md rounded-[2.5rem] border border-border/60 shadow-2xl overflow-hidden flex flex-col">
+          <div className="bg-card w-[calc(100vw-32px)] sm:w-full max-w-md rounded-2xl sm:rounded-[2.5rem] border border-border/60 shadow-2xl overflow-hidden flex flex-col max-h-[90dvh]">
             <div className="flex items-center justify-between px-6 py-5 border-b border-border/50">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-primary/10 text-primary rounded-xl">

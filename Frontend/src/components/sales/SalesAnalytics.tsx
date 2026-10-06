@@ -170,7 +170,7 @@ export function SalesAnalytics({ onAction }: { onAction?: (action: string) => vo
           <h1 className="text-2xl font-black tracking-tight sm:text-3xl">Sales Analytics</h1>
           <p className="text-sm text-muted-foreground">Every number you need to steer revenue — updated live</p>
         </div>
-        <button onClick={() => onAction?.("Export PDF")} className="flex items-center gap-1.5 self-start rounded-xl border border-border bg-white px-4 py-2 text-sm font-semibold transition-colors hover:bg-accent hover:text-emerald-700">
+        <button onClick={() => onAction?.("Export PDF")} className="flex items-center justify-center gap-1.5 w-full sm:w-auto min-h-[44px] sm:min-h-0 rounded-xl border border-border bg-white px-4 py-2 text-sm font-semibold transition-colors hover:bg-accent hover:text-emerald-700">
           <Download className="h-4 w-4" /> Export Report
         </button>
       </div>
@@ -235,7 +235,7 @@ export function SalesAnalytics({ onAction }: { onAction?: (action: string) => vo
                 <BarChart data={dynamicSources} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis type="number" tick={{ fontSize: 11 }} />
-                  <YAxis dataKey="source" type="category" tick={{ fontSize: 10 }} width={75} />
+                  <YAxis dataKey="source" type="category" tick={{ fontSize: 10 }} width={60} />
                   <Tooltip />
                   <Legend />
                   <Bar dataKey="leads" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={10} name="Leads" />

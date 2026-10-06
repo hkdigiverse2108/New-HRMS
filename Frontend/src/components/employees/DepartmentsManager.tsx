@@ -87,7 +87,7 @@ export function DepartmentsManager({ subDepartmentsCountMap = {}, onDepartmentCh
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
           <div className="relative w-full sm:w-64">
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -101,7 +101,7 @@ export function DepartmentsManager({ subDepartmentsCountMap = {}, onDepartmentCh
           {canCreate && (
             <button
               onClick={() => setIsAddOpen(true)}
-              className="px-4 h-10 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-xs flex items-center gap-2 shadow-sm transition-all shrink-0 active:scale-95"
+              className="px-4 h-10 min-h-[44px] sm:min-h-0 w-full sm:w-auto justify-center rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-xs flex items-center gap-2 shadow-sm transition-all shrink-0 active:scale-95"
             >
               <Plus className="w-4 h-4" />
               <span>Add Department</span>
@@ -145,7 +145,7 @@ export function DepartmentsManager({ subDepartmentsCountMap = {}, onDepartmentCh
                           setEditingDept(dept);
                           setEditDeptName(dept);
                         }}
-                        className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl transition-colors"
+                        className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl transition-colors"
                         title="Edit Department Name"
                       >
                         <Edit2 className="w-4 h-4" />
@@ -154,7 +154,7 @@ export function DepartmentsManager({ subDepartmentsCountMap = {}, onDepartmentCh
                     {canDelete && (
                       <button
                         onClick={() => setDeleteConfirm({ isOpen: true, dept })}
-                        className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl transition-colors"
+                        className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl transition-colors"
                         title="Delete Department"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -170,7 +170,7 @@ export function DepartmentsManager({ subDepartmentsCountMap = {}, onDepartmentCh
 
       {/* Add Department Modal */}
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-        <DialogContent className="max-w-md p-0 overflow-hidden rounded-3xl gap-0 border-border bg-card shadow-2xl [&>button]:hidden">
+        <DialogContent className="w-[calc(100vw-16px)] sm:max-w-md max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-3xl gap-0 border-border bg-card shadow-2xl [&>button]:hidden">
           <div className="flex items-center justify-between px-6 py-5 border-b border-border/50 bg-muted/40">
             <div>
               <h3 className="text-base font-black text-foreground">Add New Department</h3>
@@ -178,13 +178,13 @@ export function DepartmentsManager({ subDepartmentsCountMap = {}, onDepartmentCh
             </div>
             <button
               onClick={() => setIsAddOpen(false)}
-              className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors"
+              className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
 
-          <form onSubmit={handleAdd} className="p-6 space-y-4">
+          <form onSubmit={handleAdd} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
             <div className="space-y-2">
               <label className="text-xs font-bold text-foreground/80 uppercase tracking-wider">
                 Department Name <span className="text-destructive">*</span>
@@ -199,18 +199,18 @@ export function DepartmentsManager({ subDepartmentsCountMap = {}, onDepartmentCh
               />
             </div>
 
-            <div className="flex justify-end gap-3 pt-2">
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2">
               <button
                 type="button"
                 onClick={() => setIsAddOpen(false)}
-                className="px-4 py-2.5 rounded-xl border border-border text-xs font-bold hover:bg-muted transition-colors"
+                className="px-4 py-2.5 min-h-[44px] w-full sm:w-auto rounded-xl border border-border text-xs font-bold hover:bg-muted transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={!newDeptName.trim()}
-                className="px-5 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-black transition-all disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+                className="px-5 py-2.5 min-h-[44px] w-full sm:w-auto rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-black transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-sm"
               >
                 <Plus className="w-4 h-4" />
                 <span>Create Department</span>
@@ -222,7 +222,7 @@ export function DepartmentsManager({ subDepartmentsCountMap = {}, onDepartmentCh
 
       {/* Edit Department Modal */}
       <Dialog open={Boolean(editingDept)} onOpenChange={(open) => !open && setEditingDept(null)}>
-        <DialogContent className="max-w-md p-0 overflow-hidden rounded-3xl gap-0 border-border bg-card shadow-2xl [&>button]:hidden">
+        <DialogContent className="w-[calc(100vw-16px)] sm:max-w-md max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-3xl gap-0 border-border bg-card shadow-2xl [&>button]:hidden">
           <div className="flex items-center justify-between px-6 py-5 border-b border-border/50 bg-muted/40">
             <div>
               <h3 className="text-base font-black text-foreground">Edit Department</h3>
@@ -230,13 +230,13 @@ export function DepartmentsManager({ subDepartmentsCountMap = {}, onDepartmentCh
             </div>
             <button
               onClick={() => setEditingDept(null)}
-              className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors"
+              className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
 
-          <form onSubmit={handleEdit} className="p-6 space-y-4">
+          <form onSubmit={handleEdit} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
             <div className="space-y-2">
               <label className="text-xs font-bold text-foreground/80 uppercase tracking-wider">
                 Department Name <span className="text-destructive">*</span>
@@ -250,18 +250,18 @@ export function DepartmentsManager({ subDepartmentsCountMap = {}, onDepartmentCh
               />
             </div>
 
-            <div className="flex justify-end gap-3 pt-2">
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2">
               <button
                 type="button"
                 onClick={() => setEditingDept(null)}
-                className="px-4 py-2.5 rounded-xl border border-border text-xs font-bold hover:bg-muted transition-colors"
+                className="px-4 py-2.5 min-h-[44px] w-full sm:w-auto rounded-xl border border-border text-xs font-bold hover:bg-muted transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={!editDeptName.trim()}
-                className="px-5 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-black transition-all disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+                className="px-5 py-2.5 min-h-[44px] w-full sm:w-auto rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-black transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-sm"
               >
                 <Check className="w-4 h-4" />
                 <span>Save Changes</span>

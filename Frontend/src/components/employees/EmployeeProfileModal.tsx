@@ -39,12 +39,12 @@ export function EmployeeProfileModal({ employee, onClose }: EmployeeProfileModal
 
   return (
     <Dialog open={!!employee} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="w-full max-w-[calc(100vw-16px)] sm:max-w-3xl p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-full max-w-[calc(100vw-16px)] sm:max-w-3xl p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card max-h-[90dvh] overflow-y-auto">
         {/* Header Background */}
         <div className="h-28 sm:h-32 shrink-0 bg-gradient-to-r from-emerald-500 to-teal-600 relative">
-          <button 
+            <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-2 bg-black/20 hover:bg-black/30 text-white rounded-full transition-colors backdrop-blur-md"
+            className="absolute top-4 right-4 p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center bg-black/20 hover:bg-black/30 text-white rounded-full transition-colors backdrop-blur-md"
           >
             <X className="w-5 h-5" />
           </button>
@@ -70,9 +70,9 @@ export function EmployeeProfileModal({ employee, onClose }: EmployeeProfileModal
             </div>
             
             
-            <div className="flex-1 pt-2 md:pt-0 pb-1">
+            <div className="flex-1 min-w-0 pt-2 md:pt-0 pb-1">
               <div className="flex items-center gap-2.5 flex-wrap">
-                <h2 className="text-3xl font-black text-foreground tracking-tight">{employee.name}</h2>
+                <h2 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight break-words min-w-0">{employee.name}</h2>
                 {employee.role !== 'Admin' && (employee.employeeId || (employee.id && employee.id.startsWith("EMP-") ? employee.id : "")) && (
                   <span className="px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold font-mono rounded-lg shadow-sm">
                     {employee.employeeId || employee.id}
@@ -105,13 +105,13 @@ export function EmployeeProfileModal({ employee, onClose }: EmployeeProfileModal
               <div>
                 <h3 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-3">Contact Information</h3>
                 <div className="space-y-3">
-                  <div className="flex items-center gap-3 text-[13px] text-foreground/80 font-medium">
-                    <div className="p-2 bg-muted/50 rounded-lg text-muted-foreground"><Mail className="w-4 h-4" /></div>
-                    {employee.email}
+                  <div className="flex items-center gap-3 text-[13px] text-foreground/80 font-medium min-w-0">
+                    <div className="p-2 bg-muted/50 rounded-lg text-muted-foreground shrink-0"><Mail className="w-4 h-4" /></div>
+                    <span className="truncate min-w-0 flex-1 break-all" title={employee.email}>{employee.email}</span>
                   </div>
-                  <div className="flex items-center gap-3 text-[13px] text-foreground/80 font-medium">
-                    <div className="p-2 bg-muted/50 rounded-lg text-muted-foreground"><Phone className="w-4 h-4" /></div>
-                    {employee.phone}
+                  <div className="flex items-center gap-3 text-[13px] text-foreground/80 font-medium min-w-0">
+                    <div className="p-2 bg-muted/50 rounded-lg text-muted-foreground shrink-0"><Phone className="w-4 h-4" /></div>
+                    <span className="truncate min-w-0 flex-1">{employee.phone}</span>
                   </div>
                   <div className="flex items-center gap-3 text-[13px] text-foreground/80 font-medium">
                     <div className="p-2 bg-muted/50 rounded-lg text-muted-foreground"><MapPin className="w-4 h-4" /></div>

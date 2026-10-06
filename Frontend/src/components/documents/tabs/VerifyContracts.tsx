@@ -99,7 +99,7 @@ export function VerifyContracts() {
 
       <div className="bg-card border border-border/50 rounded-3xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full min-w-[650px] text-left border-collapse">
             <thead>
               <tr className="border-b border-border/50 bg-muted/30">
                 <SortableHeader label="Employee" sortKey="employeeName" currentSort={sortConfig} onSort={requestSort} className="p-4 text-xs font-bold text-muted-foreground uppercase tracking-widest whitespace-nowrap" />
@@ -146,9 +146,9 @@ export function VerifyContracts() {
                       {formatDate(contract.uploadedAt)}
                     </td>
                     <td className="p-4">
-                      <div className="flex justify-end gap-2">
-                        <button 
-                          className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <button
+                          className="p-2 min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
                           title="View Document"
                         >
                           <Eye className="w-4 h-4" />
@@ -156,13 +156,13 @@ export function VerifyContracts() {
                         
                         {contract.status === "Pending" && (
                           <>
-                            <button 
-                              className="px-3 py-1.5 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 text-xs font-bold rounded-lg transition-colors"
+                            <button
+                              className="px-3 py-1.5 min-h-[44px] sm:min-h-0 inline-flex items-center bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 text-xs font-bold rounded-lg transition-colors"
                             >
                               Verify
                             </button>
-                            <button 
-                              className="px-3 py-1.5 bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 text-xs font-bold rounded-lg transition-colors"
+                            <button
+                              className="px-3 py-1.5 min-h-[44px] sm:min-h-0 inline-flex items-center bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 text-xs font-bold rounded-lg transition-colors"
                             >
                               Reject
                             </button>

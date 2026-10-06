@@ -16,17 +16,17 @@ export function CollapsibleSection({ section, title, children, defaultExpanded =
   return (
     <div className="flex flex-col h-full">
       <div 
-        className="mb-6 pl-2 flex items-center justify-between cursor-pointer select-none group"
+        className="mb-6 pl-2 flex items-center justify-between gap-3 cursor-pointer select-none group"
         onClick={() => setIsExpanded(!isExpanded)}
       >
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-0.5">{section}</p>
           <div className="flex items-center gap-2">
             {titleIcon}
-            <h2 className="text-[18px] font-black text-foreground tracking-tight group-hover:text-primary transition-colors">{title}</h2>
+            <h2 className="text-[18px] font-black text-foreground tracking-tight group-hover:text-primary transition-colors truncate sm:whitespace-normal">{title}</h2>
           </div>
         </div>
-        <div className="h-8 w-8 rounded-full hover:bg-muted flex items-center justify-center transition-colors">
+        <div className="h-8 w-8 shrink-0 rounded-full hover:bg-muted flex items-center justify-center transition-colors">
           <ChevronDown className={cn("h-5 w-5 text-muted-foreground transition-transform duration-300", !isExpanded ? "rotate-180" : "")} />
         </div>
       </div>

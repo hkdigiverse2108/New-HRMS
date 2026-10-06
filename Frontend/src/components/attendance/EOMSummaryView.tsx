@@ -82,7 +82,7 @@ export function EOMSummaryView({ selectedEmployeeId }: { selectedEmployeeId?: st
           <select
             value={selectedMonth}
             onChange={(e) => setSelectedMonth(e.target.value)}
-            className="px-3.5 py-2 bg-muted/50 border border-border/80 rounded-xl text-xs sm:text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground cursor-pointer"
+            className="px-3.5 py-2 min-h-[44px] sm:min-h-0 max-w-full bg-muted/50 border border-border/80 rounded-xl text-xs sm:text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground cursor-pointer"
           >
             {MONTHS.map((m) => (
               <option key={m} value={m}>
@@ -95,7 +95,7 @@ export function EOMSummaryView({ selectedEmployeeId }: { selectedEmployeeId?: st
           <select
             value={selectedYear}
             onChange={(e) => setSelectedYear(parseInt(e.target.value, 10))}
-            className="px-3.5 py-2 bg-muted/50 border border-border/80 rounded-xl text-xs sm:text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground cursor-pointer"
+            className="px-3.5 py-2 min-h-[44px] sm:min-h-0 max-w-full bg-muted/50 border border-border/80 rounded-xl text-xs sm:text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground cursor-pointer"
           >
             {[2024, 2025, 2026, 2027].map((y) => (
               <option key={y} value={y}>

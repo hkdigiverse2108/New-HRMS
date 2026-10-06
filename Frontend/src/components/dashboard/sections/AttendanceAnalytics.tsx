@@ -78,10 +78,10 @@ export function AttendanceAnalytics() {
                   wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}
                   formatter={(value) => <span className="text-muted-foreground font-medium capitalize">{value}</span>}
                 />
-                <Bar dataKey="present" fill="#00A56C" radius={[4, 4, 0, 0]} barSize={16} />
-                <Bar dataKey="late" fill="#F59E0B" radius={[4, 4, 0, 0]} barSize={16} />
-                <Bar dataKey="wfh" fill="#3B82F6" radius={[4, 4, 0, 0]} barSize={16} />
-                <Bar dataKey="absent" fill="#EF4444" radius={[4, 4, 0, 0]} barSize={16} />
+                <Bar dataKey="present" fill="#00A56C" radius={[4, 4, 0, 0]} maxBarSize={16} />
+                <Bar dataKey="late" fill="#F59E0B" radius={[4, 4, 0, 0]} maxBarSize={16} />
+                <Bar dataKey="wfh" fill="#3B82F6" radius={[4, 4, 0, 0]} maxBarSize={16} />
+                <Bar dataKey="absent" fill="#EF4444" radius={[4, 4, 0, 0]} maxBarSize={16} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -152,8 +152,8 @@ export function AttendanceAnalytics() {
 
         {/* Heatmap Calendar */}
         <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm md:col-span-3 min-w-0 overflow-hidden">
-          <div className="mb-6 flex justify-between items-center">
-            <div>
+          <div className="mb-6 flex flex-wrap gap-2 justify-between items-center">
+            <div className="min-w-0">
               <h3 className="font-bold text-foreground">Heatmap Calendar</h3>
               <p className="text-[11px] text-muted-foreground">Attendance intensity for {currentMonthDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</p>
             </div>

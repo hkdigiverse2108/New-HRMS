@@ -901,17 +901,17 @@ export default function ResourceManagementPage() {
 
       {/* Tab Navigation */}
       {!isEmployeeOnly && (
-        <div className="flex border-b border-border bg-gray-50/50 p-1.5 rounded-xl max-w-2xl shadow-sm border">
+        <div className="flex border-b border-border bg-gray-50/50 p-1.5 rounded-xl max-w-full sm:max-w-2xl overflow-x-auto shadow-sm border">
           <button 
             onClick={() => setActiveTab("overview")} 
-            className={`flex-1 py-2 px-3 text-xs sm:text-sm font-semibold rounded-lg flex items-center justify-center gap-2 transition-all ${activeTab === "overview" ? "bg-white text-brand-teal shadow-sm border" : "text-muted-foreground hover:text-foreground"}`}
+            className={`flex-1 min-h-[44px] sm:min-h-0 whitespace-nowrap shrink-0 py-2 px-3 text-xs sm:text-sm font-semibold rounded-lg flex items-center justify-center gap-2 transition-all ${activeTab === "overview" ? "bg-white text-brand-teal shadow-sm border" : "text-muted-foreground hover:text-foreground"}`}
           >
             <TrendingUp className="w-4 h-4" />
             Dashboard
           </button>
           <button 
             onClick={() => setActiveTab("registry")} 
-            className={`flex-1 py-2 px-3 text-xs sm:text-sm font-semibold rounded-lg flex items-center justify-center gap-2 transition-all ${activeTab === "registry" ? "bg-white text-brand-teal shadow-sm border" : "text-muted-foreground hover:text-foreground"}`}
+            className={`flex-1 min-h-[44px] sm:min-h-0 whitespace-nowrap shrink-0 py-2 px-3 text-xs sm:text-sm font-semibold rounded-lg flex items-center justify-center gap-2 transition-all ${activeTab === "registry" ? "bg-white text-brand-teal shadow-sm border" : "text-muted-foreground hover:text-foreground"}`}
           >
             <Archive className="w-4 h-4" />
             Inventory ({allResources.length})

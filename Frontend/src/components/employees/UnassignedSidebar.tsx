@@ -30,17 +30,17 @@ export function UnassignedSidebar() {
     <div 
       className={cn(
         "absolute right-0 top-0 bottom-0 bg-white border-l border-border shadow-xl transition-all duration-300 flex flex-col z-40",
-        isOpen ? "w-[300px]" : "w-[0px] border-l-0"
+        isOpen ? "w-[85vw] max-w-[300px]" : "w-[0px] border-l-0"
       )}
     >
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="absolute -left-10 top-1/2 -translate-y-1/2 bg-white border border-border border-r-0 p-2 rounded-l-xl shadow-sm text-muted-foreground hover:text-foreground/80 hover:bg-muted/50 transition-colors z-50"
+        className="absolute -left-10 top-1/2 -translate-y-1/2 bg-white border border-border border-r-0 p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-l-xl shadow-sm text-muted-foreground hover:text-foreground/80 hover:bg-muted/50 transition-colors z-50"
       >
         {isOpen ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
       </button>
 
-      <div className={cn("flex flex-col h-full overflow-hidden w-[300px]", !isOpen && "hidden")}>
+      <div className={cn("flex flex-col h-full overflow-hidden w-[85vw] max-w-[300px]", !isOpen && "hidden")}>
         <div className="p-5 border-b border-border/50 bg-muted/50/50">
           <div className="flex items-center gap-2 mb-1">
             <Users className="w-5 h-5 text-primary" />

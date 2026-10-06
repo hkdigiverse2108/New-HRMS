@@ -45,19 +45,19 @@ export function CompanyHealth() {
     <div className="mb-12">
       <CollapsibleSection section="Section 02" title="Company Health">
 
-      <div className="grid grid-cols-1 min-[360px]:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
         {metrics.map((metric, i) => {
           const sensitive = SENSITIVE_LABELS.includes(metric.label);
           const hidden = sensitive && !revealed.includes(metric.label);
 
           return (
-            <div key={i} className="bg-white border border-border/60 rounded-3xl p-5 shadow-[0_2px_15px_rgba(0,0,0,0.03)] relative overflow-hidden flex flex-col h-[140px] min-w-0">
-              <div className="flex justify-between items-start z-10">
-                <div className="flex items-center gap-1.5">
+            <div key={i} className="bg-white border border-border/60 rounded-3xl p-5 shadow-[0_2px_15px_rgba(0,0,0,0.03)] relative overflow-hidden flex flex-col min-h-[140px] h-auto min-w-0">
+              <div className="flex justify-between items-start gap-2 z-10">
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
                   <span className="text-[14px] leading-none">{metric.emoji}</span>
-                  <p className="text-[11px] font-bold text-muted-foreground">{metric.label}</p>
+                  <p className="text-[11px] font-bold text-muted-foreground truncate">{metric.label}</p>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 shrink-0">
                   {sensitive && (
                     <button
                       type="button"
@@ -73,7 +73,7 @@ export function CompanyHealth() {
                   </span>
                 </div>
               </div>
-              <p className="text-[26px] font-black text-foreground leading-none mt-3 z-10">
+              <p className="text-[26px] font-black text-foreground leading-none mt-3 z-10 whitespace-nowrap truncate">
                 {hidden ? "••••••" : metric.value}
               </p>
 

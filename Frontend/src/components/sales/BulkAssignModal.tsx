@@ -54,7 +54,7 @@ export function BulkAssignModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-md rounded-2xl bg-card border border-border p-6 shadow-2xl">
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md max-h-[90dvh] overflow-y-auto rounded-2xl bg-card border border-border p-4 sm:p-6 shadow-2xl">
         <DialogHeader>
           <DialogTitle className="text-lg font-black text-foreground">
             Bulk Assign {leadIds.length} Lead{leadIds.length > 1 ? "s" : ""}
@@ -78,7 +78,7 @@ export function BulkAssignModal({
                 return (
                   <label
                     key={emp.id}
-                    className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-muted/60 cursor-pointer text-xs font-semibold text-foreground transition-colors"
+                    className="flex items-center gap-2.5 p-2 min-h-[44px] sm:min-h-0 rounded-lg hover:bg-muted/60 cursor-pointer text-xs font-semibold text-foreground transition-colors"
                   >
                     <input
                       type="checkbox"
@@ -86,8 +86,8 @@ export function BulkAssignModal({
                       onChange={() => toggleEmployee(empName)}
                       className="rounded border-border text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
                     />
-                    <div className="flex flex-col">
-                      <span>{empName}</span>
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <span className="truncate min-w-0">{empName}</span>
                       <span className="text-[10px] text-muted-foreground">
                         {emp.employeeId || "Sales"}
                       </span>
@@ -99,7 +99,7 @@ export function BulkAssignModal({
           </div>
         </div>
 
-        <DialogFooter className="pt-2 gap-2">
+        <DialogFooter className="pt-2 gap-2 flex-col-reverse sm:flex-row sm:justify-end [&>button]:w-full sm:[&>button]:w-auto [&>button]:min-h-[44px] sm:[&>button]:min-h-0">
           <Button
             type="button"
             variant="outline"

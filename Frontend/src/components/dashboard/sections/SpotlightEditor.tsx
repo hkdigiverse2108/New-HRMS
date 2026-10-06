@@ -109,8 +109,8 @@ export function SpotlightEditor({ spotlights, setSpotlights }: SpotlightEditorPr
           Manage Spotlight
         </button>
       </DialogTrigger>
-      <DialogContent className="max-w-md p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
-        <div className="flex items-center justify-between px-6 md:px-8 py-6 border-b border-border/50 bg-muted/30 sticky top-0 z-50">
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+        <div className="flex items-center justify-between px-4 sm:px-6 md:px-8 py-4 sm:py-6 border-b border-border/50 bg-muted/30 sticky top-0 z-50">
           <div>
             <h2 className="text-xl md:text-2xl font-black tracking-tight flex items-center gap-2">
               <Edit2 className="w-5 h-5 text-primary" />
@@ -124,7 +124,7 @@ export function SpotlightEditor({ spotlights, setSpotlights }: SpotlightEditorPr
           </DialogClose>
         </div>
 
-        <div className="p-6 md:p-8 pt-6 space-y-8 overflow-y-auto max-h-[calc(90vh-100px)] custom-scrollbar">
+        <div className="p-4 sm:p-6 md:p-8 pt-6 space-y-8 overflow-y-auto flex-1 min-h-0 max-h-[calc(90dvh-100px)] custom-scrollbar">
           {/* Current List */}
           <div>
             <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">Current Rotation</h4>
@@ -237,7 +237,7 @@ export function SpotlightEditor({ spotlights, setSpotlights }: SpotlightEditorPr
                 )}
               </div>
               
-              <div className="grid grid-cols-2 gap-4 pt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Avatar Ring</label>
                   <div className="relative">
@@ -267,7 +267,7 @@ export function SpotlightEditor({ spotlights, setSpotlights }: SpotlightEditorPr
               {/* Live Preview */}
               <div className="mt-4 p-6 rounded-2xl border border-border bg-muted/20 flex flex-col items-center justify-center relative overflow-hidden">
                 {newPopperStyle !== "none" && (
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[800px] pointer-events-none transform scale-[0.35] z-50">
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[320px] h-[280px] sm:w-[1000px] sm:h-[800px] max-w-full overflow-hidden pointer-events-none transform scale-[0.35] z-50">
                     <SparklesCelebration key={`${newPopperStyle}-${replayCount}`} trigger={true} effectStyle={newPopperStyle} />
                   </div>
                 )}

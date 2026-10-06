@@ -351,7 +351,7 @@ export function Payslips() {
 
       {/* Add Custom Deduction Dialog */}
       <Dialog open={isAddDeductionOpen} onOpenChange={setIsAddDeductionOpen}>
-        <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+        <DialogContent className="w-[calc(100vw-16px)] sm:w-full sm:max-w-[400px] max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
           <div className="flex items-center justify-between px-6 py-5 border-b border-border/50 bg-muted/30">
             <div>
               <h2 className="text-xl font-black tracking-tight">Add Additional Deduction</h2>

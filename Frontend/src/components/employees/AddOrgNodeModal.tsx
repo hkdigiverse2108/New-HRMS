@@ -48,7 +48,7 @@ export function AddOrgNodeModal({ isOpen, onClose, onSubmit, parentName }: AddOr
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-md p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+      <DialogContent className="w-[calc(100vw-24px)] sm:max-w-md max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
           <div className="flex items-center justify-between px-6 py-5 border-b border-border/50 bg-muted/50/50">
             <div>
               <h2 className="text-xl font-black text-foreground">Add Team Member</h2>
@@ -56,16 +56,16 @@ export function AddOrgNodeModal({ isOpen, onClose, onSubmit, parentName }: AddOr
                 {parentName ? `Adding new report under ${parentName}` : 'Add a new member to the organization'}
               </p>
             </div>
-            <button 
+            <button
               onClick={onClose}
-              className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
+              className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="flex flex-col max-h-[70vh]">
-            <div className="p-6 md:p-8 space-y-6 overflow-y-auto">
+          <form onSubmit={handleSubmit} className="flex flex-col min-h-0 max-h-[90dvh]">
+            <div className="p-6 md:p-8 space-y-6 overflow-y-auto flex-1 min-h-0">
             <div className="space-y-2">
               <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Full Name</label>
               <div className="relative">
@@ -116,17 +116,17 @@ export function AddOrgNodeModal({ isOpen, onClose, onSubmit, parentName }: AddOr
             </div>
 
             </div>
-            <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
-              <button 
+            <div className="sticky bottom-0 px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex flex-col-reverse sm:flex-row sm:justify-end gap-3 mt-auto shrink-0">
+              <button
                 type="button"
                 onClick={onClose}
-                className="px-5 py-2.5 rounded-xl font-bold text-muted-foreground hover:bg-muted transition-colors"
+                className="px-5 py-2.5 min-h-[44px] w-full sm:w-auto rounded-xl font-bold text-muted-foreground hover:bg-muted transition-colors"
               >
                 Cancel
               </button>
-              <button 
+              <button
                 type="submit"
-                className="px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all"
+                className="px-6 py-2.5 min-h-[44px] w-full sm:w-auto bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all"
               >
                 Add Member
               </button>

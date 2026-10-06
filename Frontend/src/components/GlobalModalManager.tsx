@@ -581,7 +581,16 @@ export function GlobalModalManager() {
       <CreateEventModal
         isOpen={activeModal === "newMeeting"}
         onClose={closeModal}
-        onSave={(_event) => closeModal()}
+        onSave={async (payload) => {
+          try {
+            await api.post("/schedule/events", payload);
+            toast.success("Meeting scheduled.");
+          } catch (err: any) {
+            toast.error(err?.message || "Could not schedule meeting.");
+          } finally {
+            closeModal();
+          }
+        }}
       />
       <UrgentMeetingSummonModal />
     </>

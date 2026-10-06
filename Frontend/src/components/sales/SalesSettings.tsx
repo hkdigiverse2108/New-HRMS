@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
-import { DialogClose,  Dialog, DialogContent  } from "@/components/ui/dialog";
-import { 
+import { DialogClose, Dialog, DialogContent } from "@/components/ui/dialog";
+import {
   Building2, Users, MapPin, DollarSign, Calendar, Target,
   Briefcase, TrendingUp, CheckCircle2, ShieldAlert, BadgeCent,
   Pencil, Trash2, Settings, Plus, Shuffle, Bell, Shield, History,
@@ -46,13 +46,13 @@ const INITIAL_LEAD_SOURCES = [
 ];
 
 const AVAILABLE_ICONS = [
-  { name: "Gem", icon: Gem }, { name: "Utensils", icon: UtensilsCrossed }, 
-  { name: "Building", icon: Building2 }, { name: "Stethoscope", icon: Stethoscope }, 
+  { name: "Gem", icon: Gem }, { name: "Utensils", icon: UtensilsCrossed },
+  { name: "Building", icon: Building2 }, { name: "Stethoscope", icon: Stethoscope },
   { name: "Education", icon: GraduationCap }, { name: "Heart", icon: HeartPulse },
-  { name: "Factory", icon: Factory }, { name: "Shirt", icon: Shirt }, 
-  { name: "Landmark", icon: Landmark }, { name: "Car", icon: Car }, 
+  { name: "Factory", icon: Factory }, { name: "Shirt", icon: Shirt },
+  { name: "Landmark", icon: Landmark }, { name: "Car", icon: Car },
   { name: "Plane", icon: Plane }, { name: "Cpu", icon: Cpu },
-  { name: "Scissors", icon: Scissors }, { name: "Dumbbell", icon: Dumbbell }, 
+  { name: "Scissors", icon: Scissors }, { name: "Dumbbell", icon: Dumbbell },
   { name: "HardHat", icon: HardHat }, { name: "Shapes", icon: Shapes },
 ];
 
@@ -62,8 +62,8 @@ const getIconComponent = (iconName: string) => {
 };
 
 const COLORS = [
-  "bg-amber-500", "bg-orange-500", "bg-emerald-600", "bg-blue-500", 
-  "bg-primary", "bg-rose-500", "bg-muted/500", "bg-teal-600", 
+  "bg-amber-500", "bg-orange-500", "bg-emerald-600", "bg-blue-500",
+  "bg-primary", "bg-rose-500", "bg-muted/500", "bg-teal-600",
   "bg-sky-500", "bg-pink-500", "bg-green-600", "bg-yellow-700"
 ];
 
@@ -100,9 +100,9 @@ const INITIAL_PERMISSIONS = [
 ];
 
 const AVAILABLE_PERMISSIONS = [
-  "View all leads", "View team leads", "View own leads", 
+  "View all leads", "View team leads", "View own leads",
   "Add lead", "Edit all", "Bulk edit", "Delete leads",
-  "Assign leads", "Manage targets", "Manage users", 
+  "Assign leads", "Manage targets", "Manage users",
   "Manage settings", "View audit log", "Approve proposals",
   "Log follow-up", "Create quotation"
 ];
@@ -199,8 +199,8 @@ export function SalesSettings() {
     );
     const updated = exists
       ? selectedEligibleOwners.filter(
-          (o) => (o.includes("·") ? (o.split("·")[0] || o).trim() : o.trim()) !== cleanName
-        )
+        (o) => (o.includes("·") ? (o.split("·")[0] || o).trim() : o.trim()) !== cleanName
+      )
       : [...selectedEligibleOwners, ownerName];
     setSelectedEligibleOwners(updated);
     await updateSalesSettings({ eligible_owners: updated });
@@ -272,7 +272,7 @@ export function SalesSettings() {
       toast.success("Pipeline stages reordered!");
     }
   };
-  
+
   // Categories / Sources / Follow-up types — fully backend-driven, synced from salesSettings
   const [categories, setCategories] = useState<any[]>(() => salesSettings?.categories?.map((c: any) => ({ ...c, icon: getIconComponent(c.iconName) })) || INITIAL_LEAD_CATEGORIES);
   const [sources, setSources] = useState<string[]>(() => salesSettings?.sources || INITIAL_LEAD_SOURCES);
@@ -369,7 +369,7 @@ export function SalesSettings() {
   };
 
   const handleTogglePerm = (p: string) => {
-    setTempPerms(prev => 
+    setTempPerms(prev =>
       prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]
     );
   };
@@ -639,13 +639,13 @@ export function SalesSettings() {
       </div>
 
       {/* Tabs */}
-      <div className="flex flex-wrap items-center gap-1.5 rounded-full bg-muted/40 p-1 w-fit">
+      <div className="flex flex-nowrap items-center gap-1.5 rounded-full bg-muted/40 p-1 w-full sm:w-fit overflow-x-auto max-w-full">
         {TABS.map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={cn(
-              "rounded-full px-4 py-2 text-sm font-medium transition-colors",
+              "rounded-full px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap shrink-0 min-h-[44px] sm:min-h-0",
               activeTab === tab
                 ? "bg-white text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -657,21 +657,21 @@ export function SalesSettings() {
       </div>
 
       {/* Main Content Area */}
-      <div className="rounded-3xl border border-emerald-100/50 bg-emerald-50/10 p-6 md:p-8">
-        
+      <div className="rounded-3xl border border-emerald-100/50 bg-emerald-50/10 p-4 sm:p-6 md:p-8">
+
         {/* Pipeline Stages Tab */}
         {activeTab === "Pipeline Stages" && (
           <div className="animate-in fade-in slide-in-from-bottom-2 space-y-6 text-left">
             <div className="flex flex-col sm:flex-row items-center gap-4">
-              <input 
-                type="text" 
-                placeholder="e.g. Contract Signed" 
+              <input
+                type="text"
+                placeholder="e.g. Contract Signed"
                 value={newStageName}
                 onChange={(e) => setNewStageName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAddStage()}
                 className="w-full sm:w-80 rounded-xl border border-border bg-white px-4 py-2.5 text-xs outline-none focus:ring-2 focus:ring-emerald-500/20 font-semibold text-foreground"
               />
-              <button 
+              <button
                 onClick={handleAddStage}
                 className="flex w-full sm:w-auto items-center justify-center gap-1.5 rounded-xl bg-emerald-700 px-5 py-2.5 text-xs font-bold text-white transition-all hover:bg-emerald-800 shadow-sm"
               >
@@ -685,8 +685,8 @@ export function SalesSettings() {
               <div className="overflow-x-auto pb-3 pt-1 scrollbar-none">
                 <div className="flex items-center gap-2 min-w-max p-1.5 bg-muted/40 rounded-2xl border border-border/50">
                   {stages.map((stage: string, idx: number) => (
-                    <div 
-                      key={idx} 
+                    <div
+                      key={idx}
                       className="flex items-center gap-2 px-3 py-1.5 bg-white border border-border/60 rounded-xl shadow-sm text-xs font-bold text-foreground"
                     >
                       <span className="grid h-4.5 w-4.5 place-items-center rounded bg-emerald-100 text-emerald-700 border border-emerald-200 text-[9px] font-black">
@@ -706,15 +706,15 @@ export function SalesSettings() {
             <div className="space-y-3 max-w-2xl">
               <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Manage Pipeline Sequence</p>
               {stages.map((stage: string, i: number) => (
-                <div 
-                  key={i} 
+                <div
+                  key={i}
                   className="flex items-center justify-between rounded-2xl border border-border bg-white p-4 shadow-sm hover:shadow-md hover:border-emerald-600/20 transition-all group"
                 >
                   {editingStageIdx === i ? (
                     <div className="flex items-center gap-2.5 w-full">
-                      <input 
-                        value={editStageName} 
-                        onChange={(e) => setEditStageName(e.target.value)} 
+                      <input
+                        value={editStageName}
+                        onChange={(e) => setEditStageName(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && saveEditStage()}
                         className="flex-1 rounded-xl border border-border px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 font-semibold text-foreground bg-muted/20"
                         autoFocus
@@ -724,28 +724,28 @@ export function SalesSettings() {
                     </div>
                   ) : (
                     <>
-                      <div className="flex items-center gap-3">
-                        <span className="grid h-6 w-6 place-items-center rounded-lg text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-100 shadow-inner">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-lg text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-100 shadow-inner">
                           {i + 1}
                         </span>
-                        <span className="text-sm font-black text-foreground tracking-tight">{stage}</span>
+                        <span className="text-sm font-black text-foreground tracking-tight truncate">{stage}</span>
                       </div>
-                      
-                      <div className="flex items-center gap-1">
-                        <button 
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
                           type="button"
                           disabled={i === 0}
                           onClick={() => moveStage(i, 'up')}
-                          className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg disabled:opacity-30 disabled:pointer-events-none transition-all"
+                          className="p-1.5 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg disabled:opacity-30 disabled:pointer-events-none transition-all"
                           title="Move Up"
                         >
                           <ChevronUp className="h-4 w-4" />
                         </button>
-                        <button 
+                        <button
                           type="button"
                           disabled={i === stages.length - 1}
                           onClick={() => moveStage(i, 'down')}
-                          className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg disabled:opacity-30 disabled:pointer-events-none transition-all"
+                          className="p-1.5 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg disabled:opacity-30 disabled:pointer-events-none transition-all"
                           title="Move Down"
                         >
                           <ChevronDown className="h-4 w-4" />
@@ -753,18 +753,18 @@ export function SalesSettings() {
 
                         <div className="w-[1px] h-4 bg-border/60 mx-1"></div>
 
-                        <button 
+                        <button
                           type="button"
-                          onClick={() => startEditStage(i)} 
-                          className="p-1.5 text-muted-foreground hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                          onClick={() => startEditStage(i)}
+                          className="p-1.5 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
                           title="Edit Stage"
                         >
                           <Pencil className="h-4 w-4" />
                         </button>
-                        <button 
+                        <button
                           type="button"
-                          onClick={() => confirmDeleteStage(i, stage)} 
-                          className="p-1.5 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                          onClick={() => confirmDeleteStage(i, stage)}
+                          className="p-1.5 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                           title="Delete Stage"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -783,7 +783,7 @@ export function SalesSettings() {
           <div className="animate-in fade-in slide-in-from-bottom-2">
             <div className="mb-8 flex flex-col sm:flex-row items-center gap-4 relative">
               <div className="relative flex items-center gap-2 w-full sm:w-auto">
-                <button 
+                <button
                   onClick={() => setIsIconPickerOpen(!isIconPickerOpen)}
                   className="flex shrink-0 items-center justify-center h-11 w-11 rounded-full border border-border bg-white hover:bg-muted transition-colors shadow-sm"
                   title="Choose Icon"
@@ -793,7 +793,7 @@ export function SalesSettings() {
                     return IconComp ? <IconComp className="h-5 w-5 text-emerald-600" /> : null;
                   })()}
                 </button>
-                
+
                 {isIconPickerOpen && (
                   <div className="absolute top-14 left-0 z-20 w-64 rounded-2xl border border-border bg-white p-3 shadow-xl grid grid-cols-4 gap-2 animate-in fade-in zoom-in-95">
                     {AVAILABLE_ICONS.map((iconObj, idx) => (
@@ -805,8 +805,8 @@ export function SalesSettings() {
                         }}
                         className={cn(
                           "flex h-10 w-10 items-center justify-center rounded-xl transition-colors",
-                          idx === newCategoryIconIdx 
-                            ? "bg-emerald-100 text-emerald-700" 
+                          idx === newCategoryIconIdx
+                            ? "bg-emerald-100 text-emerald-700"
                             : "text-muted-foreground hover:bg-emerald-50 hover:text-emerald-600"
                         )}
                         title={iconObj.name}
@@ -816,17 +816,17 @@ export function SalesSettings() {
                     ))}
                   </div>
                 )}
-                
-                <input 
-                  type="text" 
-                  placeholder="New category name" 
+
+                <input
+                  type="text"
+                  placeholder="New category name"
                   value={newCategoryName}
                   onChange={(e) => setNewCategoryName(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
                   className="w-full sm:w-80 rounded-full border border-border bg-white px-5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500/30"
                 />
               </div>
-              <button 
+              <button
                 onClick={handleAddCategory}
                 className="flex w-full sm:w-auto items-center justify-center gap-2 rounded-full bg-emerald-700 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-800"
               >
@@ -840,7 +840,7 @@ export function SalesSettings() {
                   {editingCategoryIdx === i ? (
                     <div className="flex flex-col gap-2 w-full relative">
                       <div className="flex items-center gap-2">
-                        <button 
+                        <button
                           onClick={() => setIsEditIconPickerOpen(!isEditIconPickerOpen)}
                           className={cn("flex shrink-0 items-center justify-center h-10 w-10 rounded-full text-white", cat.color)}
                           title="Choose Icon"
@@ -850,15 +850,15 @@ export function SalesSettings() {
                             return IconComp ? <IconComp className="h-5 w-5" /> : null;
                           })()}
                         </button>
-                        <input 
-                          value={editCategoryName} 
-                          onChange={(e) => setEditCategoryName(e.target.value)} 
+                        <input
+                          value={editCategoryName}
+                          onChange={(e) => setEditCategoryName(e.target.value)}
                           onKeyDown={(e) => e.key === 'Enter' && saveEditCategory()}
                           className="flex-1 rounded-md border border-border px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-emerald-500/30"
                           autoFocus
                         />
                       </div>
-                      
+
                       {isEditIconPickerOpen && (
                         <div className="absolute top-12 left-0 z-20 w-64 rounded-2xl border border-border bg-white p-3 shadow-xl grid grid-cols-4 gap-2 animate-in fade-in zoom-in-95">
                           {AVAILABLE_ICONS.map((iconObj, idx) => (
@@ -870,8 +870,8 @@ export function SalesSettings() {
                               }}
                               className={cn(
                                 "flex h-10 w-10 items-center justify-center rounded-xl transition-colors",
-                                idx === editCategoryIconIdx 
-                                  ? "bg-emerald-100 text-emerald-700" 
+                                idx === editCategoryIconIdx
+                                  ? "bg-emerald-100 text-emerald-700"
                                   : "text-muted-foreground hover:bg-emerald-50 hover:text-emerald-600"
                               )}
                               title={iconObj.name}
@@ -917,15 +917,15 @@ export function SalesSettings() {
         {activeTab === "Lead Sources" && (
           <div className="animate-in fade-in slide-in-from-bottom-2">
             <div className="mb-8 flex flex-col sm:flex-row items-center gap-4">
-              <input 
-                type="text" 
-                placeholder="New lead source" 
+              <input
+                type="text"
+                placeholder="New lead source"
                 value={newSourceName}
                 onChange={(e) => setNewSourceName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAddSource()}
                 className="w-full sm:w-80 rounded-full border border-border bg-white px-5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500/30"
               />
-              <button 
+              <button
                 onClick={handleAddSource}
                 className="flex w-full sm:w-auto items-center justify-center gap-2 rounded-full bg-emerald-700 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-800"
               >
@@ -938,15 +938,15 @@ export function SalesSettings() {
                 <div key={i} className="flex items-center gap-2 rounded-full border border-border bg-white px-4 py-2 text-sm font-medium transition-colors hover:bg-muted/50">
                   {editingSourceIdx === i ? (
                     <div className="flex items-center gap-2">
-                      <input 
-                        value={editSourceName} 
-                        onChange={(e) => setEditSourceName(e.target.value)} 
+                      <input
+                        value={editSourceName}
+                        onChange={(e) => setEditSourceName(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && saveEditSource()}
                         className="w-24 rounded-md border border-border px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-emerald-500/30 bg-transparent"
                         autoFocus
                       />
                       <button onClick={saveEditSource} className="text-emerald-600 hover:text-emerald-700"><Check className="h-3.5 w-3.5" /></button>
-                      <button onClick={() => setEditingSourceIdx(null)} className="text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button> 
+                      <button onClick={() => setEditingSourceIdx(null)} className="text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
                     </div>
                   ) : (
                     <>
@@ -977,14 +977,14 @@ export function SalesSettings() {
                 {selectedEligibleOwners.length} Active in Rotation
               </span>
             </div>
-            
+
             <div className="space-y-3">
               {assignmentRules.map((rule, i) => (
                 <div key={i} className="flex items-center justify-between rounded-xl border border-border bg-white p-4 shadow-sm hover:border-emerald-200 transition-colors">
                   <div>
                     <span className="font-semibold text-sm text-foreground">{rule.name}</span>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {rule.name.includes("Round Robin") 
+                      {rule.name.includes("Round Robin")
                         ? "Cycles newly created leads sequentially through the eligible sales agents below"
                         : "Ensures newly created leads are distributed fairly without manual owner selection"}
                     </p>
@@ -1226,7 +1226,7 @@ export function SalesSettings() {
                 Refresh
               </button>
             </div>
-            
+
             <div className="space-y-2.5 max-h-[500px] overflow-y-auto pr-1">
               {isLoadingAuditLogs ? (
                 <div className="py-12 text-center text-xs text-muted-foreground">
@@ -1252,10 +1252,10 @@ export function SalesSettings() {
                               isWon
                                 ? "bg-purple-100 text-purple-800"
                                 : isAssignment
-                                ? "bg-blue-100 text-blue-800"
-                                : isDelete
-                                ? "bg-rose-100 text-rose-800"
-                                : "bg-emerald-100 text-emerald-800"
+                                  ? "bg-blue-100 text-blue-800"
+                                  : isDelete
+                                    ? "bg-rose-100 text-rose-800"
+                                    : "bg-emerald-100 text-emerald-800"
                             )}
                           >
                             {log.action?.replace(/_/g, " ") || "ACTIVITY"}
@@ -1309,7 +1309,7 @@ export function SalesSettings() {
       </div>
 
       {/* Delete Confirmation Modal */}
-      <ConfirmModal 
+      <ConfirmModal
         isOpen={deleteConfirm.isOpen}
         onClose={() => setDeleteConfirm({ isOpen: false, type: null, index: -1, name: "" })}
         onConfirm={executeDelete}
@@ -1320,17 +1320,17 @@ export function SalesSettings() {
 
       {/* Edit Permissions Modal */}
       <Dialog open={editRoleIdx !== null} onOpenChange={(open) => !open && setEditRoleIdx(null)}>
-        <DialogContent className="max-w-lg p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-lg max-h-[90dvh] flex flex-col p-4 sm:p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
           <h3 className="text-xl font-black tracking-tight mb-2">Edit {editRoleIdx !== null ? permissions[editRoleIdx]?.role : "Role"} Permissions</h3>
           <p className="text-sm text-muted-foreground mb-6">
             Select the capabilities this role should have access to.
           </p>
-          
-          <div className="overflow-y-auto pr-2 mb-6 space-y-2 flex-1">
+
+          <div className="overflow-y-auto pr-2 mb-6 space-y-2 flex-1 min-h-0 max-h-[50dvh]">
             {AVAILABLE_PERMISSIONS.map(p => (
               <label key={p} className="flex items-center gap-3 rounded-xl border border-border p-3 cursor-pointer hover:bg-muted/50 transition-colors">
-                <input 
-                  type="checkbox" 
+                <input
+                  type="checkbox"
                   checked={tempPerms.includes(p)}
                   onChange={() => handleTogglePerm(p)}
                   className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-600"
@@ -1340,16 +1340,16 @@ export function SalesSettings() {
             ))}
           </div>
 
-          <div className="flex gap-3 pt-2 mt-auto">
-            <button 
+          <div className="flex flex-col sm:flex-row gap-3 pt-2 mt-auto">
+            <button
               onClick={() => setEditRoleIdx(null)}
-              className="flex-1 rounded-xl border border-border py-2.5 text-sm font-semibold hover:bg-accent transition-colors"
+              className="flex-1 rounded-xl border border-border py-2.5 min-h-[44px] text-sm font-semibold hover:bg-accent transition-colors"
             >
               Cancel
             </button>
-            <button 
+            <button
               onClick={handleSavePermissions}
-              className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors"
+              className="flex-1 rounded-xl bg-emerald-600 py-2.5 min-h-[44px] text-sm font-semibold text-white hover:bg-emerald-700 transition-colors"
             >
               Save Changes
             </button>

@@ -181,15 +181,204 @@ class ScheduleRepository:
         return "#17a2b8" # Teal
 
     @classmethod
+    async def get_team_users(cls, query_str: Optional[str] = None, limit: int = 1000) -> List[Dict[str, Any]]:
+        """Active, non-deleted (and non-blocked) employees for the Team Calendars list."""
+        import re as _re
+        db = await cls.get_db()
+        query: Dict[str, Any] = {
+            "work_details.is_delete": {"$ne": True},
+            "work_details.is_block": {"$ne": True},
+        }
+        if query_str and query_str.strip():
+            q_regex = _re.compile(_re.escape(query_str.strip()), _re.IGNORECASE)
+            query["$or"] = [
+                {"name": q_regex},
+                {"personal_info.first_name": q_regex},
+                {"personal_info.last_name": q_regex},
+                {"work_details.employee_id": q_regex},
+            ]
+        cursor = db["employees"].find(query).sort("personal_info.first_name", 1).limit(limit)
+        docs = await cursor.to_list(length=limit)
+        results = []
+        for emp in docs:
+            emp_code = emp.get("work_details", {}).get("employee_id") or str(emp.get("_id"))
+            p_info = emp.get("personal_info", {})
+            w_details = emp.get("work_details", {})
+            name = emp.get("name") or f"{p_info.get('first_name', '')} {p_info.get('last_name', '')}".strip() or emp_code
+            results.append({
+                "id": str(emp.get("_id")),
+                "employee_id": emp_code,
+                "name": name,
+                "email": emp.get("email") or p_info.get("email") or "",
+                "department": w_details.get("department_name") or w_details.get("department") or "",
+                "designation": w_details.get("designation_name") or w_details.get("designation") or "",
+            })
+        return results
+
+    @classmethod
+    async def _company_day_events(
+        cls,
+        db,
+        start_date: date,
+        end_date: date,
+        reference_date: date,
+        categories: Optional[List[str]] = None
+    ) -> List[Dict[str, Any]]:
+        """Birthdays + work anniversaries for ALL employees (company-wide days)."""
+        out: List[Dict[str, Any]] = []
+        if categories and "birthday" not in categories and "work_anniversary" not in categories:
+            return out
+        emp_cursor = db["employees"].find({})
+        employees = await emp_cursor.to_list(length=1000)
+
+        for emp in employees:
+            emp_id = emp.get("work_details", {}).get("employee_id") or str(emp.get("_id"))
+            p_info = emp.get("personal_info", {})
+            w_details = emp.get("work_details", {})
+
+            name = emp.get("name")
+            if not name:
+                fn = p_info.get("first_name", "")
+                ln = p_info.get("last_name", "")
+                name = f"{fn} {ln}".strip() or emp_id
+
+            dob_raw = p_info.get("date_of_birth") or emp.get("dob")
+            if dob_raw and (not categories or "birthday" in categories):
+                try:
+                    if isinstance(dob_raw, str):
+                        dob_d = datetime.strptime(dob_raw[:10], "%Y-%m-%d").date()
+                    elif isinstance(dob_raw, datetime):
+                        dob_d = dob_raw.date()
+                    else:
+                        dob_d = dob_raw
+
+                    curr_bday = date(reference_date.year, dob_d.month, dob_d.day)
+                    if start_date <= curr_bday <= end_date:
+                        out.append({
+                            "_id": f"bday_{emp_id}_{curr_bday.isoformat()}",
+                            "id": f"bday_{emp_id}_{curr_bday.isoformat()}",
+                            "title": f"🎂 Birthday: {name}",
+                            "primary_employee_id": emp_id,
+                            "primary_employee_name": name,
+                            "attendees": [emp_id],
+                            "date": curr_bday.isoformat(),
+                            "type": "Birthday",
+                            "start_time": "09:00",
+                            "end_time": "18:00",
+                            "description": f"Celebrate {name}'s birthday today!",
+                            "category": "birthday",
+                            "color": "#ffc107",
+                            "created_by": "system",
+                            "is_auto_generated": True
+                        })
+                except Exception:
+                    pass
+
+            joining_raw = w_details.get("joining_date") or emp.get("joining_date")
+            if joining_raw and (not categories or "work_anniversary" in categories):
+                try:
+                    if isinstance(joining_raw, str):
+                        join_d = datetime.strptime(joining_raw[:10], "%Y-%m-%d").date()
+                    elif isinstance(joining_raw, datetime):
+                        join_d = joining_raw.date()
+                    else:
+                        join_d = joining_raw
+
+                    if join_d.year < reference_date.year:
+                        years_count = reference_date.year - join_d.year
+                        curr_anniv = date(reference_date.year, join_d.month, join_d.day)
+                        if start_date <= curr_anniv <= end_date:
+                            out.append({
+                                "_id": f"anniv_{emp_id}_{curr_anniv.isoformat()}",
+                                "id": f"anniv_{emp_id}_{curr_anniv.isoformat()}",
+                                "title": f"🎉 {years_count} Yr Work Anniversary: {name}",
+                                "primary_employee_id": emp_id,
+                                "primary_employee_name": name,
+                                "attendees": [emp_id],
+                                "date": curr_anniv.isoformat(),
+                                "type": "Work Anniversary",
+                                "start_time": "09:00",
+                                "end_time": "18:00",
+                                "description": f"Congratulate {name} on {years_count} years with the team!",
+                                "category": "work_anniversary",
+                                "color": "#e83e8c",
+                                "created_by": "system",
+                                "is_auto_generated": True
+                            })
+                except Exception:
+                    pass
+        return out
+
+    @classmethod
     async def get_calendar_feed(
         cls,
         user_id: str,
         reference_date: date,
         view_mode: str = "week",
         categories: Optional[List[str]] = None,
-        search_query: Optional[str] = None
+        search_query: Optional[str] = None,
+        target_user_ids: Optional[List[str]] = None,
+        is_admin_or_hr: bool = False
     ) -> Dict[str, Any]:
         db = await cls.get_db()
+
+        # Multi-user team view (admin/HR only, enforced by controller):
+        # union of each selected user's events (each user's own connected Google included)
+        if target_user_ids:
+            merged: Dict[str, Dict[str, Any]] = {}
+            for tid in target_user_ids[:50]:
+                try:
+                    sub = await cls.get_employee_calendar_view(
+                        target_employee_id=tid,
+                        viewer_employee_id=user_id,
+                        reference_date=reference_date,
+                        view_mode=view_mode,
+                        is_admin_or_hr=True
+                    )
+                    start_date = date.fromisoformat(sub["start_date"])
+                    end_date = date.fromisoformat(sub["end_date"])
+                    date_range_label = sub["date_range_label"]
+                    for ev in sub.get("events", []):
+                        key = str(ev.get("_id") or ev.get("id"))
+                        merged[key] = ev
+                except Exception:
+                    continue
+            if not merged:
+                start_date, end_date, date_range_label = reference_date, reference_date, reference_date.strftime("%B %d, %Y")
+            try:
+                comp_days = await cls._company_day_events(db, start_date, end_date, reference_date, categories)
+                for ev in comp_days:
+                    merged[str(ev.get("id"))] = ev
+            except Exception:
+                pass
+            # Requester's own holiday calendars once (shared festival days)
+            if not categories or "google_holidays" in categories:
+                try:
+                    from app.services.google_calendar import GoogleCalendarService
+                    h_events = await GoogleCalendarService.fetch_holiday_events(
+                        employee_id=user_id, start_date=start_date, end_date=end_date
+                    )
+                    for ev in h_events:
+                        merged[str(ev.get("id"))] = ev
+                except Exception:
+                    pass
+            all_events = list(merged.values())
+            if search_query:
+                sq = search_query.lower()
+                all_events = [ev for ev in all_events
+                              if sq in (ev.get("title") or "").lower()
+                              or sq in (ev.get("description") or "").lower()
+                              or sq in (ev.get("primary_employee_name") or "").lower()]
+            all_events.sort(key=lambda ev: f"{ev.get('date') or ''}T{ev.get('start_time') or '00:00'}")
+            today_str = date.today().isoformat()
+            return {
+                "view_mode": view_mode,
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "date_range_label": date_range_label,
+                "todays_meetings_count": sum(1 for ev in all_events if (ev.get("date") or "") == today_str),
+                "events": all_events
+            }
 
         # Calculate start_date & end_date based on view_mode
         if view_mode in ("today", "day"):
@@ -244,90 +433,11 @@ class ScheduleRepository:
             custom_events = serialize_mongo(custom_events_raw)
             all_events.extend(custom_events)
 
-        # 2. Auto-generated Birthdays & Work Anniversaries from Employees Collection
-        if not categories or "birthday" in categories or "work_anniversary" in categories:
-            emp_cursor = db["employees"].find({})
-            employees = await emp_cursor.to_list(length=1000)
-
-            for emp in employees:
-                emp_id = emp.get("work_details", {}).get("employee_id") or str(emp.get("_id"))
-                p_info = emp.get("personal_info", {})
-                w_details = emp.get("work_details", {})
-                
-                name = emp.get("name")
-                if not name:
-                    fn = p_info.get("first_name", "")
-                    ln = p_info.get("last_name", "")
-                    name = f"{fn} {ln}".strip() or emp_id
-
-                # Check Birthdays
-                dob_raw = p_info.get("date_of_birth") or emp.get("dob")
-                if dob_raw and (not categories or "birthday" in categories):
-                    try:
-                        if isinstance(dob_raw, str):
-                            dob_d = datetime.strptime(dob_raw[:10], "%Y-%m-%d").date()
-                        elif isinstance(dob_raw, datetime):
-                            dob_d = dob_raw.date()
-                        else:
-                            dob_d = dob_raw
-
-                        # Match birthday in current range
-                        curr_bday = date(reference_date.year, dob_d.month, dob_d.day)
-                        if start_date <= curr_bday <= end_date:
-                            all_events.append({
-                                "_id": f"bday_{emp_id}_{curr_bday.isoformat()}",
-                                "id": f"bday_{emp_id}_{curr_bday.isoformat()}",
-                                "title": f"🎂 Birthday: {name}",
-                                "primary_employee_id": emp_id,
-                                "primary_employee_name": name,
-                                "attendees": [emp_id],
-                                "date": curr_bday.isoformat(),
-                                "type": "Birthday",
-                                "start_time": "09:00",
-                                "end_time": "18:00",
-                                "description": f"Celebrate {name}'s birthday today!",
-                                "category": "birthday",
-                                "color": "#ffc107", # Gold/Yellow
-                                "created_by": "system",
-                                "is_auto_generated": True
-                            })
-                    except Exception:
-                        pass
-
-                # Check Work Anniversaries
-                joining_raw = w_details.get("joining_date") or emp.get("joining_date")
-                if joining_raw and (not categories or "work_anniversary" in categories):
-                    try:
-                        if isinstance(joining_raw, str):
-                            join_d = datetime.strptime(joining_raw[:10], "%Y-%m-%d").date()
-                        elif isinstance(joining_raw, datetime):
-                            join_d = joining_raw.date()
-                        else:
-                            join_d = joining_raw
-
-                        if join_d.year < reference_date.year:
-                            years_count = reference_date.year - join_d.year
-                            curr_anniv = date(reference_date.year, join_d.month, join_d.day)
-                            if start_date <= curr_anniv <= end_date:
-                                all_events.append({
-                                    "_id": f"anniv_{emp_id}_{curr_anniv.isoformat()}",
-                                    "id": f"anniv_{emp_id}_{curr_anniv.isoformat()}",
-                                    "title": f"🎉 {years_count} Yr Work Anniversary: {name}",
-                                    "primary_employee_id": emp_id,
-                                    "primary_employee_name": name,
-                                    "attendees": [emp_id],
-                                    "date": curr_anniv.isoformat(),
-                                    "type": "Work Anniversary",
-                                    "start_time": "09:00",
-                                    "end_time": "18:00",
-                                    "description": f"Congratulate {name} on {years_count} years with the team!",
-                                    "category": "work_anniversary",
-                                    "color": "#e83e8c", # Pink/Magenta
-                                    "created_by": "system",
-                                    "is_auto_generated": True
-                                })
-                    except Exception:
-                        pass
+        # 2. Auto-generated Birthdays & Work Anniversaries (company-wide)
+        try:
+            all_events.extend(await cls._company_day_events(db, start_date, end_date, reference_date, categories))
+        except Exception:
+            pass
 
         # 3. Google Calendar Events
         if not categories or "google_calendar" in categories:
@@ -341,6 +451,19 @@ class ScheduleRepository:
                 all_events.extend(g_events)
             except Exception as e:
                 print(f"[GOOGLE CALENDAR FEED WARNING] {e}")
+
+        # 3b. Google Festival/Holiday Events (e.g. Holidays in India: Diwali, Dussehra)
+        if not categories or "google_holidays" in categories:
+            try:
+                from app.services.google_calendar import GoogleCalendarService
+                h_events = await GoogleCalendarService.fetch_holiday_events(
+                    employee_id=user_id,
+                    start_date=start_date,
+                    end_date=end_date
+                )
+                all_events.extend(h_events)
+            except Exception as e:
+                print(f"[GOOGLE HOLIDAY FEED WARNING] {e}")
 
         # Filter by search_query if provided
         if search_query:

@@ -53,8 +53,9 @@ function TaskRow({
     )}>
       <button
         onClick={handleToggle}
+        aria-label={done ? "Mark task as not done" : "Mark task as done"}
         className={cn(
-          "grid h-5 w-5 shrink-0 place-items-center rounded-md border-2 transition-colors",
+          "grid h-5 w-5 shrink-0 place-items-center rounded-md border-2 transition-colors min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 sm:h-5 sm:w-5",
           done ? "border-emerald-500 bg-emerald-500 text-white" : "border-muted-foreground/30 hover:border-emerald-400",
         )}
       >
@@ -69,7 +70,7 @@ function TaskRow({
       </div>
 
       <div className="min-w-0 flex-1">
-        <p className={cn("text-sm font-medium", done && "line-through")}>{task.type} — {task.company}</p>
+        <p className={cn("text-sm font-medium break-words", done && "line-through")} title={`${task.type} — ${task.company}`}>{task.type} — {task.company}</p>
         {task.phone && (
           <a href={`tel:${task.phone}`} onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 mt-0.5 font-mono font-black text-[15px] text-emerald-800 hover:text-emerald-600">
             <Phone className="w-3.5 h-3.5" />{task.phone}
@@ -79,7 +80,7 @@ function TaskRow({
       </div>
 
       <span className={cn(
-        "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+        "rounded-full px-2 py-0.5 text-[10px] font-semibold shrink-0",
         task.priority === "High" ? "bg-rose-100 text-rose-700" : task.priority === "Medium" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700",
       )}>
         {task.priority}
@@ -213,9 +214,9 @@ export function SalesTasks({ onAction }: { onAction?: (action: string) => void }
           <h1 className="text-2xl font-black tracking-tight sm:text-3xl">Sales Tasks & Follow-ups</h1>
           <p className="text-sm text-muted-foreground">Auto-created from pipeline activity — nothing slips through</p>
         </div>
-        <button 
-          onClick={() => onAction?.("Create Task")} 
-          className="flex items-center gap-1.5 self-start rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 shadow-sm"
+        <button
+          onClick={() => onAction?.("Create Task")}
+          className="flex items-center justify-center gap-1.5 w-full sm:w-auto min-h-[44px] sm:min-h-0 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 shadow-sm"
         >
           <Plus className="h-4 w-4" /> Create Task
         </button>
@@ -260,7 +261,7 @@ export function SalesTasks({ onAction }: { onAction?: (action: string) => void }
             key={f}
             onClick={() => setFilter(f)}
             className={cn(
-              "rounded-full px-3.5 py-1.5 text-xs font-semibold capitalize transition-colors",
+              "rounded-full px-3.5 py-1.5 min-h-[44px] sm:min-h-0 text-xs font-semibold capitalize transition-colors",
               filter === f ? "bg-emerald-600 text-white" : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
             )}
           >

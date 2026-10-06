@@ -589,7 +589,7 @@ export function Penalties() {
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   className={cn(
-                    "px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all duration-200 border",
+                    "px-4 py-2 min-h-[44px] sm:min-h-0 inline-flex items-center rounded-xl text-sm font-bold whitespace-nowrap transition-all duration-200 border",
                     activeTab === tab 
                       ? "bg-primary text-primary-foreground border-primary shadow-md" 
                       : "bg-background text-muted-foreground border-border hover:border-border hover:bg-muted"
@@ -678,7 +678,7 @@ export function Penalties() {
                       <span className="hidden sm:inline">Add Record</span>
                     </button>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+                    <DialogContent className="w-[calc(100vw-24px)] sm:max-w-[500px] max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
                     <div className="flex items-center justify-between px-6 md:px-8 py-5 border-b border-border/50 bg-muted/30">
                       <div>
                         <h2 className="text-xl md:text-2xl font-black tracking-tight">Add Disciplinary Record</h2>
@@ -691,8 +691,8 @@ export function Penalties() {
                       </DialogClose>
                     </div>
 
-                    <form onSubmit={handleCreateRecord} className="flex flex-col max-h-[75vh]">
-                      <div className="p-6 md:p-8 space-y-5 overflow-y-auto">
+                    <form onSubmit={handleCreateRecord} className="flex flex-col min-h-0 max-h-[90dvh]">
+                      <div className="p-4 sm:p-6 md:p-8 space-y-5 overflow-y-auto flex-1 min-h-0">
                         {/* Pre-defined Template */}
                         <div className="space-y-1.5">
                           <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
@@ -754,7 +754,7 @@ export function Penalties() {
                         
                         {/* Financial inputs (if Penalty) */}
                         {newType === "Penalty" && (
-                          <div className="flex gap-4">
+                          <div className="flex flex-col sm:flex-row gap-4">
                             <div className="space-y-1.5 flex-1">
                               <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
                                 Deduction Amount (₹)
@@ -938,7 +938,7 @@ export function Penalties() {
                                       setEditAmount(String(record.price));
                                       setIsEditOpen(true);
                                     }}
-                                    className="px-2.5 py-1 text-xs font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-500/10 rounded-lg transition-colors border border-blue-200/50"
+                                    className="px-2.5 py-1 min-h-[44px] sm:min-h-0 inline-flex items-center text-xs font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-500/10 rounded-lg transition-colors border border-blue-200/50"
                                   >
                                     Edit
                                   </button>
@@ -950,7 +950,7 @@ export function Penalties() {
                                     setUpdateReason("");
                                     setIsUpdateOpen(true);
                                   }}
-                                  className="px-2.5 py-1 text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors border border-border"
+                                  className="px-2.5 py-1 min-h-[44px] sm:min-h-0 inline-flex items-center text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors border border-border"
                                 >
                                   Waive
                                 </button>
@@ -961,7 +961,7 @@ export function Penalties() {
                                     setUpdateReason("");
                                     setIsUpdateOpen(true);
                                   }}
-                                  className="px-2.5 py-1 text-xs font-bold text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10 rounded-lg transition-colors border border-emerald-500/20"
+                                  className="px-2.5 py-1 min-h-[44px] sm:min-h-0 inline-flex items-center text-xs font-bold text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10 rounded-lg transition-colors border border-emerald-500/20"
                                 >
                                   Resolve
                                 </button>
@@ -975,7 +975,7 @@ export function Penalties() {
                                   setIsDeleteOpen(true);
                                 }}
                                 title="Delete penalty record"
-                                className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                                className="p-1.5 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -1107,7 +1107,7 @@ export function Penalties() {
 
       {/* Waive / Resolve Dialog */}
       <Dialog open={isUpdateOpen} onOpenChange={setIsUpdateOpen}>
-        <DialogContent className="sm:max-w-[420px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+        <DialogContent className="w-[calc(100vw-24px)] sm:max-w-[420px] max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
           <div className="flex items-center justify-between px-6 md:px-8 py-5 border-b border-border/50 bg-muted/30">
             <div>
               <h2 className="text-xl font-black tracking-tight">
@@ -1124,8 +1124,8 @@ export function Penalties() {
             </DialogClose>
           </div>
 
-          <form onSubmit={handleConfirmUpdate} className="flex flex-col max-h-[70vh]">
-            <div className="p-6 md:p-8 space-y-4 overflow-y-auto">
+          <form onSubmit={handleConfirmUpdate} className="flex flex-col min-h-0 max-h-[90dvh]">
+            <div className="p-4 sm:p-6 md:p-8 space-y-4 overflow-y-auto flex-1 min-h-0">
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
                   Reason for {updateAction === "Waived" ? "Waiving" : "Resolving"}
@@ -1162,7 +1162,7 @@ export function Penalties() {
 
       {/* Edit Amount Dialog */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="sm:max-w-[380px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+        <DialogContent className="w-[calc(100vw-24px)] sm:max-w-[380px] max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
           <div className="flex items-center justify-between px-6 md:px-8 py-5 border-b border-border/50 bg-muted/30">
             <div>
               <h2 className="text-xl font-black tracking-tight">Edit Penalty Amount</h2>
@@ -1192,17 +1192,17 @@ export function Penalties() {
               </div>
             </div>
 
-            <div className="px-6 md:px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
-              <button 
-                type="button" 
+            <div className="px-6 md:px-8 py-4 bg-muted/30 border-t border-border/50 flex flex-col-reverse sm:flex-row sm:justify-end gap-3 mt-auto shrink-0">
+              <button
+                type="button"
                 onClick={() => setIsEditOpen(false)}
-                className="px-4 py-2 bg-background border border-border text-foreground/80 hover:bg-muted font-bold text-sm rounded-xl transition-colors"
+                className="px-4 py-2 min-h-[44px] w-full sm:w-auto bg-background border border-border text-foreground/80 hover:bg-muted font-bold text-sm rounded-xl transition-colors"
               >
                 Cancel
               </button>
-              <button 
+              <button
                 type="submit"
-                className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm rounded-xl transition-colors"
+                className="px-4 py-2 min-h-[44px] w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm rounded-xl transition-colors"
               >
                 Update Amount
               </button>

@@ -218,6 +218,19 @@
   z-index: 999999 !important;
 }
 
+@media (max-width: 640px) {
+  .Toastify__toast-container--top-right {
+    left: 12px !important;
+    right: 12px !important;
+    top: calc(3.5rem + env(safe-area-inset-top)) !important;
+    width: auto !important;
+    max-width: none !important;
+  }
+  .Toastify__toast {
+    margin-bottom: 8px !important;
+  }
+}
+
 .Toastify__toast {
   background: #ffffff !important;
   color: #111827 !important;

@@ -441,11 +441,11 @@ export function SubmittedDocuments() {
                             onError={handleAvatarError}
                             className="w-9 h-9 rounded-xl object-cover border border-border/50 shrink-0"
                           />
-                          <div>
-                            <div className="font-extrabold text-foreground text-sm leading-snug">
+                          <div className="min-w-0">
+                            <div className="font-extrabold text-foreground text-sm leading-snug truncate max-w-[160px] sm:max-w-[220px]" title={doc.employeeName}>
                               {doc.employeeName}
                             </div>
-                            <div className="text-[11px] text-muted-foreground font-mono">
+                            <div className="text-[11px] text-muted-foreground font-mono truncate max-w-[160px] sm:max-w-[220px]">
                               {doc.employeeCode || doc.employeeId} • {doc.designation}
                             </div>
                           </div>
@@ -461,8 +461,8 @@ export function SubmittedDocuments() {
                           )}>
                             {doc.isDeposit ? <IndianRupee className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
                           </div>
-                          <div>
-                            <div className="font-bold text-sm text-foreground">{doc.documentName}</div>
+                          <div className="min-w-0">
+                            <div className="font-bold text-sm text-foreground truncate max-w-[160px] sm:max-w-[220px]" title={doc.documentName}>{doc.documentName}</div>
                             {doc.isDeposit && (
                               <div className="text-[11px] text-muted-foreground font-semibold">
                                 Target: ₹{depositInfo?.target.toLocaleString("en-IN")}
@@ -553,7 +553,7 @@ export function SubmittedDocuments() {
 
         return (
           <Dialog open={isLedgerModalOpen} onOpenChange={(v) => { if (!v) setIsLedgerModalOpen(false); }}>
-            <DialogContent className="sm:max-w-[560px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+            <DialogContent className="w-[calc(100vw-16px)] sm:max-w-[560px] max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
               <div className="flex items-center justify-between px-6 py-5 border-b border-border/50 bg-muted/30">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold">
@@ -571,9 +571,9 @@ export function SubmittedDocuments() {
                 </DialogClose>
               </div>
 
-              <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
+              <div className="p-4 sm:p-6 space-y-6 max-h-[75dvh] overflow-y-auto flex-1 min-h-0">
                 {/* Ledger Financial Summary Grid */}
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="bg-muted/40 p-3.5 rounded-2xl border border-border/40 text-center">
                     <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Target</span>
                     <p className="text-lg font-black text-foreground mt-1">₹{info.target.toLocaleString("en-IN")}</p>
@@ -628,7 +628,7 @@ export function SubmittedDocuments() {
                     <h4 className="text-xs font-black uppercase tracking-wider text-foreground flex items-center gap-1.5">
                       <Plus className="w-4 h-4 text-primary" /> Record Direct Cash/UPI Payment
                     </h4>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
                           Amount (₹) *
@@ -658,7 +658,7 @@ export function SubmittedDocuments() {
                       <button
                         onClick={handleRecordDirectPayment}
                         disabled={isRecordingPayment || !directPaymentAmount}
-                        className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-black rounded-xl transition-colors shadow-sm disabled:opacity-50"
+                        className="px-4 py-2 min-h-[44px] sm:min-h-0 w-full sm:w-auto justify-center bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-black rounded-xl transition-colors shadow-sm disabled:opacity-50"
                       >
                         {isRecordingPayment ? "Saving Payment..." : "Record Payment"}
                       </button>

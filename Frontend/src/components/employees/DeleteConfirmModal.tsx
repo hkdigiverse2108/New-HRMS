@@ -16,7 +16,7 @@ export function DeleteConfirmModal({ isOpen, onClose, onConfirm, node }: DeleteC
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-md p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+      <DialogContent className="w-[calc(100vw-24px)] sm:max-w-md max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
           <div className="flex items-center justify-between px-6 py-5 border-b border-border/50 bg-red-50/50">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-red-100 text-red-600 rounded-xl">
@@ -27,15 +27,15 @@ export function DeleteConfirmModal({ isOpen, onClose, onConfirm, node }: DeleteC
                 <p className="text-sm text-muted-foreground mt-1">Confirm deletion of {node.name}</p>
               </div>
             </div>
-            <button 
+            <button
               onClick={onClose}
-              className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
+              className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
-          <div className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[70vh]">
+          <div className="p-6 md:p-8 space-y-6 overflow-y-auto flex-1 min-h-0 max-h-[70dvh]">
             {hasChildren ? (
               <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm font-medium">
                 <span className="font-bold block mb-1">Warning: Direct Reports Found</span>
@@ -47,19 +47,19 @@ export function DeleteConfirmModal({ isOpen, onClose, onConfirm, node }: DeleteC
               </p>
             )}
 
-            <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
-              <button 
+            <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex flex-col-reverse sm:flex-row sm:justify-end gap-3 mt-auto shrink-0 sticky bottom-0">
+              <button
                 type="button"
                 onClick={onClose}
-                className="px-5 py-2.5 rounded-xl font-bold text-muted-foreground hover:bg-muted transition-colors"
+                className="px-5 py-2.5 min-h-[44px] w-full sm:w-auto rounded-xl font-bold text-muted-foreground hover:bg-muted transition-colors"
               >Cancel</button>
-              <button 
+              <button
                 type="button"
                 onClick={() => {
                   onConfirm();
                   onClose();
                 }}
-                className="px-6 py-2.5 text-sm font-bold text-white bg-red-500 hover:bg-red-600 rounded-xl transition-all shadow-sm shadow-red-500/20 active:scale-95"
+                className="px-6 py-2.5 min-h-[44px] w-full sm:w-auto text-sm font-bold text-white bg-red-500 hover:bg-red-600 rounded-xl transition-all shadow-sm shadow-red-500/20 active:scale-95"
               >
                 {hasChildren ? "Delete Entire Branch" : "Remove Employee"}
               </button>

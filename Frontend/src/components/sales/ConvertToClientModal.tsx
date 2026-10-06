@@ -352,8 +352,8 @@ export function ConvertToClientModal({
         projectHandoffNotes: handoffNotes.trim()
           ? `Delivery: ${deliveryDate || "TBD"}\nNotes: ${handoffNotes.trim()}`
           : deliveryDate
-          ? `Delivery: ${deliveryDate}`
-          : undefined,
+            ? `Delivery: ${deliveryDate}`
+            : undefined,
       });
 
       toast.success("🏆 Deal Won! Client created and net revenue credited to targets.");
@@ -368,7 +368,7 @@ export function ConvertToClientModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto rounded-3xl bg-card border border-border p-6 shadow-2xl">
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-2xl max-h-[90dvh] overflow-y-auto rounded-3xl bg-card border border-border p-4 sm:p-6 shadow-2xl">
         <DialogHeader className="border-b border-border pb-3">
           <div className="flex items-center gap-2">
             <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600">
@@ -388,31 +388,31 @@ export function ConvertToClientModal({
         <form onSubmit={handleConvert} className="space-y-4 pt-2">
           {/* 4 Tabs: Deal & Quotation, Client Info, Incentive Split, Project Handoff */}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid grid-cols-4 bg-muted/60 p-1 rounded-2xl h-auto mb-4">
+            <TabsList className="flex sm:grid sm:grid-cols-4 overflow-x-auto max-w-full bg-muted/60 p-1 rounded-2xl h-auto mb-4">
               <TabsTrigger
                 value="deal"
-                className="text-xs font-bold py-2 rounded-xl data-[state=active]:bg-background data-[state=active]:shadow-xs flex items-center gap-1.5"
+                className="text-xs font-bold py-2 rounded-xl data-[state=active]:bg-background data-[state=active]:shadow-xs flex items-center gap-1.5 whitespace-nowrap shrink-0 min-h-[44px] sm:min-h-0 flex-1"
               >
                 <Calculator className="w-3.5 h-3.5 text-emerald-600" />
                 Deal & Tax
               </TabsTrigger>
               <TabsTrigger
                 value="client"
-                className="text-xs font-bold py-2 rounded-xl data-[state=active]:bg-background data-[state=active]:shadow-xs flex items-center gap-1.5"
+                className="text-xs font-bold py-2 rounded-xl data-[state=active]:bg-background data-[state=active]:shadow-xs flex items-center gap-1.5 whitespace-nowrap shrink-0 min-h-[44px] sm:min-h-0 flex-1"
               >
                 <Building className="w-3.5 h-3.5 text-blue-600" />
                 Client Profile
               </TabsTrigger>
               <TabsTrigger
                 value="incentive"
-                className="text-xs font-bold py-2 rounded-xl data-[state=active]:bg-background data-[state=active]:shadow-xs flex items-center gap-1.5"
+                className="text-xs font-bold py-2 rounded-xl data-[state=active]:bg-background data-[state=active]:shadow-xs flex items-center gap-1.5 whitespace-nowrap shrink-0 min-h-[44px] sm:min-h-0 flex-1"
               >
                 <Users className="w-3.5 h-3.5 text-amber-600" />
                 Incentive Split
               </TabsTrigger>
               <TabsTrigger
                 value="handoff"
-                className="text-xs font-bold py-2 rounded-xl data-[state=active]:bg-background data-[state=active]:shadow-xs flex items-center gap-1.5"
+                className="text-xs font-bold py-2 rounded-xl data-[state=active]:bg-background data-[state=active]:shadow-xs flex items-center gap-1.5 whitespace-nowrap shrink-0 min-h-[44px] sm:min-h-0 flex-1"
               >
                 <Calendar className="w-3.5 h-3.5 text-purple-600" />
                 Handoff
@@ -488,7 +488,7 @@ export function ConvertToClientModal({
               </div>
 
               {/* GST Inclusive/Exclusive Toggle */}
-              <div className="flex items-center justify-between p-3 rounded-2xl bg-muted/40 border border-border">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-2xl bg-muted/40 border border-border">
                 <div>
                   <p className="text-xs font-bold text-foreground">Amount Includes GST?</p>
                   <p className="text-[11px] text-muted-foreground">
@@ -502,16 +502,15 @@ export function ConvertToClientModal({
                   variant={isGstInclusive ? "default" : "outline"}
                   size="sm"
                   onClick={() => setIsGstInclusive(!isGstInclusive)}
-                  className={`text-xs font-bold h-8 px-3 rounded-xl transition-all ${
-                    isGstInclusive ? "bg-emerald-600 hover:bg-emerald-700 text-white" : ""
-                  }`}
+                  className={`text-xs font-bold min-h-[44px] sm:h-8 w-full sm:w-auto px-3 rounded-xl transition-all ${isGstInclusive ? "bg-emerald-600 hover:bg-emerald-700 text-white" : ""
+                    }`}
                 >
                   {isGstInclusive ? "GST Included (18%)" : "GST Extra (+18%)"}
                 </Button>
               </div>
 
               {/* Live Financial Breakdown Cards (Audio 8 Core Rule) */}
-              <div className="grid grid-cols-3 gap-3 p-3.5 rounded-2xl bg-emerald-500/5 border border-emerald-500/20">
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-3 gap-3 p-3.5 rounded-2xl bg-emerald-500/5 border border-emerald-500/20">
                 <div className="space-y-0.5">
                   <span className="text-[10px] font-bold uppercase text-muted-foreground">
                     Gross Deal Value
@@ -641,11 +640,10 @@ export function ConvertToClientModal({
                         key={dept}
                         type="button"
                         onClick={() => toggleDept(dept)}
-                        className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all border ${
-                          isSelected
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all border ${isSelected
                             ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
                             : "bg-muted/50 text-muted-foreground border-border hover:bg-muted"
-                        }`}
+                          }`}
                       >
                         {dept}
                       </button>
@@ -664,7 +662,7 @@ export function ConvertToClientModal({
                     Calculated on Net Revenue (₹{netAmount.toLocaleString()})
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <div className="flex items-center gap-1.5 bg-background border border-border rounded-xl px-2.5 py-1">
                     <Percent className="w-3.5 h-3.5 text-muted-foreground" />
                     <input
@@ -713,7 +711,7 @@ export function ConvertToClientModal({
                           value={s.name}
                           onValueChange={(val) => updateSplit(idx, "name", val)}
                         >
-                          <SelectTrigger className="h-8 text-xs font-semibold">
+                          <SelectTrigger className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 text-xs font-semibold">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -733,7 +731,7 @@ export function ConvertToClientModal({
                           value={s.role}
                           onValueChange={(val) => updateSplit(idx, "role", val)}
                         >
-                          <SelectTrigger className="h-8 text-xs">
+                          <SelectTrigger className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 text-xs">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -754,7 +752,7 @@ export function ConvertToClientModal({
                           max="100"
                           value={s.percentage}
                           onChange={(e) => updateSplit(idx, "percentage", parseFloat(e.target.value) || 0)}
-                          className="h-8 text-xs font-mono font-bold text-center"
+                          className="h-11 sm:h-8 min-h-[44px] sm:min-h-0 text-xs font-mono font-bold text-center"
                         />
                         <span className="text-xs text-muted-foreground font-bold">%</span>
                       </div>
@@ -771,7 +769,7 @@ export function ConvertToClientModal({
                         <button
                           type="button"
                           onClick={() => removeSplitMember(idx)}
-                          className="text-rose-500 hover:text-rose-700 p-1"
+                          className="text-rose-500 hover:text-rose-700 p-1 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center"
                           title="Remove member"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -829,7 +827,7 @@ export function ConvertToClientModal({
             </TabsContent>
           </Tabs>
 
-          <DialogFooter className="pt-3 gap-2 border-t border-border">
+          <DialogFooter className="pt-3 gap-2 border-t border-border flex-col-reverse sm:flex-row sm:justify-end [&>button]:w-full sm:[&>button]:w-auto [&>button]:min-h-[44px] sm:[&>button]:min-h-0">
             <Button
               type="button"
               variant="outline"

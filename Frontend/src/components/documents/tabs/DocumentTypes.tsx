@@ -77,15 +77,15 @@ export function DocumentTypes() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
         <div>
           <h2 className="text-xl font-bold">Document Types Configuration</h2>
           <p className="text-sm text-muted-foreground mt-1">Manage the types of documents employees can upload.</p>
         </div>
         {!isAddMode && (
-          <button 
+          <button
             onClick={() => setIsAddMode(true)}
-            className="px-4 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm"
+            className="px-4 py-2.5 min-h-[44px] sm:min-h-0 w-full sm:w-auto bg-primary text-primary-foreground hover:bg-primary/90 font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm"
           >
             <Plus className="w-4 h-4" />
             Add Type
@@ -131,17 +131,17 @@ export function DocumentTypes() {
             />
             <label htmlFor="req" className="text-sm font-medium cursor-pointer">Mark as mandatory for all employees</label>
           </div>
-          <div className="mt-6 flex justify-end gap-3">
-            <button 
+          <div className="mt-6 flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
+            <button
               onClick={() => setIsAddMode(false)}
-              className="px-4 py-2 text-sm font-bold text-muted-foreground hover:bg-muted/50 rounded-lg transition-colors"
+              className="px-4 py-2 min-h-[44px] w-full sm:w-auto text-sm font-bold text-muted-foreground hover:bg-muted/50 rounded-lg transition-colors"
             >
               Cancel
             </button>
-            <button 
+            <button
               onClick={handleAddType}
               disabled={!newName.trim()}
-              className="px-6 py-2 text-sm font-bold bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg transition-colors disabled:opacity-50"
+              className="px-6 py-2 min-h-[44px] w-full sm:w-auto text-sm font-bold bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg transition-colors disabled:opacity-50"
             >
               Save Type
             </button>
@@ -151,7 +151,7 @@ export function DocumentTypes() {
 
       <div className="bg-card border border-border/50 rounded-3xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full min-w-[600px] text-left border-collapse">
             <thead>
               <tr className="border-b border-border/50 bg-muted/30">
                 <SortableHeader label="Document Type" sortKey="name" currentSort={sortConfig} onSort={requestSort} className="p-4 text-xs font-bold text-muted-foreground uppercase tracking-widest whitespace-nowrap" />
@@ -190,10 +190,10 @@ export function DocumentTypes() {
                       )}
                     </td>
                     <td className="p-4">
-                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
+                      <div className="flex justify-end gap-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:focus-within:opacity-100 transition-opacity">
+                        <button
                           onClick={() => confirmDelete(type.id, type.name)}
-                          className="p-2 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors"
+                          className="p-2 min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>

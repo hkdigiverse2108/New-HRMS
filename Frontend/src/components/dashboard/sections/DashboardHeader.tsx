@@ -111,8 +111,8 @@ export function DashboardHeader({ setActive, onAction }: { setActive?: ((url: st
       <div className="flex flex-col lg:flex-row justify-between items-start gap-6">
         <div>
           <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-2">CEO Command Center</p>
-          <h1 className="text-2xl sm:text-3xl md:text-[34px] font-black text-foreground tracking-tight flex items-center gap-2 mb-2 leading-tight">
-            {greeting}, {firstName} <span className="text-2xl sm:text-3xl">👋</span>
+          <h1 className="text-2xl sm:text-3xl md:text-[34px] font-black text-foreground tracking-tight flex flex-wrap items-center gap-2 mb-2 leading-tight break-words min-w-0">
+            <span className="truncate min-w-0">{greeting}, {firstName}</span> <span className="text-2xl sm:text-3xl">👋</span>
           </h1>
           <p className="text-xs sm:text-[14px] text-muted-foreground">Today's overview — everything moving across the company, in one screen.</p>
         </div>
@@ -143,7 +143,7 @@ export function DashboardHeader({ setActive, onAction }: { setActive?: ((url: st
         </div>
       </div>
 
-      <div className="grid grid-cols-1 min-[360px]:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-6 sm:mt-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-6 sm:mt-8">
         <div className="bg-muted/50/40 rounded-2xl p-4 sm:p-5 border border-border/40">
           <p className="text-[10px] font-bold text-muted-foreground mb-1">Current Time (IST)</p>
           <p className="text-xl sm:text-[22px] font-black text-primary truncate">{timeStr}</p>
@@ -164,7 +164,7 @@ export function DashboardHeader({ setActive, onAction }: { setActive?: ((url: st
     </div>
 
     <Dialog open={isCustomizeOpen} onOpenChange={setIsCustomizeOpen}>
-        <DialogContent className="max-w-[425px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card z-[9999]">
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-[425px] max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card z-[9999]">
           <div className="flex items-center justify-between px-6 py-5 border-b border-border/50 bg-muted/30">
             <div>
               <h2 className="text-lg font-black tracking-tight">Customize Shortcuts</h2>

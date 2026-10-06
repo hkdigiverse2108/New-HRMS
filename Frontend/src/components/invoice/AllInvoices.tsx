@@ -184,15 +184,15 @@ export function AllInvoices() {
                   </td>
                   <td className="p-3 sm:p-4">
                     <div className="flex justify-end gap-1.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
-                      <button className="p-1.5 sm:p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors" title="View Details">
+                      <button className="p-1.5 sm:p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors" title="View Details">
                         <ArrowUpRight className="w-4 h-4" />
                       </button>
-                      <button className="p-1.5 sm:p-2 text-muted-foreground hover:text-emerald-600 hover:bg-emerald-500/10 rounded-lg transition-colors" title="Download PDF">
+                      <button className="p-1.5 sm:p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:text-emerald-600 hover:bg-emerald-500/10 rounded-lg transition-colors" title="Download PDF">
                         <Download className="w-4 h-4" />
                       </button>
-                      <button 
+                      <button
                         onClick={() => setDeleteConfirm({ isOpen: true, id: inv.id, name: inv.invoiceNumber })}
-                        className="p-1.5 sm:p-2 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors" title="Delete">
+                        className="p-1.5 sm:p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors" title="Delete">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>

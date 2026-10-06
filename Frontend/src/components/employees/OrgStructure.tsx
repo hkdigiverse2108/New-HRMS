@@ -53,10 +53,10 @@ const OrgNodeCard = ({
           onMoveNode(draggedId, node.id);
         }
       }}
-      className="bg-white border border-border shadow-sm rounded-2xl p-4 w-[220px] z-10 relative transition-all hover:shadow-md hover:-translate-y-1 group inline-block mx-auto cursor-grab active:cursor-grabbing"
+      className="bg-white border border-border shadow-sm rounded-2xl p-4 w-[220px] max-w-[calc(100vw-48px)] z-10 relative transition-all hover:shadow-md hover:-translate-y-1 group inline-block mx-auto cursor-grab active:cursor-grabbing"
     >
       {(canCreate || canDelete) && (
-        <div className="absolute top-3 right-3 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-all z-20">
+        <div className="absolute top-3 right-3 flex flex-col gap-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:focus-within:opacity-100 transition-all z-20">
           {canCreate && (
             <button
               onPointerDown={(e) => {
@@ -64,7 +64,7 @@ const OrgNodeCard = ({
                 e.preventDefault();
                 onAddClick(node);
               }}
-              className="p-1.5 bg-muted/50 hover:bg-primary hover:text-primary-foreground text-muted-foreground rounded-lg shadow-sm border border-border transition-colors"
+              className="p-1.5 min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 inline-flex items-center justify-center bg-muted/50 hover:bg-primary hover:text-primary-foreground text-muted-foreground rounded-lg shadow-sm border border-border transition-colors"
               title="Add report under this person"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -77,7 +77,7 @@ const OrgNodeCard = ({
                 e.preventDefault();
                 onDeleteClick(node.id);
               }}
-              className="p-1.5 bg-muted/50 hover:bg-red-500 hover:text-white text-muted-foreground rounded-lg shadow-sm border border-border transition-colors"
+              className="p-1.5 min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 inline-flex items-center justify-center bg-muted/50 hover:bg-red-500 hover:text-white text-muted-foreground rounded-lg shadow-sm border border-border transition-colors"
               title="Remove this person"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -95,9 +95,9 @@ const OrgNodeCard = ({
               node.status === 'On Leave' ? 'bg-amber-500' : 'bg-blue-500'
           )} />
         </div>
-        <h3 className="text-[14px] font-bold text-foreground mb-0.5">{node.name}</h3>
-        <p className="text-[11px] text-muted-foreground font-medium mb-3">{node.role}</p>
-        <span className="px-2.5 py-1 bg-muted/50 text-foreground/80 border border-border/50 text-[10px] font-bold uppercase tracking-wider rounded-lg mb-2 inline-block">
+        <h3 className="text-[14px] font-bold text-foreground mb-0.5 truncate max-w-full" title={node.name}>{node.name}</h3>
+        <p className="text-[11px] text-muted-foreground font-medium mb-3 truncate max-w-full">{node.role}</p>
+        <span className="px-2.5 py-1 bg-muted/50 text-foreground/80 border border-border/50 text-[10px] font-bold uppercase tracking-wider rounded-lg mb-2 inline-block max-w-full truncate">
           {node.department}
         </span>
 
@@ -375,7 +375,7 @@ export function OrgStructure() {
           <p className="text-[14px] text-muted-foreground">Visual hierarchy of teams. Drag and drop cards to reorganize.</p>
         </div>
 
-        <div className="flex gap-4 items-center">
+        <div className="flex flex-wrap gap-2 sm:gap-4 items-center">
           {(isAdmin || canUpdate) && (
             <button
               onClick={() => setIsModalOpen(true)}

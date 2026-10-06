@@ -235,7 +235,7 @@ export function DatePicker({
       >
         <div className="space-y-3">
           {/* Header with Month & Year Selectors */}
-          <div className="flex items-center justify-between gap-1.5 pb-2 border-b border-border/50">
+          <div className="flex flex-wrap items-center justify-between gap-1.5 pb-2 border-b border-border/50">
             <Button
               type="button"
               variant="ghost"
@@ -247,11 +247,11 @@ export function DatePicker({
               <ChevronLeft className="h-4 w-4" />
             </Button>
 
-            <div className="flex items-center gap-1.5 min-w-0">
+            <div className="flex flex-1 items-center justify-center gap-1.5 min-w-0">
               <select
                 value={currentMonth.getMonth()}
                 onChange={(e) => handleMonthChange(parseInt(e.target.value, 10))}
-                className="h-7 px-2 text-xs font-bold bg-muted/60 hover:bg-muted border border-border/60 rounded-lg cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary text-foreground"
+                className="h-7 px-2 min-w-0 max-w-[45%] truncate text-xs font-bold bg-muted/60 hover:bg-muted border border-border/60 rounded-lg cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary text-foreground"
               >
                 {MONTH_NAMES.map((name, idx) => (
                   <option key={name} value={idx}>

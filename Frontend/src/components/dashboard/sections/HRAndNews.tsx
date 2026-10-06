@@ -161,7 +161,7 @@ export function HRAndNews() {
   }, [employees]);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 mb-12">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-12 mb-12">
       {/* SECTION 11: HR Updates */}
       <div>
         <CollapsibleSection section="Section 11" title="HR Updates">
@@ -352,7 +352,7 @@ export function HRAndNews() {
           ))}
         </div>
 
-        <div className="bg-card rounded-3xl p-8 text-white shadow-sm relative overflow-hidden flex flex-col justify-between min-h-[140px]">
+        <div className="bg-card rounded-3xl p-6 sm:p-8 text-white shadow-sm relative overflow-hidden flex flex-col justify-between min-h-[140px]">
           <div>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">

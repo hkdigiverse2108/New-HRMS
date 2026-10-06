@@ -84,7 +84,7 @@ export function EmployeeSignatures() {
 
       <div className="bg-card border border-border/50 rounded-3xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full min-w-[700px] text-left border-collapse">
             <thead>
               <tr className="border-b border-border/50 bg-muted/30">
                 <SortableHeader label="Employee" sortKey="employeeName" currentSort={sortConfig} onSort={requestSort} className="p-4 text-xs font-bold text-muted-foreground uppercase tracking-widest whitespace-nowrap" />
@@ -105,14 +105,14 @@ export function EmployeeSignatures() {
                 sortedSignatures.map((sig) => (
                   <tr key={sig.id} className="hover:bg-muted/30 transition-colors group">
                     <td className="p-4">
-                      <div className="font-bold text-foreground">{sig.employeeName}</div>
+                      <div className="font-bold text-foreground truncate max-w-[160px]" title={sig.employeeName}>{sig.employeeName}</div>
                     </td>
                     <td className="p-4">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
                         <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
                           <PenTool className="w-4 h-4" />
                         </div>
-                        <div className="font-semibold text-sm">{sig.documentName}</div>
+                        <div className="font-semibold text-sm truncate max-w-[180px]" title={sig.documentName}>{sig.documentName}</div>
                       </div>
                     </td>
                     <td className="p-4">
@@ -131,17 +131,17 @@ export function EmployeeSignatures() {
                       </div>
                     </td>
                     <td className="p-4">
-                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
+                      <div className="flex justify-end gap-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:focus-within:opacity-100 transition-opacity">
+                        <button
                           title="View Document"
-                          className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                          className="p-2 min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
                         {sig.status === "Pending" && (
-                          <button 
+                          <button
                             title="Resend Reminder"
-                            className="p-2 text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10 rounded-lg transition-colors"
+                            className="p-2 min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10 rounded-lg transition-colors"
                           >
                             <Send className="w-4 h-4" />
                           </button>

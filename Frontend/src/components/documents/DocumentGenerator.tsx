@@ -88,15 +88,15 @@ export function DocumentGenerator({ onBack }: { onBack?: () => void }) {
   return (
     <div className="flex flex-col h-full min-h-[85vh] animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex items-center justify-between pb-6 mb-6 border-b border-border/50">
+      <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center justify-between pb-6 mb-6 border-b border-border/50">
         <div className="flex items-center gap-4">
-          <button 
+          <button
             onClick={onBack}
-            className="p-2.5 bg-card border border-border/50 rounded-xl hover:bg-muted/50 transition-colors shadow-sm"
+            className="p-2.5 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center bg-card border border-border/50 rounded-xl hover:bg-muted/50 transition-colors shadow-sm shrink-0"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <div>
+          <div className="min-w-0">
             <h1 className="text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
               <Sparkles className="w-6 h-6 text-primary" />
               Document Generator
@@ -104,16 +104,16 @@ export function DocumentGenerator({ onBack }: { onBack?: () => void }) {
             <p className="text-muted-foreground text-sm font-medium">Create and preview dynamic documents</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <button className="px-4 py-2.5 bg-card border border-border/50 text-foreground font-bold rounded-xl hover:bg-muted/50 transition-colors flex items-center gap-2 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <button className="px-4 py-2.5 min-h-[44px] sm:min-h-0 flex-1 sm:flex-none justify-center bg-card border border-border/50 text-foreground font-bold rounded-xl hover:bg-muted/50 transition-colors flex items-center gap-2 shadow-sm">
             <Printer className="w-4 h-4" />
             Print
           </button>
-          <button className="px-4 py-2.5 bg-card border border-border/50 text-foreground font-bold rounded-xl hover:bg-muted/50 transition-colors flex items-center gap-2 shadow-sm">
+          <button className="px-4 py-2.5 min-h-[44px] sm:min-h-0 flex-1 sm:flex-none justify-center bg-card border border-border/50 text-foreground font-bold rounded-xl hover:bg-muted/50 transition-colors flex items-center gap-2 shadow-sm">
             <Download className="w-4 h-4" />
             Export PDF
           </button>
-          <button className="px-5 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 font-bold rounded-xl transition-colors flex items-center gap-2 shadow-sm">
+          <button className="px-5 py-2.5 min-h-[44px] sm:min-h-0 flex-1 sm:flex-none justify-center bg-primary text-primary-foreground hover:bg-primary/90 font-bold rounded-xl transition-colors flex items-center gap-2 shadow-sm">
             <Send className="w-4 h-4" />
             Send for Signature
           </button>
@@ -208,7 +208,7 @@ export function DocumentGenerator({ onBack }: { onBack?: () => void }) {
         </div>
 
         {/* Right Panel: Live Preview */}
-        <div className="flex-grow bg-muted/30 border border-border/50 rounded-3xl p-6 flex flex-col h-full min-h-[600px]">
+        <div className="flex-grow bg-muted/30 border border-border/50 rounded-3xl p-4 sm:p-6 flex flex-col h-full min-h-[400px] sm:min-h-[600px] min-w-0 overflow-hidden">
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-bold text-muted-foreground uppercase tracking-wider text-xs">Live Preview</h3>
             <span className="flex items-center gap-2 text-xs font-bold text-emerald-600 bg-emerald-500/10 px-2 py-1 rounded-md">
@@ -223,9 +223,9 @@ export function DocumentGenerator({ onBack }: { onBack?: () => void }) {
               <p className="text-sm text-muted-foreground max-w-sm">Select an employee and a document template from the configuration panel to view the live preview.</p>
             </div>
           ) : (
-            <div className="flex-grow bg-white dark:bg-card border border-border/50 shadow-sm rounded-2xl p-8 overflow-y-auto custom-scrollbar">
-              <div 
-                className="prose prose-sm dark:prose-invert max-w-none font-medium leading-relaxed"
+            <div className="flex-grow bg-white dark:bg-card border border-border/50 shadow-sm rounded-2xl p-4 sm:p-8 overflow-y-auto overflow-x-auto custom-scrollbar">
+              <div
+                className="prose prose-sm dark:prose-invert max-w-none font-medium leading-relaxed break-words"
                 dangerouslySetInnerHTML={{ __html: previewContent }}
               />
             </div>

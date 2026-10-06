@@ -13,7 +13,7 @@ export function ProjectDelivery() {
       <CollapsibleSection section="Section 06" title="Project Delivery">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Project KPIs — live counts */}
-        <div className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-3 sm:gap-4">
+        <div className="grid grid-cols-1 min-[480px]:grid-cols-2 gap-3 sm:gap-4">
           <div className="bg-white border border-border/60 rounded-3xl p-5 shadow-sm flex flex-col justify-between min-w-0">
             <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Total Projects</p>
             <p className="text-3xl font-black text-foreground">{proj.total ?? 0}</p>

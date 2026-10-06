@@ -71,8 +71,8 @@ export function InvoiceApprovals() {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-foreground flex items-center gap-2">
-            <CheckCircle2 className="w-8 h-8 text-primary" />
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground flex items-center gap-2">
+            <CheckCircle2 className="w-6 h-6 sm:w-8 sm:h-8 text-primary shrink-0" />
             Invoice Approvals
           </h1>
           <p className="text-muted-foreground mt-1 text-sm font-medium">
@@ -186,7 +186,7 @@ export function InvoiceApprovals() {
 
       {/* Review Modal */}
       <Dialog open={reviewModalOpen} onOpenChange={(open) => !open && setReviewModalOpen(false)}>
-        <DialogContent className="max-w-lg p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+        <DialogContent className="w-[calc(100vw-16px)] sm:max-w-lg max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
           <div className="flex items-center justify-between p-6 border-b border-border/50">
             <div>
               <h2 className="text-xl font-bold">Review {selectedInvoice?.invoiceNumber}</h2>
@@ -222,22 +222,22 @@ export function InvoiceApprovals() {
               </div>
             </div>
 
-            <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
-              <button 
+            <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex flex-col sm:flex-row sm:justify-end gap-3 mt-auto shrink-0">
+              <button
                 onClick={() => setReviewModalOpen(false)}
-                className="px-4 py-2.5 font-bold text-muted-foreground hover:bg-muted/50 rounded-xl transition-colors w-full sm:w-auto text-center"
+                className="px-4 py-2.5 min-h-[44px] sm:min-h-0 font-bold text-muted-foreground hover:bg-muted/50 rounded-xl transition-colors w-full sm:w-auto text-center"
               >
                 Cancel
               </button>
-              <button 
+              <button
                 onClick={() => handleAction("Rejected")}
-                className="px-6 py-2.5 bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 font-bold rounded-xl transition-colors flex items-center justify-center gap-2 w-full sm:w-auto"
+                className="px-6 py-2.5 min-h-[44px] sm:min-h-0 bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 font-bold rounded-xl transition-colors flex items-center justify-center gap-2 w-full sm:w-auto"
               >
                 <X className="w-4 h-4" /> Reject
               </button>
-              <button 
+              <button
                 onClick={() => handleAction("Approved")}
-                className="px-6 py-2.5 bg-emerald-500 text-emerald-50 hover:bg-emerald-600 font-bold rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 w-full sm:w-auto"
+                className="px-6 py-2.5 min-h-[44px] sm:min-h-0 bg-emerald-500 text-emerald-50 hover:bg-emerald-600 font-bold rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 w-full sm:w-auto"
               >
                 <Check className="w-4 h-4" /> Approve
               </button>

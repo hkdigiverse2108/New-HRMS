@@ -14,22 +14,22 @@ export function FinanceOverview() {
   return (
     <div className="mb-12">
       <CollapsibleSection section="Section 08" title="Finance Overview">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Pending payments — BIG */}
         <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm flex flex-col justify-between min-w-0 lg:row-span-1">
           <div>
             <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Outstanding Payments</p>
-            <p className="text-4xl font-black text-rose-600 leading-none">{inr(fin.outstanding)}</p>
+            <p className="text-3xl sm:text-4xl font-black text-rose-600 leading-none whitespace-nowrap truncate">{inr(fin.outstanding)}</p>
             <p className="text-[11px] text-muted-foreground mt-2 font-semibold">Receivable from clients</p>
           </div>
           <div className="mt-5 space-y-3">
-            <div className="flex justify-between items-center bg-muted/50 border border-border/50 rounded-2xl px-4 py-3">
-              <span className="text-[11px] font-bold text-muted-foreground uppercase">Total Budget</span>
-              <span className="text-lg font-black text-foreground">{inr(fin.total_budget)}</span>
+            <div className="flex justify-between items-center gap-2 bg-muted/50 border border-border/50 rounded-2xl px-4 py-3">
+              <span className="text-[11px] font-bold text-muted-foreground uppercase shrink-0">Total Budget</span>
+              <span className="text-lg font-black text-foreground min-w-0 truncate whitespace-nowrap text-right">{inr(fin.total_budget)}</span>
             </div>
-            <div className="flex justify-between items-center bg-emerald-50 border border-emerald-100 rounded-2xl px-4 py-3">
-              <span className="text-[11px] font-bold text-emerald-600 uppercase">Received</span>
-              <span className="text-lg font-black text-emerald-700">{inr(fin.total_received)}</span>
+            <div className="flex justify-between items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-2xl px-4 py-3">
+              <span className="text-[11px] font-bold text-emerald-600 uppercase shrink-0">Received</span>
+              <span className="text-lg font-black text-emerald-700 min-w-0 truncate whitespace-nowrap text-right">{inr(fin.total_received)}</span>
             </div>
             <div>
               <div className="flex justify-between text-[10px] font-bold text-muted-foreground mb-1">

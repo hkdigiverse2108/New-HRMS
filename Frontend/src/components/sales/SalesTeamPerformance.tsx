@@ -39,8 +39,8 @@ function MemberCard({ member }: { member: TeamMember }) {
           {member.avatar}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold">{member.name}</p>
-          <p className="text-[11px] text-muted-foreground">{member.role} · {member.region}</p>
+          <p className="text-sm font-bold truncate">{member.name}</p>
+          <p className="text-[11px] text-muted-foreground truncate">{member.role} · {member.region}</p>
         </div>
         {isTop && <Award className="h-5 w-5 text-amber-500" />}
       </div>
@@ -227,9 +227,9 @@ export function SalesTeamPerformance({ onAction }: { onAction?: (action: string)
           <h1 className="text-2xl font-black tracking-tight sm:text-3xl">Employee Performance</h1>
           <p className="text-sm text-muted-foreground">Leaderboard, scorecards and follow-up discipline across the sales org</p>
         </div>
-        <button 
-          onClick={handleExportReport} 
-          className="flex items-center gap-1.5 self-start rounded-xl border border-border bg-white px-4 py-2 text-sm font-semibold transition-colors hover:bg-accent hover:text-emerald-700 shadow-sm"
+        <button
+          onClick={handleExportReport}
+          className="flex items-center justify-center gap-1.5 w-full sm:w-auto min-h-[44px] sm:min-h-0 rounded-xl border border-border bg-white px-4 py-2 text-sm font-semibold transition-colors hover:bg-accent hover:text-emerald-700 shadow-sm"
         >
           <Download className="h-4 w-4" /> Export Report
         </button>
@@ -277,7 +277,7 @@ export function SalesTeamPerformance({ onAction }: { onAction?: (action: string)
             <p className="text-xs mt-1">Add employees with Department = Sales — only they appear here (fully dynamic, no static data).</p>
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
             {sorted.map((member) => (
               <MemberCard key={member.name} member={member} />
             ))}

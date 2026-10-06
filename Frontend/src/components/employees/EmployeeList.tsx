@@ -207,10 +207,10 @@ useEffect(() => {
             <div className="absolute right-0 flex items-center justify-center w-8 h-8 text-muted-foreground/40 group-hover:opacity-0 transition-opacity duration-300">
               <MoreVertical className="w-4 h-4" />
             </div>
-            <div className="flex gap-1 opacity-0 translate-x-4 group-hover:translate-x-0 group-hover:opacity-100 transition-all duration-300 bg-white shadow-sm border border-border/50 rounded-lg p-1 relative z-10">
+            <div className="flex gap-1 opacity-100 translate-x-0 lg:opacity-0 lg:translate-x-4 lg:group-hover:translate-x-0 lg:group-hover:opacity-100 lg:focus-within:translate-x-0 lg:focus-within:opacity-100 transition-all duration-300 bg-white shadow-sm border border-border/50 rounded-lg p-1 relative z-10">
               <button 
                 onClick={() => setSelectedEmployee(emp)}
-                className="p-1.5 text-muted-foreground hover:bg-primary/10 hover:text-primary rounded-md transition-all active:scale-95"
+                className="p-1.5 min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:bg-primary/10 hover:text-primary rounded-md transition-all active:scale-95"
                 title="View Profile"
               >
                 <Eye className="w-3.5 h-3.5" />
@@ -218,7 +218,7 @@ useEffect(() => {
               {canUpdate && (
                 <button 
                   onClick={() => openEditForm(emp)}
-                  className="p-1.5 text-muted-foreground hover:bg-blue-50 hover:text-blue-600 rounded-md transition-all active:scale-95"
+                  className="p-1.5 min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:bg-blue-50 hover:text-blue-600 rounded-md transition-all active:scale-95"
                   title="Edit Employee"
                 >
                   <Edit2 className="w-3.5 h-3.5" />
@@ -231,7 +231,7 @@ useEffect(() => {
                     setSummonLocation("Conference Room A");
                     setSummonReason("Urgent meeting required immediately");
                   }}
-                  className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-md transition-all active:scale-95"
+                  className="p-1.5 min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 inline-flex items-center justify-center text-amber-600 hover:bg-amber-50 rounded-md transition-all active:scale-95"
                   title="⚡ Urgent Meeting Summon"
                 >
                   <Zap className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
@@ -240,7 +240,7 @@ useEffect(() => {
               {isAdmin && (
                 <button 
                   onClick={() => setPermissionEmployee(emp)}
-                  className="p-1.5 text-muted-foreground hover:bg-indigo-50 hover:text-indigo-600 rounded-md transition-all active:scale-95"
+                  className="p-1.5 min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:bg-indigo-50 hover:text-indigo-600 rounded-md transition-all active:scale-95"
                   title="Manage Permissions"
                 >
                   <Shield className="w-3.5 h-3.5" />
@@ -455,9 +455,9 @@ useEffect(() => {
               type="button"
               onClick={() => setSelectedDept("All")}
               className={cn(
-                "px-3.5 py-2 rounded-xl text-[12px] font-bold transition-all border whitespace-nowrap flex items-center gap-1.5 flex-shrink-0 active:scale-95 shadow-sm",
+                "px-3.5 py-2 min-h-[44px] sm:min-h-0 inline-flex items-center rounded-xl text-[12px] font-bold transition-all border whitespace-nowrap gap-1.5 flex-shrink-0 active:scale-95 shadow-sm",
                 selectedDept === "All"
-                  ? "bg-primary text-primary-foreground border-primary shadow-primary/20" 
+                  ? "bg-primary text-primary-foreground border-primary shadow-primary/20"
                   : "bg-white text-foreground/80 border-border/80 hover:bg-muted/50"
               )}
             >
@@ -479,12 +479,12 @@ useEffect(() => {
                   type="button"
                   key={dept}
                   onClick={() => setSelectedDept(dept)}
-                  className={cn(
-                    "px-3.5 py-2 rounded-xl text-[12px] font-bold transition-all border whitespace-nowrap flex items-center gap-1.5 flex-shrink-0 active:scale-95 shadow-sm",
-                    isSelected 
-                      ? "bg-primary text-primary-foreground border-primary shadow-primary/20" 
-                      : "bg-white text-foreground/80 border-border/80 hover:bg-muted/50"
-                  )}
+                className={cn(
+                  "px-3.5 py-2 min-h-[44px] sm:min-h-0 inline-flex items-center rounded-xl text-[12px] font-bold transition-all border whitespace-nowrap gap-1.5 flex-shrink-0 active:scale-95 shadow-sm",
+                  isSelected
+                    ? "bg-primary text-primary-foreground border-primary shadow-primary/20"
+                    : "bg-white text-foreground/80 border-border/80 hover:bg-muted/50"
+                )}
                 >
                   <span>{dept}</span>
                   <span className={cn(
@@ -570,16 +570,16 @@ useEffect(() => {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
             {sortedEmployees.map((emp) => (
-            <div key={emp.id} className="group bg-white border border-border/50 rounded-3xl p-5 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 relative flex flex-col justify-between">
+            <div key={emp.id} className="group bg-white border border-border/50 rounded-3xl p-4 sm:p-5 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 relative flex flex-col justify-between">
               {/* Card Top Header: Action buttons cleanly right-aligned, no left-corner badge */}
               <div className="flex items-center justify-end w-full min-h-[28px] mb-2">
-                <div className="flex items-center gap-0.5 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100 transition-opacity">
                   {canUpdate && (
-                    <button 
+                    <button
                       onClick={() => openEditForm(emp)}
-                      className="p-1.5 text-muted-foreground hover:bg-slate-100 hover:text-foreground rounded-full transition-colors"
+                      className="p-1.5 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:bg-slate-100 hover:text-foreground rounded-full transition-colors"
                       title="Edit"
                     >
                       <Edit2 className="w-3.5 h-3.5" />
@@ -593,7 +593,7 @@ useEffect(() => {
                         toast.success(`${emp.name} is now ${newStatus}`);
                       }}
                       className={cn(
-                        "p-1.5 rounded-full transition-colors",
+                        "p-1.5 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center rounded-full transition-colors",
                         emp.status === 'Inactive' ? "text-amber-500 hover:bg-amber-50" : "text-muted-foreground hover:bg-amber-50 hover:text-amber-600"
                       )}
                       title={emp.status === 'Inactive' ? "Mark as Active" : "Mark as Inactive"}
@@ -608,7 +608,7 @@ useEffect(() => {
                         setSummonLocation("Conference Room A");
                         setSummonReason("Urgent meeting required immediately");
                       }}
-                      className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-full transition-colors"
+                      className="p-1.5 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center text-amber-600 hover:bg-amber-50 rounded-full transition-colors"
                       title="⚡ Urgent Meeting Summon"
                     >
                       <Zap className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
@@ -617,7 +617,7 @@ useEffect(() => {
                   {isAdmin && (
                     <button
                       onClick={() => setPermissionEmployee(emp)}
-                      className="p-1.5 text-muted-foreground hover:bg-blue-50 hover:text-blue-600 rounded-full transition-colors"
+                      className="p-1.5 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:bg-blue-50 hover:text-blue-600 rounded-full transition-colors"
                       title="Manage Permissions"
                     >
                       <Shield className="w-3.5 h-3.5" />
@@ -626,7 +626,7 @@ useEffect(() => {
                   {canDelete && (
                     <button 
                       onClick={() => handleDeleteEmployee(emp.id, emp.name)}
-                      className="p-1.5 text-muted-foreground hover:bg-red-50 hover:text-red-600 rounded-full transition-colors"
+                      className="p-1.5 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:bg-red-50 hover:text-red-600 rounded-full transition-colors"
                       title="Delete"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -731,12 +731,12 @@ useEffect(() => {
       {viewMode === 'list' && (
         <div className="bg-white border border-border/60 rounded-3xl overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full min-w-[700px] text-left border-collapse">
               <thead>
                 <tr className="bg-muted/50/50 border-b border-border/50">
                   {COLUMN_OPTIONS.map(col => visibleColumns[col.key] && (
                     col.key === 'actions' ? (
-                      <th key={col.key} className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-wider text-right w-[1%] whitespace-nowrap">
+                      <th key={col.key} className="px-4 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-wider text-right w-[1%] whitespace-nowrap">
                         {col.label}
                       </th>
                     ) : (
@@ -751,7 +751,7 @@ useEffect(() => {
                         }
                         currentSort={sortConfig}
                         onSort={requestSort}
-                        className="px-6 py-4 text-[11px] font-bold uppercase tracking-wider"
+                        className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider"
                       />
                     )
                   ))}
@@ -770,7 +770,7 @@ useEffect(() => {
                   sortedEmployees.map((emp) => (
                     <tr key={emp.id} className="border-b border-slate-50 hover:bg-muted/50/50 transition-colors group">
                       {COLUMN_OPTIONS.map(col => visibleColumns[col.key] && (
-                        <td key={col.key} className={cn("px-6 py-4", col.key === 'actions' ? 'text-right w-[1%] whitespace-nowrap' : '')}>
+                        <td key={col.key} className={cn("px-4 py-3", col.key === 'actions' ? 'text-right w-[1%] whitespace-nowrap' : '')}>
                           {renderCell(emp, col.key)}
                         </td>
                       ))}
@@ -820,25 +820,25 @@ useEffect(() => {
       {/* Urgent Meeting Summon Modal */}
       {summonTarget && (
         <Dialog open={Boolean(summonTarget)} onOpenChange={(v) => { if (!v) setSummonTarget(null); }}>
-          <DialogContent className="sm:max-w-[460px] p-0 overflow-hidden rounded-[2rem] gap-0 border-amber-500/30 shadow-2xl [&>button]:hidden bg-card">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-border/50 bg-amber-500/10">
+          <DialogContent className="w-[calc(100vw-16px)] sm:max-w-[460px] max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-amber-500/30 shadow-2xl [&>button]:hidden bg-card">
+            <div className="flex items-center justify-between px-4 sm:px-6 py-4 sm:py-5 border-b border-border/50 bg-amber-500/10">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 flex items-center justify-center font-bold">
                   <Zap className="w-5 h-5 fill-amber-500 text-amber-500" />
                 </div>
                 <div>
-                  <h2 className="text-base font-black tracking-tight text-foreground">Urgent Meeting Summon</h2>
+                  <h2 className="text-base sm:text-lg font-black tracking-tight text-foreground">Urgent Meeting Summon</h2>
                   <p className="text-xs text-muted-foreground">Send high-priority audio alert to employee screen</p>
                 </div>
               </div>
               <DialogClose asChild>
-                <button className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors">
+                <button className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors shrink-0">
                   <X className="w-5 h-5" />
                 </button>
               </DialogClose>
             </div>
 
-            <form onSubmit={handleSendSummon} className="p-6 space-y-4">
+            <form onSubmit={handleSendSummon} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
               <div className="p-3.5 bg-muted/40 rounded-2xl border border-border/40 flex items-center gap-3">
                 <img
                   src={getAvatarUrl(summonTarget.avatar || summonTarget.profile_photo, summonTarget.name)}
@@ -880,18 +880,18 @@ useEffect(() => {
                 />
               </div>
 
-              <div className="pt-2 flex justify-end gap-2.5">
+              <div className="pt-2 flex flex-col-reverse sm:flex-row sm:justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setSummonTarget(null)}
-                  className="px-4 py-2 text-sm font-bold text-muted-foreground hover:bg-muted rounded-xl transition-colors"
+                  className="px-4 py-2 min-h-[44px] w-full sm:w-auto text-sm font-bold text-muted-foreground hover:bg-muted rounded-xl transition-colors shrink-0"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSummoning}
-                  className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-sm font-black rounded-xl transition-all shadow-md shadow-amber-500/20 flex items-center gap-2 disabled:opacity-50"
+                  className="px-5 py-2.5 min-h-[44px] w-full sm:w-auto bg-amber-500 hover:bg-amber-600 text-white text-sm font-black rounded-xl transition-all shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   <Zap className="w-4 h-4 fill-white" />
                   {isSummoning ? "Broadcasting Alert..." : "Send Urgent Summon"}

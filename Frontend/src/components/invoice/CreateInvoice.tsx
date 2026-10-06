@@ -296,7 +296,7 @@ export function CreateInvoice({ onBack, isProforma = false }: { onBack?: (() => 
                     {items.length > 1 && (
                       <button
                         onClick={() => handleRemoveItem(item.id)}
-                        className="absolute -left-8 top-1/2 -translate-y-1/2 p-1.5 text-rose-500 hover:bg-rose-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                        className="static sm:absolute sm:-left-8 sm:top-1/2 sm:-translate-y-1/2 mt-2 sm:mt-0 p-1.5 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center text-rose-500 hover:bg-rose-500/10 rounded-lg opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100 transition-all"
                         title="Remove Item"
                       >
                         <Trash2 className="w-4 h-4" />

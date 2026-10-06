@@ -142,23 +142,23 @@ export function Hirings() {
           <h1 className="text-2xl font-black text-foreground tracking-tight">Job Openings</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage active requisitions and hiring pipelines</p>
         </div>
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <SearchInput 
-            placeholder="Search jobs..." 
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+          <SearchInput
+            placeholder="Search jobs..."
             value={searchQuery}
             onChange={setSearchQuery}
-            className="w-full sm:w-64"
+            className="w-full sm:w-64 flex-1 min-w-[180px]"
           />
-          <button className="p-2 bg-white border border-border rounded-xl text-foreground/80 hover:bg-muted/50 shadow-sm transition-colors shrink-0">
+          <button className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center bg-white border border-border rounded-xl text-foreground/80 hover:bg-muted/50 shadow-sm transition-colors shrink-0">
             <Filter className="w-4 h-4" />
           </button>
           <Dialog open={isPostOpen} onOpenChange={setIsPostOpen}>
             <DialogTrigger asChild>
-              <button className="px-4 py-2 bg-primary hover:bg-primary text-primary-foreground rounded-xl text-sm font-bold shadow-sm flex items-center gap-2 transition-colors whitespace-nowrap">
+              <button className="px-4 py-2 min-h-[44px] sm:min-h-0 bg-primary hover:bg-primary text-primary-foreground rounded-xl text-sm font-bold shadow-sm flex items-center gap-2 transition-colors whitespace-nowrap">
                 <Plus className="w-4 h-4" /> Post Job
               </button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px] md:max-w-[500px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+            <DialogContent className="w-[calc(100vw-16px)] sm:w-full sm:max-w-[425px] md:max-w-[500px] max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
               <div className="flex items-center justify-between px-6 md:px-8 py-6 border-b border-border/50 bg-muted/30">
           <div>
             <h2 className="text-xl md:text-2xl font-black tracking-tight">Post New Job</h2>
@@ -182,7 +182,7 @@ export function Hirings() {
                     className="w-full px-3 py-2 bg-white border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Department</label>
                     <SearchableSelect 
@@ -350,7 +350,7 @@ export function Hirings() {
 
       {/* View Details Modal */}
       <Dialog open={!!selectedJob} onOpenChange={(open) => !open && setSelectedJob(null)}>
-        <DialogContent className="w-[calc(100vw-24px)] sm:w-full max-w-2xl p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+        <DialogContent className="w-[calc(100vw-16px)] sm:w-full max-w-2xl p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
           <div className="flex items-center justify-between px-4 sm:px-8 py-4 sm:py-6 border-b border-border/50 bg-muted/30">
           <div>
             <h2 className="text-lg sm:text-2xl font-black tracking-tight">{selectedJob?.title}</h2>
@@ -409,7 +409,7 @@ export function Hirings() {
 
       {/* Refer a Friend Modal */}
       <Dialog open={!!referJob} onOpenChange={(open) => !open && setReferJob(null)}>
-        <DialogContent className="w-[calc(100vw-24px)] sm:w-full max-w-md p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+        <DialogContent className="w-[calc(100vw-16px)] sm:w-full max-w-md p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
           <div className="flex items-center justify-between px-4 sm:px-8 py-4 sm:py-6 border-b border-border/50 bg-muted/30">
           <div className="min-w-0 pr-2">
             <h2 className="text-base sm:text-xl font-black tracking-tight truncate">Refer for {referJob?.title}</h2>

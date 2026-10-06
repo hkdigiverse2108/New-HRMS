@@ -47,7 +47,7 @@ export function Documents({ setActive }: { setActive?: (path: string) => void })
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                "flex items-center gap-2 px-5 py-3 text-sm font-bold rounded-t-xl transition-all border-b-2",
+                "flex items-center gap-2 px-5 py-3 min-h-[44px] text-sm font-bold rounded-t-xl transition-all border-b-2 whitespace-nowrap shrink-0",
                 activeTab === tab.id
                   ? "bg-primary/5 text-primary border-primary"
                   : "text-muted-foreground border-transparent hover:text-foreground hover:bg-muted/50"

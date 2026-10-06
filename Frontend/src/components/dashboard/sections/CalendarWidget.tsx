@@ -35,33 +35,6 @@ interface EventItem {
   color?: string;
 }
 
-const DEFAULT_EVENTS: EventItem[] = [
-  {
-    id: "1",
-    title: "Client Requirement Sync",
-    date: format(new Date(), "yyyy-MM-dd"),
-    startTime: "11:00 AM",
-    endTime: "11:45 AM",
-    color: "bg-blue-500",
-  },
-  {
-    id: "2",
-    title: "Sprint Planning & Review",
-    date: format(new Date(), "yyyy-MM-dd"),
-    startTime: "03:30 PM",
-    endTime: "04:30 PM",
-    color: "bg-emerald-500",
-  },
-  {
-    id: "3",
-    title: "Management Team Call",
-    date: format(new Date(Date.now() + 86400000), "yyyy-MM-dd"),
-    startTime: "10:30 AM",
-    endTime: "11:00 AM",
-    color: "bg-purple-500",
-  },
-];
-
 export function CalendarWidget({
   setActive,
 }: {
@@ -69,20 +42,33 @@ export function CalendarWidget({
 }) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [events, setEvents] = useState<EventItem[]>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("hrms_dashboard_calendar_events");
-      return saved ? JSON.parse(saved) : DEFAULT_EVENTS;
-    }
-    return DEFAULT_EVENTS;
-  });
+  const [events, setEvents] = useState<EventItem[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // Live feed for the visible month (HRMS events + birthdays + connected Google events)
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("hrms_dashboard_calendar_events", JSON.stringify(events));
-    }
-  }, [events]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const ref = format(currentMonth, "yyyy-MM-dd");
+        const res = await api.get<any>(`/schedule/feed?reference_date=${ref}&view_mode=month`, { showErrorToast: false });
+        const list = Array.isArray(res?.events) ? res.events : [];
+        if (!cancelled) {
+          setEvents(list.map((raw: any) => ({
+            id: String(raw.id || raw._id || ""),
+            title: raw.title || "(No title)",
+            date: String(raw.date || "").slice(0, 10),
+            startTime: raw.start_time || undefined,
+            endTime: raw.end_time || undefined,
+            color: raw.color || "bg-emerald-500",
+          })));
+        }
+      } catch {
+        if (!cancelled) setEvents([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [currentMonth]);
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
@@ -92,20 +78,26 @@ export function CalendarWidget({
   const selectedDateStr = format(selectedDate, "yyyy-MM-dd");
   const dayEvents = events.filter((ev) => ev.date === selectedDateStr);
 
-  const handleAddEvent = (newEvent: any) => {
-    setEvents((prev) => [
-      ...prev,
-      {
-        id: String(Date.now()),
-        title: newEvent.title,
-        date: newEvent.date,
-        startTime: newEvent.startTime,
-        endTime: newEvent.endTime,
-        color: newEvent.color || "bg-emerald-500",
-      },
-    ]);
-    setIsModalOpen(false);
-    toast.success("Event added to schedule");
+  const handleAddEvent = async (payload: any) => {
+    try {
+      const created = await api.post<any>("/schedule/events", payload);
+      const raw = created || payload;
+      setEvents((prev) => [
+        ...prev,
+        {
+          id: String(raw.id || raw._id || Date.now()),
+          title: raw.title || payload.title,
+          date: String(raw.date || payload.date).slice(0, 10),
+          startTime: raw.start_time || payload.start_time,
+          endTime: raw.end_time || payload.end_time,
+          color: raw.color || payload.color || "bg-emerald-500",
+        },
+      ]);
+      setIsModalOpen(false);
+      toast.success("Event added to schedule");
+    } catch (err: any) {
+      toast.error(err?.message || "Could not create event.");
+    }
   };
 
   return (
@@ -121,7 +113,7 @@ export function CalendarWidget({
                 Quick schedule overview, deadlines, and client meetings
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"

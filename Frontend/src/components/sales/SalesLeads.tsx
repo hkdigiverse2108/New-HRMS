@@ -428,7 +428,7 @@ export function SalesLeads({
     }
 
     if (navigator?.clipboard?.writeText) {
-      navigator.clipboard.writeText(digits).catch(() => {});
+      navigator.clipboard.writeText(digits).catch(() => { });
     }
 
     // wa.me triggers the installed WhatsApp desktop app (via protocol handler);
@@ -695,7 +695,7 @@ export function SalesLeads({
 
     return (
       <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-xs">
-        <table className="w-full text-left border-collapse text-xs">
+        <table className="w-full min-w-[1020px] text-left border-collapse text-xs">
           <thead>
             <tr className="bg-muted/50 border-b border-border text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
               <th className="w-10 px-3 py-3.5 text-center">
@@ -839,7 +839,8 @@ export function SalesLeads({
                               ) : (
                                 <span
                                   onClick={() => setSelectedLeadDrawer(lead)}
-                                  className="font-bold text-foreground hover:text-emerald-600 cursor-pointer text-[13px] flex items-center gap-1.5"
+                                  title={lead.company || lead.contact}
+                                  className="font-bold text-foreground hover:text-emerald-600 cursor-pointer text-[13px] flex items-center gap-1.5 max-w-[180px] truncate"
                                 >
                                   {lead.company || lead.contact}
                                   {lead.city && (
@@ -864,7 +865,7 @@ export function SalesLeads({
                                     type="button"
                                     onClick={(e) => handleOpenWhatsApp(lead.phone || "", e)}
                                     title="Send WhatsApp message (auto-copies phone to clipboard for new chat)"
-                                    className="p-1 rounded-lg text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-950 transition-colors border border-emerald-200"
+                                    className="p-1 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center rounded-lg text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-950 transition-colors border border-emerald-200"
                                   >
                                     <MessageSquare className="w-3.5 h-3.5" />
                                   </button>
@@ -878,7 +879,8 @@ export function SalesLeads({
                                 {lead.email && (
                                   <a
                                     href={`mailto:${lead.email}`}
-                                    className="flex items-center gap-1 hover:text-emerald-600 text-foreground/70"
+                                    title={lead.email}
+                                    className="flex items-center gap-1 hover:text-emerald-600 text-foreground/70 truncate max-w-[160px]"
                                   >
                                     <Mail className="w-3 h-3 text-muted-foreground" />
                                     {lead.email}
@@ -1031,7 +1033,7 @@ export function SalesLeads({
                           {/* Follow-ups */}
                           <td className="px-4 py-3 whitespace-nowrap">
                             <div className="flex flex-col gap-1.5">
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex flex-wrap items-center gap-1.5">
                                 <FollowUpDialog
                                   lead={lead}
                                   userName={currentUserName}
@@ -1045,7 +1047,7 @@ export function SalesLeads({
                                     handleQuickCNR(lead);
                                   }}
                                   title="1-Click: Record Call Not Received (CNR) & set follow-up for tomorrow"
-                                  className="h-7 text-[10px] px-2 font-black text-amber-700 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg shadow-xs"
+                                  className="min-h-[44px] sm:min-h-0 sm:h-7 text-[10px] px-2 font-black text-amber-700 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg shadow-xs"
                                 >
                                   CNR
                                 </Button>
@@ -1058,7 +1060,7 @@ export function SalesLeads({
                                     handleQuickCallLater(lead);
                                   }}
                                   title="1-Click: Client Busy - Remind in 2 hours"
-                                  className="h-7 text-[10px] px-1.5 font-bold text-blue-700 dark:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 rounded-lg shadow-xs"
+                                  className="min-h-[44px] sm:min-h-0 sm:h-7 text-[10px] px-1.5 font-bold text-blue-700 dark:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 rounded-lg shadow-xs"
                                 >
                                   Later
                                 </Button>
@@ -1146,7 +1148,7 @@ export function SalesLeads({
             variant="outline"
             size="sm"
             onClick={() => setIsBulkImportOpen(true)}
-            className="gap-1.5 text-xs font-bold h-9"
+            className="gap-1.5 text-xs font-bold min-h-[44px] sm:min-h-0 sm:h-9"
           >
             <Upload className="w-3.5 h-3.5" /> Import CSV
           </Button>
@@ -1154,14 +1156,14 @@ export function SalesLeads({
             variant="outline"
             size="sm"
             onClick={handleExportCSV}
-            className="gap-1.5 text-xs font-bold h-9"
+            className="gap-1.5 text-xs font-bold min-h-[44px] sm:min-h-0 sm:h-9"
           >
             <Download className="w-3.5 h-3.5" /> Export CSV
           </Button>
           <Button
             size="sm"
             onClick={() => onAction?.("Add Lead")}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs font-bold h-9 shadow-sm"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs font-bold min-h-[44px] sm:min-h-0 sm:h-9 shadow-sm"
           >
             <Plus className="w-4 h-4" /> Add Lead
           </Button>
@@ -1198,7 +1200,7 @@ export function SalesLeads({
               placeholder="Company / Contact Name (Optional)..."
               value={quickAddName}
               onChange={(e) => setQuickAddName(e.target.value)}
-              className="w-full text-xs font-semibold bg-muted/40 border border-border rounded-xl px-3 py-2 outline-none focus:border-emerald-500 focus:bg-background transition-all placeholder:text-muted-foreground text-foreground"
+              className="w-full min-h-[44px] sm:min-h-0 text-xs font-semibold bg-muted/40 border border-border rounded-xl px-3 py-2 outline-none focus:border-emerald-500 focus:bg-background transition-all placeholder:text-muted-foreground text-foreground"
             />
           </div>
           <div className="w-full sm:w-[200px]">
@@ -1211,12 +1213,12 @@ export function SalesLeads({
               value={quickAddPhone}
               onChange={(e) => setQuickAddPhone(e.target.value.replace(/[^0-9]/g, "").slice(0, 12))}
               onKeyDown={(e) => { if (!/[0-9]/.test(e.key) && !["Backspace", "Delete", "ArrowLeft", "ArrowRight", "Tab", "Enter"].includes(e.key)) e.preventDefault(); }}
-              className="w-full text-xs font-semibold bg-muted/40 border border-border rounded-xl px-3 py-2 outline-none focus:border-emerald-500 focus:bg-background transition-all placeholder:text-muted-foreground text-foreground"
+              className="w-full min-h-[44px] sm:min-h-0 text-xs font-semibold bg-muted/40 border border-border rounded-xl px-3 py-2 outline-none focus:border-emerald-500 focus:bg-background transition-all placeholder:text-muted-foreground text-foreground"
             />
           </div>
           <div className="w-full sm:w-[160px]">
             <Select value={quickAddCategory} onValueChange={setQuickAddCategory}>
-              <SelectTrigger className="h-9 text-xs font-semibold bg-muted/40 border-border">
+              <SelectTrigger className="min-h-[44px] sm:min-h-0 sm:h-9 text-xs font-semibold bg-muted/40 border-border">
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
               <SelectContent>
@@ -1231,7 +1233,7 @@ export function SalesLeads({
           </div>
           <div className="w-full sm:w-[150px]">
             <Select value={quickAddSource} onValueChange={setQuickAddSource}>
-              <SelectTrigger className="h-9 text-xs font-semibold bg-muted/40 border-border">
+              <SelectTrigger className="min-h-[44px] sm:min-h-0 sm:h-9 text-xs font-semibold bg-muted/40 border-border">
                 <SelectValue placeholder="Source" />
               </SelectTrigger>
               <SelectContent>
@@ -1246,7 +1248,7 @@ export function SalesLeads({
           <Button
             type="submit"
             disabled={isQuickAdding || !quickAddPhone.trim()}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 h-9 rounded-xl gap-1.5 transition-all shadow-xs"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 w-full sm:w-auto justify-center min-h-[44px] sm:min-h-0 sm:h-9 rounded-xl gap-1.5 transition-all shadow-xs"
           >
             <Plus className="w-3.5 h-3.5" />
             {isQuickAdding ? "Adding..." : "Quick Add"}
@@ -1295,36 +1297,36 @@ export function SalesLeads({
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 bg-card p-2.5 rounded-2xl border border-border shadow-xs">
           {/* Tab buttons */}
-          <TabsList className="bg-muted/60 p-1 rounded-xl h-auto flex flex-wrap shrink-0">
+          <TabsList className="bg-muted/60 p-1 rounded-xl h-auto flex flex-nowrap overflow-x-auto max-w-full shrink-0">
             <TabsTrigger
               value="overdue"
-              className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs px-3.5 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5"
+              className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs px-3.5 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 whitespace-nowrap shrink-0 min-h-[44px] sm:min-h-0"
             >
               <Clock className="w-3.5 h-3.5 text-rose-500" />
               Follow-up Due ({overdueLeads.length})
             </TabsTrigger>
             <TabsTrigger
               value="active"
-              className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs px-3.5 py-1.5 text-xs font-bold rounded-lg"
+              className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs px-3.5 py-1.5 text-xs font-bold rounded-lg whitespace-nowrap shrink-0 min-h-[44px] sm:min-h-0"
             >
               Active Pipeline ({activeLeads.length})
             </TabsTrigger>
             <TabsTrigger
               value="hot"
-              className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs px-3.5 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5"
+              className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs px-3.5 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 whitespace-nowrap shrink-0 min-h-[44px] sm:min-h-0"
             >
               <Flame className="w-3.5 h-3.5 text-orange-500 fill-orange-500" />
               Hot Leads ({hotLeads.length})
             </TabsTrigger>
             <TabsTrigger
               value="converted"
-              className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs px-3.5 py-1.5 text-xs font-bold rounded-lg"
+              className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs px-3.5 py-1.5 text-xs font-bold rounded-lg whitespace-nowrap shrink-0 min-h-[44px] sm:min-h-0"
             >
               Converted Leads ({convertedLeads.length})
             </TabsTrigger>
             <TabsTrigger
               value="targets"
-              className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs px-3.5 py-1.5 text-xs font-bold rounded-lg"
+              className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs px-3.5 py-1.5 text-xs font-bold rounded-lg whitespace-nowrap shrink-0 min-h-[44px] sm:min-h-0"
             >
               Targets & Performance
             </TabsTrigger>
@@ -1362,7 +1364,7 @@ export function SalesLeads({
               </div>
 
               <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-[130px] h-9 text-xs font-semibold border-border">
+                <SelectTrigger className="w-full sm:w-[130px] min-h-[44px] sm:min-h-0 sm:h-9 text-xs font-semibold border-border">
                   <SelectValue placeholder="Category" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1376,7 +1378,7 @@ export function SalesLeads({
               </Select>
 
               <Select value={sourceFilter} onValueChange={setSourceFilter}>
-                <SelectTrigger className="w-[125px] h-9 text-xs font-semibold border-border">
+                <SelectTrigger className="w-full sm:w-[125px] min-h-[44px] sm:min-h-0 sm:h-9 text-xs font-semibold border-border">
                   <SelectValue placeholder="Source" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1390,7 +1392,7 @@ export function SalesLeads({
               </Select>
 
               <Select value={dateFilter} onValueChange={(val: any) => setDateFilter(val)}>
-                <SelectTrigger className="w-[115px] h-9 text-xs font-semibold border-border">
+                <SelectTrigger className="w-full sm:w-[115px] min-h-[44px] sm:min-h-0 sm:h-9 text-xs font-semibold border-border">
                   <SelectValue placeholder="Date Range" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1413,7 +1415,7 @@ export function SalesLeads({
                     setEmployeeFilter("all");
                     setSearchTerm("");
                   }}
-                  className="h-9 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  className="min-h-[44px] sm:min-h-0 sm:h-9 px-2 text-xs text-muted-foreground hover:text-foreground"
                   title="Reset all filters"
                 >
                   <RefreshCw className="w-3.5 h-3.5 mr-1" /> Reset
@@ -1623,7 +1625,7 @@ export function SalesLeads({
               </CardHeader>
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-xs">
+                  <table className="w-full min-w-[640px] text-left border-collapse text-xs">
                     <thead>
                       <tr className="bg-muted/50 border-b border-border text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
                         <th className="px-5 py-3.5">Salesperson</th>

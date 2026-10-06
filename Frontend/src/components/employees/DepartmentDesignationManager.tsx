@@ -15,7 +15,7 @@ export function DepartmentDesignationManager() {
     <div className="w-full animate-in fade-in zoom-in-95 duration-300 flex flex-col h-[calc(100vh-4rem)] pb-8 overflow-y-auto">
       {/* Header */}
       <div className="mb-6 shrink-0">
-        <h1 className="text-[28px] font-black text-foreground tracking-tight mb-1">
+        <h1 className="text-xl sm:text-[28px] font-black text-foreground tracking-tight mb-1 break-words">
           Sub-Departments & Designations
         </h1>
         <p className="text-[14px] text-muted-foreground">
@@ -28,7 +28,7 @@ export function DepartmentDesignationManager() {
         <button
           onClick={() => setActiveTab("sub_departments")}
           className={cn(
-            "pb-3.5 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap",
+            "pb-3.5 min-h-[44px] px-2 sm:px-1 flex items-center text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap",
             activeTab === "sub_departments"
               ? "border-primary text-primary font-black"
               : "border-transparent text-muted-foreground hover:text-foreground"

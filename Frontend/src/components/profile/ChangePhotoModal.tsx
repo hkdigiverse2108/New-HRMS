@@ -168,7 +168,7 @@ export function ChangePhotoModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleCancel()}>
-      <DialogContent className="max-w-md w-full p-0 overflow-hidden rounded-3xl border border-border/60 shadow-2xl bg-card">
+      <DialogContent className="w-[calc(100vw-16px)] sm:max-w-md p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 bg-muted/20">
           <div className="flex items-center gap-2.5">

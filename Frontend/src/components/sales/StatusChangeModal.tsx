@@ -86,7 +86,7 @@ export function StatusChangeModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-md rounded-2xl bg-card border border-border p-6 shadow-2xl">
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md max-h-[90dvh] overflow-y-auto rounded-2xl bg-card border border-border p-4 sm:p-6 shadow-2xl">
         <DialogHeader>
           <DialogTitle className="text-lg font-black text-foreground">
             Update Status to {newStatus}
@@ -135,7 +135,7 @@ export function StatusChangeModal({
             />
           </div>
 
-          <DialogFooter className="pt-2 gap-2">
+          <DialogFooter className="pt-2 gap-2 flex-col-reverse sm:flex-row sm:justify-end [&>button]:w-full sm:[&>button]:w-auto [&>button]:min-h-[44px] sm:[&>button]:min-h-0">
             <Button
               type="button"
               variant="outline"

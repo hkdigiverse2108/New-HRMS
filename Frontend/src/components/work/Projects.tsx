@@ -467,21 +467,21 @@ const RenewalsManager = ({
         </button>
       </div>
       {ranges.map((r, idx) => (
-        <div key={idx} className="flex items-center gap-2 p-2.5 rounded-2xl border border-border/50 bg-muted/20">
+        <div key={idx} className="flex flex-col sm:flex-row sm:items-center gap-2 p-2.5 rounded-2xl border border-border/50 bg-muted/20">
           <span className="text-[10px] font-black text-muted-foreground w-6 shrink-0">#{idx + 1}</span>
           <DatePicker
             value={r.start_date}
             onChange={(val) => onChange(ranges.map((x, i) => (i === idx ? { ...x, start_date: val } : x)))}
             placeholder="Start"
-            className="flex-1 h-10 bg-background border-border rounded-xl text-xs"
+            className="flex-1 w-full sm:w-auto min-w-[140px] h-10 bg-background border-border rounded-xl text-xs"
           />
-          <span className="text-muted-foreground text-xs">→</span>
+          <span className="text-muted-foreground text-xs hidden sm:inline">→</span>
           <DatePicker
             value={r.end_date}
             minDate={r.start_date}
             onChange={(val) => onChange(ranges.map((x, i) => (i === idx ? { ...x, end_date: val } : x)))}
             placeholder="End"
-            className="flex-1 h-10 bg-background border-border rounded-xl text-xs"
+            className="flex-1 w-full sm:w-auto min-w-[140px] h-10 bg-background border-border rounded-xl text-xs"
           />
           {idx === ranges.length - 1 && (
             <span className="text-[9px] font-black text-emerald-600 bg-emerald-500/10 px-1.5 py-0.5 rounded shrink-0">DEFAULT</span>
@@ -9026,7 +9026,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       />
 
       <Dialog open={isLogDailyStatsOpen} onOpenChange={(open) => { setIsLogDailyStatsOpen(open); if (!open) setEditingStatId(null); }}>
-        <DialogContent className={cn("p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl bg-card z-50 transition-all duration-300", isBulkAdd ? "sm:max-w-[700px]" : "sm:max-w-[450px]")}>
+        <DialogContent className={cn("p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl bg-card z-50 transition-all duration-300", isBulkAdd ? "max-w-[700px]" : "max-w-[450px]")}>
           <div className="p-6 md:p-8 border-b border-border/40">
             <h2 className="text-lg font-black tracking-tight text-foreground flex items-center gap-2">
               📈 {editingStatId ? "Edit Stats Entry" : "Log Daily Marketing Stats"}
@@ -9274,7 +9274,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       </Dialog>
       {/* F3: Revenue popup (page nai) — date + revenue, total, edit/delete */}
       <Dialog open={isRevenueOpen} onOpenChange={(open) => { setIsRevenueOpen(open); if (!open) setRevenueForm({ date: "", revenue: "", editId: "" }); }}>
-        <DialogContent className="sm:max-w-[440px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+        <DialogContent className="w-[calc(100vw-16px)] sm:max-w-[440px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
           <div className="px-6 py-5 border-b border-border/50 bg-muted/30 flex items-center justify-between">
             <div>
               <h2 className="text-xl font-black tracking-tight flex items-center gap-2">

@@ -112,10 +112,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     root.style.setProperty("--ring", primary);
     root.style.setProperty("--sidebar-primary", primary);
     
-    const bgTint = `hsl(${hsl.h}, ${Math.min(hsl.s, 40)}%, 98%)`;
+    const isDark = root.classList.contains("dark");
+    const bgTint = isDark
+      ? `hsl(${hsl.h}, ${Math.min(hsl.s, 40)}%, 14%)`
+      : `hsl(${hsl.h}, ${Math.min(hsl.s, 40)}%, 98%)`;
     root.style.setProperty("--background", bgTint);
-    
-    const sidebarTint = `hsl(${hsl.h}, ${Math.min(hsl.s, 30)}%, 95%)`;
+
+    const sidebarTint = isDark
+      ? `hsl(${hsl.h}, ${Math.min(hsl.s, 30)}%, 17%)`
+      : `hsl(${hsl.h}, ${Math.min(hsl.s, 30)}%, 95%)`;
     root.style.setProperty("--sidebar", sidebarTint);
 
     // Set vibrant semantic chart colors (constant regardless of theme)

@@ -204,7 +204,7 @@ export function Research() {
                 <span>New Document</span>
               </button>
             </DialogTrigger>
-            <DialogContent className="w-[calc(100vw-24px)] sm:w-full sm:max-w-[500px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+            <DialogContent className="w-[calc(100vw-16px)] sm:w-full sm:max-w-[500px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
               <div className="flex items-center justify-between px-4 sm:px-8 py-4 sm:py-6 border-b border-border/50 bg-muted/30">
                 <div>
                   <h2 className="text-lg sm:text-2xl font-black tracking-tight">Create New Document</h2>
@@ -215,8 +215,8 @@ export function Research() {
                   </button>
                 </DialogClose>
               </div>
-              <form onSubmit={handleCreateDocument} className="flex flex-col max-h-[70vh]">
-                <div className="p-6 md:p-8 space-y-6 overflow-y-auto">
+              <form onSubmit={handleCreateDocument} className="flex flex-col min-h-0 max-h-[90dvh]">
+                <div className="p-4 sm:p-6 md:p-8 space-y-6 overflow-y-auto flex-1 min-h-0">
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Document Title</label>
                     <input 
@@ -350,7 +350,7 @@ export function Research() {
       </div>
       {/* Research Document Reader Modal */}
       <Dialog open={!!selectedArticle} onOpenChange={(open) => !open && setSelectedArticle(null)}>
-        <DialogContent className="max-w-[700px] w-[calc(100%-2rem)] bg-card border border-border rounded-[2.5rem] p-0 overflow-hidden flex flex-col shadow-2xl h-[550px]">
+        <DialogContent className="w-[calc(100vw-16px)] sm:max-w-[700px] p-0 overflow-hidden rounded-2xl sm:rounded-[2.5rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card flex flex-col max-h-[90dvh] min-h-[400px]">
           {selectedArticle && (
             <>
               {/* Header */}

@@ -398,7 +398,7 @@ export function Remarks() {
               {isBellOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setIsBellOpen(false)} />
-                  <div className="absolute right-0 top-12 z-50 w-[340px] max-h-[380px] overflow-hidden bg-card border border-border rounded-2xl shadow-2xl flex flex-col">
+                  <div className="absolute right-0 top-12 z-50 w-[calc(100vw-32px)] max-w-[340px] max-h-[70dvh] overflow-hidden bg-card border border-border rounded-2xl shadow-2xl flex flex-col">
                     <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                       <span className="text-xs font-black uppercase tracking-wider">Notifications</span>
                       {unreadCount > 0 && (
@@ -448,7 +448,7 @@ export function Remarks() {
             {isAdmin && (
               <button
                 onClick={() => { setShowMissing(v => !v); }}
-                className={cn("px-4 py-2.5 font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm shrink-0 border",
+                className={cn("px-4 py-2.5 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm shrink-0 border",
                   showMissing ? "bg-amber-500 text-white border-amber-500" : "bg-white border-border text-foreground/80 hover:bg-muted/50")}
                         title="Those who have not submitted remarks"
               >
@@ -459,7 +459,7 @@ export function Remarks() {
             {isAdmin && (
               <button
                 onClick={() => setIsReminderOpen(true)}
-                className="px-4 py-2.5 bg-white border border-border hover:bg-muted/50 text-foreground/80 font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm shrink-0"
+                className="px-4 py-2.5 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 bg-white border border-border hover:bg-muted/50 text-foreground/80 font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm shrink-0"
               >
                 <Bell className="w-4 h-4" />
                 <span className="hidden sm:inline">Send Reminders</span>
@@ -617,7 +617,7 @@ export function Remarks() {
                   <span className="hidden sm:inline">{isAdmin ? "Add Feedback" : "Submit Remark"}</span>
                 </button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+              <DialogContent className="w-[calc(100vw-24px)] sm:max-w-[500px] max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
                 <div className="flex items-center justify-between px-6 md:px-8 py-6 border-b border-border/50 bg-muted/30">
                   <div>
                     <h2 className="text-xl md:text-2xl font-black tracking-tight">
@@ -627,26 +627,26 @@ export function Remarks() {
                       <p className="text-xs text-muted-foreground mt-1">As: <span className="font-bold text-foreground">{myName}</span></p>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2">
                     {isAdmin && (
                       <button
                         type="button"
                         onClick={() => setIsManageQOpen(true)}
                         title="Manage feedback questions"
-                        className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors"
+                        className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors"
                       >
                         <Settings className="w-4 h-4" />
                       </button>
                     )}
                     <DialogClose asChild>
-                      <button className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
+                      <button className="p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
                         <X className="w-5 h-5" />
                       </button>
                     </DialogClose>
                   </div>
                 </div>
-                <form onSubmit={handleSubmitRemark} className="flex flex-col max-h-[70vh]">
-                  <div className="p-6 md:p-8 space-y-6 overflow-y-auto">
+                <form onSubmit={handleSubmitRemark} className="flex flex-col min-h-0 max-h-[90dvh]">
+                  <div className="p-4 sm:p-6 md:p-8 space-y-6 overflow-y-auto flex-1 min-h-0">
                     {isAdmin && !editingId && (
                       <div className="space-y-2">
                         <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Employee (on behalf)</label>
@@ -669,7 +669,7 @@ export function Remarks() {
                             type="button"
                             onClick={() => setNewScore(score)}
                             className={cn(
-                              "w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm transition-colors border",
+                              "w-11 h-11 min-w-[44px] min-h-[44px] rounded-xl flex items-center justify-center font-bold text-sm transition-colors border",
                               newScore === score
                                 ? "bg-amber-100 text-amber-700 border-amber-200 shadow-sm"
                                 : "bg-white text-muted-foreground border-border hover:bg-muted/50"
