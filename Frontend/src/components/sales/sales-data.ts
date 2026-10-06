@@ -84,7 +84,7 @@ export type Lead = {
   phone?: string | undefined;
   city?: string | undefined;
   state?: string | undefined;
-  stage: LeadStage;
+  stage?: LeadStage | undefined;
   status?: string | undefined;
   category: LeadCategory | string;
   source: LeadSource | string;
@@ -96,15 +96,44 @@ export type Lead = {
   remarks?: string | undefined;
   aiScore?: number | undefined;
   isHot?: boolean | undefined;
+  is_converted?: boolean | undefined;
+  isConverted?: boolean | undefined;
   holdResumeDate?: string | null | undefined;
   nextFollowUp?: string | undefined;
   nextFollowUpDate?: string | null | undefined;
   followUps?: FollowUp[] | undefined;
+  follow_ups?: any[] | undefined;
   closedDate?: string | null | undefined;
   createdBy?: string | undefined;
   createdByUserName?: string | undefined;
   createdAt?: string | undefined;
   date?: string | undefined;
+  // Phase 3: Deal Won, Quotation, Net/GST, Incentive Split, Handoff
+  dealValue?: number | undefined;
+  deal_value?: number | undefined;
+  dealNote?: string | undefined;
+  deal_note?: string | undefined;
+  quotationId?: string | undefined;
+  quotation_id?: string | undefined;
+  quotationTitle?: string | undefined;
+  quotation_title?: string | undefined;
+  quotationNumber?: string | undefined;
+  quotation_number?: string | undefined;
+  quotationValue?: number | undefined;
+  quotation_value?: number | undefined;
+  netAmount?: number | undefined;
+  net_amount?: number | undefined;
+  gstAmount?: number | undefined;
+  gst_amount?: number | undefined;
+  incentiveSplit?: { name: string; percentage?: number; amount?: number; role?: string }[] | undefined;
+  incentive_split?: { name: string; percentage?: number; amount?: number; role?: string }[] | undefined;
+  projectHandoffNotes?: string | undefined;
+  project_handoff_notes?: string | undefined;
+  stage_history?: { from_stage?: string | null; to_stage?: string; changed_by?: string; changed_at?: string; reason?: string }[] | undefined;
+  stageHistory?: { from_stage?: string | null; to_stage?: string; changed_by?: string; changed_at?: string; reason?: string }[] | undefined;
+  nextFollowUpTime?: string | null | undefined;
+  next_follow_up_time?: string | null | undefined;
+  quotation_number?: string | undefined;
 };
 
 export const leads: Lead[] = [

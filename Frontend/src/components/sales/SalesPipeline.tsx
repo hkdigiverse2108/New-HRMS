@@ -11,12 +11,20 @@ import { SortableHeader } from "@/components/ui/sortable-header";
 
 /* ─── Kanban Card ──────────────────────────────────────────────────────── */
 
-function DealCard({ lead }: { lead: Lead }) {
+function leadAmount(l: any): number {
+  if (Number(l.budget)) return Number(l.budget);
+  const ei = parseFloat(String(l.expectedIncome ?? l.expected_income ?? "").replace(/[^0-9.]/g, ""));
+  if (ei) return ei;
+  if (Number(l.dealValue ?? l.deal_value)) return Number(l.dealValue ?? l.deal_value);
+  return 0;
+}
+
+function DealCard({ lead }: { lead: any }) {
   return (
     <div
       draggable
       onDragStart={(e) => {
-        e.dataTransfer.setData("leadId", lead.id);
+        e.dataTransfer.setData("leadId", lead.id || lead._id || "");
         e.dataTransfer.effectAllowed = "move";
       }}
       className="cursor-grab active:cursor-grabbing rounded-xl border border-border bg-white p-3 shadow-sm transition-all hover:border-emerald-300 hover:shadow-md"
@@ -25,7 +33,7 @@ function DealCard({ lead }: { lead: Lead }) {
       <p className="mt-0.5 text-[11px] text-muted-foreground">{lead.contact} · {lead.city || ""}</p>
       <div className="mt-2 flex items-center justify-between">
         <span className="text-xs font-medium text-muted-foreground">{lead.owner || ""}</span>
-        <span className="text-xs font-bold text-emerald-700">{formatCurrency(lead.budget || 0)}</span>
+        <span className="text-xs font-bold text-emerald-700">{formatCurrency(leadAmount(lead))}</span>
       </div>
     </div>
   );
@@ -34,7 +42,7 @@ function DealCard({ lead }: { lead: Lead }) {
 /* ─── Kanban Column ────────────────────────────────────────────────────── */
 
 function KanbanColumn({ stage, color, items, onDropCard }: { stage: string; color: string; items: Lead[]; onDropCard: (id: string, stage: string) => void }) {
-  const total = items.reduce((s, l) => s + (l.budget || 0), 0);
+  const total = items.reduce((s, l) => s + leadAmount(l), 0);
   return (
     <div
       onDragOver={(e) => {
@@ -56,8 +64,8 @@ function KanbanColumn({ stage, color, items, onDropCard }: { stage: string; colo
         <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold">{items.length}</span>
       </div>
       <div className="flex-1 space-y-2 overflow-y-auto p-3" style={{ maxHeight: "calc(100vh - 320px)" }}>
-        {items.map((lead) => (
-          <DealCard key={lead.id} lead={lead} />
+        {items.map((lead: any) => (
+          <DealCard key={lead.id || lead._id} lead={lead} />
         ))}
         {items.length === 0 && (
           <p className="py-6 text-center text-xs text-muted-foreground">No deals</p>
@@ -119,7 +127,7 @@ function TableView({ data, onStageChange, activeStages }: { data: Lead[]; onStag
                 />
               </td>
               <td className="px-4 py-3 text-muted-foreground">{lead.owner || ""}</td>
-              <td className="px-4 py-3 text-right font-semibold">{formatCurrency(lead.budget || 0)}</td>
+              <td className="px-4 py-3 text-right font-semibold">{formatCurrency(leadAmount(lead))}</td>
               <td className="px-4 py-3 text-center">
                 <span className={cn(
                   "inline-flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold",
@@ -136,29 +144,79 @@ function TableView({ data, onStageChange, activeStages }: { data: Lead[]; onStag
   );
 }
 
-/* ─── Timeline View ────────────────────────────────────────────────────── */
+/* ─── Timeline View — per-lead stage-shift history + follow-ups ─────────── */
 
 function TimelineView({ data }: { data: Lead[] }) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const sorted = useMemo(
     () => [...data].sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || "")),
     [data]
   );
 
+  const getHistory = (lead: any) => lead.stage_history || lead.stageHistory || [];
+  const getFollowUps = (lead: any) => lead.followUps || lead.follow_ups || [];
+
   return (
-    <div className="space-y-0">
-      {sorted.slice(0, 20).map((lead, i) => (
-        <div key={lead.id} className="flex gap-4">
-          <div className="flex flex-col items-center">
-            <div className="h-3 w-3 rounded-full bg-emerald-500" />
-            {i < sorted.length - 1 && <div className="w-px flex-1 bg-border" />}
+    <div className="space-y-2">
+      {sorted.slice(0, 50).map((lead: any) => {
+        const lid = lead.id || lead._id;
+        const history = getHistory(lead);
+        const fus = getFollowUps(lead);
+        const isOpen = expandedId === lid;
+        return (
+          <div key={lid} className="rounded-xl border border-border bg-background overflow-hidden">
+            <button onClick={() => setExpandedId(isOpen ? null : lid)} className="w-full flex items-center gap-3 p-3.5 text-left hover:bg-muted/40 transition-colors">
+              <div className="h-8 w-8 rounded-full bg-emerald-100 text-emerald-700 grid place-items-center text-xs font-black shrink-0">
+                {(lead.company || lead.contact || "L").slice(0, 1).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold truncate">{lead.company || lead.contact} <span className="text-[11px] font-semibold text-muted-foreground">· {lead.contact !== lead.company ? lead.contact : ""} {lead.phone ? `· ${lead.phone}` : ""}</span></p>
+                <p className="text-[11px] text-muted-foreground">Current: <span className="font-bold text-foreground">{lead.stage || lead.status}</span> · {history.length} shifts · {fus.length} follow-ups · Owner: {lead.owner || "—"}</p>
+              </div>
+              <span className="text-[11px] font-bold text-emerald-700">{isOpen ? "Hide ▲" : "History ▼"}</span>
+            </button>
+            {isOpen && (
+              <div className="border-t border-border bg-muted/20 p-4">
+                <div className="space-y-0">
+                  {history.length === 0 && (
+                    <p className="text-xs text-muted-foreground italic pb-3">Created in {lead.stage || lead.status} on {lead.createdAt || lead.date || "—"}</p>
+                  )}
+                  {history.map((h: any, i: number) => (
+                    <div key={i} className="flex gap-3">
+                      <div className="flex flex-col items-center">
+                        <div className={cn("h-3 w-3 rounded-full mt-1", i === history.length - 1 ? "bg-emerald-500" : "bg-blue-400")} />
+                        {i < history.length - 1 + fus.length && <div className="w-px flex-1 bg-border min-h-[14px]" />}
+                      </div>
+                      <div className="pb-4">
+                        <p className="text-[11px] text-muted-foreground">{h.changed_at ? String(h.changed_at).slice(0, 16).replace("T", " ") : "—"} · by {h.changed_by || "System"}</p>
+                        <p className="mt-0.5 text-[13px] font-semibold">
+                          {h.from_stage ? <><span className="text-muted-foreground line-through">{h.from_stage}</span><span className="mx-1.5 text-emerald-600">→</span></> : <span className="text-[10px] font-bold uppercase text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded mr-1.5">Created</span>}
+                          <span className="text-foreground">{h.to_stage}</span>
+                        </p>
+                        {h.reason && <p className="text-[11px] text-muted-foreground italic">Reason: {h.reason}</p>}
+                      </div>
+                    </div>
+                  ))}
+                  {fus.map((f: any, i: number) => (
+                    <div key={`fu-${i}`} className="flex gap-3">
+                      <div className="flex flex-col items-center">
+                        <div className="h-2.5 w-2.5 rounded-full bg-amber-400 mt-1" />
+                        {i < fus.length - 1 && <div className="w-px flex-1 bg-border min-h-[12px]" />}
+                      </div>
+                      <div className="pb-3">
+                        <p className="text-[11px] text-muted-foreground">{String(f.date || "").slice(0, 16).replace("T", " ")} · {f.action_type || f.actionType || "Follow-up"} · by {f.performedBy || lead.owner || "Rep"}</p>
+                        <p className="text-xs">💬 {f.note}</p>
+                        {(f.nextFollowUpDate || f.next_follow_up_date) && <p className="text-[11px] text-emerald-700 font-semibold">Next: {String(f.nextFollowUpDate || f.next_follow_up_date).slice(0, 16).replace("T", " ")}</p>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-          <div className="pb-6">
-            <p className="text-xs text-muted-foreground">{lead.createdAt || lead.date || "—"}</p>
-            <p className="mt-0.5 text-sm font-semibold">{lead.company}</p>
-            <p className="text-xs text-muted-foreground">{lead.contact} · {lead.city || ""} · {lead.stage} · {formatCurrency(lead.budget || 0)}</p>
-          </div>
-        </div>
-      ))}
+        );
+      })}
+      {sorted.length === 0 && <p className="py-8 text-center text-xs text-muted-foreground">No leads for selected filters.</p>}
     </div>
   );
 }
@@ -166,49 +224,71 @@ function TimelineView({ data }: { data: Lead[] }) {
 /* ─── Main Pipeline Component ──────────────────────────────────────────── */
 
 export function SalesPipeline({ onAction }: { onAction?: (action: string) => void }) {
-  const { leads, setLeads, stages } = useSales();
+  const { leads, stages, updateLead, salesSettings } = useSales();
   const [view, setView] = useState<"kanban" | "table" | "timeline">("kanban");
   const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [sourceFilter, setSourceFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState<"all" | "today" | "this_month" | "last_month">("all");
 
-  const handleStageChange = (id: string, newStage: string) => {
-    setLeads(leads.map(l => l.id === id ? { ...l, stage: newStage } : l));
-    toast.success("Stage updated", { description: `Lead moved to ${newStage}` });
+  const availableCategories = useMemo(() => {
+    const fromSettings = (salesSettings?.categories || []).map((c: any) => c.name).filter(Boolean);
+    return fromSettings.length > 0 ? fromSettings : Array.from(new Set(leads.map((l: any) => l.category || "Others")));
+  }, [salesSettings, leads]);
+  const availableSources = useMemo(() => {
+    const fromSettings = salesSettings?.sources || [];
+    return fromSettings.length > 0 ? fromSettings : Array.from(new Set(leads.map((l: any) => l.source || "Others")));
+  }, [salesSettings, leads]);
+
+  const handleStageChange = async (id: string, newStage: string) => {
+    const updated = await updateLead(id, { stage: newStage, status: newStage } as any);
+    if (updated) {
+      toast.success("Stage updated", { description: `Lead moved to ${newStage}` });
+    } else {
+      toast.error("Failed to move stage");
+    }
   };
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return leads;
-    return leads.filter(
-      (l) =>
-        (l.company || "").toLowerCase().includes(q) ||
-        (l.contact || "").toLowerCase().includes(q) ||
-        (l.owner || "").toLowerCase().includes(q),
-    );
-  }, [search, leads]);
+    const todayStr = new Date().toISOString().split("T")[0] || "";
+    const thisMonth = todayStr.slice(0, 7);
+    const d = new Date(); d.setMonth(d.getMonth() - 1);
+    const prevMonth = (d.toISOString().split("T")[0] || "").slice(0, 7);
+    return leads.filter((l: any) => {
+      if (q && !((l.company || "").toLowerCase().includes(q) || (l.contact || "").toLowerCase().includes(q) || (l.owner || "").toLowerCase().includes(q) || (l.phone || "").includes(q))) return false;
+      if (categoryFilter !== "all" && (l.category || "Others") !== categoryFilter) return false;
+      if (sourceFilter !== "all" && String(l.source || "").toLowerCase() !== String(sourceFilter).toLowerCase()) return false;
+      if (dateFilter !== "all") {
+        const lDate = (l.date || (l.createdAt ? String(l.createdAt).split("T")[0] : "") || "") as string;
+        if (dateFilter === "today" && lDate !== todayStr) return false;
+        if (dateFilter === "this_month" && !lDate.startsWith(thisMonth)) return false;
+        if (dateFilter === "last_month" && !lDate.startsWith(prevMonth)) return false;
+      }
+      return true;
+    });
+  }, [search, leads, categoryFilter, sourceFilter, dateFilter]);
 
-  // Calculate active stages (union of settings stages + any stage that currently has leads)
+  // Active stages = settings order; unknown/legacy lead stages fall back to first stage (no junk columns)
   const activeStages = useMemo(() => {
-    const leadStages = Array.from(new Set(leads.map(l => l.stage)));
-    const allStages = [...stages];
-    for (const ls of leadStages) {
-      if (!allStages.includes(ls)) allStages.push(ls);
-    }
-    return allStages;
-  }, [stages, leads]);
+    return stages.filter(Boolean);
+  }, [stages]);
 
   const grouped = useMemo(() => {
     const map: Record<string, Lead[]> = {};
     for (const s of activeStages) map[s] = [];
+    const fallback = activeStages[0] || "New Lead";
     for (const l of filtered) {
-      if (!map[l.stage]) {
-        map[l.stage] = [];
+      const key = (l.stage && activeStages.includes(l.stage)) ? l.stage : fallback;
+      if (!map[key]) {
+        map[key] = [];
       }
-      map[l.stage]!.push(l);
+      map[key]!.push(l);
     }
     return map;
   }, [filtered, activeStages]);
 
-  const totalValue = filtered.reduce((s, l) => s + (l.budget || 0), 0);
+  const totalValue = filtered.reduce((s, l) => s + leadAmount(l), 0);
 
   return (
     <div className="space-y-5">
@@ -253,6 +333,27 @@ export function SalesPipeline({ onAction }: { onAction?: (action: string) => voi
         <button onClick={() => onAction?.("Add Lead")} className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 shrink-0 self-start sm:self-auto">
           <Plus className="h-4 w-4" /> Add Deal
         </button>
+      </div>
+
+      {/* Filters — business category / source / date-wise */}
+      <div className="flex flex-wrap items-center gap-2">
+        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="h-9 text-xs font-semibold border border-border rounded-xl px-2.5 bg-background">
+          <option value="all">All Categories</option>
+          {availableCategories.map((c: string) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className="h-9 text-xs font-semibold border border-border rounded-xl px-2.5 bg-background">
+          <option value="all">All Sources</option>
+          {availableSources.map((s: string) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <select value={dateFilter} onChange={(e) => setDateFilter(e.target.value as any)} className="h-9 text-xs font-semibold border border-border rounded-xl px-2.5 bg-background">
+          <option value="all">All Dates</option>
+          <option value="today">Today</option>
+          <option value="this_month">This Month</option>
+          <option value="last_month">Last Month</option>
+        </select>
+        {(categoryFilter !== "all" || sourceFilter !== "all" || dateFilter !== "all") && (
+          <button onClick={() => { setCategoryFilter("all"); setSourceFilter("all"); setDateFilter("all"); }} className="h-9 px-3 text-xs font-bold rounded-xl border border-border bg-muted/50 hover:bg-muted">Clear</button>
+        )}
       </div>
 
       {/* Content */}

@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
-import { type SalesTask, salesTasks as sampleTasks } from "./sales-data";
+import { type SalesTask } from "./sales-data";
 import { useSales } from "./SalesContext";
 
 const typeIcons: Record<string, typeof Phone> = {
@@ -27,11 +27,11 @@ const statusConfig = {
   completed: { label: "Completed", color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200", icon: CheckCircle2, iconColor: "text-emerald-500" },
 };
 
-function TaskRow({ 
-  task, 
-  onToggleComplete 
-}: { 
-  task: SalesTask;
+function TaskRow({
+  task,
+  onToggleComplete
+}: {
+  task: SalesTask & { phone?: string; stage?: string; time?: string; leadId?: string };
   onToggleComplete: (task: SalesTask, completed: boolean) => void;
 }) {
   const [done, setDone] = useState(task.status === "completed");
@@ -70,7 +70,12 @@ function TaskRow({
 
       <div className="min-w-0 flex-1">
         <p className={cn("text-sm font-medium", done && "line-through")}>{task.type} — {task.company}</p>
-        <p className="text-[11px] text-muted-foreground">{task.assignee} · due {task.dueDate}</p>
+        {task.phone && (
+          <a href={`tel:${task.phone}`} onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 mt-0.5 font-mono font-black text-[15px] text-emerald-800 hover:text-emerald-600">
+            <Phone className="w-3.5 h-3.5" />{task.phone}
+          </a>
+        )}
+        <p className="text-[11px] text-muted-foreground">{task.assignee} · {task.stage || ""} · due {task.dueDate}{task.time ? ` at ${task.time}` : ""}</p>
       </div>
 
       <span className={cn(
@@ -84,22 +89,41 @@ function TaskRow({
 }
 
 export function SalesTasks({ onAction }: { onAction?: (action: string) => void }) {
-  const { leads, tasks: salesTasks, setTasks } = useSales();
+  const { leads, tasks: salesTasks, setTasks, salesSettings } = useSales();
   const [filter, setFilter] = useState<"all" | "overdue" | "today" | "upcoming" | "completed">("all");
   const [completedTaskIds, setCompletedTaskIds] = useState<Set<string>>(new Set());
 
-  // Dynamic derivation of tasks from live leads + context tasks
-  const allTasks = useMemo<SalesTask[]>(() => {
-    const todayStr = new Date().toISOString().split("T")[0] || "";
-    const derived: SalesTask[] = [];
+  // Notification toggles gate derived tasks: OFF hoy to te prakar na reminders na ave
+  const isNotifOn = (keyword: string) => {
+    const list = salesSettings?.notifications || [];
+    const found = list.find((n: any) => String(n.title || "").toLowerCase().includes(keyword));
+    return found ? !!found.active : true;
+  };
+  const newLeadNotifOn = isNotifOn("new lead assigned");
+  const followUpNotifOn = isNotifOn("follow-up");
 
-    leads.forEach((l) => {
-      const followUpDate = l.nextFollowUpDate || l.nextFollowUp || l.holdResumeDate || (l.date ? l.date.split("T")[0] : "");
+  // Fully dynamic: tasks derived ONLY from live leads (no static fallback)
+  const allTasks = useMemo<(SalesTask & { phone?: string; stage?: string; time?: string; leadId?: string })[]>(() => {
+    const todayStr = new Date().toISOString().split("T")[0] || "";
+    const derived: (SalesTask & { phone?: string; stage?: string; time?: string; leadId?: string })[] = [];
+
+    leads.forEach((l: any) => {
+      // "New Lead Assigned" OFF -> new-lead review tasks skip
+      // "Follow-up Reminder" OFF -> follow-up due tasks skip
+      const lid = l.id || l._id || "";
+      const rawNext = l.nextFollowUpDate || l.nextFollowUp || l.next_follow_up_date || "";
+      const nextDate = String(rawNext).split("T")[0] || "";
+      const nextTime = String(l.nextFollowUpTime || l.next_follow_up_time || (String(rawNext).includes("T") ? String(rawNext).split("T")[1]?.slice(0, 5) : "") || "");
+      const createdDate = String(l.date || (l.createdAt ? String(l.createdAt).split("T")[0] : "") || "");
+      const isWonOrLost = ["Client Won", "Won", "Client Lost", "Lost"].includes(l.status || l.stage || "");
+      // New leads created today with no follow-up => today's task (Audio 7: new lead must be reviewed same evening)
+      const isNewTodayNoFollowUp = !nextDate && createdDate === todayStr && !isWonOrLost;
+      if (isNewTodayNoFollowUp && !newLeadNotifOn) return;
+      if (!isNewTodayNoFollowUp && nextDate && !followUpNotifOn) return;
+      const followUpDate = nextDate || (isNewTodayNoFollowUp ? todayStr : "");
       if (!followUpDate) return;
 
-      const isWonOrLost = ["Client Won", "Won", "Client Lost", "Lost"].includes(l.status || l.stage || "");
-      const isMarkedDone = completedTaskIds.has(`lead-task-${l.id || l._id}`);
-
+      const isMarkedDone = completedTaskIds.has(`lead-task-${lid}`);
       let status: SalesTask["status"] = "upcoming";
       if (isWonOrLost || isMarkedDone) {
         status = "completed";
@@ -111,7 +135,7 @@ export function SalesTasks({ onAction }: { onAction?: (action: string) => void }
         status = "upcoming";
       }
 
-      let taskType = "Call Client";
+      let taskType = isNewTodayNoFollowUp ? "Call Client (New Lead)" : "Call Client";
       const stageLower = (l.stage || l.status || "").toLowerCase();
       if (stageLower.includes("demo")) taskType = "Demo";
       else if (stageLower.includes("meet")) taskType = "Meeting";
@@ -123,11 +147,15 @@ export function SalesTasks({ onAction }: { onAction?: (action: string) => void }
         : (l.assignedTo || l.owner || "Sales Team");
 
       derived.push({
-        id: `lead-task-${l.id || l._id}`,
+        id: `lead-task-${lid}`,
+        leadId: lid,
         type: taskType,
         company: l.company || l.contact || "Lead",
+        phone: l.phone || "",
+        stage: l.stage || l.status || "",
         assignee: String(assignee),
         dueDate: followUpDate,
+        time: nextTime,
         status,
         priority: l.priority || "Medium",
       });
@@ -140,9 +168,8 @@ export function SalesTasks({ onAction }: { onAction?: (action: string) => void }
       return t;
     });
 
-    const combined = [...customTasks, ...derived];
-    return combined.length > 0 ? combined : sampleTasks;
-  }, [leads, salesTasks, completedTaskIds]);
+    return [...customTasks, ...derived];
+  }, [leads, salesTasks, completedTaskIds, newLeadNotifOn, followUpNotifOn]);
 
   const handleToggleComplete = (task: SalesTask, completed: boolean) => {
     setCompletedTaskIds((prev) => {

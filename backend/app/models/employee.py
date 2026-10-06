@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field, ConfigDict
 from bson import ObjectId
+from pymongo.errors import DuplicateKeyError
 from app.schemas.employee import PersonalInfo, WorkDetails, BankAndDocs, DocumentChecklist, BondAndExit
 import logging
 from typing import Any
@@ -79,15 +80,33 @@ async def auto_assign_missing_employee_ids(db):
                 unassigned.append(emp)
 
         for emp in unassigned:
-            max_seq += 1
-            code = f"EMP-{max_seq:03d}"
-            await collection.update_one(
-                {"_id": emp["_id"]},
-                {"$set": {
-                    "employee_id": code,
-                    "work_details.employee_id": code
-                }}
-            )
+            # Find next free code (skips codes taken by concurrent startups / pre-existing dupes)
+            assigned = False
+            for _ in range(1000):
+                max_seq += 1
+                code = f"EMP-{max_seq:03d}"
+                try:
+                    taken = await collection.find_one({"employee_id": code}, {"_id": 1})
+                except Exception:
+                    taken = None
+                if taken:
+                    continue
+                try:
+                    await collection.update_one(
+                        {"_id": emp["_id"]},
+                        {"$set": {
+                            "employee_id": code,
+                            "work_details.employee_id": code
+                        }}
+                    )
+                    assigned = True
+                    break
+                except DuplicateKeyError:
+                    # Lost a race with another startup/worker — try next code, never crash
+                    logger.warning(f"employee_id {code} taken concurrently, trying next")
+                    continue
+            if not assigned:
+                logger.error(f"Could not assign free employee_id for {emp.get('_id')}, skipping")
 
         counter_doc = await counters.find_one({"_id": "employee_id"})
         current_counter = counter_doc.get("seq", 0) if counter_doc else 0

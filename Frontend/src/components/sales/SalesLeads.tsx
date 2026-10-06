@@ -42,6 +42,27 @@ const DEFAULT_CATEGORIES = [
   "Others",
 ];
 
+const DEFAULT_SOURCES = [
+  "Meta Ads",
+  "Google Ads",
+  "Instagram",
+  "Facebook",
+  "WhatsApp",
+  "Website",
+  "Direct Call",
+  "JustDial",
+  "Reference",
+  "Cold Calling",
+  "Cold Outreach",
+  "LinkedIn",
+  "Walk-in",
+  "Exhibition",
+  "BNI",
+  "PBN",
+  "Organic",
+  "Others",
+];
+
 const STAGE_COLORS: Record<string, string> = {
   Lead: "bg-blue-100 text-blue-700 border-blue-200",
   "New Lead": "bg-blue-100 text-blue-700 border-blue-200",
@@ -75,6 +96,9 @@ export function SalesLeads({
     updateLead,
     deleteLead,
     bulkDeleteLeads,
+    stages,
+    salesSettings,
+    addFollowUp,
   } = useSales();
   const { employees } = useEmployeesContext();
 
@@ -87,6 +111,8 @@ export function SalesLeads({
   const [activeTab, setActiveTab] = useState<string>("active");
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [sourceFilter, setSourceFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState<"all" | "today" | "this_month" | "last_month">("all");
   const [employeeFilter, setEmployeeFilter] = useState("all");
 
   // Selection for bulk actions
@@ -102,11 +128,30 @@ export function SalesLeads({
   // Drawer for lead details
   const [selectedLeadDrawer, setSelectedLeadDrawer] = useState<Lead | null>(null);
 
-  // Quick Add Form
+  // Quick Add Form with Sticky Dropdowns (Persisted in localStorage)
   const [quickAddName, setQuickAddName] = useState("");
   const [quickAddPhone, setQuickAddPhone] = useState("");
-  const [quickAddCategory, setQuickAddCategory] = useState("none_selected");
+  const [quickAddCategory, setQuickAddCategory] = useState<string>(() => {
+    return (typeof window !== "undefined" && localStorage.getItem("hrms_sticky_quickadd_category")) || "Jewellery";
+  });
+  const [quickAddSource, setQuickAddSource] = useState<string>(() => {
+    return (typeof window !== "undefined" && localStorage.getItem("hrms_sticky_quickadd_source")) || "Direct Call";
+  });
   const [isQuickAdding, setIsQuickAdding] = useState(false);
+  const phoneInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Persist sticky selections
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("hrms_sticky_quickadd_category", quickAddCategory);
+    }
+  }, [quickAddCategory]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("hrms_sticky_quickadd_source", quickAddSource);
+    }
+  }, [quickAddSource]);
 
   // Inline editing state
   const [inlineEditing, setInlineEditing] = useState<{ id: string; field: string } | null>(null);
@@ -130,6 +175,35 @@ export function SalesLeads({
       onAction?.("Add Lead");
     }
   }, [isNew, onAction]);
+
+  // Dynamic pipeline stages synced from settings (Audio 7 [39:46-41:09])
+  const availableStages = useMemo(() => {
+    const list = Array.isArray(stages) && stages.length > 0
+      ? [...stages]
+      : ["Stage 0", "Lead", "Contacted", "Proposal Sent", "On Hold", "Client Won", "Client Lost"];
+    if (!list.some((s) => s.toLowerCase().includes("won"))) {
+      list.push("Client Won");
+    }
+    if (!list.some((s) => s.toLowerCase().includes("lost"))) {
+      list.push("Client Lost");
+    }
+    if (!list.some((s) => s.toLowerCase().includes("hold"))) {
+      list.push("On Hold");
+    }
+    return Array.from(new Set(list));
+  }, [stages]);
+
+  // Dynamic lead sources + categories synced from settings (Audio 7 & 8) - settings is source of truth
+  const availableSources = useMemo(() => {
+    const fromSettings = salesSettings?.sources || [];
+    if (fromSettings.length > 0) return fromSettings;
+    return DEFAULT_SOURCES;
+  }, [salesSettings]);
+  const availableCategories = useMemo(() => {
+    const fromSettings = (salesSettings?.categories || []).map((c: any) => c.name).filter(Boolean);
+    if (fromSettings.length > 0) return fromSettings;
+    return DEFAULT_CATEGORIES;
+  }, [salesSettings]);
 
   // Lead helper filters
   const isOverdueOrDue = (l: Lead) => {
@@ -221,6 +295,28 @@ export function SalesLeads({
     ];
   }, [activeLeads, convertedLeads, hotLeads, overdueLeads]);
 
+  // Date helpers for filtering
+  const todayStr = useMemo(() => {
+    const s = new Date().toISOString().split("T");
+    return s[0] || "";
+  }, []);
+  const thisMonthStr = useMemo(() => todayStr.slice(0, 7), [todayStr]);
+  const prevMonthStr = useMemo(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    const s = d.toISOString().split("T");
+    return (s[0] || "").slice(0, 7);
+  }, []);
+
+  const todayLeadsCount = useMemo(() => {
+    return leads.filter((l) => {
+      const lDate = l.date || (l.createdAt ? (l.createdAt.split("T")[0] || "") : "");
+      const fDate = l.nextFollowUpDate || l.nextFollowUp;
+      const fDateStr = fDate ? (fDate.split("T")[0] || "") : "";
+      return lDate === todayStr || fDateStr === todayStr;
+    }).length;
+  }, [leads, todayStr]);
+
   // Filter function for table data
   const filterLeads = (data: Lead[]) => {
     let result = data;
@@ -238,6 +334,27 @@ export function SalesLeads({
     if (categoryFilter !== "all") {
       result = result.filter((l) => (l.category || "Others") === categoryFilter);
     }
+    if (sourceFilter !== "all") {
+      result = result.filter((l) => (l.source || "").toLowerCase() === sourceFilter.toLowerCase());
+    }
+    if (dateFilter === "today") {
+      result = result.filter((l) => {
+        const lDate = l.date || (l.createdAt ? (l.createdAt.split("T")[0] || "") : "");
+        const fDate = l.nextFollowUpDate || l.nextFollowUp;
+        const fDateStr = fDate ? (fDate.split("T")[0] || "") : "";
+        return lDate === todayStr || fDateStr === todayStr;
+      });
+    } else if (dateFilter === "this_month") {
+      result = result.filter((l) => {
+        const lDate = l.date || (l.createdAt ? (l.createdAt.split("T")[0] || "") : "");
+        return Boolean(lDate && lDate.startsWith(thisMonthStr));
+      });
+    } else if (dateFilter === "last_month") {
+      result = result.filter((l) => {
+        const lDate = l.date || (l.createdAt ? (l.createdAt.split("T")[0] || "") : "");
+        return Boolean(lDate && lDate.startsWith(prevMonthStr));
+      });
+    }
     if (employeeFilter !== "all") {
       result = result.filter((l) => {
         const assigned = Array.isArray(l.assignedTo)
@@ -249,27 +366,105 @@ export function SalesLeads({
     return result;
   };
 
-  // Quick Add Lead Handler
+  // 1-Click Follow-Up Handlers
+  const handleQuickCNR = async (lead: Lead) => {
+    const leadId = lead.id || lead._id || "";
+    const tomorrow = new Date(Date.now() + 24 * 3600000);
+    const nextDate = tomorrow.toISOString().split("T")[0] || "";
+    const hh = String(tomorrow.getHours()).padStart(2, "0");
+    const mm = String(tomorrow.getMinutes()).padStart(2, "0");
+    const nextTime = `${hh}:${mm}`;
+    const combined = `${nextDate}T${nextTime}:00`;
+
+    const ok = await addFollowUp(
+      leadId,
+      "CNR (Call Not Received) - 1-Click automated log",
+      combined,
+      "CNR",
+      nextTime
+    );
+    if (ok) {
+      toast.success(`CNR recorded for ${lead.company || lead.contact || lead.phone}. Rescheduled for tomorrow.`);
+    }
+  };
+
+  const handleQuickCallLater = async (lead: Lead) => {
+    const leadId = lead.id || lead._id || "";
+    const later = new Date(Date.now() + 2 * 3600000);
+    const nextDate = later.toISOString().split("T")[0] || "";
+    const hh = String(later.getHours()).padStart(2, "0");
+    const mm = String(later.getMinutes()).padStart(2, "0");
+    const nextTime = `${hh}:${mm}`;
+    const combined = `${nextDate}T${nextTime}:00`;
+
+    const ok = await addFollowUp(
+      leadId,
+      "Client Busy / Call Later - 1-Click automated log",
+      combined,
+      "Call Later",
+      nextTime
+    );
+    if (ok) {
+      toast.success(`Call Later recorded for ${lead.company || lead.contact || lead.phone}. Rescheduled in 2 hours.`);
+    }
+  };
+
+  // WhatsApp Handler — wa.me opens desktop app if installed, else web (with clipboard fallback)
+  const handleOpenWhatsApp = (phoneStr: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    let digits = phoneStr.replace(/[^0-9]/g, "");
+    if (!digits) {
+      toast.error("Invalid phone number");
+      return;
+    }
+    if (digits.length === 10) {
+      digits = `91${digits}`;
+    } else if (digits.length === 11 && digits.startsWith("0")) {
+      digits = `91${digits.slice(1)}`;
+    }
+    if (digits.length < 12) {
+      toast.error("Enter valid 10-digit mobile number");
+      return;
+    }
+
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(digits).catch(() => {});
+    }
+
+    // wa.me triggers the installed WhatsApp desktop app (via protocol handler);
+    // falls back to WhatsApp Web automatically when app is not installed.
+    window.open(`https://wa.me/${digits}`, "_blank", "noopener,noreferrer");
+  };
+
+  // Quick Add Lead Handler (Sticky Category & Source, Auto-focus Phone) — digits only
   const handleQuickAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!quickAddPhone.trim()) {
+    const digitsOnly = quickAddPhone.replace(/[^0-9]/g, "");
+    if (!digitsOnly) {
       toast.error("Phone number is required for Quick Add");
+      phoneInputRef.current?.focus();
+      return;
+    }
+    if (digitsOnly.length < 10) {
+      toast.error("Enter valid 10-digit mobile number");
+      phoneInputRef.current?.focus();
       return;
     }
 
     setIsQuickAdding(true);
     try {
-      const companyVal = quickAddName.trim() || `Lead ${quickAddPhone.slice(-4)}`;
+      const companyVal = quickAddName.trim() || `Lead ${digitsOnly.slice(-4)}`;
       const catVal = quickAddCategory === "none_selected" ? "Others" : quickAddCategory;
+      const defaultStage: string = (stages && stages[0]) || "New Lead";
 
       await addLead({
         company: companyVal,
         contact: quickAddName.trim() || companyVal,
-        phone: quickAddPhone.trim(),
+        phone: digitsOnly,
         category: catVal,
-        source: "Direct Call",
-        stage: "Lead",
-        status: "Lead",
+        source: quickAddSource || "Direct Call",
+        stage: defaultStage,
+        status: defaultStage,
         priority: "Medium",
         assignedTo: [currentUserName],
         owner: currentUserName,
@@ -280,7 +475,10 @@ export function SalesLeads({
       toast.success("Lead quickly added!");
       setQuickAddName("");
       setQuickAddPhone("");
-      setQuickAddCategory("none_selected");
+      // Keep quickAddCategory and quickAddSource sticky across entries
+      setTimeout(() => {
+        phoneInputRef.current?.focus();
+      }, 50);
     } catch {
       toast.error("Failed to quick add lead");
     } finally {
@@ -299,17 +497,22 @@ export function SalesLeads({
     }
   };
 
-  // Status change handler
-  const onStatusSelect = (lead: Lead, val: string) => {
+  // Status change handler (Single atomic API update without duplicates)
+  const onStatusSelect = async (lead: Lead, val: string) => {
     const leadId = lead.id || lead._id || "";
-    if (val === "Client Won") {
+    const lower = val.toLowerCase();
+    if (lower.includes("won")) {
       setConvertingLead(lead);
-    } else if (val === "Client Lost" || val === "On Hold") {
+    } else if (lower.includes("lost") || lower.includes("hold")) {
       setStatusChangeLeadId(leadId);
       setStatusChangeNewStatus(val);
     } else {
-      handleInlineUpdate(leadId, "status", val);
-      handleInlineUpdate(leadId, "stage", val);
+      try {
+        await updateLead(leadId, { status: val, stage: val });
+        toast.success("Updated");
+      } catch {
+        toast.error("Failed to update status");
+      }
     }
   };
 
@@ -337,28 +540,55 @@ export function SalesLeads({
       "Email",
       "Category",
       "Source",
-      "Status",
+      "Stage / Status",
       "Priority",
       "Assigned To",
-      "Expected Income",
-      "Next Follow-up",
+      "Budget / Expected Income (INR)",
+      "Net Won Revenue (INR)",
+      "Gross Deal Value (INR)",
+      "GST Amount (INR)",
+      "Quotation Ref",
+      "Next Follow-up Date",
+      "Follow-up History",
+      "Remarks / Notes",
       "Created Date",
     ];
 
-    const rows = dataToExport.map((l) => [
-      `"${l.company || ""}"`,
-      `"${l.contact || ""}"`,
-      `"${l.phone || ""}"`,
-      `"${l.email || ""}"`,
-      `"${l.category || ""}"`,
-      `"${l.source || ""}"`,
-      `"${l.status || l.stage || ""}"`,
-      `"${l.priority || ""}"`,
-      `"${Array.isArray(l.assignedTo) ? l.assignedTo.join(", ") : l.assignedTo || l.owner || ""}"`,
-      `"${l.expectedIncome || l.budget || ""}"`,
-      `"${l.nextFollowUpDate || l.nextFollowUp || ""}"`,
-      `"${l.date || l.createdAt || ""}"`,
-    ]);
+    const rows = dataToExport.map((l) => {
+      // Audio 7 [24:52]: Follow-ups in single cell formatted as numbered items
+      const fHistory = (l.followUps || l.follow_ups || [])
+        .map((f: any, idx: number) => {
+          const dt = f.date || f.createdAt || "";
+          const note = (f.note || f.comment || "").replace(/"/g, '""');
+          const by = f.performedBy ? ` (by ${f.performedBy})` : "";
+          return `${idx + 1}) [${dt}] ${note}${by}`;
+        })
+        .join(" | ");
+
+      const remarksClean = (l.remarks || l.dealNote || "").replace(/"/g, '""');
+      const quoteRef = l.quotation_number ? `${l.quotation_number} - ${l.quotation_title || ""}` : (l.quotation_id || "None");
+
+      return [
+        `"${(l.company || "").replace(/"/g, '""')}"`,
+        `"${(l.contact || "").replace(/"/g, '""')}"`,
+        `"${l.phone || ""}"`,
+        `"${l.email || ""}"`,
+        `"${l.category || ""}"`,
+        `"${l.source || ""}"`,
+        `"${l.status || l.stage || ""}"`,
+        `"${l.priority || ""}"`,
+        `"${Array.isArray(l.assignedTo) ? l.assignedTo.join(", ") : l.assignedTo || l.owner || ""}"`,
+        `"${l.expectedIncome || l.budget || 0}"`,
+        `"${l.net_amount || (l.deal_value ? l.deal_value : 0)}"`,
+        `"${l.deal_value || 0}"`,
+        `"${l.gst_amount || 0}"`,
+        `"${quoteRef.replace(/"/g, '""')}"`,
+        `"${l.nextFollowUpDate || l.nextFollowUp || ""}"`,
+        `"${fHistory}"`,
+        `"${remarksClean}"`,
+        `"${l.date || l.createdAt || ""}"`,
+      ];
+    });
 
     const csvContent =
       "data:text/csv;charset=utf-8," +
@@ -620,18 +850,30 @@ export function SalesLeads({
                                 </span>
                               )}
 
+                              {lead.phone && (
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  <a
+                                    href={`tel:${lead.phone}`}
+                                    title="Click to dial directly"
+                                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 font-mono font-black text-sm tracking-wide transition-colors border border-emerald-500/20 shadow-xs"
+                                  >
+                                    <Phone className="w-3.5 h-3.5 text-emerald-600 fill-emerald-600/20" />
+                                    <span>{lead.phone}</span>
+                                  </a>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleOpenWhatsApp(lead.phone || "", e)}
+                                    title="Send WhatsApp message (auto-copies phone to clipboard for new chat)"
+                                    className="p-1 rounded-lg text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-950 transition-colors border border-emerald-200"
+                                  >
+                                    <MessageSquare className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              )}
+
                               <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-0.5">
                                 {lead.contact && lead.contact !== lead.company && (
                                   <span className="font-medium text-foreground/80">{lead.contact}</span>
-                                )}
-                                {lead.phone && (
-                                  <a
-                                    href={`tel:${lead.phone}`}
-                                    className="flex items-center gap-1 hover:text-emerald-600 text-foreground/70"
-                                  >
-                                    <Phone className="w-3 h-3 text-emerald-600" />
-                                    {lead.phone}
-                                  </a>
                                 )}
                                 {lead.email && (
                                   <a
@@ -646,36 +888,36 @@ export function SalesLeads({
                             </div>
                           </td>
 
-                          {/* Source */}
+                          {/* Source Dropdown */}
                           <td className="px-4 py-3 whitespace-nowrap">
-                            {inlineEditing?.id === leadId && inlineEditing?.field === "source" ? (
-                              <Input
-                                autoFocus
-                                defaultValue={lead.source}
-                                onBlur={(e) => handleInlineUpdate(leadId, "source", e.target.value)}
-                                className="h-7 text-xs"
-                              />
-                            ) : (
-                              <span
-                                onClick={() => setInlineEditing({ id: leadId, field: "source" })}
-                                className="cursor-pointer hover:bg-muted/80 rounded px-1.5 py-1 text-muted-foreground font-medium"
-                              >
-                                {lead.source || "Add source"}
-                              </span>
-                            )}
+                            <Select
+                              value={availableSources.includes(lead.source as string) ? (lead.source as string) : "Others"}
+                              onValueChange={(val) => handleInlineUpdate(leadId, "source", val)}
+                            >
+                              <SelectTrigger className="h-7 text-xs font-semibold border-border bg-background/50 px-2 min-w-[110px] rounded-lg">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Array.from(new Set([...availableSources, "Others"])).map((s) => (
+                                  <SelectItem key={s} value={s} className="text-xs">
+                                    {s}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </td>
 
                           {/* Category */}
                           <td className="px-4 py-3 whitespace-nowrap">
                             <Select
-                              value={(lead.category as string) || "Others"}
+                              value={availableCategories.includes(lead.category as string) ? (lead.category as string) : "Others"}
                               onValueChange={(val) => handleInlineUpdate(leadId, "category", val)}
                             >
                               <SelectTrigger className="h-7 text-xs font-semibold border-border bg-background/50 px-2 min-w-[110px]">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                {DEFAULT_CATEGORIES.map((c) => (
+                                {Array.from(new Set([...availableCategories, "Others"])).map((c) => (
                                   <SelectItem key={c} value={c} className="text-xs">
                                     {c}
                                   </SelectItem>
@@ -687,7 +929,7 @@ export function SalesLeads({
                           {/* Status */}
                           <td className="px-4 py-3 whitespace-nowrap">
                             <Select
-                              value={status}
+                              value={availableStages.includes(status) ? status : availableStages[0] || "New Lead"}
                               onValueChange={(val) => onStatusSelect(lead, val)}
                             >
                               <SelectTrigger
@@ -699,12 +941,11 @@ export function SalesLeads({
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="Lead">Lead</SelectItem>
-                                <SelectItem value="Contacted">Contacted</SelectItem>
-                                <SelectItem value="Proposal Sent">Proposal Sent</SelectItem>
-                                <SelectItem value="On Hold">On Hold</SelectItem>
-                                <SelectItem value="Client Won">Client Won 🏆</SelectItem>
-                                <SelectItem value="Client Lost">Client Lost</SelectItem>
+                                {availableStages.map((st) => (
+                                  <SelectItem key={st} value={st} className="text-xs">
+                                    {st}{st.toLowerCase().includes("won") ? " 🏆" : ""}
+                                  </SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                             {status === "On Hold" && lead.holdResumeDate && (
@@ -789,23 +1030,51 @@ export function SalesLeads({
 
                           {/* Follow-ups */}
                           <td className="px-4 py-3 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              <FollowUpDialog
-                                lead={lead}
-                                userName={currentUserName}
-                              />
+                            <div className="flex flex-col gap-1.5">
+                              <div className="flex items-center gap-1.5">
+                                <FollowUpDialog
+                                  lead={lead}
+                                  userName={currentUserName}
+                                />
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleQuickCNR(lead);
+                                  }}
+                                  title="1-Click: Record Call Not Received (CNR) & set follow-up for tomorrow"
+                                  className="h-7 text-[10px] px-2 font-black text-amber-700 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg shadow-xs"
+                                >
+                                  CNR
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleQuickCallLater(lead);
+                                  }}
+                                  title="1-Click: Client Busy - Remind in 2 hours"
+                                  className="h-7 text-[10px] px-1.5 font-bold text-blue-700 dark:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 rounded-lg shadow-xs"
+                                >
+                                  Later
+                                </Button>
+                              </div>
                               {nextDateStr && (
-                                <div className="flex flex-col">
+                                <div className="flex items-center gap-1">
                                   {isMissed ? (
-                                    <span className="text-[9px] font-bold text-rose-600 animate-pulse uppercase">
+                                    <span className="text-[9px] font-bold text-rose-600 dark:text-rose-400 animate-pulse uppercase bg-rose-500/10 px-1.5 py-0.5 rounded">
                                       Missed ({nextDateStr})
                                     </span>
                                   ) : isDueToday ? (
-                                    <span className="text-[9px] font-bold text-amber-600 animate-pulse uppercase">
+                                    <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 animate-pulse uppercase bg-amber-500/10 px-1.5 py-0.5 rounded">
                                       Due Today
                                     </span>
                                   ) : (
-                                    <span className="text-[10px] text-muted-foreground">
+                                    <span className="text-[10px] text-muted-foreground font-medium">
                                       Next: {nextDateStr}
                                     </span>
                                   )}
@@ -934,23 +1203,41 @@ export function SalesLeads({
           </div>
           <div className="w-full sm:w-[200px]">
             <input
-              type="text"
-              placeholder="Phone (Compulsory)..."
+              ref={phoneInputRef}
+              type="tel"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              placeholder="Phone (10 digits)..."
               value={quickAddPhone}
-              onChange={(e) => setQuickAddPhone(e.target.value)}
+              onChange={(e) => setQuickAddPhone(e.target.value.replace(/[^0-9]/g, "").slice(0, 12))}
+              onKeyDown={(e) => { if (!/[0-9]/.test(e.key) && !["Backspace", "Delete", "ArrowLeft", "ArrowRight", "Tab", "Enter"].includes(e.key)) e.preventDefault(); }}
               className="w-full text-xs font-semibold bg-muted/40 border border-border rounded-xl px-3 py-2 outline-none focus:border-emerald-500 focus:bg-background transition-all placeholder:text-muted-foreground text-foreground"
             />
           </div>
-          <div className="w-full sm:w-[170px]">
+          <div className="w-full sm:w-[160px]">
             <Select value={quickAddCategory} onValueChange={setQuickAddCategory}>
               <SelectTrigger className="h-9 text-xs font-semibold bg-muted/40 border-border">
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none_selected">None (Others)</SelectItem>
-                {DEFAULT_CATEGORIES.map((cat) => (
+                {availableCategories.map((cat) => (
                   <SelectItem key={cat} value={cat}>
                     {cat}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="w-full sm:w-[150px]">
+            <Select value={quickAddSource} onValueChange={setQuickAddSource}>
+              <SelectTrigger className="h-9 text-xs font-semibold bg-muted/40 border-border">
+                <SelectValue placeholder="Source" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableSources.map((src) => (
+                  <SelectItem key={src} value={src}>
+                    {src}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1043,10 +1330,28 @@ export function SalesLeads({
             </TabsTrigger>
           </TabsList>
 
-          {/* Search & Category Filter */}
+          {/* Search & Filters */}
           {activeTab !== "targets" && (
             <div className="flex flex-wrap items-center gap-2">
-              <div className="relative w-full sm:w-56">
+              {/* Today Quick Toggle Pill */}
+              <Button
+                type="button"
+                size="sm"
+                variant={dateFilter === "today" ? "default" : "outline"}
+                onClick={() => setDateFilter((prev) => (prev === "today" ? "all" : "today"))}
+                className={cn(
+                  "h-9 text-xs font-bold gap-1.5 px-3 rounded-xl transition-all",
+                  dateFilter === "today"
+                    ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+                    : "border-border text-foreground hover:bg-muted"
+                )}
+                title="1-Click: Filter leads added or follow-up due today"
+              >
+                <Clock className="w-3.5 h-3.5" />
+                Today ({todayLeadsCount})
+              </Button>
+
+              <div className="relative w-full sm:w-48">
                 <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-muted-foreground" />
                 <Input
                   placeholder="Search leads..."
@@ -1055,19 +1360,65 @@ export function SalesLeads({
                   className="pl-9 h-9 text-xs bg-muted/30 border-border"
                 />
               </div>
+
               <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-[140px] h-9 text-xs font-semibold border-border">
+                <SelectTrigger className="w-[130px] h-9 text-xs font-semibold border-border">
                   <SelectValue placeholder="Category" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Categories</SelectItem>
-                  {DEFAULT_CATEGORIES.map((c) => (
+                  {availableCategories.map((c) => (
                     <SelectItem key={c} value={c}>
                       {c}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+
+              <Select value={sourceFilter} onValueChange={setSourceFilter}>
+                <SelectTrigger className="w-[125px] h-9 text-xs font-semibold border-border">
+                  <SelectValue placeholder="Source" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Sources</SelectItem>
+                  {availableSources.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={dateFilter} onValueChange={(val: any) => setDateFilter(val)}>
+                <SelectTrigger className="w-[115px] h-9 text-xs font-semibold border-border">
+                  <SelectValue placeholder="Date Range" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Dates</SelectItem>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="this_month">This Month</SelectItem>
+                  <SelectItem value="last_month">Last Month</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {(dateFilter !== "all" || sourceFilter !== "all" || categoryFilter !== "all" || employeeFilter !== "all" || searchTerm) && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setDateFilter("all");
+                    setSourceFilter("all");
+                    setCategoryFilter("all");
+                    setEmployeeFilter("all");
+                    setSearchTerm("");
+                  }}
+                  className="h-9 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  title="Reset all filters"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 mr-1" /> Reset
+                </Button>
+              )}
             </div>
           )}
         </div>
@@ -1235,7 +1586,7 @@ export function SalesLeads({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Overall">Overall</SelectItem>
-                        {DEFAULT_CATEGORIES.map((c) => (
+                        {availableCategories.map((c) => (
                           <SelectItem key={c} value={c}>
                             {c}
                           </SelectItem>
@@ -1293,7 +1644,52 @@ export function SalesLeads({
                         </tr>
                       ) : (
                         targets.map((t, idx) => {
-                          const achieved = t.currentAchievement || 0;
+                          const empName = (t.employeeName || "").toLowerCase();
+                          const dynamicAchieved = leads
+                            .filter((l) => {
+                              const isWon =
+                                l.status === "Client Won" ||
+                                l.status === "Won" ||
+                                l.stage === "Client Won" ||
+                                l.stage === "Won";
+                              if (!isWon) return false;
+
+                              const assignedArr = Array.isArray(l.assignedTo)
+                                ? l.assignedTo
+                                : [l.assignedTo || l.owner || ""];
+                              const matchesEmp =
+                                !empName ||
+                                assignedArr.some((a: string) => String(a).toLowerCase().includes(empName)) ||
+                                (l.owner && String(l.owner).toLowerCase().includes(empName));
+                              if (!matchesEmp) return false;
+
+                              if (t.type === "Monthly" && t.month && t.year) {
+                                const closed = l.closedDate || l.date || l.createdAt;
+                                if (closed) {
+                                  const d = new Date(closed);
+                                  const monthNames = [
+                                    "January", "February", "March", "April", "May", "June",
+                                    "July", "August", "September", "October", "November", "December"
+                                  ];
+                                  if (monthNames[d.getMonth()] !== t.month || d.getFullYear() !== Number(t.year)) {
+                                    return false;
+                                  }
+                                }
+                              }
+                              return true;
+                            })
+                            .reduce((sum, l) => {
+                              // Audio 8 Rule: Prioritize net_amount (excluding GST), fallback to deal_value
+                              const val =
+                                Number(l.netAmount ?? l.net_amount ?? l.dealValue ?? l.deal_value ?? l.budget) ||
+                                parseFloat(String(l.expectedIncome || "").replace(/[^0-9.]/g, "")) ||
+                                0;
+                              return sum + val;
+                            }, 0);
+
+                          const achieved = t.currentAchievement
+                            ? Math.max(t.currentAchievement, dynamicAchieved)
+                            : dynamicAchieved;
                           const pct = t.targetAmount > 0 ? (achieved / t.targetAmount) * 100 : 0;
                           return (
                             <tr key={idx} className="hover:bg-muted/40 transition-colors">
@@ -1366,7 +1762,11 @@ export function SalesLeads({
         lead={convertingLead}
         isOpen={convertingLead !== null}
         onClose={() => setConvertingLead(null)}
-        onSuccess={fetchLeads}
+        onSuccess={() => {
+          setConvertingLead(null);
+          fetchLeads();
+          fetchTargets();
+        }}
       />
 
       {/* Status Change Reason Modal */}

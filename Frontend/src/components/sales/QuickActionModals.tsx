@@ -11,14 +11,32 @@ import { X,  UploadCloud, CheckCircle2  } from "lucide-react";
 import { toast } from "@/lib/toast";
 
 export function QuickActionModals({ activeAction, onClose }: { activeAction: string | null; onClose: () => void }) {
-  const { tasks, setTasks, addLead } = useSales();
+  const { tasks, setTasks, addLead, salesSettings, stages } = useSales();
   
-  // Lead Form States
+  // Lead Form States with Sticky defaults from localStorage
   const [leadName, setLeadName] = useState("");
   const [leadCompany, setLeadCompany] = useState("");
   const [leadEmail, setLeadEmail] = useState("");
   const [leadPhone, setLeadPhone] = useState("");
-  const [leadSource, setLeadSource] = useState("Website");
+  const [leadSource, setLeadSource] = useState(() => {
+    return (typeof window !== "undefined" && localStorage.getItem("hrms_sticky_lead_source")) || "Website";
+  });
+  const [leadCategory, setLeadCategory] = useState(() => {
+    return (typeof window !== "undefined" && localStorage.getItem("hrms_sticky_lead_category")) || "Others";
+  });
+
+  // Keep sticky values synced to localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("hrms_sticky_lead_source", leadSource);
+    }
+  }, [leadSource]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("hrms_sticky_lead_category", leadCategory);
+    }
+  }, [leadCategory]);
 
   // Create Task Form States
   const [taskDescription, setTaskDescription] = useState("");
@@ -40,32 +58,78 @@ export function QuickActionModals({ activeAction, onClose }: { activeAction: str
     setTimeout(onClose, 200); // Give time for close animation
   };
 
+  const saveLeadInternal = async () => {
+    const digitsOnly = leadPhone.replace(/[^0-9]/g, "");
+    if (!digitsOnly) {
+      toast.error("Phone number is required (digits only)");
+      return false;
+    }
+    if (digitsOnly.length < 10) {
+      toast.error("Enter valid 10-digit mobile number");
+      return false;
+    }
+    const companyVal = leadCompany.trim() || leadName.trim() || `Lead ${digitsOnly.slice(-4)}`;
+    const contactVal = leadName.trim() || companyVal;
+    const defaultStage: string = (stages && stages[0]) || (salesSettings?.stages && salesSettings.stages[0]?.name) || "New Lead";
+
+    const leadPayload: Partial<Lead> = {
+      contact: contactVal,
+      company: companyVal,
+      phone: digitsOnly,
+      source: leadSource,
+      category: leadCategory,
+      stage: defaultStage,
+      status: defaultStage,
+      priority: "Medium",
+      date: new Date().toISOString().split("T")[0] || "",
+    };
+    if (leadEmail.trim()) leadPayload.email = leadEmail.trim();
+
+    await addLead(leadPayload);
+    return true;
+  };
+
+  const handleSaveAndNew = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      const ok = await saveLeadInternal();
+      if (ok) {
+        toast.success("Lead saved successfully! Ready for next lead.");
+        setLeadName("");
+        setLeadCompany("");
+        setLeadEmail("");
+        setLeadPhone("");
+        // Retain leadSource and leadCategory completely sticky!
+        const phoneEl = document.getElementById("phone");
+        if (phoneEl) phoneEl.focus();
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     
     if (activeAction === "Add Lead") {
       try {
-        const leadPayload: Partial<Lead> = {
-          contact: leadName.trim() || leadCompany.trim(),
-          company: leadCompany.trim() || leadName.trim(),
-          source: leadSource,
-          stage: "Lead",
-          status: "Lead",
-          priority: "Medium",
-          category: "Others",
-          date: new Date().toISOString().split("T")[0] || "",
-        };
-        if (leadEmail.trim()) leadPayload.email = leadEmail.trim();
-        if (leadPhone.trim()) leadPayload.phone = leadPhone.trim();
-        await addLead(leadPayload);
-        setLeadName("");
-        setLeadCompany("");
-        setLeadEmail("");
-        setLeadPhone("");
+        const ok = await saveLeadInternal();
+        if (ok) {
+          toast.success("Lead added successfully!");
+          setLeadName("");
+          setLeadCompany("");
+          setLeadEmail("");
+          setLeadPhone("");
+          handleClose();
+        }
       } catch (err) {
         console.error(err);
+      } finally {
+        setIsSubmitting(false);
       }
+      return;
     }
 
     if (activeAction === "Create Task") {
@@ -138,63 +202,107 @@ export function QuickActionModals({ activeAction, onClose }: { activeAction: str
           {/* Add Lead Form */}
           {activeAction === "Add Lead" && (
             <>
-              <div className="grid gap-2">
-                <Label htmlFor="name">Contact Name</Label>
-                <Input
-                  id="name"
-                  placeholder="John Doe"
-                  value={leadName}
-                  onChange={(e) => setLeadName(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="company">Company</Label>
-                <Input
-                  id="company"
-                  placeholder="Acme Corp"
-                  value={leadCompany}
-                  onChange={(e) => setLeadCompany(e.target.value)}
-                  required
-                />
-              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="phone" className="text-xs font-bold text-foreground flex items-center gap-1">
+                    Phone Number <span className="text-rose-500 font-black">*</span>
+                  </Label>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    placeholder="10-digit mobile (digits only)"
+                    value={leadPhone}
+                    onChange={(e) => setLeadPhone(e.target.value.replace(/[^0-9]/g, "").slice(0, 12))}
+                    onKeyDown={(e) => { if (!/[0-9]/.test(e.key) && !["Backspace", "Delete", "ArrowLeft", "ArrowRight", "Tab", "Enter"].includes(e.key)) e.preventDefault(); }}
+                    required
+                    autoFocus
+                    className="text-sm font-semibold bg-background"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="name" className="text-xs font-medium text-muted-foreground">
+                    Contact Name (Optional)
+                  </Label>
+                  <Input
+                    id="name"
+                    placeholder="e.g. Rahul Sharma"
+                    value={leadName}
+                    onChange={(e) => setLeadName(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="company" className="text-xs font-medium text-muted-foreground">
+                    Company / Business Name (Optional)
+                  </Label>
+                  <Input
+                    id="company"
+                    placeholder="e.g. Apex Jewels"
+                    value={leadCompany}
+                    onChange={(e) => setLeadCompany(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="email" className="text-xs font-medium text-muted-foreground">
+                    Email (Optional)
+                  </Label>
                   <Input
                     id="email"
                     type="email"
-                    placeholder="john@acme.com"
+                    placeholder="client@example.com"
                     value={leadEmail}
                     onChange={(e) => setLeadEmail(e.target.value)}
                   />
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="phone">Phone</Label>
-                  <Input
-                    id="phone"
-                    type="tel"
-                    placeholder="+91 98765 43210"
-                    value={leadPhone}
-                    onChange={(e) => setLeadPhone(e.target.value)}
-                  />
-                </div>
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="source">Lead Source</Label>
-                <Select value={leadSource} onValueChange={setLeadSource}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select source" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Website">Website</SelectItem>
-                    <SelectItem value="Google Ads">Google Ads</SelectItem>
-                    <SelectItem value="Meta Ads">Meta Ads</SelectItem>
-                    <SelectItem value="Referral">Referral</SelectItem>
-                    <SelectItem value="LinkedIn">LinkedIn</SelectItem>
-                    <SelectItem value="Cold Call">Cold Call</SelectItem>
-                  </SelectContent>
-                </Select>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 pt-1">
+                <div className="grid gap-2">
+                  <Label htmlFor="source" className="text-xs font-semibold text-foreground flex items-center justify-between">
+                    <span>Lead Source</span>
+                    <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded">Sticky</span>
+                  </Label>
+                  <Select value={leadSource} onValueChange={setLeadSource}>
+                    <SelectTrigger className="text-xs font-semibold">
+                      <SelectValue placeholder="Select source" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(salesSettings?.sources && salesSettings.sources.length > 0 ? salesSettings.sources : [
+                        "Meta Ads", "Google Ads", "Instagram", "Facebook", "WhatsApp",
+                        "Website", "Reference", "Cold Calling", "LinkedIn", "Walk-in", "Others"
+                      ]).map((src) => (
+                        <SelectItem key={src} value={src}>{src}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="category" className="text-xs font-semibold text-foreground flex items-center justify-between">
+                    <span>Business Category</span>
+                    <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded">Sticky</span>
+                  </Label>
+                  <Select value={leadCategory} onValueChange={setLeadCategory}>
+                    <SelectTrigger className="text-xs font-semibold">
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(salesSettings?.categories && salesSettings.categories.length > 0
+                        ? salesSettings.categories.map((c) => c.name)
+                        : [
+                          "Jewellery", "Restaurants", "Real Estate", "Doctors", "Education",
+                          "Hospital", "Manufacturing", "Textile", "Finance", "Automobile", "IT Company", "Others"
+                        ]
+                      ).map((cat) => (
+                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </>
           )}
@@ -377,10 +485,21 @@ export function QuickActionModals({ activeAction, onClose }: { activeAction: str
           )}
 
           </div>
-          <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
+          <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex flex-wrap items-center justify-end gap-3 mt-auto shrink-0">
             <Button type="button" variant="outline" onClick={handleClose}>Cancel</Button>
+            {activeAction === "Add Lead" && (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleSaveAndNew}
+                disabled={isSubmitting || !leadPhone.trim()}
+                className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 font-bold"
+              >
+                {isSubmitting ? "Saving..." : "Save & New"}
+              </Button>
+            )}
             <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700" disabled={isSubmitting}>
-              {isSubmitting ? "Processing..." : activeAction.includes("Upload") || activeAction.includes("Import") ? "Upload Data" : "Save Changes"}
+              {isSubmitting ? "Processing..." : activeAction.includes("Upload") || activeAction.includes("Import") ? "Upload Data" : activeAction === "Add Lead" ? "Save Lead" : "Save Changes"}
             </Button>
           </div>
         </form>

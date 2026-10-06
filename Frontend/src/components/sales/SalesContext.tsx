@@ -25,11 +25,47 @@ export type SalesTarget = {
   breakdown?: any[];
 };
 
+export type SalesSummary = {
+  total_leads: number;
+  active_leads: number;
+  won_leads: number;
+  lost_leads: number;
+  hot_leads_count: number;
+  hot_leads_overdue_count: number;
+  hot_leads_needing_attention: any[];
+  today_followups_count: number;
+  total_target: number;
+  achieved_target: number;
+  remaining_target: number;
+  conversion_rate: number;
+  avg_deal_size: number;
+  conversion_funnel: Record<string, number>;
+  source_analysis: any[];
+};
+
+export type SalesSettings = {
+  id?: string;
+  stages: { name: string; index: number; is_default?: boolean; color?: string }[];
+  categories: { name: string; iconName?: string; color?: string }[];
+  sources: string[];
+  assignment_rules: { name: string; active: boolean }[];
+  eligible_owners: string[];
+  notifications: { title: string; subtitle?: string; active: boolean }[];
+  payment_visibility: { allowed_roles?: string[]; allowed_employee_ids?: string[]; allowed_employee_names?: string[] };
+  follow_up_types?: { label: string; note?: string; action?: string; offset_hours?: number; active?: boolean }[];
+  role_permissions?: { role: string; perms: string[] }[];
+};
+
 type SalesContextType = {
   leads: Lead[];
   setLeads: React.Dispatch<React.SetStateAction<Lead[]>>;
   stages: string[];
   setStages: React.Dispatch<React.SetStateAction<string[]>>;
+  salesSettings: SalesSettings | null;
+  fetchSettings: () => Promise<void>;
+  updateSalesSettings: (updates: Partial<SalesSettings>) => Promise<boolean>;
+  summary: SalesSummary | null;
+  fetchSummary: () => Promise<void>;
   tasks: SalesTask[];
   setTasks: React.Dispatch<React.SetStateAction<SalesTask[]>>;
   targets: SalesTarget[];
@@ -42,7 +78,13 @@ type SalesContextType = {
   deleteLead: (id: string) => Promise<boolean>;
   bulkAssignLeads: (leadIds: string[], assignedTo: string[]) => Promise<boolean>;
   bulkDeleteLeads: (leadIds: string[]) => Promise<boolean>;
-  addFollowUp: (leadId: string, note: string, nextFollowUpDate?: string | null) => Promise<boolean>;
+  addFollowUp: (
+    leadId: string,
+    note: string,
+    nextFollowUpDate?: string | null,
+    actionType?: string,
+    nextFollowUpTime?: string
+  ) => Promise<boolean>;
   // Calculated live metrics
   activeLeads: Lead[];
   wonLeads: Lead[];
@@ -72,16 +114,66 @@ export function SalesProvider({ children }: { children: ReactNode }) {
     return pipelineStages.map((s) => s.stage);
   });
 
+  const [salesSettings, setSalesSettings] = useState<SalesSettings | null>(null);
+  const [summary, setSummary] = useState<SalesSummary | null>(null);
   const [tasks, setTasks] = useState<SalesTask[]>([]);
   const [targets, setTargets] = useState<SalesTarget[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Sync stages to local storage
+  // Sync stages to local storage as fallback
   useEffect(() => {
     if (typeof window !== "undefined") {
       localStorage.setItem("hrms_sales_stages", JSON.stringify(stages));
     }
   }, [stages]);
+
+  const fetchSettings = useCallback(async () => {
+    try {
+      const res = await api.get<SalesSettings>("/sales/settings", { showErrorToast: false });
+      if (res && res.stages && Array.isArray(res.stages)) {
+        setSalesSettings(res);
+        const stageNames = res.stages
+          .sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
+          .map((s) => s.name);
+        if (stageNames.length > 0) {
+          setStages(stageNames);
+        }
+      }
+    } catch {
+      // Fallback to local
+    }
+  }, []);
+
+  const updateSalesSettings = async (updates: Partial<SalesSettings>): Promise<boolean> => {
+    try {
+      const updated = await api.put<SalesSettings>("/sales/settings", updates, { showErrorToast: true });
+      if (updated) {
+        setSalesSettings(updated);
+        if (updated.stages) {
+          const stageNames = updated.stages
+            .sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
+            .map((s) => s.name);
+          setStages(stageNames);
+        }
+        toast.success("Sales settings updated successfully");
+        return true;
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update sales settings");
+    }
+    return false;
+  };
+
+  const fetchSummary = useCallback(async () => {
+    try {
+      const res = await api.get<SalesSummary>("/sales/summary", { showErrorToast: false });
+      if (res && typeof res.total_leads === "number") {
+        setSummary(res);
+      }
+    } catch {
+      // Backend error fallback
+    }
+  }, []);
 
   const fetchLeads = useCallback(async (employeeFilter?: string) => {
     try {
@@ -112,9 +204,11 @@ export function SalesProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    fetchSettings();
+    fetchSummary();
     fetchLeads();
     fetchTargets();
-  }, [fetchLeads, fetchTargets]);
+  }, [fetchSettings, fetchSummary, fetchLeads, fetchTargets]);
 
   const addLead = async (leadData: Partial<Lead>): Promise<Lead | null> => {
     try {
@@ -126,14 +220,15 @@ export function SalesProvider({ children }: { children: ReactNode }) {
         assignedTo: leadData.assignedTo && leadData.assignedTo.length > 0 
           ? leadData.assignedTo 
           : [currentUserName],
-        stage: leadData.stage || leadData.status || "Lead",
-        status: leadData.status || leadData.stage || "Lead",
+        stage: leadData.stage || leadData.status || stages[0] || "New Lead",
+        status: leadData.status || leadData.stage || stages[0] || "New Lead",
         date: leadData.date || new Date().toISOString().split("T")[0] || "",
       };
 
       const created = await api.post<Lead>("/leads", payload, { showErrorToast: false });
       if (created) {
         setLeads((prev) => [created, ...prev.filter((l) => (l.id || l._id) !== (created.id || created._id))]);
+        fetchSummary();
         return created;
       }
     } catch (err: any) {
@@ -203,14 +298,22 @@ export function SalesProvider({ children }: { children: ReactNode }) {
   const addFollowUp = async (
     leadId: string,
     note: string,
-    nextFollowUpDate?: string | null
+    nextFollowUpDate?: string | null,
+    actionType?: string,
+    nextFollowUpTime?: string
   ): Promise<boolean> => {
     try {
-      await api.post(`/leads/${leadId}/follow-ups`, {
+      const payload: any = {
         note,
-        nextFollowUpDate,
+        nextFollowUpDate: nextFollowUpDate ?? null,
+        action_type: actionType || "Call",
         date: new Date().toISOString(),
-      });
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
+      if (nextFollowUpTime) {
+        payload.next_follow_up_time = nextFollowUpTime;
+      }
+      await api.post(`/leads/${leadId}/follow-ups`, payload);
       await fetchLeads();
       return true;
     } catch (err: any) {
@@ -225,7 +328,14 @@ export function SalesProvider({ children }: { children: ReactNode }) {
               nextFollowUpDate: safeNextDate,
               followUps: [
                 ...followUps,
-                { note, date: new Date().toISOString(), nextFollowUpDate: nextFollowUpDate ?? null },
+                {
+                  note,
+                  action_type: actionType || "Call",
+                  date: new Date().toISOString(),
+                  time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                  nextFollowUpDate: nextFollowUpDate ?? null,
+                  next_follow_up_time: nextFollowUpTime || null,
+                } as any,
               ],
             };
           }
@@ -288,6 +398,11 @@ export function SalesProvider({ children }: { children: ReactNode }) {
         setLeads,
         stages,
         setStages,
+        salesSettings,
+        fetchSettings,
+        updateSalesSettings,
+        summary,
+        fetchSummary,
         tasks,
         setTasks,
         targets,

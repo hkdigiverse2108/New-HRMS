@@ -43,9 +43,51 @@ function parseDobToNextBirthday(dobStr: string): { diffDays: number; formatted: 
   return { diffDays, formatted };
 }
 
+const MOTIVATIONAL_QUOTES = [
+  { quote: "Every 'No' gets you one step closer to a 'Yes'. Persistence defines champions.", author: "Sales Excellence" },
+  { quote: "Discipline compounds faster than talent. Show up, ship, repeat.", author: "Daily Mindset" },
+  { quote: "Don't find customers for your products, find solutions for your customers.", author: "Seth Godin" },
+  { quote: "The secret of getting ahead is getting started. Make that call today.", author: "Mark Twain" },
+  { quote: "Excellence is not an act, but a habit. Consistent follow-ups build empires.", author: "Aristotle" },
+  { quote: "Value is what clients pay for; trust is what keeps them for life.", author: "Warren Buffett" },
+  { quote: "Your attitude, not your aptitude, will determine your altitude in closing deals.", author: "Zig Ziglar" },
+  { quote: "Opportunities don't happen. You create them by reaching out.", author: "Chris Grosser" },
+  { quote: "Small daily improvements over time lead to stunning annual results.", author: "Robin Sharma" },
+  { quote: "High-performing teams do not wait for leads to get warm; they bring the fire.", author: "Leadership Core" },
+  { quote: "Action cures fear. Hesitation creates doubt. Pick up the phone.", author: "David Schwartz" },
+  { quote: "Treat every lead as your biggest enterprise deal. Respect earns revenue.", author: "Sales Wisdom" },
+  { quote: "Quality means doing it right when no one is looking.", author: "Henry Ford" },
+  { quote: "Focus on closing relationships, not just sales quotas.", author: "Patricia Fripp" },
+  { quote: "Energy flows where attention goes. Focus on your highest-value prospects.", author: "Tony Robbins" },
+  { quote: "A goal without a plan is just a wish. Set your targets and hit them.", author: "Antoine de Saint-Exupéry" },
+  { quote: "Success usually comes to those who are too busy to be looking for it.", author: "Henry David Thoreau" },
+  { quote: "The difference between ordinary and extraordinary is that little extra effort.", author: "Jimmy Johnson" },
+  { quote: "Listen twice as much as you speak. The client will tell you how to win them.", author: "Epictetus" },
+  { quote: "Today's preparation determines tomorrow's achievement. Review your pipeline.", author: "John Wooden" },
+  { quote: "Great things in business are never done by one person. They're done by a team.", author: "Steve Jobs" },
+  { quote: "You don't have to be great to start, but you have to start to be great.", author: "Zig Ziglar" },
+  { quote: "Hard work beats talent when talent fails to work hard.", author: "Tim Notke" },
+  { quote: "Clarity breeds confidence. Understand your client's exact problem first.", author: "Mastery Principle" },
+  { quote: "Winners embrace the grind. Every follow-up is a seed planted for tomorrow.", author: "Growth Culture" },
+  { quote: "Urgency without pressure is the art of elite deal making.", author: "Modern Sales" },
+  { quote: "Be so good they can't ignore you. Deliver unmistakable quality every time.", author: "Steve Martin" },
+  { quote: "Speed to lead wins the game. Responsiveness is your competitive edge.", author: "Conversion Law" },
+  { quote: "Patience with results, impatience with actions. Move quickly today.", author: "Naval Ravikant" },
+  { quote: "Champions keep playing until they get it right. Push across the finish line.", author: "Billie Jean King" },
+  { quote: "Celebrate the win, learn from the loss, reset to zero, and conquer tomorrow.", author: "Winning Mindset" }
+];
+
 export function HRAndNews() {
   const { employees } = useEmployeesContext();
   const { user } = useAuth();
+
+  const todayQuoteDay = new Date().getDate();
+  const currentMotivation =
+    MOTIVATIONAL_QUOTES[(todayQuoteDay - 1) % MOTIVATIONAL_QUOTES.length] ||
+    MOTIVATIONAL_QUOTES[0] || {
+      quote: "Discipline compounds faster than talent. Show up, ship, repeat.",
+      author: "Daily Mindset",
+    };
 
   // Role-based access control for sensitive Offboarding / Last Working Date data
   const canViewOffboarding = Boolean(
@@ -310,10 +352,18 @@ export function HRAndNews() {
           ))}
         </div>
 
-        <div className="bg-card rounded-3xl p-8 text-white shadow-sm relative overflow-hidden flex flex-col justify-between h-48">
+        <div className="bg-card rounded-3xl p-8 text-white shadow-sm relative overflow-hidden flex flex-col justify-between min-h-[140px]">
           <div>
-            <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-4">Today's motivation</h3>
-            <p className="text-xl font-bold leading-snug">“Discipline compounds faster than talent. Show up, ship, repeat.”</p>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
+                <Sparkles className="w-3 h-3 text-amber-400" />
+                Today's Motivation • Day {todayQuoteDay}
+              </h3>
+            </div>
+            <p className="text-lg font-bold leading-snug text-white">“{currentMotivation.quote}”</p>
+            {currentMotivation.author && (
+              <p className="text-xs text-muted-foreground mt-2 font-medium">— {currentMotivation.author}</p>
+            )}
           </div>
         </div>
         </CollapsibleSection>

@@ -5,6 +5,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { MessageSquare, Calendar, User, Clock, CheckCircle } from "lucide-react";
 import { toast } from "@/lib/toast";
+import { DatePicker } from "@/components/ui/date-picker";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSales } from "./SalesContext";
 import type { Lead } from "./sales-data";
 
@@ -15,13 +17,40 @@ interface FollowUpDialogProps {
 }
 
 export function FollowUpDialog({ lead, userName, trigger }: FollowUpDialogProps) {
-  const { addFollowUp } = useSales();
+  const { addFollowUp, salesSettings } = useSales();
   const [note, setNote] = useState("");
+  const [actionType, setActionType] = useState("Call");
   const [nextDate, setNextDate] = useState("");
+  const [nextTime, setNextTime] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
 
-  const followUps = lead.followUps || [];
+  const followUps = (lead as any).followUps || (lead as any).follow_ups || [];
+
+  const PRESETS = (salesSettings?.follow_up_types && salesSettings.follow_up_types.length > 0
+    ? salesSettings.follow_up_types.filter((f: any) => f.active !== false).map((f: any) => ({
+        label: f.label,
+        note: f.note || f.label,
+        action: f.action || f.label,
+        defaultOffsetHours: f.offset_hours ?? 24,
+      }))
+    : [
+      { label: "CNR (Call Not Received)", note: "Called but call was not received (CNR).", action: "CNR", defaultOffsetHours: 24 },
+      { label: "Call Later (Client Busy)", note: "Client is currently busy and asked to call back later.", action: "Call Later", defaultOffsetHours: 2 },
+      { label: "Client Interested", note: "Client is interested in our services. Follow-up required.", action: "Meeting", defaultOffsetHours: 48 },
+      { label: "WhatsApp Details Sent", note: "Sent portfolio & service details on WhatsApp.", action: "WhatsApp", defaultOffsetHours: 24 },
+      { label: "Demo Requested", note: "Client requested an online product demo.", action: "Demo", defaultOffsetHours: 24 },
+    ]);
+
+  const applyPreset = (preset: typeof PRESETS[0]) => {
+    setNote(preset.note);
+    setActionType(preset.action || "Call");
+    const d = new Date(Date.now() + preset.defaultOffsetHours * 3600000);
+    setNextDate(d.toISOString().split("T")[0] || "");
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    setNextTime(`${hh}:${mm}`);
+  };
 
   const handleAddFollowUp = async () => {
     if (!note.trim()) {
@@ -30,15 +59,28 @@ export function FollowUpDialog({ lead, userName, trigger }: FollowUpDialogProps)
     }
     setIsSubmitting(true);
     try {
+      let combinedDate: string | null = null;
+      if (nextDate) {
+        if (nextTime) {
+          combinedDate = `${nextDate}T${nextTime}:00`;
+        } else {
+          combinedDate = nextDate;
+        }
+      }
+
       const success = await addFollowUp(
         lead.id || lead._id || "",
         note.trim(),
-        nextDate ? new Date(nextDate).toISOString() : null
+        combinedDate,
+        actionType,
+        nextTime || undefined
       );
       if (success) {
-        toast.success("Follow-up added successfully");
+        toast.success("Follow-up logged successfully");
         setNote("");
+        setActionType("Call");
         setNextDate("");
+        setNextTime("");
         setIsOpen(false);
       }
     } catch {
@@ -82,88 +124,131 @@ export function FollowUpDialog({ lead, userName, trigger }: FollowUpDialogProps)
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="max-w-md p-6 max-h-[85vh] overflow-y-auto rounded-2xl bg-card border border-border">
+      <DialogContent className="max-w-lg p-6 max-h-[88vh] overflow-y-auto rounded-3xl bg-card border border-border shadow-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
-            Follow-ups:{" "}
-            <span className="text-emerald-600 font-extrabold">
+            Follow-up Management:{" "}
+            <span className="text-emerald-600 font-extrabold truncate max-w-[260px]">
               {lead.company || lead.contact}
             </span>
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          {/* Quick Presets (Audio 7 [21:30] Requirement) */}
+          <div className="space-y-1.5">
+            <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+              <span>Quick Presets (1-Click Fill)</span>
+              <span className="text-emerald-600 font-semibold normal-case">Audio 7 Standard</span>
+            </Label>
+            <div className="flex flex-wrap gap-1.5">
+              {PRESETS.map((p, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => applyPreset(p)}
+                  className="text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-border bg-muted/50 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 transition-all text-left"
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Add New Follow-up */}
-          <div className="space-y-3 bg-muted/40 p-4 rounded-xl border border-border/60">
+          <div className="space-y-3 bg-muted/30 p-4 rounded-2xl border border-border/70">
             <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              New Follow-up Note
+              Follow-up Note / Discussion Summary
             </Label>
             <Textarea
-              placeholder="What was the outcome of the interaction? Next steps..."
+              placeholder="What was discussed? Next action plan..."
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="min-h-[80px] bg-background border-border text-xs"
+              className="min-h-[75px] bg-background border-border text-xs rounded-xl"
             />
-            <div className="space-y-1.5">
-              <Label
-                htmlFor="nextFollowUpDate"
-                className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground"
-              >
-                Next Follow-up Date & Time (Optional)
+
+            {/* Separate Date and Time Pickers (Audio 7 [12:00] & [34:50]) */}
+            <div className="space-y-1.5 pt-1">
+              <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                <span>Next Follow-up Schedule (Optional)</span>
+                <span className="text-[10px] text-muted-foreground font-normal">
+                  {nextDate && nextTime ? "Exact reminder time set" : nextDate ? "Anytime on date" : "No date"}
+                </span>
               </Label>
-              <input
-                type="datetime-local"
-                id="nextFollowUpDate"
-                value={nextDate}
-                onChange={(e) => setNextDate(e.target.value)}
-                className="w-full text-xs bg-background border border-border rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-emerald-500"
-              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <Label htmlFor="fu_date" className="text-[10px] text-muted-foreground font-medium mb-1 block">
+                    Reminder Date
+                  </Label>
+                  <input
+                    type="date"
+                    id="fu_date"
+                    value={nextDate}
+                    onChange={(e) => setNextDate(e.target.value)}
+                    className="w-full text-xs font-semibold bg-background border border-border rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="fu_time" className="text-[10px] text-muted-foreground font-medium mb-1 block">
+                    Exact Time (e.g. 03:00 PM)
+                  </Label>
+                  <input
+                    type="time"
+                    id="fu_time"
+                    value={nextTime}
+                    onChange={(e) => setNextTime(e.target.value)}
+                    className="w-full text-xs font-semibold bg-background border border-border rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
             </div>
-            <div className="flex justify-end pt-1">
+
+            <div className="flex justify-end pt-2">
               <Button
                 size="sm"
                 onClick={handleAddFollowUp}
                 disabled={isSubmitting || !note.trim()}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 h-8 rounded-lg"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-5 h-8.5 rounded-xl shadow-xs"
               >
-                {isSubmitting ? "Adding..." : "Add Note"}
+                {isSubmitting ? "Saving..." : "Log Follow-up"}
               </Button>
             </div>
           </div>
 
-          {/* Follow-up Timeline */}
-          <div className="space-y-2">
-            <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              History ({followUps.length})
+          {/* Follow-up Timeline & History (Audio 7 [14:41] Requirement) */}
+          <div className="space-y-2 pt-1">
+            <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+              <span>Follow-up History Log</span>
+              <span className="font-semibold text-emerald-600">{followUps.length} Records</span>
             </Label>
             {followUps.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-6 italic border border-dashed border-border rounded-xl">
-                No follow-ups recorded yet.
+              <p className="text-xs text-muted-foreground text-center py-6 italic border border-dashed border-border rounded-2xl bg-muted/20">
+                No past follow-ups recorded yet.
               </p>
             ) : (
-              <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                 {[...followUps].reverse().map((fu, idx) => (
                   <div
                     key={idx}
-                    className="p-3 bg-background rounded-xl border border-border/70 space-y-1 text-xs shadow-xs"
+                    className="p-3.5 bg-background rounded-2xl border border-border/80 space-y-1.5 text-xs shadow-xs"
                   >
-                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                      <span className="flex items-center gap-1 font-semibold text-foreground/80">
-                        <User className="w-3 h-3 text-emerald-600" />
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="flex items-center gap-1 font-bold text-foreground">
+                        <User className="w-3.5 h-3.5 text-emerald-600" />
                         {fu.performedBy || userName || "Sales Rep"}
                       </span>
-                      <span className="flex items-center gap-1 font-medium">
+                      <span className="flex items-center gap-1 text-[10px] text-muted-foreground font-mono">
                         <Clock className="w-3 h-3 text-muted-foreground" />
                         {formatDate(fu.date)}
                       </span>
                     </div>
-                    <p className="text-xs text-foreground font-medium pt-1 whitespace-pre-wrap">
+                    <p className="text-xs text-foreground font-medium whitespace-pre-wrap leading-relaxed">
                       {fu.note}
                     </p>
                     {fu.nextFollowUpDate && (
-                      <div className="flex items-center gap-1 text-[10px] text-emerald-600 font-semibold pt-1 border-t border-border/40 mt-1">
-                        <Calendar className="w-3 h-3" />
-                        Next Follow-up: {formatDate(fu.nextFollowUpDate)}
+                      <div className="flex items-center gap-1.5 text-[10px] text-emerald-700 font-bold pt-1.5 border-t border-border/50">
+                        <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                        Next Follow-up Scheduled: {formatDate(fu.nextFollowUpDate)}
                       </div>
                     )}
                   </div>

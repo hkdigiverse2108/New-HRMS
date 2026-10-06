@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { Award, TrendingDown, Phone, Clock, CheckCircle2, XCircle, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
-import { teamMembers, formatCurrency, type TeamMember } from "./sales-data";
+import { formatCurrency, type TeamMember } from "./sales-data";
 import { useSales } from "./SalesContext";
 import { useEmployeesContext } from "@/components/employees/EmployeeContext";
 
@@ -85,34 +85,43 @@ export function SalesTeamPerformance({ onAction }: { onAction?: (action: string)
   const { leads, targets } = useSales();
   const { employees } = useEmployeesContext();
 
-  // Dynamic Members Calculation
+  // Dynamic Members Calculation - Strictly Sales Department (Audio 7 & Audio 8 [05:27])
   const dynamicMembers = useMemo<TeamMember[]>(() => {
     const candidateEmps = employees.length > 0 ? employees : [];
 
-    const assigneeNames = new Set<string>();
-    leads.forEach((l) => {
-      const list = Array.isArray(l.assignedTo) ? l.assignedTo : [l.assignedTo || l.owner];
-      list.forEach((name) => {
-        if (name && typeof name === "string") assigneeNames.add(name.trim().toLowerCase());
-      });
-    });
+    // Strict sales check
+    const isSalesEmployee = (e: any) => {
+      const dept = (e.department || "").toLowerCase().trim();
+      const subDept = (e.sub_department || "").toLowerCase().trim();
+      const desig = (e.designation || "").toLowerCase().trim();
+      const role = (e.role || "").toLowerCase().trim();
+      const sysRole = (e.work_details?.system_role || "").toLowerCase().trim();
 
-    const membersList = candidateEmps.filter((e) => {
-      const dept = (e.department || "").toLowerCase();
-      const role = (e.role || "").toLowerCase();
-      const isSales = dept.includes("sale") || dept.includes("bd") || role.includes("sale") || role.includes("bde");
-      const hasLeads = assigneeNames.has(e.name.toLowerCase());
-      return isSales || hasLeads;
-    });
+      // Exclude non-sales departments (Audio 8 explicitly: Only Sales department)
+      if (dept === "management" || dept === "development" || dept === "hr" || dept === "creative" || dept === "digital marketing") {
+        return false;
+      }
 
-    const finalEmps = membersList.length > 0 
-      ? membersList 
-      : candidateEmps.length > 0 
-        ? candidateEmps.slice(0, 8) 
-        : [];
+      return (
+        dept.includes("sale") ||
+        dept.includes("business dev") ||
+        subDept.includes("sale") ||
+        desig.includes("sale") ||
+        desig.includes("telecaller") ||
+        desig.includes("bde") ||
+        role.includes("sale") ||
+        role.includes("telecaller") ||
+        role.includes("bde") ||
+        sysRole.includes("sale")
+      );
+    };
+
+    // Strictly Sales-department employees only — no virtual reps, no static fallback.
+    // (Eligible owners queue is for auto-assignment, not for performance leaderboard.)
+    const finalEmps = candidateEmps.filter(isSalesEmployee);
 
     if (finalEmps.length === 0) {
-      return teamMembers;
+      return [];
     }
 
     return finalEmps.map((emp) => {
@@ -123,14 +132,19 @@ export function SalesTeamPerformance({ onAction }: { onAction?: (action: string)
       });
 
       const assignedCount = empLeads.length;
-      const won = empLeads.filter((l) => ["Client Won", "Won"].includes(l.status || l.stage || ""));
-      const lost = empLeads.filter((l) => ["Client Lost", "Lost"].includes(l.status || l.stage || ""));
-      const contacted = empLeads.filter((l) => !["New Lead", "New"].includes(l.status || l.stage || ""));
-      const meetings = empLeads.filter((l) => (l.stage || "").toLowerCase().includes("meet") || (l.stage || "").toLowerCase().includes("demo"));
-      const demos = empLeads.filter((l) => (l.stage || "").toLowerCase().includes("demo"));
-      const proposals = empLeads.filter((l) => (l.stage || "").toLowerCase().includes("proposal") || (l.stage || "").toLowerCase().includes("review"));
+      const won = empLeads.filter((l) => ["Client Won", "Won", "5"].includes(l.status || l.stage || ""));
+      const lost = empLeads.filter((l) => ["Client Lost", "Lost", "6"].includes(l.status || l.stage || ""));
+      const contacted = empLeads.filter((l) => !["New Lead", "New", "Stage 0", "0"].includes(l.status || l.stage || ""));
+      const meetings = empLeads.filter((l) => (l.stage || l.status || "").toLowerCase().includes("meet") || (l.stage || l.status || "").toLowerCase().includes("demo"));
+      const demos = empLeads.filter((l) => (l.stage || l.status || "").toLowerCase().includes("demo"));
+      const proposals = empLeads.filter((l) => (l.stage || l.status || "").toLowerCase().includes("proposal") || (l.stage || l.status || "").toLowerCase().includes("review"));
 
-      const achieved = won.reduce((acc, l) => acc + (Number(l.budget || l.expectedIncome) || 0), 0);
+      // Net recognized won revenue (Audio 7 & 8 priority)
+      const achieved = won.reduce((acc, l) => {
+        const val = Number(l.netAmount || l.net_amount || l.dealValue || l.deal_value || l.budget || l.expectedIncome) || 0;
+        return acc + val;
+      }, 0);
+
       const matchedTarget = targets.find((t) => t.employeeId === emp.id || t.employeeName?.toLowerCase() === empName.toLowerCase());
       const target = Number(matchedTarget?.targetAmount) || 1000000;
 
@@ -140,16 +154,16 @@ export function SalesTeamPerformance({ onAction }: { onAction?: (action: string)
 
       const initials = empName
         .split(" ")
-        .map((p) => p[0])
+        .map((p: string) => p[0])
         .filter(Boolean)
         .slice(0, 2)
         .join("")
-        .toUpperCase() || "EM";
+        .toUpperCase() || "SE";
 
       return {
         name: empName,
-        role: emp.role || "Sales Executive",
-        region: emp.department || "Ahmedabad",
+        role: emp.role || emp.designation || "Sales Executive",
+        region: emp.department || "Sales",
         avatar: initials,
         target,
         achieved,
@@ -256,12 +270,19 @@ export function SalesTeamPerformance({ onAction }: { onAction?: (action: string)
 
       {/* Leaderboard */}
       <div>
-        <h2 className="mb-4 text-lg font-bold">Leaderboard</h2>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {sorted.map((member) => (
-            <MemberCard key={member.name} member={member} />
-          ))}
-        </div>
+        <h2 className="mb-4 text-lg font-bold">Leaderboard <span className="text-xs font-semibold text-muted-foreground">· Sales department only ({sorted.length})</span></h2>
+        {sorted.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border p-12 text-center text-muted-foreground">
+            <p className="font-semibold">No Sales department employees found</p>
+            <p className="text-xs mt-1">Add employees with Department = Sales — only they appear here (fully dynamic, no static data).</p>
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {sorted.map((member) => (
+              <MemberCard key={member.name} member={member} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

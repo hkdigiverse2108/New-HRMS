@@ -60,6 +60,7 @@ SYSTEM_MODULES: List[Dict[str, Any]] = [
     {"id": "/work/sales/team", "name": "Sales Team Performance", "section": "Work", "parent_id": "/work/sales"},
     {"id": "/work/sales/reports", "name": "Sales Reports", "section": "Work", "parent_id": "/work/sales"},
     {"id": "/work/sales/settings", "name": "Sales Settings", "section": "Work", "parent_id": "/work/sales"},
+    {"id": "/work/sales#payment-details", "name": "Sales: View Payment Details", "section": "Work", "parent_id": "/work/sales"},
 
     {"id": "/tasks", "name": "Tasks", "section": "Work", "is_parent": False},
     {"id": "/chat", "name": "Chat", "section": "Work", "is_parent": False},

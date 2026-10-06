@@ -5,17 +5,19 @@ import {
   Building2, Users, MapPin, DollarSign, Calendar, Target,
   Briefcase, TrendingUp, CheckCircle2, ShieldAlert, BadgeCent,
   Pencil, Trash2, Settings, Plus, Shuffle, Bell, Shield, History,
-  Check, X, Gem, UtensilsCrossed, Stethoscope, GraduationCap,
+  Check, X, Gem, UtensilsCrossed, Stethoscope, GraduationCap, MessageSquare,
   HeartPulse, Factory, Shirt, Landmark, Car, Plane, Cpu,
-  Scissors, Dumbbell, HardHat, Shapes, ChevronUp, ChevronDown, ChevronRight
+  Scissors, Dumbbell, HardHat, Shapes, ChevronUp, ChevronDown, ChevronRight,
+  RefreshCw, Search, Lock
 } from "lucide-react";
 import { toast } from "@/lib/toast";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { useSales } from "./SalesContext";
 import { useEmployeesContext } from "@/components/employees/EmployeeContext";
 import { moveToRecycleBin } from "@/lib/recycle-bin";
+import { api } from "@/lib/api";
 
-const TABS = ["Pipeline Stages", "Lead Categories", "Lead Sources", "Assignment", "Notifications", "Permissions", "Audit Log"] as const;
+const TABS = ["Pipeline Stages", "Lead Categories", "Lead Sources", "Assignment", "Follow-ups", "Notifications", "Permissions", "Audit Log"] as const;
 type Tab = typeof TABS[number];
 
 const INITIAL_LEAD_CATEGORIES = [
@@ -113,20 +115,20 @@ const AUDIT_LOG = [
   { action: "Updated budget for BrightMind Academy", by: "by Neha Verma", time: "28 Jul 16:11" },
 ];
 
-function ToggleSwitch({ active }: { active: boolean }) {
-  const [isOn, setIsOn] = useState(active);
+function ToggleSwitch({ active, onChange }: { active: boolean; onChange?: (newVal: boolean) => void }) {
   return (
     <button
-      onClick={() => setIsOn(!isOn)}
+      type="button"
+      onClick={() => onChange?.(!active)}
       className={cn(
         "relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
-        isOn ? "bg-emerald-500" : "bg-muted"
+        active ? "bg-emerald-500" : "bg-muted"
       )}
     >
       <span
         className={cn(
           "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
-          isOn ? "translate-x-5" : "translate-x-0"
+          active ? "translate-x-5" : "translate-x-0"
         )}
       />
     </button>
@@ -134,9 +136,76 @@ function ToggleSwitch({ active }: { active: boolean }) {
 }
 
 export function SalesSettings() {
-  const { stages, setStages, leads, todayFollowUps } = useSales();
+  const { stages, setStages, leads, todayFollowUps, salesSettings, updateSalesSettings, fetchLeads, fetchSummary } = useSales();
   const { employees } = useEmployeesContext();
   const [activeTab, setActiveTab] = useState<Tab>("Lead Categories");
+
+  // Assignment Rules & Eligible Owners State (Audio 7 & 8)
+  const [assignmentRules, setAssignmentRules] = useState<any[]>(() => {
+    return salesSettings?.assignment_rules || ASSIGNMENT_RULES;
+  });
+
+  const [selectedEligibleOwners, setSelectedEligibleOwners] = useState<string[]>(() => {
+    return salesSettings?.eligible_owners || [];
+  });
+
+  // Keep synced with salesSettings
+  useEffect(() => {
+    if (salesSettings?.assignment_rules && salesSettings.assignment_rules.length > 0) {
+      setAssignmentRules(salesSettings.assignment_rules);
+    }
+    if (salesSettings?.eligible_owners) {
+      setSelectedEligibleOwners(salesSettings.eligible_owners);
+    }
+  }, [salesSettings]);
+
+  // Live Audit Logs State (Audio 8 [04:32])
+  const [liveAuditLogs, setLiveAuditLogs] = useState<any[]>([]);
+  const [auditSearchTerm, setAuditSearchTerm] = useState("");
+  const [isLoadingAuditLogs, setIsLoadingAuditLogs] = useState(false);
+
+  const fetchLiveAuditLogs = async (searchQuery = "") => {
+    setIsLoadingAuditLogs(true);
+    try {
+      const q = searchQuery ? `?search=${encodeURIComponent(searchQuery)}` : "";
+      const res = await api.get<any[]>(`/sales/audit-logs${q}`, { showErrorToast: false });
+      if (Array.isArray(res)) {
+        setLiveAuditLogs(res);
+      }
+    } catch {
+      // Fallback
+    } finally {
+      setIsLoadingAuditLogs(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "Audit Log") {
+      fetchLiveAuditLogs(auditSearchTerm);
+    }
+  }, [activeTab]);
+
+  const handleToggleAssignmentRule = async (idx: number) => {
+    const updated = assignmentRules.map((r, i) => (i === idx ? { ...r, active: !r.active } : r));
+    setAssignmentRules(updated);
+    await updateSalesSettings({ assignment_rules: updated });
+    toast.success("Assignment rule updated");
+  };
+
+  const handleToggleEligibleOwner = async (ownerName: string) => {
+    const cleanName = ownerName.includes("·") ? (ownerName.split("·")[0] || ownerName).trim() : ownerName.trim();
+    const exists = selectedEligibleOwners.some(
+      (o) => (o.includes("·") ? (o.split("·")[0] || o).trim() : o.trim()) === cleanName
+    );
+    const updated = exists
+      ? selectedEligibleOwners.filter(
+          (o) => (o.includes("·") ? (o.split("·")[0] || o).trim() : o.trim()) !== cleanName
+        )
+      : [...selectedEligibleOwners, ownerName];
+    setSelectedEligibleOwners(updated);
+    await updateSalesSettings({ eligible_owners: updated });
+    toast.success(`${cleanName} ${exists ? "removed from" : "added to"} Auto-Assignment queue`);
+  };
 
   const eligibleOwners = useMemo(() => {
     if (employees && employees.length > 0) {
@@ -179,40 +248,75 @@ export function SalesSettings() {
     return logs.length > 0 ? logs.slice(0, 8) : AUDIT_LOG;
   }, [leads]);
 
-  const moveStage = (index: number, direction: 'up' | 'down') => {
+  const persistStages = async (stageNames: string[]) => {
+    const payload = stageNames.map((name, idx) => ({
+      name,
+      index: idx,
+      is_default: idx === 0,
+      color: salesSettings?.stages?.[idx]?.color || "bg-primary",
+    }));
+    setStages(stageNames);
+    await updateSalesSettings({ stages: payload } as any);
+  };
+
+  const moveStage = async (index: number, direction: 'up' | 'down') => {
     const nextIndex = direction === 'up' ? index - 1 : index + 1;
     if (nextIndex < 0 || nextIndex >= stages.length) return;
-    
     const updated = [...stages];
     const temp = updated[index];
     const nextVal = updated[nextIndex];
-    
     if (temp !== undefined && nextVal !== undefined) {
       updated[index] = nextVal;
       updated[nextIndex] = temp;
-      setStages(updated);
+      await persistStages(updated);
       toast.success("Pipeline stages reordered!");
     }
   };
   
-  const [categories, setCategories] = useState(() => {
-    const saved = (typeof window !== 'undefined' ? localStorage.getItem('hrms_sales_categories') : null);
-    return saved ? JSON.parse(saved) : INITIAL_LEAD_CATEGORIES;
-  });
-  
-  const [sources, setSources] = useState(() => {
-    const saved = (typeof window !== 'undefined' ? localStorage.getItem('hrms_sales_sources') : null);
-    return saved ? JSON.parse(saved) : INITIAL_LEAD_SOURCES;
-  });
-  
-  const [permissions, setPermissions] = useState(() => {
-    const saved = (typeof window !== 'undefined' ? localStorage.getItem('hrms_sales_permissions') : null);
-    return saved ? JSON.parse(saved) : INITIAL_PERMISSIONS;
-  });
+  // Categories / Sources / Follow-up types — fully backend-driven, synced from salesSettings
+  const [categories, setCategories] = useState<any[]>(() => salesSettings?.categories?.map((c: any) => ({ ...c, icon: getIconComponent(c.iconName) })) || INITIAL_LEAD_CATEGORIES);
+  const [sources, setSources] = useState<string[]>(() => salesSettings?.sources || INITIAL_LEAD_SOURCES);
+  const [followUpTypes, setFollowUpTypes] = useState<any[]>(() => salesSettings?.follow_up_types || []);
+  const [notificationsState, setNotificationsState] = useState<any[]>(() => salesSettings?.notifications || []);
+  const [permissions, setPermissions] = useState<any[]>(() => salesSettings?.role_permissions || INITIAL_PERMISSIONS);
+  useEffect(() => {
+    if (salesSettings?.role_permissions && salesSettings.role_permissions.length > 0) {
+      setPermissions(salesSettings.role_permissions);
+    }
+  }, [salesSettings?.role_permissions]);
+  const [paymentVisibility, setPaymentVisibility] = useState<{ allowed_roles: string[]; allowed_employee_names: string[] }>(() => ({
+    allowed_roles: salesSettings?.payment_visibility?.allowed_roles || ["Admin", "SuperAdmin", "CEO", "Sales Head"],
+    allowed_employee_names: salesSettings?.payment_visibility?.allowed_employee_names || [],
+  }));
 
-  useEffect(() => { localStorage.setItem('hrms_sales_categories', JSON.stringify(categories)); }, [categories]);
-  useEffect(() => { localStorage.setItem('hrms_sales_sources', JSON.stringify(sources)); }, [sources]);
-  useEffect(() => { localStorage.setItem('hrms_sales_permissions', JSON.stringify(permissions)); }, [permissions]);
+  useEffect(() => {
+    if (salesSettings?.categories && salesSettings.categories.length > 0) {
+      setCategories(salesSettings.categories.map((c: any) => ({ ...c, icon: getIconComponent(c.iconName || c.icon_name) })));
+    }
+  }, [salesSettings?.categories]);
+  useEffect(() => {
+    if (salesSettings?.sources && salesSettings.sources.length > 0) {
+      setSources(salesSettings.sources);
+    }
+  }, [salesSettings?.sources]);
+  useEffect(() => {
+    if (salesSettings?.follow_up_types) {
+      setFollowUpTypes(salesSettings.follow_up_types);
+    }
+  }, [salesSettings?.follow_up_types]);
+  useEffect(() => {
+    if (salesSettings?.notifications && salesSettings.notifications.length > 0) {
+      setNotificationsState(salesSettings.notifications);
+    }
+  }, [salesSettings?.notifications]);
+  useEffect(() => {
+    if (salesSettings?.payment_visibility) {
+      setPaymentVisibility({
+        allowed_roles: salesSettings.payment_visibility.allowed_roles || [],
+        allowed_employee_names: salesSettings.payment_visibility.allowed_employee_names || [],
+      });
+    }
+  }, [salesSettings?.payment_visibility]);
 
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newSourceName, setNewSourceName] = useState("");
@@ -250,13 +354,14 @@ export function SalesSettings() {
     }
   };
 
-  const handleSavePermissions = () => {
+  const handleSavePermissions = async () => {
     if (editRoleIdx !== null && permissions[editRoleIdx]) {
       const updated = [...permissions];
       const role = updated[editRoleIdx];
       if (role) {
         role.perms = [...tempPerms];
         setPermissions(updated);
+        await updateSalesSettings({ role_permissions: updated } as any);
         toast.success(`${role.role} permissions updated`);
       }
     }
@@ -269,7 +374,7 @@ export function SalesSettings() {
     );
   };
 
-  const handleAddCategory = () => {
+  const handleAddCategory = async () => {
     if (!newCategoryName.trim()) {
       toast.error("Please enter a category name first");
       return;
@@ -277,14 +382,14 @@ export function SalesSettings() {
     const selectedIcon = AVAILABLE_ICONS[newCategoryIconIdx];
     if (!selectedIcon) return;
     const randomColor = COLORS[Math.floor(Math.random() * COLORS.length)] || "bg-muted/500";
-    
-    setCategories([{ 
-      name: newCategoryName, 
-      icon: selectedIcon.icon, 
-      color: randomColor, 
-      iconName: selectedIcon.name 
-    }, ...categories]);
-    
+    const updated = [{
+      name: newCategoryName.trim(),
+      icon: selectedIcon.icon,
+      color: randomColor,
+      iconName: selectedIcon.name
+    }, ...categories];
+    setCategories(updated);
+    await updateSalesSettings({ categories: updated.map(({ icon, ...rest }: any) => rest) } as any);
     setNewCategoryName("");
     setNewCategoryIconIdx(0);
     toast.success("Category added successfully");
@@ -294,12 +399,14 @@ export function SalesSettings() {
     setDeleteConfirm({ isOpen: true, type: "category", index: idx, name });
   };
 
-  const handleAddSource = () => {
+  const handleAddSource = async () => {
     if (!newSourceName.trim()) {
       toast.error("Please enter a lead source name first");
       return;
     }
-    setSources([newSourceName, ...sources]);
+    const updated = [newSourceName.trim(), ...sources];
+    setSources(updated);
+    await updateSalesSettings({ sources: updated } as any);
     setNewSourceName("");
     toast.success("Lead source added");
   };
@@ -308,12 +415,12 @@ export function SalesSettings() {
     setDeleteConfirm({ isOpen: true, type: "source", index: idx, name });
   };
 
-  const handleAddStage = () => {
+  const handleAddStage = async () => {
     if (!newStageName.trim()) {
       toast.error("Please enter a stage name first");
       return;
     }
-    setStages([...stages, newStageName]);
+    await persistStages([...stages, newStageName.trim()]);
     setNewStageName("");
     toast.success("Pipeline stage added");
   };
@@ -322,27 +429,47 @@ export function SalesSettings() {
     setDeleteConfirm({ isOpen: true, type: "stage", index: idx, name });
   };
 
-  const executeDelete = () => {
+  const executeDelete = async () => {
     if (deleteConfirm.type === "category") {
       const item = categories[deleteConfirm.index];
       if (item) {
         moveToRecycleBin('Lead Category', item.name, item, 'hrms_sales_categories');
       }
-      setCategories(categories.filter((_: any, i: number) => i !== deleteConfirm.index));
+      const updated = categories.filter((_: any, i: number) => i !== deleteConfirm.index);
+      setCategories(updated);
+      await updateSalesSettings({ categories: updated.map(({ icon, ...rest }: any) => rest) } as any);
+      try {
+        await api.post("/sales/settings/reassign-category", { deleted_name: deleteConfirm.name, default_name: "Others" }, { showErrorToast: false });
+        await fetchLeads();
+        await fetchSummary();
+      } catch { /* ignore */ }
       toast.success(`${deleteConfirm.name} deleted successfully`);
     } else if (deleteConfirm.type === "source") {
       const item = sources[deleteConfirm.index];
       if (item) {
         moveToRecycleBin('Lead Source', item, item, 'hrms_sales_sources');
       }
-      setSources(sources.filter((_: any, i: number) => i !== deleteConfirm.index));
+      const updated = sources.filter((_: any, i: number) => i !== deleteConfirm.index);
+      setSources(updated);
+      await updateSalesSettings({ sources: updated } as any);
+      try {
+        await api.post("/sales/settings/rename-source", { old_name: deleteConfirm.name, new_name: "Others" }, { showErrorToast: false });
+        await fetchLeads();
+        await fetchSummary();
+      } catch { /* ignore */ }
       toast.success(`Lead source deleted`);
     } else if (deleteConfirm.type === "stage") {
       const item = stages[deleteConfirm.index];
       if (item) {
         moveToRecycleBin('Pipeline Stage', item, item, 'hrms_sales_stages');
       }
-      setStages(stages.filter((_: any, i: number) => i !== deleteConfirm.index));
+      const remaining = stages.filter((_: any, i: number) => i !== deleteConfirm.index);
+      await persistStages(remaining);
+      try {
+        await api.post("/sales/settings/rename-stage", { old_name: deleteConfirm.name, new_name: remaining[0] || "New Lead" }, { showErrorToast: false });
+        await fetchLeads();
+        await fetchSummary();
+      } catch { /* ignore */ }
       toast.success(`Pipeline stage deleted`);
     }
     setDeleteConfirm({ isOpen: false, type: null, index: -1, name: "" });
@@ -357,25 +484,39 @@ export function SalesSettings() {
     const iconIdx = AVAILABLE_ICONS.findIndex(i => i.name === cat.iconName);
     setEditCategoryIconIdx(iconIdx !== -1 ? iconIdx : 0);
   };
-  const saveEditCategory = () => {
+  const saveEditCategory = async () => {
     if (editingCategoryIdx === null) return;
     if (!editCategoryName.trim()) {
       toast.error("Name cannot be empty");
       return;
     }
+    const oldName = categories[editingCategoryIdx]?.name;
+    const newName = editCategoryName.trim();
     const updated = [...categories];
     const iconObj = AVAILABLE_ICONS[editCategoryIconIdx];
     if (!iconObj || !updated[editingCategoryIdx]) return;
-    
     updated[editingCategoryIdx] = {
       ...updated[editingCategoryIdx],
-      name: editCategoryName,
+      name: newName,
       iconName: iconObj.name,
       icon: iconObj.icon
     };
     setCategories(updated);
+    await updateSalesSettings({ categories: updated.map(({ icon, ...rest }: any) => rest) } as any);
+    // Migrate existing leads so they don't get orphaned (Jewellery -> Jewellery1 issue)
+    if (oldName && oldName !== newName) {
+      try {
+        const res = await api.post<{ migrated: number }>("/sales/settings/rename-category", { old_name: oldName, new_name: newName }, { showErrorToast: false });
+        await fetchLeads();
+        await fetchSummary();
+        toast.success(`Category updated (${res.migrated} leads migrated)`);
+      } catch {
+        toast.success("Category updated");
+      }
+    } else {
+      toast.success("Category updated");
+    }
     setEditingCategoryIdx(null);
-    toast.success("Category updated");
   };
 
   const startEditSource = (idx: number) => {
@@ -384,17 +525,31 @@ export function SalesSettings() {
     setEditingSourceIdx(idx);
     setEditSourceName(src);
   };
-  const saveEditSource = () => {
+  const saveEditSource = async () => {
     if (editingSourceIdx === null) return;
     if (!editSourceName.trim()) {
       toast.error("Name cannot be empty");
       return;
     }
+    const oldName = sources[editingSourceIdx];
+    const newName = editSourceName.trim();
     const updated = [...sources];
-    updated[editingSourceIdx] = editSourceName;
+    updated[editingSourceIdx] = newName;
     setSources(updated);
+    await updateSalesSettings({ sources: updated } as any);
+    if (oldName && oldName !== newName) {
+      try {
+        const res = await api.post<{ migrated: number }>("/sales/settings/rename-source", { old_name: oldName, new_name: newName }, { showErrorToast: false });
+        await fetchLeads();
+        await fetchSummary();
+        toast.success(`Lead source updated (${res.migrated} leads migrated)`);
+      } catch {
+        toast.success("Lead source updated");
+      }
+    } else {
+      toast.success("Lead source updated");
+    }
     setEditingSourceIdx(null);
-    toast.success("Lead source updated");
   };
 
   const startEditStage = (idx: number) => {
@@ -403,17 +558,73 @@ export function SalesSettings() {
     setEditingStageIdx(idx);
     setEditStageName(stage);
   };
-  const saveEditStage = () => {
+  const saveEditStage = async () => {
     if (editingStageIdx === null) return;
     if (!editStageName.trim()) {
       toast.error("Name cannot be empty");
       return;
     }
+    const oldName = stages[editingStageIdx];
+    const newName = editStageName.trim();
     const updated = [...stages];
-    updated[editingStageIdx] = editStageName;
-    setStages(updated);
+    updated[editingStageIdx] = newName;
+    await persistStages(updated);
+    if (oldName && oldName !== newName) {
+      try {
+        await api.post("/sales/settings/rename-stage", { old_name: oldName, new_name: newName }, { showErrorToast: false });
+        await fetchLeads();
+        await fetchSummary();
+      } catch { /* history already tracked per-lead on next move */ }
+    }
     setEditingStageIdx(null);
     toast.success("Pipeline stage updated");
+  };
+
+  const handleToggleNotification = async (idx: number) => {
+    const updated = notificationsState.map((n, i) => (i === idx ? { ...n, active: !n.active } : n));
+    setNotificationsState(updated);
+    await updateSalesSettings({ notifications: updated } as any);
+  };
+
+  const [newFollowUpLabel, setNewFollowUpLabel] = useState("");
+  const handleAddFollowUpType = async () => {
+    if (!newFollowUpLabel.trim()) {
+      toast.error("Enter follow-up button name");
+      return;
+    }
+    const updated = [...followUpTypes, { label: newFollowUpLabel.trim(), note: newFollowUpLabel.trim(), action: newFollowUpLabel.trim(), offset_hours: 24, active: true }];
+    setFollowUpTypes(updated);
+    await updateSalesSettings({ follow_up_types: updated } as any);
+    setNewFollowUpLabel("");
+    toast.success("Follow-up button added");
+  };
+  const handleToggleFollowUpType = async (idx: number) => {
+    const updated = followUpTypes.map((f, i) => (i === idx ? { ...f, active: !f.active } : f));
+    setFollowUpTypes(updated);
+    await updateSalesSettings({ follow_up_types: updated } as any);
+  };
+  const handleDeleteFollowUpType = async (idx: number) => {
+    const updated = followUpTypes.filter((_, i) => i !== idx);
+    setFollowUpTypes(updated);
+    await updateSalesSettings({ follow_up_types: updated } as any);
+    toast.success("Follow-up button removed");
+  };
+
+  const handleTogglePaymentRole = async (role: string) => {
+    const exists = paymentVisibility.allowed_roles.includes(role);
+    const updatedRoles = exists ? paymentVisibility.allowed_roles.filter((r) => r !== role) : [...paymentVisibility.allowed_roles, role];
+    const updated = { ...paymentVisibility, allowed_roles: updatedRoles };
+    setPaymentVisibility(updated);
+    await updateSalesSettings({ payment_visibility: { allowed_roles: updatedRoles, allowed_employee_ids: [], allowed_employee_names: paymentVisibility.allowed_employee_names } } as any);
+  };
+  const handleTogglePaymentPerson = async (personName: string) => {
+    const clean = (n: string) => (n.includes("·") ? (n.split("·")[0] || n).trim() : n.trim());
+    const exists = paymentVisibility.allowed_employee_names.some((n) => clean(n) === clean(personName));
+    const updatedNames = exists ? paymentVisibility.allowed_employee_names.filter((n) => clean(n) !== clean(personName)) : [...paymentVisibility.allowed_employee_names, personName];
+    const updated = { ...paymentVisibility, allowed_employee_names: updatedNames };
+    setPaymentVisibility(updated);
+    await updateSalesSettings({ payment_visibility: { allowed_roles: paymentVisibility.allowed_roles, allowed_employee_ids: [], allowed_employee_names: updatedNames } } as any);
+    toast.success(`${personName} ${exists ? "removed from" : "granted"} payment visibility`);
   };
 
   return (
@@ -752,29 +963,135 @@ export function SalesSettings() {
 
         {/* Assignment Tab */}
         {activeTab === "Assignment" && (
-          <div className="animate-in fade-in slide-in-from-bottom-2">
-            <h2 className="mb-6 flex items-center gap-2 text-lg font-bold">
-              <Shuffle className="h-5 w-5 text-emerald-600" /> Lead Assignment Rules
-            </h2>
+          <div className="animate-in fade-in slide-in-from-bottom-2 space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="flex items-center gap-2 text-lg font-bold">
+                  <Shuffle className="h-5 w-5 text-emerald-600" /> Lead Auto-Assignment Rules
+                </h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Configure intelligent sequential round-robin routing across your sales force
+                </p>
+              </div>
+              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 border border-emerald-200">
+                {selectedEligibleOwners.length} Active in Rotation
+              </span>
+            </div>
             
             <div className="space-y-3">
-              {ASSIGNMENT_RULES.map((rule, i) => (
-                <div key={i} className="flex items-center justify-between rounded-xl border border-border bg-white p-4">
-                  <span className="font-medium text-sm">{rule.name}</span>
-                  <ToggleSwitch active={rule.active} />
+              {assignmentRules.map((rule, i) => (
+                <div key={i} className="flex items-center justify-between rounded-xl border border-border bg-white p-4 shadow-sm hover:border-emerald-200 transition-colors">
+                  <div>
+                    <span className="font-semibold text-sm text-foreground">{rule.name}</span>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {rule.name.includes("Round Robin") 
+                        ? "Cycles newly created leads sequentially through the eligible sales agents below"
+                        : "Ensures newly created leads are distributed fairly without manual owner selection"}
+                    </p>
+                  </div>
+                  <ToggleSwitch active={rule.active} onChange={() => handleToggleAssignmentRule(i)} />
                 </div>
               ))}
             </div>
 
-            <div className="mt-8">
-              <h3 className="mb-3 text-sm font-bold">Eligible owners</h3>
-              <div className="flex flex-wrap gap-2">
-                {eligibleOwners.map((owner, i) => (
-                  <span key={i} className="rounded-full border border-emerald-100 bg-emerald-50/50 px-3 py-1 text-xs font-semibold">
-                    {owner}
-                  </span>
-                ))}
+            <div className="rounded-2xl border border-border bg-white p-5 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
+                <div>
+                  <h3 className="text-sm font-bold text-foreground">Eligible Owners Queue (Round-Robin Pool)</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Click to toggle agents in or out of the automated assignment queue
+                  </p>
+                </div>
               </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                {eligibleOwners.map((owner, i) => {
+                  const cleanName = owner.includes("·") ? (owner.split("·")[0] || owner).trim() : owner.trim();
+                  const roleName = owner.includes("·") ? (owner.split("·")[1] || "").trim() : "";
+                  const isSelected = selectedEligibleOwners.some(
+                    (o) => (o.includes("·") ? (o.split("·")[0] || o).trim() : o.trim()) === cleanName
+                  );
+                  const queuePosition = selectedEligibleOwners.findIndex(
+                    (o) => (o.includes("·") ? (o.split("·")[0] || o).trim() : o.trim()) === cleanName
+                  );
+
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => handleToggleEligibleOwner(owner)}
+                      className={cn(
+                        "flex items-center justify-between p-3 rounded-xl border text-left transition-all",
+                        isSelected
+                          ? "border-emerald-300 bg-emerald-50/60 shadow-sm"
+                          : "border-border bg-muted/20 opacity-60 hover:opacity-100 hover:border-border"
+                      )}
+                    >
+                      <div className="min-w-0 flex-1 pr-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className={cn("text-xs font-bold truncate", isSelected ? "text-emerald-950" : "text-foreground")}>
+                            {cleanName}
+                          </span>
+                          {isSelected && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-200 text-emerald-800">
+                              #{queuePosition + 1}
+                            </span>
+                          )}
+                        </div>
+                        {roleName && (
+                          <p className="text-[11px] text-muted-foreground truncate">{roleName}</p>
+                        )}
+                      </div>
+                      <div className={cn(
+                        "w-5 h-5 rounded-full flex items-center justify-center shrink-0 border",
+                        isSelected ? "bg-emerald-600 border-emerald-600 text-white" : "border-muted-foreground/30 bg-white"
+                      )}>
+                        {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Follow-ups Tab - 1-click quick buttons dynamic */}
+        {activeTab === "Follow-ups" && (
+          <div className="animate-in fade-in slide-in-from-bottom-2 space-y-4">
+            <div>
+              <h2 className="flex items-center gap-2 text-lg font-bold">
+                <MessageSquare className="h-5 w-5 text-emerald-600" /> Follow-up Quick Buttons
+              </h2>
+              <p className="mt-1 text-xs text-muted-foreground">CNR / Call Later jeva 1-click buttons ahiya thi manage thashe. Leads + Tasks ma live dekhashe.</p>
+            </div>
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <input
+                type="text"
+                placeholder="e.g. CNR, Call Later, WhatsApp Sent"
+                value={newFollowUpLabel}
+                onChange={(e) => setNewFollowUpLabel(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddFollowUpType()}
+                className="w-full sm:w-80 rounded-xl border border-border bg-white px-4 py-2.5 text-xs outline-none focus:ring-2 focus:ring-emerald-500/20 font-semibold"
+              />
+              <button onClick={handleAddFollowUpType} className="flex items-center gap-1.5 rounded-xl bg-emerald-700 px-5 py-2.5 text-xs font-bold text-white hover:bg-emerald-800">
+                <Plus className="h-4 w-4" /> Add Button
+              </button>
+            </div>
+            <div className="space-y-2.5">
+              {followUpTypes.length === 0 && <p className="text-xs text-muted-foreground">Koi follow-up buttons nathi. Upar thi add karo.</p>}
+              {followUpTypes.map((f: any, i: number) => (
+                <div key={i} className="flex items-center justify-between rounded-xl border border-border bg-white p-4">
+                  <div>
+                    <p className="font-semibold text-sm">{f.label}</p>
+                    <p className="text-xs text-muted-foreground">{f.note || f.action} · +{f.offset_hours || 24}h auto reminder</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <ToggleSwitch active={!!f.active} onChange={() => handleToggleFollowUpType(i)} />
+                    <button onClick={() => handleDeleteFollowUpType(i)} className="p-1.5 text-rose-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -785,15 +1102,14 @@ export function SalesSettings() {
             <h2 className="mb-6 flex items-center gap-2 text-lg font-bold">
               <Bell className="h-5 w-5 text-emerald-600" /> Notification Triggers
             </h2>
-            
             <div className="space-y-3">
-              {dynamicNotifications.map((notif, i) => (
+              {(notificationsState.length > 0 ? notificationsState : dynamicNotifications).map((notif: any, i: number) => (
                 <div key={i} className="flex items-center justify-between rounded-xl border border-border bg-white p-4">
                   <div>
                     <p className="font-medium text-sm">{notif.title}</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">{notif.subtitle}</p>
                   </div>
-                  <ToggleSwitch active={notif.active} />
+                  <ToggleSwitch active={!!notif.active} onChange={() => handleToggleNotification(i)} />
                 </div>
               ))}
             </div>
@@ -802,21 +1118,54 @@ export function SalesSettings() {
 
         {/* Permissions Tab */}
         {activeTab === "Permissions" && (
-          <div className="animate-in fade-in slide-in-from-bottom-2">
-            <h2 className="flex items-center gap-2 text-lg font-bold">
-              <Shield className="h-5 w-5 text-emerald-600" /> Role Permissions
-            </h2>
-            <p className="mt-1 mb-6 text-sm text-muted-foreground">
-              Only CEO and Admin can delete leads. Every action is written to the audit log.
-            </p>
-            
+          <div className="animate-in fade-in slide-in-from-bottom-2 space-y-6">
+            <div>
+              <h2 className="flex items-center gap-2 text-lg font-bold">
+                <Shield className="h-5 w-5 text-emerald-600" /> Role Permissions
+              </h2>
+              <p className="mt-1 mb-6 text-sm text-muted-foreground">
+                Only CEO and Admin can delete leads. Every action is written to the audit log.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5 space-y-4">
+              <div>
+                <h3 className="text-sm font-bold flex items-center gap-2"><Lock className="w-4 h-4 text-amber-700" /> Payment Details Visibility (Name-wise)</h3>
+                <p className="text-xs text-muted-foreground mt-1">Jene lead nakhi tene potani j dekhay. Admin ne badhi dekhay. Niche tick karela loko ne bijani payment details dekhase (View Details ma).</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Roles with full access</p>
+                <div className="flex flex-wrap gap-2">
+                  {["Admin", "SuperAdmin", "CEO", "CTO", "Sales Head", "HR"].map((role) => {
+                    const active = paymentVisibility.allowed_roles.includes(role);
+                    return (
+                      <button key={role} onClick={() => handleTogglePaymentRole(role)} className={cn("px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors", active ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-muted-foreground border-border hover:border-emerald-300")}>{role}</button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">People with payment access (name-wise)</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                  {eligibleOwners.map((owner: string, i: number) => {
+                    const cleanName = owner.includes("·") ? (owner.split("·")[0] || owner).trim() : owner.trim();
+                    const active = paymentVisibility.allowed_employee_names.includes(cleanName) || paymentVisibility.allowed_employee_names.includes(owner);
+                    return (
+                      <button key={i} onClick={() => handleTogglePaymentPerson(cleanName)} className={cn("flex items-center justify-between p-2.5 rounded-xl border text-left text-xs font-semibold transition-all", active ? "border-emerald-300 bg-emerald-50" : "border-border bg-white opacity-70 hover:opacity-100")}>
+                        <span className="truncate">{cleanName}</span>
+                        {active && <Check className="w-3.5 h-3.5 text-emerald-600" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
             <div className="grid gap-4 md:grid-cols-2">
               {permissions.map((perm: any, i: number) => (
                 <div key={i} className="rounded-2xl border border-border bg-white p-5">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-bold">{perm.role}</h3>
-                    <button 
-                      onClick={() => handleEditPermissions(i)} 
+                    <button
+                      onClick={() => handleEditPermissions(i)}
                       className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 hover:text-emerald-700"
                     >
                       <Pencil className="h-3.5 w-3.5" /> Edit
@@ -837,21 +1186,122 @@ export function SalesSettings() {
 
         {/* Audit Log Tab */}
         {activeTab === "Audit Log" && (
-          <div className="animate-in fade-in slide-in-from-bottom-2">
-            <h2 className="mb-6 flex items-center gap-2 text-lg font-bold">
-              <History className="h-5 w-5 text-emerald-600" /> Audit Log
-            </h2>
+          <div className="animate-in fade-in slide-in-from-bottom-2 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-4">
+              <div>
+                <h2 className="flex items-center gap-2 text-lg font-bold text-foreground">
+                  <History className="h-5 w-5 text-emerald-600" /> Sales Audit Trail
+                </h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Comprehensive compliance tracking of lead status changes, auto-assignments, and conversions
+                </p>
+              </div>
+              <span className="flex items-center gap-1.5 self-start sm:self-auto rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800 border border-amber-200">
+                <Lock className="w-3.5 h-3.5" /> Immutable & Non-Deletable
+              </span>
+            </div>
+
+            {/* Search Bar & Refresh */}
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Search logs by action, employee, lead name..."
+                  value={auditSearchTerm}
+                  onChange={(e) => {
+                    setAuditSearchTerm(e.target.value);
+                    fetchLiveAuditLogs(e.target.value);
+                  }}
+                  className="w-full pl-9 pr-4 py-2 border border-border rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => fetchLiveAuditLogs(auditSearchTerm)}
+                disabled={isLoadingAuditLogs}
+                className="flex items-center gap-1.5 px-3 py-2 border border-border rounded-xl text-xs font-semibold bg-white hover:bg-muted text-foreground transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={cn("w-3.5 h-3.5", isLoadingAuditLogs && "animate-spin text-emerald-600")} />
+                Refresh
+              </button>
+            </div>
             
-            <div className="space-y-3">
-              {dynamicAuditLogs.map((log, i) => (
-                <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-border bg-white p-4">
-                  <div>
-                    <p className="font-medium text-sm">{log.action}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{log.by}</p>
-                  </div>
-                  <span className="text-xs text-muted-foreground sm:text-right">{log.time}</span>
+            <div className="space-y-2.5 max-h-[500px] overflow-y-auto pr-1">
+              {isLoadingAuditLogs ? (
+                <div className="py-12 text-center text-xs text-muted-foreground">
+                  <RefreshCw className="w-6 h-6 animate-spin mx-auto text-emerald-600 mb-2" />
+                  Loading immutable audit records from server...
                 </div>
-              ))}
+              ) : liveAuditLogs.length > 0 ? (
+                liveAuditLogs.map((log: any, i: number) => {
+                  const isAssignment = log.action?.includes("ASSIGN");
+                  const isWon = log.action?.includes("WON") || log.action?.includes("CONVERT");
+                  const isDelete = log.action?.includes("DELETE");
+
+                  return (
+                    <div
+                      key={log._id || i}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-border bg-white p-3.5 shadow-sm hover:border-emerald-200 transition-colors"
+                    >
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span
+                            className={cn(
+                              "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                              isWon
+                                ? "bg-purple-100 text-purple-800"
+                                : isAssignment
+                                ? "bg-blue-100 text-blue-800"
+                                : isDelete
+                                ? "bg-rose-100 text-rose-800"
+                                : "bg-emerald-100 text-emerald-800"
+                            )}
+                          >
+                            {log.action?.replace(/_/g, " ") || "ACTIVITY"}
+                          </span>
+                          <span className="font-semibold text-xs text-foreground truncate">
+                            {log.details?.lead_name || log.details?.company || log.entity_id || "Lead Activity"}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {log.details?.assigned_to ? (
+                            <span>Auto-assigned to <strong className="text-foreground">{log.details.assigned_to}</strong> via Round Robin</span>
+                          ) : log.details?.deal_value ? (
+                            <span>Converted deal value: <strong className="text-foreground">₹{Number(log.details.net_amount || log.details.deal_value).toLocaleString()}</strong></span>
+                          ) : log.details?.reason ? (
+                            <span>Reason: {log.details.reason}</span>
+                          ) : (
+                            <span>Performed by <strong className="text-foreground">{log.user_name || "System"}</strong></span>
+                          )}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="text-[11px] font-mono text-muted-foreground block">
+                          {log.created_at ? new Date(log.created_at).toLocaleString() : "Just now"}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground/80">
+                          by {log.user_name || "System"}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : dynamicAuditLogs.length > 0 ? (
+                dynamicAuditLogs.map((log, i) => (
+                  <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-border bg-white p-3.5 shadow-sm">
+                    <div>
+                      <p className="font-medium text-xs text-foreground">{log.action}</p>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">{log.by}</p>
+                    </div>
+                    <span className="text-[11px] font-mono text-muted-foreground sm:text-right">{log.time}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="py-12 text-center text-xs text-muted-foreground">
+                  No audit trail records found.
+                </div>
+              )}
             </div>
           </div>
         )}

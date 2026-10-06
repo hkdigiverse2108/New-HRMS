@@ -222,6 +222,14 @@ class DashboardService:
                 ]
                 async for doc in db["projects"].aggregate(pipeline):
                     out["monthly_revenue"] = float(doc.get("rev") or 0)
+                # Audio 8: Include sales collection in monthly revenue
+                from app.repository.sales import SalesRepository
+                sales_sum = await SalesRepository.get_sales_summary()
+                s_rev = float(sales_sum.get("total_won_revenue") or 0.0)
+                if out.get("monthly_revenue", 0.0) == 0.0:
+                    out["monthly_revenue"] = s_rev
+                else:
+                    out["monthly_revenue"] = max(out.get("monthly_revenue", 0.0), s_rev)
             except Exception:
                 pass
             return out
@@ -440,6 +448,37 @@ class DashboardService:
                 pass
             return {"winners": winners}
 
+        async def sales_block():
+            from app.repository.sales import SalesRepository
+            import calendar
+            try:
+                summary = await SalesRepository.get_sales_summary()
+                perf_report = await SalesRepository.generate_sales_report(report_type="performance", date_range="this_month")
+                top_salespeople = sorted(perf_report.get("items", []), key=lambda x: x.get("net_achieved", 0), reverse=True)[:3]
+
+                today_d = datetime.utcnow().date()
+                last_day = calendar.monthrange(today_d.year, today_d.month)[1]
+                days_remaining = max(0, last_day - today_d.day)
+
+                return {
+                    "today_sales_count": summary.get("today_followups_count", 0),
+                    "total_leads": summary.get("total_leads", 0),
+                    "active_leads": summary.get("active_leads", 0),
+                    "won_leads": summary.get("won_leads", 0),
+                    "conversion_rate": summary.get("conversion_rate", 0.0),
+                    "monthly_collection": summary.get("total_won_revenue", 0.0),
+                    "sales_target": summary.get("total_target", 5000000.0),
+                    "achieved_target": summary.get("achieved_target", 0.0),
+                    "remaining_target": summary.get("remaining_target", 0.0),
+                    "target_achievement_pct": round((summary.get("achieved_target", 0.0) / (summary.get("total_target") or 5000000.0) * 100), 1) if (summary.get("total_target") or 5000000.0) > 0 else 0.0,
+                    "days_remaining": days_remaining,
+                    "top_salespeople": top_salespeople,
+                    "upcoming_hot_followups": summary.get("hot_leads_needing_attention", [])[:6]
+                }
+            except Exception as e:
+                logger.warning(f"Sales block dashboard failure: {e}")
+                return {}
+
         results = await asyncio.gather(
             # Direct repo call: skips 9s recurring-task generation (runs on /tasks/stats),
             # so dashboard stays fast even with Redis down.
@@ -457,6 +496,7 @@ class DashboardService:
             safe(company_health(), {}),
             safe(tasks_clients_block(), {}),
             safe(departments_block(), []),
+            safe(sales_block(), {}),
         )
 
         payload = {
@@ -476,6 +516,7 @@ class DashboardService:
             "health": results[11] or {},
             "tasks_clients": results[12] or {},
             "departments": results[13] or [],
+            "sales": results[14] or {},
         }
         # cross-block reuse (no extra queries)
         try:
