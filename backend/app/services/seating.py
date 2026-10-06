@@ -17,7 +17,7 @@ class SeatingService:
         role = str(work.get("system_role") or current_user.get("system_role", "Employee")).strip().lower()
 
         # Admin, CEO, HR, SubAdmin roles have full access by default
-        if role in ["admin", "ceo", "hr", "hr manager", "subadmin"]:
+        if role in ["admin", "ceo", "hr", "hr manager", "subadmin", "sub admin", "sub_admin"]:
             return True
 
         emp_id = str(current_user.get("_id") or current_user.get("id", "")).strip()
@@ -152,17 +152,16 @@ class SeatingService:
 
     @staticmethod
     async def allocate_seat(
-        floor_id: str,
-        desk_id: str,
-        seat_id: str,
+        floor_id: Optional[str],
+        desk_id: Optional[str],
+        seat_id: Optional[str],
         data: SeatAllocateRequest,
         current_user: dict
     ) -> Dict[str, Any]:
         await SeatingService.check_user_permission(current_user, "edit")
 
-        floor = await SeatingRepository.get_floor_by_id(floor_id)
-        if not floor:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Floor layout not found")
+        effective_desk_id = desk_id or data.desk_id
+        effective_seat_id = seat_id or data.seat_id
 
         emp_info = None
         status_val = data.status.strip() if data.status else "Available"
@@ -177,27 +176,182 @@ class SeatingService:
             first_name = p_info.get("first_name") or emp.get("first_name", "")
             last_name = p_info.get("last_name") or emp.get("last_name", "")
 
+            desig = w_info.get("designation") or w_info.get("job_title") or emp.get("designation", "")
+            prof_pic = p_info.get("profile_picture") or emp.get("profile_picture", "")
+
             emp_info = {
                 "employee_id": str(emp.get("_id") or emp.get("employee_id")),
                 "first_name": first_name,
                 "last_name": last_name,
                 "email": p_info.get("email_address") or emp.get("email", ""),
-                "department": w_info.get("department") or ""
+                "department": w_info.get("department") or "",
+                "designation": desig,
+                "profile_picture": prof_pic
             }
         else:
             status_val = "Available"
 
-        success = await SeatingRepository.allocate_seat(
+        # Validation: Check if seat is already allocated to another employee
+        check_floor_id = floor_id
+        if not check_floor_id and effective_desk_id:
+            f_doc = await SeatingRepository.find_floor_by_desk_id(effective_desk_id)
+            if f_doc:
+                check_floor_id = f_doc["_id"]
+
+        if check_floor_id:
+            current_floor = await SeatingRepository.get_floor_by_id(check_floor_id)
+            if current_floor:
+                for d in current_floor.get("desks", []):
+                    if not effective_desk_id or d.get("desk_id") == effective_desk_id:
+                        for s in d.get("seats", []):
+                            if not effective_seat_id or s.get("seat_id") == effective_seat_id:
+                                if status_val == "Allocated" and s.get("status") == "Allocated" and s.get("assigned_to"):
+                                    curr_emp = s.get("assigned_to", {})
+                                    curr_emp_id = str(curr_emp.get("employee_id", ""))
+                                    target_emp_id = str(data.employee_id or "")
+                                    if curr_emp_id and curr_emp_id != target_emp_id:
+                                        curr_name = curr_emp.get("full_name") or curr_emp_id
+                                        raise HTTPException(
+                                            status_code=status.HTTP_400_BAD_REQUEST,
+                                            detail=f"Seat '{effective_seat_id}' is already allocated to employee '{curr_name}'. It must be set to 'Available' (unassigned) first before allocating to another employee."
+                                        )
+
+        target_floor_id = await SeatingRepository.allocate_seat(
             floor_id=floor_id,
-            desk_id=desk_id,
-            seat_id=seat_id,
+            desk_id=effective_desk_id,
+            seat_id=effective_seat_id,
             status=status_val,
             employee_info=emp_info
         )
 
-        if not success:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to update seat allocation")
+        if not target_floor_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to update seat allocation. Ensure valid floor or desk ID.")
 
         await clear_pattern("seating:*")
-        updated_floor = await SeatingRepository.get_floor_by_id(floor_id)
-        return updated_floor
+        updated_floor = await SeatingRepository.get_floor_by_id(target_floor_id)
+        if not updated_floor:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Floor layout not found")
+
+        target_desk = None
+        for d in updated_floor.get("desks", []):
+            if effective_desk_id and d.get("desk_id") == effective_desk_id:
+                target_desk = d
+                break
+            if effective_seat_id:
+                for s in d.get("seats", []):
+                    if s.get("seat_id") == effective_seat_id:
+                        target_desk = d
+                        break
+            if target_desk:
+                break
+
+        if not target_desk and updated_floor.get("desks"):
+            target_desk = updated_floor["desks"][0]
+
+        res_desk = dict(target_desk) if target_desk else {}
+        res_desk["floor_id"] = updated_floor.get("_id")
+        res_desk["floor_name"] = updated_floor.get("floor_name")
+
+        return res_desk
+
+    @staticmethod
+    async def get_my_seat(current_user: dict) -> Dict[str, Any]:
+        """Allows any employee to view their own allocated seat, desk details, and allocated inventory resources."""
+        if not current_user:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+
+        emp_id = str(current_user.get("_id") or current_user.get("id", "")).strip()
+
+        floors = await SeatingRepository.get_all_floors(is_deleted=False)
+        for floor in floors:
+            for desk in floor.get("desks", []):
+                for seat in desk.get("seats", []):
+                    assigned = seat.get("assigned_to")
+                    if assigned and str(assigned.get("employee_id")) == emp_id:
+                        return {
+                            "floor_id": floor.get("_id"),
+                            "floor_name": floor.get("floor_name"),
+                            "desk_id": desk.get("desk_id"),
+                            "desk_name": desk.get("desk_name"),
+                            "seat_id": seat.get("seat_id"),
+                            "status": seat.get("status"),
+                            "assigned_to": assigned
+                        }
+
+        return {
+            "message": "No seat is currently allocated to you.",
+            "seat_id": None,
+            "assigned_to": None
+        }
+
+    @staticmethod
+    async def get_all_seats(
+        status_filter: Optional[str] = None,
+        floor_id: Optional[str] = None,
+        search: Optional[str] = None,
+        current_user: dict = None
+    ) -> List[Dict[str, Any]]:
+        """Returns a flat list of all seats across all floors/desks with employee and resource details."""
+        await SeatingService.check_user_permission(current_user, "read")
+
+        floors = await SeatingRepository.get_all_floors(is_deleted=False)
+        all_seats = []
+
+        for floor in floors:
+            if floor_id and str(floor.get("_id")) != str(floor_id):
+                continue
+
+            for desk in floor.get("desks", []):
+                for seat in desk.get("seats", []):
+                    st = seat.get("status", "Available")
+                    if status_filter and status_filter.lower() != "all":
+                        if st.lower() != status_filter.lower():
+                            continue
+
+                    assigned = seat.get("assigned_to")
+
+                    if search:
+                        q = search.lower().strip()
+                        f_name = str(floor.get("floor_name", "")).lower()
+                        d_name = str(desk.get("desk_name", "")).lower()
+                        s_id = str(seat.get("seat_id", "")).lower()
+                        emp_name = str(assigned.get("full_name", "") if assigned else "").lower()
+                        emp_dept = str(assigned.get("department", "") if assigned else "").lower()
+
+                        if not (q in f_name or q in d_name or q in s_id or q in emp_name or q in emp_dept):
+                            continue
+
+                    seat_item = {
+                        "floor_id": floor.get("_id"),
+                        "floor_name": floor.get("floor_name"),
+                        "desk_id": desk.get("desk_id"),
+                        "desk_name": desk.get("desk_name"),
+                        "seat_id": seat.get("seat_id"),
+                        "status": st,
+                        "assigned_to": assigned
+                    }
+                    all_seats.append(seat_item)
+
+        return all_seats
+
+    @staticmethod
+    async def reset_floor_seats(floor_id: Optional[str], current_user: dict) -> Dict[str, Any]:
+        """Reset all seats on a specific floor (or all floors if floor_id is None) to Available."""
+        await SeatingService.check_user_permission(current_user, "edit")
+
+        if floor_id:
+            floor = await SeatingRepository.get_floor_by_id(floor_id)
+            if not floor:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Floor layout not found")
+
+        success = await SeatingRepository.reset_floor_seats(floor_id)
+        if not success:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to reset floor seats")
+
+        await clear_pattern("seating:*")
+
+        if floor_id:
+            updated_floor = await SeatingRepository.get_floor_by_id(floor_id)
+            return updated_floor or {"message": "Floor seats reset successfully."}
+
+        return {"message": "All seats across all floors have been reset to Available and cleared successfully."}

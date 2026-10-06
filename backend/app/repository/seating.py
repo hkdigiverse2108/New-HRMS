@@ -18,11 +18,12 @@ class SeatingRepository:
             return floor_doc
 
         emp_ids = set()
-        allocations = floor_doc.get("allocations", [])
-        for item in allocations:
-            assigned = item.get("assigned_to")
-            if assigned and assigned.get("employee_id"):
-                emp_ids.add(str(assigned["employee_id"]))
+        desks = floor_doc.get("desks", [])
+        for desk in desks:
+            for seat in desk.get("seats", []):
+                assigned = seat.get("assigned_to")
+                if assigned and assigned.get("employee_id"):
+                    emp_ids.add(str(assigned["employee_id"]))
 
         emp_resources_map: Dict[str, List[dict]] = {}
         if emp_ids:
@@ -51,13 +52,14 @@ class SeatingRepository:
                     "status": r.get("status", "Allocated")
                 })
 
-        for item in allocations:
-            assigned = item.get("assigned_to")
-            if assigned and assigned.get("employee_id"):
-                e_id = str(assigned["employee_id"])
-                assigned["allocated_resources"] = emp_resources_map.get(e_id, [])
-            elif assigned:
-                assigned["allocated_resources"] = []
+        for desk in desks:
+            for seat in desk.get("seats", []):
+                assigned = seat.get("assigned_to")
+                if assigned and assigned.get("employee_id"):
+                    e_id = str(assigned["employee_id"])
+                    assigned["allocated_resources"] = emp_resources_map.get(e_id, [])
+                elif assigned:
+                    assigned["allocated_resources"] = []
 
         return floor_doc
 
@@ -68,7 +70,6 @@ class SeatingRepository:
         doc = {
             "floor_name": str(data.get("floor_name", "")).strip(),
             "desks": [],
-            "allocations": [],
             "created_by": data.get("created_by"),
             "is_deleted": False,
             "created_at": now,
@@ -92,10 +93,15 @@ class SeatingRepository:
             doc["_id"] = str(doc["_id"])
             doc = await cls._populate_employee_resources(doc)
             desks = doc.get("desks", [])
-            allocations = doc.get("allocations", [])
             total_desks = len(desks)
-            total_seats = sum(int(d.get("top_seats_count", 0) or 0) + int(d.get("bottom_seats_count", 0) or 0) for d in desks)
-            allocated_seats = len(allocations)
+            total_seats = 0
+            allocated_seats = 0
+            for d in desks:
+                seats = d.get("seats", [])
+                total_seats += len(seats)
+                for s in seats:
+                    if s.get("status") == "Allocated":
+                        allocated_seats += 1
             doc["total_desks"] = total_desks
             doc["total_seats"] = total_seats
             doc["allocated_seats"] = allocated_seats
@@ -117,13 +123,27 @@ class SeatingRepository:
         doc["_id"] = str(doc["_id"])
         doc = await cls._populate_employee_resources(doc)
         desks = doc.get("desks", [])
-        allocations = doc.get("allocations", [])
-        total_seats = sum(int(d.get("top_seats_count", 0) or 0) + int(d.get("bottom_seats_count", 0) or 0) for d in desks)
-        allocated_seats = len(allocations)
+        total_seats = 0
+        allocated_seats = 0
+        for d in desks:
+            seats = d.get("seats", [])
+            total_seats += len(seats)
+            for s in seats:
+                if s.get("status") == "Allocated":
+                    allocated_seats += 1
         doc["total_desks"] = len(desks)
         doc["total_seats"] = total_seats
         doc["allocated_seats"] = allocated_seats
         doc["available_seats"] = max(0, total_seats - allocated_seats)
+        return doc
+
+    @classmethod
+    async def find_floor_by_desk_id(cls, desk_id: str) -> Optional[Dict[str, Any]]:
+        collection = await cls.get_collection()
+        doc = await collection.find_one({"desks.desk_id": str(desk_id), "is_deleted": False})
+        if not doc:
+            return None
+        doc["_id"] = str(doc["_id"])
         return doc
 
     @classmethod
@@ -163,30 +183,45 @@ class SeatingRepository:
         target_desk_id = desk_data.get("desk_id")
 
         if not target_desk_id:
-            existing_ids = [d.get("desk_id") for d in desks if d.get("desk_id")]
-            count = len(desks) + 1
-            target_desk_id = f"desk-{count:02d}"
-            while target_desk_id in existing_ids:
-                count += 1
-                target_desk_id = f"desk-{count:02d}"
+            target_desk_id = str(ObjectId())
 
         existing_desk = next((d for d in desks if d.get("desk_id") == target_desk_id), None)
+        existing_seats = existing_desk.get("seats", []) if existing_desk else []
 
         top_count = int(desk_data.get("top_seats_count", 0) or 0)
         bottom_count = int(desk_data.get("bottom_seats_count", 0) or 0)
+        total_seats_needed = top_count + bottom_count
 
         desk_pcs = desk_data.get("desk_pcs", [])
         if isinstance(desk_pcs, str):
             desk_pcs = [p.strip() for p in desk_pcs.split(",") if p.strip()]
 
-        desk_name = desk_data.get("desk_name") or f"Desk #{target_desk_id.replace('desk-', '')}"
+        desk_name = desk_data.get("desk_name") or f"Table #{len(desks) + 1}"
+
+        # Auto-generate MongoDB ObjectId strings for seat_id
+        new_seats = []
+        for i in range(1, total_seats_needed + 1):
+            if (i - 1) < len(existing_seats):
+                prev_seat = existing_seats[i - 1]
+                new_seats.append({
+                    "seat_id": prev_seat.get("seat_id") or str(ObjectId()),
+                    "status": prev_seat.get("status", "Available"),
+                    "assigned_to": prev_seat.get("assigned_to")
+                })
+            else:
+                new_seats.append({
+                    "seat_id": str(ObjectId()),
+                    "status": "Available",
+                    "assigned_to": None
+                })
 
         updated_desk_obj = {
             "desk_id": target_desk_id,
             "desk_name": desk_name,
             "top_seats_count": top_count,
             "bottom_seats_count": bottom_count,
-            "desk_pcs": desk_pcs
+            "desk_pcs": desk_pcs,
+            "seats": new_seats
         }
 
         if existing_desk:
@@ -214,55 +249,99 @@ class SeatingRepository:
             return False
 
         desks = [d for d in floor.get("desks", []) if d.get("desk_id") != desk_id]
-        allocations = [a for a in floor.get("allocations", []) if a.get("desk_id") != desk_id]
 
         res = await collection.update_one(
             {"_id": ObjectId(floor_id)},
-            {"$set": {"desks": desks, "allocations": allocations, "updated_at": datetime.utcnow()}}
+            {"$set": {"desks": desks, "updated_at": datetime.utcnow()}}
         )
         return res.modified_count > 0
 
     @classmethod
     async def allocate_seat(
         cls,
-        floor_id: str,
+        floor_id: Optional[str],
         desk_id: Optional[str],
         seat_id: Optional[str],
         status: str,
         employee_info: Optional[dict] = None
-    ) -> bool:
+    ) -> Optional[str]:
         collection = await cls.get_collection()
-        if not ObjectId.is_valid(floor_id):
-            return False
-        floor = await cls.get_floor_by_id(floor_id)
+
+        target_floor_id = floor_id
+        if not target_floor_id and desk_id:
+            floor_doc = await cls.find_floor_by_desk_id(desk_id)
+            if floor_doc:
+                target_floor_id = floor_doc["_id"]
+
+        if not target_floor_id or not ObjectId.is_valid(target_floor_id):
+            return None
+
+        floor = await cls.get_floor_by_id(target_floor_id)
         if not floor:
-            return False
+            return None
 
-        allocations = floor.get("allocations", [])
-        target_seat_id = seat_id or f"seat-{uuid.uuid4().hex[:8]}"
+        desks = floor.get("desks", [])
+        seat_found = False
 
-        # Remove existing allocation for this seat_id if updating/unassigning
-        allocations = [a for a in allocations if a.get("seat_id") != target_seat_id]
+        for desk in desks:
+            if not desk_id or desk.get("desk_id") == desk_id:
+                for seat in desk.get("seats", []):
+                    if not seat_id or seat.get("seat_id") == seat_id:
+                        seat_found = True
+                        seat["status"] = status
+                        if status == "Allocated" and employee_info:
+                            seat["assigned_to"] = {
+                                "employee_id": employee_info.get("employee_id"),
+                                "first_name": employee_info.get("first_name", ""),
+                                "last_name": employee_info.get("last_name", ""),
+                                "full_name": f"{employee_info.get('first_name', '')} {employee_info.get('last_name', '')}".strip(),
+                                "email": employee_info.get("email"),
+                                "department": employee_info.get("department_name") or employee_info.get("department"),
+                                "designation": employee_info.get("designation", ""),
+                                "profile_picture": employee_info.get("profile_picture", ""),
+                                "assigned_date": datetime.utcnow().isoformat()
+                            }
+                        else:
+                            seat["status"] = "Available"
+                            seat["assigned_to"] = None
+                        break
+                if seat_found:
+                    break
 
-        if status == "Allocated" and employee_info:
-            new_alloc = {
-                "seat_id": target_seat_id,
-                "desk_id": desk_id,
-                "status": "Allocated",
-                "assigned_to": {
-                    "employee_id": employee_info.get("employee_id"),
-                    "first_name": employee_info.get("first_name", ""),
-                    "last_name": employee_info.get("last_name", ""),
-                    "full_name": f"{employee_info.get('first_name', '')} {employee_info.get('last_name', '')}".strip(),
-                    "email": employee_info.get("email"),
-                    "department": employee_info.get("department_name") or employee_info.get("department"),
-                    "assigned_date": datetime.utcnow().isoformat()
-                }
-            }
-            allocations.append(new_alloc)
+        if not seat_found:
+            return None
 
         res = await collection.update_one(
-            {"_id": ObjectId(floor_id)},
-            {"$set": {"allocations": allocations, "updated_at": datetime.utcnow()}}
+            {"_id": ObjectId(target_floor_id)},
+            {"$set": {"desks": desks, "updated_at": datetime.utcnow()}}
         )
-        return res.modified_count > 0 or res.matched_count > 0
+        return target_floor_id if (res.modified_count > 0 or res.matched_count > 0) else None
+
+    @classmethod
+    async def reset_floor_seats(cls, floor_id: Optional[str] = None) -> bool:
+        """Reset all seats on a floor (or across all floors if floor_id is None) to Available and clear assigned employees."""
+        collection = await cls.get_collection()
+        now = datetime.utcnow()
+        query: Dict[str, Any] = {"is_deleted": False}
+        if floor_id:
+            if not ObjectId.is_valid(floor_id):
+                return False
+            query["_id"] = ObjectId(floor_id)
+
+        cursor = collection.find(query)
+        async for floor in cursor:
+            desks = floor.get("desks", [])
+            modified = False
+            for desk in desks:
+                for seat in desk.get("seats", []):
+                    if seat.get("status") != "Available" or seat.get("assigned_to") is not None:
+                        seat["status"] = "Available"
+                        seat["assigned_to"] = None
+                        modified = True
+            if modified:
+                await collection.update_one(
+                    {"_id": floor["_id"]},
+                    {"$set": {"desks": desks, "updated_at": now}}
+                )
+
+        return True
