@@ -26,6 +26,7 @@ class DocumentGenerateRequest(BaseModel):
     template_id: str = Field(..., description="ID of document template selected")
     employee_id: str = Field(..., description="ID of employee selected")
     variables: Dict[str, Any] = Field(default_factory=dict, description="Key-value mapping of replaced placeholders")
+    placeholder_values: Optional[Dict[str, Any]] = Field(default=None, description="Alias for variables")
 
 class GeneratedDocumentResponse(BaseModel):
     id: str = Field(alias="_id")
