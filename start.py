@@ -341,13 +341,19 @@ def main():
             print(f"\033[91m[CRITICAL] Backend crashed immediately with exit code {backend_proc.returncode}!\033[0m")
             return
 
-        # Ensure Frontend is built and up to date with .env VITE_API_URL
-        force_rebuild = "--rebuild" in sys.argv
-        ensure_frontend_build(vite_api_url, force_rebuild=force_rebuild)
+        # Start Frontend (Default: Vite Dev Server for instant live reload on file save)
+        is_preview = "--preview" in sys.argv or "--prod" in sys.argv
+        if is_preview:
+            force_rebuild = "--rebuild" in sys.argv
+            ensure_frontend_build(vite_api_url, force_rebuild=force_rebuild)
+            print(f"[4/4] Starting Frontend Preview on port {frontend_port} ...")
+            frontend_cmd = ["node", "run-preview.mjs"]
+        else:
+            sync_env_config(vite_api_url)
+            vite_bin = FRONTEND_DIR / "node_modules" / "vite" / "bin" / "vite.js"
+            print(f"[4/4] Starting Frontend Dev Server (Live Reload & HMR) on port {frontend_port} ...")
+            frontend_cmd = ["node", str(vite_bin), "--host", host, "--port", str(frontend_port)]
 
-        # Start Frontend using node directly (completely eliminates cmd.exe and 'Terminate batch job (Y/N)?' prompt)
-        print(f"[4/4] Starting Frontend on port {frontend_port} ...")
-        frontend_cmd = ["node", "run-preview.mjs"]
         frontend_env = {**os.environ, "VITE_API_URL": vite_api_url, "FRONTEND_PORT": str(frontend_port)}
         frontend_proc = subprocess.Popen(
             frontend_cmd,

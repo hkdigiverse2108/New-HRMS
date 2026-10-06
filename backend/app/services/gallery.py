@@ -4,8 +4,22 @@ from app.repository.gallery import GalleryEventRepository
 from app.repository.access_control import UserPermissionRepository
 from app.schemas.gallery import GalleryEventCreate, GalleryEventUpdate
 from app.redis.service import get_cache, set_cache, delete_cache, clear_pattern, make_list_key
+from app.utils.google_drive import auto_extract_gallery_images, auto_extract_gallery_media, extract_drive_file_id, is_video_filename
 
 class GalleryService:
+
+    @staticmethod
+    def _backfill_item_media(item: Dict[str, Any]) -> Dict[str, Any]:
+        if not item:
+            return item
+        media_items = item.get("media_items")
+        images = item.get("images", [])
+        link = item.get("link")
+        if not media_items or not isinstance(media_items, list):
+            new_images, new_media = auto_extract_gallery_media(link, images, None)
+            item["images"] = new_images
+            item["media_items"] = new_media
+        return item
 
     @staticmethod
     async def check_user_permission(current_user: dict, action: str) -> bool:
@@ -66,6 +80,15 @@ class GalleryService:
             "role": user_role
         }
 
+        # Auto extract structured media_items & images from Drive link
+        link_val = data_dict.get("link")
+        existing_imgs = data_dict.get("images", [])
+        existing_media = data_dict.get("media_items", [])
+
+        imgs, media = auto_extract_gallery_media(link_val, existing_imgs, existing_media)
+        data_dict["images"] = imgs
+        data_dict["media_items"] = media
+
         created = await GalleryEventRepository.create(data_dict)
         await clear_pattern("gallery_events:*")
         return created
@@ -104,6 +127,13 @@ class GalleryService:
             page=page,
             limit=limit
         )
+        
+        # Backfill media_items for existing items in response
+        if res and "items" in res:
+            res["items"] = [GalleryService._backfill_item_media(item) for item in res["items"]]
+        if res and "data" in res:
+            res["data"] = [GalleryService._backfill_item_media(item) for item in res["data"]]
+
         await set_cache(cache_key, res, ttl=1800)
         return res
 
@@ -118,6 +148,7 @@ class GalleryService:
 
         item = await GalleryEventRepository.get_by_id(item_id)
         if item and not item.get("is_deleted"):
+            item = GalleryService._backfill_item_media(item)
             await set_cache(cache_key, item, ttl=1800)
             return item
         return None
@@ -131,11 +162,22 @@ class GalleryService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery event not found")
 
         update_dict = data.model_dump(exclude_unset=True)
+
+        new_link = update_dict.get("link", item.get("link"))
+        new_images = update_dict.get("images", item.get("images", []))
+        new_media = update_dict.get("media_items", item.get("media_items", []))
+
+        imgs, media = auto_extract_gallery_media(new_link, new_images, new_media)
+        update_dict["images"] = imgs
+        update_dict["media_items"] = media
+
         success = await GalleryEventRepository.update(item_id, update_dict)
         if success:
             await clear_pattern("gallery_events:*")
             await delete_cache(f"gallery_event:{item_id}")
-        return await GalleryEventRepository.get_by_id(item_id)
+        
+        updated_item = await GalleryEventRepository.get_by_id(item_id)
+        return GalleryService._backfill_item_media(updated_item) if updated_item else None
 
     @staticmethod
     async def delete_event(item_id: str, current_user: dict) -> bool:
