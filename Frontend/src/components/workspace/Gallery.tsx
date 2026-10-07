@@ -18,7 +18,8 @@ import {
   Folder,
   Layers,
   Camera,
-  Film
+  Film,
+  Play
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
@@ -197,12 +198,22 @@ export function getAlbumImages(item: GalleryEventItem): string[] {
 // Extract unified MediaItem[] for an event album with backwards compatibility
 export function getUnifiedMediaItems(item: GalleryEventItem): MediaItem[] {
   if (item.media_items && Array.isArray(item.media_items) && item.media_items.length > 0) {
+    const isSingleLink = item.media_items.length === 1;
     return item.media_items.map(m => {
       const fid = m.file_id || getDriveFileId(m.url) || (item.link ? getDriveFileId(item.link) : null);
+      const isVidByUrl = isVideoUrl(m.url);
+      const isVidByName = m.name ? isVideoUrl(m.name) : false;
+      const isVidByLink = item.link ? isVideoUrl(item.link) : false;
+
+      let mType = m.media_type;
+      if (mType !== "video" && (isVidByUrl || isVidByName || isVidByLink || (isSingleLink && Boolean(fid)))) {
+        mType = "video";
+      }
+
       return {
         file_id: fid,
         name: m.name || fid || "Media Item",
-        media_type: m.media_type || (isVideoUrl(m.url) ? "video" : "image"),
+        media_type: mType || "image",
         url: m.url
       };
     });
@@ -247,6 +258,7 @@ export function Gallery() {
   // Lightbox / Detail View State
   const [selectedAlbum, setSelectedAlbum] = useState<GalleryEventItem | null>(null);
   const [currentImageIndex, setCurrentImageIndex] = useState<number | null>(null);
+  const [forceVideoMode, setForceVideoMode] = useState<boolean>(false);
 
   // Fetch gallery events from backend
   const fetchEvents = async () => {
@@ -432,18 +444,30 @@ export function Gallery() {
 
   const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
     const target = e.currentTarget;
+    if (target.dataset.failed === "true") {
+      target.style.display = "none";
+      return;
+    }
     if (target.src.includes("thumbnail?id=")) {
       const parts = target.src.split("id=");
       const fileId = parts[1]?.split("&")[0];
       if (fileId) {
+        target.dataset.failed = "true";
         target.src = `https://lh3.googleusercontent.com/d/${fileId}`;
+      } else {
+        target.style.display = "none";
       }
-    } else if (target.src.includes("lh3.googleusercontent.com")) {
+    } else if (target.src.includes("lh3.googleusercontent.com/d/")) {
       const parts = target.src.split("/d/");
       const fileId = parts[1]?.split("?")[0];
       if (fileId) {
+        target.dataset.failed = "true";
         target.src = `https://drive.google.com/uc?export=view&id=${fileId}`;
+      } else {
+        target.style.display = "none";
       }
+    } else {
+      target.style.display = "none";
     }
   };
 
@@ -452,17 +476,21 @@ export function Gallery() {
 
   // Keyboard navigation for Lightbox popup (ArrowLeft, ArrowRight, Escape)
   useEffect(() => {
+    setForceVideoMode(false);
     if (currentImageIndex === null || activeMediaItems.length === 0) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "ArrowRight" || e.key === "ArrowDown") {
         e.preventDefault();
+        setForceVideoMode(false);
         setCurrentImageIndex((prev) => (prev !== null ? (prev + 1) % activeMediaItems.length : 0));
       } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
         e.preventDefault();
+        setForceVideoMode(false);
         setCurrentImageIndex((prev) => (prev !== null ? (prev - 1 + activeMediaItems.length) % activeMediaItems.length : 0));
       } else if (e.key === "Escape") {
         e.preventDefault();
+        setForceVideoMode(false);
         setCurrentImageIndex(null);
       }
     };
@@ -661,15 +689,15 @@ export function Gallery() {
               <h3 className="text-lg font-bold text-foreground">Photos & Media ({activeMediaItems.length})</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {activeMediaItems.map((media, idx) => {
-                  const fid = media.file_id || getDriveFileId(media.url);
-                  const isVid = media.media_type === "video" || isVideoUrl(media.url) || Boolean(fid);
+                  // Only use media_type field to determine video — never infer from file_id alone
+                  const isVid = media.media_type === "video" || isVideoUrl(media.url);
                   return (
                     <div 
                       key={idx} 
                       className="aspect-square rounded-2xl overflow-hidden cursor-pointer group relative bg-black/5 border border-border/30"
                       onClick={() => setCurrentImageIndex(idx)}
                     >
-                      {/* NEVER load iframes inside grid: Thumbnails are always <img> */}
+                      {/* Thumbnails are always <img> - never load iframes in grid */}
                       <img 
                         src={getMediaUrl(media.url)} 
                         alt={media.name || `Media ${idx + 1}`} 
@@ -677,14 +705,14 @@ export function Gallery() {
                         onError={handleImageError}
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
                       />
-                      {/* ▶ Play Overlay Icon on Video / Drive Thumbnails */}
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300 flex items-center justify-center">
-                        {isVid && (
-                          <div className="w-14 h-14 rounded-full bg-white/30 backdrop-blur-md flex items-center justify-center text-white border border-white/40 shadow-xl group-hover:scale-110 transition-transform">
-                            <PlayCircle className="w-8 h-8 text-white fill-white/80" />
+                      {/* ▶ Play Overlay ONLY on actual video items */}
+                      {isVid && (
+                        <div className="absolute inset-0 bg-black/30 group-hover:bg-black/50 transition-all duration-300 flex items-center justify-center">
+                          <div className="w-16 h-16 rounded-full border-[3.5px] border-white bg-black/35 flex items-center justify-center text-white shadow-2xl group-hover:scale-110 group-hover:bg-black/55 transition-all duration-300">
+                            <Play className="w-8 h-8 text-white fill-white translate-x-0.5" />
                           </div>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -717,10 +745,14 @@ export function Gallery() {
         const rawUrl = currentMedia.url;
         const currentUrl = getMediaUrl(rawUrl);
         const fileId = currentMedia.file_id || getDriveFileId(rawUrl) || getDriveFileId(currentUrl);
-        const isVideo = currentMedia.media_type === "video" || isVideoUrl(currentUrl);
+        const isGooglePhotos = currentUrl.includes("lh3.googleusercontent.com");
 
-        const driveEmbedUrl = fileId ? `https://drive.google.com/file/d/${fileId}/preview` : null;
-        const directDriveLink = fileId ? `https://drive.google.com/file/d/${fileId}/view` : currentUrl;
+        // Determine if this media should play as video
+        const isExplicitVideo = currentMedia.media_type === "video";
+        const isNativeVideoFile = isExplicitVideo && isVideoUrl(currentUrl) && !isGooglePhotos;
+        // Use Drive iframe ONLY for videos with file_id, not images
+        const driveEmbedUrl = (isExplicitVideo && fileId) ? `https://drive.google.com/file/d/${fileId}/preview?autoplay=1` : null;
+        const directDriveLink = fileId ? `https://drive.google.com/file/d/${fileId}/view` : selectedAlbum?.link || currentUrl;
 
         return (
           <div 
@@ -734,15 +766,17 @@ export function Gallery() {
           >
             {/* Top Bar Navigation & Actions */}
             <div className="absolute top-6 right-6 flex items-center gap-3 z-20">
-              <a
-                href={directDriveLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white transition-colors text-xs font-bold flex items-center gap-1.5 border border-white/20 shadow-md"
-                title="Open in Google Drive"
-              >
-                <ExternalLink className="w-3.5 h-3.5" /> Open in Drive
-              </a>
+              {directDriveLink && (
+                <a
+                  href={directDriveLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white transition-colors text-xs font-bold flex items-center gap-1.5 border border-white/20 shadow-md"
+                  title="Open Original Album / File"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" /> {fileId ? "Open in Drive" : "Open Original Album"}
+                </a>
+              )}
               <button 
                 onClick={() => setCurrentImageIndex(null)}
                 className="p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors cursor-pointer border border-white/20 shadow-md"
@@ -781,8 +815,8 @@ export function Gallery() {
                     allowFullScreen
                   />
                 </div>
-              ) : isVideo ? (
-                /* Native MP4 Video Player */
+              ) : isNativeVideoFile ? (
+                /* Native MP4 Video Player (Only for actual MP4 / WEBM / MOV files) */
                 <div className="w-full max-w-4xl h-[78vh] flex flex-col items-center justify-center relative">
                   <video 
                     key={`native-video-${currentImageIndex}`}
@@ -794,7 +828,7 @@ export function Gallery() {
                   />
                 </div>
               ) : (
-                /* Image Lightbox View */
+                /* Fullscreen Image View */
                 <div className="relative flex items-center justify-center max-w-full max-h-[82vh]">
                   <img 
                     src={currentUrl} 
@@ -889,31 +923,6 @@ export function Gallery() {
                 </p>
               </div>
 
-              {/* File Upload Option */}
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
-                  Direct Upload Media Files
-                </label>
-                <input
-                  type="file"
-                  multiple
-                  accept="image/*,video/*"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                  id="direct-file-input"
-                />
-                <label
-                  htmlFor="direct-file-input"
-                  className="flex items-center justify-center gap-2 p-3 bg-muted/50 hover:bg-muted border border-dashed border-border rounded-xl cursor-pointer transition-colors text-sm font-semibold text-muted-foreground hover:text-foreground"
-                >
-                  {uploading ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                  ) : (
-                    <Upload className="w-4 h-4 text-primary" />
-                  )}
-                  {uploading ? "Uploading files..." : "Choose Photo / Video files to upload"}
-                </label>
-              </div>
 
               {/* Admin Type Selection for Added Media Items */}
               {formData.media_items.length > 0 && (

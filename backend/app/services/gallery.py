@@ -15,7 +15,17 @@ class GalleryService:
         media_items = item.get("media_items")
         images = item.get("images", [])
         link = item.get("link")
-        if not media_items or not isinstance(media_items, list):
+
+        needs_backfill = (
+            not media_items
+            or not isinstance(media_items, list)
+            or any(
+                not isinstance(m, dict) or not m.get("media_type")
+                for m in (media_items or [])
+            )
+        )
+
+        if needs_backfill:
             new_images, new_media = auto_extract_gallery_media(link, images, None)
             item["images"] = new_images
             item["media_items"] = new_media
@@ -164,8 +174,14 @@ class GalleryService:
         update_dict = data.model_dump(exclude_unset=True)
 
         new_link = update_dict.get("link", item.get("link"))
-        new_images = update_dict.get("images", item.get("images", []))
-        new_media = update_dict.get("media_items", item.get("media_items", []))
+        old_link = item.get("link")
+
+        if "link" in update_dict and update_dict["link"] != old_link:
+            new_images = None
+            new_media = None
+        else:
+            new_images = update_dict.get("images", item.get("images", []))
+            new_media = update_dict.get("media_items", item.get("media_items", []))
 
         imgs, media = auto_extract_gallery_media(new_link, new_images, new_media)
         update_dict["images"] = imgs
