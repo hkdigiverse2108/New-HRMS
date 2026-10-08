@@ -7,9 +7,64 @@ import pytz
 from app.repository.attendance import AttendanceRepository
 from app.repository.leave import LeaveRepository
 from app.repository.employee import EmployeeRepository
+from app.repository.payroll import PayrollRepository
 from app.redis.service import get_cache, set_cache, delete_cache, clear_pattern, make_list_key
 
 IST = pytz.timezone("Asia/Kolkata")
+
+async def get_company_leave_holidays(year: int, month: int) -> List[str]:
+    """Fetch company leave holidays from payroll settings & schedule_events for given year/month, omitting deleted/excluded holidays."""
+    result = []
+    excluded_ids = set()
+    excluded_dates = set()
+
+    try:
+        from app.database.db import get_database
+        db = get_database()
+        excluded_cursor = db["excluded_schedule_events"].find({}, {"event_id": 1, "date": 1})
+        excluded_docs = await excluded_cursor.to_list(length=5000)
+        excluded_ids = {str(d.get("event_id")) for d in excluded_docs if d.get("event_id")}
+        excluded_dates = {str(d.get("date")) for d in excluded_docs if d.get("date")}
+    except Exception:
+        db = None
+
+    try:
+        settings = await PayrollRepository.get_settings()
+        holidays = settings.get("holidays", [])
+        for h in holidays:
+            if h.get("isCompanyLeave") and h.get("date"):
+                h_date = h["date"]
+                h_id = str(h.get("id") or "")
+                if h_id in excluded_ids or h_date in excluded_dates:
+                    continue
+                if h_date.startswith(f"{year:04d}-{month:02d}-"):
+                    result.append(h_date)
+    except Exception:
+        pass
+
+    try:
+        if db is None:
+            from app.database.db import get_database
+            db = get_database()
+        cursor = db["schedule_events"].find({
+            "date": {"$regex": f"^{year:04d}-{month:02d}-"},
+            "$or": [
+                {"category": {"$in": ["company_leave", "google_holidays", "holiday"]}},
+                {"type": {"$in": ["Company Leave", "Holiday", "Public Holiday"]}}
+            ]
+        })
+        sched_holidays = await cursor.to_list(length=100)
+        for sh in sched_holidays:
+            sh_id = str(sh.get("_id") or sh.get("id") or "")
+            d_val = sh.get("date")
+            if sh_id in excluded_ids or (d_val in excluded_dates and sh.get("category") == "google_holidays"):
+                continue
+            if d_val and d_val not in result:
+                result.append(d_val)
+    except Exception:
+        pass
+
+    return result
 
 def get_now_ist() -> datetime:
     return datetime.now(IST)
@@ -877,12 +932,15 @@ class AttendanceService:
         start_date_str = f"{year:04d}-{month_idx:02d}-01"
         end_date_str = f"{year:04d}-{month_idx:02d}-{total_days:02d}"
 
-        # Working days calculation (excluding Sundays)
+        # Working days calculation (excluding Sundays and company leave holidays)
         sundays_count = 0
+        company_leave_dates = await get_company_leave_holidays(year, month_idx)
+        company_leave_count = len(company_leave_dates)
         for d in range(1, total_days + 1):
+            date_str = f"{year:04d}-{month_idx:02d}-{d:02d}"
             if datetime(year, month_idx, d).weekday() == 6: # Sunday
                 sundays_count += 1
-        holidays_count = 1 # standard 1 company holiday
+        holidays_count = company_leave_count # company leave holidays
         working_days = max(1, total_days - sundays_count - holidays_count)
 
         # Fetch records

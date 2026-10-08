@@ -21,18 +21,46 @@ export function isUserAdmin(user: UserProfile | null): boolean {
  * Only explicit child permission OR parent `all` (Full Access) grants child access.
  */
 const GROUP_PARENT_MODULES = new Set([
-  "/employees",
-  "/approvals",
-  "/reports",
-  "/recruitment",
-  "/work/sales",
   "/payroll",
   "/finance",
   "/invoice",
-  "/workspace",
-  "/ceo-dashboard",
-  "/recognitions",
+  "/employees",
 ]);
+
+const URL_ALIASES: Record<string, string[]> = {
+  "/work/sales": [
+    "/work/sales/dashboard",
+    "/work/sales/pipeline",
+    "/work/sales/leads",
+    "/work/sales/tasks",
+    "/work/sales/analytics",
+    "/work/sales/team",
+    "/work/sales/reports",
+    "/work/sales/settings",
+  ],
+  "/elections": [
+    "/recognitions",
+    "/team-leader-of-the-week",
+    "/elections",
+  ],
+  "/recognitions": ["/elections", "/recognitions"],
+  "/team-leader-of-the-week": ["/elections", "/team-leader-of-the-week"],
+  "/employees/documents": ["/documents", "/employees/documents"],
+  "/employees/documents/generate": ["/documents/generate", "/employees/documents/generate"],
+  "/recruitment/interviews": ["/recruitment", "/recruitment/interviews", "/interviews"],
+  "/recruitment/hirings": ["/recruitment", "/recruitment/hirings", "/hirings"],
+  "/workspace/seating": ["/workspace", "/workspace/seating", "/seating"],
+  "/workspace/gallery": ["/workspace", "/workspace/gallery", "/gallery"],
+  "/approvals/daily-progress": ["/approvals", "/approvals/daily-progress", "/daily-progress"],
+  "/daily-progress": ["/approvals", "/approvals/daily-progress", "/daily-progress"],
+  "/attendance": ["/employees/attendance", "/attendance"],
+  "/employees/attendance": ["/employees/attendance", "/attendance"],
+  "/leave": ["/employees/leave-requests", "/leave", "/approvals/leave-requests"],
+  "/employees/leave-requests": ["/employees/leave-requests", "/leave", "/approvals/leave-requests"],
+  "/employees/list": ["/employees", "/employees/list"],
+  "/employees": ["/employees/list", "/employees"],
+  "/invoice": ["/invoice/all", "/invoice/ledger", "/invoice/create", "/invoice/proforma"],
+};
 
 /**
  * Checks if the user has permission to access a given URL or perform an action.
@@ -86,6 +114,27 @@ export function hasModulePermission(
     return Boolean(p.all || p[action]);
   }
 
+  // 1b. Aliases & Legacy Key Compatibility
+  const aliases = URL_ALIASES[cleanUrl] || [];
+  for (const alt of aliases) {
+    if (perms[alt]) {
+      const p = perms[alt];
+      if (action === "all" ? Boolean(p.all) : Boolean(p.all || p[action])) {
+        return true;
+      }
+    }
+  }
+
+  // 1c. Unified module fuzzy check (Sales & Elections)
+  if (cleanUrl.startsWith("/work/sales") && (action === "read" || action === "all")) {
+    const hasAnySales = Object.keys(perms).some(k => k.startsWith("/work/sales") && Boolean(perms[k]?.all || perms[k]?.read));
+    if (hasAnySales) return true;
+  }
+  if (cleanUrl.startsWith("/elections") && (action === "read" || action === "all")) {
+    const hasAnyElection = Object.keys(perms).some(k => (k === "/elections" || k === "/recognitions" || k === "/team-leader-of-the-week") && Boolean(perms[k]?.all || perms[k]?.read));
+    if (hasAnyElection) return true;
+  }
+
   // 2. Dynamic hierarchical prefix matching (for dynamic sub-routes like "/tasks/123" or "/work/projects/edit/456")
   const parts = cleanUrl.split("/").filter(Boolean);
   for (let i = parts.length - 1; i >= 1; i--) {
@@ -95,7 +144,7 @@ export function hasModulePermission(
       // Full Access on parent grants all subpaths
       if (p.all) return true;
 
-      // Category parent groups (/employees, /reports, etc.) should NEVER grant children unless p.all is True
+      // Category parent groups (/payroll, /finance, etc.) should NEVER grant children unless p.all is True
       if (GROUP_PARENT_MODULES.has(parent)) {
         continue;
       }
@@ -106,8 +155,6 @@ export function hasModulePermission(
   }
 
   // 3. Dynamic child match for parent group URLs
-  // If evaluating access for a parent group URL itself (e.g. "/employees" dropdown header),
-  // allow read if user has access to any child module (e.g. "/employees/attendance")
   if (action === "read" && GROUP_PARENT_MODULES.has(cleanUrl)) {
     const hasAnyChildPermitted = Object.keys(perms).some(permUrl => {
       if (permUrl !== cleanUrl && permUrl.startsWith(cleanUrl + "/")) {

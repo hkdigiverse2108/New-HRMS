@@ -1,14 +1,16 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays,
   startOfWeek, endOfWeek, startOfMonth, endOfMonth,
   eachDayOfInterval, isSameMonth, isSameDay, isToday
 } from "date-fns";
 import {
-  ChevronLeft, ChevronRight, Search, Plus, Calendar as CalendarIcon, ChevronDown, Clock, Trash2, Link2Off, RefreshCw
+  ChevronLeft, ChevronRight, Search, Plus, Calendar as CalendarIcon, ChevronDown, Clock, Trash2, Link2Off, RefreshCw, X, Check
 } from "lucide-react";
+import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { Calendar as MiniCalendar } from "@/components/ui/calendar";
+import { DatePicker } from "@/components/ui/date-picker";
 import { CreateEventModal } from "./CreateEventModal";
 import { toast } from "@/lib/toast";
 import { api } from "@/lib/api";
@@ -42,6 +44,7 @@ const CATEGORY_OPTIONS = [
   { key: "birthday", label: "Birthdays" },
   { key: "google_calendar", label: "Google Calendar" },
   { key: "google_holidays", label: "Festivals & Holidays" },
+  { key: "company_leave", label: "Company Leaves" },
 ] as const;
 
 function toUiEvent(raw: any): ScheduleEvent {
@@ -73,9 +76,28 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(isNew || false);
   const [selectedDateForCreate, setSelectedDateForCreate] = useState<Date>(new Date());
   const [editingEvent, setEditingEvent] = useState<ScheduleEvent | null>(null);
-  const [activeCategories, setActiveCategories] = useState<string[]>((["my_schedule", "work_anniversary", "birthday", "google_calendar", "google_holidays"]));
+  const [activeCategories, setActiveCategories] = useState<string[]>((["my_schedule", "work_anniversary", "birthday", "google_calendar", "google_holidays", "company_leave"]));
   const [searchInput, setSearchInput] = useState("");
   const search = useDebounce(searchInput, 400);
+
+  // Holidays Master State
+  const [isHolidaysMasterOpen, setIsHolidaysMasterOpen] = useState(false);
+  const [newHolidayTitle, setNewHolidayTitle] = useState("");
+  const [newHolidayDate, setNewHolidayDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
+  const [newHolidayType, setNewHolidayType] = useState<"Public Holiday" | "Company Leave">("Public Holiday");
+  const [isAddingHoliday, setIsAddingHoliday] = useState(false);
+  const [isTypeDropdownOpen, setIsTypeDropdownOpen] = useState(false);
+  const typeDropdownRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (typeDropdownRef.current && !typeDropdownRef.current.contains(e.target as Node)) {
+        setIsTypeDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Team calendars (admin/HR only): active users, multi-tick. Non-admin sees only self.
   const [teamUsers, setTeamUsers] = useState<{ id?: string; employee_id: string; name: string; email?: string; department?: string }[]>([]);
@@ -86,19 +108,31 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
   // Resolve self to the team-list row (match by employee_id, mongo id, or email),
   // so the user's own entry is ticked by default even when login id != employee code.
   const selfEmployeeId = useMemo(() => {
-    if (teamUsers.length === 0) return "";
-    const email = String(user?.email || "").toLowerCase();
+    const uEmp = String(user?.employee_id || (user as any)?.employeeId || "").trim();
+    const uId = String(user?.id || (user as any)?._id || "").trim();
+    const email = String(user?.email || "").toLowerCase().trim();
+    if (teamUsers.length === 0) return uEmp || uId || selfId;
     const hit =
-      teamUsers.find((u) => u.employee_id === selfId) ||
-      teamUsers.find((u) => u.id === selfId) ||
+      (uEmp ? teamUsers.find((u) => u.employee_id === uEmp) : undefined) ||
+      (uId ? teamUsers.find((u) => u.id === uId || u.employee_id === uId) : undefined) ||
       (email ? teamUsers.find((u) => String(u.email || "").toLowerCase() === email) : undefined);
-    return hit ? hit.employee_id : "";
-  }, [teamUsers, selfId, user?.email]);
+    return hit ? hit.employee_id : (uEmp || uId || selfId);
+  }, [teamUsers, user, selfId]);
 
   useEffect(() => {
-    const fallback = selfEmployeeId || selfId;
-    if (fallback) setSelectedUserIds((prev) => (prev.length === 0 ? [fallback] : prev));
-  }, [selfEmployeeId, selfId]);
+    if (!selfEmployeeId) return;
+    setSelectedUserIds((prev) => {
+      if (prev.length === 0) return [selfEmployeeId];
+      const hasSelf = prev.includes(selfEmployeeId) || (user?.id && prev.includes(user.id));
+      if (!hasSelf) {
+        return [selfEmployeeId, ...prev];
+      }
+      if (user?.id && prev.includes(user.id) && !prev.includes(selfEmployeeId)) {
+        return prev.map((id) => (id === user.id ? selfEmployeeId : id));
+      }
+      return prev;
+    });
+  }, [selfEmployeeId, user?.id]);
 
   const fetchTeamUsers = useCallback(async () => {
     if (!canViewTeam) return;
@@ -139,6 +173,8 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
   const viewMode = view === "Month" ? "month" : view === "Week" ? "week" : "day";
   const referenceDate = format(currentDate, "yyyy-MM-dd");
 
+  const inFlightFeedKeyRef = useRef<string | null>(null);
+
   const fetchFeed = useCallback(async () => {
     // Admin/HR with zero ticked users -> empty board with hint
     if (canViewTeam && selectedUserIds.length === 0) {
@@ -146,30 +182,36 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
       setIsLoading(false);
       return;
     }
+    const params = new URLSearchParams({
+      reference_date: referenceDate,
+      view_mode: viewMode,
+    });
+    if (activeCategories.length > 0 && activeCategories.length < CATEGORY_OPTIONS.length) {
+      params.set("categories", activeCategories.join(","));
+    }
+    if (search.trim()) {
+      params.set("q", search.trim());
+    }
+    // Admin/HR: union of ticked users (each user's own connected Google included).
+    // Others: backend always scopes to self.
+    if (canViewTeam && selectedUserIds.length > 0) {
+      params.set("employee_ids", selectedUserIds.join(","));
+    }
+    const currentKey = params.toString();
+    if (inFlightFeedKeyRef.current === currentKey) {
+      return;
+    }
+    inFlightFeedKeyRef.current = currentKey;
     setIsLoading(true);
     try {
-      const params = new URLSearchParams({
-        reference_date: referenceDate,
-        view_mode: viewMode,
-      });
-      if (activeCategories.length > 0 && activeCategories.length < CATEGORY_OPTIONS.length) {
-        params.set("categories", activeCategories.join(","));
-      }
-      if (search.trim()) {
-        params.set("q", search.trim());
-      }
-      // Admin/HR: union of ticked users (each user's own connected Google included).
-      // Others: backend always scopes to self.
-      if (canViewTeam && selectedUserIds.length > 0) {
-        params.set("employee_ids", selectedUserIds.join(","));
-      }
-      const res = await api.get<any>(`/schedule/feed?${params.toString()}`, { showErrorToast: false });
+      const res = await api.get<any>(`/schedule/feed?${currentKey}`, { showErrorToast: false });
       const list = Array.isArray(res?.events) ? res.events : [];
       setEvents(list.map(toUiEvent));
     } catch {
       setEvents([]);
     } finally {
       setIsLoading(false);
+      inFlightFeedKeyRef.current = null;
     }
   }, [referenceDate, viewMode, activeCategories, search, canViewTeam, selectedUserIds]);
 
@@ -263,7 +305,8 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
   const handleDeleteEvent = async () => {
     if (!editingEvent) return;
     try {
-      await api.delete(`/schedule/events/${editingEvent.id}`);
+      const url = `/schedule/events/${encodeURIComponent(editingEvent.id)}?date=${encodeURIComponent(editingEvent.date)}&title=${encodeURIComponent(editingEvent.title)}`;
+      await api.delete(url);
       toast.success("Event deleted.");
       setIsCreateModalOpen(false);
       setEditingEvent(null);
@@ -334,29 +377,88 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
 
   const getEventsForDay = (dateStr: string) => eventsByDay[dateStr] || [];
 
-  const renderEventChip = (event: ScheduleEvent, extra?: string) => (
-    <div
-      key={event.id}
-      onClick={(e) => {
-        e.stopPropagation();
-        if (!event.id.startsWith("bday_") && !event.id.startsWith("anniv_") && !event.id.startsWith("gcal_")) {
-          openEdit(event);
-        }
-      }}
-      title={`${event.title}${event.startTime ? ` (${event.startTime}${event.endTime ? ` - ${event.endTime}` : ""})` : ""}${event.description ? `\n${event.description}` : ""}`}
-      style={eventStyle(event.color)}
-      className={cn(
-        "text-[10px] px-1.5 py-0.5 rounded truncate text-white font-medium shadow-sm cursor-pointer",
-        eventClass(event.color),
-        extra
-      )}
-    >
-      {event.startTime} {event.title}
-    </div>
-  );
+  const holidaysList = useMemo(() => {
+    return events
+      .filter((e) =>
+        e.type === "Holiday" ||
+        e.type === "Public Holiday" ||
+        e.type === "Company Leave" ||
+        e.category === "google_holidays" ||
+        e.category === "company_leave" ||
+        e.category === "holiday" ||
+        e.id.startsWith("holiday_") ||
+        e.id.startsWith("leave_")
+      )
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [events]);
+
+  const handleAddHoliday = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newHolidayTitle.trim() || !newHolidayDate) {
+      toast.error("Please enter holiday name and date.");
+      return;
+    }
+    try {
+      setIsAddingHoliday(true);
+      const isCompanyLeave = newHolidayType === "Company Leave";
+      await api.post("/schedule/events", {
+        title: newHolidayTitle.trim(),
+        date: newHolidayDate,
+        type: newHolidayType,
+        category: isCompanyLeave ? "company_leave" : "google_holidays",
+        color: isCompanyLeave ? "#8B5CF6" : "#EF4444",
+        description: isCompanyLeave ? "Official Company Leave" : "Public / Office Holiday",
+        start_time: "00:00",
+        end_time: "23:59",
+      });
+
+      toast.success(`${newHolidayType} added successfully!`);
+      setNewHolidayTitle("");
+      fetchFeed();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to add holiday.");
+    } finally {
+      setIsAddingHoliday(false);
+    }
+  };
+
+  const handleDeleteHoliday = async (h: ScheduleEvent) => {
+    try {
+      const url = `/schedule/events/${encodeURIComponent(h.id)}?date=${encodeURIComponent(h.date)}&title=${encodeURIComponent(h.title)}`;
+      await api.delete(url, { showErrorToast: false });
+      toast.success("Holiday removed.");
+      fetchFeed();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to remove holiday.");
+    }
+  };
+
+  const renderEventChip = (event: ScheduleEvent, extra?: string) => {
+    const isFullDay = !event.startTime || event.startTime === "00:00" || event.type === "Holiday" || event.type === "Public Holiday" || event.type === "Company Leave";
+    return (
+      <div
+        key={event.id}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!event.id.startsWith("bday_") && !event.id.startsWith("anniv_") && !event.id.startsWith("gcal_")) {
+            openEdit(event);
+          }
+        }}
+        title={`${event.title}${event.startTime ? ` (${event.startTime}${event.endTime ? ` - ${event.endTime}` : ""})` : ""}${event.description ? `\n${event.description}` : ""}`}
+        style={eventStyle(event.color)}
+        className={cn(
+          "text-[10px] px-1.5 py-0.5 rounded truncate text-white font-medium shadow-sm cursor-pointer",
+          eventClass(event.color),
+          extra
+        )}
+      >
+        {!isFullDay && event.startTime ? `${event.startTime} ` : ""}{event.title}
+      </div>
+    );
+  };
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-4rem)] bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
+    <div className="flex flex-col min-h-[calc(100dvh-4rem)] lg:h-[calc(100vh-4rem)] lg:min-h-0 lg:overflow-hidden bg-white rounded-2xl border border-border shadow-sm">
       {/* Header */}
       <header className="flex flex-col md:flex-row md:items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-border gap-3">
         <div className="flex flex-wrap items-center gap-2 sm:gap-4">
@@ -452,6 +554,20 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
             </div>
           )}
 
+          {canViewTeam && (
+            <button
+              type="button"
+              onClick={() => setIsHolidaysMasterOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-850 text-xs sm:text-sm font-semibold rounded-lg transition-colors shadow-sm"
+              title="View & manage holidays and company leaves"
+            >
+              <span>🎉 Holidays Master</span>
+              <span className="px-1.5 py-0.5 rounded-full bg-rose-200 dark:bg-rose-800 text-rose-800 dark:text-rose-200 text-[11px] font-bold">
+                {holidaysList.length}
+              </span>
+            </button>
+          )}
+
           <button
             onClick={() => openCreate(currentDate)}
             className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 bg-primary text-primary-foreground text-xs sm:text-sm font-semibold rounded-lg hover:bg-primary transition-colors shadow-sm">
@@ -462,42 +578,55 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
-        <aside className="w-64 border-r border-border p-4 hidden lg:flex flex-col gap-6 overflow-y-auto hide-scrollbar bg-muted/50/50">
-          <div className="-ml-2">
+        <aside className="w-72 border-r border-border hidden lg:flex flex-col shrink-0 bg-muted/20 select-none">
+          {/* Pinned / Stuck Mini Calendar at top (never scrolls out of view) */}
+          <div className="shrink-0 p-3.5 border-b border-border/80 bg-white flex justify-center">
             <MiniCalendar
               mode="single"
               selected={currentDate}
               onSelect={(date) => date && setCurrentDate(date)}
               month={currentDate}
               onMonthChange={setCurrentDate}
-              className="bg-transparent"
+              className="p-0 bg-transparent w-full [--cell-size:2rem]"
+              classNames={{
+                root: "w-full flex justify-center",
+                months: "w-full",
+                month: "w-full space-y-1.5",
+                table: "w-full border-collapse",
+                weekdays: "flex w-full justify-between",
+                weekday: "text-muted-foreground flex-1 text-center select-none rounded-md text-[0.75rem] font-medium py-1",
+                week: "flex w-full justify-between mt-1",
+                day: "group/day relative flex-1 aspect-square h-auto select-none p-0 text-center flex items-center justify-center",
+              }}
             />
           </div>
 
-          <div className="space-y-4">
-            <div className="flex items-center justify-between group cursor-pointer">
-              <h3 className="text-sm font-bold text-foreground">My Calendars</h3>
-              <ChevronDown className="w-4 h-4 text-muted-foreground group-hover:text-foreground/80" />
+          {/* Scrollable Categories & Team Calendars below */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-6 hide-scrollbar">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between group cursor-pointer">
+                <h3 className="text-sm font-bold text-foreground">My Calendars</h3>
+                <ChevronDown className="w-4 h-4 text-muted-foreground group-hover:text-foreground/80" />
+              </div>
+              <div className="space-y-2.5">
+                {CATEGORY_OPTIONS.map((c) => (
+                  <label key={c.key} className="flex items-center gap-3 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      checked={activeCategories.includes(c.key)}
+                      onChange={() => toggleCategory(c.key)}
+                      className="w-4 h-4 rounded text-primary focus:ring-primary/20 border-border"
+                    />
+                    <span className="text-sm font-medium text-foreground/80 group-hover:text-foreground">
+                      {c.label}
+                      {c.key === "google_calendar" && googleConnected && googleEmail && (
+                        <span className="block text-[10px] text-muted-foreground truncate max-w-[160px]">{googleEmail}</span>
+                      )}
+                    </span>
+                  </label>
+                ))}
+              </div>
             </div>
-            <div className="space-y-2.5">
-              {CATEGORY_OPTIONS.map((c) => (
-                <label key={c.key} className="flex items-center gap-3 cursor-pointer group">
-                  <input
-                    type="checkbox"
-                    checked={activeCategories.includes(c.key)}
-                    onChange={() => toggleCategory(c.key)}
-                    className="w-4 h-4 rounded text-primary focus:ring-primary/20 border-border"
-                  />
-                  <span className="text-sm font-medium text-foreground/80 group-hover:text-foreground">
-                    {c.label}
-                    {c.key === "google_calendar" && googleConnected && googleEmail && (
-                      <span className="block text-[10px] text-muted-foreground truncate max-w-[160px]">{googleEmail}</span>
-                    )}
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
 
           {canViewTeam && (
             <div className="space-y-3">
@@ -525,7 +654,7 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
                 </button>
                 <span className="text-muted-foreground">·</span>
                 <button
-                  onClick={() => setSelectedUserIds(selfEmployeeId || selfId ? [selfEmployeeId || selfId] : [])}
+                  onClick={() => setSelectedUserIds(selfEmployeeId ? [selfEmployeeId] : (selfId ? [selfId] : []))}
                   className="text-[11px] font-semibold text-muted-foreground hover:text-foreground hover:underline"
                 >
                   Only me
@@ -535,40 +664,44 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
                 {teamUsers.length === 0 && (
                   <p className="text-[11px] text-muted-foreground">No active users found.</p>
                 )}
-                {teamUsers.map((u) => (
-                  <label key={u.employee_id} className="flex items-center gap-2.5 cursor-pointer group rounded-lg px-1.5 py-1 hover:bg-muted/60">
-                    <input
-                      type="checkbox"
-                      checked={selectedUserIds.includes(u.employee_id)}
-                      onChange={() => toggleTeamUser(u.employee_id)}
-                      className="w-4 h-4 rounded text-primary focus:ring-primary/20 border-border shrink-0"
-                    />
+                {teamUsers.map((u) => {
+                  const isCurrentSelf = u.employee_id === selfEmployeeId || (user?.id && u.id === user.id) || (selfId && (u.employee_id === selfId || u.id === selfId));
+                  return (
+                    <label key={u.employee_id} className="flex items-center gap-2.5 cursor-pointer group rounded-lg px-1.5 py-1 hover:bg-muted/60">
+                      <input
+                        type="checkbox"
+                        checked={selectedUserIds.includes(u.employee_id)}
+                        onChange={() => toggleTeamUser(u.employee_id)}
+                        className="w-4 h-4 rounded text-primary focus:ring-primary/20 border-border shrink-0"
+                      />
                       <span className="min-w-0">
                         <span className="block text-xs font-semibold text-foreground/90 truncate group-hover:text-foreground">
                           {u.name}
-                          {u.employee_id === (selfEmployeeId || selfId) && <span className="text-muted-foreground font-normal"> (you)</span>}
+                          {isCurrentSelf && <span className="text-muted-foreground font-normal"> (you)</span>}
                         </span>
-                      {u.department && (
-                        <span className="block text-[10px] text-muted-foreground truncate">{u.department}</span>
-                      )}
-                    </span>
-                  </label>
-                ))}
+                        {u.department && (
+                          <span className="block text-[10px] text-muted-foreground truncate">{u.department}</span>
+                        )}
+                      </span>
+                    </label>
+                  );
+                })}
               </div>
             </div>
           )}
+          </div>
         </aside>
 
         {/* Main Calendar Area */}
-        <main className="flex-1 overflow-y-auto flex flex-col bg-white min-w-0">
+        <main className={cn("flex-1 flex flex-col bg-white min-w-0", view === "Month" ? "overflow-y-auto lg:overflow-hidden" : "overflow-y-auto")}>
           {isLoading && (
             <div className="px-4 py-1.5 text-[11px] text-muted-foreground border-b border-border bg-muted/30">
               Loading schedule…
             </div>
           )}
           {view === "Month" && (
-            <div className="flex-1 flex flex-col min-h-[600px] overflow-x-auto min-w-0">
-              <div className="min-w-[600px] flex-1 flex flex-col">
+            <div className="flex-1 flex flex-col min-h-[500px] lg:min-h-0 overflow-x-auto min-w-0 h-full">
+              <div className="min-w-[600px] flex-1 flex flex-col h-full">
                 {/* Days Header */}
                 <div className="grid grid-cols-7 border-b border-border">
                   {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
@@ -855,6 +988,186 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
           </div>
         </div>
       )}
+
+      {/* Holidays Master Modal (Task 17 & 18) */}
+      <Dialog open={canViewTeam && isHolidaysMasterOpen} onOpenChange={setIsHolidaysMasterOpen}>
+        <DialogContent className="w-[calc(100vw-16px)] sm:max-w-[620px] max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-3xl border border-border shadow-2xl bg-card">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-muted/20">
+            <div className="flex items-center gap-2.5">
+              <span className="text-xl">🎉</span>
+              <div>
+                <h2 className="text-lg font-bold text-foreground">Holidays Master</h2>
+                <p className="text-xs text-muted-foreground">
+                  View scheduled festivals, public holidays, and company leaves
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 pr-6">
+              <span className="px-3 py-1 rounded-full bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 font-bold text-xs border border-rose-200 dark:border-rose-900 shadow-xs">
+                Total: {holidaysList.length} Days
+              </span>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-5 overflow-y-auto max-h-[70dvh] flex-1">
+            {/* Add Holiday Form for Admin & HR */}
+            {canViewTeam && (
+              <form onSubmit={handleAddHoliday} className="p-4 rounded-xl border border-border/80 bg-muted/30 space-y-3">
+                <h3 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                  <Plus className="w-3.5 h-3.5 text-primary" /> Add Holiday / Company Leave
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div className="sm:col-span-1">
+                    <input
+                      type="text"
+                      placeholder="Holiday Name (e.g. Diwali)"
+                      value={newHolidayTitle}
+                      onChange={(e) => setNewHolidayTitle(e.target.value)}
+                      className="w-full h-8 px-3 py-1.5 bg-background border border-border rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-xs"
+                    />
+                  </div>
+                  <div>
+                    <DatePicker
+                      value={newHolidayDate}
+                      onChange={(val) => setNewHolidayDate(val || "")}
+                      placeholder="Select date"
+                      displayFormat="dd-MM-yyyy"
+                      className="h-8 text-xs bg-background"
+                    />
+                  </div>
+                  <div className="relative" ref={typeDropdownRef}>
+                    <button
+                      type="button"
+                      onClick={() => setIsTypeDropdownOpen((prev) => !prev)}
+                      className="w-full h-8 flex items-center justify-between px-2.5 py-1.5 bg-background border border-border rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer shadow-xs"
+                    >
+                      <span className="flex items-center gap-2 truncate">
+                        <span className={cn(
+                          "w-2 h-2 rounded-full shrink-0",
+                          newHolidayType === "Company Leave" ? "bg-purple-500" : "bg-rose-500"
+                        )} />
+                        <span className="text-foreground font-semibold">{newHolidayType}</span>
+                      </span>
+                      <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform duration-200", isTypeDropdownOpen && "rotate-180")} />
+                    </button>
+
+                    {isTypeDropdownOpen && (
+                      <div className="absolute left-0 right-0 top-full mt-1.5 bg-card border border-border rounded-xl shadow-xl z-50 py-1 overflow-hidden animate-in fade-in-50 zoom-in-95 duration-150">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewHolidayType("Public Holiday");
+                            setIsTypeDropdownOpen(false);
+                          }}
+                          className={cn(
+                            "w-full flex items-center justify-between px-3 py-2 text-xs text-left transition-colors cursor-pointer",
+                            newHolidayType === "Public Holiday" ? "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 font-bold" : "hover:bg-muted text-foreground font-medium"
+                          )}
+                        >
+                          <span className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+                            <span>Public Holiday</span>
+                          </span>
+                          {newHolidayType === "Public Holiday" && <Check className="w-3.5 h-3.5 text-rose-600" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewHolidayType("Company Leave");
+                            setIsTypeDropdownOpen(false);
+                          }}
+                          className={cn(
+                            "w-full flex items-center justify-between px-3 py-2 text-xs text-left transition-colors cursor-pointer",
+                            newHolidayType === "Company Leave" ? "bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 font-bold" : "hover:bg-muted text-foreground font-medium"
+                          )}
+                        >
+                          <span className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-purple-500 shrink-0" />
+                            <span>Company Leave</span>
+                          </span>
+                          {newHolidayType === "Company Leave" && <Check className="w-3.5 h-3.5 text-purple-600" />}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex justify-between items-center pt-1">
+                  <p className="text-[11px] text-muted-foreground">
+                    Reflects across calendar schedule and counts in monthly holiday calculations.
+                  </p>
+                  <button
+                    type="submit"
+                    disabled={isAddingHoliday}
+                    className="px-3.5 py-1.5 bg-primary text-primary-foreground font-bold text-xs rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 shrink-0"
+                  >
+                    {isAddingHoliday ? "Adding…" : "Add"}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* List of holidays */}
+            <div className="space-y-2">
+              <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                Scheduled Holidays ({holidaysList.length})
+              </h3>
+              {holidaysList.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-6 text-center border border-dashed border-border rounded-xl">
+                  No holidays recorded.
+                </p>
+              ) : (
+                <div className="space-y-1.5">
+                  {holidaysList.map((h) => {
+                    const isCompanyLeave = h.type === "Company Leave" || h.category === "company_leave";
+                    return (
+                      <div
+                        key={h.id}
+                        className="flex items-center justify-between p-3 rounded-xl border border-border/60 bg-card hover:bg-muted/40 transition-colors"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={cn(
+                            "w-2.5 h-2.5 rounded-full shrink-0",
+                            isCompanyLeave ? "bg-purple-500" : "bg-rose-500"
+                          )} />
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-foreground truncate">{h.title}</p>
+                            <p className="text-[11px] text-muted-foreground">{h.date}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={cn(
+                            "px-2 py-0.5 rounded-md text-[10px] font-bold border",
+                            isCompanyLeave
+                              ? "bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border-purple-200"
+                              : "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border-rose-200"
+                          )}>
+                            {isCompanyLeave ? "Company Leave" : "Public Holiday"}
+                          </span>
+                          {(h.id.startsWith("ghol_") || h.id.startsWith("gcal_") || h.id.startsWith("bday_") || h.id.startsWith("anniv_")) && (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-muted text-muted-foreground border border-border">
+                              Google Synced
+                            </span>
+                          )}
+                          {canViewTeam && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteHoliday(h)}
+                              className="p-1 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition-colors"
+                              title="Delete holiday"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

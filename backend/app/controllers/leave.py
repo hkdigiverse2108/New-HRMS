@@ -24,7 +24,7 @@ async def apply_leave(
     """
     work = current_employee.get("work_details", {})
     user_role = work.get("system_role", "Employee")
-    dept = work.get("department", "")
+    dept = str(work.get("department") or "").strip()
     if dept.lower() == "hr" or current_employee.get("role") == "HR":
         user_role = "HR"
 
@@ -92,7 +92,7 @@ async def get_leaves(
     """
     work = current_employee.get("work_details", {})
     user_role = work.get("system_role", "Employee")
-    dept = work.get("department", "")
+    dept = str(work.get("department") or "").strip()
     if dept.lower() == "hr" or current_employee.get("role") == "HR":
         user_role = "HR"
     current_id = str(current_employee.get("_id") or current_employee.get("id") or current_employee.get("email") or "")
@@ -172,7 +172,7 @@ async def update_leave_status(
     """
     work = current_employee.get("work_details", {})
     user_role = work.get("system_role", "Employee")
-    dept = work.get("department", "")
+    dept = str(work.get("department") or "").strip()
     if dept.lower() == "hr" or current_employee.get("role") == "HR":
         user_role = "HR"
 
@@ -280,7 +280,7 @@ async def delete_leave(
     employee_id = str(current_employee.get("_id") or current_employee.get("id") or current_employee.get("email") or "")
     work = current_employee.get("work_details", {})
     user_role = work.get("system_role", "Employee")
-    dept = str(work.get("department", ""))
+    dept = str(work.get("department") or "").strip()
     
     from app.controllers.auth import resolve_effective_permissions_for_employee
     perms = await resolve_effective_permissions_for_employee(current_employee)

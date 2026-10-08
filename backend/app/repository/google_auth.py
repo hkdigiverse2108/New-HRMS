@@ -47,7 +47,38 @@ class GoogleAuthRepository:
     @classmethod
     async def get_auth_by_employee(cls, employee_id: str) -> Optional[Dict[str, Any]]:
         db = await cls.get_db()
-        return await db[cls.collection_name].find_one({"employee_id": employee_id})
+        if not employee_id:
+            return None
+        # 1. Direct match by employee_id field in user_google_auth
+        doc = await db[cls.collection_name].find_one({"employee_id": employee_id})
+        if doc:
+            return doc
+        
+        # 2. If employee_id is ObjectId or emp_code, find the employee document to check alternative IDs
+        try:
+            from bson import ObjectId
+            emp = None
+            if ObjectId.is_valid(employee_id):
+                emp = await db["employees"].find_one({"_id": ObjectId(employee_id)})
+            if not emp:
+                emp = await db["employees"].find_one({
+                    "$or": [
+                        {"work_details.employee_id": employee_id},
+                        {"employee_id": employee_id}
+                    ]
+                })
+            if emp:
+                possible_ids = [
+                    str(emp.get("_id")),
+                    emp.get("work_details", {}).get("employee_id"),
+                    emp.get("employee_id")
+                ]
+                possible_ids = [pid for pid in possible_ids if pid and pid != employee_id]
+                if possible_ids:
+                    return await db[cls.collection_name].find_one({"employee_id": {"$in": possible_ids}})
+        except Exception:
+            pass
+        return None
 
     @classmethod
     async def get_valid_access_token(cls, employee_id: str) -> Optional[str]:

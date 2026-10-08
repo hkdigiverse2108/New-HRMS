@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
+from fastapi.responses import StreamingResponse
+import httpx
 from typing import Optional, List
 from app.schemas.gallery import (
     GalleryEventCreate, GalleryEventUpdate, GalleryEventResponse, GalleryPaginatedResponse
@@ -7,6 +9,53 @@ from app.services.gallery import GalleryService
 from app.controllers.auth import get_current_employee
 
 router = APIRouter(prefix="/gallery", tags=["Gallery & Events"])
+
+@router.get("/stream-video")
+async def stream_gallery_video(url: str, request: Request):
+    """
+    Proxies video streaming for Google Photos / Drive videos without Referer / CORS issues,
+    supporting HTTP Range headers for smooth playback and seeking in HTML5 <video>.
+    """
+    if not url:
+        raise HTTPException(status_code=400, detail="Missing url")
+    
+    clean_url = url.strip()
+    if "lh3.googleusercontent.com" in clean_url and not any(clean_url.endswith(s) for s in ["=m18", "=m22", "=m37"]):
+        clean_url = clean_url.split("=")[0] + "=m18"
+    
+    req_headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "*/*"
+    }
+    range_header = request.headers.get("range")
+    if range_header:
+        req_headers["Range"] = range_header
+
+    client = httpx.AsyncClient(timeout=60.0, follow_redirects=True)
+    req = client.build_request("GET", clean_url, headers=req_headers)
+    resp = await client.send(req, stream=True)
+
+    resp_headers = {}
+    for h in ["content-type", "content-length", "content-range", "accept-ranges"]:
+        if h in resp.headers:
+            resp_headers[h] = resp.headers[h]
+    resp_headers["access-control-allow-origin"] = "*"
+
+    async def body_stream():
+        try:
+            async for chunk in resp.aiter_bytes():
+                yield chunk
+        finally:
+            await resp.aclose()
+            await client.aclose()
+
+    return StreamingResponse(
+        body_stream(),
+        status_code=resp.status_code,
+        headers=resp_headers,
+        media_type=resp.headers.get("content-type", "video/mp4")
+    )
+
 
 @router.post("", response_model=GalleryEventResponse, status_code=status.HTTP_201_CREATED)
 async def create_gallery_event(

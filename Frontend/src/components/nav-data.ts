@@ -36,16 +36,8 @@ import {
   Settings2,
   PlayCircle,
   Gift,
-  Handshake,
   Target,
-  Cpu,
-  Store,
-  CheckSquare,
-  BarChart2,
-  Bell,
   Trash2,
-  Package,
-  Map,
   type LucideIcon,
 } from "lucide-react";
 
@@ -64,29 +56,71 @@ export const navItems: NavItem[] = [
   // 1. Dashboard
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
 
-  // 2. Employees
+  // 2. Attendance
+  { title: "Attendance", url: "/employees/attendance", icon: Clock },
+
+  // 3. Leave
+  { title: "Leave", url: "/employees/leave-requests", icon: CalendarDays },
+
+  // 4. Schedule
+  { title: "Schedule", url: "/schedule", icon: CalendarRange },
+
+  // 5. Task
+  { title: "Task", url: "/tasks", icon: ClipboardList },
+
+  // 6. Client & Project (Promoted to Main Page)
+  { title: "Client & Project", url: "/work/projects", icon: Briefcase },
+
+  // 7. Chat
+  { title: "Chat", url: "/chat", icon: MessagesSquare },
+
+  // 8. Work Logs (Promoted to Main Page)
+  { title: "Work Logs", url: "/work/logs", icon: ScrollText },
+
+  // 9. Research (Promoted to Main Page)
+  { title: "Research", url: "/work/research", icon: BookOpen },
+
+  // 10. Sales (Unified Main Page, sub-pages integrated inside SalesHub)
+  { title: "Sales", url: "/work/sales", icon: Target },
+
+  // 11. Daily Progress
+  { title: "Daily Progress", url: "/approvals/daily-progress", icon: CheckCheck },
+
+  // 12. Interview
+  { title: "Interview", url: "/recruitment/interviews", icon: Users },
+
+  // 13. Activity Tracker
+  { title: "Activity Tracker", url: "/activity-tracker", icon: Activity },
+
+  // 14. Invoices (5 Sub-Departments)
   {
-    title: "Employees",
-    icon: Users,
+    title: "Invoices",
+    icon: FileText,
     children: [
-      { title: "Employee List", url: "/employees/list" },
-      { title: "Deposits & Documents", url: "/employees/deposits" },
-      { title: "Org Structure", url: "/employees/org" },
-      { title: "Sub-Departments & Designations", url: "/employees/departments-setup" },
+      { title: "Invoices", url: "/invoice/all" },
+      { title: "Quotation", url: "/invoice/proforma" },
+      { title: "Ledger", url: "/invoice/ledger" },
+      { title: "Create Invoice", url: "/invoice/create" },
+      { title: "Create Quotations", url: "/invoice/proforma?create=1" },
     ],
   },
 
-  // 3. Documents
-  {
-    title: "Documents",
-    icon: Files,
-    children: [
-      { title: "Submitted Documents", url: "/employees/documents" },
-      { title: "Document Generator", url: "/employees/documents/generate" },
-    ],
-  },
+  // 15. Penalty
+  { title: "Penalty", url: "/penalty", icon: MessageSquareWarning },
 
-  // 4. Payroll
+  // 16. Remarks
+  { title: "Remarks", url: "/remarks", icon: Star },
+
+  // 17. Our Gallery
+  { title: "Our Gallery", url: "/workspace/gallery", icon: MonitorPlay },
+
+  // 18. Seating
+  { title: "Seating", url: "/workspace/seating", icon: LayoutGrid },
+
+  // 19. Recruitment
+  { title: "Recruitment", url: "/recruitment/hirings", icon: UserPlus },
+
+  // 20. Payroll (Existing sub-departments preserved)
   {
     title: "Payroll",
     icon: IndianRupee,
@@ -100,16 +134,16 @@ export const navItems: NavItem[] = [
     ],
   },
 
-  // 5. Recruitment
-  {
-    title: "Recruitment",
-    icon: Briefcase,
-    children: [
-      { title: "Interviews", url: "/recruitment/interviews" },
-    ],
-  },
+  // 21. Document Center (Direct Main Page)
+  { title: "Document Center", url: "/employees/documents", icon: Files },
 
-  // 6. Company Finance
+  // 22. Document Generate (Direct Main Page)
+  { title: "Document Generate", url: "/employees/documents/generate", icon: FileText },
+
+  // 23. Election (Unified Main Page, sub-pages integrated inside ElectionsHub)
+  { title: "Election", url: "/elections", icon: Vote },
+
+  // 24. Company Finance (Existing sub-departments preserved)
   {
     title: "Company Finance",
     icon: Landmark,
@@ -121,111 +155,31 @@ export const navItems: NavItem[] = [
     ],
   },
 
-  // 7. Attendance
-  { title: "Attendance", url: "/employees/attendance", icon: Clock },
-
-  // 8. Leave
-  { title: "Leave", url: "/employees/leave-requests", icon: CalendarDays },
-
-  // 9. Schedule
-  { title: "Schedule", url: "/schedule", icon: CalendarRange },
-
-  // 10. Workspace
+  // 25. Employees (Employee list is default main view, plus sub-departments)
   {
-    title: "Workspace",
-    icon: MonitorPlay,
+    title: "Employees",
+    url: "/employees/list",
+    icon: Users,
     children: [
-      { title: "Seating Arrangement", url: "/workspace/seating" },
-      { title: "Resource Management", url: "/workspace/resource" },
-      { title: "Gallery", url: "/workspace/gallery" },
+      { title: "Org Structure", url: "/employees/org" },
+      { title: "Sub-Departments & Designations", url: "/employees/departments-setup" },
     ],
   },
 
-  // 11. Penalty
-  { title: "Penalty", url: "/penalty", icon: MessageSquareWarning },
+  // 26. Deposit (Promoted to Main Page)
+  { title: "Deposit", url: "/employees/deposits", icon: Wallet },
 
-  // 12. Remarks
-  { title: "Remarks", url: "/remarks", icon: Star },
-
-  // 13. Activity Tracker
-  { title: "Activity Tracker", url: "/activity-tracker", icon: Activity },
-
-  // 14. Invoice
-  {
-    title: "Invoice",
-    icon: FileText,
-    children: [
-      { title: "All Invoices", url: "/invoice/all" },
-      { title: "Invoice Ledger", url: "/invoice/ledger" },
-      { title: "Create Invoice", url: "/invoice/create" },
-      { title: "Create Proforma Invoice", url: "/invoice/proforma" },
-    ],
-  },
-
-  // 15. Chat
-  { title: "Chat", url: "/chat", icon: MessagesSquare },
-
-  // 16. Tasks
-  { title: "Tasks", url: "/tasks", icon: ClipboardList },
-
-  // 17. Work Management
-  {
-    title: "Work Management",
-    icon: Briefcase,
-    children: [
-      { title: "Clients & Projects", url: "/work/projects", icon: Briefcase },
-      { title: "Work Logs", url: "/work/logs", icon: ScrollText },
-      { title: "Research", url: "/work/research", icon: BookOpen },
-      { title: "Sales Dashboard", url: "/work/sales/dashboard", icon: LayoutDashboard },
-      { title: "Sales Pipeline", url: "/work/sales/pipeline", icon: Kanban },
-      { title: "Sales Leads", url: "/work/sales/leads", icon: Users },
-      { title: "Sales Tasks & Follow-ups", url: "/work/sales/tasks", icon: ClipboardList },
-      { title: "Sales Analytics", url: "/work/sales/analytics", icon: BarChart3 },
-      { title: "Team Performance", url: "/work/sales/team", icon: Trophy },
-      { title: "Sales Reports", url: "/work/sales/reports", icon: FileText },
-      { title: "Sales Settings", url: "/work/sales/settings", icon: SlidersHorizontal },
-    ],
-  },
-
-  // 18. Elections & Recognition
-  {
-    title: "Elections & Recognition",
-    icon: Vote,
-    children: [
-      { title: "Employee of Month", url: "/recognitions" },
-      { title: "Team Leader of the Week", url: "/team-leader-of-the-week" },
-      { title: "Elections", url: "/elections" },
-    ],
-  },
-
-  // 19. Settings
-  { title: "Settings", url: "/settings", icon: Settings },
-
-  // 20. Restrictions
-  { title: "Restrictions", url: "/restrictions", icon: Shield },
-
-  // 21. Activity Logs
+  // 27. Activity Logs
   { title: "Activity Logs", url: "/activity-logs", icon: Activity },
 
-  // --- ADDITIONAL MODULES (Present in code, placed below the image items) ---
-  // 22. Access Control
+  // 28. Recycle Bin
+  { title: "Recycle Bin", url: "/recycle-bin", icon: Trash2 },
+
+  // 29. Access Control
   { title: "Access Control", url: "/access-control", icon: Shield },
 
-  // 23. Approvals Hub
-  {
-    title: "Approvals Hub",
-    url: "/approvals",
-    icon: CheckCheck,
-    children: [
-      { title: "Leave Requests", url: "/employees/leave-requests" },
-      { title: "Penalties", url: "/approvals/penalties" },
-      { title: "Daily Progress", url: "/approvals/daily-progress" },
-      { title: "Approval History", url: "/approvals/history" },
-    ],
-  },
-
-  // 24. Recycle Bin
-  { title: "Recycle Bin", url: "/recycle-bin", icon: Trash2 },
+  // 30. Settings
+  { title: "Settings", url: "/settings", icon: Settings },
 ];
 
 export const sectionOrder = [

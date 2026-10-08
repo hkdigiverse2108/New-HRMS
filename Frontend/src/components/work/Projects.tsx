@@ -1149,20 +1149,22 @@ export const getWorkProgress = (project: any): { completed: number; total: numbe
   if (project.contentCalendar && Array.isArray(project.contentCalendar) && project.contentCalendar.length > 0) {
     totalWork += project.contentCalendar.length;
     completedWork += project.contentCalendar.filter(
-      (item: any) =>
-        item.status === "Published" ||
-        item.status === "Approved" ||
-        item.status === "Approved by Client" ||
-        item.is_posted ||
-        Boolean(item.actualPostingDate || item.postingLinkOfIg)
+      (item: any) => {
+        const s = String(item.status || "").toLowerCase();
+        return s.includes("publish") || s.includes("approved") || item.is_posted || Boolean((item.actualPostingDate || "").trim() || (item.postingLinkOfIg || "").trim() || (item.finalPostLink || "").trim() || (item.finalReelLink || "").trim());
+      }
     ).length;
   }
 
   if (project.modules) {
-    Object.values(project.modules).forEach((mod: any) => {
+    const modList = Array.isArray(project.modules) ? project.modules : Object.values(project.modules);
+    modList.forEach((mod: any) => {
       if (mod?.tasks && Array.isArray(mod.tasks) && mod.tasks.length > 0) {
         totalWork += mod.tasks.length;
-        completedWork += mod.tasks.filter((t: any) => t.status === "Completed" || t.completed).length;
+        completedWork += mod.tasks.filter((t: any) => {
+          const s = String(t.status || "").toLowerCase();
+          return s === "completed" || s === "done" || Boolean(t.completed);
+        }).length;
       }
     });
   }
@@ -1599,7 +1601,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   }, []);
   const handleSaveCcStatus = async (projId: string, month: number, year: number) => {
     if (ccStatusDraft !== "Approved by Client" && !ccReasonDraft.trim()) {
-      toast.error("Reason compulsory che (Approved sivay)");
+            toast.error("Reason is required (unless Approved)");
       return;
     }
     try {
@@ -1837,6 +1839,57 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     }
   }, [selectedProjectId, projects]);
 
+  // Browser history for back button support (Task 12: Proper hierarchy on Back)
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      const state = event.state;
+      if (state && typeof state === "object") {
+        if ("projectId" in state && state.projectId) {
+          setSelectedProjectId(state.projectId);
+          if ("clientId" in state) setSelectedClientId(state.clientId);
+          return;
+        }
+        if ("clientId" in state && state.clientId) {
+          setSelectedProjectId(null);
+          setSelectedClientId(state.clientId);
+          return;
+        }
+      }
+      setSelectedProjectId(null);
+      setSelectedClientId(null);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
+    if (selectedProjectId) {
+      history.pushState({ projectId: selectedProjectId, clientId: selectedClientId }, "", "");
+    } else if (selectedClientId) {
+      history.pushState({ clientId: selectedClientId }, "", "");
+    }
+  }, [selectedProjectId, selectedClientId]);
+
+  // Task 9: Scroll & pulse highlight auto-assigned CC task
+  useEffect(() => {
+    if (typeof window === "undefined" || !selectedProjectId) return;
+    const highlightId = localStorage.getItem("hrms_cc_highlight_id");
+    if (!highlightId) return;
+
+    const timer = setTimeout(() => {
+      const row = document.getElementById(`cc-item-${highlightId}`) || document.querySelector(`[data-cc-id="${highlightId}"]`);
+      if (row) {
+        row.scrollIntoView({ behavior: "smooth", block: "center" });
+        row.classList.add("ring-4", "ring-primary", "bg-primary/10", "transition-all");
+        setTimeout(() => {
+          row.classList.remove("ring-4", "ring-primary", "bg-primary/10");
+        }, 3500);
+        localStorage.removeItem("hrms_cc_highlight_id");
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [selectedProjectId, projects]);
+
   const [isLoadingData, setIsLoadingData] = useState(false);
 
   const loadLiveData = useCallback(async () => {
@@ -2050,7 +2103,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   const handleSaveRevenue = async () => {
     if (!selectedProjectId) return;
     if (!revenueForm.date || !(parseFloat(revenueForm.revenue) > 0)) {
-      toast.error("Date ane revenue (>0) compulsory che");
+      toast.error("Date and revenue (>0) are required");
       return;
     }
     try {
@@ -2068,7 +2121,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     }
   };
   const handleDeleteRevenue = async (id: string) => {
-    if (!selectedProjectId || !window.confirm("Aa revenue entry delete karvi?")) return;
+    if (!selectedProjectId || !window.confirm("Are you sure you want to delete this revenue entry?")) return;
     try {
       await api.delete(`/projects/${selectedProjectId}/daily-revenue/${id}`, { showErrorToast: false });
       await fetchRevenues(selectedProjectId);
@@ -2256,7 +2309,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       } else {
         const camp = dailyStatsForm.campaignName.trim();
         if (!camp) {
-          toast.error("Campaign name lakho (navu hoy to auto-bani jashe)");
+          toast.error("Enter a campaign name (new ones are created automatically)");
           return;
         }
         const body = {
@@ -2615,94 +2668,183 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         <head>
           <title>${docTitle}</title>
           <meta charset="utf-8" />
+          <link rel="preconnect" href="https://fonts.googleapis.com">
+          <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+          <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
           <style>
             @page {
               size: landscape;
-              margin: 12mm;
+              margin: 10mm;
             }
+            * { box-sizing: border-box; }
             body {
-              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-              color: #1e293b;
+              font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+              color: #0f172a;
               margin: 0;
-              padding: 16px;
+              padding: 24px;
               font-size: 11px;
+              background: #f8fafc;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
             }
-            .header {
+            .header-banner {
+              background: linear-gradient(135deg, #059669 0%, #0d9488 50%, #0284c7 100%);
+              color: #fff;
+              border-radius: 20px;
+              padding: 24px 28px;
+              margin-bottom: 20px;
               display: flex;
               justify-content: space-between;
               align-items: center;
-              border-bottom: 2px solid #0284c7;
-              padding-bottom: 12px;
-              margin-bottom: 16px;
+              box-shadow: 0 10px 25px -5px rgba(5, 150, 105, 0.25);
             }
-            .title-area h1 {
+            .header-banner h1 {
               margin: 0;
-              font-size: 18px;
-              color: #0f172a;
-              font-weight: 800;
+              font-size: 22px;
+              font-weight: 900;
+              letter-spacing: -0.03em;
+              display: flex;
+              align-items: center;
+              gap: 10px;
             }
-            .title-area p {
-              margin: 4px 0 0 0;
-              color: #64748b;
-              font-size: 11px;
+            .header-banner p {
+              margin: 6px 0 0 0;
+              color: rgba(255, 255, 255, 0.9);
+              font-size: 11.5px;
+              font-weight: 500;
             }
-            .badge {
+            .badge-pill {
               display: inline-block;
-              padding: 3px 10px;
-              background: #e0f2fe;
-              color: #0369a1;
+              padding: 6px 16px;
+              background: rgba(255, 255, 255, 0.2);
+              backdrop-filter: blur(8px);
+              color: #fff;
+              border: 1px solid rgba(255, 255, 255, 0.4);
               border-radius: 9999px;
-              font-weight: 700;
+              font-weight: 800;
               font-size: 11px;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin-top: 10px;
-            }
-            th {
-              background-color: #f8fafc;
-              color: #334155;
-              font-weight: 700;
-              text-align: left;
-              padding: 8px 10px;
-              border: 1px solid #cbd5e1;
-              font-size: 10px;
               text-transform: uppercase;
               letter-spacing: 0.05em;
             }
-            td {
-              padding: 8px 10px;
+            .stats-grid {
+              display: grid;
+              grid-template-columns: repeat(4, 1fr);
+              gap: 12px;
+              margin-bottom: 20px;
+            }
+            .stat-card {
+              background: #fff;
               border: 1px solid #e2e8f0;
-              vertical-align: top;
-              line-height: 1.4;
+              border-radius: 14px;
+              padding: 12px 16px;
+              box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+              display: flex;
+              flex-direction: column;
+              justify-content: center;
             }
-            tr:nth-child(even) {
-              background-color: #f8fafc;
+            .stat-card .num {
+              font-size: 20px;
+              font-weight: 900;
+              color: #0f172a;
+              letter-spacing: -0.02em;
             }
+            .stat-card .lbl {
+              font-size: 9.5px;
+              text-transform: uppercase;
+              letter-spacing: 0.08em;
+              color: #64748b;
+              font-weight: 800;
+              margin-top: 2px;
+            }
+            .stat-card.published .num { color: #059669; }
+            .stat-card.approved .num { color: #4f46e5; }
+            .stat-card.pending .num { color: #d97706; }
+            table {
+              width: 100%;
+              border-collapse: separate;
+              border-spacing: 0;
+              margin-top: 4px;
+              background: #fff;
+              border-radius: 16px;
+              overflow: hidden;
+              border: 1px solid #e2e8f0;
+              box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03);
+              page-break-inside: auto;
+            }
+            tr { page-break-inside: avoid; page-break-after: auto; }
+            th {
+              background-color: #0f172a;
+              color: #f8fafc;
+              font-weight: 800;
+              text-align: left;
+              padding: 11px 14px;
+              font-size: 10px;
+              text-transform: uppercase;
+              letter-spacing: 0.07em;
+              border-bottom: 2px solid #334155;
+            }
+            td {
+              padding: 10px 14px;
+              border-bottom: 1px solid #f1f5f9;
+              vertical-align: middle;
+              line-height: 1.45;
+              color: #334155;
+              font-size: 11px;
+            }
+            tr:nth-child(even) td { background-color: #f8fafc; }
+            tr:last-child td { border-bottom: none; }
             .status-tag {
               display: inline-block;
-              padding: 2px 6px;
-              border-radius: 4px;
-              font-size: 9px;
-              font-weight: 700;
-              background: #f1f5f9;
-              color: #475569;
+              padding: 4px 10px;
+              border-radius: 9999px;
+              font-size: 9.5px;
+              font-weight: 800;
+              text-transform: uppercase;
+              letter-spacing: 0.04em;
             }
-            .status-published { background: #dcfce7; color: #15803d; }
-            .status-approved { background: #e0e7ff; color: #4338ca; }
-            .status-progress { background: #e0f2fe; color: #0369a1; }
-            .status-todo { background: #fef3c7; color: #b45309; }
+            .status-published { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+            .status-approved { background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; }
+            .status-progress { background: #e0f2fe; color: #075985; border: 1px solid #bae6fd; }
+            .status-todo { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+            .footer-strip {
+              margin-top: 20px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              color: #94a3b8;
+              font-size: 10px;
+              font-weight: 600;
+              padding-top: 12px;
+              border-top: 1px dashed #cbd5e1;
+            }
           </style>
         </head>
         <body>
-          <div class="header">
-            <div class="title-area">
-              <h1>${clientName} - ${projName} (${category}) Content Calendar</h1>
-              <p>Generated: ${new Date().toLocaleDateString("en-IN", { day: '2-digit', month: 'short', year: 'numeric' })} • Total Items: ${items.length}</p>
+          <div class="header-banner">
+            <div>
+              <h1>📅 ${clientName} — ${projName}</h1>
+              <p>Content Calendar Specification • Generated on ${new Date().toLocaleDateString("en-IN", { day: '2-digit', month: 'short', year: 'numeric' })} • Total ${items.length} items</p>
             </div>
             <div>
-              <span class="badge">${category}</span>
+              <span class="badge-pill">${category}</span>
+            </div>
+          </div>
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="num">${items.length}</div>
+              <div class="lbl">Total Deliverables</div>
+            </div>
+            <div class="stat-card published">
+              <div class="num">${items.filter((i: any) => String(i.status || '').toLowerCase().includes('publish')).length}</div>
+              <div class="lbl">Published Items</div>
+            </div>
+            <div class="stat-card approved">
+              <div class="num">${items.filter((i: any) => String(i.status || '').toLowerCase().includes('approved')).length}</div>
+              <div class="lbl">Approved & Ready</div>
+            </div>
+            <div class="stat-card pending">
+              <div class="num">${items.filter((i: any) => !String(i.status || '').toLowerCase().includes('publish') && !String(i.status || '').toLowerCase().includes('approved')).length}</div>
+              <div class="lbl">In Progress / To Do</div>
             </div>
           </div>
           <table>
@@ -2728,11 +2870,15 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               `).join('')}
             </tbody>
           </table>
+          <div class="footer-strip">
+            <span>© ${new Date().getFullYear()} ${clientName} — Generated via HRMS Content Hub</span>
+            <span>Confidential & Proprietary</span>
+          </div>
           <script>
             window.onload = function() {
               setTimeout(function() {
                 window.print();
-              }, 300);
+              }, 400);
             };
           </script>
         </body>
@@ -2760,6 +2906,10 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     setOpenDept({ smm: true, dm: true });
     setExplainMode(false);
     setExplainedIds([]);
+    setFollowupText("");
+    setFollowupNextDate("");
+    setPayForm({ date: "", amount: "", work_from: "", work_to: "", next_reminder: "", note: "", ownerId: "" });
+    setIsPayFormOpen(false);
   }, [selectedProjectId]);
   // K17: explanation mode (Meet ma samjavva — click = highlight, clear)
   const [explainMode, setExplainMode] = useState(false);
@@ -2799,7 +2949,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   });
   const handleSavePayment = async (proj: Project, cliName: string) => {
     if (!payForm.date || !parseMoney(payForm.amount)) {
-      toast.error("Date ane amount compulsory che");
+      toast.error("Date and amount are required");
       return;
     }
     const entry = {
@@ -2821,7 +2971,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         const owner = (employees || []).find(e => String(e.id) === String(payForm.ownerId));
         await api.post("/tasks", {
           title: `Payment followup: ${cliName} — ${entry.next_reminder}`,
-          description: `Client payment followup levano: ₹${entry.amount.toLocaleString("en-IN")} (${entry.date})`,
+          description: `Client payment follow-up due: ₹${entry.amount.toLocaleString("en-IN")} (${entry.date})`,
           assigned_to: payForm.ownerId,
           due_date: entry.next_reminder,
           project_id: proj.id,
@@ -2839,7 +2989,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     }
   };
   const handleDeletePayment = async (proj: Project, payId: string) => {
-    if (!window.confirm("Aa payment entry delete karvi?")) return;
+    if (!window.confirm("Are you sure you want to delete this payment entry?")) return;
     const next = (proj.payments || []).filter(e => String(e.id) !== String(payId));
     try {
       await api.put(`/projects/${proj.id}`, { finance: { ...buildFinancePayload(proj), payments: next } });
@@ -2855,8 +3005,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       return;
     }
     try {
-      const formattedNextDate = followupNextDate ? followupNextDate.split("-").reverse().join("/") : "";
-      const text = formattedNextDate ? `${followupText.trim()} (Next: ${formattedNextDate})` : followupText.trim();
+      const trimmed = followupText.trim();
+      const text = followupNextDate ? `${trimmed} (Next: ${followupNextDate})` : trimmed;
       await api.post(`/projects/${proj.id}/followups`, { text });
       setFollowupText("");
       setFollowupNextDate("");
@@ -3064,7 +3214,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     }
   };
 
-  const openEditModal = (project: Project) => {
+  const openEditModal = async (project: Project) => {
     let cat = project.category;
     if (!FIXED_DEPARTMENTS.includes(cat as any)) {
       const c = (cat || "").toLowerCase().replace(/[\s_\-\/]/g, "");
@@ -3073,9 +3223,39 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       else if (c.includes("dev")) cat = "Development";
       else cat = "Creative";
     }
-    setEditingProject({ ...project, category: cat });
+    const cleanBudget = String(project.budget || "").replace(/[^0-9.]/g, "");
+    const cleanReceived = String(project.amountReceived || "").replace(/[^0-9.]/g, "");
+    setEditingProject({
+      ...project,
+      category: cat,
+      budget: cleanBudget,
+      amountReceived: cleanReceived,
+      reach: project.reach || "",
+      leads: project.leads ? String(project.leads) : "",
+      cpl: project.cpl ? String(project.cpl) : "",
+      post: project.post ?? 0,
+      reel: project.reel ?? 0,
+    });
     setActiveProjectTab('general');
     setIsEditProjectModalOpen(true);
+
+    try {
+      const res = await api.get<any>(`/projects/${project.id}`, { showLoader: false, showErrorToast: false });
+      if (res) {
+        const mapped = mapBackendProject(res);
+        const mappedBudget = String(mapped.budget || "").replace(/[^0-9.]/g, "");
+        const mappedReceived = String(mapped.amountReceived || "").replace(/[^0-9.]/g, "");
+        setEditingProject(prev => {
+          if (!prev || prev.id !== project.id) return prev;
+          return {
+            ...mapped,
+            category: cat,
+            budget: mappedBudget,
+            amountReceived: mappedReceived,
+          };
+        });
+      }
+    } catch {}
   };
 
   const handleUpdateProject = async () => {
@@ -4706,7 +4886,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   type="text"
                   value={followupText}
                   onChange={e => setFollowupText(e.target.value)}
-                  placeholder="Followup text lakho..."
+                  placeholder="Enter follow-up text..."
                   className="flex-1 px-3 h-10 bg-background border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
                 <DatePicker
@@ -5568,14 +5748,10 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
                                   {/* Thumbnail */}
                                   <td className="py-2 px-5 text-center whitespace-nowrap">
-                                    {item.type === "Reel" ? (
-                                      <div className="flex flex-col items-center gap-1">
-                                        <InlineDate field="thumbnailDate" value={item.thumbnailDate} />
-                                        <InlineLink field="thumbnailLink" value={item.thumbnailLink} label="🖼️ Design" cc="bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 border-blue-500/20" />
-                                      </div>
-                                    ) : (
-                                      <span className="text-muted-foreground/30 text-[10px] italic">-</span>
-                                    )}
+                                    <div className="flex flex-col items-center gap-1">
+                                      <InlineDate field="thumbnailDate" value={item.thumbnailDate} />
+                                      <InlineLink field="thumbnailLink" value={item.thumbnailLink} label="🖼️ Design" cc="bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 border-blue-500/20" />
+                                    </div>
                                   </td>
 
                                   {/* Caption */}
@@ -10079,16 +10255,27 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
                 {/* Progress */}
                 <div className="mb-6 relative z-10">
-                  <div className="flex justify-between items-end mb-2">
-                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Progress</span>
-                    <span className="text-sm font-black text-foreground">{project.progress}%</span>
-                  </div>
-                  <div className="h-2 w-full bg-muted/60 rounded-full overflow-hidden">
-                    <div 
-                      className={cn("h-full rounded-full transition-all duration-1000 ease-out", getProgressColor(project.status))}
-                      style={{ width: `${project.progress}%` }}
-                    ></div>
-                  </div>
+                  {(() => {
+                    const wp = getWorkProgress(project);
+                    const dp = getDateProgress(project.startDate, project.endDate);
+                    const pct = wp !== null ? wp.pct : (dp ? dp.pct : (project.progress || 0));
+                    return (
+                      <>
+                        <div className="flex justify-between items-end mb-2">
+                          <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
+                            {wp !== null ? "Work Progress" : "Progress"}
+                          </span>
+                          <span className="text-sm font-black text-foreground">{pct}%</span>
+                        </div>
+                        <div className="h-2 w-full bg-muted/60 rounded-full overflow-hidden">
+                          <div 
+                            className={cn("h-full rounded-full transition-all duration-1000 ease-out", getProgressColor(project.status))}
+                            style={{ width: `${pct}%` }}
+                          ></div>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 {/* Footer */}
@@ -10311,28 +10498,28 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       </div>
                     )}
                   </>
-                )}
-                {activeProjectTab === 'finance' && (
-                  <>
-                    <div className="space-y-2">
-                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Project Budget</label>
-                      <input type="text" value={newProjectBudget} onChange={(e) => setNewProjectBudget(e.target.value.replace(/[^0-9]/g, ""))} placeholder="e.g. 10000" className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Amount Received</label>
-                      <input type="text" value={newProjectAmountReceived} onChange={(e) => setNewProjectAmountReceived(e.target.value.replace(/[^0-9]/g, ""))} placeholder="e.g. 5000" className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Next Payment Date</label>
-                      <DatePicker
-                        value={newProjectNextPaymentDate}
-                        onChange={(val) => setNewProjectNextPaymentDate(val)}
-                        placeholder="Select payment date"
-                        className="w-full h-[42px] bg-muted/50 border border-border rounded-xl text-sm font-medium"
-                      />
-                    </div>
-                  </>
-                )}
+)}
+                  {activeProjectTab === 'finance' && editingProject && (
+                    <>
+                      <div className="space-y-2">
+                        <label className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">Project Budget</label>
+                        <input type="text" value={String(editingProject.budget || "").replace(/[^0-9]/g, "")} onChange={(e) => setEditingProject(prev => prev ? {...prev, budget: e.target.value.replace(/[^0-9]/g, "")} : null)} placeholder="e.g. 10000" className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">Amount Received</label>
+                        <input type="text" value={String(editingProject.amountReceived || "").replace(/[^0-9]/g, "")} onChange={(e) => setEditingProject(prev => prev ? {...prev, amountReceived: e.target.value.replace(/[^0-9]/g, "")} : null)} placeholder="e.g. 5000" className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">Next Payment Date</label>
+                        <DatePicker
+                          value={editingProject.nextPaymentDate || ""}
+                          onChange={(val) => setEditingProject(prev => prev ? {...prev, nextPaymentDate: val} : null)}
+                          placeholder="Select payment date"
+                          className="w-full h-[42px] bg-muted/50 border border-border rounded-xl text-sm font-medium"
+                        />
+                      </div>
+                    </>
+                  )}
               </div>
             </div>
             {/* Footer */}

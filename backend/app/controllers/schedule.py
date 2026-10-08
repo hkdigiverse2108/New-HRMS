@@ -211,19 +211,25 @@ async def update_schedule_event(
 @router.delete("/events/{event_id}", response_model=Dict[str, str])
 async def delete_schedule_event(
     event_id: str,
+    date: Optional[str] = Query(None, description="Event date (YYYY-MM-DD) if available"),
+    title: Optional[str] = Query(None, description="Event title if available"),
     current_employee: dict = Depends(get_current_employee)
 ):
     """
-    Delete a schedule event. Creator, Host, Attendees, or Admin/HR can delete.
+    Delete a schedule event or exclude a Google/regional holiday.
+    Admin/HR/Manager can delete/exclude any holiday or event.
+    Regular employees can delete events they created or host.
     """
     user_id = str(current_employee.get("work_details", {}).get("employee_id") or current_employee.get("_id") or current_employee.get("id"))
     user_role = (current_employee.get("work_details", {}).get("system_role") or current_employee.get("role") or "Employee")
-    is_admin_or_hr = user_role in ("Admin", "HR", "Sub-Admin")
+    is_admin_or_hr = user_role in ("Admin", "SuperAdmin", "HR", "Sub-Admin")
 
     success = await ScheduleRepository.delete_event(
         event_id=event_id,
         user_id=user_id,
-        is_admin_or_hr=is_admin_or_hr
+        is_admin_or_hr=is_admin_or_hr,
+        event_date=date,
+        event_title=title
     )
     if not success:
         raise HTTPException(

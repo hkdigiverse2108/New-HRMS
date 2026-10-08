@@ -96,7 +96,7 @@ async def get_all_employee_penalties(
 ):
     work = current_user.get("work_details", {})
     role = work.get("system_role", "Employee")
-    dept = work.get("department", "")
+    dept = str(work.get("department") or "").strip()
     if dept.lower() == "hr" or current_user.get("role") == "HR":
         role = "HR"
     current_uid = str(current_user.get("_id") or current_user.get("id"))

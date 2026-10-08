@@ -809,9 +809,9 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
-                        Supporting Document / Certificate
+                        Supporting Document / Certificate (Optional)
                         {(newLeaveType === "Sick Leave" || newLeaveType.toLowerCase().includes("medical")) && (
-                          <span className="text-rose-500 ml-1 font-black">* (Recommended)</span>
+                          <span className="text-muted-foreground ml-1 font-medium">(Optional)</span>
                         )}
                       </label>
                       {attachmentUrl && (
@@ -1121,8 +1121,8 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                   })()}
 
                   {/* Edit and Delete Actions */}
-                  <div className="flex items-center gap-1">
-                    {(request.status === "Pending" || canManageLeaves) && (
+                    <div className="flex items-center gap-1">
+                    {request.status === "Pending" && (
                       <button
                         type="button"
                         onClick={() => handleOpenEdit(request)}

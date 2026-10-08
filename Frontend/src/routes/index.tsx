@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { AppSidebar } from "@/components/AppSidebar";
 
 // Sales Components
+import { SalesHub } from "@/components/sales/SalesHub";
 import { SalesDashboard } from "@/components/sales/SalesDashboard";
 import { SalesPipeline } from "@/components/sales/SalesPipeline";
 import { SalesLeads } from "@/components/sales/SalesLeads";
@@ -47,6 +48,7 @@ import { Restrictions } from "@/components/admin/Restrictions";
 import { AdminSettings } from "@/components/admin/AdminSettings";
 import { AccessControl } from "@/components/admin/AccessControl";
 import { RecycleBin } from "@/components/admin/RecycleBin";
+import { ElectionsHub } from "@/components/admin/ElectionsHub";
 import { Elections } from "@/components/admin/Elections";
 import { Recognitions } from "@/components/admin/Recognitions";
 import { TeamLeaderOfWeek } from "@/components/admin/TeamLeaderOfWeek";
@@ -220,15 +222,31 @@ export function Index() {
                   {/* Main Dashboard */}
                   {basePath === "/dashboard" && <Dashboard setActive={setActive} onAction={handleQuickAction} />}
 
-                  {/* Render the appropriate sales page based on state */}
-                  {basePath === "/work/sales/dashboard" && <SalesDashboard setActive={setActive} onAction={handleQuickAction} />}
-                  {basePath === "/work/sales/pipeline" && <SalesPipeline onAction={handleQuickAction} />}
-                  {basePath === "/work/sales/leads" && <SalesLeads onAction={handleQuickAction} isNew={isNew} />}
-                  {basePath === "/work/sales/tasks" && <SalesTasks onAction={handleQuickAction} />}
-                  {basePath === "/work/sales/analytics" && <SalesAnalytics onAction={handleQuickAction} />}
-                  {basePath === "/work/sales/team" && <SalesTeamPerformance onAction={handleQuickAction} />}
-                  {basePath === "/work/sales/reports" && <SalesReports onAction={handleQuickAction} />}
-                  {basePath === "/work/sales/settings" && <SalesSettings />}
+                  {/* Render the unified sales hub */}
+                  {(basePath === "/work/sales" || basePath === "/work/sales/dashboard") && (
+                    <SalesHub initialTab="dashboard" setActive={setActive} onAction={handleQuickAction} isNew={isNew} />
+                  )}
+                  {basePath === "/work/sales/pipeline" && (
+                    <SalesHub initialTab="pipeline" setActive={setActive} onAction={handleQuickAction} isNew={isNew} />
+                  )}
+                  {basePath === "/work/sales/leads" && (
+                    <SalesHub initialTab="leads" setActive={setActive} onAction={handleQuickAction} isNew={isNew} />
+                  )}
+                  {basePath === "/work/sales/tasks" && (
+                    <SalesHub initialTab="tasks" setActive={setActive} onAction={handleQuickAction} isNew={isNew} />
+                  )}
+                  {basePath === "/work/sales/analytics" && (
+                    <SalesHub initialTab="analytics" setActive={setActive} onAction={handleQuickAction} isNew={isNew} />
+                  )}
+                  {basePath === "/work/sales/team" && (
+                    <SalesHub initialTab="team" setActive={setActive} onAction={handleQuickAction} isNew={isNew} />
+                  )}
+                  {basePath === "/work/sales/reports" && (
+                    <SalesHub initialTab="reports" setActive={setActive} onAction={handleQuickAction} isNew={isNew} />
+                  )}
+                  {basePath === "/work/sales/settings" && (
+                    <SalesHub initialTab="settings" setActive={setActive} onAction={handleQuickAction} isNew={isNew} />
+                  )}
 
                   {/* Render Payroll pages */}
                   {basePath === "/payroll/dashboard" && <PayrollDashboard />}
@@ -239,7 +257,7 @@ export function Index() {
                   {basePath === "/payroll/payslips" && <Payslips />}
 
                   {/* Render Employee pages */}
-                  {basePath === "/employees/list" && <EmployeeList isNew={isNew} />}
+                  {(basePath === "/employees" || basePath === "/employees/list") && <EmployeeList isNew={isNew} />}
                   {basePath === "/employees/deposits" && <DepositTracking />}
                   {basePath === "/employees/org" && <OrgStructure />}
                   {(basePath === "/employees/departments-setup" || basePath === "/employees/sub-departments" || basePath === "/employees/designations" || basePath === "/employees/departments") && <DepartmentDesignationManager />}
@@ -266,11 +284,11 @@ export function Index() {
                   {basePath === "/finance/plan" && <FinancialPlan />}
                   {basePath === "/finance/summary" && <FinancialSummary />}
                   {basePath === "/finance/clients" && <OtherTransactions />}
-                  {/* Finance (Audit Logs page removed per Audio PDF) */}
-                  {basePath === "/invoice/all" && <AllInvoices />}
+                  {/* Invoices (5 Sub-Departments) */}
+                  {(basePath === "/invoice" || basePath === "/invoice/all") && <AllInvoices />}
                   {basePath === "/invoice/ledger" && <InvoiceLedger />}
                   {basePath === "/invoice/create" && <CreateInvoice onBack={() => setActive("/invoice/all")} />}
-                  {basePath === "/invoice/proforma" && <CreateProforma onBack={() => setActive("/invoice/all")} />}
+                  {(basePath === "/invoice/proforma" || basePath === "/invoice/quotation") && <CreateProforma onBack={() => setActive("/invoice/all")} />}
 
                   {/* Reports & Analysis sub-department — REMOVED per Audio PDF */}
 
@@ -309,9 +327,9 @@ export function Index() {
                   )}
                   {basePath === "/access-control" && <AccessControl />}
                   {basePath === "/recycle-bin" && <RecycleBin />}
-                  {basePath === "/elections" && <Elections />}
-                  {basePath === "/recognitions" && <Recognitions />}
-                  {basePath === "/team-leader-of-the-week" && <TeamLeaderOfWeek />}
+                  {basePath === "/elections" && <ElectionsHub initialTab="elections" />}
+                  {basePath === "/recognitions" && <ElectionsHub initialTab="recognitions" />}
+                  {basePath === "/team-leader-of-the-week" && <ElectionsHub initialTab="leader" />}
 
                   {/* User Profile */}
                   {basePath === "/profile" && <UserProfile />}

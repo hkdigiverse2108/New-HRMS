@@ -137,9 +137,10 @@ def fetch_images_from_google_drive_folder(folder_url: str) -> List[str]:
     return [item["url"] for item in items]
 
 
-def fetch_images_from_google_photos_album(album_url: str) -> List[str]:
+def fetch_media_from_google_photos_album(album_url: str) -> List[Dict[str, Any]]:
     """
-    Extracts direct image URLs from a public Google Photos shared album URL.
+    Extracts structured media items (file_id, name, media_type, url) from a public Google Photos shared album URL.
+    Identifies video items using stream markers [null,null,1/2/3] in the album metadata.
     """
     if not album_url:
         return []
@@ -148,27 +149,61 @@ def fetch_images_from_google_photos_album(album_url: str) -> List[str]:
         album_url, 
         headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
     )
+    media_items: List[Dict[str, Any]] = []
+    seen = set()
+
     try:
-        with urllib.request.urlopen(req, timeout=12) as response:
+        with urllib.request.urlopen(req, timeout=15) as response:
             html = response.read().decode("utf-8", errors="ignore")
 
-            pw_urls = re.findall(r'https://lh3\.googleusercontent\.com/pw/[a-zA-Z0-9_-]{50,}', html)
-            all_urls = re.findall(r'https://lh3\.googleusercontent\.com/[a-zA-Z0-9_-]{60,}', html)
+            pattern = re.compile(r'\["(AF1Qip[a-zA-Z0-9_-]+)",\["(https://lh3\.googleusercontent\.com/pw/[^"]+)",(\d+),(\d+)(.*?)\]\]')
+            matches = pattern.findall(html)
 
-            raw_urls = pw_urls if pw_urls else all_urls
-
-            valid_images = []
-            for u in raw_urls:
-                if any(bad in u for bad in ["/a/", "/a-/", "/ogw/", "proxy", "ggpht"]):
+            for photo_id, base_url, w, h, rest in matches:
+                clean_base = base_url.split("=")[0]
+                if clean_base in seen:
                     continue
-                clean_u = u.split("=")[0] + "=w1200-h900"
-                if clean_u not in valid_images:
-                    valid_images.append(clean_u)
+                seen.add(clean_base)
 
-            return valid_images[:200]
+                is_vid = any(marker in rest for marker in ["[null,null,1]", "[null,null,2]", "[null,null,3]"])
+                clean_url = f"{clean_base}=w1200-h900"
+
+                media_items.append({
+                    "file_id": photo_id,
+                    "name": f"{'Video' if is_vid else 'Photo'} {len(media_items) + 1}",
+                    "media_type": "video" if is_vid else "image",
+                    "url": clean_url
+                })
+
+            # Fallback if structured regex returned empty
+            if not media_items:
+                pw_urls = re.findall(r'https://lh3\.googleusercontent\.com/pw/[a-zA-Z0-9_-]{50,}', html)
+                all_urls = re.findall(r'https://lh3\.googleusercontent\.com/[a-zA-Z0-9_-]{60,}', html)
+                raw_urls = pw_urls if pw_urls else all_urls
+                for u in raw_urls:
+                    if any(bad in u for bad in ["/a/", "/a-/", "/ogw/", "proxy", "ggpht"]):
+                        continue
+                    clean_u = u.split("=")[0] + "=w1200-h900"
+                    if clean_u not in seen:
+                        seen.add(clean_u)
+                        media_items.append({
+                            "file_id": None,
+                            "name": f"Photo {len(media_items) + 1}",
+                            "media_type": "image",
+                            "url": clean_u
+                        })
     except Exception as e:
         print(f"[GooglePhotosParser] Error fetching album '{album_url}': {e}")
-        return []
+
+    return media_items[:200]
+
+
+def fetch_images_from_google_photos_album(album_url: str) -> List[str]:
+    """
+    Backwards compatibility helper returning List[str] thumbnail URLs.
+    """
+    items = fetch_media_from_google_photos_album(album_url)
+    return [item["url"] for item in items]
 
 
 def auto_extract_gallery_media(
@@ -220,17 +255,12 @@ def auto_extract_gallery_media(
 
         # 3. Google Photos Shared Album
         elif "photos.google.com" in str_link or "photos.app.goo.gl" in str_link or "goo.gl/photos" in str_link:
-            gp_images = fetch_images_from_google_photos_album(str_link)
-            for u in gp_images:
+            gp_items = fetch_media_from_google_photos_album(str_link)
+            for item in gp_items:
+                u = item["url"]
                 if u not in images:
                     images.append(u)
                 if u not in url_to_media:
-                    item = {
-                        "file_id": None,
-                        "name": "Google Photos Item",
-                        "media_type": "image",
-                        "url": u
-                    }
                     media_items.append(item)
                     url_to_media[u] = item
 

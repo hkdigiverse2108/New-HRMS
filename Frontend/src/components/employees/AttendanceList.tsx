@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { X, Download, MoreHorizontal, Clock, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Coffee, Briefcase, Award, FileSpreadsheet, RefreshCw, Search, Check, Users, ChevronDown } from "lucide-react";
+import { X, Download, MoreHorizontal, Clock, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Coffee, Briefcase, Award, FileSpreadsheet, RefreshCw, Search, Check, Users, ChevronDown, RotateCcw } from "lucide-react";
 import { DateRange } from "react-day-picker";
 import { Calendar } from "@/components/ui/calendar";
 import { DialogClose, Dialog, DialogContent } from "@/components/ui/dialog";
@@ -13,6 +13,7 @@ import { DateRangeFilter } from "@/components/common/DateRangeFilter";
 import { SearchInput } from "@/components/common/SearchInput";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { EOMSummaryView } from "@/components/attendance/EOMSummaryView";
+import { RecoverTimeModal } from "@/components/attendance/RecoverTimeModal";
 import { formatISTDate, formatISTTime, formatDurationSeconds, parseTimeToMinutes } from "@/lib/timeUtils";
 import { api } from "@/lib/api";
 import { toast } from "@/lib/toast";
@@ -20,7 +21,7 @@ import { isUserAdmin, hasModulePermission } from "@/lib/permissions";
 import { DatePicker } from "@/components/ui/date-picker";
 import { SearchableSelect } from "@/components/ui/select";
 
-type AttendanceStatus = "Present" | "Absent" | "Late" | "Half Day" | "On Leave";
+type AttendanceStatus = "Present" | "Absent" | "Late" | "Half Day" | "On Leave" | "Company Leave" | "Holiday";
 
 interface AttendanceLogItem {
   action: string;
@@ -143,6 +144,7 @@ export function AttendanceList() {
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const itemsPerPage = 10;
+  const [isRecoverModalOpen, setIsRecoverModalOpen] = useState(false);
 
   const canReadAttendance =
     isUserAdmin(user) ||
@@ -604,6 +606,16 @@ export function AttendanceList() {
               >
                 <Download className="w-4 h-4" /> Export
               </button>
+              {!isUserAdmin(user) && (
+                <button
+                  type="button"
+                  onClick={() => setIsRecoverModalOpen(true)}
+                  className="px-3.5 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30 font-bold text-xs sm:text-sm rounded-xl shadow-sm flex items-center gap-1.5 transition-colors"
+                  title="Recover missed punches or break time"
+                >
+                  <RotateCcw className="w-4 h-4" /> Recover Time
+                </button>
+              )}
               {canManageAttendance && (
                 <button
                   onClick={() => setIsManualModalOpen(true)}
@@ -1211,7 +1223,9 @@ export function AttendanceList() {
                   options={[
                     { label: "Present (Full Day)", value: "Present" },
                     { label: "Half Day", value: "Half Day" },
-                    { label: "On Leave / Holiday", value: "On Leave" },
+                    { label: "Company Leave (Office Closed)", value: "Company Leave" },
+                    { label: "Public Holiday", value: "Holiday" },
+                    { label: "On Leave", value: "On Leave" },
                   ]}
                   placeholder="Select attendance status..."
                   className="w-full h-10 px-3 bg-background border border-border rounded-xl text-sm font-medium"
@@ -1282,6 +1296,14 @@ export function AttendanceList() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Recover Time Modal for punching employees */}
+      <RecoverTimeModal
+        isOpen={isRecoverModalOpen}
+        onClose={() => setIsRecoverModalOpen(false)}
+        employeeId={user?.id || ""}
+        onRecovered={fetchAttendance}
+      />
     </div>
   );
 }

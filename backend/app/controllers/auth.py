@@ -191,7 +191,7 @@ async def resolve_effective_permissions_for_employee(employee: dict) -> dict:
     emp_id = str(employee.get("_id", "")).strip()
     work = employee.get("work_details", {})
     role = work.get("system_role", "Employee")
-    dept = work.get("department", "Development")
+    dept = str(work.get("department") or "Development").strip() or "Development"
 
     if role == "Admin":
         from app.database.default_presets import get_admin_full_permissions
@@ -214,6 +214,10 @@ async def resolve_effective_permissions_for_employee(employee: dict) -> dict:
         else:
             from app.database.default_presets import get_default_permissions_for_department
             perms = get_default_permissions_for_department(dept)
+
+    # Normalize & expand legacy keys for 100% backward compatibility
+    from app.database.default_presets import normalize_and_expand_permissions
+    perms = normalize_and_expand_permissions(perms)
 
     await set_cache(f"user_perms_resolved:{emp_id}", perms, ttl=300)
     return perms
@@ -305,20 +309,26 @@ async def get_me(current_employee: dict = Depends(get_current_employee)):
     personal = current_employee.get("personal_info", {})
     work = current_employee.get("work_details", {})
     role = work.get("system_role", "Employee")
-    dept = work.get("department", "")
+    dept = str(work.get("department") or "").strip()
     if dept.lower() == "hr" and role not in ("Admin", "superadmin", "Sub-Admin"):
         role = "HR"
     emp_id = str(current_employee.get("_id", ""))
+    emp_code = (
+        current_employee.get("work_details", {}).get("employee_id")
+        or current_employee.get("employee_id")
+        or emp_id
+    )
 
     perms = await resolve_effective_permissions_for_employee(current_employee)
 
     return {
         "id": emp_id,
+        "employee_id": emp_code,
         "email": personal.get("email_address") or current_employee.get("email"),
         "name": f"{personal.get('first_name', '')} {personal.get('last_name', '')}".strip() or "Employee",
         "role": role,
-        "department": work.get("department", ""),
-        "designation": work.get("designation", ""),
+        "department": work.get("department") or "",
+        "designation": work.get("designation") or "",
         "profile_photo": personal.get("profile_photo", "") or current_employee.get("profile_photo", ""),
         "permissions": perms
     }

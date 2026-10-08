@@ -133,7 +133,6 @@ export type Lead = {
   stageHistory?: { from_stage?: string | null; to_stage?: string; changed_by?: string; changed_at?: string; reason?: string }[] | undefined;
   nextFollowUpTime?: string | null | undefined;
   next_follow_up_time?: string | null | undefined;
-  quotation_number?: string | undefined;
 };
 
 export const leads: Lead[] = [
