@@ -355,3 +355,26 @@ class SeatingService:
             return updated_floor or {"message": "Floor seats reset successfully."}
 
         return {"message": "All seats across all floors have been reset to Available and cleared successfully."}
+
+    @staticmethod
+    async def get_global_layout() -> Dict[str, Any]:
+        from app.database.db import get_database
+        db = get_database()
+        doc = await db["seating_arrangement"].find_one({"_id": "global"})
+        if not doc:
+            return {"desks": []}
+        return {"desks": doc.get("desks", [])}
+
+    @staticmethod
+    async def save_global_layout(payload: dict) -> Dict[str, Any]:
+        from app.database.db import get_database
+        from datetime import datetime
+        db = get_database()
+        desks = payload.get("desks", [])
+        await db["seating_arrangement"].update_one(
+            {"_id": "global"},
+            {"$set": {"desks": desks, "updated_at": datetime.utcnow()}},
+            upsert=True
+        )
+        return {"status": "success", "desks": desks}
+

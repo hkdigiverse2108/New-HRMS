@@ -29,9 +29,6 @@ export function PrintLabelsModal({ isOpen, onClose, resources }: PrintLabelsModa
   if (!isOpen) return null;
 
   const handlePrint = () => {
-    const printArea = document.getElementById('print-area');
-    if (!printArea) return;
-
     const iframe = document.createElement('iframe');
     iframe.style.position = 'fixed';
     iframe.style.right = '0';
@@ -44,33 +41,69 @@ export function PrintLabelsModal({ isOpen, onClose, resources }: PrintLabelsModa
     const iframeDoc = iframe.contentWindow?.document;
     if (!iframeDoc) return;
 
-    iframeDoc.open();
-    iframeDoc.write(`
+    const htmlContent = `
+      <!DOCTYPE html>
       <html>
         <head>
-          <title>Print Labels</title>
+          <title>Print Resource Labels - ${title}</title>
           <style>
-            body { margin: 0; padding: 0; font-family: sans-serif; height: 100%; }
-            html { height: 100%; }
-            @page { size: ${pageSize === "A4" ? "A4" : "letter"} portrait; margin: 0.5in; }
-            .print-page { page-break-after: always; height: 100%; box-sizing: border-box; }
+            @page { size: ${pageSize === "A4" ? "A4" : "letter"} portrait; margin: 0.25in; }
+            * { box-sizing: border-box; }
+            body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 0; background: #fff; color: #000; }
+            .print-page {
+              page-break-after: always;
+              display: grid;
+              grid-template-rows: repeat(${rows}, 1fr);
+              grid-template-columns: repeat(${cols}, 1fr);
+              gap: ${gap}px;
+              width: 100%;
+              min-height: 95vh;
+              padding: 4px;
+            }
             .print-page:last-child { page-break-after: auto; }
+            .label-card {
+              border: 1px dashed #666;
+              border-radius: 4px;
+              padding: 6px;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              text-align: center;
+              background: #fff;
+            }
+            .label-title { font-weight: 700; font-size: 11px; text-transform: uppercase; color: #111; margin-bottom: 2px; }
+            .label-id { font-family: monospace; font-weight: 700; font-size: 13px; color: #059669; margin: 2px 0; letter-spacing: 0.5px; }
           </style>
         </head>
         <body>
-          ${printArea.innerHTML}
+          ${pages.map(pageLabels => `
+            <div class="print-page">
+              ${pageLabels.map(id => id ? `
+                <div class="label-card">
+                  <div class="label-title">${title}</div>
+                  <div class="label-id">${id}</div>
+                </div>
+              ` : `<div class="label-card" style="visibility:hidden"></div>`).join('')}
+            </div>
+          `).join('')}
         </body>
       </html>
-    `);
+    `;
+
+    iframeDoc.open();
+    iframeDoc.write(htmlContent);
     iframeDoc.close();
 
-    iframe.onload = () => {
+    setTimeout(() => {
       iframe.contentWindow?.focus();
       iframe.contentWindow?.print();
       setTimeout(() => {
-        document.body.removeChild(iframe);
-      }, 500);
-    };
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
+      }, 1000);
+    }, 250);
   };
 
   const getPageDimensions = () => {

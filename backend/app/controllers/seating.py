@@ -5,6 +5,28 @@ from app.services.seating import SeatingService
 from app.controllers.auth import get_current_employee
 
 router = APIRouter(prefix="/seating", tags=["Seating Arrangement & Floor Layout Management"])
+global_seating_router = APIRouter(tags=["Seating Arrangement"])
+
+@global_seating_router.get("/seating-arrangement", response_model=Dict[str, Any])
+async def get_seating_arrangement_direct():
+    """Get global seating arrangement layout for all employees."""
+    return await SeatingService.get_global_layout()
+
+@global_seating_router.post("/seating-arrangement", response_model=Dict[str, Any])
+async def save_seating_arrangement_direct(payload: Dict[str, Any]):
+    """Save global seating arrangement layout across all employee views."""
+    return await SeatingService.save_global_layout(payload)
+
+@router.get("/layout", response_model=Dict[str, Any])
+async def get_seating_layout():
+    """Get global seating layout."""
+    return await SeatingService.get_global_layout()
+
+@router.post("/layout", response_model=Dict[str, Any])
+async def save_seating_layout(payload: Dict[str, Any]):
+    """Save global seating layout."""
+    return await SeatingService.save_global_layout(payload)
+
 
 @router.get("/my-seat", response_model=Dict[str, Any])
 async def get_my_seat(

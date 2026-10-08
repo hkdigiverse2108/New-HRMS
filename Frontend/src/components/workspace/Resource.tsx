@@ -42,6 +42,7 @@ import { Switch } from "@/components/ui/switch";
 import { useApi } from "@/hooks/useApi";
 import { useUser } from "@/hooks/useUser";
 import { API_URL } from "@/lib/config";
+import { api } from "@/lib/api";
 import { toast } from "@/lib/toast";
 import { PrintLabelsModal } from "./PrintLabelsModal";
 import { useSortableData } from "@/hooks/useSortableData";
@@ -103,17 +104,6 @@ export default function ResourceManagementPage() {
   const { data, isLoading, refresh: apiRefresh, updateData } = useApi();
   const confirm = async (msg: any) => window.confirm(msg.title || "Confirm");
 
-  const refreshAssets = async () => {
-    try {
-      const response = await fetch(`${API_URL}/assets`);
-      if (response.ok) {
-        updateData('assets', await response.json());
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-  
   const [activeTab, setActiveTab] = useState<"overview" | "registry" | "categories" | "history">("overview");
   const [isAddingMode, setIsAddingMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -130,9 +120,13 @@ export default function ResourceManagementPage() {
   const [employeeFilter, setEmployeeFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   
-  // Dynamic categories and logs
+  // Dynamic categories, inventory items, employees, dashboard and logs
+  const [realEmployees, setRealEmployees] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [inventoryItems, setInventoryItems] = useState<any[]>([]);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [dashboardData, setDashboardData] = useState<any>(null);
   const [inventoryLogs, setInventoryLogs] = useState<any[]>([]);
   const [categoryLogs, setCategoryLogs] = useState<any[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
@@ -144,6 +138,7 @@ export default function ResourceManagementPage() {
     category: "",
     status: "Available",
     assignedTo: "",
+    assignedToEmpId: "",
     purchaseDate: new Date().toISOString().split('T')[0],
     description: "",
     value: 0,
@@ -200,18 +195,51 @@ export default function ResourceManagementPage() {
     }
   }, [isEmployeeOnly]);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, statusFilter, typeFilter, employeeFilter]);
+  const formatLogTime = (dateStr: string) => {
+    if (!dateStr) return "";
+    try {
+      const raw = dateStr.endsWith("Z") || dateStr.includes("UTC") ? dateStr.replace(" UTC", "Z") : dateStr;
+      const d = new Date(raw);
+      if (isNaN(d.getTime())) return dateStr;
+      return d.toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const fetchDashboardData = async () => {
+    try {
+      const res = await api.get("/resource-inventory/dashboard", { showLoader: false, showErrorToast: false });
+      if (res) setDashboardData(res);
+    } catch (err) {
+      console.error("Failed to fetch resource dashboard:", err);
+    }
+  };
 
   const fetchCategories = async () => {
     setCategoriesLoading(true);
     try {
-      const response = await fetch(`${API_URL}/asset-categories`);
-      if (response.ok) {
-        const data = await response.json();
-        setCategories(data);
-      }
+      const response = await api.get("/resource-categories?page=1&limit=100", { showLoader: false, showErrorToast: false });
+      const rawCats = response?.items || response?.data || (Array.isArray(response) ? response : []);
+      setCategories(rawCats.map((c: any) => ({
+        id: c.id || c._id,
+        name: c.category_name || c.name,
+        description: c.description || "",
+        icon: c.icon || "Package",
+        totalItems: c.total_items ?? c.total_resources ?? c.totalItems ?? 0,
+        availableStock: c.available_stock ?? c.availableStock ?? 0,
+        allocatedItems: c.allocated_items ?? c.allocatedItems ?? 0,
+        inMaintenance: c.in_maintenance ?? c.inMaintenance ?? 0,
+        valuation: c.valuation || 0
+      })));
     } catch (error) {
       console.error("Failed to fetch categories:", error);
     } finally {
@@ -219,20 +247,90 @@ export default function ResourceManagementPage() {
     }
   };
 
+  const fetchInventoryItems = async () => {
+    setInventoryLoading(true);
+    try {
+      const endpoint = isEmployeeOnly
+        ? "/resource-inventory/my-resources?page=1&limit=100"
+        : "/resource-inventory?page=1&limit=100";
+      const response = await api.get(endpoint, { showLoader: false, showErrorToast: false });
+      const rawItems = response?.items || response?.data || (Array.isArray(response) ? response : []);
+      setInventoryItems(rawItems.map((item: any) => ({
+        id: item.id || item._id,
+        assetId: item.resource_id || item.assetId || `HK-AST-${(item.id || item._id)?.slice(-4) || "0001"}`,
+        name: item.category_name || item.name || item.resource_id,
+        category: item.category_name || item.category || "General",
+        categoryId: item.category_id,
+        status: item.status || "Available",
+        condition: item.condition || "Good",
+        assignedTo: (() => {
+          const raw = item.assigned_to
+            ? (typeof item.assigned_to === "object" && item.assigned_to !== null ? (item.assigned_to.employee_name || item.assigned_to.name || "") : item.assigned_to)
+            : (item.assigned_to_name || item.assignedTo || "");
+          return String(raw || "").replace(/\s*\([A-Z0-9-]+\)$/i, "").trim();
+        })(),
+        assignedToEmpId: item.assigned_to_employee_id || (item.assigned_to && typeof item.assigned_to === "object" ? item.assigned_to.employee_id : null),
+        serialNumber: item.serial_number || item.serialNumber || "",
+        location: item.location || "",
+        purchaseDate: item.purchase_date || item.purchaseDate || "",
+        value: item.value || 0,
+        description: item.description || ""
+      })));
+    } catch (error) {
+      console.error("Failed to fetch inventory items:", error);
+    } finally {
+      setInventoryLoading(false);
+    }
+  };
+
+  const fetchEmployees = async () => {
+    try {
+      const res = await api.get("/employees?page=1&limit=100", { showLoader: false, showErrorToast: false });
+      const rawEmps = res?.items || res?.data || (Array.isArray(res) ? res : []);
+      const mapped = rawEmps.map((emp: any) => {
+        const pi = emp.personal_info || {};
+        const fullName = (pi.full_name || emp.full_name || emp.name || `${pi.first_name || ""} ${pi.last_name || ""}`).trim() || "Employee";
+        const code = emp.work_details?.employee_id || emp.employee_id || "";
+        return {
+          id: emp.id || emp._id,
+          name: fullName,
+          displayName: fullName,
+          employeeCode: code,
+          avatar: emp.profile_photo || pi.profile_photo || ""
+        };
+      });
+      setRealEmployees(mapped);
+    } catch (err) {
+      console.error("Failed to fetch real employees:", err);
+    }
+  };
+
+  const refreshAssets = async () => {
+    await Promise.all([fetchInventoryItems(), fetchCategories(), fetchDashboardData(), fetchEmployees()]);
+  };
+
   const fetchLogs = async () => {
     setLogsLoading(true);
     try {
-      const [assetsRes, categoriesRes] = await Promise.all([
-        fetch(`${API_URL}/assets/logs`),
-        fetch(`${API_URL}/asset-categories/logs`)
-      ]);
-      
-      if (assetsRes.ok) {
-        setInventoryLogs(await assetsRes.json());
-      }
-      if (categoriesRes.ok) {
-        setCategoryLogs(await categoriesRes.json());
-      }
+      const res = await api.get("/resource-inventory/logs", { showLoader: false, showErrorToast: false });
+      const invLogs = res?.inventory_logs || [];
+      const catLogs = res?.category_logs || [];
+      setInventoryLogs(invLogs.map((l: any) => ({
+        id: l._id || l.id,
+        action: l.action,
+        details: l.details,
+        userName: l.user_name || "Admin",
+        performedBy: l.performed_by || "Admin",
+        timestamp: l.timestamp || l.created_at
+      })));
+      setCategoryLogs(catLogs.map((l: any) => ({
+        id: l._id || l.id,
+        action: l.action,
+        details: l.details,
+        userName: l.user_name || "Admin",
+        performedBy: l.performed_by || "Admin",
+        timestamp: l.timestamp || l.created_at
+      })));
     } catch (error) {
       console.error("Failed to fetch logs:", error);
     } finally {
@@ -241,32 +339,33 @@ export default function ResourceManagementPage() {
   };
 
   useEffect(() => {
+    fetchEmployees();
     fetchCategories();
+    fetchInventoryItems();
+    fetchDashboardData();
     fetchLogs();
-  }, []);
+  }, [isEmployeeOnly]);
 
   useEffect(() => {
-    if (activeTab === "history") {
-      fetchLogs();
-    }
-    if (activeTab === "categories") {
-      fetchCategories();
-    }
+    if (activeTab === "overview") fetchDashboardData();
+    if (activeTab === "history") fetchLogs();
+    if (activeTab === "categories") { fetchCategories(); fetchInventoryItems(); }
+    if (activeTab === "registry") fetchInventoryItems();
   }, [activeTab]);
 
   const fetchItemLogs = async (type: 'category' | 'resource', id: string) => {
     setItemLogsLoading(true);
     try {
-      const url = type === 'category' 
-        ? `${API_URL}/asset-categories/logs?category_id=${id}`
-        : `${API_URL}/assets/logs?asset_id=${id}`;
-        
-      const response = await fetch(url);
-      if (response.ok) {
-        setItemLogs(await response.json());
-      } else {
-        setItemLogs([]);
-      }
+      const res = await api.get(`/resource-inventory/logs/${type}/${id}`, { showLoader: false, showErrorToast: false });
+      const rawLogs = res?.items || (Array.isArray(res) ? res : []);
+      setItemLogs(rawLogs.map((l: any) => ({
+        id: l._id || l.id,
+        action: l.action,
+        details: l.details,
+        userName: l.user_name || "Admin",
+        performedBy: l.performed_by || "Admin",
+        timestamp: l.timestamp || l.created_at
+      })));
     } catch (error) {
       console.error("Failed to fetch item logs:", error);
       setItemLogs([]);
@@ -321,41 +420,40 @@ export default function ResourceManagementPage() {
     }
 
     try {
-      const payload: any = {
-        [field]: value,
-        performedBy: user?.id || user?.employeeId || "System",
-        userName: user?.name || `${user?.firstName} ${user?.lastName}` || "System User"
-      };
-
+      const payload: any = {};
       if (field === "assignedTo") {
         if (value && value !== "unassigned") {
+          const emp = realEmployees.find((e: any) => e.name === value || e.displayName === value || e.id === value);
+          payload.assigned_to_name = emp ? emp.name : value;
+          payload.assigned_to_employee_id = emp ? emp.id : null;
           payload.status = "Allocated";
         } else {
-          payload.assignedTo = "";
+          payload.assigned_to_name = null;
+          payload.assigned_to_employee_id = null;
+          payload.assigned_to_department = null;
           payload.status = "Available";
         }
-      }
-      
-      if (field === "status" && value !== "Allocated") {
-        payload.assignedTo = "";
+      } else if (field === "status") {
+        payload.status = value;
+        if (value !== "Allocated") {
+          payload.assigned_to_name = null;
+          payload.assigned_to_employee_id = null;
+          payload.assigned_to_department = null;
+        }
+      } else if (field === "condition") {
+        payload.condition = value;
+      } else if (field === "location") {
+        payload.location = value;
+      } else if (field === "serialNumber") {
+        payload.serial_number = value;
       }
 
-      const response = await fetch(`${API_URL}/assets/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-
-      if (response.ok) {
-        toast.success("Asset updated successfully");
-        refreshAssets();
-        fetchLogs();
-      } else {
-        toast.error("Failed to update asset");
-      }
-    } catch (error) {
+      await api.put(`/resource-inventory/${id}`, payload);
+      toast.success("Asset updated successfully");
+      await refreshAssets();
+    } catch (error: any) {
       console.error(error);
-      toast.error("An error occurred");
+      toast.error(error?.message || "Failed to update asset");
     } finally {
       setEditingCell(null);
     }
@@ -377,6 +475,7 @@ export default function ResourceManagementPage() {
       category: resource.category,
       status: resource.status,
       assignedTo: resource.assignedTo || "",
+      assignedToEmpId: resource.assignedToEmpId || "",
       purchaseDate: resource.purchaseDate || new Date().toISOString().split('T')[0],
       description: resource.description || "",
       value: resource.value || 0,
@@ -389,39 +488,24 @@ export default function ResourceManagementPage() {
   };
 
   const handleDeleteResource = async (id: string) => {
+    const itemToDelete = allResources.find((r: any) => r.id === id);
+    const itemCode = itemToDelete?.assetId || itemToDelete?.name || "this item";
+
     const isConfirmed = await confirm({
-      title: "Delete Resource",
-      message: "Are you sure you want to delete this resource?",
+      title: "Delete Resource Item",
+      message: `Are you sure you want to delete asset item "${itemCode}"? This will automatically decrease the category total resources count by 1.`,
       destructive: true,
-      confirmText: "Delete"
+      confirmText: "Delete Item"
     });
     if (!isConfirmed) return;
 
-    // Optimistically hide from UI instantly
-    setDeletedResourceIds(prev => [...prev, id]);
-
     try {
-      const perfBy = user?.id || user?.employeeId || "System";
-      const uName = user?.name || `${user?.firstName} ${user?.lastName}` || "System User";
-      const response = await fetch(`${API_URL}/assets/${id}?performedBy=${encodeURIComponent(perfBy)}&userName=${encodeURIComponent(uName)}`, {
-        method: "DELETE",
-      });
-
-      if (response.ok) {
-        toast.success("Resource deleted successfully");
-        refreshAssets();
-        fetchCategories();
-        fetchLogs();
-      } else {
-        // Revert on failure
-        setDeletedResourceIds(prev => prev.filter(item => item !== id));
-        toast.error("Failed to delete resource");
-      }
-    } catch (error) {
+      await api.delete(`/resource-inventory/${id}`);
+      toast.success(`Inventory item "${itemCode}" deleted and category count updated.`);
+      await refreshAssets();
+    } catch (error: any) {
       console.error(error);
-      // Revert on failure
-      setDeletedResourceIds(prev => prev.filter(item => item !== id));
-      toast.error("An error occurred while deleting");
+      toast.error(error?.message || "Failed to delete inventory item");
     }
   };
 
@@ -432,62 +516,63 @@ export default function ResourceManagementPage() {
   };
 
   const handleSaveResource = async () => {
-    const finalName = formData.name || formData.category;
-    if (!finalName || !formData.category) {
-      toast.error("Please fill in all required fields");
+    if (!formData.category) {
+      toast.error("Please select a category");
       return;
     }
 
     setIsSaving(true);
     try {
-      const url = editingId ? `${API_URL}/assets/${editingId}` : `${API_URL}/assets`;
-      const method = editingId ? "PUT" : "POST";
-      
-      const count = !editingId ? (formData.resourceCount || 1) : 1;
-      
-      for (let i = 0; i < count; i++) {
-        const payload = {
-          ...formData,
-          name: finalName,
-          performedBy: user?.id || user?.employeeId || "System",
-          userName: user?.name || `${user?.firstName} ${user?.lastName}` || "System User"
+      if (editingId) {
+        const payload: any = {
+          condition: formData.condition,
+          status: formData.status,
+          location: formData.location,
+          serial_number: formData.serialNumber,
+          description: formData.description
         };
-
-        if (!editingId) {
-          if (!formData.assetId) {
-            const code = getCategoryCode(formData.category);
-            const nextNum = allResources.filter((res: any) => res.category === formData.category).length + 1 + i;
-            payload.assetId = `HK-${code}-${String(nextNum).padStart(3, '0')}`;
-          } else {
-            if (count > 1) {
-              payload.assetId = `${formData.assetId}-${i + 1}`;
-            }
-          }
-          if (!formData.serialNumber) {
-            payload.serialNumber = `SN-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-          } else if (count > 1) {
-            payload.serialNumber = `${formData.serialNumber}-${i + 1}`;
-          }
+        if (formData.assignedTo && formData.assignedTo !== "unassigned") {
+          const emp = realEmployees.find((e: any) => 
+            (formData.assignedToEmpId && (String(e.id) === String(formData.assignedToEmpId) || String(e._id) === String(formData.assignedToEmpId))) ||
+            e.name === formData.assignedTo || 
+            e.displayName === formData.assignedTo ||
+            e.name.toLowerCase().startsWith(formData.assignedTo.toLowerCase())
+          );
+          payload.assigned_to_name = emp ? emp.name : formData.assignedTo;
+          payload.assigned_to_employee_id = emp ? emp.id : (formData.assignedToEmpId || null);
+          payload.status = "Allocated";
+        } else {
+          payload.assigned_to_name = null;
+          payload.assigned_to_employee_id = null;
+          payload.assigned_to_department = null;
         }
-
-        const response = await fetch(url, {
-          method,
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-          throw new Error("Failed to save one of the items");
+        await api.put(`/resource-inventory/${editingId}`, payload);
+        toast.success("Resource item updated successfully!");
+      } else {
+        const cat = categories.find(c => c.name === formData.category);
+        const count = formData.resourceCount || 1;
+        if (cat?.id) {
+          await api.put(`/resource-categories/${cat.id}`, {
+            category_name: cat.name,
+            add_resources: count
+          });
+          toast.success(`Successfully added ${count} resource(s) to ${cat.name}!`);
+        } else {
+          await api.post("/resource-categories", {
+            category_name: formData.category,
+            description: formData.description || `Category for ${formData.category}`,
+            icon: "Package",
+            initial_resource_count: count
+          });
+          toast.success(`Category and ${count} item(s) created!`);
         }
       }
 
-      toast.success(editingId ? "Resource updated successfully" : `Successfully added ${count} resource(s)`);
       handleCancel();
-      refreshAssets();
-      fetchLogs();
-    } catch (error) {
+      await refreshAssets();
+    } catch (error: any) {
       console.error(error);
-      toast.error("An error occurred");
+      toast.error(error?.message || "Failed to save resource");
     } finally {
       setIsSaving(false);
     }
@@ -508,134 +593,67 @@ export default function ResourceManagementPage() {
 
   const handleDeleteCategory = async (id: string) => {
     const catToDelete = categories.find(c => c.id === id);
-    const catName = catToDelete?.name;
-    const resourceCount = catName ? allResources.filter((r: any) => r.category === catName).length : 0;
+    const catName = catToDelete?.name || "this category";
 
     const isConfirmed = await confirm({
       title: "Delete Category",
-      message: `Are you sure you want to delete "${catName}"? This will also permanently delete all ${resourceCount} resource(s) in this category.`,
+      message: `Are you sure you want to delete category "${catName}"? This will also remove all associated inventory items.`,
       destructive: true,
-      confirmText: "Delete All"
+      confirmText: "Delete Category"
     });
     if (!isConfirmed) return;
 
-    // Instantly hide category and its resources from UI
-    setCategories(prev => prev.filter(cat => cat.id !== id));
-    if (catName) {
-      const idsToRemove = allResources.filter((r: any) => r.category === catName).map((r: any) => r.id);
-      setDeletedResourceIds(prev => [...prev, ...idsToRemove]);
-    }
-
     try {
-      const perfBy = user?.id || user?.employeeId || "System";
-      const uName = user?.name || "System User";
-
-      // Step 1: Delete all assets for this category using dedicated endpoint
-      if (catName) {
-        await fetch(`${API_URL}/assets/by-category/${encodeURIComponent(catName)}?performedBy=${encodeURIComponent(perfBy)}&userName=${encodeURIComponent(uName)}`, {
-          method: "DELETE",
-        });
-      }
-
-      // Step 2: Delete the category itself
-      const response = await fetch(`${API_URL}/asset-categories/${id}?performedBy=${encodeURIComponent(perfBy)}&userName=${encodeURIComponent(uName)}`, {
-        method: "DELETE",
-      });
-
-      if (response.ok) {
-        toast.success(`Category "${catName}" and all its resources deleted.`);
-        // Clear all deleted IDs and do a full fresh fetch
-        setDeletedResourceIds([]);
-        await fetchCategories();
-        refreshAssets();
-        fetchLogs();
-      } else {
-        fetchCategories();
-        refreshAssets();
-        toast.error("Failed to delete category");
-      }
-    } catch (error) {
+      await api.delete(`/resource-categories/${id}`);
+      toast.success(`Category "${catName}" deleted successfully.`);
+      await refreshAssets();
+    } catch (error: any) {
       console.error(error);
-      fetchCategories();
-      refreshAssets();
-      toast.error("An error occurred while deleting category");
+      toast.error(error?.message || "Failed to delete category");
     }
   };
 
   const handleSaveCategory = async () => {
-    if (!categoryFormData.name) {
+    if (!categoryFormData.name.trim()) {
       toast.error("Category name is required");
       return;
     }
 
     setIsSaving(true);
     try {
-      const url = editingCategoryId ? `${API_URL}/asset-categories/${editingCategoryId}` : `${API_URL}/asset-categories`;
-      const method = editingCategoryId ? "PUT" : "POST";
-
       const countToAdd = editingCategoryId
         ? (parseInt(newResourceCount) || 0)
         : (categoryFormData.totalItems || 0);
-        
+
       const countToRemove = editingCategoryId
         ? (parseInt(removeResourceCount) || 0)
         : 0;
 
-      const actualCurrentCount = editingCategoryId
-        ? allResources.filter((r: any) => r.category === categoryFormData.name).length
-        : 0;
-        
-      const availableCurrentCount = editingCategoryId
-        ? allResources.filter((r: any) => r.category === categoryFormData.name && r.status === "Available").length
-        : 0;
-
-      if (countToRemove > availableCurrentCount) {
-        toast.error(`Cannot remove ${countToRemove} items. Only ${availableCurrentCount} unassigned items are currently available.`);
-        setIsSaving(false);
-        return;
-      }
-        
-      const finalTotalItems = Math.max(0, actualCurrentCount + countToAdd - countToRemove);
-
-      const response = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...categoryFormData,
-          totalItems: finalTotalItems,
-          performedBy: user?.id || user?.employeeId || "System",
-          userName: user?.name || "System User"
-        })
-      });
-
-      if (response.ok) {
-        if (countToAdd > 0 || countToRemove > 0) {
-          if (editingCategoryId) {
-            let msg = "Category updated.";
-            if (countToAdd > 0) msg += ` ${countToAdd} item(s) added.`;
-            if (countToRemove > 0) msg += ` ${countToRemove} item(s) removed.`;
-            toast.success(msg);
-          } else {
-            toast.success(`Category created with ${countToAdd} item(s) added to inventory!`);
-          }
-        } else {
-          toast.success(editingCategoryId ? "Category updated successfully" : "Category added successfully");
-        }
-
-        setIsAddingCategoryMode(false);
-        setEditingCategoryId(null);
-        setCategoryFormData(initialCategoryFormState);
-        setIsAddingResourceCount(false);
-        setNewResourceCount("");
-        setRemoveResourceCount("");
-        fetchCategories();
-        refreshAssets();
+      if (editingCategoryId) {
+        await api.put(`/resource-categories/${editingCategoryId}`, {
+          category_name: categoryFormData.name.trim(),
+          description: categoryFormData.description.trim(),
+          icon: categoryFormData.icon || "Package",
+          add_resources: countToAdd > 0 ? countToAdd : undefined,
+          remove_resources: countToRemove > 0 ? countToRemove : undefined
+        });
+        toast.success("Category updated successfully!");
       } else {
-        toast.error(editingCategoryId ? "Failed to update category" : "Failed to add category");
+        await api.post("/resource-categories", {
+          category_name: categoryFormData.name.trim(),
+          description: categoryFormData.description.trim(),
+          icon: categoryFormData.icon || "Package",
+          total_resources: countToAdd > 0 ? countToAdd : 0,
+          initial_resource_count: countToAdd > 0 ? countToAdd : 0
+        });
+        toast.success("Category created successfully!");
       }
-    } catch (error) {
+
+      handleCancelCategory();
+      await refreshAssets();
+    } catch (error: any) {
       console.error(error);
-      toast.error("An error occurred");
+      toast.error(error?.message || "Failed to save category");
     } finally {
       setIsSaving(false);
     }
@@ -680,7 +698,7 @@ export default function ResourceManagementPage() {
     );
   }
 
-  const rawResources = (data?.assets || []).filter((r: any) => !deletedResourceIds.includes(r.id));
+  const rawResources = (inventoryItems.length > 0 ? inventoryItems : (data?.assets || [])).filter((r: any) => !deletedResourceIds.includes(r.id));
   const currentUserName = (user?.name || `${user?.firstName || ""} ${user?.lastName || ""}`).trim().toLowerCase();
 
   const allResources = isEmployeeOnly 
@@ -704,36 +722,56 @@ export default function ResourceManagementPage() {
     currentPage * itemsPerPage
   );
 
-  // Calculate statistics
-  const allocatedCount = allResources.filter((r: any) => r.status === "Allocated").length;
-  const availableCount = allResources.filter((r: any) => r.status === "Available").length;
-  const maintenanceCount = allResources.filter((r: any) => r.status === "Maintenance").length;
+  // Calculate statistics using live backend dashboardData if present
+  const totalAssetsCount = dashboardData?.total_assets ?? allResources.length;
+  const allocatedCount = dashboardData?.allocated_assets ?? allResources.filter((r: any) => r.status === "Allocated").length;
+  const availableCount = dashboardData?.available_assets ?? allResources.filter((r: any) => r.status === "Available").length;
+  const maintenanceCount = dashboardData?.in_maintenance ?? allResources.filter((r: any) => r.status === "Maintenance").length;
+  const assignmentRate = dashboardData?.assignment_rate ?? (totalAssetsCount > 0 ? Math.round((allocatedCount / totalAssetsCount) * 100) : 0);
   const totalValue = allResources.reduce((acc: number, r: any) => acc + (r.value || 0), 0);
 
   // Group by categories fetched dynamically
-  const categoryStats = categories.map(cat => {
-    const items = allResources.filter((r: any) => r.category === cat.name);
-    const catTotal = items.length;
-    const catAllocated = items.filter((r: any) => r.status === "Allocated").length;
-    const catAvailable = items.filter((r: any) => r.status === "Available").length;
-    const catMaintenance = items.filter((r: any) => r.status === "Maintenance").length;
-    const catValuation = items.reduce((acc: number, r: any) => acc + (r.value || 0), 0);
-    const allocationRate = catTotal > 0 ? Math.round((catAllocated / catTotal) * 100) : 0;
-    return {
-      id: cat.id,
-      name: cat.name,
-      icon: cat.icon || "Package",
-      description: cat.description || "",
-      total: catTotal,
-      allocated: catAllocated,
-      available: catAvailable,
-      maintenance: catMaintenance,
-      valuation: cat.valuation || 0,
-      valuation_calculated: catValuation,
-      totalItems: cat.totalItems || 0,
-      allocationRate
-    };
-  });
+  const categoryStats = (dashboardData?.category_summary && dashboardData.category_summary.length > 0)
+    ? dashboardData.category_summary.map((catSummary: any) => {
+        const catInfo = categories.find(c => c.name === catSummary.category_name || c.id === catSummary.category_id) || {};
+        return {
+          id: catSummary.category_id,
+          name: catSummary.category_name,
+          icon: catInfo.icon || "Package",
+          description: catInfo.description || "",
+          total: catSummary.total_items,
+          allocated: catSummary.allocated_items ?? catSummary.allocated_assigned ?? 0,
+          available: catSummary.available_stock,
+          maintenance: catSummary.in_maintenance,
+          valuation: catInfo.valuation || 0,
+          valuation_calculated: 0,
+          totalItems: catSummary.total_items,
+          allocationRate: catSummary.allocation_ratio
+        };
+      })
+    : categories.map(cat => {
+        const items = allResources.filter((r: any) => r.category === cat.name);
+        const catTotal = cat.totalItems || items.length;
+        const catAllocated = items.filter((r: any) => r.status === "Allocated").length;
+        const catAvailable = cat.availableStock || items.filter((r: any) => r.status === "Available").length;
+        const catMaintenance = cat.inMaintenance || items.filter((r: any) => r.status === "Maintenance").length;
+        const catValuation = items.reduce((acc: number, r: any) => acc + (r.value || 0), 0);
+        const allocationRate = catTotal > 0 ? Math.round((catAllocated / catTotal) * 100) : 0;
+        return {
+          id: cat.id,
+          name: cat.name,
+          icon: cat.icon || "Package",
+          description: cat.description || "",
+          total: catTotal,
+          allocated: catAllocated,
+          available: catAvailable,
+          maintenance: catMaintenance,
+          valuation: cat.valuation || 0,
+          valuation_calculated: catValuation,
+          totalItems: cat.totalItems || 0,
+          allocationRate
+        };
+      });
 
   const { items: sortedCategoryStats, requestSort: requestSortCategories, sortConfig: sortConfigCategories } = useSortableData(categoryStats);
 
@@ -794,24 +832,39 @@ export default function ResourceManagementPage() {
                 <label className="text-sm font-semibold text-foreground flex items-center gap-1.5"><User className="w-4 h-4 text-muted-foreground" /> Assign To</label>
                 <Select 
                   value={(() => {
-                    const emp = data?.employees?.find((e:any) => (e.name || `${e.firstName} ${e.lastName}`) === formData.assignedTo);
-                    return emp ? `${formData.assignedTo}|${emp.id}` : (formData.assignedTo || "unassigned");
+                    if (!formData.assignedTo && !formData.assignedToEmpId) return "unassigned";
+                    const cleaned = String(formData.assignedTo || "").replace(/\s*\([A-Z0-9-]+\)$/i, "").trim().toLowerCase();
+                    const empId = String(formData.assignedToEmpId || "").trim();
+
+                    const emp = realEmployees.find((e: any) => {
+                      const eId = String(e.id || e._id || "").trim();
+                      const eName = String(e.name || e.displayName || "").trim().toLowerCase();
+                      if (empId && eId === empId) return true;
+                      if (cleaned && (eName === cleaned || eName.startsWith(cleaned) || cleaned.startsWith(eName))) return true;
+                      return false;
+                    });
+
+                    return emp ? emp.name : (formData.assignedTo || "unassigned");
                   })()}
-                  onValueChange={handleAssignToChange}
+                  onValueChange={(val) => {
+                    if (val === "unassigned" || !val) {
+                      setFormData(prev => ({ ...prev, assignedTo: "", assignedToEmpId: "", status: "Available" }));
+                    } else {
+                      const emp = realEmployees.find((e: any) => e.name === val || e.id === val);
+                      setFormData(prev => ({ ...prev, assignedTo: emp ? emp.name : val, assignedToEmpId: emp ? emp.id : "", status: "Allocated" }));
+                    }
+                  }}
                 >
                   <SelectTrigger className="w-full bg-white focus-visible:ring-brand-teal">
                     <SelectValue placeholder="Select employee" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="unassigned">-- Unassigned / Clear --</SelectItem>
-                    {data?.employees?.map((emp: any) => {
-                      const empName = emp.name || `${emp.firstName} ${emp.lastName}`;
-                      return (
-                        <SelectItem key={emp.id} value={`${empName}|${emp.id}`}>
-                          {empName}
-                        </SelectItem>
-                      );
-                    })}
+                    {realEmployees.map((emp: any) => (
+                      <SelectItem key={emp.id} value={emp.name}>
+                        {emp.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -876,7 +929,7 @@ export default function ResourceManagementPage() {
           <div className="p-6 border-t border-border flex justify-end gap-3 bg-gray-50/50">
             <Button variant="outline" className="font-medium bg-white" onClick={handleCancel} disabled={isSaving}>Cancel</Button>
             <Button 
-              className="bg-brand-teal hover:bg-brand-teal-light text-white font-medium shadow-sm"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md"
               onClick={handleSaveResource}
               disabled={isSaving}
             >
@@ -904,23 +957,23 @@ export default function ResourceManagementPage() {
         <div className="flex border-b border-border bg-gray-50/50 p-1.5 rounded-xl max-w-full sm:max-w-2xl overflow-x-auto shadow-sm border">
           <button 
             onClick={() => setActiveTab("overview")} 
-            className={`flex-1 min-h-[44px] sm:min-h-0 whitespace-nowrap shrink-0 py-2 px-3 text-xs sm:text-sm font-semibold rounded-lg flex items-center justify-center gap-2 transition-all ${activeTab === "overview" ? "bg-white text-brand-teal shadow-sm border" : "text-muted-foreground hover:text-foreground"}`}
+            className={`flex-1 min-h-[44px] sm:min-h-0 whitespace-nowrap shrink-0 py-2 px-3 text-xs sm:text-sm font-semibold rounded-lg flex items-center justify-center gap-2 transition-all ${activeTab === "overview" ? "bg-white text-emerald-700 shadow-sm border border-emerald-200" : "text-muted-foreground hover:text-foreground"}`}
           >
-            <TrendingUp className="w-4 h-4" />
+            <TrendingUp className="w-4 h-4 text-emerald-600" />
             Dashboard
           </button>
           <button 
             onClick={() => setActiveTab("registry")} 
-            className={`flex-1 min-h-[44px] sm:min-h-0 whitespace-nowrap shrink-0 py-2 px-3 text-xs sm:text-sm font-semibold rounded-lg flex items-center justify-center gap-2 transition-all ${activeTab === "registry" ? "bg-white text-brand-teal shadow-sm border" : "text-muted-foreground hover:text-foreground"}`}
+            className={`flex-1 min-h-[44px] sm:min-h-0 whitespace-nowrap shrink-0 py-2 px-3 text-xs sm:text-sm font-semibold rounded-lg flex items-center justify-center gap-2 transition-all ${activeTab === "registry" ? "bg-white text-emerald-700 shadow-sm border border-emerald-200" : "text-muted-foreground hover:text-foreground"}`}
           >
-            <Archive className="w-4 h-4" />
+            <Archive className="w-4 h-4 text-emerald-600" />
             Inventory ({allResources.length})
           </button>
           <button 
             onClick={() => setActiveTab("categories")} 
-            className={`flex-1 py-2 px-3 text-xs sm:text-sm font-semibold rounded-lg flex items-center justify-center gap-2 transition-all ${activeTab === "categories" ? "bg-white text-brand-teal shadow-sm border" : "text-muted-foreground hover:text-foreground"}`}
+            className={`flex-1 py-2 px-3 text-xs sm:text-sm font-semibold rounded-lg flex items-center justify-center gap-2 transition-all ${activeTab === "categories" ? "bg-white text-emerald-700 shadow-sm border border-emerald-200" : "text-muted-foreground hover:text-foreground"}`}
           >
-            <Layers className="w-4 h-4" />
+            <Layers className="w-4 h-4 text-emerald-600" />
             Categories ({categories.length})
           </button>
         </div>
@@ -933,7 +986,7 @@ export default function ResourceManagementPage() {
             <div className="bg-white border border-border rounded-2xl p-6 shadow-sm flex items-center justify-between group hover:border-brand-teal/30 transition-all hover:shadow-md">
               <div>
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Assets</span>
-                <h3 className="text-3xl font-bold text-foreground mt-1">{allResources.length}</h3>
+                <h3 className="text-3xl font-bold text-foreground mt-1">{totalAssetsCount}</h3>
                 <span className="text-xs text-muted-foreground mt-2 inline-block">Registered inventory</span>
               </div>
               <div className="w-12 h-12 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-center text-indigo-600 transition-transform group-hover:scale-110">
@@ -946,7 +999,7 @@ export default function ResourceManagementPage() {
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Allocated Assets</span>
                 <h3 className="text-3xl font-bold text-foreground mt-1">{allocatedCount}</h3>
                 <span className="text-xs text-blue-600 font-medium mt-2 inline-block">
-                  {allResources.length > 0 ? Math.round((allocatedCount / allResources.length) * 100) : 0}% assignment rate
+                  {assignmentRate}% assignment rate
                 </span>
               </div>
               <div className="w-12 h-12 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-center text-blue-600 transition-transform group-hover:scale-110">
@@ -988,7 +1041,7 @@ export default function ResourceManagementPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {sortedCategoryStats.map(cat => (
+                    {sortedCategoryStats.map((cat: any) => (
                       <tr key={cat.name} className="hover:bg-gray-50/30 transition-colors">
                         <td className="px-6 py-4 font-medium text-foreground">
                           <span className="font-semibold text-sm">{cat.name}</span>
@@ -1087,10 +1140,9 @@ export default function ResourceManagementPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Employees</SelectItem>
-                        {data?.employees?.map((emp: any) => {
-                          const name = emp.name || `${emp.firstName} ${emp.lastName}`;
-                          return <SelectItem key={emp.id} value={name}>{name}</SelectItem>;
-                        })}
+                        {realEmployees.map((emp: any) => (
+                          <SelectItem key={emp.id} value={emp.name}>{emp.name}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -1198,40 +1250,46 @@ export default function ResourceManagementPage() {
                         {editingCell?.id === res.id && editingCell?.field === 'assignedTo' ? (
                           <Select 
                             value={(() => {
-                              const emp = data?.employees?.find((e:any) => (e.name || `${e.firstName} ${e.lastName}`) === tempValue);
-                              return emp ? `${tempValue}|${emp.id}` : (tempValue || "unassigned");
+                              const current = tempValue || res.assignedTo;
+                              if (!current || current === "unassigned") return "unassigned";
+                              const cleaned = String(current).replace(/\s*\([A-Z0-9-]+\)$/i, "").trim();
+                              const emp = realEmployees.find((e: any) => e.name === cleaned || e.displayName === cleaned || e.id === cleaned || (res.assignedToEmpId && e.id === res.assignedToEmpId));
+                              return emp ? emp.name : (cleaned || "unassigned");
                             })()} 
-                            onValueChange={(val) => {
-                              const actualVal = val && val.includes('|') ? val.split('|')[0] : val;
-                              handleInlineSave(res.id, 'assignedTo', actualVal);
-                            }}
+                            onValueChange={(val) => handleInlineSave(res.id, 'assignedTo', val)}
                           >
-                            <SelectTrigger className="h-8 bg-white text-xs w-36">
+                            <SelectTrigger className="h-8 bg-white text-xs min-w-[160px]">
                               <SelectValue placeholder="Select" />
                             </SelectTrigger>
                             <SelectContent onClick={(e) => e.stopPropagation()}>
                               <SelectItem value="unassigned">-- Unassigned --</SelectItem>
-                              {data?.employees?.map((emp: any) => {
-                                const empName = emp.name || `${emp.firstName} ${emp.lastName}`;
-                                return (
-                                  <SelectItem key={emp.id} value={`${empName}|${emp.id}`}>
-                                    {empName}
-                                  </SelectItem>
-                                );
-                              })}
+                              {realEmployees.map((emp: any) => (
+                                <SelectItem key={emp.id} value={emp.name}>
+                                  {emp.name}
+                                </SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
-                        ) : res.assignedTo ? (
-                          <div className="flex items-center gap-2">
-                            <Avatar className="w-6 h-6 border">
-                              <AvatarImage src={res.avatar || ""} />
-                              <AvatarFallback className="bg-brand-light text-brand-teal text-[10px] font-bold">
-                                {res.assignedTo.split(' ').map((n: string) => n[0]).join('')}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span className="font-semibold text-foreground text-xs">{res.assignedTo}</span>
-                          </div>
-                        ) : (
+                        ) : res.assignedTo ? (() => {
+                          const matchedEmp = realEmployees.find((e: any) => 
+                            (res.assignedToEmpId && String(e.id) === String(res.assignedToEmpId)) ||
+                            e.name.toLowerCase() === res.assignedTo.toLowerCase() ||
+                            e.name.toLowerCase().startsWith(res.assignedTo.toLowerCase()) ||
+                            res.assignedTo.toLowerCase().startsWith(e.name.toLowerCase())
+                          );
+                          const fullName = matchedEmp ? matchedEmp.name : res.assignedTo;
+                          return (
+                            <div className="flex items-center gap-2">
+                              <Avatar className="w-6 h-6 border">
+                                <AvatarImage src={matchedEmp?.avatar || res.avatar || ""} />
+                                <AvatarFallback className="bg-brand-light text-brand-teal text-[10px] font-bold">
+                                  {fullName.split(' ').map((n: string) => n[0]).join('')}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="font-semibold text-foreground text-xs">{fullName}</span>
+                            </div>
+                          );
+                        })() : (
                           <span className="text-muted-foreground text-xs">Unassigned</span>
                         )}
                       </td>
@@ -1315,7 +1373,7 @@ export default function ResourceManagementPage() {
                       <Input 
                         type="number"
                         disabled
-                        value={allResources.filter((r: any) => r.category === categoryFormData.name).length}
+                        value={categoryFormData.totalItems || allResources.filter((r: any) => r.category === categoryFormData.name).length}
                         className="bg-muted cursor-not-allowed"
                       />
                       <p className="text-[10px] text-muted-foreground">Current inventory count (read-only).</p>
@@ -1359,7 +1417,7 @@ export default function ResourceManagementPage() {
               </div>
               <div className="p-6 border-t border-border flex justify-end gap-3 bg-gray-50/50">
                 <Button variant="outline" size="sm" onClick={handleCancelCategory}>Cancel</Button>
-                <Button className="bg-brand-teal hover:bg-brand-teal-light text-white font-medium shadow-sm" size="sm" onClick={handleSaveCategory} disabled={isSaving}>
+                <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md" size="sm" onClick={handleSaveCategory} disabled={isSaving}>
                   {isSaving ? "Saving..." : (editingCategoryId ? "Update Category" : "Save Category")}
                 </Button>
               </div>
@@ -1371,7 +1429,7 @@ export default function ResourceManagementPage() {
                   <h2 className="text-lg font-bold text-foreground">Asset Categories</h2>
                   <p className="text-xs text-muted-foreground mt-0.5">Perform CRUD operations on inventory asset classifications.</p>
                 </div>
-                <Button className="bg-brand-teal hover:bg-brand-teal-light text-white font-medium shadow-sm" size="sm" onClick={() => setIsAddingCategoryMode(true)}>
+                <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md" size="sm" onClick={() => setIsAddingCategoryMode(true)}>
                   <Plus className="w-4 h-4 mr-1.5" />
                   Add Category
                 </Button>
@@ -1466,11 +1524,11 @@ export default function ResourceManagementPage() {
                   <div key={log.id || idx} className="py-3 first:pt-0 last:pb-0 text-xs space-y-1">
                     <div className="flex justify-between items-start">
                       <span className="font-semibold text-foreground">{log.action}</span>
-                      <span className="text-[10px] text-muted-foreground font-mono">{log.timestamp}</span>
+                      <span className="text-[10px] text-muted-foreground font-mono">{formatLogTime(log.timestamp)}</span>
                     </div>
                     <p className="text-muted-foreground">{log.details}</p>
                     <div className="text-[10px] text-brand-teal/80 font-medium">
-                      By: {log.userName} ({log.performedBy})
+                      By: {log.userName}
                     </div>
                   </div>
                 ))
@@ -1498,11 +1556,11 @@ export default function ResourceManagementPage() {
                   <div key={log.id || idx} className="py-3 first:pt-0 last:pb-0 text-xs space-y-1">
                     <div className="flex justify-between items-start">
                       <span className="font-semibold text-foreground">{log.action}</span>
-                      <span className="text-[10px] text-muted-foreground font-mono">{log.timestamp}</span>
+                      <span className="text-[10px] text-muted-foreground font-mono">{formatLogTime(log.timestamp)}</span>
                     </div>
                     <p className="text-muted-foreground">{log.details}</p>
                     <div className="text-[10px] text-brand-teal/80 font-medium">
-                      By: {log.userName} ({log.performedBy})
+                      By: {log.userName}
                     </div>
                   </div>
                 ))
@@ -1551,12 +1609,12 @@ export default function ResourceManagementPage() {
                   <div key={log.id || idx} className="py-3.5 first:pt-0 last:pb-0 text-xs space-y-1.5">
                     <div className="flex justify-between items-start gap-4">
                       <span className="font-semibold text-foreground text-sm">{log.action}</span>
-                      <span className="text-[10px] text-muted-foreground font-mono bg-gray-100 px-1.5 py-0.5 rounded">{log.timestamp}</span>
+                      <span className="text-[10px] text-muted-foreground font-mono bg-gray-100 px-1.5 py-0.5 rounded">{formatLogTime(log.timestamp)}</span>
                     </div>
                     <p className="text-muted-foreground leading-relaxed">{log.details}</p>
                     <div className="text-[10px] text-brand-teal/80 font-semibold flex items-center gap-1">
                       <span className="w-1.5 h-1.5 bg-brand-teal rounded-full"></span>
-                      Performed by: {log.userName} ({log.performedBy})
+                      Performed by: {log.userName}
                     </div>
                   </div>
                 ))

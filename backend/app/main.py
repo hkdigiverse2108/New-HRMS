@@ -40,7 +40,7 @@ from app.controllers.letter_request import router as letter_request_router
 from app.controllers.gallery import router as gallery_router
 from app.controllers.resource_category import router as resource_category_router
 from app.controllers.resource_inventory import router as resource_inventory_router
-from app.controllers.seating import router as seating_router
+from app.controllers.seating import router as seating_router, global_seating_router
 from app.controllers.hiring import router as hiring_router
 from app.controllers.interview import router as interview_router
 from app.models.employee import setup_employee_indexes
@@ -165,6 +165,7 @@ app.include_router(gallery_router)
 app.include_router(resource_category_router)
 app.include_router(resource_inventory_router)
 app.include_router(seating_router)
+app.include_router(global_seating_router)
 app.include_router(hiring_router)
 app.include_router(interview_router)
 

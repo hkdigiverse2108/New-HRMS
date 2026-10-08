@@ -10,15 +10,15 @@ class ResourceInventoryUpdate(BaseModel):
 class ResourceInventoryResponse(BaseModel):
     id: str = Field(alias="_id")
     resource_id: str = Field(..., description="Formatted Unique ID e.g. HK-PRI-001")
-    category_id: str
-    category_name: str
-    condition: str = "New"
-    status: str = "Available"
+    category_id: Optional[str] = ""
+    category_name: Optional[str] = ""
+    condition: Optional[str] = "New"
+    status: Optional[str] = "Available"
     assigned_to: Optional[Dict[str, Any]] = None
     created_by: Optional[Dict[str, Any]] = None
-    is_deleted: bool = False
-    created_at: datetime
-    updated_at: datetime
+    is_deleted: Optional[bool] = False
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(populate_by_name=True)
 

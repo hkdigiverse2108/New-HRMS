@@ -55,6 +55,8 @@ class ResourceCategoryRepository:
         items = []
         async for doc in cursor:
             doc["_id"] = str(doc["_id"])
+            doc["total_resources"] = int(doc.get("total_resources", 0) or doc.get("total_items", 0) or 0)
+            doc["total_items"] = int(doc.get("total_items", 0) or doc.get("total_resources", 0) or 0)
             items.append(doc)
 
         total_pages = (total + eff_limit - 1) // eff_limit if total > 0 else 0
@@ -103,6 +105,7 @@ class ResourceCategoryRepository:
 
         update_payload: Dict[str, Any] = {
             "total_resources": new_total,
+            "total_items": new_total,
             "updated_at": datetime.utcnow()
         }
 

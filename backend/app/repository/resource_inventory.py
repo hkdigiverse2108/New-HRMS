@@ -6,12 +6,12 @@ from typing import List, Dict, Any, Optional
 from app.repository.employee import EmployeeRepository
 
 def get_category_prefix(category_name: str) -> str:
-    """Extracts first 3 uppercase alphabetic letters for resource ID prefix e.g. Printer -> PRI, ABCD -> ABC."""
-    clean = re.sub(r'[^a-zA-Z]', '', category_name or "").upper()
+    """Extracts first 2-3 uppercase alphanumeric letters for resource ID prefix e.g. TV -> TV, Printer -> PRI."""
+    clean = re.sub(r'[^a-zA-Z0-9]', '', category_name or "").upper()
     if not clean:
-        clean = "RES"
-    elif len(clean) < 3:
-        clean = clean.ljust(3, 'X')
+        return "RES"
+    if len(clean) <= 3:
+        return clean
     return clean[:3]
 
 class ResourceInventoryRepository:
@@ -29,11 +29,18 @@ class ResourceInventoryRepository:
 
         collection = await cls.get_collection()
         prefix = get_category_prefix(category_name)
-        pattern = f"^HK-{prefix}-(\\d+)$"
+        cat_id_str = str(category_id)
 
-        # Find current highest sequence number for this prefix
+        # Find current highest sequence number for active items in this category
         max_seq = 0
-        cursor = collection.find({"resource_id": {"$regex": pattern, "$options": "i"}})
+        query = {
+            "is_deleted": False,
+            "$or": [
+                {"category_id": cat_id_str},
+                {"category_name": {"$regex": f"^{re.escape(category_name)}$", "$options": "i"}}
+            ]
+        }
+        cursor = collection.find(query)
         async for doc in cursor:
             res_id = str(doc.get("resource_id", ""))
             match = re.search(r"-(\d+)$", res_id)
@@ -49,7 +56,7 @@ class ResourceInventoryRepository:
             formatted_id = f"HK-{prefix}-{next_seq:03d}"
             item_doc = {
                 "resource_id": formatted_id,
-                "category_id": str(category_id),
+                "category_id": cat_id_str,
                 "category_name": category_name,
                 "condition": "New",
                 "status": "Available",
@@ -99,6 +106,16 @@ class ResourceInventoryRepository:
             return res.modified_count
 
         return 0
+
+    @classmethod
+    async def update_category_name(cls, category_id: str, new_category_name: str) -> int:
+        collection = await cls.get_collection()
+        now = datetime.utcnow()
+        res = await collection.update_many(
+            {"category_id": str(category_id)},
+            {"$set": {"category_name": str(new_category_name).strip(), "updated_at": now}}
+        )
+        return res.modified_count
 
     @classmethod
     async def delete_all_by_category(cls, category_id: str) -> int:
@@ -165,6 +182,14 @@ class ResourceInventoryRepository:
         items = []
         async for doc in cursor:
             doc["_id"] = str(doc["_id"])
+            if not doc.get("category_id"):
+                doc["category_id"] = ""
+            if not doc.get("category_name"):
+                doc["category_name"] = "General"
+            if not doc.get("created_at"):
+                doc["created_at"] = datetime.utcnow()
+            if not doc.get("updated_at"):
+                doc["updated_at"] = datetime.utcnow()
             items.append(doc)
 
         total_pages = (total + eff_limit - 1) // eff_limit if total > 0 else 0
@@ -210,21 +235,57 @@ class ResourceInventoryRepository:
             if st in ["Available", "Allocated", "Maintenance"]:
                 update_payload["status"] = st
 
-        if "assigned_to_employee_id" in update_data:
-            emp_id = update_data["assigned_to_employee_id"]
-            if emp_id and str(emp_id).strip() and str(emp_id).lower() not in ["unassigned", "none", "null"]:
-                employee = await EmployeeRepository.get_by_id(str(emp_id).strip())
+        if "assigned_to_employee_id" in update_data or "assigned_to_name" in update_data:
+            emp_id = update_data.get("assigned_to_employee_id")
+            emp_name_input = update_data.get("assigned_to_name")
+
+            if (emp_id and str(emp_id).strip() and str(emp_id).lower() not in ["unassigned", "none", "null"]) or (emp_name_input and str(emp_name_input).strip() not in ["unassigned", "none", "null"]):
+                employee = None
+                if emp_id and ObjectId.is_valid(str(emp_id)):
+                    employee = await EmployeeRepository.get_by_id(str(emp_id).strip())
+                if not employee and emp_name_input:
+                    employee = await EmployeeRepository.get_employee_by_email(str(emp_name_input))
+                if not employee and emp_name_input:
+                    from app.database.db import get_database
+                    emp_coll = get_database()["employees"]
+                    employee = await emp_coll.find_one({
+                        "$or": [
+                            {"personal_info.full_name": {"$regex": f"^{re.escape(str(emp_name_input))}$", "$options": "i"}},
+                            {"personal_info.first_name": {"$regex": f"^{re.escape(str(emp_name_input))}$", "$options": "i"}},
+                            {"name": {"$regex": f"^{re.escape(str(emp_name_input))}$", "$options": "i"}}
+                        ]
+                    })
+
                 if employee:
-                    full_name = str(employee.get("contact_info", {}).get("full_name") or employee.get("full_name") or "").strip()
-                    emp_code = str(employee.get("employee_code") or employee.get("employee_id") or "").strip()
+                    pi = employee.get("personal_info", {}) or {}
+                    wd = employee.get("work_details", {}) or {}
+                    fn = str(pi.get("first_name") or "").strip()
+                    ln = str(pi.get("last_name") or "").strip()
+                    combined_name = f"{fn} {ln}".strip()
+                    full_name = str(pi.get("full_name") or combined_name or employee.get("full_name") or employee.get("name") or emp_name_input or "Employee").strip()
+                    clean_name = re.sub(r'\s*\([A-Z0-9-]+\)$', '', full_name, flags=re.IGNORECASE).strip()
                     update_payload["assigned_to"] = {
                         "employee_id": str(employee["_id"]),
-                        "employee_name": f"{full_name} ({emp_code})" if emp_code else full_name,
+                        "employee_name": clean_name,
                         "assigned_date": datetime.utcnow().strftime("%Y-%m-%d")
                     }
+                    update_payload["assigned_to_name"] = clean_name
+                    update_payload["assigned_to_employee_id"] = str(employee["_id"])
+                    update_payload["status"] = "Allocated"
+                elif emp_name_input:
+                    clean_name = re.sub(r'\s*\([A-Z0-9-]+\)$', '', str(emp_name_input), flags=re.IGNORECASE).strip()
+                    update_payload["assigned_to"] = {
+                        "employee_id": str(emp_id or ""),
+                        "employee_name": clean_name,
+                        "assigned_date": datetime.utcnow().strftime("%Y-%m-%d")
+                    }
+                    update_payload["assigned_to_name"] = clean_name
+                    update_payload["assigned_to_employee_id"] = str(emp_id or "")
                     update_payload["status"] = "Allocated"
             else:
                 update_payload["assigned_to"] = None
+                update_payload["assigned_to_name"] = None
+                update_payload["assigned_to_employee_id"] = None
                 if update_payload.get("status") == "Allocated":
                     update_payload["status"] = "Available"
 
