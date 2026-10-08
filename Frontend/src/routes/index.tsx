@@ -149,6 +149,9 @@ export function Index() {
     setActiveState(val);
     if (typeof window !== 'undefined') {
       localStorage.setItem("activeSidebarTab", val);
+      try {
+        window.history.replaceState({}, '', val);
+      } catch (e) {}
     }
   };
 
@@ -242,8 +245,16 @@ export function Index() {
                   {(basePath === "/employees/departments-setup" || basePath === "/employees/sub-departments" || basePath === "/employees/designations" || basePath === "/employees/departments") && <DepartmentDesignationManager />}
                   {(basePath === "/employees/attendance" || basePath === "/attendance") && <AttendanceList />}
                   {(basePath === "/employees/leave-requests" || basePath === "/leave" || basePath === "/approvals/leave-requests") && <LeaveRequests isNew={isNew} />}
-                  {(basePath === "/employees/documents" || basePath === "/documents") && <Documents setActive={setActive} />}
-                  {(basePath === "/employees/documents/generate" || basePath === "/documents/generate") && <DocumentGenerator onBack={() => setActive("/employees/documents")} />}
+                  {(basePath === "/employees/documents" || basePath === "/documents") && (
+                    <ModuleErrorBoundary moduleName="Documents">
+                      <Documents setActive={setActive} />
+                    </ModuleErrorBoundary>
+                  )}
+                  {(basePath === "/employees/documents/generate" || basePath === "/documents/generate") && (
+                    <ModuleErrorBoundary moduleName="Document Generator">
+                      <DocumentGenerator onBack={() => setActive("/employees/documents")} activeTabPath={active} />
+                    </ModuleErrorBoundary>
+                  )}
                   {(basePath === "/penalty" || basePath === "/approvals/penalties" || basePath === "/employees/penalties") && <Penalties />}
                   {(basePath === "/approvals/daily-progress" || basePath === "/daily-progress") && <DailyProgress />}
                   {basePath === "/approvals/history" && <ApprovalHistory />}
@@ -291,7 +302,11 @@ export function Index() {
                   {basePath === "/activity-logs" && <ActivityLogs />}
                   {basePath === "/activity-tracker" && <ActivityTracker />}
                   {basePath === "/restrictions" && <Restrictions />}
-                  {basePath === "/settings" && <AdminSettings />}
+                  {basePath === "/settings" && (
+                    <ModuleErrorBoundary moduleName="Admin Settings">
+                      <AdminSettings />
+                    </ModuleErrorBoundary>
+                  )}
                   {basePath === "/access-control" && <AccessControl />}
                   {basePath === "/recycle-bin" && <RecycleBin />}
                   {basePath === "/elections" && <Elections />}

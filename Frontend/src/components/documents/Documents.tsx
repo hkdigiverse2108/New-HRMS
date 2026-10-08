@@ -8,6 +8,8 @@ import {
   Stamp, 
   PenTool
 } from "lucide-react";
+import { useAuth } from "@/components/auth/AuthContext";
+import { isUserAdmin } from "@/lib/permissions";
 import { SubmittedDocuments } from "./tabs/SubmittedDocuments";
 import { OfficialLetters } from "./tabs/OfficialLetters";
 import { DocumentTypes } from "./tabs/DocumentTypes";
@@ -25,7 +27,20 @@ const TABS = [
 ];
 
 export function Documents({ setActive }: { setActive?: (path: string) => void }) {
-  const [activeTab, setActiveTab] = useState(TABS[0]!.id);
+  const { user } = useAuth();
+
+  const userRole = String((user as any)?.role || (user as any)?.work_details?.system_role || (user as any)?.system_role || "").toLowerCase();
+  const userDept = String((user as any)?.department || (user as any)?.work_details?.department || "").toLowerCase();
+  const isAdminOrHR = isUserAdmin(user) || ["admin", "subadmin", "superadmin", "hr", "hr manager"].some(r => userRole.includes(r)) || userDept === "hr";
+
+  const visibleTabs = TABS.filter(tab => {
+    if (tab.id === "types" || tab.id === "templates") {
+      return isAdminOrHR;
+    }
+    return true;
+  });
+
+  const [activeTab, setActiveTab] = useState("submitted");
 
   return (
     <div className="w-full space-y-8 animate-in fade-in duration-500">
@@ -42,7 +57,7 @@ export function Documents({ setActive }: { setActive?: (path: string) => void })
 
       <div className="flex overflow-x-auto pb-2 scrollbar-none border-b border-border/50">
         <div className="flex gap-2">
-          {TABS.map((tab) => (
+          {visibleTabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}

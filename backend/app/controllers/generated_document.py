@@ -12,11 +12,10 @@ from app.controllers.auth import get_current_employee
 router = APIRouter(prefix="/generated-documents", tags=["Generated Documents & PDF Engine"])
 
 def check_admin_or_hr_role(user: dict):
-    work = user.get("work_details", {})
-    role = str(work.get("system_role") or user.get("system_role", "Employee")).strip()
-    if role.lower() not in ["admin", "subadmin", "hr", "hr manager"]:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Admin or HR can generate documents")
-    return role
+    # Allow all authenticated users/employees to generate/preview documents
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+    return True
 
 @router.post("/preview", response_model=DocumentPreviewResponse)
 async def preview_document(

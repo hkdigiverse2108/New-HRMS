@@ -257,6 +257,21 @@ export const api = {
   delete: <T = any>(endpoint: string, options?: RequestOptions): Promise<T> =>
     apiRequest<T>(endpoint, { method: "DELETE", ...options }),
 
+  getBlob: async (endpoint: string, options?: RequestOptions): Promise<Blob> => {
+    const token = getAuthToken();
+    let cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+    cleanEndpoint = cleanEndpoint.replace(/\/+\?/, "?");
+    const baseUrl = getApiUrl() || API_URL;
+    const url = `${baseUrl}${cleanEndpoint}`;
+    const res = await fetch(url, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (!res.ok) throw new Error(`Failed to fetch file: ${res.statusText}`);
+    return await res.blob();
+  },
+
   /**
    * Common upload method for any folder (e.g., "employee", "department")
    */

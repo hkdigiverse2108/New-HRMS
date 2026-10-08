@@ -26,7 +26,16 @@ class SubmittedDocumentRepository:
         return doc
 
     @classmethod
-    async def get_all(cls, is_deleted: bool = False, employee_id: Optional[str] = None, document_type_id: Optional[str] = None, status: Optional[str] = None, search: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def get_all(
+        cls, 
+        is_deleted: bool = False, 
+        employee_id: Optional[str] = None, 
+        document_type_id: Optional[str] = None, 
+        status: Optional[str] = None, 
+        search: Optional[str] = None,
+        page: Optional[int] = None,
+        limit: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
         collection = await cls.get_collection()
         query: Dict[str, Any] = {"is_deleted": is_deleted}
 
@@ -49,6 +58,9 @@ class SubmittedDocumentRepository:
             ]
 
         cursor = collection.find(query).sort("created_at", -1)
+        if page and limit and page > 0 and limit > 0:
+            cursor = cursor.skip((page - 1) * limit).limit(limit)
+
         items = []
         async for doc in cursor:
             doc["_id"] = str(doc["_id"])

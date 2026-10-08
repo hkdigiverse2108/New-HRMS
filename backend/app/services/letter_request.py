@@ -22,15 +22,34 @@ class LetterRequestService:
 
         if not emp:
             # Fallback check by employee string ID
-            emp = await db.db["employees"].find_one({"id": target_emp_id, "is_deleted": False})
+            emp = await db.db["employees"].find_one({
+                "$or": [
+                    {"id": target_emp_id},
+                    {"employee_id": target_emp_id},
+                    {"work_details.employee_id": target_emp_id}
+                ],
+                "is_deleted": False
+            })
 
-        emp_name = "Employee"
-        emp_code = ""
+        def format_emp_name(source: dict) -> tuple[str, str]:
+            p_info = source.get("personal_info") or source.get("personal_details") or {}
+            w_info = source.get("work_details") or {}
+            
+            fn = p_info.get("first_name") or source.get("first_name") or ""
+            mn = p_info.get("middle_name") or source.get("middle_name") or ""
+            ln = p_info.get("last_name") or source.get("last_name") or ""
+
+            full = " ".join([f for f in [fn, mn, ln] if f]).strip()
+            if not full:
+                full = source.get("name") or p_info.get("email_address") or source.get("email") or "Employee"
+
+            code = w_info.get("employee_id") or source.get("employee_id") or source.get("emp_id") or ""
+            return full, code
+
         if emp:
-            first_name = emp.get("first_name") or emp.get("personal_details", {}).get("first_name", "")
-            last_name = emp.get("last_name") or emp.get("personal_details", {}).get("last_name", "")
-            emp_name = f"{first_name} {last_name}".strip() or emp.get("name", "Employee")
-            emp_code = emp.get("work_details", {}).get("employee_id") or emp.get("employee_id") or emp.get("emp_id", "")
+            emp_name, emp_code = format_emp_name(emp)
+        else:
+            emp_name, emp_code = format_emp_name(current_user)
 
         # Fetch Document Type info if provided
         doc_type_name = None
@@ -47,8 +66,17 @@ class LetterRequestService:
             tpl = await db.db["document_templates"].find_one({"_id": ObjectId(tpl_id), "is_deleted": False})
             if tpl:
                 tpl_name = tpl.get("template_name")
+        elif data.letter_type:
+            import re
+            tpl = await db.db["document_templates"].find_one({
+                "template_name": {"$regex": f"^{re.escape(data.letter_type)}$", "$options": "i"},
+                "is_deleted": False
+            })
+            if tpl:
+                tpl_id = str(tpl["_id"])
+                tpl_name = tpl.get("template_name")
 
-        letter_title = tpl_name or doc_type_name or "Official Letter"
+        letter_title = data.letter_type or tpl_name or doc_type_name or "Official Letter"
 
         payload = {
             "employee_id": target_emp_id,
@@ -59,11 +87,12 @@ class LetterRequestService:
             "template_id": tpl_id,
             "template_name": tpl_name,
             "requested_date": datetime.utcnow().strftime("%Y-%m-%d"),
-            "needed_by_date": data.needed_by_date,
-            "reason": data.reason,
-            "status": "Pending",
-            "generated_document_id": None,
-            "pdf_url": None,
+            "needed_by_date": data.needed_by_date or datetime.utcnow().strftime("%Y-%m-%d"),
+            "reason": data.reason or "Document sent for signature",
+            "status": data.status or "Pending",
+            "generated_document_id": data.generated_document_id,
+            "pdf_url": data.pdf_url,
+            "content": data.content,
             "rejection_reason": None,
         }
 

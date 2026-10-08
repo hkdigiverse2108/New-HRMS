@@ -10,9 +10,10 @@ from app.controllers.auth import get_current_employee
 router = APIRouter(prefix="/letter-requests", tags=["Letter Requests Workflow"])
 
 def is_admin_or_hr(user: dict) -> bool:
-    work = user.get("work_details", {})
-    role = str(work.get("system_role") or user.get("system_role", "Employee")).strip().lower()
-    return role in ["admin", "subadmin", "hr", "hr manager"]
+    work = user.get("work_details", {}) or {}
+    role = str(work.get("system_role") or user.get("system_role") or user.get("role") or "").strip().lower()
+    dept = str(work.get("department") or user.get("department") or "").strip().lower()
+    return any(r in role for r in ["admin", "subadmin", "superadmin", "hr"]) or dept == "hr"
 
 @router.post("", response_model=LetterRequestResponse, status_code=status.HTTP_201_CREATED)
 async def create_letter_request(

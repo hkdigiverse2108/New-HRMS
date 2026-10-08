@@ -26,9 +26,17 @@ async def create_document_type(
 async def get_all_document_types(
     is_mandatory: Optional[bool] = Query(None, description="Filter by mandatory status"),
     search: Optional[str] = Query(None, description="Search by name or description"),
+    page: Optional[int] = Query(None, ge=1, description="Page number for pagination"),
+    limit: Optional[int] = Query(None, ge=1, le=1000, description="Items per page limit"),
     current_user: dict = Depends(get_current_employee)
 ):
-    return await DocumentTypeService.get_all_document_types(is_deleted=False, is_mandatory=is_mandatory, search=search)
+    return await DocumentTypeService.get_all_document_types(
+        is_deleted=False, 
+        is_mandatory=is_mandatory, 
+        search=search,
+        page=page,
+        limit=limit
+    )
 
 @router.get("/{item_id}", response_model=DocumentTypeResponse)
 async def get_document_type_by_id(
