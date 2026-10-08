@@ -76,6 +76,11 @@ class CreativeStats(BaseModel):
     festival_posts_included: bool = False
     graphics_banners_required: bool = False
 
+class DigitalMarketingStats(BaseModel):
+    reach_target: Optional[str] = None
+    leads_target: Optional[int] = None
+    cpl: Optional[float] = None
+
 class ProjectGeneralDetails(BaseModel):
     project_name: str = Field(..., description="Name of the project")
     description: Optional[str] = None
@@ -87,6 +92,7 @@ class ProjectGeneralDetails(BaseModel):
     end_date: date = Field(..., description="Project end date")
     team_deadline: Optional[date] = None
     creative_stats: Optional[CreativeStats] = None
+    digital_marketing_stats: Optional[DigitalMarketingStats] = None
 
     @field_validator('category', mode='before')
     def parse_category(cls, v):
@@ -314,6 +320,7 @@ class ProjectTaskSummaryResponse(BaseModel):
 class ProjectBase(BaseModel):
     client_id: str = Field(..., description="Client ID this project belongs to")
     general: ProjectGeneralDetails
+    finance: Optional[ProjectFinanceDetails] = None
     creative_team: Optional[CreativeTeam] = None
     whatsapp_group_link: Optional[str] = None
     social_media_credentials: Optional[list[SocialMediaCredential]] = None
@@ -331,7 +338,6 @@ class ProjectBase(BaseModel):
     content_approvals: Optional[list[ContentCalendarApproval]] = []
     daily_marketing_stats: Optional[list[DailyMarketingStat]] = []
     date_ranges: Optional[list[DateRangeEntry]] = []
-    daily_marketing_stats: Optional[list[DailyMarketingStat]] = []
     marketing_campaigns: Optional[list[str]] = []
     daily_revenues: Optional[list[DailyRevenue]] = []
     renewal_history: Optional[list[ProjectRenewal]] = []
@@ -350,6 +356,7 @@ class ProjectGeneralUpdate(BaseModel):
     end_date: Optional[date] = None
     team_deadline: Optional[date] = None
     creative_stats: Optional[CreativeStats] = None
+    digital_marketing_stats: Optional[DigitalMarketingStats] = None
 
     @field_validator('category', mode='before')
     def parse_category(cls, v):
@@ -410,6 +417,7 @@ class ProjectFinanceUpdate(BaseModel):
 class ProjectUpdate(BaseModel):
     client_id: Optional[str] = None
     general: Optional[ProjectGeneralUpdate] = None
+    finance: Optional[ProjectFinanceUpdate] = None
     creative_team: Optional[CreativeTeam] = None
     whatsapp_group_link: Optional[str] = None
     social_media_credentials: Optional[list[SocialMediaCredential]] = None

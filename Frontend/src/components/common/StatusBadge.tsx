@@ -61,6 +61,12 @@ export function StatusBadge({ status, className, showIcon = true }: StatusBadgeP
       Icon = AlertCircle;
       break;
 
+    case "company leave":
+    case "holiday":
+      style = "bg-purple-50 text-purple-700 border-purple-200/60";
+      Icon = CheckCircle2;
+      break;
+
     default:
       style = "bg-muted text-foreground/80 border-border/60";
       break;

@@ -221,7 +221,7 @@ export function Remarks() {
     }
     for (const q of questions) {
       if (q.required && !(customAnswers[q.id] ?? "").trim() && !(customAnswers[q.label] ?? "").trim()) {
-        toast.error(`"${q.label}" compulsory che.`);
+        toast.error(`"${q.label}" is compulsory.`);
         return;
       }
     }

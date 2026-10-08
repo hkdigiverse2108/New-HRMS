@@ -129,12 +129,12 @@ head: () => ({
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <script src="/env-config.js" />
         <HeadContent />
       </head>
-      <body>
+      <body suppressHydrationWarning>
         {children}
         <ToastContainer
           position="top-right"

@@ -79,9 +79,11 @@ export function Penalties() {
 
   const canReadPenalties = isUserAdmin(user) || userDept === "hr" || hasModulePermission(user, "/penalty", "read") || hasModulePermission(user, "/approvals/penalties", "read") || hasModulePermission(user, "/employees/penalties", "read");
   const canCreatePenalty = isUserAdmin(user) || userDept === "hr" || hasModulePermission(user, "/penalty", "create") || hasModulePermission(user, "/approvals/penalties", "create") || hasModulePermission(user, "/employees/penalties", "create");
-  const canUpdatePenalty = isUserAdmin(user) || userDept === "hr" || hasModulePermission(user, "/penalty", "update") || hasModulePermission(user, "/approvals/penalties", "update") || hasModulePermission(user, "/employees/penalties", "update");
-  const canDeletePenalty = isUserAdmin(user) || userDept === "hr" || hasModulePermission(user, "/penalty", "delete") || hasModulePermission(user, "/approvals/penalties", "delete") || hasModulePermission(user, "/employees/penalties", "delete");
-  const isAdminOrHr = canReadPenalties;
+
+
+  const isAdminOrHr = isUserAdmin(user) || ["admin", "superadmin", "super admin", "subadmin", "hr"].includes(userRole) || userDept === "hr";
+  const canUpdatePenalty = isAdminOrHr;
+  const canDeletePenalty = isAdminOrHr;
 
   // Main Data States
   const [records, setRecords] = useState<PenaltyRecord[]>([]);

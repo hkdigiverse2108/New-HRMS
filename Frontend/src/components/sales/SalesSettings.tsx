@@ -1079,7 +1079,7 @@ export function SalesSettings() {
               </button>
             </div>
             <div className="space-y-2.5">
-              {followUpTypes.length === 0 && <p className="text-xs text-muted-foreground">Koi follow-up buttons nathi. Upar thi add karo.</p>}
+              {followUpTypes.length === 0 && <p className="text-xs text-muted-foreground">No follow-up buttons yet. Add one above.</p>}
               {followUpTypes.map((f: any, i: number) => (
                 <div key={i} className="flex items-center justify-between rounded-xl border border-border bg-white p-4">
                   <div>

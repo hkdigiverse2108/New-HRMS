@@ -19,7 +19,8 @@ from app.database.default_presets import (
     DEFAULT_EMPLOYEE_PERMISSIONS, 
     DEFAULT_HR_PERMISSIONS, 
     get_admin_full_permissions,
-    get_default_permissions_for_department
+    get_default_permissions_for_department,
+    normalize_and_expand_permissions
 )
 from app.database.db import get_database
 
@@ -139,10 +140,13 @@ async def get_preset_by_department(department_name: str):
             "department": clean_dept,
             "department_id": "all",
             "designation_id": "all",
-            "module_permissions": perms
+            "module_permissions": normalize_and_expand_permissions(perms)
         }
         await set_cache(cache_key, result)
         return result
+
+    if item and "module_permissions" in item:
+        item["module_permissions"] = normalize_and_expand_permissions(item["module_permissions"])
 
     await set_cache(cache_key, item)
     return item
@@ -170,10 +174,13 @@ async def get_preset_by_role(role: str):
             "role": clean_role,
             "department_id": "all",
             "designation_id": "all",
-            "module_permissions": perms
+            "module_permissions": normalize_and_expand_permissions(perms)
         }
         await set_cache(cache_key, result)
         return result
+
+    if item and "module_permissions" in item:
+        item["module_permissions"] = normalize_and_expand_permissions(item["module_permissions"])
 
     await set_cache(cache_key, item)
     return item
@@ -361,7 +368,7 @@ async def get_user_permission(employee_id: str):
         res = {
             "_id": str(item["_id"]),
             "employee_id": employee_id,
-            "module_permissions": item.get("module_permissions", {}),
+            "module_permissions": normalize_and_expand_permissions(item.get("module_permissions", {})),
             "is_custom": True,
             "inherited_from": None
         }
@@ -375,7 +382,7 @@ async def get_user_permission(employee_id: str):
         res = {
             "_id": "",
             "employee_id": employee_id,
-            "module_permissions": preset["module_permissions"],
+            "module_permissions": normalize_and_expand_permissions(preset["module_permissions"]),
             "is_custom": False,
             "inherited_from": inherited_desc
         }
@@ -383,7 +390,7 @@ async def get_user_permission(employee_id: str):
         res = {
             "_id": "",
             "employee_id": employee_id,
-            "module_permissions": get_default_permissions_for_department(department),
+            "module_permissions": normalize_and_expand_permissions(get_default_permissions_for_department(department)),
             "is_custom": False,
             "inherited_from": f"Default Department Permissions ({department})"
         }

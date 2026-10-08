@@ -441,8 +441,8 @@ export function Hirings() {
               <input type="url" className="w-full px-3 py-2 bg-white border border-border rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest block">Resume / CV</label>
-              <input type="file" required className="w-full px-3 py-2 bg-white border border-border rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 file:mr-2 sm:file:mr-4 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/10" />
+              <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest block">Resume / CV (Optional)</label>
+              <input type="file" className="w-full px-3 py-2 bg-white border border-border rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 file:mr-2 sm:file:mr-4 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/10" />
             </div>
             <div className="space-y-1.5">
               <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest block">Why are they a good fit?</label>

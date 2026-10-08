@@ -132,6 +132,13 @@ export function getMediaUrl(url?: string | null): string {
 // Helper to get streamable video URL
 export function getVideoStreamUrl(url: string): string {
   if (!url) return "";
+  const backendBase = (import.meta.env["VITE_BACKEND_URL"] || (import.meta.env as any).VITE_API_URL || "http://localhost:8000").replace(/\/+$/, "").replace(/\/api\/v1\/?$/, "");
+  
+  if (url.includes("lh3.googleusercontent.com")) {
+    const baseUrl = url.split("=")[0];
+    const streamTarget = `${baseUrl}=m18`;
+    return `${backendBase}/gallery/stream-video?url=${encodeURIComponent(streamTarget)}`;
+  }
   return getMediaUrl(url);
 }
 
@@ -444,7 +451,7 @@ export function Gallery() {
 
   const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
     const target = e.currentTarget;
-    if (target.dataset.failed === "true") {
+    if (target.dataset["failed"] === "true") {
       target.style.display = "none";
       return;
     }
@@ -452,7 +459,7 @@ export function Gallery() {
       const parts = target.src.split("id=");
       const fileId = parts[1]?.split("&")[0];
       if (fileId) {
-        target.dataset.failed = "true";
+        target.dataset["failed"] = "true";
         target.src = `https://lh3.googleusercontent.com/d/${fileId}`;
       } else {
         target.style.display = "none";
@@ -461,7 +468,7 @@ export function Gallery() {
       const parts = target.src.split("/d/");
       const fileId = parts[1]?.split("?")[0];
       if (fileId) {
-        target.dataset.failed = "true";
+        target.dataset["failed"] = "true";
         target.src = `https://drive.google.com/uc?export=view&id=${fileId}`;
       } else {
         target.style.display = "none";
@@ -744,15 +751,20 @@ export function Gallery() {
         if (!currentMedia) return null;
         const rawUrl = currentMedia.url;
         const currentUrl = getMediaUrl(rawUrl);
-        const fileId = currentMedia.file_id || getDriveFileId(rawUrl) || getDriveFileId(currentUrl);
-        const isGooglePhotos = currentUrl.includes("lh3.googleusercontent.com");
+        const rawFileId = currentMedia.file_id || getDriveFileId(rawUrl) || getDriveFileId(currentUrl);
+        // Distinguish Google Drive files from Google Photos items (AF1Qip... are Google Photos item IDs)
+        const isGoogleDriveFileId = Boolean(rawFileId && !rawFileId.startsWith("AF1Qip"));
+        const fileId = isGoogleDriveFileId ? rawFileId : null;
+        const isGooglePhotos = currentUrl.includes("lh3.googleusercontent.com") || Boolean(rawFileId?.startsWith("AF1Qip"));
 
         // Determine if this media should play as video
-        const isExplicitVideo = currentMedia.media_type === "video";
-        const isNativeVideoFile = isExplicitVideo && isVideoUrl(currentUrl) && !isGooglePhotos;
-        // Use Drive iframe ONLY for videos with file_id, not images
-        const driveEmbedUrl = (isExplicitVideo && fileId) ? `https://drive.google.com/file/d/${fileId}/preview?autoplay=1` : null;
-        const directDriveLink = fileId ? `https://drive.google.com/file/d/${fileId}/view` : selectedAlbum?.link || currentUrl;
+        const isExplicitVideo = currentMedia.media_type === "video" || isVideoUrl(currentUrl);
+        const isDriveVideo = isExplicitVideo && Boolean(fileId);
+        // Use Drive iframe ONLY for real Google Drive video files
+        const driveEmbedUrl = isDriveVideo ? `https://drive.google.com/file/d/${fileId}/preview?autoplay=1` : null;
+        const isNativeVideoFile = isExplicitVideo && !driveEmbedUrl;
+        const directMediaLink = fileId ? `https://drive.google.com/file/d/${fileId}/view` : (selectedAlbum?.link || currentUrl);
+        const directLinkLabel = fileId ? "Open in Drive" : (isGooglePhotos ? "Open in Google Photos" : "Open Original Album");
 
         return (
           <div 
@@ -766,15 +778,15 @@ export function Gallery() {
           >
             {/* Top Bar Navigation & Actions */}
             <div className="absolute top-6 right-6 flex items-center gap-3 z-20">
-              {directDriveLink && (
+              {directMediaLink && (
                 <a
-                  href={directDriveLink}
+                  href={directMediaLink}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white transition-colors text-xs font-bold flex items-center gap-1.5 border border-white/20 shadow-md"
                   title="Open Original Album / File"
                 >
-                  <ExternalLink className="w-3.5 h-3.5" /> {fileId ? "Open in Drive" : "Open Original Album"}
+                  <ExternalLink className="w-3.5 h-3.5" /> {directLinkLabel}
                 </a>
               )}
               <button 
@@ -816,15 +828,16 @@ export function Gallery() {
                   />
                 </div>
               ) : isNativeVideoFile ? (
-                /* Native MP4 Video Player (Only for actual MP4 / WEBM / MOV files) */
+                /* Native MP4 Video Player with Backend Range Streaming */
                 <div className="w-full max-w-4xl h-[78vh] flex flex-col items-center justify-center relative">
                   <video 
                     key={`native-video-${currentImageIndex}`}
                     src={getVideoStreamUrl(currentUrl)} 
                     controls 
                     autoPlay 
-                    {...({ referrerPolicy: "no-referrer" } as any)}
-                    className="max-w-full max-h-[78vh] object-contain rounded-xl shadow-2xl animate-in fade-in duration-300"
+                    playsInline
+                    preload="auto"
+                    className="max-w-full max-h-[78vh] object-contain rounded-xl shadow-2xl animate-in fade-in duration-300 bg-black"
                   />
                 </div>
               ) : (

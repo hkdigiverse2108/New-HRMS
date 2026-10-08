@@ -106,6 +106,7 @@ interface TaskItem {
   taskCategory: string;
   contentItemId: string;
   isAuto: boolean;
+  isTransferred: boolean;
   department?: string;
   createdAt?: string | undefined;
   rawBackend: BackendTask;
@@ -123,7 +124,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   // Role checks requested by user:
   // 1. Team Leader:
   const isTeamLeader = userDesignation.includes("team leader") || userRole.includes("team leader");
-  // 2. Head: "only ne only head biju kai pn na hoi to tene aa badhu jem che am j show thase"
+  // 2. Head: shows the full task view as-is.
   const isHead = !isTeamLeader && (userDesignation.includes("head") || userRole.includes("head") || isAdminOrHR);
   // 3. Neither Head nor Team Leader (Other employees):
   const isOther = !isTeamLeader && !isHead;
@@ -356,7 +357,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
             // K15
             taskCategory: t.task_category || "General",
             contentItemId: String(t.content_item_id || ""),
-            isAuto: Boolean(t.content_item_id),
+            isAuto: Boolean(t.content_item_id) || t.task_category === "Content Calendar" || t.task_category === "SMM" || Boolean((t as any).is_auto),
+            isTransferred: Boolean(t.transfer_history && t.transfer_history.length > 0) || Boolean(t.transfer_request?.status === "transferred" || t.transfer_request?.status === "accepted"),
             department: t.department || "",
             createdAt: t.created_at || (t as any).createdAt || "",
             rawBackend: t,
@@ -847,9 +849,14 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     }
   };
 
-  // Delete Task
+  // Delete Task (Task 8: block delete for auto/transferred tasks unless Admin/HR)
   const handleDeleteTask = async (taskId: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
+    const taskToDelete = tasks.find(t => t.id === taskId);
+    if ((taskToDelete?.isAuto || taskToDelete?.isTransferred) && !isAdminOrHR) {
+      toast.error("Auto-assigned or transferred tasks cannot be deleted.");
+      return;
+    }
     if (!confirm("Are you sure you want to delete this task?")) return;
     try {
       await api.delete(`/tasks/${taskId}`);
@@ -861,27 +868,37 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     }
   };
 
-  // Open Edit Modal
+  // Open CC Handler (Task 9)
+  const handleOpenCC = (task: TaskItem, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    const projId =
+      task.rawBackend?.project_id ||
+      (typeof task.projectDetails === "object"
+        ? task.projectDetails?.id || task.projectDetails?._id
+        : task.projectDetails);
+    if (projId) {
+      localStorage.setItem("hrms_selected_project_id", String(projId));
+    }
+    if (task.contentItemId) {
+      localStorage.setItem("hrms_cc_highlight_id", String(task.contentItemId));
+    }
+    if (setActive) {
+      setActive("/work/projects");
+    } else {
+      window.dispatchEvent(new CustomEvent("navigate_tab", { detail: "/work/projects" }));
+    }
+  };
+
+  // Open Edit Modal (Task 8: block editing for auto/transferred tasks unless Admin/HR)
   const openEditModal = (task: TaskItem, e?: React.MouseEvent) => {
     e?.stopPropagation();
     if (task.isAuto) {
-      toast.info("This task is linked to Content Calendar. Redirecting to CC...");
-      const projId =
-        task.rawBackend?.project_id ||
-        (typeof task.projectDetails === "object"
-          ? task.projectDetails?.id || task.projectDetails?._id
-          : task.projectDetails);
-      if (projId) {
-        localStorage.setItem("hrms_selected_project_id", String(projId));
-        if (task.contentItemId) {
-          localStorage.setItem("hrms_cc_highlight_id", task.contentItemId);
-        }
-      }
-      if (setActive) {
-        setActive("/work/projects");
-      } else {
-        window.location.hash = "/work/projects";
-      }
+      toast.info("This task is linked to Content Calendar. Opening CC...");
+      handleOpenCC(task, e);
+      return;
+    }
+    if (task.isTransferred && !isAdminOrHR) {
+      toast.error("Transferred tasks cannot be edited directly.");
       return;
     }
     setEditingTaskId(task.id);
@@ -1424,9 +1441,21 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                         >
                           {/* Top Badges */}
                           <div className="flex justify-between items-start gap-2">
-                            <span className={cn("text-[9px] font-black px-2 py-0.5 rounded-md uppercase border", getPriorityColor(task.priority))}>
-                              {task.priority}
-                            </span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={cn("text-[9px] font-black px-2 py-0.5 rounded-md uppercase border", getPriorityColor(task.priority))}>
+                                {task.priority}
+                              </span>
+                              {task.isAuto && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleOpenCC(task, e)}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black bg-primary/10 text-primary hover:bg-primary hover:text-white transition-colors"
+                                  title="Open in Content Calendar"
+                                >
+                                  <ExternalLink className="w-2.5 h-2.5" /> Open CC
+                                </button>
+                              )}
+                            </div>
                             <div className="flex items-center gap-1.5">
                               {task.recurrence && task.recurrence !== "none" && (
                                 <span className="text-[9px] font-bold bg-muted px-1.5 py-0.5 rounded-md text-muted-foreground flex items-center gap-0.5">
@@ -1447,18 +1476,21 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                                   >
                                     <History className="w-3.5 h-3.5" /> View History
                                   </button>
-                                  <button
-                                    onClick={() => openEditModal(task)}
-                                    className="w-full text-left px-2.5 py-1.5 text-xs font-bold hover:bg-muted rounded-lg flex items-center gap-1.5"
-                                  >
-                                    {task.isAuto ? (
-                                      <>
-                                        <ExternalLink className="w-3.5 h-3.5 text-primary" /> View in CC
-                                      </>
-                                    ) : (
-                                      "Edit Task"
-                                    )}
-                                  </button>
+                                  {task.isAuto ? (
+                                    <button
+                                      onClick={() => handleOpenCC(task)}
+                                      className="w-full text-left px-2.5 py-1.5 text-xs font-bold hover:bg-muted rounded-lg flex items-center gap-1.5 text-primary"
+                                    >
+                                      <ExternalLink className="w-3.5 h-3.5 text-primary" /> Open CC
+                                    </button>
+                                  ) : (!task.isTransferred || isAdminOrHR) ? (
+                                    <button
+                                      onClick={() => openEditModal(task)}
+                                      className="w-full text-left px-2.5 py-1.5 text-xs font-bold hover:bg-muted rounded-lg flex items-center gap-1.5"
+                                    >
+                                      Edit Task
+                                    </button>
+                                  ) : null}
                                   <button
                                     onClick={() => {
                                       setTransferringTask(task);
@@ -1469,7 +1501,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                                   >
                                     <ArrowRightLeft className="w-3.5 h-3.5" /> Transfer Task
                                   </button>
-                                  {(isAdminOrHR || task.assignedById === currentUserId) && !task.isAuto && (
+                                  {(isAdminOrHR || task.assignedById === currentUserId) && !task.isAuto && !task.isTransferred && (
                                     <button
                                       onClick={(e) => handleDeleteTask(task.id, e)}
                                       className="w-full text-left px-2.5 py-1.5 text-xs font-bold hover:bg-destructive/10 text-destructive rounded-lg flex items-center gap-1.5"
@@ -1477,9 +1509,9 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                                       <Trash2 className="w-3.5 h-3.5" /> Delete Task
                                     </button>
                                   )}
-                                  {(isAdminOrHR || task.assignedById === currentUserId) && task.isAuto && (
+                                  {(task.isAuto || task.isTransferred) && !isAdminOrHR && (
                                     <p className="px-2.5 py-1.5 text-[10px] font-semibold text-muted-foreground/60 italic">
-                                      Auto task delete na thay
+                                      {task.isAuto ? "Auto task cannot be modified" : "Transferred task cannot be modified"}
                                     </p>
                                   )}
                                 </PopoverContent>
@@ -1821,15 +1853,26 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                             <History className="w-4 h-4" />
                           </button>
 
-                          <button
-                            onClick={(e) => openEditModal(task, e)}
-                            className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
-                            title={task.isAuto ? "View in Content Calendar" : "Edit task"}
-                          >
-                            {task.isAuto ? <ExternalLink className="w-4 h-4 text-primary" /> : <MoreHorizontal className="w-4 h-4" />}
-                          </button>
+                          {task.isAuto ? (
+                            <button
+                              onClick={(e) => handleOpenCC(task, e)}
+                              className="p-1.5 text-primary hover:bg-primary/10 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold"
+                              title="Open in Content Calendar"
+                            >
+                              <ExternalLink className="w-4 h-4 text-primary" />
+                              <span className="hidden sm:inline text-[11px]">Open CC</span>
+                            </button>
+                          ) : (!task.isTransferred || isAdminOrHR) ? (
+                            <button
+                              onClick={(e) => openEditModal(task, e)}
+                              className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+                              title="Edit task"
+                            >
+                              <MoreHorizontal className="w-4 h-4" />
+                            </button>
+                          ) : null}
 
-                          {(isAdminOrHR || task.assignedById === currentUserId) && !task.isAuto && (
+                          {(isAdminOrHR || task.assignedById === currentUserId) && !task.isAuto && !task.isTransferred && (
                             <button
                               onClick={(e) => handleDeleteTask(task.id, e)}
                               className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
@@ -1838,10 +1881,10 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                               <Trash2 className="w-4 h-4" />
                             </button>
                           )}
-                          {(isAdminOrHR || task.assignedById === currentUserId) && task.isAuto && (
+                          {(task.isAuto || task.isTransferred) && (
                             <span
-                              className="p-1.5 text-muted-foreground/40 cursor-not-allowed"
-                              title="Auto task delete na thay"
+                              className="p-1.5 text-muted-foreground/30 cursor-not-allowed"
+                              title={task.isAuto ? "Auto task cannot be deleted" : "Transferred task cannot be deleted"}
                             >
                               <Trash2 className="w-4 h-4" />
                             </span>
@@ -2233,20 +2276,20 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                     onClick={() => {
                       const t = inspectingTask;
                       setInspectingTask(null);
-                      openEditModal(t);
+                      handleOpenCC(t);
                     }}
                     className="px-4 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors"
                   >
-                    <ExternalLink className="w-3.5 h-3.5" /> View in CC
+                    <ExternalLink className="w-3.5 h-3.5" /> Open CC
                   </button>
-                ) : (
+                ) : (!inspectingTask.isTransferred || isAdminOrHR) ? (
                   <button
                     onClick={() => openEditModal(inspectingTask)}
                     className="px-4 py-1.5 bg-card border border-border hover:bg-muted font-bold text-xs rounded-xl"
                   >
                     Edit Task
                   </button>
-                )}
+                ) : null}
                 <button
                   onClick={() => setInspectingTask(null)}
                   className="px-4 py-1.5 bg-primary text-primary-foreground font-bold text-xs rounded-xl"

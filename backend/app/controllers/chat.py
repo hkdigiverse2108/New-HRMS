@@ -282,6 +282,46 @@ async def add_channel_member(channel_id: str, member_id: str = Query(...), curre
     await manager.send_personal_message(json.dumps(event_data, default=str), member_id)
     return {"message": f"Member {member_id} added to group", "channel": updated_channel}
 
+class BatchAddMembersRequest(BaseModel):
+    member_ids: List[str]
+
+@router.post("/channels/{channel_id}/members/batch")
+async def add_channel_members_batch(
+    channel_id: str, 
+    payload: BatchAddMembersRequest, 
+    current_user: dict = Depends(get_current_employee)
+):
+    user_id = str(current_user.get("_id") or current_user.get("id"))
+    channel = await ChatRepository.get_channel_by_id(channel_id)
+    if not channel or user_id not in channel.get("members", []):
+        raise HTTPException(status_code=403, detail="Not authorized or channel not found")
+    if channel.get("type") == "self" or "yourself" in str(channel.get("name", "")).lower() or channel.get("name") == "You":
+        raise HTTPException(status_code=400, detail="Cannot add members to personal or self chat")
+    
+    for member_id in payload.member_ids:
+        await ChatRepository.add_member_to_channel(channel_id, member_id)
+        
+    updated_channel = await ChatRepository.get_channel_by_id(channel_id)
+    try:
+        await clear_pattern("chat:channels:*")
+    except Exception:
+        pass
+        
+    for member_id in payload.member_ids:
+        event_data = {
+            "action": "group_member_updated",
+            "channel_id": channel_id,
+            "channel": updated_channel,
+            "event_type": "member_added",
+            "member_id": member_id,
+            "updated_by": user_id
+        }
+        await manager.broadcast_to_channel(channel_id, event_data)
+        await manager.send_personal_message(json.dumps(event_data, default=str), member_id)
+        
+    return {"message": f"{len(payload.member_ids)} members added to group", "channel": updated_channel}
+
+
 @router.delete("/channels/{channel_id}/members/{member_id}")
 async def remove_channel_member(channel_id: str, member_id: str, current_user: dict = Depends(get_current_employee)):
     user_id = str(current_user.get("_id") or current_user.get("id"))
@@ -376,14 +416,15 @@ class SendMessageRequest(BaseModel):
 def extract_employee_name(emp: dict) -> str:
     if not emp:
         return "User"
-    if emp.get("name"):
-        return emp["name"]
     p_info = emp.get("personal_info", {}) if isinstance(emp.get("personal_info"), dict) else {}
     fn = p_info.get("first_name", "").strip()
+    mn = p_info.get("middle_name", "").strip()
     ln = p_info.get("last_name", "").strip()
-    full = f"{fn} {ln}".strip()
-    if full:
-        return full
+    name_parts = [p for p in [fn, mn, ln] if p]
+    if name_parts:
+        return " ".join(name_parts)
+    if emp.get("name"):
+        return emp["name"]
     if emp.get("email"):
         return emp["email"].split("@")[0].capitalize()
     return "User"
@@ -741,6 +782,41 @@ async def delete_chat_message(message_id: str, current_user: dict = Depends(get_
         await manager.broadcast_to_channel(channel_id, ws_event)
         
     return {"message": "Message deleted successfully", "message_id": message_id}
+
+class EditMessageRequest(BaseModel):
+    content: str
+
+@router.put("/messages/{message_id}")
+async def edit_chat_message(
+    message_id: str, 
+    body: EditMessageRequest, 
+    current_user: dict = Depends(get_current_employee)
+):
+    user_id = str(current_user.get("_id") or current_user.get("id"))
+    new_content = body.content.strip()
+    if not new_content:
+        raise HTTPException(status_code=400, detail="Message content cannot be empty")
+    
+    updated_msg = await ChatRepository.edit_message(message_id, user_id, new_content)
+    if not updated_msg:
+        raise HTTPException(
+            status_code=403, 
+            detail="Cannot edit message: you can only edit your own messages"
+        )
+        
+    channel_id = updated_msg.get("channel_id")
+    if channel_id:
+        ws_event = {
+            "type": "message_edited",
+            "action": "message_edited",
+            "message_id": message_id,
+            "channel_id": channel_id,
+            "content": new_content,
+            "is_edited": True
+        }
+        await manager.broadcast_to_channel(channel_id, ws_event)
+        
+    return {"message": "Message edited successfully", "updated_message": updated_msg}
 
 # --- WebSocket ---
 
@@ -1135,8 +1211,7 @@ class MeetingSummonRequest(BaseModel):
 
 @router.post("/meeting-summon")
 async def trigger_meeting_summon(data: MeetingSummonRequest, current_user: dict = Depends(get_current_employee)):
-    caller_name = current_user.get("personal_info", {}).get("first_name", "") + " " + current_user.get("personal_info", {}).get("last_name", "")
-    caller_name = caller_name.strip() or current_user.get("name") or "Team Leader"
+    caller_name = extract_employee_name(current_user) or "Team Leader"
     caller_role = current_user.get("work_details", {}).get("designation") or current_user.get("work_details", {}).get("system_role") or "Admin"
     
     summon_id = str(uuid.uuid4())

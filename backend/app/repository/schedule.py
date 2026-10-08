@@ -48,6 +48,13 @@ def format_minutes_to_12h(total_minutes: int) -> str:
         display_hours = 12
     return f"{display_hours:02d}:{mins:02d} {period}"
 
+def normalize_holiday_title(title: Optional[str]) -> str:
+    if not title:
+        return ""
+    import re
+    cleaned = re.sub(r"[^\w\s]", "", str(title)).strip().lower()
+    return " ".join(cleaned.split())
+
 class ScheduleRepository:
     events_collection = "schedule_events"
 
@@ -156,6 +163,27 @@ class ScheduleRepository:
         result = await db[cls.events_collection].insert_one(doc)
         doc["_id"] = result.inserted_id
         serialized = serialize_mongo(doc)
+
+        # If this date/holiday was previously excluded, un-exclude it since it's explicitly created
+        d_val = doc.get("date")
+        norm_t = normalize_holiday_title(doc.get("title"))
+        if d_val and norm_t:
+            try:
+                await db["excluded_schedule_events"].delete_many({
+                    "$or": [
+                        {"date": d_val, "normalized_title": norm_t},
+                        {"date": d_val, "title": doc.get("title")}
+                    ]
+                })
+            except Exception:
+                pass
+
+        # Clear Redis cache for schedule
+        try:
+            from app.redis.service import clear_pattern
+            await clear_pattern("schedule:*")
+        except Exception:
+            pass
 
         # Sync meeting event to participating employees' connected Google Calendars
         try:
@@ -310,6 +338,31 @@ class ScheduleRepository:
         return out
 
     @classmethod
+    async def _resolve_employee_ids(cls, db, emp_id: str) -> List[str]:
+        ids = [emp_id]
+        if not emp_id:
+            return ids
+        try:
+            from bson import ObjectId
+            emp = None
+            if ObjectId.is_valid(emp_id):
+                emp = await db["employees"].find_one({"_id": ObjectId(emp_id)})
+            if not emp:
+                emp = await db["employees"].find_one({
+                    "$or": [
+                        {"work_details.employee_id": emp_id},
+                        {"employee_id": emp_id}
+                    ]
+                })
+            if emp:
+                for candidate in [str(emp.get("_id")), emp.get("work_details", {}).get("employee_id"), emp.get("employee_id")]:
+                    if candidate and candidate not in ids:
+                        ids.append(candidate)
+        except Exception:
+            pass
+        return ids
+
+    @classmethod
     async def get_calendar_feed(
         cls,
         user_id: str,
@@ -320,7 +373,70 @@ class ScheduleRepository:
         target_user_ids: Optional[List[str]] = None,
         is_admin_or_hr: bool = False
     ) -> Dict[str, Any]:
+        # Check Redis Cache first for instant response
+        try:
+            from app.redis.service import get_cache
+            cats_k = ",".join(sorted(categories)) if categories else "all"
+            targs_k = ",".join(sorted(target_user_ids)) if target_user_ids else "self"
+            feed_cache_key = f"schedule:feed:{user_id}:{reference_date.isoformat()}:{view_mode}:{cats_k}:{targs_k}:{search_query or ''}"
+            cached_feed = await get_cache(feed_cache_key)
+            if cached_feed:
+                return cached_feed
+        except Exception:
+            feed_cache_key = None
+
         db = await cls.get_db()
+
+        # Permanently excluded/deleted event IDs & (date, title) pairs (e.g. deleted Google holidays, leaves)
+        excluded_ids = set()
+        excluded_date_titles = set()
+        try:
+            excluded_cursor = db["excluded_schedule_events"].find(
+                {},
+                {"event_id": 1, "date": 1, "normalized_title": 1, "title": 1}
+            )
+            excluded_docs = await excluded_cursor.to_list(length=5000)
+            for d in excluded_docs:
+                if d.get("event_id"):
+                    excluded_ids.add(str(d["event_id"]))
+                d_date = d.get("date")
+                d_title = d.get("normalized_title") or normalize_holiday_title(d.get("title"))
+                if d_date and d_title:
+                    excluded_date_titles.add((str(d_date), d_title))
+        except Exception:
+            pass
+
+        def is_event_excluded(ev: Dict[str, Any]) -> bool:
+            ev_id = str(ev.get("id") or "")
+            ev_oid = str(ev.get("_id") or "")
+            if (ev_id and ev_id in excluded_ids) or (ev_oid and ev_oid in excluded_ids):
+                return True
+            ev_date = str(ev.get("date") or "")
+            ev_norm = normalize_holiday_title(ev.get("title"))
+            if ev_date and ev_norm and (ev_date, ev_norm) in excluded_date_titles:
+                return True
+            return False
+
+        # Calculate start_date & end_date based on view_mode first (applies to both team & single user)
+        if view_mode in ("today", "day"):
+            start_date = reference_date
+            end_date = reference_date
+            date_range_label = reference_date.strftime("%B %d, %Y")
+        elif view_mode == "week":
+            # Week starts on Sunday
+            idx = (reference_date.weekday() + 1) % 7
+            start_date = reference_date - timedelta(days=idx)
+            end_date = start_date + timedelta(days=6)
+            if start_date.month == end_date.month:
+                date_range_label = f"{start_date.strftime('%b %d')} – {end_date.strftime('%d, %Y')}"
+            else:
+                date_range_label = f"{start_date.strftime('%b %d')} – {end_date.strftime('%b %d, %Y')}"
+        else:
+            # Month view
+            start_date = reference_date.replace(day=1)
+            _, last_day = calendar.monthrange(reference_date.year, reference_date.month)
+            end_date = reference_date.replace(day=last_day)
+            date_range_label = reference_date.strftime("%B %Y")
 
         # Multi-user team view (admin/HR only, enforced by controller):
         # union of each selected user's events (each user's own connected Google included)
@@ -335,23 +451,58 @@ class ScheduleRepository:
                         view_mode=view_mode,
                         is_admin_or_hr=True
                     )
-                    start_date = date.fromisoformat(sub["start_date"])
-                    end_date = date.fromisoformat(sub["end_date"])
-                    date_range_label = sub["date_range_label"]
                     for ev in sub.get("events", []):
                         key = str(ev.get("_id") or ev.get("id"))
                         merged[key] = ev
                 except Exception:
                     continue
-            if not merged:
-                start_date, end_date, date_range_label = reference_date, reference_date, reference_date.strftime("%B %d, %Y")
+
+            # Ensure current logged-in user's Google Calendar events are included if category selected
+            if not categories or "google_calendar" in categories:
+                try:
+                    from app.services.google_calendar import GoogleCalendarService
+                    my_g_events = await GoogleCalendarService.fetch_google_calendar_events(
+                        employee_id=user_id,
+                        start_date=start_date,
+                        end_date=end_date
+                    )
+                    for ev in my_g_events:
+                        merged[str(ev.get("id"))] = ev
+                except Exception:
+                    pass
+
             try:
                 comp_days = await cls._company_day_events(db, start_date, end_date, reference_date, categories)
                 for ev in comp_days:
                     merged[str(ev.get("id"))] = ev
             except Exception:
                 pass
-            # Requester's own holiday calendars once (shared festival days)
+
+            # System Public Holidays & Company Leaves (company-wide, visible to everyone)
+            want_holidays = not categories or "google_holidays" in categories
+            want_company_leaves = not categories or "company_leave" in categories
+            h_cats = []
+            if want_holidays:
+                h_cats.extend(["google_holidays", "holiday", "Holiday", "Public Holiday"])
+            if want_company_leaves:
+                h_cats.extend(["company_leave", "Company Leave"])
+            if h_cats:
+                try:
+                    h_query = {
+                        "date": {"$gte": start_date.isoformat(), "$lte": end_date.isoformat()},
+                        "$or": [
+                            {"category": {"$in": h_cats}},
+                            {"type": {"$in": ["Holiday", "Public Holiday", "Company Leave"]}}
+                        ]
+                    }
+                    h_cursor = db[cls.events_collection].find(h_query)
+                    h_events_raw = await h_cursor.to_list(length=500)
+                    for ev in serialize_mongo(h_events_raw):
+                        merged[str(ev.get("_id") or ev.get("id"))] = ev
+                except Exception:
+                    pass
+
+            # Google Holiday Calendar (Holidays in India, etc.)
             if not categories or "google_holidays" in categories:
                 try:
                     from app.services.google_calendar import GoogleCalendarService
@@ -362,7 +513,8 @@ class ScheduleRepository:
                         merged[str(ev.get("id"))] = ev
                 except Exception:
                     pass
-            all_events = list(merged.values())
+
+            all_events = [ev for ev in merged.values() if not is_event_excluded(ev)]
             if search_query:
                 sq = search_query.lower()
                 all_events = [ev for ev in all_events
@@ -371,7 +523,7 @@ class ScheduleRepository:
                               or sq in (ev.get("primary_employee_name") or "").lower()]
             all_events.sort(key=lambda ev: f"{ev.get('date') or ''}T{ev.get('start_time') or '00:00'}")
             today_str = date.today().isoformat()
-            return {
+            feed_res = {
                 "view_mode": view_mode,
                 "start_date": start_date.isoformat(),
                 "end_date": end_date.isoformat(),
@@ -379,37 +531,23 @@ class ScheduleRepository:
                 "todays_meetings_count": sum(1 for ev in all_events if (ev.get("date") or "") == today_str),
                 "events": all_events
             }
+            if feed_cache_key:
+                try:
+                    from app.redis.service import set_cache
+                    await set_cache(feed_cache_key, feed_res, ttl=300)
+                except Exception:
+                    pass
+            return feed_res
 
-        # Calculate start_date & end_date based on view_mode
-        if view_mode in ("today", "day"):
-            start_date = reference_date
-            end_date = reference_date
-            date_range_label = reference_date.strftime("%B %d, %Y")
-        elif view_mode == "week":
-            # Week starts on Sunday
-            idx = (reference_date.weekday() + 1) % 7
-            start_date = reference_date - timedelta(days=idx)
-            end_date = start_date + timedelta(days=6)
-            
-            if start_date.month == end_date.month:
-                date_range_label = f"{start_date.strftime('%b %d')} – {end_date.strftime('%d, %Y')}"
-            else:
-                date_range_label = f"{start_date.strftime('%b %d')} – {end_date.strftime('%b %d, %Y')}"
-        else:
-            # Month view
-            start_date = reference_date.replace(day=1)
-            _, last_day = calendar.monthrange(reference_date.year, reference_date.month)
-            end_date = reference_date.replace(day=last_day)
-            date_range_label = reference_date.strftime("%B %Y")
-
-        # Today's meetings count for current user
+        # Single user calendar feed
+        user_ids = await cls._resolve_employee_ids(db, user_id)
         today_str = date.today().isoformat()
         todays_count = await db[cls.events_collection].count_documents({
             "date": today_str,
             "$or": [
-                {"created_by": user_id},
-                {"primary_employee_id": user_id},
-                {"attendees": user_id}
+                {"created_by": {"$in": user_ids}},
+                {"primary_employee_id": {"$in": user_ids}},
+                {"attendees": {"$in": user_ids}}
             ]
         })
 
@@ -423,15 +561,43 @@ class ScheduleRepository:
             query = {
                 "date": {"$gte": start_iso, "$lte": end_iso},
                 "$or": [
-                    {"created_by": user_id},
-                    {"primary_employee_id": user_id},
-                    {"attendees": user_id}
+                    {"created_by": {"$in": user_ids}},
+                    {"primary_employee_id": {"$in": user_ids}},
+                    {"attendees": {"$in": user_ids}}
                 ]
             }
             cursor = db[cls.events_collection].find(query)
             custom_events_raw = await cursor.to_list(length=500)
             custom_events = serialize_mongo(custom_events_raw)
             all_events.extend(custom_events)
+
+        # 1b. System Company Leaves & Public Holidays (company-wide, visible to all employees)
+        want_holidays = not categories or "google_holidays" in categories
+        want_company_leaves = not categories or "company_leave" in categories
+        h_cats = []
+        if want_holidays:
+            h_cats.extend(["google_holidays", "holiday", "Holiday", "Public Holiday"])
+        if want_company_leaves:
+            h_cats.extend(["company_leave", "Company Leave"])
+        if h_cats:
+            try:
+                start_iso = start_date.isoformat()
+                end_iso = end_date.isoformat()
+                h_query = {
+                    "date": {"$gte": start_iso, "$lte": end_iso},
+                    "$or": [
+                        {"category": {"$in": h_cats}},
+                        {"type": {"$in": ["Holiday", "Public Holiday", "Company Leave"]}}
+                    ]
+                }
+                h_cursor = db[cls.events_collection].find(h_query)
+                h_events_raw = await h_cursor.to_list(length=500)
+                for ev in serialize_mongo(h_events_raw):
+                    ev_id = str(ev.get("_id") or ev.get("id"))
+                    if not any(str(x.get("_id") or x.get("id")) == ev_id for x in all_events):
+                        all_events.append(ev)
+            except Exception:
+                pass
 
         # 2. Auto-generated Birthdays & Work Anniversaries (company-wide)
         try:
@@ -465,6 +631,9 @@ class ScheduleRepository:
             except Exception as e:
                 print(f"[GOOGLE HOLIDAY FEED WARNING] {e}")
 
+        # Permanently exclude deleted events/holidays
+        all_events = [ev for ev in all_events if not is_event_excluded(ev)]
+
         # Filter by search_query if provided
         if search_query:
             sq = search_query.lower()
@@ -485,7 +654,7 @@ class ScheduleRepository:
 
         all_events.sort(key=sort_key)
 
-        return {
+        feed_res = {
             "view_mode": view_mode,
             "start_date": start_date.isoformat(),
             "end_date": end_date.isoformat(),
@@ -493,6 +662,13 @@ class ScheduleRepository:
             "todays_meetings_count": todays_count,
             "events": all_events
         }
+        if feed_cache_key:
+            try:
+                from app.redis.service import set_cache
+                await set_cache(feed_cache_key, feed_res, ttl=300)
+            except Exception:
+                pass
+        return feed_res
 
     @classmethod
     async def get_free_time_slots(
@@ -678,6 +854,9 @@ class ScheduleRepository:
             end_date = reference_date.replace(day=last_day)
             date_range_label = reference_date.strftime("%B %Y")
 
+        # Resolve target employee identifiers (both MongoDB ObjectId and employee code)
+        target_ids = await cls._resolve_employee_ids(db, target_employee_id)
+
         # Query events for target_employee_id
         start_iso = start_date.isoformat()
         end_iso = end_date.isoformat()
@@ -685,9 +864,9 @@ class ScheduleRepository:
         query = {
             "date": {"$gte": start_iso, "$lte": end_iso},
             "$or": [
-                {"created_by": target_employee_id},
-                {"primary_employee_id": target_employee_id},
-                {"attendees": target_employee_id}
+                {"created_by": {"$in": target_ids}},
+                {"primary_employee_id": {"$in": target_ids}},
+                {"attendees": {"$in": target_ids}}
             ]
         }
         cursor = db[cls.events_collection].find(query)
@@ -734,6 +913,30 @@ class ScheduleRepository:
                 masked_ev["color"] = "#6c757d" # Muted Gray for private slots
                 final_events.append(masked_ev)
 
+        # Permanently exclude deleted events/holidays
+        try:
+            excluded_cursor = db["excluded_schedule_events"].find(
+                {},
+                {"event_id": 1, "date": 1, "normalized_title": 1, "title": 1}
+            )
+            excluded_docs = await excluded_cursor.to_list(length=5000)
+            view_ex_ids = set()
+            view_ex_dt = set()
+            for d in excluded_docs:
+                if d.get("event_id"):
+                    view_ex_ids.add(str(d["event_id"]))
+                d_date = d.get("date")
+                d_title = d.get("normalized_title") or normalize_holiday_title(d.get("title"))
+                if d_date and d_title:
+                    view_ex_dt.add((str(d_date), d_title))
+            final_events = [
+                ev for ev in final_events
+                if (str(ev.get("id")) not in view_ex_ids and str(ev.get("_id")) not in view_ex_ids) and
+                   not (str(ev.get("date") or "") and normalize_holiday_title(ev.get("title")) and (str(ev.get("date") or ""), normalize_holiday_title(ev.get("title"))) in view_ex_dt)
+            ]
+        except Exception:
+            pass
+
         # Sort by date & time
         def sort_key(ev):
             d_str = ev.get("date") or ""
@@ -766,34 +969,133 @@ class ScheduleRepository:
     async def update_event(cls, event_id: str, data: Dict[str, Any], user_id: str, is_admin_or_hr: bool = False) -> bool:
         db = await cls.get_db()
         try:
-            obj_id = ObjectId(event_id)
-            query = {"_id": obj_id}
-            if not is_admin_or_hr:
-                query["$or"] = [
-                    {"created_by": user_id},
-                    {"primary_employee_id": user_id},
-                    {"attendees": user_id}
-                ]
+            from bson import ObjectId
+            match_or = []
+            if ObjectId.is_valid(event_id):
+                match_or.append({"_id": ObjectId(event_id)})
+            match_or.append({"_id": event_id})
+            match_or.append({"id": event_id})
+
+            if is_admin_or_hr:
+                query = {"$or": match_or}
+            else:
+                user_ids = await cls._resolve_employee_ids(db, user_id)
+                query = {
+                    "$and": [
+                        {"$or": match_or},
+                        {"$or": [
+                            {"created_by": {"$in": user_ids}},
+                            {"primary_employee_id": {"$in": user_ids}},
+                            {"attendees": {"$in": user_ids}}
+                        ]}
+                    ]
+                }
             result = await db[cls.events_collection].update_one(query, {"$set": data})
-            return result.modified_count > 0 or result.matched_count > 0
+            if result.modified_count > 0 or result.matched_count > 0:
+                try:
+                    from app.redis.service import clear_pattern
+                    await clear_pattern("schedule:*")
+                except Exception:
+                    pass
+                return True
+            return False
         except Exception:
             return False
 
     @classmethod
-    async def delete_event(cls, event_id: str, user_id: str, is_admin_or_hr: bool = False) -> bool:
+    async def delete_event(
+        cls,
+        event_id: str,
+        user_id: str,
+        is_admin_or_hr: bool = False,
+        event_date: Optional[str] = None,
+        event_title: Optional[str] = None
+    ) -> bool:
+        if not event_id:
+            return False
+
         db = await cls.get_db()
         try:
-            obj_id = ObjectId(event_id)
-            query = {"_id": obj_id}
-            if not is_admin_or_hr:
-                query["$or"] = [
-                    {"created_by": user_id},
-                    {"primary_employee_id": user_id},
-                    {"attendees": user_id}
+            from bson import ObjectId
+            match_or = []
+            if ObjectId.is_valid(event_id):
+                match_or.append({"_id": ObjectId(event_id)})
+            match_or.append({"_id": str(event_id)})
+            match_or.append({"id": str(event_id)})
+
+            is_external_or_holiday = (
+                str(event_id).startswith("ghol_") or
+                str(event_id).startswith("gcal_") or
+                str(event_id).startswith("bday_") or
+                str(event_id).startswith("anniv_") or
+                str(event_id).startswith("holiday_") or
+                str(event_id).startswith("leave_")
+            )
+
+            # Try to retrieve existing doc if in database to retain date/title
+            existing_doc = await db[cls.events_collection].find_one({"$or": match_or})
+            if existing_doc:
+                if not event_date:
+                    event_date = existing_doc.get("date")
+                if not event_title:
+                    event_title = existing_doc.get("title")
+
+            if is_admin_or_hr:
+                # 1. Permanently record in excluded_schedule_events so Google holidays & leaves NEVER reappear
+                await db["excluded_schedule_events"].update_one(
+                    {"event_id": str(event_id)},
+                    {
+                        "$set": {
+                            "event_id": str(event_id),
+                            "date": event_date,
+                            "title": event_title,
+                            "normalized_title": normalize_holiday_title(event_title),
+                            "deleted_by": user_id,
+                            "deleted_at": datetime.utcnow()
+                        }
+                    },
+                    upsert=True
+                )
+
+                # 2. Delete from schedule_events collection if it exists there
+                await db[cls.events_collection].delete_many({"$or": match_or})
+
+                # 3. Clear Redis cache for instant update
+                try:
+                    from app.redis.service import clear_pattern
+                    await clear_pattern("schedule:*")
+                    await clear_pattern("attendance:*")
+                except Exception:
+                    pass
+
+                return True
+
+            # Regular employee trying to delete
+            if is_external_or_holiday:
+                return False
+
+            user_ids = await cls._resolve_employee_ids(db, user_id)
+            query = {
+                "$and": [
+                    {"$or": match_or},
+                    {"$or": [
+                        {"created_by": {"$in": user_ids}},
+                        {"primary_employee_id": {"$in": user_ids}},
+                        {"attendees": {"$in": user_ids}}
+                    ]}
                 ]
+            }
             result = await db[cls.events_collection].delete_one(query)
-            return result.deleted_count > 0
-        except Exception:
+            if result.deleted_count > 0:
+                try:
+                    from app.redis.service import clear_pattern
+                    await clear_pattern("schedule:*")
+                except Exception:
+                    pass
+                return True
+            return False
+        except Exception as e:
+            print(f"[DELETE EVENT ERROR] {e}")
             return False
 
     @classmethod

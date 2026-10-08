@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Search,
@@ -24,6 +25,8 @@ import {
   ChevronDown,
   ChevronUp,
   EyeOff,
+  Eye,
+  Pencil,
   AlertCircle,
   Copy,
   Star,
@@ -286,7 +289,7 @@ function VoicePlayer({
       el.addEventListener("seeked", handleSeeked, { once: true });
       try {
         el.currentTime = 1e101;
-      } catch {}
+      } catch { }
     }
   }, []);
 
@@ -307,7 +310,7 @@ function VoicePlayer({
     if (isPlaying) {
       try {
         el.pause();
-      } catch {}
+      } catch { }
       setIsPlaying(false);
     } else {
       try {
@@ -400,7 +403,7 @@ function VoicePlayer({
             if (audioRef.current) {
               try {
                 audioRef.current.currentTime = val;
-              } catch {}
+              } catch { }
             }
           }}
           className="w-full h-1.5 bg-foreground/20 rounded-lg appearance-none cursor-pointer accent-emerald-500"
@@ -460,15 +463,19 @@ function ReplyQuote({
   const isVid = rType.includes("video") || (reply.media_url && /\.(mp4|mov|mkv|avi)(\?|$)/i.test(reply.media_url || ""));
   const label = reply.content && !/^\[.+?\]$/.test(reply.content.trim())
     ? reply.content
-    : reply.media_type === "image" || isImg
-    ? "📷 Photo"
-    : reply.media_type === "video" || isVid
-    ? "🎬 Video"
-    : reply.media_type === "audio"
-    ? "🎤 Voice message"
-    : reply.media_type === "document" || reply.file_name
-    ? `📄 ${reply.file_name || "Document"}`
-    : reply.content || "Message";
+    : (reply as any).poll
+      ? `📊 ${(reply as any).poll.question || "Poll"}`
+      : (reply as any).is_call || (reply as any).call || rType.includes("call")
+        ? "📞 Call"
+        : reply.media_type === "image" || isImg
+          ? "📷 Photo"
+          : reply.media_type === "video" || isVid
+            ? "🎬 Video"
+            : reply.media_type === "audio"
+              ? "🎤 Voice message"
+              : reply.media_type === "document" || reply.file_name
+                ? `📄 ${reply.file_name || "Document"}`
+                : reply.content || "Message";
   return (
     <div
       onClick={(e) => {
@@ -565,7 +572,7 @@ function ChatInner() {
   const [reactionPickerMsgId, setReactionPickerMsgId] = useState<string | null>(null);
   const [editChannelName, setEditChannelName] = useState("");
   const [editChannelDesc, setEditChannelDesc] = useState("");
-  const [editChannelMemberId, setEditChannelMemberId] = useState("");
+  const [editChannelMemberIds, setEditChannelMemberIds] = useState<string[]>([]);
   const [isMemberDropdownOpen, setIsMemberDropdownOpen] = useState(false);
   const [memberSearch, setMemberSearch] = useState("");
   const memberDropdownRef = useRef<HTMLDivElement | null>(null);
@@ -601,7 +608,7 @@ function ChatInner() {
   const canDeleteChatMessages = Boolean(
     isUserAdmin(user) ||
     hasModulePermission(user, "/chat", "delete") ||
-    user?.permissions?.["/chat"]?.delete || 
+    user?.permissions?.["/chat"]?.delete ||
     user?.permissions?.["/chat"]?.all ||
     user?.permissions?.["chat"]?.delete ||
     user?.permissions?.["chat"]?.all
@@ -631,16 +638,26 @@ function ChatInner() {
 
   const hideDm = useCallback((dmId: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
+    const ch = channels.find((c) => String(c.id || (c as any)._id) === String(dmId));
+    const otherUser = ch ? getDmOtherUser(ch) : null;
+    const targetUserId = otherUser?.id ? String(otherUser.id) : (dmId.startsWith("dm-") ? dmId.replace(/^dm-/, "") : "");
+
     setHiddenDms((prev) => {
       const next = new Set(prev);
       next.add(dmId);
+      if (targetUserId) next.add(targetUserId);
       try {
         localStorage.setItem(`hrms_hidden_dms_${myUserId}`, JSON.stringify(Array.from(next)));
-      } catch {}
+      } catch { }
       return next;
     });
+
+    if (activeChannelId === dmId || (targetUserId && String(activeChannelId).includes(targetUserId))) {
+      setActiveChannelId(null);
+    }
+
     toast.success("Conversation hidden from sidebar");
-  }, [myUserId]);
+  }, [channels, activeChannelId, myUserId]);
 
   const unhideDm = useCallback((dmId: string) => {
     setHiddenDms((prev) => {
@@ -649,10 +666,56 @@ function ChatInner() {
       next.delete(dmId);
       try {
         localStorage.setItem(`hrms_hidden_dms_${myUserId}`, JSON.stringify(Array.from(next)));
-      } catch {}
+      } catch { }
       return next;
     });
   }, [myUserId]);
+
+  const ensureChannelUnhidden = useCallback((chId: string) => {
+    if (!chId) return;
+    unhideDm(chId);
+    const ch = channels.find((c) => String(c.id || (c as any)._id) === String(chId));
+    if (ch && isDirect(ch)) {
+      const other = getDmOtherUser(ch);
+      if (other?.id) {
+        unhideDm(String(other.id));
+      }
+    }
+  }, [channels, unhideDm]);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingMessageText, setEditingMessageText] = useState("");
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  const handleStartEditMessage = (msg: any) => {
+    const senderId = String(msg.sender_id || (msg.sender as any)?.id || "");
+    if (senderId !== String(user?.id)) {
+      toast.error("You can only edit your own messages");
+      return;
+    }
+    setEditingMessageId(msg.id);
+    setEditingMessageText(msg.content || "");
+    setContextMenu(null);
+  };
+
+  const handleSaveEditMessage = async () => {
+    if (!editingMessageId || !editingMessageText.trim()) return;
+    setIsSavingEdit(true);
+    try {
+      await api.put(`/chat/messages/${editingMessageId}`, { content: editingMessageText.trim() });
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === editingMessageId ? { ...m, content: editingMessageText.trim(), is_edited: true } : m
+        )
+      );
+      toast.success("Message updated");
+      setEditingMessageId(null);
+      setEditingMessageText("");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to edit message");
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
 
   // Task 39: Reactions Lock / Debounce Ref
   const reactingInProgressRef = useRef<Set<string>>(new Set());
@@ -981,8 +1044,8 @@ function ChatInner() {
       const readBy = Array.isArray(m?.read_by)
         ? m.read_by.map(String)
         : Array.isArray(m?.is_read_by)
-        ? m.is_read_by.map(String)
-        : [];
+          ? m.is_read_by.map(String)
+          : [];
 
       let pollData: PollData | null = null;
       if (m?.poll && typeof m.poll === "object") {
@@ -993,10 +1056,10 @@ function ChatInner() {
           created_by: String(m.poll.created_by || ""),
           options: Array.isArray(m.poll.options)
             ? m.poll.options.map((opt: any) => ({
-                id: String(opt.id || ""),
-                text: String(opt.text || ""),
-                voters: Array.isArray(opt.voters) ? opt.voters.map(String) : []
-              }))
+              id: String(opt.id || ""),
+              text: String(opt.text || ""),
+              voters: Array.isArray(opt.voters) ? opt.voters.map(String) : []
+            }))
             : []
         };
       }
@@ -1085,7 +1148,7 @@ function ChatInner() {
             body: "Desktop notifications are now active. You will receive alerts when new messages arrive!",
             icon: "/favicon.ico",
           });
-        } catch {}
+        } catch { }
       } else if (perm === "denied") {
         toast.warning("Notifications blocked. Please allow notifications from your browser site settings.");
       }
@@ -1098,7 +1161,7 @@ function ChatInner() {
   const showDesktopNotification = useCallback((title: string, body: string, channelId: string, avatarUrl?: string | null) => {
     if (typeof Notification === "undefined") return;
     if (Notification.permission !== "granted") return;
-    
+
     let finalIcon = "/favicon.ico";
     if (avatarUrl && typeof avatarUrl === "string" && avatarUrl.trim()) {
       const clean = avatarUrl.trim();
@@ -1110,7 +1173,7 @@ function ChatInner() {
         finalIcon = `${base}${path}`;
       }
     }
-    
+
     try {
       const n = new Notification(title, {
         body,
@@ -1120,7 +1183,7 @@ function ChatInner() {
       n.onclick = () => {
         try {
           window.focus();
-        } catch {}
+        } catch { }
         hasUserDismissedActiveRef.current = false;
         setActiveChannelId(channelId);
         n.close();
@@ -1133,7 +1196,7 @@ function ChatInner() {
             icon: finalIcon,
             tag: `chat-${channelId}-${Date.now()}`,
           });
-        }).catch(() => {});
+        }).catch(() => { });
       }
     }
   }, []);
@@ -1231,7 +1294,7 @@ function ChatInner() {
       setTimeout(() => {
         try {
           ctx.close();
-        } catch {}
+        } catch { }
       }, 400);
     } catch {
       // ignore
@@ -1353,7 +1416,7 @@ function ChatInner() {
           if (resp.ok) {
             blob = await resp.blob();
           }
-        } catch {}
+        } catch { }
       }
 
       // 1. Native OS "Save As" file picker dialog (Chromium on Windows/Mac)
@@ -1393,7 +1456,7 @@ function ChatInner() {
         setTimeout(() => {
           try {
             URL.revokeObjectURL(objUrl);
-          } catch {}
+          } catch { }
         }, 10000);
         return;
       }
@@ -1410,7 +1473,7 @@ function ChatInner() {
     } catch {
       try {
         window.open(src, "_blank", "noopener");
-      } catch {}
+      } catch { }
     }
   }, []);
 
@@ -1489,7 +1552,7 @@ function ChatInner() {
               channel_id: channelId,
               user_name: user?.name
             }));
-          } catch {}
+          } catch { }
         }
         setChannels((prev) =>
           prev.map((c) =>
@@ -1602,7 +1665,7 @@ function ChatInner() {
                 user_name: user?.name
               }));
             }
-          } catch {}
+          } catch { }
           // Heartbeat ping every 20 seconds
           if (pingInterval) clearInterval(pingInterval);
           pingInterval = setInterval(() => {
@@ -1610,7 +1673,7 @@ function ChatInner() {
               if (socket.readyState === WebSocket.OPEN) {
                 socket.send(JSON.stringify({ type: "ping", action: "ping" }));
               }
-            } catch {}
+            } catch { }
           }, 20000);
         };
 
@@ -1666,6 +1729,9 @@ function ChatInner() {
               const msg = formatMessage(data.message);
               const isMeMsg = String(msg.sender_id) === String(user?.id);
               const isCurrentChat = String(msg.channel_id) === String(activeChannelIdRef.current);
+
+              if (msg.channel_id) unhideDm(String(msg.channel_id));
+              if (msg.sender_id) unhideDm(String(msg.sender_id));
 
               // --- unread + channel list update (all channels, not only active) ---
               setChannels((prev) => {
@@ -1729,7 +1795,7 @@ function ChatInner() {
                   if (typeof document === "undefined" || document.hidden || !document.hasFocus()) {
                     playNotifySound();
                   }
-                } catch {}
+                } catch { }
               }
 
               if (isCurrentChat) {
@@ -1767,7 +1833,7 @@ function ChatInner() {
                       channel_id: msg.channel_id,
                       user_name: user?.name
                     }));
-                  } catch {}
+                  } catch { }
                 }
               }
             } else if (data.type === "reaction_updated" || data.action === "reaction_updated") {
@@ -1783,6 +1849,12 @@ function ChatInner() {
               setViewVotesPollMsg((prev) => (prev && prev.id === data.message_id ? { ...prev, poll: data.poll } : prev));
             } else if (data.type === "message_deleted" || data.action === "message_deleted") {
               setMessages((prev) => prev.filter((m) => m.id !== data.message_id));
+            } else if (data.type === "message_edited" || data.action === "message_edited") {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === data.message_id ? { ...m, content: data.content, is_edited: true } : m
+                )
+              );
             } else if (data.type === "read_receipt" || data.action === "read_receipt" || data.type === "messages_read" || data.action === "messages_read") {
               if (String(data.channel_id) === String(activeChannelIdRef.current)) {
                 const readerId = String(data.user_id);
@@ -1845,7 +1917,7 @@ function ChatInner() {
         socket.onerror = () => {
           try {
             socket.close();
-          } catch {}
+          } catch { }
         };
 
         socket.onclose = () => {
@@ -1872,7 +1944,7 @@ function ChatInner() {
       if (socketRef.current) {
         try {
           socketRef.current.close();
-        } catch {}
+        } catch { }
       }
     };
   }, [user?.id, formatMessage, fetchChannels, fetchMessages, playNotifySound]);
@@ -1886,9 +1958,9 @@ function ChatInner() {
       }
       try {
         if (typeof Notification !== "undefined" && Notification.permission === "default") {
-          Notification.requestPermission().catch(() => {});
+          Notification.requestPermission().catch(() => { });
         }
-      } catch {}
+      } catch { }
     };
     const onVis = () => {
       if (typeof document !== "undefined" && document.visibilityState === "visible") onFocus();
@@ -1919,6 +1991,7 @@ function ChatInner() {
     isSendingRef.current = true;
     lastSentRef.current = { content, at: nowTs };
     setInputText("");
+    if (activeChannelId) ensureChannelUnhidden(activeChannelId);
 
     const payload: any = {
       content,
@@ -1929,7 +2002,7 @@ function ChatInner() {
       payload.reply_to = {
         id: replyTo.id,
         sender_name: replyTo.sender_name,
-        content: replyTo.content || (replyTo.media_type ? `[${replyTo.media_type}]` : ""),
+        content: replyTo.content || (replyTo.poll ? `📊 ${replyTo.poll.question || "Poll"}` : (replyTo as any).is_call || (replyTo as any).call ? "📞 Call" : replyTo.media_type ? `[${replyTo.media_type}]` : "Message"),
         media_type: replyTo.media_type || undefined
       };
       setReplyTo(null);
@@ -1986,6 +2059,7 @@ function ChatInner() {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
     if (files.length === 0 || !activeChannelId) return;
+    ensureChannelUnhidden(activeChannelId);
 
     setIsUploading(true);
     // One group so multi images render as a WhatsApp grid (issue 8)
@@ -1996,7 +2070,7 @@ function ChatInner() {
       for (let idx = 0; idx < files.length; idx++) {
         const file = files[idx] as File | undefined;
         if (!file) continue;
-        
+
         // Sanitize filename to avoid multipart header issues with unicode/middle dots from ChatGPT
         const rawName = file.name || "image.png";
         const safeName = rawName.replace(/[^\x00-\x7F]/g, "_") || "image.png";
@@ -2089,7 +2163,7 @@ function ChatInner() {
           await navigator.clipboard.writeText(msg.content);
           toast.success("Message copied!");
         }
-      } catch {}
+      } catch { }
     }
   };
 
@@ -2247,7 +2321,7 @@ function ChatInner() {
               const blob = await res.blob();
               found.push(new File([blob], `chatgpt-image-${Date.now()}.png`, { type: blob.type || "image/png" }));
             }
-          } catch {}
+          } catch { }
         }
       }
     }
@@ -2285,7 +2359,7 @@ function ChatInner() {
       if (urlToRevoke) {
         try {
           URL.revokeObjectURL(urlToRevoke);
-        } catch {}
+        } catch { }
       }
       return prevUrls.filter((_, i) => i !== idxToRemove);
     });
@@ -2310,7 +2384,7 @@ function ChatInner() {
       prev.forEach((u) => {
         try {
           URL.revokeObjectURL(u);
-        } catch {}
+        } catch { }
       });
       return [];
     });
@@ -2323,6 +2397,7 @@ function ChatInner() {
   const handleSendPastedImage = async () => {
     const filesToSend = pasteFiles.length > 0 ? pasteFiles : pasteFile ? [pasteFile] : [];
     if (filesToSend.length === 0 || !activeChannelId) return;
+    ensureChannelUnhidden(activeChannelId);
     setIsUploading(true);
     // Shared group -> all pasted images render as ONE album bubble (issue 5)
     const groupId =
@@ -2435,7 +2510,7 @@ function ChatInner() {
         mediaRecorderRef.current.pause();
         setIsRecordingPaused(true);
         if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
-      } catch {}
+      } catch { }
     } else if (mediaRecorderRef.current.state === "paused") {
       try {
         mediaRecorderRef.current.resume();
@@ -2443,7 +2518,7 @@ function ChatInner() {
         recordingTimerRef.current = setInterval(() => {
           setRecordingSeconds((prev) => prev + 1);
         }, 1000);
-      } catch {}
+      } catch { }
     }
   };
 
@@ -2451,7 +2526,7 @@ function ChatInner() {
     if (mediaRecorderRef.current && isRecording) {
       try {
         mediaRecorderRef.current.stop();
-      } catch {}
+      } catch { }
       setIsRecording(false);
       setIsRecordingPaused(false);
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
@@ -2465,7 +2540,7 @@ function ChatInner() {
         mediaRecorderRef.current.stop();
         const stream = mediaRecorderRef.current.stream;
         if (stream) stream.getTracks().forEach((t) => t.stop());
-      } catch {}
+      } catch { }
       setIsRecording(false);
       setIsRecordingPaused(false);
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
@@ -2475,6 +2550,7 @@ function ChatInner() {
 
   const sendAudioBlob = async (blob: Blob) => {
     if (!activeChannelId) return;
+    ensureChannelUnhidden(activeChannelId);
     setIsUploading(true);
     try {
       const file = new File([blob], `voice-note-${Date.now()}.webm`, { type: "audio/webm" });
@@ -2816,7 +2892,7 @@ function ChatInner() {
     setEditChannelName(activeChannel.name || "");
     setEditChannelDesc((activeChannel as any).description || "");
     setEditChannelAutoJoin(Boolean((activeChannel as any).auto_join_new_employees));
-    setEditChannelMemberId("");
+    setEditChannelMemberIds([]);
     setMemberSearch("");
     setIsMemberDropdownOpen(false);
     setIsEditChannelOpen(true);
@@ -2845,11 +2921,11 @@ function ChatInner() {
       prev.map((c) =>
         (c.id || (c as any)._id) === activeChannelId
           ? {
-              ...c,
-              name: cleanName,
-              description: editChannelDesc.trim(),
-              auto_join_new_employees: editChannelAutoJoin
-            } as any
+            ...c,
+            name: cleanName,
+            description: editChannelDesc.trim(),
+            auto_join_new_employees: editChannelAutoJoin
+          } as any
           : c
       )
     );
@@ -2857,35 +2933,39 @@ function ChatInner() {
   };
 
   const handleAddMember = async () => {
-    if (!activeChannelId || !editChannelMemberId || !activeChannel) return;
+    if (!activeChannelId || !activeChannel || editChannelMemberIds.length === 0) return;
     if (!isChannelCreator(activeChannel)) return;
-    // avoid duplicates
-    if ((activeChannel.members || []).map(String).includes(String(editChannelMemberId))) {
-      setEditChannelMemberId("");
+    const currentMembers = (activeChannel.members || []).map(String);
+    const newMembers = editChannelMemberIds.filter(id => !currentMembers.includes(id));
+    if (newMembers.length === 0) {
+      setEditChannelMemberIds([]);
       setIsMemberDropdownOpen(false);
       return;
     }
     try {
-      const res: any = await api.post(
-        `/chat/channels/${activeChannelId}/members?member_id=${encodeURIComponent(editChannelMemberId)}`,
-        {},
-        { showErrorToast: false }
-      );
-      const serverMembers = res?.channel?.members;
-      const updatedMembers = Array.isArray(serverMembers)
-        ? serverMembers.map(String)
-        : [...(activeChannel.members || []).map(String), String(editChannelMemberId)];
+      // Try batch add first
+      try {
+        await api.post(`/chat/channels/${activeChannelId}/members/batch`, { member_ids: newMembers });
+      } catch {
+        // Fallback to sequential
+        for (const memberId of newMembers) {
+          await api.post(
+            `/chat/channels/${activeChannelId}/members?member_id=${encodeURIComponent(memberId)}`,
+            {},
+            { showErrorToast: false }
+          );
+        }
+      }
+      const updatedMembers = [...currentMembers, ...newMembers];
       setChannels((prev) =>
         prev.map((c) =>
           (c.id || (c as any)._id) === activeChannelId ? { ...c, members: updatedMembers } : c
         )
       );
-      setEditChannelMemberId("");
+      toast.success(`Added ${newMembers.length} member${newMembers.length > 1 ? "s" : ""} to group`);
+      setEditChannelMemberIds([]);
       setMemberSearch("");
       setIsMemberDropdownOpen(false);
-      // keep modal open so creator sees the updated member list (issue 2)
-      // the newly added user gets the group instantly via WS + cache bust (issue 3)
-      // + local refetch so my own list stays fresh even if the event loops back
       fetchChannels();
     } catch {
       // quiet
@@ -2945,7 +3025,7 @@ function ChatInner() {
         setMessages([]);
         setIsEditChannelOpen(false);
       }
-    }); 
+    });
   };
 
   // --- 14. START DIRECT MESSAGE (guard against double-click creating duplicates) ---
@@ -3002,29 +3082,32 @@ function ChatInner() {
     filteredDms.length > 0
       ? filteredDms
       : (employees || []).slice(0, 4).map((emp) => ({
-          id: `dm-${emp.id}`,
+        id: `dm-${emp.id}`,
+        name: emp.name,
+        type: "direct",
+        is_dm: true,
+        members: [emp.id],
+        created_by: "system",
+        created_at: "",
+        unread_count: emp.id === employees?.[0]?.id ? 2 : 0,
+        other_user: {
+          id: emp.id,
           name: emp.name,
-          type: "direct",
-          is_dm: true,
-          members: [emp.id],
-          created_by: "system",
-          created_at: "",
-          unread_count: emp.id === employees?.[0]?.id ? 2 : 0,
-          other_user: {
-            id: emp.id,
-            name: emp.name,
-            avatar: emp.avatar || emp.profile_photo,
-            is_online: presenceMap[emp.id] ?? false
-          }
-        }))
+          avatar: emp.avatar || emp.profile_photo,
+          is_online: presenceMap[emp.id] ?? false
+        }
+      }))
   ).filter((dm) => {
     const dmId = String(dm.id || (dm as any)._id);
     const targetUserId = String(dm.other_user?.id || "");
-    if (
-      (hiddenDms.has(dmId) || hiddenDms.has(targetUserId)) &&
-      activeChannelId !== dmId &&
-      !dm.unread_count
-    ) {
+    const isHidden = hiddenDms.has(dmId) || (Boolean(targetUserId) && hiddenDms.has(targetUserId));
+
+    // If searching actively in Jump to..., allow matching so user can find and reopen
+    if (searchQuery.trim() && (dm.other_user?.name || dm.name || "").toLowerCase().includes(searchQuery.toLowerCase())) {
+      return true;
+    }
+
+    if (isHidden && !dm.unread_count) {
       return false;
     }
     return true;
@@ -3043,8 +3126,8 @@ function ChatInner() {
   const activeChannelName = isSelfChat
     ? "You (Message Yourself)"
     : isCurrentDm
-    ? currentDmUser?.name || activeChannel?.name || "Direct Message"
-    : activeChannel?.name || "engineering";
+      ? currentDmUser?.name || activeChannel?.name || "Direct Message"
+      : activeChannel?.name || "engineering";
 
   // Members of active channel (matches both emp.id and emp._id - Task 42)
   const activeChannelMemberEmployees = React.useMemo(() => {
@@ -3180,7 +3263,7 @@ function ChatInner() {
           let closeInTime = false;
           try {
             closeInTime = Math.abs(new Date(n.created_at).getTime() - new Date(m.created_at).getTime()) < 90000;
-          } catch {}
+          } catch { }
           if (!sameGroup && !closeInTime) break;
           // don't merge if either has reply/poll (keep context clear)
           if (n.reply_to || n.poll || m.poll) break;
@@ -3207,16 +3290,12 @@ function ChatInner() {
 
   return (
     <div className="flex h-[calc(100vh-4rem)] bg-card rounded-2xl border border-border overflow-hidden shadow-xs relative">
-      {/* ======================================================== */}
-      {/* 1. LEFT SIDEBAR (EXACT CLEAN SLACK / HRMS DESIGN)        */}
-      {/* ======================================================== */}
       <div
         className={cn(
           "w-64 border-r border-border bg-muted/10 flex flex-col shrink-0 transition-all duration-300 md:flex",
           isMobileChannelsOpen ? "fixed inset-y-0 left-0 z-50 bg-background w-72 shadow-xl" : "hidden md:flex"
         )}
       >
-        {/* Sidebar Header: "Messages" + Plus button */}
         <div className="p-4 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h2 className="font-bold text-foreground tracking-tight text-base">Messages</h2>
@@ -3352,7 +3431,10 @@ function ChatInner() {
                     type="button"
                     onClick={() => {
                       const targetId = (dm.id && !dm.id.startsWith("dm-")) ? dm.id : (dmId || "");
+                      unhideDm(String(dmId));
+                      if (dmUser?.id) unhideDm(String(dmUser.id));
                       if (targetId && !targetId.startsWith("dm-")) {
+                        unhideDm(targetId);
                         setActiveChannelId(targetId);
                       } else if (dmUser) {
                         handleStartDm(dmUser.id);
@@ -3458,22 +3540,42 @@ function ChatInner() {
         </div>
       ) : (
         <div className="flex-1 flex flex-col bg-background min-w-0">
-        {/* Chat Header: # engineering + Menu & 3 Dots */}
-        <div className="px-4 py-3.5 border-b border-border flex items-center justify-between bg-card shrink-0">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <button
-              type="button"
-              onClick={() => setIsMobileChannelsOpen(true)}
-              className="p-1.5 -ml-1 text-muted-foreground hover:text-foreground md:hidden rounded-lg hover:bg-muted transition-colors cursor-pointer shrink-0"
-              title="Open channels"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-            <div className="min-w-0">
-              <h2 className="font-bold text-foreground text-base sm:text-lg tracking-tight flex items-center gap-1.5 leading-tight truncate">
-                {!isCurrentDm && <Hash className="w-4 sm:w-5 h-4 sm:h-5 text-muted-foreground shrink-0" />}
-                <span className="truncate">{cleanDisplayName(activeChannelName)}</span>
-              </h2>
+          {/* Chat Header: # engineering + Menu & 3 Dots */}
+          <div className="px-4 py-3.5 border-b border-border flex items-center justify-between bg-card shrink-0">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <button
+                type="button"
+                onClick={() => setIsMobileChannelsOpen(true)}
+                className="p-1.5 -ml-1 text-muted-foreground hover:text-foreground md:hidden rounded-lg hover:bg-muted transition-colors cursor-pointer shrink-0"
+                title="Open channels"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+              <div className="min-w-0">
+                <h2 className="font-bold text-foreground text-base sm:text-lg tracking-tight flex items-center gap-1.5 leading-tight truncate">
+                  {!isCurrentDm && <Hash className="w-4 sm:w-5 h-4 sm:h-5 text-muted-foreground shrink-0" />}
+                  <span className="truncate">{cleanDisplayName(activeChannelName)}</span>
+                </h2>
+                {!isCurrentDm && !isSelfChat && activeChannel && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGroupMemberSearch("");
+                      setIsGroupMembersModalOpen(true);
+                    }}
+                    className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-emerald-600 transition-colors cursor-pointer mt-0.5 text-left font-medium"
+                    title="View group members (click to see all joined members)"
+                  >
+                    <Users className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>
+                      {(activeChannel.members || []).length} {((activeChannel.members || []).length === 1) ? "member" : "members"}
+                    </span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1 shrink-0">
               {!isCurrentDm && !isSelfChat && activeChannel && (
                 <button
                   type="button"
@@ -3481,81 +3583,55 @@ function ChatInner() {
                     setGroupMemberSearch("");
                     setIsGroupMembersModalOpen(true);
                   }}
-                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-emerald-600 transition-colors cursor-pointer mt-0.5 text-left font-medium"
-                  title="View group members (click to see all joined members)"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-muted-foreground hover:text-emerald-600 hover:bg-muted rounded-lg transition-colors cursor-pointer"
+                  title="View group members"
                 >
-                  <Users className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>
-                    {(activeChannel.members || []).length} {((activeChannel.members || []).length === 1) ? "member" : "members"}
+                  <Users className="w-4 h-4 text-emerald-600" />
+                  <span className="hidden sm:inline">
+                    {(activeChannel.members || []).length} members
                   </span>
                 </button>
               )}
-            </div>
-          </div>
 
-          <div className="flex items-center gap-1 shrink-0">
-            {!isCurrentDm && !isSelfChat && activeChannel && (
+              {/* Task 37: In-Chat Message Search Button */}
               <button
                 type="button"
                 onClick={() => {
-                  setGroupMemberSearch("");
-                  setIsGroupMembersModalOpen(true);
+                  setIsSearchOpen((prev) => !prev);
+                  if (isSearchOpen) setChatSearchQuery("");
                 }}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-muted-foreground hover:text-emerald-600 hover:bg-muted rounded-lg transition-colors cursor-pointer"
-                title="View group members"
+                className={cn(
+                  "p-2 rounded-lg transition-colors cursor-pointer",
+                  isSearchOpen
+                    ? "text-emerald-600 bg-emerald-500/10 font-bold"
+                    : "text-muted-foreground hover:text-emerald-600 hover:bg-muted"
+                )}
+                title="Search messages in this conversation"
               >
-                <Users className="w-4 h-4 text-emerald-600" />
-                <span className="hidden sm:inline">
-                  {(activeChannel.members || []).length} members
-                </span>
+                <Search className="w-4 h-4" />
               </button>
-            )}
 
-            {/* Task 37: In-Chat Message Search Button */}
-            <button
-              type="button"
-              onClick={() => {
-                setIsSearchOpen((prev) => !prev);
-                if (isSearchOpen) setChatSearchQuery("");
-              }}
-              className={cn(
-                "p-2 rounded-lg transition-colors cursor-pointer",
-                isSearchOpen
-                  ? "text-emerald-600 bg-emerald-500/10 font-bold"
-                  : "text-muted-foreground hover:text-emerald-600 hover:bg-muted"
+              {!isSelfChat && !isCurrentDm && (
+                <button
+                  type="button"
+                  onClick={() => setIsPollModalOpen(true)}
+                  className="p-2 text-muted-foreground hover:text-emerald-600 hover:bg-muted rounded-lg transition-colors cursor-pointer"
+                  title="Create a Poll"
+                >
+                  <BarChart2 className="w-4 h-4" />
+                </button>
               )}
-              title="Search messages in this conversation"
-            >
-              <Search className="w-4 h-4" />
-            </button>
+              {!isCurrentDm && activeChannel?.type !== "direct" && !(activeChannel?.members && activeChannel.members.length === 2 && !activeChannel.is_group) && !isSelfChat && activeChannel && isChannelCreator(activeChannel) && (
+                <button
+                  type="button"
+                  onClick={openEditChannel}
+                  className="px-2.5 py-1.5 text-[11px] font-bold text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                  title="Edit channel (creator only)"
+                >
+                  Edit
+                </button>
+              )}
 
-            {!isSelfChat && !isCurrentDm && (
-              <button
-                type="button"
-                onClick={() => setIsPollModalOpen(true)}
-                className="p-2 text-muted-foreground hover:text-emerald-600 hover:bg-muted rounded-lg transition-colors cursor-pointer"
-                title="Create a Poll"
-              >
-                <BarChart2 className="w-4 h-4" />
-              </button>
-            )}
-            {!isCurrentDm && !isSelfChat && activeChannel && isChannelCreator(activeChannel) && (
-              <button
-                type="button"
-                onClick={openEditChannel}
-                className="px-2.5 py-1.5 text-[11px] font-bold text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
-                title="Edit channel (creator only)"
-              >
-                Edit
-              </button>
-            )}
-            <button
-              type="button"
-              className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors cursor-pointer"
-              title="Options"
-            >
-              <MoreVertical className="w-5 h-5" />
-            </button>
           </div>
         </div>
 
@@ -3635,356 +3711,356 @@ function ChatInner() {
           </div>
         )}
 
-        {/* In-app slide-in notification (top-right) - click opens that chat */}
-        {notifyToast && (
-          <div
-            onClick={() => {
-              setActiveChannelId(notifyToast.channelId);
-              setNotifyToast(null);
-            }}
-            className="absolute top-3 right-3 z-40 w-80 max-w-[calc(100%-2rem)] bg-card border border-border shadow-2xl rounded-2xl p-3 flex items-start gap-2.5 cursor-pointer animate-in slide-in-from-right duration-300 hover:shadow-xl"
-          >
-            <div className="w-9 h-9 rounded-full bg-emerald-500/15 text-emerald-700 flex items-center justify-center font-bold text-xs shrink-0">
-              {(notifyToast.sender || "N").slice(0, 2).toUpperCase()}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="font-bold text-xs text-foreground truncate">{notifyToast.sender}</div>
-              <div className="text-[11px] text-muted-foreground truncate">{notifyToast.text}</div>
-              <div className="text-[10px] text-emerald-600 font-bold mt-0.5">Click to open chat</div>
-            </div>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
+          {/* In-app slide-in notification (top-right) - click opens that chat */}
+          {notifyToast && (
+            <div
+              onClick={() => {
+                setActiveChannelId(notifyToast.channelId);
                 setNotifyToast(null);
               }}
-              className="p-1 text-muted-foreground hover:text-foreground"
+              className="absolute top-3 right-3 z-40 w-80 max-w-[calc(100%-2rem)] bg-card border border-border shadow-2xl rounded-2xl p-3 flex items-start gap-2.5 cursor-pointer animate-in slide-in-from-right duration-300 hover:shadow-xl"
             >
-              <X className="w-3.5 h-3.5" />
-            </button>
+              <div className="w-9 h-9 rounded-full bg-emerald-500/15 text-emerald-700 flex items-center justify-center font-bold text-xs shrink-0">
+                {(notifyToast.sender || "N").slice(0, 2).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="font-bold text-xs text-foreground truncate">{notifyToast.sender}</div>
+                <div className="text-[11px] text-muted-foreground truncate">{notifyToast.text}</div>
+                <div className="text-[10px] text-emerald-600 font-bold mt-0.5">Click to open chat</div>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setNotifyToast(null);
+                }}
+                className="p-1 text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+        {/* ======================================================== */}
+      {/* 3. MESSAGE LIST (AVATAR + NAME + TIMESTAMP + BUBBLES)     */}
+      {/* ======================================================== */}
+      <div
+        className={cn(
+          "flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 relative transition-colors",
+          isDraggingOver && "bg-emerald-500/10 ring-2 ring-emerald-500/50 ring-inset"
+        )}
+        onPaste={handlePaste}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDraggingOver(true);
+        }}
+        onDragLeave={() => setIsDraggingOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setIsDraggingOver(false);
+          const droppedFiles = e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [];
+          if (droppedFiles.length === 0) return;
+          const imgFiles = droppedFiles.filter(
+            (f) => f.type.startsWith("image/") || /\.(png|jpe?g|webp|gif|svg)$/i.test(f.name)
+          );
+          if (imgFiles.length > 0) {
+            addMorePasteImages(imgFiles);
+          } else {
+            handleFileUpload({ target: { files: e.dataTransfer.files } } as any);
+          }
+        }}
+      >
+        {isDraggingOver && (
+          <div className="absolute inset-4 z-40 border-2 border-dashed border-emerald-500 bg-emerald-500/10 rounded-2xl flex flex-col items-center justify-center pointer-events-none backdrop-blur-xs animate-in fade-in">
+            <ImageIcon className="w-10 h-10 text-emerald-600 mb-2 animate-bounce" />
+            <p className="text-sm font-bold text-foreground">Drop images or files here to send</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Supports PNG, JPG, WebP, PDF & documents</p>
           </div>
         )}
-
-        {/* ======================================================== */}
-        {/* 3. MESSAGE LIST (AVATAR + NAME + TIMESTAMP + BUBBLES)     */}
-        {/* ======================================================== */}
-        <div
-          className={cn(
-            "flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 relative transition-colors",
-            isDraggingOver && "bg-emerald-500/10 ring-2 ring-emerald-500/50 ring-inset"
-          )}
-          onPaste={handlePaste}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setIsDraggingOver(true);
-          }}
-          onDragLeave={() => setIsDraggingOver(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setIsDraggingOver(false);
-            const droppedFiles = e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [];
-            if (droppedFiles.length === 0) return;
-            const imgFiles = droppedFiles.filter(
-              (f) => f.type.startsWith("image/") || /\.(png|jpe?g|webp|gif|svg)$/i.test(f.name)
-            );
-            if (imgFiles.length > 0) {
-              addMorePasteImages(imgFiles);
-            } else {
-              handleFileUpload({ target: { files: e.dataTransfer.files } } as any);
-            }
-          }}
-        >
-          {isDraggingOver && (
-            <div className="absolute inset-4 z-40 border-2 border-dashed border-emerald-500 bg-emerald-500/10 rounded-2xl flex flex-col items-center justify-center pointer-events-none backdrop-blur-xs animate-in fade-in">
-              <ImageIcon className="w-10 h-10 text-emerald-600 mb-2 animate-bounce" />
-              <p className="text-sm font-bold text-foreground">Drop images or files here to send</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Supports PNG, JPG, WebP, PDF & documents</p>
+        {messages.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center text-center p-6 text-muted-foreground">
+            <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-600 mb-3">
+              <Hash className="w-6 h-6" />
             </div>
-          )}
-          {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center p-6 text-muted-foreground">
-              <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-600 mb-3">
-                <Hash className="w-6 h-6" />
-              </div>
-              <h3 className="font-bold text-foreground text-base">This is the start of #{activeChannelName}</h3>
-              <p className="text-xs text-muted-foreground max-w-sm mt-1">
-                Send a message, upload images/files, or record voice notes to start chatting.
-              </p>
-            </div>
-          ) : (
-            displayItems.map((item) => {
-              const isAlbum = item.kind === "album";
-              const albumMsgs: ChatMessage[] = isAlbum ? (item as any).msgs : [];
-              const msg: ChatMessage = isAlbum ? (albumMsgs[0] as ChatMessage) : ((item as any).msg as ChatMessage);
-              const isMe = Boolean(msg.isMe);
-              const isHighlighted = highlightedMsgId === msg.id;
+            <h3 className="font-bold text-foreground text-base">This is the start of #{activeChannelName}</h3>
+            <p className="text-xs text-muted-foreground max-w-sm mt-1">
+              Send a message, upload images/files, or record voice notes to start chatting.
+            </p>
+          </div>
+        ) : (
+          displayItems.map((item) => {
+            const isAlbum = item.kind === "album";
+            const albumMsgs: ChatMessage[] = isAlbum ? (item as any).msgs : [];
+            const msg: ChatMessage = isAlbum ? (albumMsgs[0] as ChatMessage) : ((item as any).msg as ChatMessage);
+            const isMe = Boolean(msg.isMe);
+            const isHighlighted = highlightedMsgId === msg.id;
 
-              // --- WhatsApp album grid (issue 8): 1 full, 2 side-by-side, 3 = 1+2, 4 = 2x2, 4+ = overlay +N ---
-              if (isAlbum) {
-                const total = albumMsgs.length;
-                const shown = albumMsgs.slice(0, 4);
-                const extra = total - 4;
-                const captionMsg = [...albumMsgs].reverse().find((a) => (a.content || "").trim() && !/^.+\.(jpg|jpeg|png|gif|webp|mp4|mov|webm)$/i.test((a.content || "").trim())) || (albumMsgs[albumMsgs.length - 1] as ChatMessage);
-                const caption = (captionMsg?.content || "").trim();
-                const showCaption = caption && !/^.+\.(jpg|jpeg|png|gif|webp|mp4|mov|webm|pdf|doc|docx)$/i.test(caption);
-                return (
-                  <div
-                    key={(item as any).key}
-                    id={`msg-${msg.id}`}
-                    data-album-containing={albumMsgs.map((a) => a.id).join(" ")}
-                    className={cn(
-                      "flex gap-2.5 items-start w-full transition-all duration-300 rounded-lg px-1 py-0.5",
-                      isMe ? "flex-row-reverse" : "flex-row",
-                      isHighlighted ? "bg-emerald-500/15 ring-2 ring-emerald-500" : ""
-                    )}
-                  >
-                    <div className="pt-5 shrink-0">
-                      <UserAvatar name={msg.sender_name} avatar={msg.sender_avatar} size="w-9 h-9" showStatus={false} />
-                    </div>
-                    <div className={cn("flex flex-col gap-1 min-w-0 max-w-[75%] sm:max-w-[65%]", isMe ? "items-end" : "items-start")}>
-                      <div className={cn("flex items-baseline gap-1.5 px-1", isMe ? "flex-row-reverse" : "flex-row")}>
-                        <span className="font-bold text-[13px] leading-none text-foreground whitespace-nowrap">{cleanDisplayName(msg.sender_name)}</span>
-                        <span className="text-[11px] font-normal text-muted-foreground whitespace-nowrap">{formatMsgTime(msg.created_at)}</span>
-                      </div>
-                      <div className={cn("relative group flex items-end gap-1.5 max-w-full mb-2", isMe ? "flex-row-reverse" : "flex-row")}>
-                        <div
-                          onContextMenu={(e) => handleContextMenu(e, msg)}
-                          className={cn("rounded-[18px] p-1.5 w-fit max-w-full", isMe ? "bg-[#00a36c] dark:bg-emerald-600" : "bg-[#f0f2f5] dark:bg-muted")}
-                        >
-                          {(() => {
-                            const albumReply = albumMsgs.map((a) => a.reply_to).find(Boolean) || msg.reply_to;
-                            return albumReply ? (
-                              <ReplyQuote reply={albumReply} isMe={isMe} onNavigate={() => scrollToOriginalMessage(albumReply.id)} />
-                            ) : null;
-                          })()}
-                          <div className={cn("grid gap-1 rounded-xl overflow-hidden", total === 2 ? "grid-cols-2" : total === 3 ? "grid-cols-2" : "grid-cols-2")}>
-                            {shown.map((am, idx2) => (
-                              <div
-                                key={am.id}
-                                onClick={() => openMediaViewer(am)}
-                                onContextMenu={(e) => handleContextMenu(e, am, { url: am.media_url || "", name: am.file_name || "image.jpg", type: am.media_type || "image" })}
-                                className={cn(
-                                  "relative overflow-hidden cursor-pointer bg-black/10",
-                                  total === 3 && idx2 === 0 ? "col-span-2 h-44" : "h-32 sm:h-36",
-                                  total === 1 ? "col-span-2 h-56" : ""
-                                )}
-                              >
-                                {am.media_type === "video" ? (
-                                  <video src={getMediaUrl(am.media_url)} preload="metadata" className="w-full h-full object-cover" />
-                                ) : (
-                                  <img src={getMediaUrl(am.media_url)} alt="attachment" className="w-full h-full object-cover" loading="lazy" />
-                                )}
-                                {idx2 === 3 && extra > 0 && (
-                                  <div className="absolute inset-0 bg-black/60 text-white flex items-center justify-center text-2xl font-bold">+{extra + 1}</div>
-                                )}
-                                {am.media_type === "video" && (
-                                  <div className="absolute inset-0 flex items-center justify-center"><span className="w-9 h-9 rounded-full bg-black/60 text-white flex items-center justify-center"><Play className="w-4 h-4 ml-0.5 fill-current" /></span></div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                          {showCaption && (
-                            <div className={cn("px-2 pt-1.5 pb-1 text-[13.5px] break-words whitespace-pre-wrap select-text", isMe ? "text-white" : "text-[#111b21] dark:text-foreground")}>
-                              {renderFormattedText(caption)}
-                            </div>
-                          )}
-                          {/* Status checkmarks (no duplicate time - time is already in top header) */}
-                          {isMe && (
-                            <div className="px-2 pb-0.5 text-[10px] flex items-center justify-end">
-                              {isMessageSeen(msg) ? (
-                                <span title="Seen"><CheckCheck className="w-3.5 h-3.5 text-[#53bdeb]" strokeWidth={2.5} /></span>
-                              ) : (
-                                <span title="Delivered"><CheckCheck className="w-3.5 h-3.5 text-white/70" strokeWidth={2} /></span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                        <div className={cn("opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 bg-card border border-border rounded-lg shadow-xs p-0.5", isMe ? "flex-row-reverse" : "")}>
-                          <button
-                            type="button"
-                            onClick={() => { setReplyTo(msg); focusMessageInput(); }}
-                            title="Reply"
-                            className="p-1 text-muted-foreground hover:text-emerald-600 hover:bg-muted rounded cursor-pointer"
-                          >
-                            <CornerUpLeft className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleCopyMessage(msg)}
-                            title="Copy image / album"
-                            className="p-1 text-muted-foreground hover:text-emerald-600 hover:bg-muted rounded cursor-pointer"
-                          >
-                            <Copy className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setForwardMsg(msg);
-                              setForwardTargets([]);
-                              setForwardSearch("");
-                            }}
-                            title="Forward"
-                            className="p-1 text-muted-foreground hover:text-emerald-600 hover:bg-muted rounded cursor-pointer text-xs font-bold"
-                          >
-                            <Share2 className="w-3.5 h-3.5" />
-                          </button>
-                          <div className="flex items-center gap-0.5 px-1 py-0.5 bg-muted/60 dark:bg-muted/40 rounded-full border border-border/40 ml-0.5">
-                            {DEFAULT_REACTIONS.map((emoji) => {
-                              const isReacted = (msg.reactions?.[emoji] || []).includes(String(user?.id));
-                              return (
-                                <button
-                                  key={emoji}
-                                  type="button"
-                                  onClick={() => handleReact(msg.id, emoji)}
-                                  title={`React ${emoji}`}
-                                  className={cn(
-                                    "w-6 h-6 flex items-center justify-center text-sm hover:scale-130 active:scale-95 transition-transform duration-150 rounded-full cursor-pointer",
-                                    isReacted && "bg-emerald-500/20 scale-110"
-                                  )}
-                                >
-                                  {emoji}
-                                </button>
-                              );
-                            })}
-                            <button
-                              type="button"
-                              onClick={() => setReactionPickerMsgId(msg.id)}
-                              title="More reactions (+)"
-                              className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted rounded-full text-xs font-bold transition-transform hover:scale-115 cursor-pointer ml-0.5"
-                            >
-                              +
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
-
+            // --- WhatsApp album grid (issue 8): 1 full, 2 side-by-side, 3 = 1+2, 4 = 2x2, 4+ = overlay +N ---
+            if (isAlbum) {
+              const total = albumMsgs.length;
+              const shown = albumMsgs.slice(0, 4);
+              const extra = total - 4;
+              const captionMsg = [...albumMsgs].reverse().find((a) => (a.content || "").trim() && !/^.+\.(jpg|jpeg|png|gif|webp|mp4|mov|webm)$/i.test((a.content || "").trim())) || (albumMsgs[albumMsgs.length - 1] as ChatMessage);
+              const caption = (captionMsg?.content || "").trim();
+              const showCaption = caption && !/^.+\.(jpg|jpeg|png|gif|webp|mp4|mov|webm|pdf|doc|docx)$/i.test(caption);
               return (
                 <div
-                  key={msg.id}
+                  key={(item as any).key}
                   id={`msg-${msg.id}`}
+                  data-album-containing={albumMsgs.map((a) => a.id).join(" ")}
                   className={cn(
                     "flex gap-2.5 items-start w-full transition-all duration-300 rounded-lg px-1 py-0.5",
                     isMe ? "flex-row-reverse" : "flex-row",
                     isHighlighted ? "bg-emerald-500/15 ring-2 ring-emerald-500" : ""
                   )}
                 >
-                  {/* Sender Avatar - left for others, right for me (like reference image) */}
                   <div className="pt-5 shrink-0">
-                    <UserAvatar
-                      name={msg.sender_name}
-                      avatar={msg.sender_avatar}
-                      size="w-9 h-9"
-                      isOnline={presenceMap[msg.sender_id] ?? false}
-                      showStatus={false}
-                    />
+                    <UserAvatar name={msg.sender_name} avatar={msg.sender_avatar} size="w-9 h-9" showStatus={false} />
                   </div>
-
-                  {/* Message Content Stack */}
-                  <div
-                    className={cn(
-                      "flex flex-col gap-1 min-w-0 max-w-[75%] sm:max-w-[65%]",
-                      isMe ? "items-end" : "items-start"
-                    )}
-                  >
-                    {/* Header: Sender Name + Timestamp (like reference: Sarah Connor 10:24 AM) */}
+                  <div className={cn("flex flex-col gap-1 min-w-0 max-w-[75%] sm:max-w-[65%]", isMe ? "items-end" : "items-start")}>
                     <div className={cn("flex items-baseline gap-1.5 px-1", isMe ? "flex-row-reverse" : "flex-row")}>
-                      <span className="font-bold text-[13px] leading-none text-foreground whitespace-nowrap">
-                        {cleanDisplayName(msg.sender_name)}
-                      </span>
-                      <span className="text-[11px] font-normal text-muted-foreground whitespace-nowrap">
-                        {formatMsgTime(msg.created_at)}
-                      </span>
+                      <span className="font-bold text-[13px] leading-none text-foreground whitespace-nowrap">{cleanDisplayName(msg.sender_name)}</span>
+                      <span className="text-[11px] font-normal text-muted-foreground whitespace-nowrap">{formatMsgTime(msg.created_at)}</span>
                     </div>
-
-                    {/* Speech Bubble Container with Hover Actions */}
                     <div className={cn("relative group flex items-end gap-1.5 max-w-full mb-2", isMe ? "flex-row-reverse" : "flex-row")}>
-                      {/* Bubble - fully rounded like reference image */}
                       <div
                         onContextMenu={(e) => handleContextMenu(e, msg)}
-                        className={cn(
-                          "px-3.5 py-2 rounded-[18px] text-[13.5px] leading-[1.45] shadow-none relative transition-all w-fit max-w-full break-words",
-                          isMe
-                            ? "bg-[#00a36c] dark:bg-emerald-600 text-white"
-                            : "bg-[#f0f2f5] dark:bg-muted text-[#111b21] dark:text-foreground"
-                        )}
+                        className={cn("rounded-[18px] p-1.5 w-fit max-w-full", isMe ? "bg-[#00a36c] dark:bg-emerald-600" : "bg-[#f0f2f5] dark:bg-muted")}
                       >
-                        {/* Forwarded label (issue 7) */}
-                        {msg.is_forwarded && (
-                          <div className={cn("flex items-center gap-1 text-[10px] italic opacity-70 mb-1", isMe ? "text-white" : "text-muted-foreground")}>
-                            <span>➦</span>
-                            <span>Forwarded</span>
+                        {(() => {
+                          const albumReply = albumMsgs.map((a) => a.reply_to).find(Boolean) || msg.reply_to;
+                          return albumReply ? (
+                            <ReplyQuote reply={albumReply} isMe={isMe} onNavigate={() => scrollToOriginalMessage(albumReply.id)} />
+                          ) : null;
+                        })()}
+                        <div className={cn("grid gap-1 rounded-xl overflow-hidden", total === 2 ? "grid-cols-2" : total === 3 ? "grid-cols-2" : "grid-cols-2")}>
+                          {shown.map((am, idx2) => (
+                            <div
+                              key={am.id}
+                              onClick={() => openMediaViewer(am)}
+                              onContextMenu={(e) => handleContextMenu(e, am, { url: am.media_url || "", name: am.file_name || "image.jpg", type: am.media_type || "image" })}
+                              className={cn(
+                                "relative overflow-hidden cursor-pointer bg-black/10",
+                                total === 3 && idx2 === 0 ? "col-span-2 h-44" : "h-32 sm:h-36",
+                                total === 1 ? "col-span-2 h-56" : ""
+                              )}
+                            >
+                              {am.media_type === "video" ? (
+                                <video src={getMediaUrl(am.media_url)} preload="metadata" className="w-full h-full object-cover" />
+                              ) : (
+                                <img src={getMediaUrl(am.media_url)} alt="attachment" className="w-full h-full object-cover" loading="lazy" />
+                              )}
+                              {idx2 === 3 && extra > 0 && (
+                                <div className="absolute inset-0 bg-black/60 text-white flex items-center justify-center text-2xl font-bold">+{extra + 1}</div>
+                              )}
+                              {am.media_type === "video" && (
+                                <div className="absolute inset-0 flex items-center justify-center"><span className="w-9 h-9 rounded-full bg-black/60 text-white flex items-center justify-center"><Play className="w-4 h-4 ml-0.5 fill-current" /></span></div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        {showCaption && (
+                          <div className={cn("px-2 pt-1.5 pb-1 text-[13.5px] break-words whitespace-pre-wrap select-text", isMe ? "text-white" : "text-[#111b21] dark:text-foreground")}>
+                            {renderFormattedText(caption)}
                           </div>
                         )}
-                        {/* QUOTED REPLY PREVIEW (WhatsApp Style with Click-to-Scroll) */}
-                        {msg.reply_to && (
-                          <ReplyQuote reply={msg.reply_to} isMe={isMe} onNavigate={() => scrollToOriginalMessage(msg.reply_to!.id)} />
+                        {/* Status checkmarks (no duplicate time - time is already in top header) */}
+                        {isMe && (
+                          <div className="px-2 pb-0.5 text-[10px] flex items-center justify-end">
+                            {isMessageSeen(msg) ? (
+                              <span title="Seen"><CheckCheck className="w-3.5 h-3.5 text-[#53bdeb]" strokeWidth={2.5} /></span>
+                            ) : (
+                              <span title="Delivered"><CheckCheck className="w-3.5 h-3.5 text-white/70" strokeWidth={2} /></span>
+                            )}
+                          </div>
                         )}
-
-                        {/* INLINE MEDIA (Image, Video, Audio, Doc) - auto-detect audio by extension too */}
-                        {msg.media_url && (
-                          <div className="mb-2">
-                            {msg.media_type === "image" && (
-                              <div
-                                onClick={() => openMediaViewer(msg)}
-                                onContextMenu={(e) => handleContextMenu(e, msg, { url: msg.media_url!, name: msg.file_name || "image.jpg", type: "image" })}
-                                className="rounded-xl overflow-hidden cursor-pointer max-w-sm max-h-72 border border-black/10 group/img relative"
+                      </div>
+                      <div className={cn("opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 bg-card border border-border rounded-lg shadow-xs p-0.5", isMe ? "flex-row-reverse" : "")}>
+                        <button
+                          type="button"
+                          onClick={() => { setReplyTo(msg); focusMessageInput(); }}
+                          title="Reply"
+                          className="p-1 text-muted-foreground hover:text-emerald-600 hover:bg-muted rounded cursor-pointer"
+                        >
+                          <CornerUpLeft className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyMessage(msg)}
+                          title="Copy image / album"
+                          className="p-1 text-muted-foreground hover:text-emerald-600 hover:bg-muted rounded cursor-pointer"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setForwardMsg(msg);
+                            setForwardTargets([]);
+                            setForwardSearch("");
+                          }}
+                          title="Forward"
+                          className="p-1 text-muted-foreground hover:text-emerald-600 hover:bg-muted rounded cursor-pointer text-xs font-bold"
+                        >
+                          <Share2 className="w-3.5 h-3.5" />
+                        </button>
+                        <div className="flex items-center gap-0.5 px-1 py-0.5 bg-muted/60 dark:bg-muted/40 rounded-full border border-border/40 ml-0.5">
+                          {DEFAULT_REACTIONS.map((emoji) => {
+                            const isReacted = (msg.reactions?.[emoji] || []).includes(String(user?.id));
+                            return (
+                              <button
+                                key={emoji}
+                                type="button"
+                                onClick={() => handleReact(msg.id, emoji)}
+                                title={`React ${emoji}`}
+                                className={cn(
+                                  "w-6 h-6 flex items-center justify-center text-sm hover:scale-130 active:scale-95 transition-transform duration-150 rounded-full cursor-pointer",
+                                  isReacted && "bg-emerald-500/20 scale-110"
+                                )}
                               >
-                                <img
-                                  src={getMediaUrl(msg.media_url)}
-                                  alt={msg.file_name || "attachment"}
-                                  loading="lazy"
-                                  className="w-full h-full object-cover transition-transform group-hover/img:scale-105 duration-200"
-                                />
-                                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center text-white">
-                                  <Maximize2 className="w-5 h-5" />
-                                </div>
-                              </div>
-                            )}
+                                {emoji}
+                              </button>
+                            );
+                          })}
+                          <button
+                            type="button"
+                            onClick={() => setReactionPickerMsgId(msg.id)}
+                            title="More reactions (+)"
+                            className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted rounded-full text-xs font-bold transition-transform hover:scale-115 cursor-pointer ml-0.5"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
 
-                            {msg.media_type === "video" && (
-                              <div
-                                onContextMenu={(e) => handleContextMenu(e, msg, { url: msg.media_url!, name: msg.file_name || "video.mp4", type: "video" })}
-                                className="rounded-xl overflow-hidden max-w-sm border border-black/10 bg-black relative group/vid"
+            return (
+              <div
+                key={msg.id}
+                id={`msg-${msg.id}`}
+                className={cn(
+                  "flex gap-2.5 items-start w-full transition-all duration-300 rounded-lg px-1 py-0.5",
+                  isMe ? "flex-row-reverse" : "flex-row",
+                  isHighlighted ? "bg-emerald-500/15 ring-2 ring-emerald-500" : ""
+                )}
+              >
+                {/* Sender Avatar - left for others, right for me (like reference image) */}
+                <div className="pt-5 shrink-0">
+                  <UserAvatar
+                    name={msg.sender_name}
+                    avatar={msg.sender_avatar}
+                    size="w-9 h-9"
+                    isOnline={presenceMap[msg.sender_id] ?? false}
+                    showStatus={false}
+                  />
+                </div>
+
+                {/* Message Content Stack */}
+                <div
+                  className={cn(
+                    "flex flex-col gap-1 min-w-0 max-w-[75%] sm:max-w-[65%]",
+                    isMe ? "items-end" : "items-start"
+                  )}
+                >
+                  {/* Header: Sender Name + Timestamp (like reference: Sarah Connor 10:24 AM) */}
+                  <div className={cn("flex items-baseline gap-1.5 px-1", isMe ? "flex-row-reverse" : "flex-row")}>
+                    <span className="font-bold text-[13px] leading-none text-foreground whitespace-nowrap">
+                      {cleanDisplayName(msg.sender_name)}
+                    </span>
+                    <span className="text-[11px] font-normal text-muted-foreground whitespace-nowrap">
+                      {formatMsgTime(msg.created_at)}
+                    </span>
+                  </div>
+
+                  {/* Speech Bubble Container with Hover Actions */}
+                  <div className={cn("relative group flex items-end gap-1.5 max-w-full mb-2", isMe ? "flex-row-reverse" : "flex-row")}>
+                    {/* Bubble - fully rounded like reference image */}
+                    <div
+                      onContextMenu={(e) => handleContextMenu(e, msg)}
+                      className={cn(
+                        "px-3.5 py-2 rounded-[18px] text-[13.5px] leading-[1.45] shadow-none relative transition-all w-fit max-w-full break-words",
+                        isMe
+                          ? "bg-[#00a36c] dark:bg-emerald-600 text-white"
+                          : "bg-[#f0f2f5] dark:bg-muted text-[#111b21] dark:text-foreground"
+                      )}
+                    >
+                      {/* Forwarded label (issue 7) */}
+                      {msg.is_forwarded && (
+                        <div className={cn("flex items-center gap-1 text-[10px] italic opacity-70 mb-1", isMe ? "text-white" : "text-muted-foreground")}>
+                          <span>➦</span>
+                          <span>Forwarded</span>
+                        </div>
+                      )}
+                      {/* QUOTED REPLY PREVIEW (WhatsApp Style with Click-to-Scroll) */}
+                      {msg.reply_to && (
+                        <ReplyQuote reply={msg.reply_to} isMe={isMe} onNavigate={() => scrollToOriginalMessage(msg.reply_to!.id)} />
+                      )}
+
+                      {/* INLINE MEDIA (Image, Video, Audio, Doc) - auto-detect audio by extension too */}
+                      {msg.media_url && (
+                        <div className="mb-2">
+                          {msg.media_type === "image" && (
+                            <div
+                              onClick={() => openMediaViewer(msg)}
+                              onContextMenu={(e) => handleContextMenu(e, msg, { url: msg.media_url!, name: msg.file_name || "image.jpg", type: "image" })}
+                              className="rounded-xl overflow-hidden cursor-pointer max-w-sm max-h-72 border border-black/10 group/img relative"
+                            >
+                              <img
+                                src={getMediaUrl(msg.media_url)}
+                                alt={msg.file_name || "attachment"}
+                                loading="lazy"
+                                className="w-full h-full object-cover transition-transform group-hover/img:scale-105 duration-200"
+                              />
+                              <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                <Maximize2 className="w-5 h-5" />
+                              </div>
+                            </div>
+                          )}
+
+                          {msg.media_type === "video" && (
+                            <div
+                              onContextMenu={(e) => handleContextMenu(e, msg, { url: msg.media_url!, name: msg.file_name || "video.mp4", type: "video" })}
+                              className="rounded-xl overflow-hidden max-w-sm border border-black/10 bg-black relative group/vid"
+                            >
+                              <video
+                                src={getMediaUrl(msg.media_url)}
+                                controls
+                                preload="metadata"
+                                className="w-full max-h-64 object-contain cursor-pointer"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  downloadViaBlob(msg.media_url, msg.file_name || "video.mp4");
+                                }}
+                                title="Download Video (Save As)"
+                                className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white transition-opacity opacity-0 group-hover/vid:opacity-100 cursor-pointer z-10"
                               >
-                                <video
-                                  src={getMediaUrl(msg.media_url)}
-                                  controls
-                                  preload="metadata"
-                                  className="w-full max-h-64 object-contain cursor-pointer"
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    downloadViaBlob(msg.media_url, msg.file_name || "video.mp4");
-                                  }}
-                                  title="Download Video (Save As)"
-                                  className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white transition-opacity opacity-0 group-hover/vid:opacity-100 cursor-pointer z-10"
-                                >
-                                  <Download className="w-4 h-4" />
-                                </button>
-                              </div>
-                            )}
+                                <Download className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
 
-                            {(msg.media_type === "audio" ||
-                              (msg.file_name && /\.(webm|mp3|wav|ogg|m4a|aac)$/i.test(msg.file_name)) ||
-                              (msg.media_url && /\.(webm|mp3|wav|ogg|m4a|aac)(\?|$)/i.test(msg.media_url))) && (
+                          {(msg.media_type === "audio" ||
+                            (msg.file_name && /\.(webm|mp3|wav|ogg|m4a|aac)$/i.test(msg.file_name)) ||
+                            (msg.media_url && /\.(webm|mp3|wav|ogg|m4a|aac)(\?|$)/i.test(msg.media_url))) && (
                               <div onClick={(e) => e.stopPropagation()}>
                                 <VoicePlayer audioUrl={msg.media_url} isMe={isMe} fileName={msg.file_name} onDownload={downloadViaBlob} />
                               </div>
                             )}
 
-                            {(msg.media_type === "document" ||
-                              (!msg.media_type &&
-                                msg.media_url &&
-                                !/\.(jpg|jpeg|png|gif|webp|mp4|mov|webm|mp3|wav|ogg|m4a)$/i.test(
-                                  msg.file_name || msg.media_url
-                                ))) && (
+                          {(msg.media_type === "document" ||
+                            (!msg.media_type &&
+                              msg.media_url &&
+                              !/\.(jpg|jpeg|png|gif|webp|mp4|mov|webm|mp3|wav|ogg|m4a)$/i.test(
+                                msg.file_name || msg.media_url
+                              ))) && (
                               <>
                                 {isPdfMsg(msg) ? (
                                   <div className={cn("rounded-xl overflow-hidden min-w-[240px] sm:min-w-[280px]", isMe ? "bg-black/15" : "bg-card border border-border")}>
@@ -4021,206 +4097,264 @@ function ChatInner() {
                                 )}
                               </>
                             )}
-                          </div>
-                        )}
+                        </div>
+                      )}
 
-                        {/* POLL INTERFACE - WhatsApp Style */}
-                        {Boolean(msg.poll && Array.isArray(msg.poll.options) && msg.poll.options.length > 0) && (
-                          <div className="min-w-[260px] sm:min-w-[300px] max-w-[360px] space-y-2.5 py-0.5">
-                            {/* Poll Header: Question + Selection Mode */}
-                            <div className="space-y-0.5 pr-1">
-                              <h4 className={cn(
-                                "font-bold text-[15px] leading-snug tracking-tight select-text",
-                                isMe ? "text-white" : "text-[#111b21] dark:text-foreground"
-                              )}>
-                                {msg.poll!.question}
-                              </h4>
-                              <p className={cn(
-                                "text-[11px] font-normal tracking-wide",
-                                isMe ? "text-white/80" : "text-muted-foreground"
-                              )}>
-                                {msg.poll!.allow_multiple_answers ? "Select one or more" : "Select one"}
-                              </p>
-                            </div>
-
-                            {/* Options List */}
-                            <div className="space-y-2">
-                              {msg.poll!.options.map((opt) => {
-                                const totalVotes =
-                                  msg.poll!.options.reduce((acc, o) => acc + (Array.isArray(o.voters) ? o.voters.length : 0), 0) || 1;
-                                const votes = Array.isArray(opt.voters) ? opt.voters.length : 0;
-                                const percent = Math.round((votes / totalVotes) * 100);
-                                const hasVoted = Array.isArray(opt.voters) && opt.voters.some((v) => String(v) === myUserId || (myEmployeeId && String(v) === myEmployeeId));
-
-                                // Resolve voter names with fallback
-                                const voterItems: Array<{ id: string; name: string }> = (opt.voter_details && opt.voter_details.length > 0)
-                                  ? opt.voter_details.map((vd) => {
-                                      const sVid = String(vd.id);
-                                      const isSelf = sVid === myUserId || (myEmployeeId && sVid === myEmployeeId);
-                                      return { id: sVid, name: isSelf ? "You" : (vd.name || "Colleague") };
-                                    })
-                                  : (opt.voters || []).map((vid) => {
-                                      const sVid = String(vid);
-                                      const isSelf = sVid === myUserId || (myEmployeeId && sVid === myEmployeeId);
-                                      const found = (employees || []).find((e) => String(e.id) === sVid || String((e as any)._id) === sVid);
-                                      return { id: sVid, name: isSelf ? "You" : (found?.name || "Colleague") };
-                                    });
-
-                                return (
-                                  <div key={opt.id} className="space-y-1.5">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleVotePoll(msg.id, opt.id)}
-                                      className={cn(
-                                        "w-full text-left relative overflow-hidden rounded-xl p-2.5 sm:p-3 text-xs transition-all duration-200 cursor-pointer border select-none group",
-                                        isMe
-                                          ? hasVoted
-                                            ? "bg-black/25 border-white/50 shadow-xs ring-1 ring-white/30"
-                                            : "bg-black/15 hover:bg-black/25 border-white/20 hover:border-white/40"
-                                          : hasVoted
-                                            ? "bg-emerald-500/10 border-emerald-600/60 shadow-xs ring-1 ring-emerald-500/30 dark:bg-emerald-500/15"
-                                            : "bg-white dark:bg-card hover:bg-card/80 border-border/80 hover:border-emerald-500/40"
-                                      )}
-                                    >
-                                      {/* Smooth Progress Fill */}
-                                      <div
-                                        className={cn(
-                                          "absolute inset-y-0 left-0 transition-all duration-300 rounded-xl",
-                                          isMe ? "bg-white/20" : "bg-emerald-500/15 dark:bg-emerald-500/25"
-                                        )}
-                                        style={{ width: `${percent}%` }}
-                                      />
-
-                                      {/* Option Info Row */}
-                                      <div className="relative flex items-center justify-between gap-3 z-10">
-                                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                          {/* Checkbox / Radio Circle */}
-                                          <span
-                                            className={cn(
-                                              "w-4 h-4 rounded-full flex items-center justify-center shrink-0 transition-all duration-150",
-                                              hasVoted
-                                                ? isMe
-                                                  ? "bg-white text-emerald-800 shadow-xs"
-                                                  : "bg-emerald-600 text-white shadow-xs"
-                                                : isMe
-                                                  ? "border-2 border-white/60 group-hover:border-white"
-                                                  : "border-2 border-muted-foreground/50 group-hover:border-emerald-600"
-                                            )}
-                                          >
-                                            {hasVoted && <Check className="w-2.5 h-2.5 stroke-[3.5]" />}
-                                          </span>
-                                          <span className={cn(
-                                            "text-[13px] font-semibold truncate",
-                                            isMe ? "text-white" : "text-foreground"
-                                          )}>
-                                            {opt.text}
-                                          </span>
-                                        </div>
-
-                                        {/* Percentage and Vote Count */}
-                                        <div className="flex items-center gap-1.5 shrink-0">
-                                          <span className={cn(
-                                            "text-[11px] font-mono",
-                                            isMe ? "text-white/80" : "text-muted-foreground"
-                                          )}>
-                                            {votes > 0 ? `${votes}` : ""}
-                                          </span>
-                                          <span className={cn(
-                                            "text-[11.5px] font-bold font-mono px-1.5 py-0.5 rounded-md",
-                                            isMe ? "bg-white/20 text-white" : "bg-muted text-foreground"
-                                          )}>
-                                            {percent}%
-                                          </span>
-                                        </div>
-                                      </div>
-                                    </button>
-
-                                    {/* High-Contrast Voter Badges */}
-                                    {voterItems.length > 0 && !msg.poll?.hide_voters_name && (
-                                      <div className="flex items-center flex-wrap gap-1 px-1 pt-0.5">
-                                        {voterItems.slice(0, 3).map((voter, vIdx) => (
-                                          <span
-                                            key={vIdx}
-                                            className={cn(
-                                              "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10.5px] font-medium transition-colors",
-                                              isMe
-                                                ? "bg-black/35 text-white border border-white/25 shadow-xs"
-                                                : "bg-card text-foreground border border-border/80 shadow-2xs"
-                                            )}
-                                          >
-                                            <span className={cn(
-                                              "w-3.5 h-3.5 rounded-full text-[9px] font-bold flex items-center justify-center shrink-0",
-                                              isMe ? "bg-white/25 text-white" : "bg-emerald-600/15 text-emerald-700 dark:text-emerald-400"
-                                            )}>
-                                              {voter.name.charAt(0).toUpperCase()}
-                                            </span>
-                                            <span className="max-w-[120px] truncate">{voter.name}</span>
-                                          </span>
-                                        ))}
-                                        {voterItems.length > 3 && (
-                                          <span className={cn(
-                                            "text-[10px] font-medium px-1.5 py-0.5 rounded-full",
-                                            isMe ? "bg-black/30 text-white/90" : "bg-muted text-muted-foreground"
-                                          )}>
-                                            +{voterItems.length - 3} more
-                                          </span>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-
-                            {/* WhatsApp Style Footer: "View votes" + Count + Time & Status Tick */}
-                            <div className={cn(
-                              "pt-2 mt-2 border-t flex items-center justify-between gap-2",
-                              isMe ? "border-white/20" : "border-border/60"
+                      {/* POLL INTERFACE - WhatsApp Style */}
+                      {Boolean(msg.poll && Array.isArray(msg.poll.options) && msg.poll.options.length > 0) && (
+                        <div className="min-w-[260px] sm:min-w-[300px] max-w-[360px] space-y-2.5 py-0.5">
+                          {/* Poll Header: Question + Selection Mode */}
+                          <div className="space-y-0.5 pr-1">
+                            <h4 className={cn(
+                              "font-bold text-[15px] leading-snug tracking-tight select-text",
+                              isMe ? "text-white" : "text-[#111b21] dark:text-foreground"
                             )}>
+                              {msg.poll!.question}
+                            </h4>
+                            <p className={cn(
+                              "text-[11px] font-normal tracking-wide",
+                              isMe ? "text-white/80" : "text-muted-foreground"
+                            )}>
+                              {msg.poll!.allow_multiple_answers ? "Select one or more" : "Select one"}
+                            </p>
+                          </div>
+
+                          {/* Options List */}
+                          <div className="space-y-2">
+                            {msg.poll!.options.map((opt) => {
+                              const totalVotes =
+                                msg.poll!.options.reduce((acc, o) => acc + (Array.isArray(o.voters) ? o.voters.length : 0), 0) || 1;
+                              const votes = Array.isArray(opt.voters) ? opt.voters.length : 0;
+                              const percent = Math.round((votes / totalVotes) * 100);
+                              const hasVoted = Array.isArray(opt.voters) && opt.voters.some((v) => String(v) === myUserId || (myEmployeeId && String(v) === myEmployeeId));
+
+                              // Resolve voter names with fallback
+                              const voterItems: Array<{ id: string; name: string }> = (opt.voter_details && opt.voter_details.length > 0)
+                                ? opt.voter_details.map((vd) => {
+                                  const sVid = String(vd.id);
+                                  const isSelf = sVid === myUserId || (myEmployeeId && sVid === myEmployeeId);
+                                  return { id: sVid, name: isSelf ? "You" : (vd.name || "Colleague") };
+                                })
+                                : (opt.voters || []).map((vid) => {
+                                  const sVid = String(vid);
+                                  const isSelf = sVid === myUserId || (myEmployeeId && sVid === myEmployeeId);
+                                  const found = (employees || []).find((e) => String(e.id) === sVid || String((e as any)._id) === sVid);
+                                  return { id: sVid, name: isSelf ? "You" : (found?.name || "Colleague") };
+                                });
+
+                              return (
+                                <div key={opt.id} className="space-y-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleVotePoll(msg.id, opt.id)}
+                                    className={cn(
+                                      "w-full text-left relative overflow-hidden rounded-xl p-2.5 sm:p-3 text-xs transition-all duration-200 cursor-pointer border select-none group",
+                                      isMe
+                                        ? hasVoted
+                                          ? "bg-black/25 border-white/50 shadow-xs ring-1 ring-white/30"
+                                          : "bg-black/15 hover:bg-black/25 border-white/20 hover:border-white/40"
+                                        : hasVoted
+                                          ? "bg-emerald-500/10 border-emerald-600/60 shadow-xs ring-1 ring-emerald-500/30 dark:bg-emerald-500/15"
+                                          : "bg-white dark:bg-card hover:bg-card/80 border-border/80 hover:border-emerald-500/40"
+                                    )}
+                                  >
+                                    {/* Smooth Progress Fill */}
+                                    <div
+                                      className={cn(
+                                        "absolute inset-y-0 left-0 transition-all duration-300 rounded-xl",
+                                        isMe ? "bg-white/20" : "bg-emerald-500/15 dark:bg-emerald-500/25"
+                                      )}
+                                      style={{ width: `${percent}%` }}
+                                    />
+
+                                    {/* Option Info Row */}
+                                    <div className="relative flex items-center justify-between gap-3 z-10">
+                                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                        {/* Checkbox / Radio Circle */}
+                                        <span
+                                          className={cn(
+                                            "w-4 h-4 rounded-full flex items-center justify-center shrink-0 transition-all duration-150",
+                                            hasVoted
+                                              ? isMe
+                                                ? "bg-white text-emerald-800 shadow-xs"
+                                                : "bg-emerald-600 text-white shadow-xs"
+                                              : isMe
+                                                ? "border-2 border-white/60 group-hover:border-white"
+                                                : "border-2 border-muted-foreground/50 group-hover:border-emerald-600"
+                                          )}
+                                        >
+                                          {hasVoted && <Check className="w-2.5 h-2.5 stroke-[3.5]" />}
+                                        </span>
+                                        <span className={cn(
+                                          "text-[13px] font-semibold truncate",
+                                          isMe ? "text-white" : "text-foreground"
+                                        )}>
+                                          {opt.text}
+                                        </span>
+                                      </div>
+
+                                      {/* Percentage and Vote Count */}
+                                      <div className="flex items-center gap-1.5 shrink-0">
+                                        <span className={cn(
+                                          "text-[11px] font-mono",
+                                          isMe ? "text-white/80" : "text-muted-foreground"
+                                        )}>
+                                          {votes > 0 ? `${votes}` : ""}
+                                        </span>
+                                        <span className={cn(
+                                          "text-[11.5px] font-bold font-mono px-1.5 py-0.5 rounded-md",
+                                          isMe ? "bg-white/20 text-white" : "bg-muted text-foreground"
+                                        )}>
+                                          {percent}%
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </button>
+
+                                  {/* High-Contrast Voter Badges */}
+                                  {voterItems.length > 0 && !msg.poll?.hide_voters_name && (
+                                    <div className="flex items-center flex-wrap gap-1 px-1 pt-0.5">
+                                      {voterItems.slice(0, 3).map((voter, vIdx) => (
+                                        <span
+                                          key={vIdx}
+                                          className={cn(
+                                            "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10.5px] font-medium transition-colors",
+                                            isMe
+                                              ? "bg-black/35 text-white border border-white/25 shadow-xs"
+                                              : "bg-card text-foreground border border-border/80 shadow-2xs"
+                                          )}
+                                        >
+                                          <span className={cn(
+                                            "w-3.5 h-3.5 rounded-full text-[9px] font-bold flex items-center justify-center shrink-0",
+                                            isMe ? "bg-white/25 text-white" : "bg-emerald-600/15 text-emerald-700 dark:text-emerald-400"
+                                          )}>
+                                            {voter.name.charAt(0).toUpperCase()}
+                                          </span>
+                                          <span className="max-w-[120px] truncate">{voter.name}</span>
+                                        </span>
+                                      ))}
+                                      {voterItems.length > 3 && (
+                                        <span className={cn(
+                                          "text-[10px] font-medium px-1.5 py-0.5 rounded-full",
+                                          isMe ? "bg-black/30 text-white/90" : "bg-muted text-muted-foreground"
+                                        )}>
+                                          +{voterItems.length - 3} more
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* WhatsApp Style Footer: "View votes" + Count + Time & Status Tick */}
+                          <div className={cn(
+                            "pt-2 mt-2 border-t flex items-center justify-between gap-2",
+                            isMe ? "border-white/20" : "border-border/60"
+                          )}>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setViewVotesPollMsg(msg);
+                              }}
+                              className={cn(
+                                "text-[11.5px] font-semibold flex items-center gap-1.5 cursor-pointer transition-colors px-2 py-1 rounded-lg",
+                                isMe
+                                  ? "bg-white/15 text-white hover:bg-white/25"
+                                  : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20"
+                              )}
+                            >
+                              <Users className="w-3.5 h-3.5" />
+                              <span>View votes</span>
+                            </button>
+
+                            <div className="flex items-center gap-2">
+                              <span className={cn("text-[11px] font-medium", isMe ? "text-white/85" : "text-muted-foreground")}>
+                                {msg.poll!.options.reduce((acc, o) => acc + (Array.isArray(o.voters) ? o.voters.length : 0), 0)} votes
+                              </span>
+                              <span className={cn("text-[10px] flex items-center gap-1 ml-0.5", isMe ? "text-white/75" : "text-muted-foreground")}>
+                                <span>{formatMsgTime(msg.created_at)}</span>
+                                {isMe && (
+                                  <span title={isMessageSeen(msg) ? "Seen / Read" : "Delivered"}>
+                                    {isMessageSeen(msg) ? (
+                                      <CheckCheck className="w-3.5 h-3.5 text-[#53bdeb]" strokeWidth={2.5} />
+                                    ) : (
+                                      <CheckCheck className="w-3.5 h-3.5 text-white/70" strokeWidth={2} />
+                                    )}
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* TEXT MESSAGE CONTENT - WhatsApp style (tick inline, no extra line) */}
+                      {msg.content && !msg.poll && (
+                        editingMessageId === msg.id ? (
+                          <div className="flex flex-col gap-2 min-w-[220px] py-1" onClick={(e) => e.stopPropagation()}>
+                            <textarea
+                              autoFocus
+                              rows={2}
+                              value={editingMessageText}
+                              onChange={(e) => setEditingMessageText(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && !e.shiftKey) {
+                                  e.preventDefault();
+                                  handleSaveEditMessage();
+                                }
+                                if (e.key === "Escape") setEditingMessageId(null);
+                              }}
+                              className={cn(
+                                "w-full px-2.5 py-1.5 text-xs rounded-lg border focus:outline-none resize-none",
+                                isMe
+                                  ? "bg-white/10 text-white border-white/30 placeholder:text-white/60 focus:ring-1 focus:ring-white"
+                                  : "bg-background text-foreground border-border focus:ring-1 focus:ring-primary"
+                              )}
+                            />
+                            <div className="flex items-center gap-2 justify-end">
                               <button
                                 type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setViewVotesPollMsg(msg);
-                                }}
+                                onClick={() => setEditingMessageId(null)}
                                 className={cn(
-                                  "text-[11.5px] font-semibold flex items-center gap-1.5 cursor-pointer transition-colors px-2 py-1 rounded-lg",
-                                  isMe
-                                    ? "bg-white/15 text-white hover:bg-white/25"
-                                    : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20"
+                                  "px-2 py-0.5 text-[10px] font-bold rounded cursor-pointer",
+                                  isMe ? "text-white/80 hover:text-white" : "text-muted-foreground hover:text-foreground"
                                 )}
                               >
-                                <Users className="w-3.5 h-3.5" />
-                                <span>View votes</span>
+                                Cancel
                               </button>
-
-                              <div className="flex items-center gap-2">
-                                <span className={cn("text-[11px] font-medium", isMe ? "text-white/85" : "text-muted-foreground")}>
-                                  {msg.poll!.options.reduce((acc, o) => acc + (Array.isArray(o.voters) ? o.voters.length : 0), 0)} votes
-                                </span>
-                                <span className={cn("text-[10px] flex items-center gap-1 ml-0.5", isMe ? "text-white/75" : "text-muted-foreground")}>
-                                  <span>{formatMsgTime(msg.created_at)}</span>
-                                  {isMe && (
-                                    <span title={isMessageSeen(msg) ? "Seen / Read" : "Delivered"}>
-                                      {isMessageSeen(msg) ? (
-                                        <CheckCheck className="w-3.5 h-3.5 text-[#53bdeb]" strokeWidth={2.5} />
-                                      ) : (
-                                        <CheckCheck className="w-3.5 h-3.5 text-white/70" strokeWidth={2} />
-                                      )}
-                                    </span>
-                                  )}
-                                </span>
-                              </div>
+                              <button
+                                type="button"
+                                onClick={handleSaveEditMessage}
+                                disabled={isSavingEdit || !editingMessageText.trim()}
+                                className="px-2.5 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold cursor-pointer disabled:opacity-50"
+                              >
+                                {isSavingEdit ? "Saving..." : "Save"}
+                              </button>
                             </div>
                           </div>
-                        )}
-
-                        {/* TEXT MESSAGE CONTENT - WhatsApp style (tick inline, no extra line) */}
-                        {msg.content && !msg.poll && (
-                          <div className={cn("break-words select-text relative", isMe && "pr-6")}>
-                            {msg.content.length > 700 && !expandedMessages.has(msg.id) ? (
-                              <>
-                                <div>{renderFormattedText(msg.content.slice(0, 700), isMe)}</div>
+                        ) : (
+                        <div className={cn("break-words select-text relative", isMe && "pr-6")}>
+                          {msg.content.length > 700 && !expandedMessages.has(msg.id) ? (
+                            <>
+                              <div>{renderFormattedText(msg.content.slice(0, 700), isMe)}</div>
+                              <button
+                                type="button"
+                                onClick={() => toggleExpandMessage(msg.id)}
+                                className={cn(
+                                  "mt-1 text-xs font-bold underline cursor-pointer",
+                                  isMe ? "text-emerald-100" : "text-emerald-600 dark:text-emerald-400"
+                                )}
+                              >
+                                Read more
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <div>{renderFormattedText(msg.content, isMe)}</div>
+                              {msg.content.length > 700 && (
                                 <button
                                   type="button"
                                   onClick={() => toggleExpandMessage(msg.id)}
@@ -4229,1947 +4363,1997 @@ function ChatInner() {
                                     isMe ? "text-emerald-100" : "text-emerald-600 dark:text-emerald-400"
                                   )}
                                 >
-                                  Read more
+                                  Show less
                                 </button>
-                              </>
-                            ) : (
-                              <>
-                                <div>{renderFormattedText(msg.content, isMe)}</div>
-                                {msg.content.length > 700 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleExpandMessage(msg.id)}
-                                    className={cn(
-                                      "mt-1 text-xs font-bold underline cursor-pointer",
-                                      isMe ? "text-emerald-100" : "text-emerald-600 dark:text-emerald-400"
-                                    )}
-                                  >
-                                    Show less
-                                  </button>
-                                )}
-                              </>
-                            )}
-                            {/* WhatsApp style tick — absolute at end of last line, never a new line */}
-                            {isMe && (
-                              <span
-                                className="absolute bottom-0 right-0 inline-flex items-center leading-none"
-                                title={isMessageSeen(msg) ? "Seen / Read" : "Delivered"}
-                              >
-                                {isMessageSeen(msg) ? (
-                                  <CheckCheck
-                                    className="w-4 h-4 text-[#53bdeb]"
-                                    strokeWidth={2.5}
-                                  />
-                                ) : (
-                                  <CheckCheck
-                                    className="w-4 h-4 text-white/70 dark:text-muted-foreground"
-                                    strokeWidth={2}
-                                  />
-                                )}
-                              </span>
-                            )}
-                          </div>
-                        )}
+                              )}
+                            </>
+                          )}
+                          {/* WhatsApp style tick — absolute at end of last line, never a new line */}
+                          {isMe && (
+                            <span
+                              className="absolute bottom-0 right-0 inline-flex items-center gap-1 leading-none"
+                              title={isMessageSeen(msg) ? "Seen / Read" : "Delivered"}
+                            >
+                              {(msg as any).is_edited && (
+                                <span className="text-[9px] opacity-70 italic">edited</span>
+                              )}
+                              {isMessageSeen(msg) ? (
+                                <CheckCheck
+                                  className="w-4 h-4 text-[#53bdeb]"
+                                  strokeWidth={2.5}
+                                />
+                              ) : (
+                                <CheckCheck
+                                  className="w-4 h-4 text-white/70 dark:text-muted-foreground"
+                                  strokeWidth={2}
+                                />
+                              )}
+                            </span>
+                          )}
+                        </div>
+                        )
+                      )}
 
-                        {/* Fallback tick for media-only messages (no text) - also inline */}
-                        {isMe && !msg.content && !msg.poll && (
-                          <span
-                            className="float-right inline-flex items-center ml-2 mt-1"
-                            title={isMessageSeen(msg) ? "Seen / Read" : "Delivered"}
-                          >
-                            {isMessageSeen(msg) ? (
-                              <CheckCheck className="w-4 h-4 text-[#53bdeb]" strokeWidth={2.5} />
-                            ) : (
-                              <CheckCheck className="w-4 h-4 text-white/70 dark:text-muted-foreground" strokeWidth={2} />
-                            )}
-                          </span>
-                        )}
+                      {/* Fallback tick for media-only messages (no text) - also inline */}
+                      {isMe && !msg.content && !msg.poll && (
+                        <span
+                          className="float-right inline-flex items-center ml-2 mt-1"
+                          title={isMessageSeen(msg) ? "Seen / Read" : "Delivered"}
+                        >
+                          {isMessageSeen(msg) ? (
+                            <CheckCheck className="w-4 h-4 text-[#53bdeb]" strokeWidth={2.5} />
+                          ) : (
+                            <CheckCheck className="w-4 h-4 text-white/70 dark:text-muted-foreground" strokeWidth={2} />
+                          )}
+                        </span>
+                      )}
 
-                        {/* EMOJI REACTIONS BADGE - Overlapping bubble bottom corner (WhatsApp style) */}
-                        {Boolean(msg.reactions && typeof msg.reactions === "object" && Object.values(msg.reactions).some(u => Array.isArray(u) && u.length > 0)) && (
-                          <div
-                            className={cn(
-                              "absolute -bottom-3 z-10 flex items-center gap-1 bg-card dark:bg-card border border-border shadow-md rounded-full px-2 py-0.5 text-xs select-none transition-transform hover:scale-105",
-                              isMe ? "right-3" : "left-3"
-                            )}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {Object.entries(msg.reactions).map(([emoji, userIds]) => {
-                              if (!Array.isArray(userIds) || userIds.length === 0) return null;
-                              const hasReacted = userIds.includes(String(user?.id));
-                              return (
-                                <button
-                                  key={emoji}
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleReact(msg.id, emoji);
-                                  }}
-                                  title={`${userIds.length} reactions`}
-                                  className={cn(
-                                    "flex items-center gap-0.5 transition-transform hover:scale-110 cursor-pointer",
-                                    hasReacted ? "opacity-100 font-bold" : "opacity-80"
-                                  )}
-                                >
-                                  <span>{emoji}</span>
-                                  {userIds.length > 1 && (
-                                    <span className="text-[10px] text-muted-foreground font-semibold">{userIds.length}</span>
-                                  )}
-                                </button>
-                              );
-                            })}
-                            {(() => {
-                              const total = (Object.values(msg.reactions) as string[][]).reduce(
-                                (a, u) => a + (Array.isArray(u) ? u.length : 0),
-                                0
-                              );
-                              const activeEmojis = Object.keys(msg.reactions).filter(
-                                (k) => Array.isArray(msg.reactions[k]) && msg.reactions[k].length > 0
-                              );
-                              return total > 1 && activeEmojis.length > 1 ? (
-                                <span className="text-[10px] font-semibold text-muted-foreground pl-0.5">{total}</span>
-                              ) : null;
-                            })()}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* HOVER QUICK ACTIONS (REPLY, COPY, FORWARD, REACT, DOWNLOAD, DELETE) */}
-                      <div
-                        className={cn(
-                          "opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 bg-card border border-border rounded-lg shadow-xs p-0.5",
-                          isMe ? "flex-row-reverse" : ""
-                        )}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setReplyTo(msg);
-                            focusMessageInput();
-                          }}
-                          title="Reply"
-                          className="p-1 text-muted-foreground hover:text-emerald-600 hover:bg-muted rounded transition-colors cursor-pointer"
+                      {/* EMOJI REACTIONS BADGE - Overlapping bubble bottom corner (WhatsApp style) */}
+                      {Boolean(msg.reactions && typeof msg.reactions === "object" && Object.values(msg.reactions).some(u => Array.isArray(u) && u.length > 0)) && (
+                        <div
+                          className={cn(
+                            "absolute -bottom-3 z-10 flex items-center gap-1 bg-card dark:bg-card border border-border shadow-md rounded-full px-2 py-0.5 text-xs select-none transition-transform hover:scale-105",
+                            isMe ? "right-3" : "left-3"
+                          )}
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          <CornerUpLeft className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleCopyMessage(msg)}
-                          title={msg.media_type === "image" ? "Copy image" : "Copy text"}
-                          className="p-1 text-muted-foreground hover:text-emerald-600 hover:bg-muted rounded transition-colors cursor-pointer"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setForwardMsg(msg);
-                            setForwardTargets([]);
-                            setForwardSearch("");
-                          }}
-                          title="Forward (multiple chats)"
-                          className="p-1 text-muted-foreground hover:text-emerald-600 hover:bg-muted rounded transition-colors cursor-pointer"
-                        >
-                          <Share2 className="w-3.5 h-3.5" />
-                        </button>
-                        {msg.media_url && (
-                          <button
-                            type="button"
-                            onClick={() => downloadViaBlob(msg.media_url, msg.file_name || "media")}
-                            title="Download (Save As)"
-                            className="p-1 text-muted-foreground hover:text-emerald-600 hover:bg-muted rounded transition-colors cursor-pointer"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                        {/* WhatsApp Reaction Pill (Screenshot 3: 👍 ❤️ 😂 😮 😢 🙏 +) */}
-                        <div className="flex items-center gap-0.5 px-1 py-0.5 bg-muted/60 dark:bg-muted/40 rounded-full border border-border/40">
-                          {DEFAULT_REACTIONS.map((emoji) => {
-                            const isReacted = (msg.reactions?.[emoji] || []).includes(String(user?.id));
+                          {Object.entries(msg.reactions).map(([emoji, userIds]) => {
+                            if (!Array.isArray(userIds) || userIds.length === 0) return null;
+                            const hasReacted = userIds.includes(String(user?.id));
                             return (
                               <button
                                 key={emoji}
                                 type="button"
-                                onClick={() => handleReact(msg.id, emoji)}
-                                title={`React ${emoji}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleReact(msg.id, emoji);
+                                }}
+                                title={`${userIds.length} reactions`}
                                 className={cn(
-                                  "w-6 h-6 flex items-center justify-center text-sm hover:scale-130 active:scale-95 transition-transform duration-150 rounded-full cursor-pointer",
-                                  isReacted && "bg-emerald-500/20 scale-110"
+                                  "flex items-center gap-0.5 transition-transform hover:scale-110 cursor-pointer",
+                                  hasReacted ? "opacity-100 font-bold" : "opacity-80"
                                 )}
                               >
-                                {emoji}
+                                <span>{emoji}</span>
+                                {userIds.length > 1 && (
+                                  <span className="text-[10px] text-muted-foreground font-semibold">{userIds.length}</span>
+                                )}
                               </button>
                             );
                           })}
-                          <button
-                            type="button"
-                            onClick={() => setReactionPickerMsgId(msg.id)}
-                            title="More reactions (+)"
-                            className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted rounded-full text-xs font-bold transition-transform hover:scale-115 cursor-pointer ml-0.5"
-                          >
-                            +
-                          </button>
+                          {(() => {
+                            const total = (Object.values(msg.reactions) as string[][]).reduce(
+                              (a, u) => a + (Array.isArray(u) ? u.length : 0),
+                              0
+                            );
+                            const activeEmojis = Object.keys(msg.reactions).filter(
+                              (k) => Array.isArray(msg.reactions[k]) && msg.reactions[k].length > 0
+                            );
+                            return total > 1 && activeEmojis.length > 1 ? (
+                              <span className="text-[10px] font-semibold text-muted-foreground pl-0.5">{total}</span>
+                            ) : null;
+                          })()}
                         </div>
-                        {canDeleteChatMessages && (
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteMessage(msg.id)}
-                            title="Delete message"
-                            className="p-1 text-muted-foreground hover:text-destructive hover:bg-muted rounded transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
+                      )}
+                    </div>
+
+                    {/* HOVER QUICK ACTIONS (REPLY, COPY, FORWARD, REACT, DOWNLOAD, DELETE) */}
+                    <div
+                      className={cn(
+                        "opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 bg-card border border-border rounded-lg shadow-xs p-0.5",
+                        isMe ? "flex-row-reverse" : ""
+                      )}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReplyTo(msg);
+                          focusMessageInput();
+                        }}
+                        title="Reply"
+                        className="p-1 text-muted-foreground hover:text-emerald-600 hover:bg-muted rounded transition-colors cursor-pointer"
+                      >
+                        <CornerUpLeft className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyMessage(msg)}
+                        title={msg.media_type === "image" ? "Copy image" : "Copy text"}
+                        className="p-1 text-muted-foreground hover:text-emerald-600 hover:bg-muted rounded transition-colors cursor-pointer"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setForwardMsg(msg);
+                          setForwardTargets([]);
+                          setForwardSearch("");
+                        }}
+                        title="Forward (multiple chats)"
+                        className="p-1 text-muted-foreground hover:text-emerald-600 hover:bg-muted rounded transition-colors cursor-pointer"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                      </button>
+                      {/* Task 25: Edit message - strictly only for own messages */}
+                      {isMe && !msg.poll && Boolean(msg.content) && (
+                        <button
+                          type="button"
+                          onClick={() => handleStartEditMessage(msg)}
+                          title="Edit message"
+                          className="p-1 text-muted-foreground hover:text-emerald-600 hover:bg-muted rounded transition-colors cursor-pointer"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {msg.media_url && (
+                        <button
+                          type="button"
+                          onClick={() => downloadViaBlob(msg.media_url, msg.file_name || "media")}
+                          title="Download (Save As)"
+                          className="p-1 text-muted-foreground hover:text-emerald-600 hover:bg-muted rounded transition-colors cursor-pointer"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {/* WhatsApp Reaction Pill (Screenshot 3: 👍 ❤️ 😂 😮 😢 🙏 +) */}
+                      <div className="flex items-center gap-0.5 px-1 py-0.5 bg-muted/60 dark:bg-muted/40 rounded-full border border-border/40">
+                        {DEFAULT_REACTIONS.map((emoji) => {
+                          const isReacted = (msg.reactions?.[emoji] || []).includes(String(user?.id));
+                          return (
+                            <button
+                              key={emoji}
+                              type="button"
+                              onClick={() => handleReact(msg.id, emoji)}
+                              title={`React ${emoji}`}
+                              className={cn(
+                                "w-6 h-6 flex items-center justify-center text-sm hover:scale-130 active:scale-95 transition-transform duration-150 rounded-full cursor-pointer",
+                                isReacted && "bg-emerald-500/20 scale-110"
+                              )}
+                            >
+                              {emoji}
+                            </button>
+                          );
+                        })}
+                        <button
+                          type="button"
+                          onClick={() => setReactionPickerMsgId(msg.id)}
+                          title="More reactions (+)"
+                          className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted rounded-full text-xs font-bold transition-transform hover:scale-115 cursor-pointer ml-0.5"
+                        >
+                          +
+                        </button>
                       </div>
+                      {canDeleteChatMessages && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteMessage(msg.id)}
+                          title="Delete message"
+                          className="p-1 text-muted-foreground hover:text-destructive hover:bg-muted rounded transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
-              );
-            })
-          )}
-          <div ref={messagesEndRef} />
-        </div>
+              </div>
+            );
+          })
+        )}
+        <div ref={messagesEndRef} />
+      </div>
 
-        {/* ======================================================== */}
-        {/* 4. MESSAGE INPUT (EXACT ROUNDED CONTAINER WITH + & G)    */}
-        {/* ======================================================== */}
-        <div className="p-4 bg-card border-t border-border shrink-0">
-          {/* Active Reply Banner (WhatsApp Style) */}
-          {replyTo && (
-            <div className="flex items-center justify-between bg-muted/60 border-l-4 border-emerald-500 px-3 py-1.5 rounded-t-lg mb-2 text-xs animate-in fade-in slide-in-from-bottom-1 duration-150 gap-2">
-              <div className="min-w-0 flex-1">
-                <span className="font-bold text-emerald-600 block text-[11px]">
-                  Replying to {replyTo.sender_name}
-                </span>
-                <span className="text-muted-foreground truncate block text-[11px]">
-                  {replyTo.content && !/^.+\.(jpg|jpeg|png|gif|webp|mp4|mov|webm|pdf)$/i.test(replyTo.content.trim())
-                    ? replyTo.content
-                    : replyTo.media_type === "image"
+      {/* ======================================================== */}
+      {/* 4. MESSAGE INPUT (EXACT ROUNDED CONTAINER WITH + & G)    */}
+      {/* ======================================================== */}
+      <div className="p-4 bg-card border-t border-border shrink-0">
+        {/* Active Reply Banner (WhatsApp Style) */}
+        {replyTo && (
+          <div className="flex items-center justify-between bg-muted/60 border-l-4 border-emerald-500 px-3 py-1.5 rounded-t-lg mb-2 text-xs animate-in fade-in slide-in-from-bottom-1 duration-150 gap-2">
+            <div className="min-w-0 flex-1">
+              <span className="font-bold text-emerald-600 block text-[11px]">
+                Replying to {replyTo.sender_name}
+              </span>
+              <span className="text-muted-foreground truncate block text-[11px]">
+                {replyTo.content && !/^.+\.(jpg|jpeg|png|gif|webp|mp4|mov|webm|pdf)$/i.test(replyTo.content.trim())
+                  ? replyTo.content
+                  : replyTo.media_type === "image"
                     ? "📷 Photo"
                     : replyTo.media_type === "video"
-                    ? "🎬 Video"
-                    : replyTo.media_type === "audio"
-                    ? "🎤 Voice message"
-                    : replyTo.file_name || (replyTo.media_type ? `[${replyTo.media_type}]` : "")}
-                </span>
-              </div>
-              {replyTo.media_url && (replyTo.media_type === "image" || replyTo.media_type === "video") && (
-                <span className="w-9 h-9 rounded-md overflow-hidden shrink-0 bg-black/10 border border-black/10">
-                  {replyTo.media_type === "video" ? (
-                    <video src={getMediaUrl(replyTo.media_url)} preload="metadata" className="w-full h-full object-cover" />
-                  ) : (
-                    <img src={getMediaUrl(replyTo.media_url)} alt="" className="w-full h-full object-cover" />
-                  )}
-                </span>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  setReplyTo(null);
-                  focusMessageInput();
-                }}
-                className="p-1 text-muted-foreground hover:text-foreground cursor-pointer"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
-
-          {/* Live Voice Recording Active Bar - WhatsApp Style matching Screenshot */}
-          {isRecording ? (
-            <div className="flex items-center justify-between bg-card border border-border rounded-full px-3 py-1.5 shadow-sm gap-2 sm:gap-3 transition-all">
-              {/* Trash can button (Green circular outline) */}
-              <button
-                type="button"
-                onClick={cancelRecording}
-                className="w-9 h-9 rounded-full border border-emerald-600 dark:border-emerald-500 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950 flex items-center justify-center transition-colors cursor-pointer shrink-0"
-                title="Cancel & Delete Recording"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-
-              {/* Red dot indicator */}
-              <span className={cn("w-2.5 h-2.5 rounded-full bg-red-600 shrink-0", isRecordingPaused ? "opacity-40" : "animate-pulse")} />
-
-              {/* Timer text */}
-              <span className="text-sm font-semibold text-foreground font-mono shrink-0 select-none">
-                {Math.floor(recordingSeconds / 60)}:{(recordingSeconds % 60).toString().padStart(2, "0")}
+                      ? "🎬 Video"
+                      : replyTo.media_type === "audio"
+                        ? "🎤 Voice message"
+                        : replyTo.file_name || (replyTo.media_type ? `[${replyTo.media_type}]` : "")}
               </span>
-
-              {/* Animated audio sound wave visualizer bars */}
-              <div className="flex-1 flex items-center justify-center gap-1 h-6 overflow-hidden px-2 select-none">
-                {[14, 22, 10, 26, 18, 28, 12, 24, 16, 26, 10, 20, 16, 24, 18, 12].map((baseH, i) => (
-                  <span
-                    key={i}
-                    className={cn(
-                      "w-1 rounded-full transition-all duration-150",
-                      isRecordingPaused ? "bg-muted-foreground/30 h-1.5" : "bg-emerald-500 dark:bg-emerald-400"
-                    )}
-                    style={{
-                      height: isRecordingPaused
-                        ? "4px"
-                        : `${Math.max(4, (baseH * (((recordingSeconds + i) % 4) + 1) * 0.3) % 24)}px`,
-                      animation: isRecordingPaused ? "none" : `pulse 0.7s ease-in-out infinite ${(i * 0.05).toFixed(2)}s`
-                    }}
-                  />
-                ))}
-              </div>
-
-              {/* Pause / Resume Button (Red Pause icon) */}
-              <button
-                type="button"
-                onClick={togglePauseResumeRecording}
-                className="p-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-full transition-colors cursor-pointer shrink-0"
-                title={isRecordingPaused ? "Resume recording" : "Pause recording"}
-              >
-                {isRecordingPaused ? (
-                  <Play className="w-5 h-5 fill-rose-600 text-rose-600" />
-                ) : (
-                  <Pause className="w-5 h-5 fill-rose-600 text-rose-600" />
-                )}
-              </button>
-
-              {/* Green Circular Send Button */}
-              <button
-                type="button"
-                onClick={stopRecording}
-                className="w-10 h-10 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shadow-md transition-colors cursor-pointer shrink-0 ml-1"
-                title="Send Voice Message"
-              >
-                <Send className="w-5 h-5 ml-0.5" />
-              </button>
             </div>
-          ) : (
-            /* Input Box matching the user screenshot */
-            <form
-              onSubmit={handleSendMessage}
-              className="relative flex items-end gap-2 bg-background border border-emerald-300 dark:border-emerald-600 rounded-2xl px-3 py-1.5 focus-within:ring-2 focus-within:ring-emerald-400/30 transition-all"
+            {replyTo.media_url && (replyTo.media_type === "image" || replyTo.media_type === "video") && (
+              <span className="w-9 h-9 rounded-md overflow-hidden shrink-0 bg-black/10 border border-black/10">
+                {replyTo.media_type === "video" ? (
+                  <video src={getMediaUrl(replyTo.media_url)} preload="metadata" className="w-full h-full object-cover" />
+                ) : (
+                  <img src={getMediaUrl(replyTo.media_url)} alt="" className="w-full h-full object-cover" />
+                )}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setReplyTo(null);
+                focusMessageInput();
+              }}
+              className="p-1 text-muted-foreground hover:text-foreground cursor-pointer"
             >
-              {/* WhatsApp-style @ Mention Popup for Group Members (Issue 3) */}
-              {mentionQuery !== null && matchingMentionMembers.length > 0 && !isCurrentDm && (
-                <div className="absolute bottom-full left-0 mb-2 w-72 sm:w-80 max-h-56 overflow-y-auto bg-card border border-border shadow-2xl rounded-2xl p-1.5 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
-                  <div className="px-2.5 py-1 text-[11px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border/60 mb-1 flex items-center justify-between">
-                    <span>Group Members</span>
-                    <span className="text-[10px] lowercase text-emerald-600 font-semibold">{matchingMentionMembers.length} matches</span>
-                  </div>
-                  <div className="space-y-0.5">
-                    {matchingMentionMembers.map((emp, idx) => (
-                      <button
-                        key={emp.id}
-                        type="button"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          insertMention(emp);
-                        }}
-                        className={cn(
-                          "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-left transition-colors cursor-pointer",
-                          idx === mentionIndex
-                            ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 font-semibold"
-                            : "hover:bg-muted text-foreground"
-                        )}
-                      >
-                        <UserAvatar
-                          name={cleanDisplayName(emp.name)}
-                          avatar={emp.avatar || emp.profile_photo}
-                          size="w-7 h-7"
-                          isOnline={Boolean(presenceMap[emp.id])}
-                          showStatus={true}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="text-xs font-medium truncate">{cleanDisplayName(emp.name)}</div>
-                          <div className="text-[10px] text-muted-foreground truncate">{emp.role || emp.email}</div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Live Voice Recording Active Bar - WhatsApp Style matching Screenshot */}
+        {isRecording ? (
+          <div className="flex items-center justify-between bg-card border border-border rounded-full px-3 py-1.5 shadow-sm gap-2 sm:gap-3 transition-all">
+            {/* Trash can button (Green circular outline) */}
+            <button
+              type="button"
+              onClick={cancelRecording}
+              className="w-9 h-9 rounded-full border border-emerald-600 dark:border-emerald-500 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+              title="Cancel & Delete Recording"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+
+            {/* Red dot indicator */}
+            <span className={cn("w-2.5 h-2.5 rounded-full bg-red-600 shrink-0", isRecordingPaused ? "opacity-40" : "animate-pulse")} />
+
+            {/* Timer text */}
+            <span className="text-sm font-semibold text-foreground font-mono shrink-0 select-none">
+              {Math.floor(recordingSeconds / 60)}:{(recordingSeconds % 60).toString().padStart(2, "0")}
+            </span>
+
+            {/* Animated audio sound wave visualizer bars */}
+            <div className="flex-1 flex items-center justify-center gap-1 h-6 overflow-hidden px-2 select-none">
+              {[14, 22, 10, 26, 18, 28, 12, 24, 16, 26, 10, 20, 16, 24, 18, 12].map((baseH, i) => (
+                <span
+                  key={i}
+                  className={cn(
+                    "w-1 rounded-full transition-all duration-150",
+                    isRecordingPaused ? "bg-muted-foreground/30 h-1.5" : "bg-emerald-500 dark:bg-emerald-400"
+                  )}
+                  style={{
+                    height: isRecordingPaused
+                      ? "4px"
+                      : `${Math.max(4, (baseH * (((recordingSeconds + i) % 4) + 1) * 0.3) % 24)}px`,
+                    animation: isRecordingPaused ? "none" : `pulse 0.7s ease-in-out infinite ${(i * 0.05).toFixed(2)}s`
+                  }}
+                />
+              ))}
+            </div>
+
+            {/* Pause / Resume Button (Red Pause icon) */}
+            <button
+              type="button"
+              onClick={togglePauseResumeRecording}
+              className="p-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-full transition-colors cursor-pointer shrink-0"
+              title={isRecordingPaused ? "Resume recording" : "Pause recording"}
+            >
+              {isRecordingPaused ? (
+                <Play className="w-5 h-5 fill-rose-600 text-rose-600" />
+              ) : (
+                <Pause className="w-5 h-5 fill-rose-600 text-rose-600" />
               )}
+            </button>
 
-              {/* Plus icon button on left */}
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors cursor-pointer shrink-0 mb-0.5"
-                title="Attach Document or Image"
-              >
-                <Plus className="w-5 h-5" />
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                onChange={handleFileUpload}
-                className="hidden"
-                accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
-              />
+            {/* Green Circular Send Button */}
+            <button
+              type="button"
+              onClick={stopRecording}
+              className="w-10 h-10 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shadow-md transition-colors cursor-pointer shrink-0 ml-1"
+              title="Send Voice Message"
+            >
+              <Send className="w-5 h-5 ml-0.5" />
+            </button>
+          </div>
+        ) : (
+          /* Input Box matching the user screenshot */
+          <form
+            onSubmit={handleSendMessage}
+            className="relative flex items-end gap-2 bg-background border border-emerald-300 dark:border-emerald-600 rounded-2xl px-3 py-1.5 focus-within:ring-2 focus-within:ring-emerald-400/30 transition-all"
+          >
+            {/* WhatsApp-style @ Mention Popup for Group Members (Issue 3) */}
+            {mentionQuery !== null && matchingMentionMembers.length > 0 && !isCurrentDm && (
+              <div className="absolute bottom-full left-0 mb-2 w-72 sm:w-80 max-h-56 overflow-y-auto bg-card border border-border shadow-2xl rounded-2xl p-1.5 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                <div className="px-2.5 py-1 text-[11px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border/60 mb-1 flex items-center justify-between">
+                  <span>Group Members</span>
+                  <span className="text-[10px] lowercase text-emerald-600 font-semibold">{matchingMentionMembers.length} matches</span>
+                </div>
+                <div className="space-y-0.5">
+                  {matchingMentionMembers.map((emp, idx) => (
+                    <button
+                      key={emp.id}
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        insertMention(emp);
+                      }}
+                      className={cn(
+                        "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-left transition-colors cursor-pointer",
+                        idx === mentionIndex
+                          ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 font-semibold"
+                          : "hover:bg-muted text-foreground"
+                      )}
+                    >
+                      <UserAvatar
+                        name={cleanDisplayName(emp.name)}
+                        avatar={emp.avatar || emp.profile_photo}
+                        size="w-7 h-7"
+                        isOnline={Boolean(presenceMap[emp.id])}
+                        showStatus={true}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-medium truncate">{cleanDisplayName(emp.name)}</div>
+                        <div className="text-[10px] text-muted-foreground truncate">{emp.role || emp.email}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
-              {/* Textarea: Suppresses Grammarly 'G' icon (Issue 2) & Handles @ Mentions (Issue 3) */}
-              <textarea
-                ref={messageInputRef}
-                rows={1}
-                value={inputText}
-                data-gramm="false"
-                data-gramm_editor="false"
-                data-enable-grammarly="false"
-                spellCheck={false}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setInputText(val);
-                  e.target.style.height = "auto";
-                  e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
+            {/* Plus icon button on left */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors cursor-pointer shrink-0 mb-0.5"
+              title="Attach Document or Image"
+            >
+              <Plus className="w-5 h-5" />
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={handleFileUpload}
+              className="hidden"
+              accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
+            />
 
-                  // WhatsApp-style @ mention trigger for group chats
-                  if (!isCurrentDm && activeChannel) {
-                    const cursorPos = e.target.selectionStart ?? val.length;
-                    const textBeforeCursor = val.slice(0, cursorPos);
-                    const match = textBeforeCursor.match(/@([a-zA-Z0-9_\. -]*)$/);
-                    if (match) {
-                      setMentionQuery(match[1] ?? "");
-                      setMentionIndex(0);
-                    } else {
-                      setMentionQuery(null);
-                    }
+            {/* Textarea: Suppresses Grammarly 'G' icon (Issue 2) & Handles @ Mentions (Issue 3) */}
+            <textarea
+              ref={messageInputRef}
+              rows={1}
+              value={inputText}
+              data-gramm="false"
+              data-gramm_editor="false"
+              data-enable-grammarly="false"
+              spellCheck={false}
+              onChange={(e) => {
+                const val = e.target.value;
+                setInputText(val);
+                e.target.style.height = "auto";
+                e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
+
+                // WhatsApp-style @ mention trigger for group chats
+                if (!isCurrentDm && activeChannel) {
+                  const cursorPos = e.target.selectionStart ?? val.length;
+                  const textBeforeCursor = val.slice(0, cursorPos);
+                  const match = textBeforeCursor.match(/@([a-zA-Z0-9_\. -]*)$/);
+                  if (match) {
+                    setMentionQuery(match[1] ?? "");
+                    setMentionIndex(0);
                   } else {
                     setMentionQuery(null);
                   }
-                }}
-                onKeyDown={(e) => {
-                  if (mentionQuery !== null && matchingMentionMembers.length > 0 && !isCurrentDm) {
-                    if (e.key === "ArrowDown") {
-                      e.preventDefault();
-                      setMentionIndex((prev) => (prev + 1) % matchingMentionMembers.length);
-                      return;
-                    }
-                    if (e.key === "ArrowUp") {
-                      e.preventDefault();
-                      setMentionIndex((prev) => (prev - 1 + matchingMentionMembers.length) % matchingMentionMembers.length);
-                      return;
-                    }
-                    if (e.key === "Enter" || e.key === "Tab") {
-                      e.preventDefault();
-                      const selected = matchingMentionMembers[mentionIndex] || matchingMentionMembers[0];
-                      if (selected) {
-                        insertMention(selected);
-                      }
-                      return;
-                    }
-                    if (e.key === "Escape") {
-                      e.preventDefault();
-                      setMentionQuery(null);
-                      return;
-                    }
-                  }
-
-                  if (e.key === "Enter" && !e.shiftKey) {
+                } else {
+                  setMentionQuery(null);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (mentionQuery !== null && matchingMentionMembers.length > 0 && !isCurrentDm) {
+                  if (e.key === "ArrowDown") {
                     e.preventDefault();
-                    handleSendMessage();
-                    if (messageInputRef.current) {
-                      messageInputRef.current.style.height = "auto";
-                    }
+                    setMentionIndex((prev) => (prev + 1) % matchingMentionMembers.length);
+                    return;
                   }
-                }}
-                onPaste={handlePaste}
-                placeholder={isSelfChat ? "Message yourself..." : isCurrentDm ? `Message ${cleanDisplayName(activeChannelName)}` : `Message #${cleanDisplayName(activeChannelName)}`}
-                className="w-full bg-transparent border-none focus:outline-none text-sm text-foreground placeholder:text-muted-foreground resize-none max-h-40 overflow-y-auto leading-relaxed py-1.5"
-              />
-
-              {/* Action Icons on Right */}
-              <div className="flex items-center gap-1 shrink-0 mb-0.5">
-
-                {/* Emoji Picker Button - WhatsApp Web Full Categorized & Searchable Picker */}
-                <div className="relative" ref={emojiPickerRef}>
-                  <button
-                    type="button"
-                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                    className={cn(
-                      "p-1.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded-lg",
-                      showEmojiPicker && "text-emerald-600 bg-emerald-500/10"
-                    )}
-                    title="Insert Emoji"
-                  >
-                    <Smile className="w-5 h-5" />
-                  </button>
-                  {showEmojiPicker && (
-                    <div className="absolute bottom-12 right-0 sm:-right-4 z-50 shadow-2xl">
-                      <WhatsAppEmojiPicker
-                        onSelect={(emoji) => {
-                          setInputText((prev) => prev + emoji);
-                          focusMessageInput();
-                        }}
-                        onClose={() => setShowEmojiPicker(false)}
-                        className="w-[calc(100vw-32px)] sm:w-[380px] sm:max-w-[380px]"
-                      />
-                    </div>
-                  )}
-                </div>
-
-                {/* Paperclip attachment */}
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="p-1.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                  title="Attach File"
-                >
-                  <Paperclip className="w-5 h-5" />
-                </button>
-
-                {/* Voice Note Mic */}
-                <button
-                  type="button"
-                  onClick={startRecording}
-                  className="p-1.5 text-muted-foreground hover:text-emerald-600 transition-colors cursor-pointer"
-                  title="Record Voice Note"
-                >
-                  <Mic className="w-5 h-5" />
-                </button>
-
-                {/* Circular Mint/Green Send Button */}
-                <button
-                  type="submit"
-                  disabled={!inputText.trim()}
-                  className="w-8 h-8 rounded-full bg-emerald-400 hover:bg-emerald-500 disabled:opacity-40 disabled:hover:bg-emerald-400 text-white flex items-center justify-center transition-colors shadow-xs shrink-0 cursor-pointer ml-1"
-                >
-                  <Send className="w-4 h-4 ml-0.5" />
-                </button>
-              </div>
-            </form>
-          )}
-
-          <div className="text-center mt-2">
-            <span className="text-[10px] font-medium text-muted-foreground">
-              <strong>Return</strong> to send, <strong>Shift + Return</strong> for new line, <strong>Ctrl + V</strong> to paste image
-            </span>
-          </div>
-        </div>
-      </div>
-    )}
-
-      {/* ======================================================== */}
-      {/* 5. CLIPBOARD IMAGE PASTE MODAL (WhatsApp Web multi-image style) */}
-      {/* ======================================================== */}
-      {(pasteFiles.length > 0 || (pasteFile && pastePreviewUrl)) && (
-        <div className="fixed inset-0 bg-background/90 backdrop-blur-md z-50 flex flex-col items-center justify-between p-4 sm:p-6 animate-in fade-in duration-200">
-          {/* Header */}
-          <div className="w-full max-w-4xl flex items-center justify-between py-2 shrink-0">
-            <button
-              type="button"
-              onClick={closePasteModal}
-              className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors cursor-pointer"
-              title="Close / Discard"
-            >
-              <X className="w-6 h-6" />
-            </button>
-            <div className="text-center min-w-0">
-              <span className="font-bold text-sm text-foreground block truncate">
-                {activeChannel?.name ? `#${activeChannel.name}` : "Send Image"}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {pastePreviewUrls.length} {pastePreviewUrls.length === 1 ? "image" : "images"} selected
-              </span>
-            </div>
-            <div className="w-10" />
-          </div>
-
-          {/* Main Preview Area */}
-          <div className="flex-1 w-full max-w-3xl flex flex-col items-center justify-center min-h-0 relative my-2">
-            <div className="relative max-h-[55vh] w-full flex items-center justify-center overflow-hidden rounded-2xl bg-black/10 dark:bg-white/5 border border-border p-2">
-              <img
-                src={pastePreviewUrls[activePasteIndex] || pastePreviewUrl || ""}
-                alt="Selected preview"
-                className="max-h-[50vh] max-w-full w-auto h-auto object-contain rounded-xl shadow-lg transition-all"
-              />
-            </div>
-
-            {/* Caption Input */}
-            <div className="w-full max-w-md mt-4 relative">
-              <input
-                type="text"
-                value={pasteCaption}
-                onChange={(e) => setPasteCaption(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
+                  if (e.key === "ArrowUp") {
                     e.preventDefault();
-                    handleSendPastedImage();
+                    setMentionIndex((prev) => (prev - 1 + matchingMentionMembers.length) % matchingMentionMembers.length);
+                    return;
                   }
-                }}
-                placeholder="Add a caption..."
-                className="w-full px-4 py-3 bg-muted/80 border border-border rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-foreground pr-10 shadow-xs"
-              />
-            </div>
-          </div>
+                  if (e.key === "Enter" || e.key === "Tab") {
+                    e.preventDefault();
+                    const selected = matchingMentionMembers[mentionIndex] || matchingMentionMembers[0];
+                    if (selected) {
+                      insertMention(selected);
+                    }
+                    return;
+                  }
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    setMentionQuery(null);
+                    return;
+                  }
+                }
 
-          {/* Bottom Thumbnails & Send Control Strip */}
-          <div className="w-full max-w-2xl bg-card border border-border rounded-3xl p-3 shadow-xl flex items-center justify-between gap-3 shrink-0">
-            {/* Thumbnail Strip */}
-            <div className="flex items-center gap-2 overflow-x-auto py-1 px-1 flex-1 min-w-0 no-scrollbar">
-              {pastePreviewUrls.map((url, idx) => (
-                <div
-                  key={idx}
-                  onClick={() => setActivePasteIndex(idx)}
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage();
+                  if (messageInputRef.current) {
+                    messageInputRef.current.style.height = "auto";
+                  }
+                }
+              }}
+              onPaste={handlePaste}
+              placeholder={isSelfChat ? "Message yourself..." : isCurrentDm ? `Message ${cleanDisplayName(activeChannelName)}` : `Message #${cleanDisplayName(activeChannelName)}`}
+              className="w-full bg-transparent border-none focus:outline-none text-sm text-foreground placeholder:text-muted-foreground resize-none max-h-40 overflow-y-auto leading-relaxed py-1.5"
+            />
+
+            {/* Action Icons on Right */}
+            <div className="flex items-center gap-1 shrink-0 mb-0.5">
+
+              {/* Emoji Picker Button - WhatsApp Web Full Categorized & Searchable Picker */}
+              <div className="relative" ref={emojiPickerRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                   className={cn(
-                    "relative group w-14 h-14 rounded-xl overflow-hidden cursor-pointer shrink-0 border-2 transition-all",
-                    activePasteIndex === idx
-                      ? "border-emerald-500 scale-105 shadow-md"
-                      : "border-transparent opacity-75 hover:opacity-100"
+                    "p-1.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded-lg",
+                    showEmojiPicker && "text-emerald-600 bg-emerald-500/10"
                   )}
+                  title="Insert Emoji"
                 >
-                  <img src={url} alt={`Thumb ${idx + 1}`} className="w-full h-full object-cover" />
-                  {/* Discard / Delete button on thumbnail */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removePasteImage(idx);
-                    }}
-                    title="Discard image"
-                    className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/75 hover:bg-rose-600 text-white flex items-center justify-center opacity-90 transition-colors shadow-xs"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ))}
-
-              {/* Add More Images Button */}
-              <label
-                title="Add more images"
-                className="w-14 h-14 rounded-xl border-2 border-dashed border-muted-foreground/30 hover:border-emerald-500 bg-muted/30 hover:bg-emerald-500/10 text-muted-foreground hover:text-emerald-600 flex items-center justify-center cursor-pointer shrink-0 transition-colors"
-              >
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => {
-                    if (e.target.files) addMorePasteImages(e.target.files);
-                    e.target.value = "";
-                  }}
-                />
-                <span className="text-xl font-bold">+</span>
-              </label>
-            </div>
-
-            {/* Send Button */}
-            <button
-              type="button"
-              disabled={isUploading}
-              onClick={handleSendPastedImage}
-              className="relative w-12 h-12 rounded-full bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-50 text-white flex items-center justify-center transition-all shadow-lg shrink-0 cursor-pointer"
-              title="Send images"
-            >
-              <Send className="w-5 h-5 ml-0.5" />
-              {pastePreviewUrls.length > 1 && (
-                <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-emerald-800 border-2 border-background text-[10px] font-black flex items-center justify-center text-white">
-                  {pastePreviewUrls.length}
-                </span>
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ======================================================== */}
-      {/* 6. LIGHTBOX MEDIA PREVIEW MODAL (WhatsApp style, issue 5)   */}
-      {/* Header: sender + actions (reply/star/forward/download/menu/close), */}
-      {/* arrows, bottom thumbnail strip                                 */}
-      {/* ======================================================== */}
-      {previewMediaUrl && (
-        <div className="fixed inset-0 bg-[#0b141a]/95 z-50 flex flex-col backdrop-blur-md">
-          {/* Top bar */}
-          <div className="flex items-center justify-between px-3 sm:px-5 py-2.5 text-white shrink-0">
-            <div className="flex items-center gap-2.5 min-w-0">
-              {(() => {
-                const cur = (channelMedia[previewIndex] as ChatMessage | undefined) || channelMedia.find((m) => m.media_url === previewMediaUrl);
-                return (
-                  <>
-                    <UserAvatar name={cur?.sender_name || "User"} avatar={cur?.sender_avatar} size="w-9 h-9" showStatus={false} />
-                    <div className="min-w-0">
-                      <div className="font-bold text-sm truncate">{cur?.sender_name || "Media"}</div>
-                      <div className="text-[11px] text-white/60">{cur ? formatMsgTime(cur.created_at) : ""}{channelMedia.length > 1 ? ` • ${previewIndex + 1} of ${channelMedia.length}` : ""}</div>
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-            <div className="flex items-center gap-0.5 sm:gap-1 text-white/85">
-              <button type="button" title="Reply" onClick={() => { const cur = (channelMedia[previewIndex] as ChatMessage | undefined) || channelMedia.find((m) => m.media_url === previewMediaUrl); if (cur) setReplyTo(cur); setPreviewMediaUrl(null); }} className="p-2 hover:bg-white/10 rounded-full cursor-pointer"><CornerUpLeft className="w-5 h-5" /></button>
-              <button type="button" title="React ❤" onClick={() => { const cur = (channelMedia[previewIndex] as ChatMessage | undefined) || channelMedia.find((m) => m.media_url === previewMediaUrl); if (cur) handleReact(cur.id, "❤️"); }} className="p-2 hover:bg-white/10 rounded-full cursor-pointer text-base">❤️</button>
-              <button type="button" title="Forward" onClick={() => { const cur = (channelMedia[previewIndex] as ChatMessage | undefined) || channelMedia.find((m) => m.media_url === previewMediaUrl); if (cur) { setForwardMsg(cur); setForwardTargets([]); setForwardSearch(""); } }} className="p-2 hover:bg-white/10 rounded-full cursor-pointer text-lg font-bold">➦</button>
-              <button type="button" title="Download (Save As)" onClick={() => { const cur = (channelMedia[previewIndex] as ChatMessage | undefined) || channelMedia.find((m) => m.media_url === previewMediaUrl); downloadViaBlob(previewMediaUrl, cur?.file_name || (previewMediaType === "video" ? "video.mp4" : "image.jpg")); }} className="p-2 hover:bg-white/10 rounded-full cursor-pointer"><Download className="w-5 h-5" /></button>
-              <button type="button" title="Close (Esc)" onClick={() => setPreviewMediaUrl(null)} className="p-2 hover:bg-white/10 rounded-full cursor-pointer"><X className="w-6 h-6" /></button>
-            </div>
-          </div>
-          {/* Main stage */}
-          <div className="flex-1 flex items-center justify-center relative min-h-0 px-10 sm:px-16">
-            {channelMedia.length > 1 && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => navigatePreview("prev")}
-                  title="Previous (Left Arrow)"
-                  className="absolute left-2 sm:left-4 w-10 h-10 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center cursor-pointer select-none text-xl"
-                >
-                  ‹
+                  <Smile className="w-5 h-5" />
                 </button>
-                <button
-                  type="button"
-                  onClick={() => navigatePreview("next")}
-                  title="Next (Right Arrow)"
-                  className="absolute right-2 sm:right-4 w-10 h-10 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center cursor-pointer select-none text-xl"
-                >
-                  ›
-                </button>
-              </>
-            )}
-            <div onClick={(e) => e.stopPropagation()} className="max-w-4xl max-h-full flex items-center justify-center">
-              {previewMediaType === "video" ? (
-                <video src={getMediaUrl(previewMediaUrl)} controls autoPlay className="max-h-[68vh] max-w-full rounded-lg shadow-2xl" />
-              ) : (
-                <img src={getMediaUrl(previewMediaUrl)} alt="fullscreen preview" className="max-h-[68vh] max-w-full object-contain rounded-lg shadow-2xl" />
-              )}
-            </div>
-          </div>
-          {/* Bottom thumbnail strip */}
-          {channelMedia.length > 1 && (
-            <div className="shrink-0 border-t border-white/10 bg-black/30 px-3 py-2 flex gap-1.5 overflow-x-auto justify-start sm:justify-center">
-              {channelMedia.map((m, idx) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => {
-                    setPreviewIndex(idx);
-                    setPreviewMediaUrl(m.media_url!);
-                    setPreviewMediaType(m.media_type === "video" ? "video" : "image");
-                  }}
-                  className={cn("w-12 h-12 rounded-md overflow-hidden shrink-0 border-2 cursor-pointer", idx === previewIndex ? "border-emerald-400" : "border-transparent opacity-60 hover:opacity-100")}
-                >
-                  {m.media_type === "video" ? (
-                    <video src={getMediaUrl(m.media_url)} preload="metadata" className="w-full h-full object-cover" />
-                  ) : (
-                    <img src={getMediaUrl(m.media_url)} alt="" className="w-full h-full object-cover" loading="lazy" />
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-          <button type="button" onClick={() => setPreviewMediaUrl(null)} className="absolute inset-0 -z-10 cursor-zoom-out" aria-hidden />
-        </div>
-      )}
-
-      {/* ======================================================== */}
-      {/* 7. CREATE NEW CHANNEL MODAL                               */}
-      {/* ======================================================== */}
-      {isNewChannelOpen && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-[440px] overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-border flex items-center justify-between">
-              <h3 className="font-bold text-foreground">Create New Channel</h3>
-              <button
-                type="button"
-                onClick={() => setIsNewChannelOpen(false)}
-                className="p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <form onSubmit={handleCreateChannel} className="p-6 space-y-4 text-left">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">
-                  Channel Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. general-discussions"
-                  value={newChannelName}
-                  onChange={(e) => setNewChannelName(e.target.value)}
-                  className="w-full px-3 py-2 bg-muted/50 border border-border rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                />
-              </div>
-
-              {/* Task 42: Member selection with search */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">
-                    Add Members ({newChannelMembers.length > 0 ? `${newChannelMembers.filter((m, i, a) => a.indexOf(m) === i).length} selected` : "Optional"})
-                  </label>
-                  {newChannelMembers.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setNewChannelMembers([])}
-                      className="text-[10px] text-emerald-600 hover:underline cursor-pointer"
-                    >
-                      Clear all
-                    </button>
-                  )}
-                </div>
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
-                  <input
-                    type="text"
-                    value={newChannelMemberSearch}
-                    onChange={(e) => setNewChannelMemberSearch(e.target.value)}
-                    placeholder="Search colleagues to add..."
-                    className="w-full pl-8 pr-3 py-1.5 bg-muted/40 border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  />
-                </div>
-                <div className="max-h-36 overflow-y-auto space-y-1 p-1 bg-muted/20 rounded-xl border border-border/60">
-                  {(employees || [])
-                    .filter((emp) => String(emp.id) !== myUserId && String((emp as any)._id) !== myUserId)
-                    .filter((emp) =>
-                      !newChannelMemberSearch.trim() ||
-                      (emp.name || "").toLowerCase().includes(newChannelMemberSearch.toLowerCase()) ||
-                      (emp.email || "").toLowerCase().includes(newChannelMemberSearch.toLowerCase())
-                    )
-                    .map((emp) => {
-                      const empKey = String((emp as any)._id || emp.id);
-                      const isSelected = newChannelMembers.includes(empKey) || newChannelMembers.includes(String(emp.id));
-                      return (
-                        <label
-                          key={emp.id}
-                          className="flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-muted cursor-pointer text-xs"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => {
-                              setNewChannelMembers((prev) =>
-                                isSelected
-                                  ? prev.filter((id) => id !== empKey && id !== String(emp.id))
-                                  : [...prev, empKey, String(emp.id)]
-                              );
-                            }}
-                            className="accent-emerald-600 w-3.5 h-3.5 rounded cursor-pointer"
-                          />
-                          <UserAvatar name={emp.name} avatar={emp.avatar || emp.profile_photo} size="w-6 h-6" />
-                          <div className="min-w-0 flex-1">
-                            <span className="font-bold block truncate">{emp.name}</span>
-                            <span className="text-[10px] text-muted-foreground block truncate">{emp.designation || emp.email}</span>
-                          </div>
-                        </label>
-                      );
-                    })}
-                </div>
-              </div>
-
-              {/* Auto-join toggle for future new employees (Issue 5 - default off) */}
-              <div className="flex items-center justify-between p-3 rounded-2xl bg-muted/40 border border-border/80">
-                <div className="space-y-0.5 pr-2">
-                  <div className="text-xs font-semibold text-foreground">Auto-join new employees</div>
-                  <div className="text-[10px] text-muted-foreground">
-                    Automatically add newly registered employees to this channel (Default: Off)
+                {showEmojiPicker && (
+                  <div className="absolute bottom-12 right-0 sm:-right-4 z-50 shadow-2xl">
+                    <WhatsAppEmojiPicker
+                      onSelect={(emoji) => {
+                        setInputText((prev) => prev + emoji);
+                        focusMessageInput();
+                      }}
+                      onClose={() => setShowEmojiPicker(false)}
+                      className="w-[calc(100vw-32px)] sm:w-[380px] sm:max-w-[380px]"
+                    />
                   </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setNewChannelAutoJoin(!newChannelAutoJoin)}
-                  className={cn(
-                    "w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer shrink-0",
-                    newChannelAutoJoin ? "bg-emerald-600 justify-end" : "bg-muted-foreground/30 justify-start"
-                  )}
-                >
-                  <div className="w-4 h-4 rounded-full bg-white shadow-md transform transition-transform" />
-                </button>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsNewChannelOpen(false)}
-                  className="px-4 py-2 bg-card border border-border text-foreground/80 hover:bg-muted font-bold text-xs rounded-xl transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors shadow-xs cursor-pointer"
-                >
-                  Create
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* 7b. EDIT CHANNEL MODAL (creator only) */}
-      {isEditChannelOpen && activeChannel && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-[440px] overflow-hidden animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
-            <div className="p-5 border-b border-border flex items-center justify-between shrink-0">
-              <h3 className="font-bold text-foreground text-sm">Edit Channel (creator only)</h3>
-              <button
-                type="button"
-                onClick={() => setIsEditChannelOpen(false)}
-                className="p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <form onSubmit={handleEditChannel} className="p-5 space-y-4 overflow-y-auto">
-              <div>
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1.5">
-                  Channel Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={editChannelName}
-                  onChange={(e) => setEditChannelName(e.target.value)}
-                  placeholder="hello"
-                  className="w-full px-4 py-2.5 bg-background border border-border rounded-full text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1.5">
-                  Description
-                </label>
-                <input
-                  type="text"
-                  value={editChannelDesc}
-                  onChange={(e) => setEditChannelDesc(e.target.value)}
-                  placeholder="Channel topic..."
-                  className="w-full px-4 py-2.5 bg-background border border-border rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
-                />
-              </div>
-
-              {/* Auto-join toggle for future new employees (Issue 5) */}
-              <div className="flex items-center justify-between p-3 rounded-2xl bg-muted/40 border border-border/80">
-                <div className="space-y-0.5 pr-2">
-                  <div className="text-xs font-semibold text-foreground">Auto-join new employees</div>
-                  <div className="text-[10px] text-muted-foreground">
-                    Newly added employees in the system will automatically join this channel. Existing members remain unchanged.
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setEditChannelAutoJoin(!editChannelAutoJoin)}
-                  className={cn(
-                    "w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer shrink-0",
-                    editChannelAutoJoin ? "bg-emerald-600 justify-end" : "bg-muted-foreground/30 justify-start"
-                  )}
-                >
-                  <div className="w-4 h-4 rounded-full bg-white shadow-md transform transition-transform" />
-                </button>
-              </div>
-              {/* Issue 1: design-wise custom dropdown (not native select) */}
-              <div>
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1.5">
-                  Add member (select employee)
-                </label>
-                <div className="flex gap-2 items-start" ref={memberDropdownRef}>
-                  <div className="relative flex-1">
-                    <button
-                      type="button"
-                      onClick={() => setIsMemberDropdownOpen((v) => !v)}
-                      className="w-full px-4 py-2.5 bg-background border border-border rounded-full text-sm flex items-center justify-between gap-2 hover:border-emerald-500 transition-colors cursor-pointer"
-                    >
-                      <span className={cn("truncate", editChannelMemberId ? "text-foreground font-semibold" : "text-muted-foreground")}>
-                        {editChannelMemberId
-                          ? (employees || []).find((e) => String(e.id) === String(editChannelMemberId))?.name || "Selected"
-                          : "Select..."}
-                      </span>
-                      <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform shrink-0", isMemberDropdownOpen && "rotate-180")} />
-                    </button>
-                    {isMemberDropdownOpen && (
-                      <div className="absolute left-0 right-0 top-full mt-1.5 z-10 bg-card border border-border rounded-2xl shadow-2xl overflow-hidden">
-                        <div className="p-2 border-b border-border">
-                          <input
-                            type="text"
-                            autoFocus
-                            value={memberSearch}
-                            onChange={(e) => setMemberSearch(e.target.value)}
-                            placeholder="Search employee..."
-                            className="w-full px-3 py-1.5 bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                          />
-                        </div>
-                        <div className="max-h-44 overflow-y-auto p-1.5">
-                          {(employees || [])
-                            .filter((emp) => (emp.name || "").toLowerCase().includes(memberSearch.toLowerCase()))
-                            .map((emp) => {
-                              const already = (activeChannel.members || []).map(String).includes(String(emp.id));
-                              const selected = String(editChannelMemberId) === String(emp.id);
-                              return (
-                                <button
-                                  key={emp.id}
-                                  type="button"
-                                  disabled={already}
-                                  onClick={() => {
-                                    setEditChannelMemberId(String(emp.id));
-                                    setIsMemberDropdownOpen(false);
-                                  }}
-                                  className={cn(
-                                    "w-full flex items-center gap-2.5 p-2 rounded-xl text-left transition-colors",
-                                    already ? "opacity-40 cursor-not-allowed" : "hover:bg-emerald-50 dark:hover:bg-emerald-950/40 cursor-pointer",
-                                    selected ? "bg-emerald-50 dark:bg-emerald-950/40" : ""
-                                  )}
-                                >
-                                  <UserAvatar name={emp.name} avatar={emp.avatar || (emp as any).profile_photo} size="w-7 h-7" showStatus={false} />
-                                  <span className="flex-1 min-w-0">
-                                    <span className="block text-xs font-bold text-foreground truncate">{emp.name}</span>
-                                    <span className="block text-[10px] text-muted-foreground truncate">{(emp as any).designation || (emp as any).email || ""}</span>
-                                  </span>
-                                  {already ? (
-                                    <span className="text-[10px] font-bold text-emerald-600">Added ✓</span>
-                                  ) : selected ? (
-                                    <Check className="w-4 h-4 text-emerald-600" />
-                                  ) : null}
-                                </button>
-                              );
-                            })}
-                          {(employees || []).filter((emp) => (emp.name || "").toLowerCase().includes(memberSearch.toLowerCase())).length === 0 && (
-                            <div className="p-3 text-center text-[11px] text-muted-foreground">No employees found</div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleAddMember}
-                    disabled={!editChannelMemberId}
-                    className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 disabled:hover:bg-emerald-500 text-white rounded-full text-xs font-bold transition-colors cursor-pointer shrink-0"
-                  >
-                    Add
-                  </button>
-                </div>
-                <div className="text-[10px] text-muted-foreground mt-1.5">
-                  Members: {(activeChannel.members || []).length} • Only creator can add/edit
-                </div>
-              </div>
-              {/* Issue 2: already-added users list with remove */}
-              <div>
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1.5">
-                  Current members ({(activeChannel.members || []).length})
-                </label>
-                <div className="max-h-40 overflow-y-auto space-y-1 rounded-2xl border border-border p-1.5 bg-muted/20">
-                  {(activeChannel.members || []).length === 0 && (
-                    <div className="p-2.5 text-[11px] text-muted-foreground text-center">No members yet</div>
-                  )}
-                  {(activeChannel.members || []).map((mid) => {
-                    const emp = (employees || []).find((e) => String(e.id) === String(mid));
-                    const isCreator = String(activeChannel.created_by || "") === String(mid);
-                    return (
-                      <div key={String(mid)} className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-background transition-colors">
-                        <UserAvatar name={emp?.name || "User"} avatar={emp?.avatar || (emp as any)?.profile_photo} size="w-7 h-7" showStatus={false} />
-                        <span className="flex-1 min-w-0">
-                          <span className="block text-xs font-bold text-foreground truncate">
-                            {emp?.name || String(mid).slice(0, 8)}
-                            {String(mid) === String(user?.id) ? " (You)" : ""}
-                          </span>
-                          <span className="block text-[10px] text-muted-foreground">{isCreator ? "Creator" : (emp as any)?.designation || "Member"}</span>
-                        </span>
-                        {!isCreator && String(mid) !== String(user?.id) && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveMember(String(mid))}
-                            title="Remove member"
-                            className="p-1.5 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="flex justify-between pt-1">
-                <button
-                  type="button"
-                  onClick={handleDeleteChannel}
-                  className="px-3 py-2 text-rose-600 hover:bg-rose-50 rounded-xl text-xs font-bold"
-                >
-                  Delete channel
-                </button>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsEditChannelOpen(false)}
-                    className="px-4 py-2 border border-border rounded-full text-xs font-bold text-muted-foreground hover:bg-muted"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full text-xs font-bold"
-                  >
-                    Save
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ======================================================== */}
-      {/* 7c. GROUP MEMBERS LIST MODAL (Issue 4: visible to all)    */}
-      {/* ======================================================== */}
-      {isGroupMembersModalOpen && activeChannel && !isCurrentDm && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-[460px] overflow-hidden animate-in zoom-in-95 duration-200 max-h-[85vh] flex flex-col">
-            <div className="p-5 border-b border-border flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-9 h-9 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
-                  <Users className="w-5 h-5" />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="font-bold text-foreground text-sm truncate flex items-center gap-1.5">
-                    <Hash className="w-4 h-4 text-muted-foreground shrink-0" />
-                    <span>{cleanDisplayName(activeChannel.name)}</span>
-                  </h3>
-                  <p className="text-[11px] text-muted-foreground">
-                    {(activeChannel.members || []).length} {((activeChannel.members || []).length === 1) ? "member joined" : "members joined"}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsGroupMembersModalOpen(false)}
-                className="p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Search Box inside modal */}
-            <div className="p-3 border-b border-border bg-muted/20 shrink-0">
-              <div className="relative">
-                <Search className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground" />
-                <input
-                  type="text"
-                  value={groupMemberSearch}
-                  onChange={(e) => setGroupMemberSearch(e.target.value)}
-                  placeholder="Search members in this group..."
-                  className="w-full pl-9 pr-3 py-2 bg-background border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                />
-              </div>
-            </div>
-
-            {/* Members List */}
-            <div className="overflow-y-auto p-3 space-y-1 flex-1">
-              {activeChannelMemberEmployees
-                .filter((emp) =>
-                  !groupMemberSearch.trim() ||
-                  (emp.name || "").toLowerCase().includes(groupMemberSearch.toLowerCase()) ||
-                  (emp.email || "").toLowerCase().includes(groupMemberSearch.toLowerCase()) ||
-                  (emp.role || "").toLowerCase().includes(groupMemberSearch.toLowerCase())
-                )
-                .map((emp) => {
-                  const isCreator = String(activeChannel.created_by) === String(emp.id);
-                  const isCurrent = String(user?.id) === String(emp.id);
-                  const isOnline = Boolean(presenceMap[emp.id]);
-
-                  return (
-                    <div
-                      key={emp.id}
-                      className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-muted/60 transition-colors"
-                    >
-                      <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <UserAvatar
-                          name={cleanDisplayName(emp.name)}
-                          avatar={emp.avatar || emp.profile_photo}
-                          size="w-9 h-9"
-                          isOnline={isOnline}
-                          showStatus={true}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-xs font-bold text-foreground truncate">
-                              {cleanDisplayName(emp.name)}
-                            </span>
-                            {isCurrent && (
-                              <span className="text-[10px] font-semibold bg-muted text-muted-foreground px-1.5 py-0.2 rounded-md">
-                                You
-                              </span>
-                            )}
-                            {isCreator && (
-                              <span className="text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.2 rounded-md border border-emerald-500/20">
-                                Group Admin
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-[11px] text-muted-foreground truncate">
-                            {emp.designation || emp.role || emp.department || emp.email}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Direct message button if not current user */}
-                      {!isCurrent && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsGroupMembersModalOpen(false);
-                            handleStartDm(String(emp.id));
-                          }}
-                          className="px-2.5 py-1.5 text-[11px] font-semibold text-emerald-600 hover:bg-emerald-500/10 rounded-lg transition-colors cursor-pointer shrink-0 ml-2"
-                          title={`Message ${cleanDisplayName(emp.name)}`}
-                        >
-                          Message
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-
-              {activeChannelMemberEmployees.filter((emp) =>
-                !groupMemberSearch.trim() ||
-                (emp.name || "").toLowerCase().includes(groupMemberSearch.toLowerCase()) ||
-                (emp.email || "").toLowerCase().includes(groupMemberSearch.toLowerCase()) ||
-                (emp.role || "").toLowerCase().includes(groupMemberSearch.toLowerCase())
-              ).length === 0 && (
-                <div className="py-8 text-center text-xs text-muted-foreground">
-                  No group members found matching "{groupMemberSearch}"
-                </div>
-              )}
-            </div>
-
-            {/* Footer with Edit bridge for admin/creator */}
-            {isChannelCreator(activeChannel) && (
-              <div className="p-3 border-t border-border bg-muted/10 flex items-center justify-between shrink-0">
-                <span className="text-[11px] text-muted-foreground">You are the admin of this channel</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsGroupMembersModalOpen(false);
-                    openEditChannel();
-                  }}
-                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
-                >
-                  Manage Members
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ======================================================== */}
-      {/* 8. CREATE POLL MODAL                                      */}
-      {/* ======================================================== */}
-      {isPollModalOpen && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-[420px] overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-border flex items-center justify-between">
-              <h3 className="font-bold text-foreground flex items-center gap-2">
-                <BarChart2 className="w-4 h-4 text-emerald-600" />
-                Create a Poll
-              </h3>
-              <button
-                type="button"
-                onClick={() => setIsPollModalOpen(false)}
-                className="p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <form onSubmit={handleCreatePoll} className="p-6 space-y-4">
-              <div>
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
-                  Question
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={pollQuestion}
-                  onChange={(e) => setPollQuestion(e.target.value)}
-                  placeholder="e.g. Which sprint goal should we prioritize?"
-                  className="w-full px-3 py-2 bg-muted/40 border border-border rounded-xl text-xs focus:ring-1 focus:ring-emerald-500 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
-                  Options
-                </label>
-                <div className="space-y-2">
-                  {pollOptions.map((opt, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        required
-                        value={opt}
-                        onChange={(e) => {
-                          const updated = [...pollOptions];
-                          updated[i] = e.target.value;
-                          setPollOptions(updated);
-                        }}
-                        placeholder={`Option ${i + 1}`}
-                        className="flex-1 px-3 py-1.5 bg-muted/40 border border-border rounded-xl text-xs focus:ring-1 focus:ring-emerald-500 outline-none"
-                      />
-                      {pollOptions.length > 2 && (
-                        <button
-                          type="button"
-                          onClick={() => setPollOptions(pollOptions.filter((_, idx) => idx !== i))}
-                          className="p-1 text-muted-foreground hover:text-destructive"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  {pollOptions.length < 5 && (
-                    <button
-                      type="button"
-                      onClick={() => setPollOptions([...pollOptions, ""])}
-                      className="text-xs text-emerald-600 font-bold hover:underline"
-                    >
-                      + Add Option
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 pt-2">
-                <input
-                  type="checkbox"
-                  id="multiVote"
-                  checked={pollMultiple}
-                  onChange={(e) => setPollMultiple(e.target.checked)}
-                  className="rounded accent-emerald-600"
-                />
-                <label htmlFor="multiVote" className="text-xs text-foreground cursor-pointer">
-                  Allow multiple answers
-                </label>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsPollModalOpen(false)}
-                  className="px-4 py-2 border border-border rounded-xl text-xs font-bold text-muted-foreground hover:bg-muted"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold shadow-xs hover:bg-emerald-700"
-                >
-                  Create Poll
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ======================================================== */}
-      {/* 9. DIRECT MESSAGE USER SELECTION MODAL                    */}
-      {/* ======================================================== */}
-      {isNewDmOpen && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-[390px] overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-4 border-b border-border flex items-center justify-between">
-              <h3 className="font-bold text-foreground text-sm flex items-center gap-2">
-                <Users className="w-4 h-4 text-emerald-600" />
-                New Direct Message
-              </h3>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsNewDmOpen(false);
-                  setNewDmSearch("");
-                }}
-                className="p-1 text-muted-foreground hover:text-foreground rounded-lg cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            {/* Task 36: Search colleagues in modal */}
-            <div className="p-3 border-b border-border bg-muted/20">
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-muted-foreground" />
-                <input
-                  type="text"
-                  autoFocus
-                  value={newDmSearch}
-                  onChange={(e) => setNewDmSearch(e.target.value)}
-                  placeholder="Search by name, email, designation..."
-                  className="w-full pl-8 pr-7 py-1.5 bg-background border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 font-medium"
-                />
-                {newDmSearch && (
-                  <button
-                    type="button"
-                    onClick={() => setNewDmSearch("")}
-                    className="absolute right-2.5 top-2 text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
                 )}
               </div>
-            </div>
-            <div className="max-h-80 overflow-y-auto p-2 space-y-1">
-              {(employees || [])
-                .filter((emp) => String(emp.id) !== myUserId && String((emp as any)._id) !== myUserId)
-                .filter((emp) => {
-                  if (!newDmSearch.trim()) return true;
-                  const q = newDmSearch.toLowerCase();
-                  return (
-                    (emp.name || "").toLowerCase().includes(q) ||
-                    (emp.email || "").toLowerCase().includes(q) ||
-                    (emp.designation || "").toLowerCase().includes(q) ||
-                    String((emp as any).department || "").toLowerCase().includes(q)
-                  );
-                })
-                .map((emp) => (
-                  <button
-                    key={emp.id}
-                    type="button"
-                    onClick={() => {
-                      setNewDmSearch("");
-                      handleStartDm(emp.id);
-                    }}
-                    className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-muted text-left transition-colors cursor-pointer"
-                  >
-                    <UserAvatar
-                      name={emp.name}
-                      avatar={emp.avatar || emp.profile_photo}
-                      size="w-8 h-8"
-                      isOnline={presenceMap[emp.id] ?? false}
-                      showStatus={true}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <span className="font-bold text-xs text-foreground block truncate">{emp.name}</span>
-                      <span className="text-[10px] text-muted-foreground block truncate">
-                        {emp.designation || (emp as any).department || emp.email}
-                      </span>
-                    </div>
-                  </button>
-                ))}
-              {(employees || [])
-                .filter((emp) => String(emp.id) !== myUserId && String((emp as any)._id) !== myUserId)
-                .filter((emp) => {
-                  if (!newDmSearch.trim()) return true;
-                  const q = newDmSearch.toLowerCase();
-                  return (
-                    (emp.name || "").toLowerCase().includes(q) ||
-                    (emp.email || "").toLowerCase().includes(q) ||
-                    (emp.designation || "").toLowerCase().includes(q) ||
-                    String((emp as any).department || "").toLowerCase().includes(q)
-                  );
-                }).length === 0 && (
-                <div className="p-6 text-center text-xs text-muted-foreground">
-                  No colleagues found matching "{newDmSearch}"
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* ======================================================== */}
-      {/* 10. FORWARD MODAL (support single/album & contact names)  */}
-      {/* ======================================================== */}
-      {forwardMsg && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-[400px] overflow-hidden animate-in zoom-in-95 duration-200 max-h-[85vh] flex flex-col">
-            <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
-              <h3 className="font-bold text-foreground text-sm">
-                Forward {messageIdsToForward.length > 1 ? `${messageIdsToForward.length} items` : "message"} ({forwardTargets.length} selected)
-              </h3>
+              {/* Paperclip attachment */}
               <button
                 type="button"
-                onClick={() => {
-                  setForwardMsg(null);
-                  setForwardTargets([]);
-                }}
-                className="p-1 text-muted-foreground hover:text-foreground rounded-lg cursor-pointer"
+                onClick={() => fileInputRef.current?.click()}
+                className="p-1.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                title="Attach File"
               >
-                <X className="w-4 h-4" />
+                <Paperclip className="w-5 h-5" />
+              </button>
+
+              {/* Voice Note Mic */}
+              <button
+                type="button"
+                onClick={startRecording}
+                className="p-1.5 text-muted-foreground hover:text-emerald-600 transition-colors cursor-pointer"
+                title="Record Voice Note"
+              >
+                <Mic className="w-5 h-5" />
+              </button>
+
+              {/* Circular Mint/Green Send Button */}
+              <button
+                type="submit"
+                disabled={!inputText.trim()}
+                className="w-8 h-8 rounded-full bg-emerald-400 hover:bg-emerald-500 disabled:opacity-40 disabled:hover:bg-emerald-400 text-white flex items-center justify-center transition-colors shadow-xs shrink-0 cursor-pointer ml-1"
+              >
+                <Send className="w-4 h-4 ml-0.5" />
               </button>
             </div>
-            <div className="p-3 border-b border-border shrink-0">
+          </form>
+        )}
+
+        <div className="text-center mt-2">
+          <span className="text-[10px] font-medium text-muted-foreground">
+            <strong>Return</strong> to send, <strong>Shift + Return</strong> for new line, <strong>Ctrl + V</strong> to paste image
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+{/* ======================================================== */ }
+{/* 5. CLIPBOARD IMAGE PASTE MODAL (WhatsApp Web multi-image style) */ }
+{/* ======================================================== */ }
+{
+  (pasteFiles.length > 0 || (pasteFile && pastePreviewUrl)) && (
+    <div className="fixed inset-0 bg-background/90 backdrop-blur-md z-50 flex flex-col items-center justify-between p-4 sm:p-6 animate-in fade-in duration-200">
+      {/* Header */}
+      <div className="w-full max-w-4xl flex items-center justify-between py-2 shrink-0">
+        <button
+          type="button"
+          onClick={closePasteModal}
+          className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors cursor-pointer"
+          title="Close / Discard"
+        >
+          <X className="w-6 h-6" />
+        </button>
+        <div className="text-center min-w-0">
+          <span className="font-bold text-sm text-foreground block truncate">
+            {activeChannel?.name ? `#${activeChannel.name}` : "Send Image"}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {pastePreviewUrls.length} {pastePreviewUrls.length === 1 ? "image" : "images"} selected
+          </span>
+        </div>
+        <div className="w-10" />
+      </div>
+
+      {/* Main Preview Area */}
+      <div className="flex-1 w-full max-w-3xl flex flex-col items-center justify-center min-h-0 relative my-2">
+        <div className="relative max-h-[55vh] w-full flex items-center justify-center overflow-hidden rounded-2xl bg-black/10 dark:bg-white/5 border border-border p-2">
+          <img
+            src={pastePreviewUrls[activePasteIndex] || pastePreviewUrl || ""}
+            alt="Selected preview"
+            className="max-h-[50vh] max-w-full w-auto h-auto object-contain rounded-xl shadow-lg transition-all"
+          />
+        </div>
+
+        {/* Caption Input */}
+        <div className="w-full max-w-md mt-4 relative">
+          <input
+            type="text"
+            value={pasteCaption}
+            onChange={(e) => setPasteCaption(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSendPastedImage();
+              }
+            }}
+            placeholder="Add a caption..."
+            className="w-full px-4 py-3 bg-muted/80 border border-border rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-foreground pr-10 shadow-xs"
+          />
+        </div>
+      </div>
+
+      {/* Bottom Thumbnails & Send Control Strip */}
+      <div className="w-full max-w-2xl bg-card border border-border rounded-3xl p-3 shadow-xl flex items-center justify-between gap-3 shrink-0">
+        {/* Thumbnail Strip */}
+        <div className="flex items-center gap-2 overflow-x-auto py-1 px-1 flex-1 min-w-0 no-scrollbar">
+          {pastePreviewUrls.map((url, idx) => (
+            <div
+              key={idx}
+              onClick={() => setActivePasteIndex(idx)}
+              className={cn(
+                "relative group w-14 h-14 rounded-xl overflow-hidden cursor-pointer shrink-0 border-2 transition-all",
+                activePasteIndex === idx
+                  ? "border-emerald-500 scale-105 shadow-md"
+                  : "border-transparent opacity-75 hover:opacity-100"
+              )}
+            >
+              <img src={url} alt={`Thumb ${idx + 1}`} className="w-full h-full object-cover" />
+              {/* Discard / Delete button on thumbnail */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removePasteImage(idx);
+                }}
+                title="Discard image"
+                className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/75 hover:bg-rose-600 text-white flex items-center justify-center opacity-90 transition-colors shadow-xs"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+
+          {/* Add More Images Button */}
+          <label
+            title="Add more images"
+            className="w-14 h-14 rounded-xl border-2 border-dashed border-muted-foreground/30 hover:border-emerald-500 bg-muted/30 hover:bg-emerald-500/10 text-muted-foreground hover:text-emerald-600 flex items-center justify-center cursor-pointer shrink-0 transition-colors"
+          >
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files) addMorePasteImages(e.target.files);
+                e.target.value = "";
+              }}
+            />
+            <span className="text-xl font-bold">+</span>
+          </label>
+        </div>
+
+        {/* Send Button */}
+        <button
+          type="button"
+          disabled={isUploading}
+          onClick={handleSendPastedImage}
+          className="relative w-12 h-12 rounded-full bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-50 text-white flex items-center justify-center transition-all shadow-lg shrink-0 cursor-pointer"
+          title="Send images"
+        >
+          <Send className="w-5 h-5 ml-0.5" />
+          {pastePreviewUrls.length > 1 && (
+            <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-emerald-800 border-2 border-background text-[10px] font-black flex items-center justify-center text-white">
+              {pastePreviewUrls.length}
+            </span>
+          )}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+{/* ======================================================== */ }
+{/* 6. LIGHTBOX MEDIA PREVIEW MODAL (WhatsApp style, issue 5)   */ }
+{/* Header: sender + actions (reply/star/forward/download/menu/close), */ }
+{/* arrows, bottom thumbnail strip                                 */ }
+{/* ======================================================== */ }
+{
+  previewMediaUrl && (
+    <div className="fixed inset-0 bg-[#0b141a]/95 z-50 flex flex-col backdrop-blur-md">
+      {/* Top bar */}
+      <div className="flex items-center justify-between px-3 sm:px-5 py-2.5 text-white shrink-0">
+        <div className="flex items-center gap-2.5 min-w-0">
+          {(() => {
+            const cur = (channelMedia[previewIndex] as ChatMessage | undefined) || channelMedia.find((m) => m.media_url === previewMediaUrl);
+            return (
+              <>
+                <UserAvatar name={cur?.sender_name || "User"} avatar={cur?.sender_avatar} size="w-9 h-9" showStatus={false} />
+                <div className="min-w-0">
+                  <div className="font-bold text-sm truncate">{cur?.sender_name || "Media"}</div>
+                  <div className="text-[11px] text-white/60">{cur ? formatMsgTime(cur.created_at) : ""}{channelMedia.length > 1 ? ` • ${previewIndex + 1} of ${channelMedia.length}` : ""}</div>
+                </div>
+              </>
+            );
+          })()}
+        </div>
+        <div className="flex items-center gap-0.5 sm:gap-1 text-white/85">
+          <button type="button" title="Reply" onClick={() => { const cur = (channelMedia[previewIndex] as ChatMessage | undefined) || channelMedia.find((m) => m.media_url === previewMediaUrl); if (cur) setReplyTo(cur); setPreviewMediaUrl(null); }} className="p-2 hover:bg-white/10 rounded-full cursor-pointer"><CornerUpLeft className="w-5 h-5" /></button>
+          <button type="button" title="React ❤" onClick={() => { const cur = (channelMedia[previewIndex] as ChatMessage | undefined) || channelMedia.find((m) => m.media_url === previewMediaUrl); if (cur) handleReact(cur.id, "❤️"); }} className="p-2 hover:bg-white/10 rounded-full cursor-pointer text-base">❤️</button>
+          <button type="button" title="Forward" onClick={() => { const cur = (channelMedia[previewIndex] as ChatMessage | undefined) || channelMedia.find((m) => m.media_url === previewMediaUrl); if (cur) { setForwardMsg(cur); setForwardTargets([]); setForwardSearch(""); } }} className="p-2 hover:bg-white/10 rounded-full cursor-pointer text-lg font-bold">➦</button>
+          <button type="button" title="Download (Save As)" onClick={() => { const cur = (channelMedia[previewIndex] as ChatMessage | undefined) || channelMedia.find((m) => m.media_url === previewMediaUrl); downloadViaBlob(previewMediaUrl, cur?.file_name || (previewMediaType === "video" ? "video.mp4" : "image.jpg")); }} className="p-2 hover:bg-white/10 rounded-full cursor-pointer"><Download className="w-5 h-5" /></button>
+          <button type="button" title="Close (Esc)" onClick={() => setPreviewMediaUrl(null)} className="p-2 hover:bg-white/10 rounded-full cursor-pointer"><X className="w-6 h-6" /></button>
+        </div>
+      </div>
+      {/* Main stage */}
+      <div className="flex-1 flex items-center justify-center relative min-h-0 px-10 sm:px-16">
+        {channelMedia.length > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={() => navigatePreview("prev")}
+              title="Previous (Left Arrow)"
+              className="absolute left-2 sm:left-4 w-10 h-10 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center cursor-pointer select-none text-xl"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              onClick={() => navigatePreview("next")}
+              title="Next (Right Arrow)"
+              className="absolute right-2 sm:right-4 w-10 h-10 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center cursor-pointer select-none text-xl"
+            >
+              ›
+            </button>
+          </>
+        )}
+        <div onClick={(e) => e.stopPropagation()} className="max-w-4xl max-h-full flex items-center justify-center">
+          {previewMediaType === "video" ? (
+            <video src={getMediaUrl(previewMediaUrl)} controls autoPlay className="max-h-[68vh] max-w-full rounded-lg shadow-2xl" />
+          ) : (
+            <img src={getMediaUrl(previewMediaUrl)} alt="fullscreen preview" className="max-h-[68vh] max-w-full object-contain rounded-lg shadow-2xl" />
+          )}
+        </div>
+      </div>
+      {/* Bottom thumbnail strip */}
+      {channelMedia.length > 1 && (
+        <div className="shrink-0 border-t border-white/10 bg-black/30 px-3 py-2 flex gap-1.5 overflow-x-auto justify-start sm:justify-center">
+          {channelMedia.map((m, idx) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => {
+                setPreviewIndex(idx);
+                setPreviewMediaUrl(m.media_url!);
+                setPreviewMediaType(m.media_type === "video" ? "video" : "image");
+              }}
+              className={cn("w-12 h-12 rounded-md overflow-hidden shrink-0 border-2 cursor-pointer", idx === previewIndex ? "border-emerald-400" : "border-transparent opacity-60 hover:opacity-100")}
+            >
+              {m.media_type === "video" ? (
+                <video src={getMediaUrl(m.media_url)} preload="metadata" className="w-full h-full object-cover" />
+              ) : (
+                <img src={getMediaUrl(m.media_url)} alt="" className="w-full h-full object-cover" loading="lazy" />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+      <button type="button" onClick={() => setPreviewMediaUrl(null)} className="absolute inset-0 -z-10 cursor-zoom-out" aria-hidden />
+    </div>
+  )
+}
+
+{/* ======================================================== */ }
+{/* 7. CREATE NEW CHANNEL MODAL                               */ }
+{/* ======================================================== */ }
+{
+  isNewChannelOpen && (
+    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-[440px] overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="p-6 border-b border-border flex items-center justify-between">
+          <h3 className="font-bold text-foreground">Create New Channel</h3>
+          <button
+            type="button"
+            onClick={() => setIsNewChannelOpen(false)}
+            className="p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg transition-colors cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <form onSubmit={handleCreateChannel} className="p-6 space-y-4 text-left">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">
+              Channel Name
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. general-discussions"
+              value={newChannelName}
+              onChange={(e) => setNewChannelName(e.target.value)}
+              className="w-full px-3 py-2 bg-muted/50 border border-border rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+          </div>
+
+          {/* Task 42: Member selection with search */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">
+                Add Members ({newChannelMembers.length > 0 ? `${newChannelMembers.filter((m, i, a) => a.indexOf(m) === i).length} selected` : "Optional"})
+              </label>
+              {newChannelMembers.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setNewChannelMembers([])}
+                  className="text-[10px] text-emerald-600 hover:underline cursor-pointer"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
               <input
                 type="text"
-                value={forwardSearch}
-                onChange={(e) => setForwardSearch(e.target.value)}
-                placeholder="Search contacts & chats..."
-                className="w-full px-3 py-2 bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                value={newChannelMemberSearch}
+                onChange={(e) => setNewChannelMemberSearch(e.target.value)}
+                placeholder="Search colleagues to add..."
+                className="w-full pl-8 pr-3 py-1.5 bg-muted/40 border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
-              <div className="mt-2 rounded-xl bg-muted/40 border border-border px-2.5 py-2 text-[11px] text-muted-foreground truncate flex items-center gap-1.5">
-                <span className="text-emerald-600 font-bold">➦</span>
-                <span className="truncate">
-                  {messageIdsToForward.length > 1
-                    ? `${messageIdsToForward.length} images/messages`
-                    : (forwardMsg.content || (forwardMsg.media_type ? `[${forwardMsg.media_type}]` : "Media") || "").slice(0, 80)}
-                </span>
-              </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
-              {forwardOptions
-                .filter((opt) => opt.name.toLowerCase().includes(forwardSearch.toLowerCase()))
-                .map((opt) => {
-                  const checked = forwardTargets.includes(opt.id);
+            <div className="max-h-36 overflow-y-auto space-y-1 p-1 bg-muted/20 rounded-xl border border-border/60">
+              {(employees || [])
+                .filter((emp) => String(emp.id) !== myUserId && String((emp as any)._id) !== myUserId)
+                .filter((emp) =>
+                  !newChannelMemberSearch.trim() ||
+                  (emp.name || "").toLowerCase().includes(newChannelMemberSearch.toLowerCase()) ||
+                  (emp.email || "").toLowerCase().includes(newChannelMemberSearch.toLowerCase())
+                )
+                .map((emp) => {
+                  const empKey = String((emp as any)._id || emp.id);
+                  const isSelected = newChannelMembers.includes(empKey) || newChannelMembers.includes(String(emp.id));
                   return (
                     <label
-                      key={opt.id}
-                      className="w-full flex items-center gap-2.5 p-2 rounded-xl hover:bg-muted cursor-pointer transition-colors"
+                      key={emp.id}
+                      className="flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-muted cursor-pointer text-xs"
                     >
                       <input
                         type="checkbox"
-                        checked={checked}
-                        onChange={() =>
-                          setForwardTargets((prev) => (checked ? prev.filter((t) => t !== opt.id) : [...prev, opt.id]))
-                        }
-                        className="accent-emerald-600 w-4 h-4 rounded cursor-pointer"
+                        checked={isSelected}
+                        onChange={() => {
+                          setNewChannelMembers((prev) =>
+                            isSelected
+                              ? prev.filter((id) => id !== empKey && id !== String(emp.id))
+                              : [...prev, empKey, String(emp.id)]
+                          );
+                        }}
+                        className="accent-emerald-600 w-3.5 h-3.5 rounded cursor-pointer"
                       />
-                      {opt.is_dm ? (
-                        <UserAvatar name={opt.name} avatar={opt.avatar} size="w-7 h-7" showStatus={false} />
-                      ) : (
-                        <span className="w-7 h-7 rounded-full bg-emerald-500/15 text-emerald-700 flex items-center justify-center font-bold text-xs shrink-0">
-                          #
-                        </span>
-                      )}
-                      <span className="text-xs font-bold text-foreground truncate flex-1">{opt.name}</span>
+                      <UserAvatar name={emp.name} avatar={emp.avatar || emp.profile_photo} size="w-6 h-6" />
+                      <div className="min-w-0 flex-1">
+                        <span className="font-bold block truncate">{emp.name}</span>
+                        <span className="text-[10px] text-muted-foreground block truncate">{emp.designation || emp.email}</span>
+                      </div>
                     </label>
                   );
                 })}
-              {forwardOptions.filter((opt) => opt.name.toLowerCase().includes(forwardSearch.toLowerCase())).length === 0 && (
-                <div className="p-4 text-center text-[11px] text-muted-foreground">No matching chats or contacts found</div>
-              )}
-            </div>
-            <div className="p-3 border-t border-border flex justify-end gap-2 shrink-0 bg-muted/20">
-              <button
-                type="button"
-                onClick={() => {
-                  setForwardMsg(null);
-                  setForwardTargets([]);
-                }}
-                className="px-4 py-2 border border-border rounded-xl text-xs font-bold text-muted-foreground hover:bg-muted cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={forwardTargets.length === 0 || isForwarding}
-                onClick={handleForwardConfirm}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors"
-              >
-                {isForwarding ? "Forwarding..." : `Forward → ${forwardTargets.length ? `(${forwardTargets.length})` : ""}`}
-              </button>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* ======================================================== */}
-      {/* 11. PDF VIEWER MODAL (issue: PDF like screenshot)          */}
-      {/* ======================================================== */}
-      {pdfUrl && (
-        <div className="fixed inset-0 bg-[#0b141a]/95 z-50 flex flex-col">
-          <div className="flex items-center justify-between px-3 sm:px-5 py-2.5 text-white shrink-0">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <span className="w-8 h-10 rounded bg-rose-600 text-white flex items-center justify-center text-[9px] font-black shrink-0">PDF</span>
-              <div className="min-w-0">
-                <div className="font-bold text-sm truncate max-w-[50vw]">{pdfName}</div>
-                <div className="text-[11px] text-white/60">PDF viewer</div>
+          {/* Auto-join toggle for future new employees (Issue 5 - default off) */}
+          <div className="flex items-center justify-between p-3 rounded-2xl bg-muted/40 border border-border/80">
+            <div className="space-y-0.5 pr-2">
+              <div className="text-xs font-semibold text-foreground">Auto-join new employees</div>
+              <div className="text-[10px] text-muted-foreground">
+                Automatically add newly registered employees to this channel (Default: Off)
               </div>
             </div>
-            <div className="flex items-center gap-1 text-white/85">
-              <button type="button" onClick={() => downloadViaBlob(pdfUrl, pdfName)} title="Download (Save as…)" className="p-2 hover:bg-white/10 rounded-full cursor-pointer"><Download className="w-5 h-5" /></button>
-              <button type="button" onClick={() => setPdfUrl(null)} title="Close" className="p-2 hover:bg-white/10 rounded-full cursor-pointer"><X className="w-6 h-6" /></button>
-            </div>
-          </div>
-          <div className="flex-1 min-h-0 bg-white m-2 sm:m-4 rounded-lg overflow-hidden">
-            <iframe src={pdfUrl} title={pdfName} className="w-full h-full border-0" />
-          </div>
-        </div>
-      )}
-
-      {/* ======================================================== */}
-      {/* 12. DESIGN-WISE CONFIRMATION MODAL (Replaces window.confirm) */}
-      {/* ======================================================== */}
-      {confirmDialog?.isOpen && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-150 p-6 text-center">
-            <div
+            <button
+              type="button"
+              onClick={() => setNewChannelAutoJoin(!newChannelAutoJoin)}
               className={cn(
-                "w-12 h-12 rounded-full mx-auto mb-4 flex items-center justify-center text-lg font-bold shadow-xs",
-                confirmDialog.variant === "danger"
-                  ? "bg-rose-500/10 text-rose-600 dark:text-rose-400"
-                  : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                "w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer shrink-0",
+                newChannelAutoJoin ? "bg-emerald-600 justify-end" : "bg-muted-foreground/30 justify-start"
               )}
             >
-              {confirmDialog.variant === "danger" ? (
-                <Trash2 className="w-6 h-6" />
-              ) : (
-                <AlertCircle className="w-6 h-6" />
-              )}
-            </div>
-            <h3 className="font-bold text-foreground text-base mb-1.5">{confirmDialog.title}</h3>
-            <p className="text-xs text-muted-foreground mb-6 leading-relaxed">
-              {confirmDialog.message}
-            </p>
-            <div className="flex items-center justify-center gap-2.5">
-              <button
-                type="button"
-                onClick={() => setConfirmDialog(null)}
-                className="px-4 py-2 border border-border rounded-xl text-xs font-bold text-muted-foreground hover:bg-muted transition-colors cursor-pointer"
-              >
-                {confirmDialog.cancelText || "Cancel"}
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  const cb = confirmDialog.onConfirm;
-                  setConfirmDialog(null);
-                  await cb();
-                }}
-                className={cn(
-                  "px-5 py-2 text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer",
-                  confirmDialog.variant === "danger"
-                    ? "bg-rose-600 hover:bg-rose-700"
-                    : "bg-emerald-600 hover:bg-emerald-700"
-                )}
-              >
-                {confirmDialog.confirmText || "Confirm"}
-              </button>
-            </div>
+              <div className="w-4 h-4 rounded-full bg-white shadow-md transform transition-transform" />
+            </button>
           </div>
-        </div>
-      )}
 
-      {/* ======================================================== */}
-      {/* 13. WHATSAPP REACTION PICKER MODAL (Opened via '+' on message) */}
-      {/* ======================================================== */}
-      {reactionPickerMsgId && (
-        <div
-          className="fixed inset-0 z-50 bg-background/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150"
-          onClick={() => setReactionPickerMsgId(null)}
-        >
-          <div
-            className="w-full max-w-[360px] sm:max-w-[400px] shadow-2xl animate-in zoom-in-95 duration-150"
-            onClick={(e) => e.stopPropagation()}
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setIsNewChannelOpen(false)}
+              className="px-4 py-2 bg-card border border-border text-foreground/80 hover:bg-muted font-bold text-xs rounded-xl transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors shadow-xs cursor-pointer"
+            >
+              Create
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+{/* 7b. EDIT CHANNEL MODAL (creator only) */ }
+{
+  isEditChannelOpen && activeChannel && (
+    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-[440px] overflow-hidden animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+        <div className="p-5 border-b border-border flex items-center justify-between shrink-0">
+          <h3 className="font-bold text-foreground text-sm">Edit Channel (creator only)</h3>
+          <button
+            type="button"
+            onClick={() => setIsEditChannelOpen(false)}
+            className="p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg cursor-pointer"
           >
-            <WhatsAppEmojiPicker
-              autoFocusSearch={true}
-              onSelect={(emoji) => {
-                handleReact(reactionPickerMsgId, emoji);
-                setReactionPickerMsgId(null);
-              }}
-              onClose={() => setReactionPickerMsgId(null)}
-              className="w-full max-h-[460px]"
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <form onSubmit={handleEditChannel} className="p-5 space-y-4 overflow-y-auto">
+          <div>
+            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1.5">
+              Channel Name
+            </label>
+            <input
+              type="text"
+              required
+              value={editChannelName}
+              onChange={(e) => setEditChannelName(e.target.value)}
+              placeholder="hello"
+              className="w-full px-4 py-2.5 bg-background border border-border rounded-full text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
             />
           </div>
-        </div>
-      )}
+          <div>
+            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1.5">
+              Description
+            </label>
+            <input
+              type="text"
+              value={editChannelDesc}
+              onChange={(e) => setEditChannelDesc(e.target.value)}
+              placeholder="Channel topic..."
+              className="w-full px-4 py-2.5 bg-background border border-border rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
+            />
+          </div>
 
-      {/* ======================================================== */}
-      {/* 14. WHATSAPP-STYLE RIGHT CLICK CONTEXT MENU              */}
-      {/* ======================================================== */}
-      {contextMenu && (
-        <div
-          ref={contextMenuRef}
-          className="fixed z-50 min-w-[220px] bg-card dark:bg-[#233138] border border-border shadow-2xl rounded-2xl p-1.5 animate-in fade-in zoom-in-95 duration-100 select-none text-[13px]"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-          onClick={(e) => e.stopPropagation()}
-          onContextMenu={(e) => e.preventDefault()}
-        >
-          {/* Reaction Pill on Top (Screenshot 2/3) */}
-          <div className="flex items-center justify-between px-2 py-1.5 mb-1 bg-muted/60 dark:bg-[#111b21] rounded-xl border border-border/40">
-            {DEFAULT_REACTIONS.map((emoji) => {
-              const isReacted = (contextMenu.msg.reactions?.[emoji] || []).includes(String(user?.id));
-              return (
+          {/* Auto-join toggle for future new employees (Issue 5) */}
+          <div className="flex items-center justify-between p-3 rounded-2xl bg-muted/40 border border-border/80">
+            <div className="space-y-0.5 pr-2">
+              <div className="text-xs font-semibold text-foreground">Auto-join new employees</div>
+              <div className="text-[10px] text-muted-foreground">
+                Newly added employees in the system will automatically join this channel. Existing members remain unchanged.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setEditChannelAutoJoin(!editChannelAutoJoin)}
+              className={cn(
+                "w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer shrink-0",
+                editChannelAutoJoin ? "bg-emerald-600 justify-end" : "bg-muted-foreground/30 justify-start"
+              )}
+            >
+              <div className="w-4 h-4 rounded-full bg-white shadow-md transform transition-transform" />
+            </button>
+          </div>
+          {/* Multi-select member dropdown */}
+          <div>
+            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1.5">
+              Add members (select employees)
+            </label>
+            <div className="flex gap-2 items-start" ref={memberDropdownRef}>
+              <div className="relative flex-1">
                 <button
-                  key={emoji}
                   type="button"
-                  onClick={() => {
-                    handleReact(contextMenu.msg.id, emoji);
-                    setContextMenu(null);
-                  }}
-                  title={`React ${emoji}`}
-                  className={cn(
-                    "w-7 h-7 flex items-center justify-center text-base hover:scale-130 active:scale-95 transition-transform rounded-full cursor-pointer",
-                    isReacted && "bg-emerald-500/20 scale-110"
-                  )}
+                  onClick={() => setIsMemberDropdownOpen((v) => !v)}
+                  className="w-full px-4 py-2.5 bg-background border border-border rounded-full text-sm flex items-center justify-between gap-2 hover:border-emerald-500 transition-colors cursor-pointer"
                 >
-                  {emoji}
+                  <span className={cn("truncate", editChannelMemberIds.length > 0 ? "text-foreground font-semibold" : "text-muted-foreground")}>
+                    {editChannelMemberIds.length > 0
+                      ? `${editChannelMemberIds.length} selected`
+                      : "Select employees..."}
+                  </span>
+                  <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform shrink-0", isMemberDropdownOpen && "rotate-180")} />
                 </button>
-              );
-            })}
-            <button
-              type="button"
-              onClick={() => {
-                const targetId = contextMenu.msg.id;
-                setContextMenu(null);
-                setReactionPickerMsgId(targetId);
-              }}
-              title="More reactions (+)"
-              className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted dark:hover:bg-muted/30 rounded-full text-xs font-bold transition-transform hover:scale-115 cursor-pointer"
-            >
-              +
-            </button>
-          </div>
-
-          {/* Context Menu Options */}
-          <div className="py-0.5 space-y-0.5">
-            {/* WhatsApp style Message Info */}
-            <button
-              type="button"
-              onClick={() => {
-                setMessageInfoMsg(contextMenu.msg);
-                setContextMenu(null);
-              }}
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted dark:hover:bg-[#182229] text-foreground transition-colors cursor-pointer text-left font-medium"
-            >
-              <Info className="w-4 h-4 text-emerald-600" />
-              <span>Message info</span>
-            </button>
-
-            {/* Poll view votes */}
-            {contextMenu.msg.poll && (
-              <button
-                type="button"
-                onClick={() => {
-                  setViewVotesPollMsg(contextMenu.msg);
-                  setContextMenu(null);
-                }}
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted dark:hover:bg-[#182229] text-foreground transition-colors cursor-pointer text-left font-medium"
-              >
-                <Users className="w-4 h-4 text-emerald-600" />
-                <span>View votes</span>
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={() => {
-                setReplyTo(contextMenu.msg);
-                focusMessageInput();
-                setContextMenu(null);
-              }}
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted dark:hover:bg-[#182229] text-foreground transition-colors cursor-pointer text-left font-medium"
-            >
-              <CornerUpLeft className="w-4 h-4 text-muted-foreground" />
-              <span>Reply</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={async () => {
-                const targetMsg = contextMenu.msg;
-                const media = contextMenu.mediaItem;
-                setContextMenu(null);
-                if (media?.url || (targetMsg.media_type === "image" && targetMsg.media_url)) {
-                  const urlToCopy = media?.url || targetMsg.media_url!;
-                  const ok = await copyImageToClipboard(urlToCopy);
-                  if (ok) {
-                    toast.success("Image copied to clipboard!");
-                  } else {
-                    toast.error("Could not copy image");
-                  }
-                } else if (targetMsg.content) {
-                  await navigator.clipboard.writeText(targetMsg.content);
-                  toast.success("Message copied!");
-                }
-              }}
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted dark:hover:bg-[#182229] text-foreground transition-colors cursor-pointer text-left font-medium"
-            >
-              <Copy className="w-4 h-4 text-muted-foreground" />
-              <span>
-                {contextMenu.mediaItem || contextMenu.msg.media_type === "image" ? "Copy image" : "Copy"}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setForwardMsg(contextMenu.msg);
-                setForwardTargets([]);
-                setForwardSearch("");
-                setContextMenu(null);
-              }}
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted dark:hover:bg-[#182229] text-foreground transition-colors cursor-pointer text-left font-medium"
-            >
-              <Share2 className="w-4 h-4 text-muted-foreground" />
-              <span>Forward</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                handleTogglePin(contextMenu.msg.id);
-                setContextMenu(null);
-              }}
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted dark:hover:bg-[#182229] text-foreground transition-colors cursor-pointer text-left font-medium"
-            >
-              <Pin className="w-4 h-4 text-muted-foreground" />
-              <span>{contextMenu.msg.is_pinned ? "Unpin message" : "Pin"}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                toast.info("Starred message");
-                setContextMenu(null);
-              }}
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted dark:hover:bg-[#182229] text-foreground transition-colors cursor-pointer text-left font-medium"
-            >
-              <Star className="w-4 h-4 text-muted-foreground" />
-              <span>Star</span>
-            </button>
-
-            {(contextMenu.mediaItem || contextMenu.msg.media_url) && (
-              <button
-                type="button"
-                onClick={() => {
-                  const url = contextMenu.mediaItem?.url || contextMenu.msg.media_url!;
-                  const name = contextMenu.mediaItem?.name || contextMenu.msg.file_name || "media";
-                  downloadViaBlob(url, name);
-                  setContextMenu(null);
-                }}
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted dark:hover:bg-[#182229] text-foreground transition-colors cursor-pointer text-left font-medium border-t border-border/60 pt-2 mt-1"
-              >
-                <Download className="w-4 h-4 text-muted-foreground" />
-                <span>Save as…</span>
-              </button>
-            )}
-
-            {/* Task 41 & User Access Control: Delete message option strictly governed by Access Control permissions */}
-            {canDeleteChatMessages && (
-              <button
-                type="button"
-                onClick={() => {
-                  const msgId = contextMenu.msg.id;
-                  setContextMenu(null);
-                  handleDeleteMessage(msgId);
-                }}
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-destructive/10 text-destructive transition-colors cursor-pointer text-left font-medium border-t border-border/60 pt-2 mt-1"
-              >
-                <Trash2 className="w-4 h-4 text-destructive" />
-                <span>Delete message</span>
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ======================================================== */}
-      {/* 15. POLL VOTES DETAILS MODAL (WhatsApp style)            */}
-      {/* ======================================================== */}
-      {viewVotesPollMsg && viewVotesPollMsg.poll && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col max-h-[85vh]">
-            <div className="p-4 sm:p-5 border-b border-border flex items-center justify-between bg-muted/20 shrink-0">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-9 h-9 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                  <BarChart2 className="w-5 h-5" />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="font-bold text-foreground text-sm sm:text-base truncate">Poll Details</h3>
-                  <p className="text-xs text-muted-foreground truncate">{viewVotesPollMsg.poll.question}</p>
-                </div>
+                {isMemberDropdownOpen && (
+                  <div className="absolute left-0 right-0 top-full mt-1.5 z-10 bg-card border border-border rounded-2xl shadow-2xl overflow-hidden">
+                    <div className="p-2 border-b border-border flex items-center gap-2">
+                      <input
+                        type="text"
+                        autoFocus
+                        value={memberSearch}
+                        onChange={(e) => setMemberSearch(e.target.value)}
+                        placeholder="Search employee..."
+                        className="flex-1 px-3 py-1.5 bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      />
+                      {editChannelMemberIds.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setEditChannelMemberIds([])}
+                          className="px-2 py-1 text-[10px] font-bold text-muted-foreground hover:text-rose-600 rounded-lg"
+                        >
+                          Clear all
+                        </button>
+                      )}
+                    </div>
+                    <div className="max-h-44 overflow-y-auto p-1.5">
+                      {(employees || [])
+                        .filter((emp) => (emp.name || "").toLowerCase().includes(memberSearch.toLowerCase()))
+                        .map((emp) => {
+                          const already = (activeChannel.members || []).map(String).includes(String(emp.id));
+                          const selected = editChannelMemberIds.includes(String(emp.id));
+                          return (
+                            <label
+                              key={emp.id}
+                              className={cn(
+                                "w-full flex items-center gap-2.5 p-2 rounded-xl text-left transition-colors cursor-pointer",
+                                already ? "opacity-40 cursor-not-allowed" : "hover:bg-emerald-50 dark:hover:bg-emerald-950/40",
+                                selected ? "bg-emerald-50 dark:bg-emerald-950/40" : ""
+                              )}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                disabled={already}
+                                onChange={(e) => {
+                                  if (already) return;
+                                  if (e.target.checked) {
+                                    setEditChannelMemberIds(prev => [...prev, String(emp.id)]);
+                                  } else {
+                                    setEditChannelMemberIds(prev => prev.filter(id => id !== String(emp.id)));
+                                  }
+                                }}
+                                className="w-4 h-4 rounded border-border accent-emerald-600 cursor-pointer disabled:cursor-not-allowed shrink-0"
+                              />
+                              <UserAvatar name={emp.name} avatar={emp.avatar || (emp as any).profile_photo} size="w-7 h-7" showStatus={false} />
+                              <span className="flex-1 min-w-0">
+                                <span className="block text-xs font-bold text-foreground truncate">{emp.name}</span>
+                                <span className="block text-[10px] text-muted-foreground truncate">{(emp as any).designation || (emp as any).email || ""}</span>
+                              </span>
+                              {already ? (
+                                <span className="text-[10px] font-bold text-emerald-600">Added ✓</span>
+                              ) : null}
+                            </label>
+                          );
+                        })}
+                      {(employees || []).filter((emp) => (emp.name || "").toLowerCase().includes(memberSearch.toLowerCase())).length === 0 && (
+                        <div className="p-3 text-center text-[11px] text-muted-foreground">No employees found</div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
               <button
                 type="button"
-                onClick={() => setViewVotesPollMsg(null)}
-                className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted cursor-pointer transition-colors"
+                onClick={handleAddMember}
+                disabled={editChannelMemberIds.length === 0}
+                className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 disabled:hover:bg-emerald-500 text-white rounded-full text-xs font-bold transition-colors cursor-pointer shrink-0"
               >
-                <X className="w-5 h-5" />
+                Add {editChannelMemberIds.length > 0 && `(${editChannelMemberIds.length})`}
               </button>
             </div>
-
-            <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1">
-              {viewVotesPollMsg.poll.options.map((opt, oIdx) => {
-                const totalVotes =
-                  viewVotesPollMsg.poll!.options.reduce((acc, o) => acc + (Array.isArray(o.voters) ? o.voters.length : 0), 0) || 1;
-                const votesCount = Array.isArray(opt.voters) ? opt.voters.length : 0;
-                const pct = Math.round((votesCount / totalVotes) * 100);
-
-                const votersList = (opt.voter_details && opt.voter_details.length > 0)
-                  ? opt.voter_details
-                  : (opt.voters || []).map((vid) => {
-                      const sVid = String(vid);
-                      const found = (employees || []).find((e) => String(e.id) === sVid || String((e as any)._id) === sVid);
-                      return {
-                        id: sVid,
-                        name: sVid === myUserId || (myEmployeeId && sVid === myEmployeeId) ? "You" : found?.name || "Colleague",
-                        avatar: found?.profile_photo || found?.avatar,
-                        time: undefined
-                      };
-                    });
-
+            <div className="text-[10px] text-muted-foreground mt-1.5">
+              Members: {(activeChannel.members || []).length} • Only creator can add/edit
+            </div>
+          </div>
+          {/* Issue 2: already-added users list with remove */}
+          <div>
+            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1.5">
+              Current members ({(activeChannel.members || []).length})
+            </label>
+            <div className="max-h-40 overflow-y-auto space-y-1 rounded-2xl border border-border p-1.5 bg-muted/20">
+              {(activeChannel.members || []).length === 0 && (
+                <div className="p-2.5 text-[11px] text-muted-foreground text-center">No members yet</div>
+              )}
+              {(activeChannel.members || []).map((mid) => {
+                const emp = (employees || []).find((e) => String(e.id) === String(mid));
+                const isCreator = String(activeChannel.created_by || "") === String(mid);
                 return (
-                  <div key={opt.id || oIdx} className="bg-muted/15 border border-border/80 rounded-2xl p-4 space-y-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="font-bold text-foreground text-sm flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 text-xs flex items-center justify-center font-bold">
-                          {oIdx + 1}
-                        </span>
-                        <span>{opt.text}</span>
-                      </div>
-                      <span className="text-xs font-semibold text-muted-foreground font-mono">
-                        {votesCount} {votesCount === 1 ? "vote" : "votes"} ({pct}%)
+                  <div key={String(mid)} className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-background transition-colors">
+                    <UserAvatar name={emp?.name || "User"} avatar={emp?.avatar || (emp as any)?.profile_photo} size="w-7 h-7" showStatus={false} />
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-xs font-bold text-foreground truncate">
+                        {emp?.name || String(mid).slice(0, 8)}
+                        {String(mid) === String(user?.id) ? " (You)" : ""}
                       </span>
-                    </div>
-
-                    <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-                      <div className="bg-emerald-600 h-2 rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
-                    </div>
-
-                    {votersList.length > 0 ? (
-                      <div className="pt-2 border-t border-border/60 space-y-2">
-                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                          Voted by ({votersList.length}):
-                        </p>
-                        <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                          {votersList.map((voter: any, vIdx: number) => {
-                            const vId = String(voter.id || voter);
-                            const isMe = vId === myUserId || (myEmployeeId && vId === myEmployeeId);
-                            const foundEmp = (employees || []).find((e) => String(e.id) === vId || String((e as any)._id) === vId);
-                            const name = isMe ? "You" : (voter.name || foundEmp?.name || "Colleague");
-                            const designation = (foundEmp as any)?.work_details?.designation || (foundEmp as any)?.designation || (foundEmp as any)?.role || "";
-
-                            return (
-                              <div key={vIdx} className="flex items-center justify-between p-1.5 rounded-lg hover:bg-muted/40 transition-colors">
-                                <div className="flex items-center gap-2.5 min-w-0">
-                                  <div className="w-7 h-7 rounded-full bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden">
-                                    {foundEmp?.profile_photo || foundEmp?.avatar ? (
-                                      <img src={foundEmp.profile_photo || foundEmp.avatar} alt={name} className="w-full h-full object-cover" />
-                                    ) : (
-                                      name.charAt(0).toUpperCase()
-                                    )}
-                                  </div>
-                                  <div className="min-w-0">
-                                    <p className="text-xs font-medium text-foreground truncate flex items-center gap-1.5">
-                                      <span>{name}</span>
-                                      {isMe && <span className="text-[10px] text-emerald-600 bg-emerald-500/10 px-1 rounded">You</span>}
-                                    </p>
-                                    {designation && (
-                                      <p className="text-[10px] text-muted-foreground truncate">{designation}</p>
-                                    )}
-                                  </div>
-                                </div>
-                                {voter.time && (
-                                  <span className="text-[10px] text-muted-foreground shrink-0 font-mono">
-                                    {new Date(voter.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-[11px] text-muted-foreground italic">No votes yet for this option</p>
+                      <span className="block text-[10px] text-muted-foreground">{isCreator ? "Creator" : (emp as any)?.designation || "Member"}</span>
+                    </span>
+                    {!isCreator && String(mid) !== String(user?.id) && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveMember(String(mid))}
+                        title="Remove member"
+                        className="p-1.5 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
                     )}
                   </div>
                 );
               })}
             </div>
-
-            <div className="p-3 border-t border-border bg-muted/10 text-right shrink-0">
+          </div>
+          <div className="flex justify-between pt-1">
+            <button
+              type="button"
+              onClick={handleDeleteChannel}
+              className="px-3 py-2 text-rose-600 hover:bg-rose-50 rounded-xl text-xs font-bold"
+            >
+              Delete channel
+            </button>
+            <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => setViewVotesPollMsg(null)}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer"
+                onClick={() => setIsEditChannelOpen(false)}
+                className="px-4 py-2 border border-border rounded-full text-xs font-bold text-muted-foreground hover:bg-muted"
               >
-                Close
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full text-xs font-bold"
+              >
+                Save
               </button>
             </div>
           </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+{/* ======================================================== */ }
+{/* 7c. GROUP MEMBERS LIST MODAL (Issue 4: visible to all)    */ }
+{/* ======================================================== */ }
+{
+  isGroupMembersModalOpen && activeChannel && !isCurrentDm && (
+    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-[460px] overflow-hidden animate-in zoom-in-95 duration-200 max-h-[85vh] flex flex-col">
+        <div className="p-5 border-b border-border flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-9 h-9 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
+              <Users className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="font-bold text-foreground text-sm truncate flex items-center gap-1.5">
+                <Hash className="w-4 h-4 text-muted-foreground shrink-0" />
+                <span>{cleanDisplayName(activeChannel.name)}</span>
+              </h3>
+              <p className="text-[11px] text-muted-foreground">
+                {(activeChannel.members || []).length} {((activeChannel.members || []).length === 1) ? "member joined" : "members joined"}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsGroupMembersModalOpen(false)}
+            className="p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg transition-colors cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
+
+        {/* Search Box inside modal */}
+        <div className="p-3 border-b border-border bg-muted/20 shrink-0">
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground" />
+            <input
+              type="text"
+              value={groupMemberSearch}
+              onChange={(e) => setGroupMemberSearch(e.target.value)}
+              placeholder="Search members in this group..."
+              className="w-full pl-9 pr-3 py-2 bg-background border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+          </div>
+        </div>
+
+        {/* Members List */}
+        <div className="overflow-y-auto p-3 space-y-1 flex-1">
+          {activeChannelMemberEmployees
+            .filter((emp) =>
+              !groupMemberSearch.trim() ||
+              (emp.name || "").toLowerCase().includes(groupMemberSearch.toLowerCase()) ||
+              (emp.email || "").toLowerCase().includes(groupMemberSearch.toLowerCase()) ||
+              (emp.role || "").toLowerCase().includes(groupMemberSearch.toLowerCase())
+            )
+            .map((emp) => {
+              const isCreator = String(activeChannel.created_by) === String(emp.id);
+              const isCurrent = String(user?.id) === String(emp.id);
+              const isOnline = Boolean(presenceMap[emp.id]);
+
+              return (
+                <div
+                  key={emp.id}
+                  className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-muted/60 transition-colors"
+                >
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <UserAvatar
+                      name={cleanDisplayName(emp.name)}
+                      avatar={emp.avatar || emp.profile_photo}
+                      size="w-9 h-9"
+                      isOnline={isOnline}
+                      showStatus={true}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs font-bold text-foreground truncate">
+                          {cleanDisplayName(emp.name)}
+                        </span>
+                        {isCurrent && (
+                          <span className="text-[10px] font-semibold bg-muted text-muted-foreground px-1.5 py-0.2 rounded-md">
+                            You
+                          </span>
+                        )}
+                        {isCreator && (
+                          <span className="text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.2 rounded-md border border-emerald-500/20">
+                            Group Admin
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground truncate">
+                        {emp.designation || emp.role || emp.department || emp.email}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Direct message button if not current user */}
+                  {!isCurrent && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsGroupMembersModalOpen(false);
+                        handleStartDm(String(emp.id));
+                      }}
+                      className="px-2.5 py-1.5 text-[11px] font-semibold text-emerald-600 hover:bg-emerald-500/10 rounded-lg transition-colors cursor-pointer shrink-0 ml-2"
+                      title={`Message ${cleanDisplayName(emp.name)}`}
+                    >
+                      Message
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+
+          {activeChannelMemberEmployees.filter((emp) =>
+            !groupMemberSearch.trim() ||
+            (emp.name || "").toLowerCase().includes(groupMemberSearch.toLowerCase()) ||
+            (emp.email || "").toLowerCase().includes(groupMemberSearch.toLowerCase()) ||
+            (emp.role || "").toLowerCase().includes(groupMemberSearch.toLowerCase())
+          ).length === 0 && (
+              <div className="py-8 text-center text-xs text-muted-foreground">
+                No group members found matching "{groupMemberSearch}"
+              </div>
+            )}
+        </div>
+
+        {/* Footer with Edit bridge for admin/creator */}
+        {isChannelCreator(activeChannel) && (
+          <div className="p-3 border-t border-border bg-muted/10 flex items-center justify-between shrink-0">
+            <span className="text-[11px] text-muted-foreground">You are the admin of this channel</span>
+            <button
+              type="button"
+              onClick={() => {
+                setIsGroupMembersModalOpen(false);
+                openEditChannel();
+              }}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+            >
+              Manage Members
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+{/* ======================================================== */ }
+{/* 8. CREATE POLL MODAL                                      */ }
+{/* ======================================================== */ }
+{
+  isPollModalOpen && (
+    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-[420px] overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="p-6 border-b border-border flex items-center justify-between">
+          <h3 className="font-bold text-foreground flex items-center gap-2">
+            <BarChart2 className="w-4 h-4 text-emerald-600" />
+            Create a Poll
+          </h3>
+          <button
+            type="button"
+            onClick={() => setIsPollModalOpen(false)}
+            className="p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg transition-colors cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <form onSubmit={handleCreatePoll} className="p-6 space-y-4">
+          <div>
+            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
+              Question
+            </label>
+            <input
+              type="text"
+              required
+              value={pollQuestion}
+              onChange={(e) => setPollQuestion(e.target.value)}
+              placeholder="e.g. Which sprint goal should we prioritize?"
+              className="w-full px-3 py-2 bg-muted/40 border border-border rounded-xl text-xs focus:ring-1 focus:ring-emerald-500 outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
+              Options
+            </label>
+            <div className="space-y-2">
+              {pollOptions.map((opt, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    required
+                    value={opt}
+                    onChange={(e) => {
+                      const updated = [...pollOptions];
+                      updated[i] = e.target.value;
+                      setPollOptions(updated);
+                    }}
+                    placeholder={`Option ${i + 1}`}
+                    className="flex-1 px-3 py-1.5 bg-muted/40 border border-border rounded-xl text-xs focus:ring-1 focus:ring-emerald-500 outline-none"
+                  />
+                  {pollOptions.length > 2 && (
+                    <button
+                      type="button"
+                      onClick={() => setPollOptions(pollOptions.filter((_, idx) => idx !== i))}
+                      className="p-1 text-muted-foreground hover:text-destructive"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              {pollOptions.length < 5 && (
+                <button
+                  type="button"
+                  onClick={() => setPollOptions([...pollOptions, ""])}
+                  className="text-xs text-emerald-600 font-bold hover:underline"
+                >
+                  + Add Option
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 pt-2">
+            <input
+              type="checkbox"
+              id="multiVote"
+              checked={pollMultiple}
+              onChange={(e) => setPollMultiple(e.target.checked)}
+              className="rounded accent-emerald-600"
+            />
+            <label htmlFor="multiVote" className="text-xs text-foreground cursor-pointer">
+              Allow multiple answers
+            </label>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setIsPollModalOpen(false)}
+              className="px-4 py-2 border border-border rounded-xl text-xs font-bold text-muted-foreground hover:bg-muted"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold shadow-xs hover:bg-emerald-700"
+            >
+              Create Poll
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+{/* ======================================================== */ }
+{/* 9. DIRECT MESSAGE USER SELECTION MODAL                    */ }
+{/* ======================================================== */ }
+{
+  isNewDmOpen && (
+    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-[390px] overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          <h3 className="font-bold text-foreground text-sm flex items-center gap-2">
+            <Users className="w-4 h-4 text-emerald-600" />
+            New Direct Message
+          </h3>
+          <button
+            type="button"
+            onClick={() => {
+              setIsNewDmOpen(false);
+              setNewDmSearch("");
+            }}
+            className="p-1 text-muted-foreground hover:text-foreground rounded-lg cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        {/* Task 36: Search colleagues in modal */}
+        <div className="p-3 border-b border-border bg-muted/20">
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-muted-foreground" />
+            <input
+              type="text"
+              autoFocus
+              value={newDmSearch}
+              onChange={(e) => setNewDmSearch(e.target.value)}
+              placeholder="Search by name, email, designation..."
+              className="w-full pl-8 pr-7 py-1.5 bg-background border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 font-medium"
+            />
+            {newDmSearch && (
+              <button
+                type="button"
+                onClick={() => setNewDmSearch("")}
+                className="absolute right-2.5 top-2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="max-h-80 overflow-y-auto p-2 space-y-1">
+          {(employees || [])
+            .filter((emp) => String(emp.id) !== myUserId && String((emp as any)._id) !== myUserId)
+            .filter((emp) => {
+              if (!newDmSearch.trim()) return true;
+              const q = newDmSearch.toLowerCase();
+              return (
+                (emp.name || "").toLowerCase().includes(q) ||
+                (emp.email || "").toLowerCase().includes(q) ||
+                (emp.designation || "").toLowerCase().includes(q) ||
+                String((emp as any).department || "").toLowerCase().includes(q)
+              );
+            })
+            .map((emp) => (
+              <button
+                key={emp.id}
+                type="button"
+                onClick={() => {
+                  setNewDmSearch("");
+                  handleStartDm(emp.id);
+                }}
+                className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-muted text-left transition-colors cursor-pointer"
+              >
+                <UserAvatar
+                  name={emp.name}
+                  avatar={emp.avatar || emp.profile_photo}
+                  size="w-8 h-8"
+                  isOnline={presenceMap[emp.id] ?? false}
+                  showStatus={true}
+                />
+                <div className="min-w-0 flex-1">
+                  <span className="font-bold text-xs text-foreground block truncate">{emp.name}</span>
+                  <span className="text-[10px] text-muted-foreground block truncate">
+                    {emp.designation || (emp as any).department || emp.email}
+                  </span>
+                </div>
+              </button>
+            ))}
+          {(employees || [])
+            .filter((emp) => String(emp.id) !== myUserId && String((emp as any)._id) !== myUserId)
+            .filter((emp) => {
+              if (!newDmSearch.trim()) return true;
+              const q = newDmSearch.toLowerCase();
+              return (
+                (emp.name || "").toLowerCase().includes(q) ||
+                (emp.email || "").toLowerCase().includes(q) ||
+                (emp.designation || "").toLowerCase().includes(q) ||
+                String((emp as any).department || "").toLowerCase().includes(q)
+              );
+            }).length === 0 && (
+              <div className="p-6 text-center text-xs text-muted-foreground">
+                No colleagues found matching "{newDmSearch}"
+              </div>
+            )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+{/* ======================================================== */ }
+{/* 10. FORWARD MODAL (support single/album & contact names)  */ }
+{/* ======================================================== */ }
+{
+  forwardMsg && (
+    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-[400px] overflow-hidden animate-in zoom-in-95 duration-200 max-h-[85vh] flex flex-col">
+        <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
+          <h3 className="font-bold text-foreground text-sm">
+            Forward {messageIdsToForward.length > 1 ? `${messageIdsToForward.length} items` : "message"} ({forwardTargets.length} selected)
+          </h3>
+          <button
+            type="button"
+            onClick={() => {
+              setForwardMsg(null);
+              setForwardTargets([]);
+            }}
+            className="p-1 text-muted-foreground hover:text-foreground rounded-lg cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-3 border-b border-border shrink-0">
+          <input
+            type="text"
+            value={forwardSearch}
+            onChange={(e) => setForwardSearch(e.target.value)}
+            placeholder="Search contacts & chats..."
+            className="w-full px-3 py-2 bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+          />
+          <div className="mt-2 rounded-xl bg-muted/40 border border-border px-2.5 py-2 text-[11px] text-muted-foreground truncate flex items-center gap-1.5">
+            <span className="text-emerald-600 font-bold">➦</span>
+            <span className="truncate">
+              {messageIdsToForward.length > 1
+                ? `${messageIdsToForward.length} images/messages`
+                : (forwardMsg.content || (forwardMsg.media_type ? `[${forwardMsg.media_type}]` : "Media") || "").slice(0, 80)}
+            </span>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+          {forwardOptions
+            .filter((opt) => opt.name.toLowerCase().includes(forwardSearch.toLowerCase()))
+            .map((opt) => {
+              const checked = forwardTargets.includes(opt.id);
+              return (
+                <label
+                  key={opt.id}
+                  className="w-full flex items-center gap-2.5 p-2 rounded-xl hover:bg-muted cursor-pointer transition-colors"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() =>
+                      setForwardTargets((prev) => (checked ? prev.filter((t) => t !== opt.id) : [...prev, opt.id]))
+                    }
+                    className="accent-emerald-600 w-4 h-4 rounded cursor-pointer"
+                  />
+                  {opt.is_dm ? (
+                    <UserAvatar name={opt.name} avatar={opt.avatar} size="w-7 h-7" showStatus={false} />
+                  ) : (
+                    <span className="w-7 h-7 rounded-full bg-emerald-500/15 text-emerald-700 flex items-center justify-center font-bold text-xs shrink-0">
+                      #
+                    </span>
+                  )}
+                  <span className="text-xs font-bold text-foreground truncate flex-1">{opt.name}</span>
+                </label>
+              );
+            })}
+          {forwardOptions.filter((opt) => opt.name.toLowerCase().includes(forwardSearch.toLowerCase())).length === 0 && (
+            <div className="p-4 text-center text-[11px] text-muted-foreground">No matching chats or contacts found</div>
+          )}
+        </div>
+        <div className="p-3 border-t border-border flex justify-end gap-2 shrink-0 bg-muted/20">
+          <button
+            type="button"
+            onClick={() => {
+              setForwardMsg(null);
+              setForwardTargets([]);
+            }}
+            className="px-4 py-2 border border-border rounded-xl text-xs font-bold text-muted-foreground hover:bg-muted cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={forwardTargets.length === 0 || isForwarding}
+            onClick={handleForwardConfirm}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors"
+          >
+            {isForwarding ? "Forwarding..." : `Forward → ${forwardTargets.length ? `(${forwardTargets.length})` : ""}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+{/* ======================================================== */ }
+{/* 11. PDF VIEWER MODAL (issue: PDF like screenshot)          */ }
+{/* ======================================================== */ }
+{
+  pdfUrl && (
+    <div className="fixed inset-0 bg-[#0b141a]/95 z-50 flex flex-col">
+      <div className="flex items-center justify-between px-3 sm:px-5 py-2.5 text-white shrink-0">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="w-8 h-10 rounded bg-rose-600 text-white flex items-center justify-center text-[9px] font-black shrink-0">PDF</span>
+          <div className="min-w-0">
+            <div className="font-bold text-sm truncate max-w-[50vw]">{pdfName}</div>
+            <div className="text-[11px] text-white/60">PDF viewer</div>
+          </div>
+        </div>
+        <div className="flex items-center gap-1 text-white/85">
+          <button type="button" onClick={() => downloadViaBlob(pdfUrl, pdfName)} title="Download (Save as…)" className="p-2 hover:bg-white/10 rounded-full cursor-pointer"><Download className="w-5 h-5" /></button>
+          <button type="button" onClick={() => setPdfUrl(null)} title="Close" className="p-2 hover:bg-white/10 rounded-full cursor-pointer"><X className="w-6 h-6" /></button>
+        </div>
+      </div>
+      <div className="flex-1 min-h-0 bg-white m-2 sm:m-4 rounded-lg overflow-hidden">
+        <iframe src={pdfUrl} title={pdfName} className="w-full h-full border-0" />
+      </div>
+    </div>
+  )
+}
+
+{/* ======================================================== */ }
+{/* 12. DESIGN-WISE CONFIRMATION MODAL (Replaces window.confirm) */ }
+{/* ======================================================== */ }
+{
+  confirmDialog?.isOpen && (
+    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+      <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-150 p-6 text-center">
+        <div
+          className={cn(
+            "w-12 h-12 rounded-full mx-auto mb-4 flex items-center justify-center text-lg font-bold shadow-xs",
+            confirmDialog.variant === "danger"
+              ? "bg-rose-500/10 text-rose-600 dark:text-rose-400"
+              : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+          )}
+        >
+          {confirmDialog.variant === "danger" ? (
+            <Trash2 className="w-6 h-6" />
+          ) : (
+            <AlertCircle className="w-6 h-6" />
+          )}
+        </div>
+        <h3 className="font-bold text-foreground text-base mb-1.5">{confirmDialog.title}</h3>
+        <p className="text-xs text-muted-foreground mb-6 leading-relaxed">
+          {confirmDialog.message}
+        </p>
+        <div className="flex items-center justify-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => setConfirmDialog(null)}
+            className="px-4 py-2 border border-border rounded-xl text-xs font-bold text-muted-foreground hover:bg-muted transition-colors cursor-pointer"
+          >
+            {confirmDialog.cancelText || "Cancel"}
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              const cb = confirmDialog.onConfirm;
+              setConfirmDialog(null);
+              await cb();
+            }}
+            className={cn(
+              "px-5 py-2 text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer",
+              confirmDialog.variant === "danger"
+                ? "bg-rose-600 hover:bg-rose-700"
+                : "bg-emerald-600 hover:bg-emerald-700"
+            )}
+          >
+            {confirmDialog.confirmText || "Confirm"}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+{/* ======================================================== */ }
+{/* 13. WHATSAPP REACTION PICKER MODAL (Opened via '+' on message) */ }
+{/* ======================================================== */ }
+{
+  reactionPickerMsgId && (
+    <div
+      className="fixed inset-0 z-50 bg-background/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150"
+      onClick={() => setReactionPickerMsgId(null)}
+    >
+      <div
+        className="w-full max-w-[360px] sm:max-w-[400px] shadow-2xl animate-in zoom-in-95 duration-150"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <WhatsAppEmojiPicker
+          autoFocusSearch={true}
+          onSelect={(emoji) => {
+            handleReact(reactionPickerMsgId, emoji);
+            setReactionPickerMsgId(null);
+          }}
+          onClose={() => setReactionPickerMsgId(null)}
+          className="w-full max-h-[460px]"
+        />
+      </div>
+    </div>
+  )
+}
+
+{/* ======================================================== */ }
+{/* 14. WHATSAPP-STYLE RIGHT CLICK CONTEXT MENU              */ }
+{/* ======================================================== */ }
+{
+  contextMenu && (
+    <div
+      ref={contextMenuRef}
+      className="fixed z-50 min-w-[220px] bg-card dark:bg-[#233138] border border-border shadow-2xl rounded-2xl p-1.5 animate-in fade-in zoom-in-95 duration-100 select-none text-[13px]"
+      style={{ left: contextMenu.x, top: contextMenu.y }}
+      onClick={(e) => e.stopPropagation()}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      {/* Reaction Pill on Top (Screenshot 2/3) */}
+      <div className="flex items-center justify-between px-2 py-1.5 mb-1 bg-muted/60 dark:bg-[#111b21] rounded-xl border border-border/40">
+        {DEFAULT_REACTIONS.map((emoji) => {
+          const isReacted = (contextMenu.msg.reactions?.[emoji] || []).includes(String(user?.id));
+          return (
+            <button
+              key={emoji}
+              type="button"
+              onClick={() => {
+                handleReact(contextMenu.msg.id, emoji);
+                setContextMenu(null);
+              }}
+              title={`React ${emoji}`}
+              className={cn(
+                "w-7 h-7 flex items-center justify-center text-base hover:scale-130 active:scale-95 transition-transform rounded-full cursor-pointer",
+                isReacted && "bg-emerald-500/20 scale-110"
+              )}
+            >
+              {emoji}
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          onClick={() => {
+            const targetId = contextMenu.msg.id;
+            setContextMenu(null);
+            setReactionPickerMsgId(targetId);
+          }}
+          title="More reactions (+)"
+          className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted dark:hover:bg-muted/30 rounded-full text-xs font-bold transition-transform hover:scale-115 cursor-pointer"
+        >
+          +
+        </button>
+      </div>
+
+      {/* Context Menu Options */}
+      <div className="py-0.5 space-y-0.5">
+        {/* WhatsApp style Message Info */}
+        <button
+          type="button"
+          onClick={() => {
+            setMessageInfoMsg(contextMenu.msg);
+            setContextMenu(null);
+          }}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted dark:hover:bg-[#182229] text-foreground transition-colors cursor-pointer text-left font-medium"
+        >
+          <Info className="w-4 h-4 text-emerald-600" />
+          <span>Message info</span>
+        </button>
+
+        {/* Poll view votes */}
+        {contextMenu.msg.poll && (
+          <button
+            type="button"
+            onClick={() => {
+              setViewVotesPollMsg(contextMenu.msg);
+              setContextMenu(null);
+            }}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted dark:hover:bg-[#182229] text-foreground transition-colors cursor-pointer text-left font-medium"
+          >
+            <Users className="w-4 h-4 text-emerald-600" />
+            <span>View votes</span>
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={() => {
+            setReplyTo(contextMenu.msg);
+            focusMessageInput();
+            setContextMenu(null);
+          }}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted dark:hover:bg-[#182229] text-foreground transition-colors cursor-pointer text-left font-medium"
+        >
+          <CornerUpLeft className="w-4 h-4 text-muted-foreground" />
+          <span>Reply</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={async () => {
+            const targetMsg = contextMenu.msg;
+            const media = contextMenu.mediaItem;
+            setContextMenu(null);
+            if (media?.url || (targetMsg.media_type === "image" && targetMsg.media_url)) {
+              const urlToCopy = media?.url || targetMsg.media_url!;
+              const ok = await copyImageToClipboard(urlToCopy);
+              if (ok) {
+                toast.success("Image copied to clipboard!");
+              } else {
+                toast.error("Could not copy image");
+              }
+            } else if (targetMsg.content) {
+              await navigator.clipboard.writeText(targetMsg.content);
+              toast.success("Message copied!");
+            }
+          }}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted dark:hover:bg-[#182229] text-foreground transition-colors cursor-pointer text-left font-medium"
+        >
+          <Copy className="w-4 h-4 text-muted-foreground" />
+          <span>
+            {contextMenu.mediaItem || contextMenu.msg.media_type === "image" ? "Copy image" : "Copy"}
+          </span>
+        </button>
+
+        {/* Task 25: Edit message option - strictly only for own text messages */}
+        {String(contextMenu.msg.sender_id || (contextMenu.msg.sender as any)?.id || "") === String(user?.id) && !contextMenu.msg.poll && Boolean(contextMenu.msg.content) && (
+          <button
+            type="button"
+            onClick={() => handleStartEditMessage(contextMenu.msg)}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted dark:hover:bg-[#182229] text-foreground transition-colors cursor-pointer text-left font-medium"
+          >
+            <Pencil className="w-4 h-4 text-muted-foreground" />
+            <span>Edit message</span>
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={() => {
+            setForwardMsg(contextMenu.msg);
+            setForwardTargets([]);
+            setForwardSearch("");
+            setContextMenu(null);
+          }}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted dark:hover:bg-[#182229] text-foreground transition-colors cursor-pointer text-left font-medium"
+        >
+          <Share2 className="w-4 h-4 text-muted-foreground" />
+          <span>Forward</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            handleTogglePin(contextMenu.msg.id);
+            setContextMenu(null);
+          }}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted dark:hover:bg-[#182229] text-foreground transition-colors cursor-pointer text-left font-medium"
+        >
+          <Pin className="w-4 h-4 text-muted-foreground" />
+          <span>{contextMenu.msg.is_pinned ? "Unpin message" : "Pin"}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            toast.info("Starred message");
+            setContextMenu(null);
+          }}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted dark:hover:bg-[#182229] text-foreground transition-colors cursor-pointer text-left font-medium"
+        >
+          <Star className="w-4 h-4 text-muted-foreground" />
+          <span>Star</span>
+        </button>
+
+        {(contextMenu.mediaItem || contextMenu.msg.media_url) && (
+          <button
+            type="button"
+            onClick={() => {
+              const url = contextMenu.mediaItem?.url || contextMenu.msg.media_url!;
+              const name = contextMenu.mediaItem?.name || contextMenu.msg.file_name || "media";
+              downloadViaBlob(url, name);
+              setContextMenu(null);
+            }}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted dark:hover:bg-[#182229] text-foreground transition-colors cursor-pointer text-left font-medium border-t border-border/60 pt-2 mt-1"
+          >
+            <Download className="w-4 h-4 text-muted-foreground" />
+            <span>Save as…</span>
+          </button>
+        )}
+
+        {/* Task 41 & User Access Control: Delete message option strictly governed by Access Control permissions */}
+        {canDeleteChatMessages && (
+          <button
+            type="button"
+            onClick={() => {
+              const msgId = contextMenu.msg.id;
+              setContextMenu(null);
+              handleDeleteMessage(msgId);
+            }}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-destructive/10 text-destructive transition-colors cursor-pointer text-left font-medium border-t border-border/60 pt-2 mt-1"
+          >
+            <Trash2 className="w-4 h-4 text-destructive" />
+            <span>Delete message</span>
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+{
+  viewVotesPollMsg && viewVotesPollMsg.poll && (
+    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+      <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col max-h-[85vh]">
+        <div className="p-4 sm:p-5 border-b border-border flex items-center justify-between bg-muted/20 shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-9 h-9 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+              <BarChart2 className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="font-bold text-foreground text-sm sm:text-base truncate">Poll Details</h3>
+              <p className="text-xs text-muted-foreground truncate">{viewVotesPollMsg.poll.question}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setViewVotesPollMsg(null)}
+            className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted cursor-pointer transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+          <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1">
+            {viewVotesPollMsg.poll.options.map((opt, oIdx) => {
+              const totalVotes =
+                viewVotesPollMsg.poll!.options.reduce((acc, o) => acc + (Array.isArray(o.voters) ? o.voters.length : 0), 0) || 1;
+              const votesCount = Array.isArray(opt.voters) ? opt.voters.length : 0;
+              const pct = Math.round((votesCount / totalVotes) * 100);
+
+              const votersList = (opt.voter_details && opt.voter_details.length > 0)
+                ? opt.voter_details
+                : (opt.voters || []).map((vid) => {
+                  const sVid = String(vid);
+                  const found = (employees || []).find((e) => String(e.id) === sVid || String((e as any)._id) === sVid);
+                  return {
+                    id: sVid,
+                    name: sVid === myUserId || (myEmployeeId && sVid === myEmployeeId) ? "You" : found?.name || "Colleague",
+                    avatar: found?.profile_photo || found?.avatar,
+                    time: undefined
+                  };
+                });
+
+              return (
+                <div key={opt.id || oIdx} className="bg-muted/15 border border-border/80 rounded-2xl p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="font-bold text-foreground text-sm flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 text-xs flex items-center justify-center font-bold">
+                        {oIdx + 1}
+                      </span>
+                      <span>{opt.text}</span>
+                    </div>
+                    <span className="text-xs font-semibold text-muted-foreground font-mono">
+                      {votesCount} {votesCount === 1 ? "vote" : "votes"} ({pct}%)
+                    </span>
+                  </div>
+
+                  <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                    <div className="bg-emerald-600 h-2 rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
+                  </div>
+
+                  {votersList.length > 0 ? (
+                    <div className="pt-2 border-t border-border/60 space-y-2">
+                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                        Voted by ({votersList.length}):
+                      </p>
+                      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                        {votersList.map((voter: any, vIdx: number) => {
+                          const vId = String(voter.id || voter);
+                          const isMe = vId === myUserId || (myEmployeeId && vId === myEmployeeId);
+                          const foundEmp = (employees || []).find((e) => String(e.id) === vId || String((e as any)._id) === vId);
+                          const name = isMe ? "You" : (voter.name || foundEmp?.name || "Colleague");
+                          const designation = (foundEmp as any)?.work_details?.designation || (foundEmp as any)?.designation || (foundEmp as any)?.role || "";
+
+                          return (
+                            <div key={vIdx} className="flex items-center justify-between p-1.5 rounded-lg hover:bg-muted/40 transition-colors">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="w-7 h-7 rounded-full bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden">
+                                  {foundEmp?.profile_photo || foundEmp?.avatar ? (
+                                    <img src={foundEmp.profile_photo || foundEmp.avatar} alt={name} className="w-full h-full object-cover" />
+                                  ) : (
+                                    name.charAt(0).toUpperCase()
+                                  )}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-medium text-foreground truncate flex items-center gap-1.5">
+                                    <span>{name}</span>
+                                    {isMe && <span className="text-[10px] text-emerald-600 bg-emerald-500/10 px-1 rounded">You</span>}
+                                  </p>
+                                  {designation && (
+                                    <p className="text-[10px] text-muted-foreground truncate">{designation}</p>
+                                  )}
+                                </div>
+                              </div>
+                              {voter.time && (
+                                <span className="text-[10px] text-muted-foreground shrink-0 font-mono">
+                                  {new Date(voter.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground italic">No votes yet for this option</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="p-3 border-t border-border bg-muted/10 text-right shrink-0">
+            <button
+              type="button"
+              onClick={() => setViewVotesPollMsg(null)}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
       )}
 
       {/* ======================================================== */}

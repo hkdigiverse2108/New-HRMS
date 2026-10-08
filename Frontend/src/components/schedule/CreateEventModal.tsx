@@ -11,8 +11,8 @@ import type { ScheduleEvent } from "./Schedule";
 interface CreateEventModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (payload: any) => void;
-  onDelete?: () => void;
+  onSave: (payload: any) => void | Promise<void>;
+  onDelete?: (() => void | Promise<void>) | undefined;
   selectedDate?: Date;
   initialEvent?: ScheduleEvent | null;
 }

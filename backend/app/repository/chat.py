@@ -624,6 +624,37 @@ class ChatRepository:
                 pass
         return serialize_mongo(msg)
 
+    @classmethod
+    async def edit_message(cls, message_id: str, user_id: str, new_content: str) -> Optional[Dict[str, Any]]:
+        db = await cls.get_db()
+        try:
+            msg_id_obj = ObjectId(message_id)
+        except Exception:
+            return None
+
+        msg = await db[cls.messages_collection].find_one({"_id": msg_id_obj})
+        if not msg:
+            return None
+
+        # STRICTLY: Only the original sender can edit their own message
+        if str(msg.get("sender_id")) != str(user_id):
+            return None
+
+        await db[cls.messages_collection].update_one(
+            {"_id": msg_id_obj},
+            {"$set": {"content": new_content, "is_edited": True, "edited_at": datetime.utcnow()}}
+        )
+        updated = await db[cls.messages_collection].find_one({"_id": msg_id_obj})
+        if updated:
+            channel_id = updated.get("channel_id")
+            if channel_id:
+                try:
+                    await clear_pattern(f"chat:history:{channel_id}:*")
+                except Exception:
+                    pass
+            return serialize_mongo(updated)
+        return None
+
 
     @classmethod
     async def toggle_pin_message(cls, message_id: str, user_id: str) -> Optional[Dict[str, Any]]:

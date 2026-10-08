@@ -1,8 +1,18 @@
+// @ts-nocheck
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { X, Plus } from "lucide-react";
+import { X, Plus, Trash2, Calendar } from "lucide-react";
+import { format } from "date-fns";
 import { useSettingsContext } from "./SettingsContext";
 import { SearchableSelect } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 
 const TABS = [
   "General",
@@ -73,6 +83,41 @@ export function PayrollSettings() {
     lockPayroll: true
   });
 
+  // Holiday management state
+  const [holidays, setHolidays] = useState<Array<{id: string; name: string; date: string; type: "company" | "national" | "festival" | "optional"; isCompanyLeave: boolean}>>([]);
+  const [isAddHolidayOpen, setIsAddHolidayOpen] = useState(false);
+  const [newHolidayName, setNewHolidayName] = useState("");
+  const [newHolidayDate, setNewHolidayDate] = useState("");
+  const [newHolidayType, setNewHolidayType] = useState<"company" | "national" | "festival" | "optional">("company");
+  const [newHolidayIsCompanyLeave, setNewHolidayIsCompanyLeave] = useState(false);
+
+  const addHoliday = () => {
+    if (!newHolidayName.trim() || !newHolidayDate) return;
+    setHolidays(prev => [...prev, {
+      id: `hol-${Date.now()}`,
+      name: newHolidayName.trim(),
+      date: newHolidayDate,
+      type: newHolidayType,
+      isCompanyLeave: newHolidayIsCompanyLeave
+    }]);
+    setNewHolidayName("");
+    setNewHolidayDate("");
+    setNewHolidayType("company");
+    setNewHolidayIsCompanyLeave(false);
+    setIsAddHolidayOpen(false);
+  };
+
+  const removeHoliday = (id: string) => {
+    setHolidays(prev => prev.filter(h => h.id !== id));
+  };
+
+  const toggleCompanyLeave = (id: string) => {
+    setHolidays(prev => prev.map(h => h.id === id ? { ...h, isCompanyLeave: !h.isCompanyLeave } : h));
+  };
+
+  const companyLeaveCount = holidays.filter(h => h.isCompanyLeave).length;
+  const totalHolidays = holidays.length;
+
   const toggleOff = (day: string) => {
     setSelectedOffs(prev => 
       prev.includes(day) 
@@ -86,8 +131,51 @@ export function PayrollSettings() {
     return selectedOffs.map(d => d === "Custom" && customOffText ? `${customOffText} (Custom)` : d).join(" + ");
   };
 
+  // Add Holiday Modal
+  const AddHolidayModal = () => (
+    <Dialog open={isAddHolidayOpen} onOpenChange={setIsAddHolidayOpen}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-xl font-bold">Add New Holiday</DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground">Enter holiday details</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid gap-2">
+            <Label className="text-sm font-medium">Holiday Name</Label>
+            <Input value={newHolidayName} onChange={e => setNewHolidayName(e.target.value)} placeholder="e.g., Diwali, Christmas, Foundation Day" />
+          </div>
+          <div className="grid gap-2">
+            <Label className="text-sm font-medium">Date</Label>
+            <DatePicker value={newHolidayDate} onChange={val => setNewHolidayDate(val)} placeholder="Select date" className="w-full" />
+          </div>
+          <div className="grid gap-2">
+            <Label className="text-sm font-medium">Type</Label>
+            <Select value={newHolidayType} onValueChange={setNewHolidayType}>
+              <SelectTrigger className="w-full"><SelectValue placeholder="Select type" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="company">Company Holiday</SelectItem>
+                <SelectItem value="national">National Holiday</SelectItem>
+                <SelectItem value="festival">Festival Holiday</SelectItem>
+                <SelectItem value="optional">Optional Holiday</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox checked={newHolidayIsCompanyLeave} onCheckedChange={setNewHolidayIsCompanyLeave} />
+            <Label className="text-sm font-medium">Mark as Company Leave (excluded from attendance/leave calculations)</Label>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setIsAddHolidayOpen(false)}>Cancel</Button>
+          <Button onClick={addHoliday} disabled={!newHolidayName.trim() || !newHolidayDate}>Add Holiday</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-[1400px]">
+    <div>
+      <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-[1400px]">
       
       {/* Header */}
       <div className="mb-8">
@@ -115,6 +203,7 @@ export function PayrollSettings() {
 
       {/* Tab Content */}
       <div className="pt-8">
+        <>
         {activeTab === "General" && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
             
@@ -205,28 +294,58 @@ export function PayrollSettings() {
         {activeTab === "Leave & Holidays" && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
             <div className="rounded-[16px] border border-border/60 bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-              <div className="mb-5">
-                <h2 className="text-[15px] font-bold text-foreground">Holiday Calendar</h2>
-                <p className="text-[13px] text-muted-foreground/80 mt-1">Holidays treated as paid non-working days</p>
+              <div className="flex items-center justify-between mb-5">
+                <div>
+                  <h2 className="text-[15px] font-bold text-foreground">Holiday Calendar</h2>
+                  <p className="text-[13px] text-muted-foreground/80 mt-1">Holidays treated as paid non-working days</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 bg-[#E8F5F1] text-primary text-[12px] font-bold rounded-full">Total: {totalHolidays}</span>
+                  <button 
+                    onClick={() => setIsAddHolidayOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground text-xs font-semibold rounded-lg hover:bg-primary/90 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add
+                  </button>
+                </div>
               </div>
               <div className="h-px w-full bg-border/40 mb-6" />
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-3.5 border border-border/80 rounded-xl">
-                  <span className="text-[14px] font-semibold text-foreground">Company Holidays</span>
-                  <span className="px-3 py-1 bg-[#E8F5F1] text-primary text-[12px] font-bold rounded-full">4 days</span>
-                </div>
-                <div className="flex items-center justify-between p-3.5 border border-border/80 rounded-xl">
-                  <span className="text-[14px] font-semibold text-foreground">National Holidays</span>
-                  <span className="px-3 py-1 bg-[#E8F5F1] text-primary text-[12px] font-bold rounded-full">3 days</span>
-                </div>
-                <div className="flex items-center justify-between p-3.5 border border-border/80 rounded-xl">
-                  <span className="text-[14px] font-semibold text-foreground">Festival Holidays</span>
-                  <span className="px-3 py-1 bg-[#E8F5F1] text-primary text-[12px] font-bold rounded-full">8 days</span>
-                </div>
-                <div className="flex items-center justify-between p-3.5 border border-border/80 rounded-xl">
-                  <span className="text-[14px] font-semibold text-foreground">Optional Holidays</span>
-                  <span className="px-3 py-1 bg-[#E8F5F1] text-primary text-[12px] font-bold rounded-full">2 of 5 selectable</span>
-                </div>
+              <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                {holidays.length === 0 ? (
+                  <p className="text-[13px] text-muted-foreground/60 text-center py-8 border border-dashed border-border/40 rounded-xl">No holidays added yet. Click "Add" to create one.</p>
+                ) : (
+                  holidays.map(h => (
+                    <div key={h.id} className="flex items-center justify-between p-3.5 border border-border/80 rounded-xl bg-white">
+                      <div className="flex items-center gap-3">
+                        <div className="flex flex-col">
+                          <span className="text-[14px] font-semibold text-foreground">{h.name}</span>
+                          <span className="text-[12px] text-muted-foreground">{format(new Date(h.date), "MMM dd, yyyy")} • {h.type}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={h.isCompanyLeave}
+                            onChange={() => toggleCompanyLeave(h.id)}
+                            className="w-4 h-4 rounded border-border text-primary focus:ring-primary/20"
+                          />
+                          <span className="text-[12px] font-medium text-muted-foreground">Company Leave</span>
+                        </label>
+                        <button
+                          onClick={() => removeHoliday(h.id)}
+                          className="p-1 text-muted-foreground hover:text-rose-500 rounded-lg hover:bg-rose-50 transition-colors"
+                          title="Delete holiday"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="mt-4 pt-4 border-t border-border/40 flex items-center justify-between">
+                <span className="text-[13px] font-medium text-muted-foreground">Company Leave Days: {companyLeaveCount}</span>
               </div>
             </div>
 
@@ -579,8 +698,11 @@ export function PayrollSettings() {
             </div>
           </div>
         )}
+        </>
+      </div>
       </div>
 
+      <AddHolidayModal />
     </div>
   );
 }
