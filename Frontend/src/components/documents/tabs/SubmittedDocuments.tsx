@@ -222,7 +222,7 @@ export function SubmittedDocuments() {
     const targetEmployees = !isAdminOrHR
       ? nonAdminEmployees.filter(e => 
           String(e.id) === myEmpId || 
-          (myEmpCode && String(e.employeeId || e.employeeCode) === myEmpCode) ||
+          (myEmpCode && String(e.employeeId || (e as any).employeeCode) === myEmpCode) ||
           (myEmail && String(e.email).toLowerCase() === myEmail) ||
           (myName && String(e.name).toLowerCase() === myName)
         )
@@ -236,7 +236,7 @@ export function SubmittedDocuments() {
             id: `placeholder-${emp.id}-${type.id}`,
             employeeId: String(emp.id),
             employeeName: emp.name || "Employee",
-            employeeCode: emp.employeeId || emp.employeeCode || "",
+            employeeCode: emp.employeeId || (emp as any).employeeCode || "",
             designation: emp.designation || emp.role || "Employee",
             avatar: emp.avatar || emp.profile_photo || "",
             documentTypeId: type.id,
@@ -375,7 +375,7 @@ export function SubmittedDocuments() {
     setEditStatus(doc.status === "Pending to Submit" ? "Accepted" : doc.status);
     const matchedTypeId = doc.documentTypeId || docTypes.find(t => t.name.toLowerCase() === doc.documentName.toLowerCase())?.id || "";
     setEditDocTypeId(matchedTypeId);
-    setEditDate(doc.uploadDate && doc.uploadDate !== "-" ? doc.uploadDate : new Date().toISOString().split("T")[0]);
+    setEditDate((doc.uploadDate && doc.uploadDate !== "-" ? doc.uploadDate : new Date().toISOString().split("T")[0]) || "");
     setIsEditModalOpen(true);
   };
 

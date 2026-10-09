@@ -91,13 +91,13 @@ export function SalesHub({ initialTab = "dashboard", setActive, onAction, isNew 
 
       {/* Tab Contents */}
       <div className="min-w-0">
-        {activeTab === "dashboard" && <SalesDashboard setActive={setActive} onAction={onAction} />}
-        {activeTab === "pipeline" && <SalesPipeline onAction={onAction} />}
-        {activeTab === "leads" && <SalesLeads onAction={onAction} isNew={isNew} />}
-        {activeTab === "tasks" && <SalesTasks onAction={onAction} />}
-        {activeTab === "analytics" && <SalesAnalytics onAction={onAction} />}
-        {activeTab === "team" && <SalesTeamPerformance onAction={onAction} />}
-        {activeTab === "reports" && <SalesReports onAction={onAction} />}
+        {activeTab === "dashboard" && <SalesDashboard {...(setActive ? { setActive } : {})} {...(onAction ? { onAction } : {})} />}
+        {activeTab === "pipeline" && <SalesPipeline {...(onAction ? { onAction } : {})} />}
+        {activeTab === "leads" && <SalesLeads {...(onAction ? { onAction } : {})} {...(isNew !== undefined ? { isNew } : {})} />}
+        {activeTab === "tasks" && <SalesTasks {...(onAction ? { onAction } : {})} />}
+        {activeTab === "analytics" && <SalesAnalytics {...(onAction ? { onAction } : {})} />}
+        {activeTab === "team" && <SalesTeamPerformance {...(onAction ? { onAction } : {})} />}
+        {activeTab === "reports" && <SalesReports {...(onAction ? { onAction } : {})} />}
         {activeTab === "settings" && <SalesSettings />}
       </div>
     </div>

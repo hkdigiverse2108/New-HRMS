@@ -4,14 +4,14 @@ import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { api } from "@/lib/api";
 import { toast } from "@/lib/toast";
 
-const ReactQuillComponent = lazy(async () => {
+const ReactQuillComponent = lazy<React.ComponentType<any>>(async () => {
   if (typeof window === "undefined") {
     return { default: () => null };
   }
   try {
     await import("react-quill-new/dist/quill.snow.css");
     const mod = await import("react-quill-new");
-    return mod;
+    return { default: mod.default };
   } catch (e) {
     return { default: () => null };
   }
@@ -140,7 +140,7 @@ export function DocumentTemplates() {
       setTemplates(mapped);
 
       // Auto-select first template if none selected
-      if (mapped.length > 0 && !selectedTemplateId) {
+      if (mapped.length > 0 && !selectedTemplateId && mapped[0]) {
         setSelectedTemplateId(mapped[0].id);
       }
     } catch (err: any) {
@@ -624,7 +624,7 @@ export function DocumentTemplates() {
                               <ReactQuillComponent
                                 theme="snow"
                                 value={secHtml}
-                                onChange={(val) => {
+                                onChange={(val: string) => {
                                   const updated = [...pageSections];
                                   updated[secIdx] = val;
                                   setTempContent(updated.join(""));
@@ -684,7 +684,7 @@ export function DocumentTemplates() {
                 <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Template Dynamic Fields</h4>
                 <div className="flex flex-wrap gap-2 pt-1">
                   {extractedFields.length === 0 ? (
-                    <span className="text-xs text-muted-foreground italic">No {{variable}} fields found in template content.</span>
+                    <span className="text-xs text-muted-foreground italic">No {"{{variable}}"} fields found in template content.</span>
                   ) : (
                     extractedFields.map((field) => (
                       <span

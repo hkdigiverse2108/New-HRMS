@@ -81,7 +81,11 @@ class ContentService:
                 else:
                     date_val = None
                     break
-            date_str = date_val if isinstance(date_val, str) else None
+            date_str = None
+            if isinstance(date_val, str):
+                date_str = date_val.split("T")[0]
+            elif hasattr(date_val, "isoformat"):
+                date_str = date_val.isoformat().split("T")[0]
             
             is_completed = mapping["is_completed"](item_data)
             
@@ -106,8 +110,10 @@ class ContentService:
                     await TaskRepository.update(task_id, {"status": TaskStatus.COMPLETED})
             else:
                 # Create new task
-                if date_str:
-                    from datetime import datetime
+                from datetime import datetime, date as py_date
+                if isinstance(date_val, (py_date, datetime)):
+                    due_date_obj = date_val if isinstance(date_val, py_date) and not isinstance(date_val, datetime) else date_val.date()
+                elif date_str:
                     due_date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
                 else:
                     due_date_obj = None
@@ -144,7 +150,7 @@ class ContentService:
             ("script", settings.script_days_before),
             ("shoot", settings.shoot_days_before),
             ("editing", settings.editing_graphics_days_before),
-            ("thumbnail", settings.editing_graphics_days_before)
+            ("thumbnail", settings.thumbnail_days_before)
         ]:
             if stage not in insert_data:
                 insert_data[stage] = {}

@@ -44,6 +44,7 @@ interface Client {
 }
 
 export interface CreativeTeamRoles {
+  cc_creator?: string;
   scripting?: string;
   shoot_videography?: string;
   reel_editing?: string;
@@ -52,6 +53,7 @@ export interface CreativeTeamRoles {
   approval_qc?: string;
   caption?: string;
   posting_publisher?: string;
+  [key: string]: string | undefined;
 }
 
 interface Project {
@@ -214,13 +216,13 @@ export const mapBackendContentToCalendarItem = (item: any): CalendarItem => {
       typeof iss === 'string'
         ? { id: `iss-${idx}`, text: iss, timestamp: "", role: "Shoot", author: "Team", isClientIssue: true }
         : {
-            id: iss.id || `iss-${idx}`,
-            text: iss.text || "",
-            timestamp: iss.timestamp || "",
-            role: iss.role || "Shoot",
-            author: iss.author || "Team",
-            isClientIssue: iss.isClientIssue !== false
-          }
+          id: iss.id || `iss-${idx}`,
+          text: iss.text || "",
+          timestamp: iss.timestamp || "",
+          role: iss.role || "Shoot",
+          author: iss.author || "Team",
+          isClientIssue: iss.isClientIssue !== false
+        }
     ),
   };
 };
@@ -279,6 +281,7 @@ export const FIXED_DEPARTMENTS = [
 ] as const;
 
 export const CREATIVE_ROLES = [
+  { key: "cc_creator", label: "CC Creator (Content Calendar)", icon: "📅", desc: "Plan & Create Content Calendar" },
   { key: "scripting", label: "Scripting", icon: "📝", desc: "Topic & Script Creation" },
   { key: "shoot_videography", label: "Shoot / Videography", icon: "🎬", desc: "Shoot & Footage Assets" },
   { key: "reel_editing", label: "Reel / Video Editing", icon: "🎥", desc: "Video Cutting & Final Reel" },
@@ -314,7 +317,7 @@ export const getDateProgress = (
 
 // K16: months list from project date-range + default month (running cycle).
 // today range ma hoy to current month, pela hoy to start month, pachi hoy to end month.
-export const getProjectMonths = (  startDate?: string | null,
+export const getProjectMonths = (startDate?: string | null,
   endDate?: string | null,
   now: Date = new Date()
 ): { months: { value: string; label: string }[]; def: string } => {
@@ -394,14 +397,14 @@ export const isCreativeCategory = (cat?: string) => {
   return c === "creative" || c.includes("creative") || c === "design" || c === "uiux";
 };
 
-const UserAvatar = ({ 
-  name, 
-  avatar, 
+const UserAvatar = ({
+  name,
+  avatar,
   size = "w-7 h-7",
   className = ""
-}: { 
-  name?: string | null | undefined; 
-  avatar?: string | null | undefined; 
+}: {
+  name?: string | null | undefined;
+  avatar?: string | null | undefined;
   size?: string | undefined;
   className?: string | undefined;
 }) => {
@@ -832,10 +835,10 @@ const INITIAL_PROJECTS: Project[] = [
   }
 ];
 
-  // K1: 4-tab landing — Active/Archived Projects + Active/Archived Clients.
-  // "Brand Division" is kept as a separate toggle (not a tab) so the feature stays.
-  const TABS = ["Active Projects", "Active Clients", "Archived Projects", "Archived Clients"];
-  const PROJECT_TABS = ["Active Projects", "Archived Projects"];
+// K1: 4-tab landing — Active/Archived Projects + Active/Archived Clients.
+// "Brand Division" is kept as a separate toggle (not a tab) so the feature stays.
+const TABS = ["Active Projects", "Active Clients", "Archived Projects", "Archived Clients"];
+const PROJECT_TABS = ["Active Projects", "Archived Projects"];
 
 const syncSocialMediaTasksForProject = (project: any, calendarItems: any[]) => {
   const modules = project.modules || [];
@@ -850,12 +853,12 @@ const syncSocialMediaTasksForProject = (project: any, calendarItems: any[]) => {
 
   const otherTasks = socialModule.tasks.filter((t: any) => !t.id.startsWith("sm-cal-"));
   const newGeneratedTasks: any[] = [];
-  
+
   calendarItems.forEach(item => {
     const topicText = item.topic || "Untitled Idea";
     const typeLabel = item.type || "Content";
     const assigned = item.assignedTo || undefined;
-    
+
     if (item.scriptDate) {
       newGeneratedTasks.push({
         id: `sm-cal-script-${item.id}`,
@@ -908,6 +911,19 @@ const syncSocialMediaTasksForProject = (project: any, calendarItems: any[]) => {
     }
   });
 
+  const ccCreatorId = project.creativeTeam?.cc_creator;
+  if (ccCreatorId) {
+    const creatorName = project.creativeTeamDetails?.cc_creator?.employee_name || "Assigned Creator";
+    newGeneratedTasks.push({
+      id: `sm-cal-creator-${project.id}`,
+      title: `📅 Create Content Calendar: ${project.name || 'Project'}`,
+      status: "todo",
+      phase: "Planning",
+      dueDate: project.startDate || new Date().toISOString().split("T")[0],
+      assignedToName: creatorName
+    });
+  }
+
   const updatedSocialModule = {
     ...socialModule,
     tasks: [...otherTasks, ...newGeneratedTasks]
@@ -917,22 +933,23 @@ const syncSocialMediaTasksForProject = (project: any, calendarItems: any[]) => {
   return [...otherModules, updatedSocialModule];
 };
 
-const CalendarIssuesCell = ({ 
-  item, 
-  projectCalendar, 
-  project, 
-  projects, 
+const CalendarIssuesCell = ({
+  item,
+  projectCalendar,
+  project,
+  projects,
   setProjects,
   onLogActivity
-}: { 
-  item: CalendarItem; 
-  projectCalendar: CalendarItem[]; 
-  project: any; 
-  projects: any[]; 
+}: {
+  item: CalendarItem;
+  projectCalendar: CalendarItem[];
+  project: any;
+  projects: any[];
   setProjects: (projs: any[]) => void;
   onLogActivity: (action: string, details?: string) => void;
 }) => {
   const { user } = useAuth();
+  const currentUserId = String((user as any)?._id || (user as any)?.id || "");
   const currentUserName = useMemo(() => {
     const personal = (user as any)?.personal_info || {};
     const first = (personal.first_name || "").trim();
@@ -946,22 +963,36 @@ const CalendarIssuesCell = ({
   const [isClientIssue, setIsClientIssue] = useState(true);
   const issuesList = item.issues || [];
 
+  // Issue 1: Only show remarks/issues authored by the current person
+  const myIssuesList = useMemo(() => {
+    return issuesList.filter((issue: any) => {
+      if (issue.authorId && currentUserId) {
+        return String(issue.authorId) === currentUserId;
+      }
+      if (issue.author && currentUserName) {
+        return issue.author.trim().toLowerCase() === currentUserName.trim().toLowerCase();
+      }
+      return false;
+    });
+  }, [issuesList, currentUserId, currentUserName]);
+
   const handleAddIssue = () => {
     if (!newIssueText.trim()) return;
     const now = new Date();
     const dateStr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    
+
     const newIssue = {
       id: `issue-${Date.now()}`,
       text: newIssueText.trim(),
       role: selectedRole,
       author: currentUserName,
+      authorId: currentUserId,
       isClientIssue: isClientIssue,
       timestamp: dateStr
     };
 
     const updatedIssues = [...issuesList, newIssue];
-    const updatedCalendar = projectCalendar.map((x: any) => 
+    const updatedCalendar = projectCalendar.map((x: any) =>
       x.id === item.id ? { ...x, issues: updatedIssues } : x
     );
     setProjects(projects.map(p => p.id === project.id ? { ...p, contentCalendar: updatedCalendar } : p));
@@ -976,10 +1007,10 @@ const CalendarIssuesCell = ({
   };
 
   const handleToggleClientIssue = (issueId: string) => {
-    const updatedIssues = issuesList.map(iss => 
+    const updatedIssues = issuesList.map(iss =>
       iss.id === issueId ? { ...iss, isClientIssue: !iss.isClientIssue } : iss
     );
-    const updatedCalendar = projectCalendar.map((x: any) => 
+    const updatedCalendar = projectCalendar.map((x: any) =>
       x.id === item.id ? { ...x, issues: updatedIssues } : x
     );
     setProjects(projects.map(p => p.id === project.id ? { ...p, contentCalendar: updatedCalendar } : p));
@@ -993,7 +1024,7 @@ const CalendarIssuesCell = ({
   const handleRemoveIssue = (issueId: string) => {
     const issueObj = issuesList.find(i => i.id === issueId);
     const updatedIssues = issuesList.filter(i => i.id !== issueId);
-    const updatedCalendar = projectCalendar.map((x: any) => 
+    const updatedCalendar = projectCalendar.map((x: any) =>
       x.id === item.id ? { ...x, issues: updatedIssues } : x
     );
     setProjects(projects.map(p => p.id === project.id ? { ...p, contentCalendar: updatedCalendar } : p));
@@ -1008,42 +1039,42 @@ const CalendarIssuesCell = ({
     }
   };
 
-  const activeClientIssues = issuesList.filter(i => i.isClientIssue !== false);
+  const activeClientIssues = myIssuesList.filter(i => i.isClientIssue !== false);
 
   return (
     <Popover>
       <PopoverTrigger asChild>
         <button className={cn(
           "mx-auto px-2.5 py-1 rounded-full text-[10px] font-semibold tracking-wider block text-center cursor-pointer transition-all border shadow-xs",
-          activeClientIssues.length > 0 
-            ? "bg-rose-500/10 text-rose-600 border-rose-500/30 hover:bg-rose-500/20" 
-            : issuesList.length > 0
-            ? "bg-amber-500/10 text-amber-600 border-amber-500/30 hover:bg-amber-500/20"
-            : "bg-muted/60 text-muted-foreground hover:bg-muted border-border/40"
+          activeClientIssues.length > 0
+            ? "bg-rose-500/10 text-rose-600 border-rose-500/30 hover:bg-rose-500/20"
+            : myIssuesList.length > 0
+              ? "bg-amber-500/10 text-amber-600 border-amber-500/30 hover:bg-amber-500/20"
+              : "bg-muted/60 text-muted-foreground hover:bg-muted border-border/40"
         )}>
-          {activeClientIssues.length > 0 
-            ? `⚠️ ${activeClientIssues.length} Client Issue${activeClientIssues.length > 1 ? 's' : ''}` 
-            : issuesList.length > 0 
-            ? `💬 ${issuesList.length} Remark${issuesList.length > 1 ? 's' : ''}` 
-            : "+ Issue / Remark"}
+          {activeClientIssues.length > 0
+            ? `⚠️ ${activeClientIssues.length} Client Issue${activeClientIssues.length > 1 ? 's' : ''}`
+            : myIssuesList.length > 0
+              ? `💬 ${myIssuesList.length} Remark${myIssuesList.length > 1 ? 's' : ''}`
+              : "+ Remark"}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-[320px] p-4 bg-card border border-border rounded-2xl shadow-xl z-50 text-left" align="center">
         <div className="space-y-3">
           <div className="flex justify-between items-center border-b border-border/40 pb-2">
             <div>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">Issues & Remarks ({issuesList.length})</h4>
-              <p className="text-[10px] text-muted-foreground">Person-specific client issues & notes</p>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">My Remarks &amp; Issues ({myIssuesList.length})</h4>
+              <p className="text-[10px] text-muted-foreground">Private notes visible only to you ({currentUserName})</p>
             </div>
           </div>
-          
+
           <div className="space-y-2 max-h-[190px] overflow-y-auto pr-1">
-            {issuesList.length === 0 ? (
-              <p className="text-[10px] text-muted-foreground italic font-medium py-2 text-center">No active issues or remarks logged.</p>
+            {myIssuesList.length === 0 ? (
+              <p className="text-[10px] text-muted-foreground italic font-medium py-2 text-center">No remarks added by you yet.</p>
             ) : (
-              issuesList.map((issue) => (
-                <div 
-                  key={issue.id} 
+              myIssuesList.map((issue) => (
+                <div
+                  key={issue.id}
                   className={cn(
                     "p-2.5 rounded-xl border flex flex-col gap-1.5 transition-all",
                     issue.isClientIssue !== false
@@ -1064,7 +1095,7 @@ const CalendarIssuesCell = ({
                     </div>
                     <div className="flex items-center gap-1">
                       <span className="text-[9px] text-muted-foreground font-mono">{issue.timestamp}</span>
-                      <button 
+                      <button
                         onClick={() => handleRemoveIssue(issue.id)}
                         className="p-1 text-muted-foreground hover:text-rose-600 transition-colors"
                         title="Delete issue"
@@ -1098,15 +1129,18 @@ const CalendarIssuesCell = ({
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Target Phase/Role</label>
-                <select
-                  value={selectedRole}
-                  onChange={(e) => setSelectedRole(e.target.value)}
-                  className="w-full px-2 py-1 bg-muted/40 border border-border/50 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
-                >
-                  {["Shoot", "Scripting", "Editing", "Thumbnail", "Posting"].map(r => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </select>
+                <Select value={selectedRole} onValueChange={(val) => setSelectedRole(val)}>
+                  <SelectTrigger className="w-full h-8 px-2 bg-muted/40 border border-border/50 rounded-lg text-xs font-semibold shadow-xs">
+                    <SelectValue placeholder="Role" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                    {["Shoot", "Scripting", "Editing", "Thumbnail", "Posting"].map(r => (
+                      <SelectItem key={r} value={r} className="text-xs font-semibold rounded-lg cursor-pointer">
+                        {r}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="flex flex-col justify-end">
                 <label className="flex items-center gap-1.5 text-xs font-semibold cursor-pointer pb-1.5 select-none text-rose-600">
@@ -1122,7 +1156,7 @@ const CalendarIssuesCell = ({
             </div>
 
             <textarea
-              placeholder="Type remark / issue reason..."
+              placeholder="Type remark / note for this item..."
               value={newIssueText}
               onChange={(e) => setNewIssueText(e.target.value)}
               rows={2}
@@ -1130,9 +1164,157 @@ const CalendarIssuesCell = ({
             />
             <button
               onClick={handleAddIssue}
-              className="w-full py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl transition-colors shadow-xs"
+              className="w-full py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs rounded-xl transition-colors shadow-xs"
             >
-              Add Issue / Remark
+              Add Remark
+            </button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
+// Issue 3: Dedicated Thumbnail Cell with both Date & Link support
+const ThumbnailCell = ({
+  item,
+  saveInlineEdit
+}: {
+  item: CalendarItem;
+  saveInlineEdit: (field: string, value: string) => Promise<void>;
+}) => {
+  const [open, setOpen] = useState(false);
+  const [dateVal, setDateVal] = useState(item.thumbnailDate || "");
+  const [linkVal, setLinkVal] = useState(item.thumbnailLink || "");
+
+  useEffect(() => {
+    setDateVal(item.thumbnailDate || "");
+    setLinkVal(item.thumbnailLink || "");
+  }, [item.thumbnailDate, item.thumbnailLink]);
+
+  const handleSave = async (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (dateVal !== (item.thumbnailDate || "")) {
+      await saveInlineEdit("thumbnailDate", dateVal);
+    }
+    if (linkVal !== (item.thumbnailLink || "")) {
+      await saveInlineEdit("thumbnailLink", linkVal);
+    }
+    setOpen(false);
+    toast.success("Thumbnail details updated!");
+  };
+
+  const formatDateLabel = (dStr?: string) => {
+    if (!dStr) return null;
+    try {
+      const d = new Date(dStr);
+      if (isNaN(d.getTime())) return null;
+      return format(d, "dd/MM/yyyy");
+    } catch {
+      return null;
+    }
+  };
+
+  const formattedDate = formatDateLabel(item.thumbnailDate);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <div
+          onClick={(e) => { e.stopPropagation(); setOpen(true); }}
+          className="flex flex-col items-center gap-1 cursor-pointer p-1 rounded-xl hover:bg-muted/40 transition-colors group/thumb select-none"
+          title="Click to edit Thumbnail Date & Link"
+        >
+          {formattedDate ? (
+            <span className="text-[11px] font-extrabold text-foreground flex items-center gap-1">
+              <Calendar className="w-2.5 h-2.5 text-muted-foreground" />
+              {formattedDate}
+            </span>
+          ) : (
+            <span className="text-muted-foreground/40 text-[10px] italic hover:text-primary transition-colors">+ Date</span>
+          )}
+
+          {item.thumbnailLink ? (
+            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+              <a
+                href={item.thumbnailLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-2 py-0.5 font-bold rounded-md text-[10px] flex items-center gap-1 border bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 border-blue-500/20"
+              >
+                🖼️ Design
+              </a>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigator.clipboard.writeText(item.thumbnailLink || "");
+                  toast.success("Thumbnail link copied!");
+                }}
+                className="p-0.5 hover:text-primary text-[10px]"
+                title="Copy link"
+              >
+                <Copy className="w-2.5 h-2.5" />
+              </button>
+            </div>
+          ) : (
+            <span className="text-muted-foreground/40 text-[10px] italic hover:text-primary transition-colors">
+              + Design Link
+            </span>
+          )}
+        </div>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-[280px] p-3.5 bg-card border border-border rounded-2xl shadow-xl z-[300]"
+        align="center"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="space-y-3">
+          <div className="flex items-center justify-between border-b border-border/40 pb-2">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
+              <span>🖼️</span> Thumbnail Details
+            </h4>
+            <span className="text-[10px] text-muted-foreground font-semibold">Date &amp; Link</span>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
+              Thumbnail Date
+            </label>
+            <DatePicker
+              value={dateVal}
+              onChange={(val) => setDateVal(val)}
+              className="w-full h-8 text-xs font-bold bg-muted/40 border border-border/50 rounded-xl"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
+              Design Link (Canva / Drive / Figma)
+            </label>
+            <input
+              type="text"
+              value={linkVal}
+              onChange={(e) => setLinkVal(e.target.value)}
+              placeholder="https://..."
+              className="w-full px-2.5 py-1.5 bg-muted/40 border border-border/50 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-1 border-t border-border/40">
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="px-2.5 py-1 text-xs font-bold text-muted-foreground hover:bg-muted rounded-lg"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              className="px-3.5 py-1 text-xs font-bold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all shadow-xs"
+            >
+              Save
             </button>
           </div>
         </div>
@@ -1190,13 +1372,13 @@ const getPresetDates = (postingDateStr: string) => {
   if (!postingDateStr) return {};
   const d = new Date(postingDateStr);
   if (isNaN(d.getTime())) return {};
-  
+
   let offsets = { script: 14, shoot: 12, editing: 6, thumbnail: 5, approval: 5 };
   if (typeof window !== 'undefined') {
     try {
       const saved = (typeof window !== 'undefined' ? localStorage.getItem('hrms_calendar_offsets') : null);
       if (saved) offsets = { ...offsets, ...JSON.parse(saved) };
-    } catch (e) {}
+    } catch (e) { }
   }
 
   return {
@@ -1238,7 +1420,7 @@ const mapBackendProject = (bp: any): Project => {
   const fin = bp.finance || {};
   const cStats = gen.creative_stats || {};
   const dmStats = gen.digital_marketing_stats || {};
-  
+
   let statusMapped: ProjectStatus = "In Progress";
   const rawStatus = (gen.status || "").toLowerCase().replace(/[\s_]/g, "");
   if (rawStatus === "completed") statusMapped = "Completed";
@@ -1346,7 +1528,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       timestamp: dateStr,
       details: details || undefined
     };
-    
+
     setProjects(prevProjects => {
       const updated = prevProjects.map(p => {
         if (p.id === projectId) {
@@ -1362,7 +1544,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     });
   };
   const saveProjectModules = async (
-    projectId: string, 
+    projectId: string,
     updatedModules: NonNullable<Project['modules']>,
     logAction?: string,
     logDetails?: string
@@ -1418,7 +1600,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   const [clients, setClients] = useState<Client[]>(() => {
     const saved = (typeof window !== 'undefined' ? localStorage.getItem('hrms_clients') : null);
     if (saved) {
-      try { 
+      try {
         const parsed = JSON.parse(saved);
         if (JSON.stringify(parsed).includes('$')) return INITIAL_CLIENTS; // Force update to ₹
         // Normalize: ensure all clients have a contacts array and logo
@@ -1429,7 +1611,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           totalBudget: c.totalBudget ?? '₹0',
           outstandingPayment: c.outstandingPayment ?? '₹0',
         }));
-      } catch (e) {}
+      } catch (e) { }
     }
     return INITIAL_CLIENTS;
   });
@@ -1438,7 +1620,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     const saved = (typeof window !== 'undefined' ? localStorage.getItem('hrms_projects') : null);
     let loadedProjects: Project[] = INITIAL_PROJECTS;
     if (saved) {
-      try { 
+      try {
         const parsed = JSON.parse(saved);
         if (JSON.stringify(parsed).includes('$')) loadedProjects = INITIAL_PROJECTS; // Force update to ₹
         else {
@@ -1459,7 +1641,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           });
           loadedProjects = parsed;
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     // Normalize issues field on contentCalendar items
@@ -1502,10 +1684,10 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         }
 
         const tasks = [...(dailyModule.tasks || [])];
-        const campaignList = (project.campaigns && project.campaigns.length > 0) 
-          ? project.campaigns.map(c => typeof c === 'string' ? c : (c.name || "")) 
+        const campaignList = (project.campaigns && project.campaigns.length > 0)
+          ? project.campaigns.map(c => typeof c === 'string' ? c : (c.name || ""))
           : ["Q4 Retargeting Ads", "Holiday Social Push", "B2B Email Drip"];
-        
+
         let hasNewTasks = false;
         campaignList.forEach((campaignName) => {
           const taskId = `daily-task-${project.id}-${prevDate}-${campaignName.replace(/\s+/g, '-').toLowerCase()}`;
@@ -1549,12 +1731,12 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     setShowBrandDivision(false);
   };
   const [searchQuery, setSearchQuery] = useState("");
-  
+
   const [clientSort, setClientSort] = useState<"name" | "budgetDesc" | "projectsDesc">("name");
   const [clientFilterCategories, setClientFilterCategories] = useState<string[]>([]);
   const [projectFilterStatuses, setProjectFilterStatuses] = useState<ProjectStatus[]>([]);
   const [projectFilterCategories, setProjectFilterCategories] = useState<string[]>([]);
-  
+
   const { employees } = useEmployeesContext();
 
   // Feature 1: Creative Team Assignment
@@ -1562,6 +1744,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   const [isSavingCreativeTeam, setIsSavingCreativeTeam] = useState(false);
   const [assigningProject, setAssigningProject] = useState<Project | null>(null);
   const [creativeTeamForm, setCreativeTeamForm] = useState<Record<string, string>>({
+    cc_creator: "",
     scripting: "",
     shoot_videography: "",
     reel_editing: "",
@@ -1601,7 +1784,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   }, []);
   const handleSaveCcStatus = async (projId: string, month: number, year: number) => {
     if (ccStatusDraft !== "Approved by Client" && !ccReasonDraft.trim()) {
-            toast.error("Reason is required (unless Approved)");
+      toast.error("Reason is required (unless Approved)");
       return;
     }
     try {
@@ -1781,7 +1964,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     }).sort((a, b) => b.assignedProjects.length - a.assignedProjects.length);
   }, [employees, projects, clients, brandDivisionCategory, brandDivisionRole, brandDivisionSearch]);
 
-  
+
   const [selectedClientId, setSelectedClientId] = useState<string | null>(() => {
     if (typeof window !== "undefined") {
       const saved = (typeof window !== 'undefined' ? localStorage.getItem("hrms_selected_client_id") : null);
@@ -1960,7 +2143,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             approval: settings.approval_days_before ?? 5,
           });
         }
-      } catch {}
+      } catch { }
 
       setProjects(prev => prev.map(p => p.id === projId ? {
         ...p,
@@ -2044,7 +2227,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       setBackendActivityLogs([]);
     }
   }, [selectedProjectId, fetchProjectContentCalendar, fetchProjectFollowups, fetchProjectActivities, fetchDmStats, fetchDmCampaigns]);
-  
+
   const [campaignDateRange, setCampaignDateRange] = useState("Last 30 Days");
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>({
     from: subDays(new Date(), 30),
@@ -2223,9 +2406,9 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         ? dmCampaigns
         : (project?.campaigns && project.campaigns.length > 0)
           ? project.campaigns
-              .map(c => typeof c === 'string' ? { name: c, status: 'Active' } : { name: c.name || "", status: c.status || 'Active' })
-              .filter(c => c.status === 'Active')
-              .map(c => c.name)
+            .map(c => typeof c === 'string' ? { name: c, status: 'Active' } : { name: c.name || "", status: c.status || 'Active' })
+            .filter(c => c.status === 'Active')
+            .map(c => c.name)
           : ["Q4 Retargeting Ads", "Holiday Social Push", "B2B Email Drip"];
       const emptyEntry = () => ({ reach: "", impressions: "", leads: "", followers: "", revenue: "", spend: "" });
       const dailyStats = project?.dailyStats || [];
@@ -2478,7 +2661,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       }
     ];
   });
-  
+
   const [isCreatePresetModalOpen, setIsCreatePresetModalOpen] = useState(false);
   const [newPresetForm, setNewPresetForm] = useState({
     name: "",
@@ -2518,7 +2701,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [showEditClientErrors, setShowEditClientErrors] = useState(false);
   const [isEditProjectModalOpen, setIsEditProjectModalOpen] = useState(false);
-  
+
   const defaultClientForm = {
     name: "",
     companyName: "",
@@ -2539,7 +2722,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     onboardingDate: new Date().toISOString().split('T')[0] || "",
   };
   const [newClientFormData, setNewClientFormData] = useState(defaultClientForm);
-  
+
   const handleClientFormChange = (field: string, value: any, isEdit: boolean = false) => {
     if (isEdit) {
       setEditingClient(prev => prev ? { ...prev, [field]: value } : prev);
@@ -2556,7 +2739,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       : [...currentList, dept];
     handleClientFormChange('department', nextList.join(", "), isEdit);
   };
-  
+
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectBudget, setNewProjectBudget] = useState("");
   const [newProjectCategory, setNewProjectCategory] = useState("");
@@ -2589,7 +2772,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     description: string;
     itemName?: string;
     action: () => void;
-  }>({ isOpen: false, title: "", description: "", action: () => {} });
+  }>({ isOpen: false, title: "", description: "", action: () => { } });
 
   const [editingProject, setEditingProject] = useState<Project | null>(null);
 
@@ -2601,9 +2784,10 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   const [activeCalendarTab, setActiveCalendarTab] = useState<'general' | 'production' | 'publishing'>('general');
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [inlineEdit, setInlineEdit] = useState<{ id: string; field: string; value: string } | null>(null);
-  
+
   // Task 24: CC Custom PDF Export States
   const [isPdfExportModalOpen, setIsPdfExportModalOpen] = useState(false);
+  const [pdfMonthFilter, setPdfMonthFilter] = useState<string>("Current");
   const [pdfSelectedColumns, setPdfSelectedColumns] = useState<string[]>([
     "Schedule",
     "Type",
@@ -2628,23 +2812,128 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     const clientName = currentClient?.companyName || currentClient?.name || "Client";
     const projName = currentProject.name || "Project";
     const category = currentProject.category || "Creative";
-    const docTitle = `${clientName} - ${projName} (${category}) Content Calendar`;
 
-    const items = currentProject.contentCalendar || [];
-    if (items.length === 0) {
+    const allItems = currentProject.contentCalendar || [];
+    if (allItems.length === 0) {
       toast.error("No content calendar items to export");
       return;
     }
 
+    const formatDayMonthYear = (dateVal: any): string => {
+      if (!dateVal || dateVal === "-" || dateVal === "null" || dateVal === "undefined") return "-";
+      try {
+        const str = String(dateVal).trim();
+        if (!str) return "-";
+        if (/^\d{2}-\d{2}-\d{4}$/.test(str)) return str;
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(str)) return str.replace(/\//g, "-");
+
+        const ymdMatch = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+        if (ymdMatch && ymdMatch[1] && ymdMatch[2] && ymdMatch[3]) {
+          const y = ymdMatch[1];
+          const m = ymdMatch[2].padStart(2, "0");
+          const d = ymdMatch[3].padStart(2, "0");
+          return `${d}-${m}-${y}`;
+        }
+
+        const d = new Date(str);
+        if (isNaN(d.getTime())) return str;
+        const day = String(d.getDate()).padStart(2, "0");
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        const year = d.getFullYear();
+        return `${day}-${month}-${year}`;
+      } catch {
+        return String(dateVal);
+      }
+    };
+
+    const now = new Date();
+    const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    let ccMonthLabel = "All Months";
+    let items = allItems;
+
+    const chosenFilter = pdfMonthFilter || calendarMonthFilter || "Current";
+
+    if (chosenFilter === "Current") {
+      const mItems = allItems.filter(i => i.postingDate && i.postingDate.startsWith(currentYearMonth));
+      if (mItems.length > 0) {
+        items = mItems;
+      }
+      ccMonthLabel = format(now, "MMMM yyyy");
+    } else if (chosenFilter && chosenFilter !== "All" && /^\d{4}-\d{2}$/.test(chosenFilter)) {
+      const mItems = allItems.filter(i => i.postingDate && i.postingDate.startsWith(chosenFilter));
+      if (mItems.length > 0) {
+        items = mItems;
+      }
+      const parts = chosenFilter.split("-").map(Number);
+      const yy = parts[0] ?? now.getFullYear();
+      const mm = parts[1] ?? (now.getMonth() + 1);
+      ccMonthLabel = format(new Date(yy, mm - 1, 1), "MMMM yyyy");
+    } else {
+      const monthsFound = new Set<string>();
+      allItems.forEach(it => {
+        if (it.postingDate && /^\d{4}-\d{2}/.test(it.postingDate)) {
+          monthsFound.add(it.postingDate.substring(0, 7));
+        }
+      });
+      const monthsArr = Array.from(monthsFound);
+      if (monthsArr.length === 1 && monthsArr[0]) {
+        const parts = monthsArr[0].split("-").map(Number);
+        const yy = parts[0] ?? now.getFullYear();
+        const mm = parts[1] ?? (now.getMonth() + 1);
+        ccMonthLabel = format(new Date(yy, mm - 1, 1), "MMMM yyyy");
+      } else if (monthsArr.length > 1) {
+        const sorted = monthsArr.sort();
+        const firstM = sorted[0];
+        const lastM = sorted[sorted.length - 1];
+        if (firstM && lastM) {
+          const p1 = firstM.split("-").map(Number);
+          const p2 = lastM.split("-").map(Number);
+          const y1 = p1[0] ?? now.getFullYear();
+          const m1 = p1[1] ?? (now.getMonth() + 1);
+          const y2 = p2[0] ?? now.getFullYear();
+          const m2 = p2[1] ?? (now.getMonth() + 1);
+          ccMonthLabel = `${format(new Date(y1, m1 - 1, 1), "MMM yyyy")} - ${format(new Date(y2, m2 - 1, 1), "MMM yyyy")}`;
+        }
+      } else {
+        ccMonthLabel = "All Months";
+      }
+    }
+
+    const docTitle = `${clientName} - ${projName} (${category}) Content Calendar - ${ccMonthLabel}`;
+
     const columnsMap: Record<string, (item: any) => string> = {
-      "Schedule": (i) => `${i.postingDate || "-"} (${i.postingDay || ""})`,
+      "Schedule": (i) => {
+        const formattedDate = formatDayMonthYear(i.postingDate);
+        const dayPart = i.postingDay ? ` (${i.postingDay})` : "";
+        return formattedDate === "-" ? "-" : `${formattedDate}${dayPart}`;
+      },
       "Type": (i) => i.type || "-",
       "Topic / Concept": (i) => i.topic || "-",
       "Brand Person": (i) => i.brand_person || "-",
-      "Script": (i) => `${i.scriptDate || ""} ${i.scriptLink ? '• Link' : ''}`.trim() || "-",
-      "Shoot": (i) => `${i.shootDate || ""} ${i.shootLink ? '• Link' : ''}`.trim() || "-",
-      "Editing": (i) => `${i.editingDate || ""} ${i.finalPostLink || i.finalReelLink ? '• Link' : ''}`.trim() || "-",
-      "Thumbnail": (i) => `${i.thumbnailDate || ""} ${i.thumbnailLink ? '• Link' : ''}`.trim() || "-",
+      "Script": (i) => {
+        const formattedDate = formatDayMonthYear(i.scriptDate);
+        const linkPart = i.scriptLink ? ' • Link' : '';
+        if (formattedDate === "-" && !linkPart) return "-";
+        return `${formattedDate === "-" ? "" : formattedDate}${linkPart}`.trim() || "-";
+      },
+      "Shoot": (i) => {
+        const formattedDate = formatDayMonthYear(i.shootDate);
+        const linkPart = i.shootLink ? ' • Link' : '';
+        if (formattedDate === "-" && !linkPart) return "-";
+        return `${formattedDate === "-" ? "" : formattedDate}${linkPart}`.trim() || "-";
+      },
+      "Editing": (i) => {
+        const formattedDate = formatDayMonthYear(i.editingDate);
+        const linkPart = (i.finalPostLink || i.finalReelLink) ? ' • Link' : '';
+        if (formattedDate === "-" && !linkPart) return "-";
+        return `${formattedDate === "-" ? "" : formattedDate}${linkPart}`.trim() || "-";
+      },
+      "Thumbnail": (i) => {
+        const formattedDate = formatDayMonthYear(i.thumbnailDate);
+        const linkPart = i.thumbnailLink ? ' • Link' : '';
+        if (formattedDate === "-" && !linkPart) return "-";
+        return `${formattedDate === "-" ? "" : formattedDate}${linkPart}`.trim() || "-";
+      },
       "Caption": (i) => i.caption || "-",
       "Final Link": (i) => i.finalPostLink || i.finalReelLink || i.postingLinkOfIg || "-",
       "Status": (i) => i.status || "To Do",
@@ -2823,9 +3112,13 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           <div class="header-banner">
             <div>
               <h1>📅 ${clientName} — ${projName}</h1>
-              <p>Content Calendar Specification • Generated on ${new Date().toLocaleDateString("en-IN", { day: '2-digit', month: 'short', year: 'numeric' })} • Total ${items.length} items</p>
+              <p style="margin-top: 4px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <span style="display: inline-block; background: #e0e7ff; color: #3730a3; padding: 2px 10px; border-radius: 6px; font-weight: 800; font-size: 11px;">🗓️ Month: ${ccMonthLabel}</span>
+                <span>Content Calendar Specification • Generated on ${formatDayMonthYear(new Date().toISOString())} • Total ${items.length} items</span>
+              </p>
             </div>
             <div>
+              <span class="badge-pill" style="background: #e0e7ff; color: #3730a3; font-weight: 800; margin-right: 6px;">🗓️ ${ccMonthLabel}</span>
               <span class="badge-pill">${category}</span>
             </div>
           </div>
@@ -2857,21 +3150,21 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               ${items.map(item => `
                 <tr>
                   ${selectedCols.map(col => {
-                    const fn = columnsMap[col];
-                    const val = fn ? fn(item) : "";
-                    if (col === "Status") {
-                      const st = String(val).toLowerCase();
-                      const cls = st.includes("published") ? "status-published" : st.includes("approved") ? "status-approved" : st.includes("progress") ? "status-progress" : "status-todo";
-                      return `<td><span class="status-tag ${cls}">${val}</span></td>`;
-                    }
-                    return `<td>${val}</td>`;
-                  }).join('')}
+      const fn = columnsMap[col];
+      const val = fn ? fn(item) : "";
+      if (col === "Status") {
+        const st = String(val).toLowerCase();
+        const cls = st.includes("published") ? "status-published" : st.includes("approved") ? "status-approved" : st.includes("progress") ? "status-progress" : "status-todo";
+        return `<td><span class="status-tag ${cls}">${val}</span></td>`;
+      }
+      return `<td>${val}</td>`;
+    }).join('')}
                 </tr>
               `).join('')}
             </tbody>
           </table>
           <div class="footer-strip">
-            <span>© ${new Date().getFullYear()} ${clientName} — Generated via HRMS Content Hub</span>
+            <span>© ${new Date().getFullYear()} ${clientName} — Content Calendar (${ccMonthLabel}) • Generated via HRMS Content Hub</span>
             <span>Confidential & Proprietary</span>
           </div>
           <script>
@@ -3016,7 +3309,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       toast.error(err?.message || "Failed to add followup");
     }
   };
-  
+
   const [isCalendarSettingsOpen, setIsCalendarSettingsOpen] = useState(false);
   const [calendarOffsets, setCalendarOffsets] = useState(() => {
     let offsets = { script: 14, shoot: 12, editing: 6, thumbnail: 5, approval: 5 };
@@ -3024,11 +3317,11 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       try {
         const saved = (typeof window !== 'undefined' ? localStorage.getItem('hrms_calendar_offsets') : null);
         if (saved) offsets = { ...offsets, ...JSON.parse(saved) };
-      } catch (e) {}
+      } catch (e) { }
     }
     return offsets;
   });
-  
+
   const defaultCalendarForm = {
     postingDate: new Date().toISOString().split('T')[0],
     postingDay: "",
@@ -3067,7 +3360,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       const depts = newClientFormData.department
         ? newClientFormData.department.split(",").map(d => d.trim()).filter(Boolean)
         : [];
-      
+
       const payload: any = {
         company_name: newClientFormData.companyName.trim(),
         contact_person_name: newClientFormData.name.trim(),
@@ -3255,7 +3548,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           };
         });
       }
-    } catch {}
+    } catch { }
   };
 
   const handleUpdateProject = async () => {
@@ -3556,16 +3849,16 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   const currentClient = (selectedClientId ? clients.find(c => c.id === selectedClientId) : null)
     || (currentProject ? clients.find(c => c.id === currentProject.clientId) : null)
     || (currentProject ? {
-        id: currentProject.clientId || "c-default",
-        name: "Client",
-        logo: "https://api.dicebear.com/7.x/identicon/svg?seed=Client",
-        totalBudget: currentProject.budget || "₹0",
-        outstandingPayment: "₹0",
-        onboardingDate: currentProject.startDate || "",
-        activeProjects: 1,
-        status: "Active" as ClientStatus,
-        contacts: []
-      } : null);
+      id: currentProject.clientId || "c-default",
+      name: "Client",
+      logo: "https://api.dicebear.com/7.x/identicon/svg?seed=Client",
+      totalBudget: currentProject.budget || "₹0",
+      outstandingPayment: "₹0",
+      onboardingDate: currentProject.startDate || "",
+      activeProjects: 1,
+      status: "Active" as ClientStatus,
+      contacts: []
+    } : null);
 
   const currentMonthStats = useMemo(() => {
     if (!currentProject) return { targetPosts: 8, targetReels: 8, completedPosts: 0, completedReels: 0, totalTarget: 16, totalCompleted: 0 };
@@ -3673,12 +3966,12 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     const isAssigned = !!selectedEmp;
 
                     return (
-                      <div 
-                        key={role.key} 
+                      <div
+                        key={role.key}
                         className={cn(
                           "p-3.5 sm:p-4 rounded-2xl border transition-all duration-200 flex flex-col justify-between gap-3 min-w-0",
-                          isAssigned 
-                            ? "bg-card border-primary/30 shadow-xs ring-1 ring-primary/10" 
+                          isAssigned
+                            ? "bg-card border-primary/30 shadow-xs ring-1 ring-primary/10"
                             : "bg-muted/20 border-border/60 hover:bg-muted/30"
                         )}
                       >
@@ -3712,8 +4005,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                 type="button"
                                 className={cn(
                                   "w-full h-10 px-2.5 sm:px-3 rounded-xl border text-xs font-medium transition-all flex items-center justify-between gap-2 outline-none cursor-pointer min-w-0",
-                                  isAssigned 
-                                    ? "bg-background border-border hover:border-primary/50 text-foreground shadow-2xs" 
+                                  isAssigned
+                                    ? "bg-background border-border hover:border-primary/50 text-foreground shadow-2xs"
                                     : "bg-muted/40 border-dashed border-border/80 hover:border-border text-muted-foreground hover:bg-muted/60"
                                 )}
                               >
@@ -3787,8 +4080,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                       <X className="w-3 h-3" />
                                     </button>
                                   )}
-                        </div>
-                      </div>
+                                </div>
+                              </div>
 
                               <div className="max-h-56 overflow-y-auto p-1.5 space-y-0.5">
                                 {/* Option: Unassign */}
@@ -3801,8 +4094,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                   }}
                                   className={cn(
                                     "w-full px-2.5 py-2 rounded-xl text-left text-xs font-semibold flex items-center justify-between gap-2 transition-all cursor-pointer",
-                                    !selectedEmpId 
-                                      ? "bg-primary/10 text-primary" 
+                                    !selectedEmpId
+                                      ? "bg-primary/10 text-primary"
                                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
                                   )}
                                 >
@@ -3839,8 +4132,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                         }}
                                         className={cn(
                                           "w-full px-2.5 py-2 rounded-xl text-left text-xs font-semibold flex items-center justify-between gap-2 transition-all cursor-pointer",
-                                          isSelected 
-                                            ? "bg-primary/10 text-primary font-bold" 
+                                          isSelected
+                                            ? "bg-primary/10 text-primary font-bold"
                                             : "text-foreground hover:bg-muted/80"
                                         )}
                                       >
@@ -4005,6 +4298,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                               setIsPendingBrandsModalOpen(false);
                               setAssigningProject(proj);
                               setCreativeTeamForm({
+                                cc_creator: proj.creativeTeam?.["cc_creator"] || "",
                                 scripting: proj.creativeTeam?.["scripting"] || "",
                                 shoot_videography: proj.creativeTeam?.["shoot_videography"] || "",
                                 reel_editing: proj.creativeTeam?.["reel_editing"] || "",
@@ -4252,246 +4546,246 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 </button>
               </div>
 
-            <div className="p-4 sm:p-6 md:p-8 space-y-6 max-h-[70vh] overflow-y-auto">
-              {/* Credentials List */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Saved Accounts</h4>
-                  {((activeProj?.credentials || []).length > 0) && (
-                    <span className="text-[11px] font-bold text-muted-foreground">
-                      {(activeProj?.credentials || []).length} accounts saved
-                    </span>
-                  )}
-                </div>
-                {((activeProj?.credentials || []).length === 0) ? (
-                  <div className="p-6 rounded-2xl border border-dashed border-border/60 text-center text-xs text-muted-foreground bg-muted/10">
-                    No credentials saved yet for this project. Add one below.
+              <div className="p-4 sm:p-6 md:p-8 space-y-6 max-h-[70vh] overflow-y-auto">
+                {/* Credentials List */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Saved Accounts</h4>
+                    {((activeProj?.credentials || []).length > 0) && (
+                      <span className="text-[11px] font-bold text-muted-foreground">
+                        {(activeProj?.credentials || []).length} accounts saved
+                      </span>
+                    )}
                   </div>
-                ) : (
-                  (activeProj?.credentials || []).map((cred: any, idx: number) => {
-                    const isRevealed = !!showPasswordMap[idx];
-                    const pMeta = CREDENTIAL_PLATFORMS.find(p => p.value === cred.platform || p.label === cred.platform);
+                  {((activeProj?.credentials || []).length === 0) ? (
+                    <div className="p-6 rounded-2xl border border-dashed border-border/60 text-center text-xs text-muted-foreground bg-muted/10">
+                      No credentials saved yet for this project. Add one below.
+                    </div>
+                  ) : (
+                    (activeProj?.credentials || []).map((cred: any, idx: number) => {
+                      const isRevealed = !!showPasswordMap[idx];
+                      const pMeta = CREDENTIAL_PLATFORMS.find(p => p.value === cred.platform || p.label === cred.platform);
 
-                    return (
-                      <div key={idx} className="p-3.5 sm:p-4 rounded-2xl border border-border/60 bg-muted/20 hover:bg-muted/40 transition-all space-y-2.5">
-                        <div className="flex items-center justify-between">
-                          <span className={cn("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border shadow-2xs", pMeta ? pMeta.color : "bg-primary/10 text-primary border-primary/20")}>
-                            <span>{pMeta?.icon || "🔑"}</span>
-                            <span>{pMeta?.label || cred.platform}</span>
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const targetProjId = activeProj?.id;
-                              if (targetProjId) {
-                                const updated = (activeProj?.credentials || []).filter((_: any, i: number) => i !== idx);
-                                handleSaveCredentials(targetProjId, updated);
-                              }
-                            }}
-                            className="p-1.5 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
-                            title="Delete Credential"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                          <div className="flex items-center justify-between p-2.5 rounded-xl bg-card border border-border/50 shadow-2xs">
-                            <span className="font-mono text-foreground truncate mr-2 font-medium">{cred.username}</span>
+                      return (
+                        <div key={idx} className="p-3.5 sm:p-4 rounded-2xl border border-border/60 bg-muted/20 hover:bg-muted/40 transition-all space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <span className={cn("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border shadow-2xs", pMeta ? pMeta.color : "bg-primary/10 text-primary border-primary/20")}>
+                              <span>{pMeta?.icon || "🔑"}</span>
+                              <span>{pMeta?.label || cred.platform}</span>
+                            </span>
                             <button
                               type="button"
                               onClick={() => {
-                                navigator.clipboard.writeText(cred.username);
-                                toast.success("Username copied!");
+                                const targetProjId = activeProj?.id;
+                                if (targetProjId) {
+                                  const updated = (activeProj?.credentials || []).filter((_: any, i: number) => i !== idx);
+                                  handleSaveCredentials(targetProjId, updated);
+                                }
                               }}
-                              className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
-                              title="Copy Username"
+                              className="p-1.5 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
+                              title="Delete Credential"
                             >
-                              <Copy className="w-3.5 h-3.5" />
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
 
-                          <div className="flex items-center justify-between p-2.5 rounded-xl bg-card border border-border/50 shadow-2xs">
-                            <span className="font-mono text-foreground truncate mr-2 font-medium">
-                              {isRevealed ? cred.password : "••••••••••••"}
-                            </span>
-                            <div className="flex items-center gap-1 shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => setShowPasswordMap(prev => ({ ...prev, [idx]: !prev[idx] }))}
-                                className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground cursor-pointer"
-                                title={isRevealed ? "Hide Password" : "Show Password"}
-                              >
-                                {isRevealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                              </button>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                            <div className="flex items-center justify-between p-2.5 rounded-xl bg-card border border-border/50 shadow-2xs">
+                              <span className="font-mono text-foreground truncate mr-2 font-medium">{cred.username}</span>
                               <button
                                 type="button"
                                 onClick={() => {
-                                  navigator.clipboard.writeText(cred.password);
-                                  toast.success("Password copied!");
+                                  navigator.clipboard.writeText(cred.username);
+                                  toast.success("Username copied!");
                                 }}
-                                className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground cursor-pointer"
-                                title="Copy Password"
+                                className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
+                                title="Copy Username"
                               >
                                 <Copy className="w-3.5 h-3.5" />
                               </button>
                             </div>
-                          </div>
-                        </div>
 
-                        {cred.notes && (
-                          <p className="text-[11px] text-muted-foreground italic px-1">Note: {cred.notes}</p>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-
-              {/* Add New Credential Form */}
-              <div className="p-4 sm:p-5 rounded-2xl border border-border/60 bg-muted/30 space-y-3.5">
-                <h4 className="text-xs font-bold text-foreground">Add New Credential</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-muted-foreground">Platform <span className="text-destructive font-black">*</span></label>
-                    <Select
-                      value={newCredentialForm.platform}
-                      onValueChange={(val) => setNewCredentialForm(prev => ({ ...prev, platform: val }))}
-                    >
-                      <SelectTrigger className="w-full h-10 px-3 bg-card border border-border/60 hover:border-primary/50 rounded-xl text-xs font-semibold text-foreground focus:ring-2 focus:ring-primary/20 transition-all shadow-xs cursor-pointer">
-                        <SelectValue placeholder="Select Platform">
-                          {(() => {
-                            const selected = CREDENTIAL_PLATFORMS.find(p => p.value === newCredentialForm.platform);
-                            if (!selected) return newCredentialForm.platform || "Select Platform";
-                            return (
-                              <div className="flex items-center gap-2">
-                                <span className={cn("w-5 h-5 rounded-md flex items-center justify-center text-xs shrink-0", selected.color)}>
-                                  {selected.icon}
-                                </span>
-                                <span className="font-bold text-foreground truncate">{selected.label}</span>
-                              </div>
-                            );
-                          })()}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent className="z-[300] rounded-2xl border border-border/80 shadow-2xl bg-popover/98 backdrop-blur-xl p-1.5 min-w-[220px]">
-                        {CREDENTIAL_PLATFORMS.map(p => (
-                          <SelectItem
-                            key={p.value}
-                            value={p.value}
-                            className="rounded-xl py-2 px-2.5 text-xs font-semibold hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer"
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className={cn("w-5 h-5 rounded-md flex items-center justify-center text-xs shrink-0", p.color)}>
-                                {p.icon}
+                            <div className="flex items-center justify-between p-2.5 rounded-xl bg-card border border-border/50 shadow-2xs">
+                              <span className="font-mono text-foreground truncate mr-2 font-medium">
+                                {isRevealed ? cred.password : "••••••••••••"}
                               </span>
-                              <span>{p.label}</span>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => setShowPasswordMap(prev => ({ ...prev, [idx]: !prev[idx] }))}
+                                  className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground cursor-pointer"
+                                  title={isRevealed ? "Hide Password" : "Show Password"}
+                                >
+                                  {isRevealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(cred.password);
+                                    toast.success("Password copied!");
+                                  }}
+                                  className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground cursor-pointer"
+                                  title="Copy Password"
+                                >
+                                  <Copy className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                          </div>
 
-                  {newCredentialForm.platform === "Other" && (
-                    <div className="space-y-1.5 sm:col-span-2">
-                      <label className="text-[11px] font-bold text-muted-foreground">
-                        Platform / Service Name <span className="text-destructive font-black">*</span>
-                      </label>
+                          {cred.notes && (
+                            <p className="text-[11px] text-muted-foreground italic px-1">Note: {cred.notes}</p>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Add New Credential Form */}
+                <div className="p-4 sm:p-5 rounded-2xl border border-border/60 bg-muted/30 space-y-3.5">
+                  <h4 className="text-xs font-bold text-foreground">Add New Credential</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold text-muted-foreground">Platform <span className="text-destructive font-black">*</span></label>
+                      <Select
+                        value={newCredentialForm.platform}
+                        onValueChange={(val) => setNewCredentialForm(prev => ({ ...prev, platform: val }))}
+                      >
+                        <SelectTrigger className="w-full h-10 px-3 bg-card border border-border/60 hover:border-primary/50 rounded-xl text-xs font-semibold text-foreground focus:ring-2 focus:ring-primary/20 transition-all shadow-xs cursor-pointer">
+                          <SelectValue placeholder="Select Platform">
+                            {(() => {
+                              const selected = CREDENTIAL_PLATFORMS.find(p => p.value === newCredentialForm.platform);
+                              if (!selected) return newCredentialForm.platform || "Select Platform";
+                              return (
+                                <div className="flex items-center gap-2">
+                                  <span className={cn("w-5 h-5 rounded-md flex items-center justify-center text-xs shrink-0", selected.color)}>
+                                    {selected.icon}
+                                  </span>
+                                  <span className="font-bold text-foreground truncate">{selected.label}</span>
+                                </div>
+                              );
+                            })()}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent className="z-[300] rounded-2xl border border-border/80 shadow-2xl bg-popover/98 backdrop-blur-xl p-1.5 min-w-[220px]">
+                          {CREDENTIAL_PLATFORMS.map(p => (
+                            <SelectItem
+                              key={p.value}
+                              value={p.value}
+                              className="rounded-xl py-2 px-2.5 text-xs font-semibold hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className={cn("w-5 h-5 rounded-md flex items-center justify-center text-xs shrink-0", p.color)}>
+                                  {p.icon}
+                                </span>
+                                <span>{p.label}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {newCredentialForm.platform === "Other" && (
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <label className="text-[11px] font-bold text-muted-foreground">
+                          Platform / Service Name <span className="text-destructive font-black">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={newCredentialForm.customPlatform || ""}
+                          onChange={(e) => setNewCredentialForm(prev => ({ ...prev, customPlatform: e.target.value }))}
+                          placeholder="e.g. Hostinger, Figma, AWS, Pinterest, Shopify"
+                          className="w-full h-10 px-3 bg-card border border-border/60 rounded-xl text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                        />
+                      </div>
+                    )}
+
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold text-muted-foreground">Username / Handle / Email <span className="text-destructive font-black">*</span></label>
                       <input
                         type="text"
-                        value={newCredentialForm.customPlatform || ""}
-                        onChange={(e) => setNewCredentialForm(prev => ({ ...prev, customPlatform: e.target.value }))}
-                        placeholder="e.g. Hostinger, Figma, AWS, Pinterest, Shopify"
+                        value={newCredentialForm.username}
+                        onChange={(e) => setNewCredentialForm(prev => ({ ...prev, username: e.target.value }))}
+                        placeholder="e.g. @brand_handle"
                         className="w-full h-10 px-3 bg-card border border-border/60 rounded-xl text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                       />
                     </div>
-                  )}
 
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-muted-foreground">Username / Handle / Email <span className="text-destructive font-black">*</span></label>
-                    <input
-                      type="text"
-                      value={newCredentialForm.username}
-                      onChange={(e) => setNewCredentialForm(prev => ({ ...prev, username: e.target.value }))}
-                      placeholder="e.g. @brand_handle"
-                      className="w-full h-10 px-3 bg-card border border-border/60 rounded-xl text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                    />
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold text-muted-foreground">Password <span className="text-destructive font-black">*</span></label>
+                      <input
+                        type="text"
+                        value={newCredentialForm.password}
+                        onChange={(e) => setNewCredentialForm(prev => ({ ...prev, password: e.target.value }))}
+                        placeholder="Enter password"
+                        className="w-full h-10 px-3 bg-card border border-border/60 rounded-xl text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold text-muted-foreground">Notes / 2FA info</label>
+                      <input
+                        type="text"
+                        value={newCredentialForm.notes}
+                        onChange={(e) => setNewCredentialForm(prev => ({ ...prev, notes: e.target.value }))}
+                        placeholder="e.g. 2FA with client phone"
+                        className="w-full h-10 px-3 bg-card border border-border/60 rounded-xl text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                      />
+                    </div>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-muted-foreground">Password <span className="text-destructive font-black">*</span></label>
-                    <input
-                      type="text"
-                      value={newCredentialForm.password}
-                      onChange={(e) => setNewCredentialForm(prev => ({ ...prev, password: e.target.value }))}
-                      placeholder="Enter password"
-                      className="w-full h-10 px-3 bg-card border border-border/60 rounded-xl text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-muted-foreground">Notes / 2FA info</label>
-                    <input
-                      type="text"
-                      value={newCredentialForm.notes}
-                      onChange={(e) => setNewCredentialForm(prev => ({ ...prev, notes: e.target.value }))}
-                      placeholder="e.g. 2FA with client phone"
-                      className="w-full h-10 px-3 bg-card border border-border/60 rounded-xl text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex justify-end pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (newCredentialForm.platform === "Other" && !newCredentialForm.customPlatform?.trim()) {
-                        toast.error("Please enter platform / service name");
-                        return;
-                      }
-                      if (!newCredentialForm.username.trim() || !newCredentialForm.password.trim()) {
-                        toast.error("Please enter username and password");
-                        return;
-                      }
-                      const targetProjId = activeProj?.id;
-                      if (!targetProjId) return;
-
-                      const finalPlatform = newCredentialForm.platform === "Other"
-                        ? newCredentialForm.customPlatform?.trim() || "Other"
-                        : newCredentialForm.platform;
-
-                      const updated = [
-                        ...(activeProj?.credentials || []),
-                        {
-                          ...newCredentialForm,
-                          platform: finalPlatform
+                  <div className="flex justify-end pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (newCredentialForm.platform === "Other" && !newCredentialForm.customPlatform?.trim()) {
+                          toast.error("Please enter platform / service name");
+                          return;
                         }
-                      ];
-                      handleSaveCredentials(targetProjId, updated);
-                      setNewCredentialForm({ platform: "Instagram", customPlatform: "", username: "", password: "", notes: "" });
-                    }}
-                    className="px-4 py-2.5 bg-primary text-primary-foreground font-bold text-xs rounded-xl shadow-sm hover:bg-primary/90 transition-all flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Credential</span>
-                  </button>
+                        if (!newCredentialForm.username.trim() || !newCredentialForm.password.trim()) {
+                          toast.error("Please enter username and password");
+                          return;
+                        }
+                        const targetProjId = activeProj?.id;
+                        if (!targetProjId) return;
+
+                        const finalPlatform = newCredentialForm.platform === "Other"
+                          ? newCredentialForm.customPlatform?.trim() || "Other"
+                          : newCredentialForm.platform;
+
+                        const updated = [
+                          ...(activeProj?.credentials || []),
+                          {
+                            ...newCredentialForm,
+                            platform: finalPlatform
+                          }
+                        ];
+                        handleSaveCredentials(targetProjId, updated);
+                        setNewCredentialForm({ platform: "Instagram", customPlatform: "", username: "", password: "", notes: "" });
+                      }}
+                      className="px-4 py-2.5 bg-primary text-primary-foreground font-bold text-xs rounded-xl shadow-sm hover:bg-primary/90 transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Credential</span>
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="px-5 sm:px-8 py-3.5 sm:py-4 bg-muted/30 border-t border-border/50 flex justify-end shrink-0">
-              <button
-                type="button"
-                onClick={() => setIsCredentialsModalOpen(false)}
-                className="px-5 py-2.5 rounded-xl font-bold text-xs text-muted-foreground hover:bg-muted transition-colors cursor-pointer"
-              >
-                Close
-              </button>
+              <div className="px-5 sm:px-8 py-3.5 sm:py-4 bg-muted/30 border-t border-border/50 flex justify-end shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsCredentialsModalOpen(false)}
+                  className="px-5 py-2.5 rounded-xl font-bold text-xs text-muted-foreground hover:bg-muted transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
       </>
     );
   };
@@ -4505,2712 +4799,5177 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       return (
         <>
           <div className="w-full space-y-8 animate-in fade-in duration-500">
-          {/* Detail View Header */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div className="flex items-center gap-4">
-              <button 
-                onClick={() => setSelectedProjectId(null)}
-                className="p-2.5 bg-card border border-border/60 rounded-xl hover:bg-muted/80 hover:text-primary transition-colors shadow-sm group"
-              >
-                <ArrowLeft className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
-              </button>
-              {/* K5: highlighted client logo — project ni odakh logo uparthi */}
-              <BrandLogo src={client.logo} alt={client.name} size="w-20 h-20" />
-              <div>
-                <h1 className="text-3xl font-black tracking-tight text-foreground leading-tight">{project.name}</h1>
-                <div className="flex items-center gap-2 mt-2">
-                  <span className={cn("px-2 py-0.5 inline-flex text-[10px] font-bold uppercase tracking-widest rounded-lg items-center gap-1.5", getStatusColor(project.status))}>
-                    <Circle className="w-1.5 h-1.5 fill-current" />
-                    {project.status}
-                  </span>
-                  <span className="px-2 py-0.5 inline-flex text-[10px] font-bold uppercase tracking-widest rounded-lg items-center gap-1.5 bg-muted text-muted-foreground border border-border/50">
-                    <Briefcase className="w-3 h-3" />
-                    {project.category || "General"}
-                  </span>
+            {/* Detail View Header */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setSelectedProjectId(null)}
+                  className="p-2.5 bg-card border border-border/60 rounded-xl hover:bg-muted/80 hover:text-primary transition-colors shadow-sm group"
+                >
+                  <ArrowLeft className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                </button>
+                {/* K5: highlighted client logo — project ni odakh logo uparthi */}
+                <BrandLogo src={client.logo} alt={client.name} size="w-20 h-20" />
+                <div>
+                  <h1 className="text-3xl font-black tracking-tight text-foreground leading-tight">{project.name}</h1>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className={cn("px-2 py-0.5 inline-flex text-[10px] font-bold uppercase tracking-widest rounded-lg items-center gap-1.5", getStatusColor(project.status))}>
+                      <Circle className="w-1.5 h-1.5 fill-current" />
+                      {project.status}
+                    </span>
+                    <span className="px-2 py-0.5 inline-flex text-[10px] font-bold uppercase tracking-widest rounded-lg items-center gap-1.5 bg-muted text-muted-foreground border border-border/50">
+                      <Briefcase className="w-3 h-3" />
+                      {project.category || "General"}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-            
-            <div className="flex flex-wrap items-center gap-2">
-              {/* WhatsApp Group Link */}
-              <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-1 shadow-sm">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (project.whatsapp_group_link) {
-                      window.open(project.whatsapp_group_link, '_blank');
-                    } else {
-                      setWhatsappLinkInput("");
+
+              <div className="flex flex-wrap items-center gap-2">
+                {/* WhatsApp Group Link */}
+                <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-1 shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (project.whatsapp_group_link) {
+                        window.open(project.whatsapp_group_link, '_blank');
+                      } else {
+                        setWhatsappLinkInput("");
+                        setIsWhatsappModalOpen(true);
+                      }
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:text-emerald-800 transition-colors"
+                    title={project.whatsapp_group_link ? "Open WhatsApp Group (Go to Group)" : "Set WhatsApp Group Link"}
+                  >
+                    <MessageSquare className="w-4 h-4 text-emerald-600 fill-emerald-500/20" />
+                    <span>{project.whatsapp_group_link ? "Go to Group" : "Set WhatsApp"}</span>
+                    {project.whatsapp_group_link && <ExternalLink className="w-3 h-3 text-emerald-500 ml-0.5" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWhatsappLinkInput(project.whatsapp_group_link || "");
                       setIsWhatsappModalOpen(true);
-                    }
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:text-emerald-800 transition-colors"
-                  title={project.whatsapp_group_link ? "Open WhatsApp Group (Go to Group)" : "Set WhatsApp Group Link"}
+                    }}
+                    className="p-1.5 hover:bg-emerald-500/20 text-emerald-600 rounded-lg transition-colors"
+                    title="Edit WhatsApp Group Link"
+                  >
+                    <Edit2 className="w-3 h-3" />
+                  </button>
+                </div>
+
+                {/* Client Credentials */}
+                <button
+                  type="button"
+                  onClick={() => setIsCredentialsModalOpen(true)}
+                  className="flex items-center gap-2 px-3.5 py-2 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-xl transition-all shadow-sm"
+                  title="Client Social Media & System Credentials"
                 >
-                  <MessageSquare className="w-4 h-4 text-emerald-600 fill-emerald-500/20" />
-                  <span>{project.whatsapp_group_link ? "Go to Group" : "Set WhatsApp"}</span>
-                  {project.whatsapp_group_link && <ExternalLink className="w-3 h-3 text-emerald-500 ml-0.5" />}
+                  <Key className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Credentials</span>
+                  {((project.credentials || []).length > 0) && (
+                    <span className="px-1.5 py-0.5 bg-amber-500/10 text-amber-600 border border-amber-500/20 rounded-full text-[10px] font-mono font-black">
+                      {(project.credentials || []).length}
+                    </span>
+                  )}
                 </button>
+
+                {/* K6: dept arrows — click = auto dept view + scroll */}
+                {isSocialMediaCategory(project.category) && (
+                  <button
+                    type="button"
+                    onClick={() => jumpToDept("smm")}
+                    className="flex items-center gap-2 px-3.5 py-2 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-xl transition-all shadow-sm"
+                    title="Go to Social Media (SMM) section"
+                  >
+                    <span>📱</span>
+                    <span>SMM</span>
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                  </button>
+                )}
+                {isMarketingCategory(project.category) && (
+                  <button
+                    type="button"
+                    onClick={() => jumpToDept("dm")}
+                    className="flex items-center gap-2 px-3.5 py-2 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-xl transition-all shadow-sm"
+                    title="Go to Digital Marketing section"
+                  >
+                    <span>📈</span>
+                    <span>DM</span>
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                  </button>
+                )}
+
+                {/* Assign Creative Team */}
                 <button
                   type="button"
                   onClick={() => {
-                    setWhatsappLinkInput(project.whatsapp_group_link || "");
-                    setIsWhatsappModalOpen(true);
+                    setAssigningProject(project);
+                    setCreativeTeamForm({
+                      cc_creator: project.creativeTeam?.["cc_creator"] || "",
+                      scripting: project.creativeTeam?.["scripting"] || "",
+                      shoot_videography: project.creativeTeam?.["shoot_videography"] || "",
+                      reel_editing: project.creativeTeam?.["reel_editing"] || "",
+                      post_graphics: project.creativeTeam?.["post_graphics"] || "",
+                      thumbnail: project.creativeTeam?.["thumbnail"] || "",
+                      approval_qc: project.creativeTeam?.["approval_qc"] || "",
+                      caption: project.creativeTeam?.["caption"] || "",
+                      posting_publisher: project.creativeTeam?.["posting_publisher"] || "",
+                    });
+                    setIsAssignCreativeTeamModalOpen(true);
                   }}
-                  className="p-1.5 hover:bg-emerald-500/20 text-emerald-600 rounded-lg transition-colors"
-                  title="Edit WhatsApp Group Link"
+                  className="flex items-center gap-2 px-3.5 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 font-bold text-xs rounded-xl transition-all shadow-sm"
+                  title="Assign Creative Team Roles"
                 >
-                  <Edit2 className="w-3 h-3" />
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Creative Team</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => openEditModal(project)}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/90 transition-all shadow-sm"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Edit</span>
                 </button>
               </div>
+            </div>
 
-              {/* Client Credentials */}
+            {/* K13: Quick Links — brand na badha shortcuts ek j jagyae (go-to) */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-black text-muted-foreground uppercase tracking-widest mr-1">Quick Links:</span>
+              {project.whatsapp_group_link ? (
+                <button
+                  type="button"
+                  onClick={() => window.open(project.whatsapp_group_link, "_blank")}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-emerald-700 font-bold text-xs rounded-full transition-colors"
+                  title="WhatsApp group kholo"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" /> WhatsApp Group <ExternalLink className="w-3 h-3" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => { setWhatsappLinkInput(""); setIsWhatsappModalOpen(true); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-muted hover:bg-muted/70 border border-border/50 text-muted-foreground font-bold text-xs rounded-full transition-colors"
+                  title="Set WhatsApp group link"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" /> Set WhatsApp
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => document.getElementById("finance-section")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-full transition-colors shadow-sm"
+                title="Go to Finance & follow-ups"
+              >
+                ➦ Followups
+              </button>
+              <button
+                type="button"
+                onClick={() => { setProjectSubTab("logs"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-full transition-colors shadow-sm"
+                title="View activity logs"
+              >
+                📋 Logs
+              </button>
               <button
                 type="button"
                 onClick={() => setIsCredentialsModalOpen(true)}
-                className="flex items-center gap-2 px-3.5 py-2 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-xl transition-all shadow-sm"
-                title="Client Social Media & System Credentials"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-full transition-colors shadow-sm"
+                title="Credentials kholo"
               >
-                <Key className="w-3.5 h-3.5 text-amber-500" />
-                <span>Credentials</span>
+                <Key className="w-3.5 h-3.5 text-amber-500" /> Credentials
                 {((project.credentials || []).length > 0) && (
-                  <span className="px-1.5 py-0.5 bg-amber-500/10 text-amber-600 border border-amber-500/20 rounded-full text-[10px] font-mono font-black">
-                    {(project.credentials || []).length}
-                  </span>
+                  <span className="px-1.5 py-0.5 bg-amber-500/10 text-amber-600 rounded-full text-[10px] font-black">{(project.credentials || []).length}</span>
                 )}
               </button>
-
-              {/* K6: dept arrows — click = auto dept view + scroll */}
-              {isSocialMediaCategory(project.category) && (
-                <button
-                  type="button"
-                  onClick={() => jumpToDept("smm")}
-                  className="flex items-center gap-2 px-3.5 py-2 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-xl transition-all shadow-sm"
-                  title="Go to Social Media (SMM) section"
-                >
-                  <span>📱</span>
-                  <span>SMM</span>
-                  <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
-                </button>
-              )}
-              {isMarketingCategory(project.category) && (
-                <button
-                  type="button"
-                  onClick={() => jumpToDept("dm")}
-                  className="flex items-center gap-2 px-3.5 py-2 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-xl transition-all shadow-sm"
-                  title="Go to Digital Marketing section"
-                >
-                  <span>📈</span>
-                  <span>DM</span>
-                  <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
-                </button>
-              )}
-
-              {/* Assign Creative Team */}
-              <button
-                type="button"
-                onClick={() => {
-                  setAssigningProject(project);
-                  setCreativeTeamForm({
-                    scripting: project.creativeTeam?.["scripting"] || "",
-                    shoot_videography: project.creativeTeam?.["shoot_videography"] || "",
-                    reel_editing: project.creativeTeam?.["reel_editing"] || "",
-                    post_graphics: project.creativeTeam?.["post_graphics"] || "",
-                    thumbnail: project.creativeTeam?.["thumbnail"] || "",
-                    approval_qc: project.creativeTeam?.["approval_qc"] || "",
-                    caption: project.creativeTeam?.["caption"] || "",
-                    posting_publisher: project.creativeTeam?.["posting_publisher"] || "",
-                  });
-                  setIsAssignCreativeTeamModalOpen(true);
-                }}
-                className="flex items-center gap-2 px-3.5 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 font-bold text-xs rounded-xl transition-all shadow-sm"
-                title="Assign Creative Team Roles"
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span>Creative Team</span>
-              </button>
-
-              <button 
-                type="button"
-                onClick={() => openEditModal(project)}
-                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/90 transition-all shadow-sm"
-              >
-                <Edit2 className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Edit</span>
-              </button>
             </div>
-          </div>
 
-          {/* K13: Quick Links — brand na badha shortcuts ek j jagyae (go-to) */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[11px] font-black text-muted-foreground uppercase tracking-widest mr-1">Quick Links:</span>
-            {project.whatsapp_group_link ? (
-              <button
-                type="button"
-                onClick={() => window.open(project.whatsapp_group_link, "_blank")}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-emerald-700 font-bold text-xs rounded-full transition-colors"
-                title="WhatsApp group kholo"
-              >
-                <MessageSquare className="w-3.5 h-3.5" /> WhatsApp Group <ExternalLink className="w-3 h-3" />
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => { setWhatsappLinkInput(""); setIsWhatsappModalOpen(true); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-muted hover:bg-muted/70 border border-border/50 text-muted-foreground font-bold text-xs rounded-full transition-colors"
-                title="Set WhatsApp group link"
-              >
-                <MessageSquare className="w-3.5 h-3.5" /> Set WhatsApp
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => document.getElementById("finance-section")?.scrollIntoView({ behavior: "smooth", block: "start" })}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-full transition-colors shadow-sm"
-              title="Go to Finance & follow-ups"
-            >
-              ➦ Followups
-            </button>
-            <button
-              type="button"
-              onClick={() => { setProjectSubTab("logs"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-full transition-colors shadow-sm"
-              title="View activity logs"
-            >
-              📋 Logs
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsCredentialsModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-full transition-colors shadow-sm"
-              title="Credentials kholo"
-            >
-              <Key className="w-3.5 h-3.5 text-amber-500" /> Credentials
-              {((project.credentials || []).length > 0) && (
-                <span className="px-1.5 py-0.5 bg-amber-500/10 text-amber-600 rounded-full text-[10px] font-black">{(project.credentials || []).length}</span>
-              )}
-            </button>
-          </div>
-
-          {/* Top Summary */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm">
-               {(() => {
-                 // Task 13: Calculate progress from completed tasks / deliverables rather than purely elapsed days
-                 const wp = getWorkProgress(project);
-                 const dp = getDateProgress(project.startDate, project.endDate);
-                 const pct = wp !== null ? wp.pct : (dp ? dp.pct : (project.progress || 0));
-                 return (
-                   <>
-                     <div className="flex justify-between items-end mb-2">
-                       <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
-                         {wp !== null ? "Work Progress" : "Progress"}
-                       </span>
-                       <span className="text-3xl font-black text-foreground font-mono">{pct}%</span>
-                     </div>
-                     {wp !== null ? (
-                       <p className="text-[11px] font-bold text-emerald-600">
-                         {wp.completed} / {wp.total} items completed
-                         {dp && <span className="text-muted-foreground font-normal ml-1">({dp.elapsed}/{dp.total} days)</span>}
-                       </p>
-                     ) : dp ? (
-                       <p className="text-[11px] font-bold text-muted-foreground">
-                         {safeFormat(project.startDate, "dd/MM/yyyy")} → {safeFormat(project.endDate, "dd/MM/yyyy")} • {dp.elapsed}/{dp.total} days
-                       </p>
-                     ) : null}
-                     <div className="h-2 w-full bg-muted/60 rounded-full overflow-hidden mt-4">
-                       <div
-                         className={cn("h-full rounded-full transition-all duration-1000 ease-out", getProgressColor(project.status))}
-                         style={{ width: `${pct}%` }}
-                       ></div>
-                     </div>
-                   </>
-                 );
-               })()}
-             </div>
-            
-            {/* F3: Revenue total instead of Budget (transcript: budget is not needed) */}
-            <div className="bg-card border border-border/60 rounded-3xl p-6 flex items-center gap-5 shadow-sm">
-              <button
-                type="button"
-                onClick={() => { setRevenueForm({ date: "", revenue: "", editId: "" }); setIsRevenueOpen(true); }}
-                className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0 hover:bg-emerald-500/20 transition-colors"
-                title="Revenue log kholo"
-              >
-                <IndianRupee className="w-6 h-6" />
-              </button>
-              <div className="min-w-0">
-                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Total Revenue</p>
-                <h3 className="text-3xl font-black text-emerald-600 font-mono">₹{revenueTotal.toLocaleString("en-IN")}</h3>
-              </div>
-            </div>
-            
-            <div className="bg-card border border-border/60 rounded-3xl p-6 flex items-center gap-5 shadow-sm">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center shrink-0">
-                <Calendar className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Timeline</p>
-                <h3 className="text-sm font-black text-foreground">{safeFormat(project.startDate, "dd/MM/yyyy")} - {safeFormat(project.endDate, "dd/MM/yyyy")}</h3>
+            {/* Top Summary */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm">
                 {(() => {
+                  // Task 13: Calculate progress from completed tasks / deliverables rather than purely elapsed days
+                  const wp = getWorkProgress(project);
                   const dp = getDateProgress(project.startDate, project.endDate);
-                  return dp ? (
-                    <p className="text-[11px] font-bold text-primary mt-1">{dp.total} days • {dp.elapsed} elapsed</p>
-                  ) : null;
+                  const pct = wp !== null ? wp.pct : (dp ? dp.pct : (project.progress || 0));
+                  return (
+                    <>
+                      <div className="flex justify-between items-end mb-2">
+                        <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
+                          {wp !== null ? "Work Progress" : "Progress"}
+                        </span>
+                        <span className="text-3xl font-black text-foreground font-mono">{pct}%</span>
+                      </div>
+                      {wp !== null ? (
+                        <p className="text-[11px] font-bold text-emerald-600">
+                          {wp.completed} / {wp.total} items completed
+                          {dp && <span className="text-muted-foreground font-normal ml-1">({dp.elapsed}/{dp.total} days)</span>}
+                        </p>
+                      ) : dp ? (
+                        <p className="text-[11px] font-bold text-muted-foreground">
+                          {safeFormat(project.startDate, "dd/MM/yyyy")} → {safeFormat(project.endDate, "dd/MM/yyyy")} • {dp.elapsed}/{dp.total} days
+                        </p>
+                      ) : null}
+                      <div className="h-2 w-full bg-muted/60 rounded-full overflow-hidden mt-4">
+                        <div
+                          className={cn("h-full rounded-full transition-all duration-1000 ease-out", getProgressColor(project.status))}
+                          style={{ width: `${pct}%` }}
+                        ></div>
+                      </div>
+                    </>
+                  );
                 })()}
-                {/* Renewals: month-wise periods (reporting mate) */}
-                {(project.dateRanges || []).length > 1 && (
-                  <div className="mt-2 space-y-1 border-t border-border/40 pt-2">
-                    {project.dateRanges!.map((r, i) => (
-                      <p key={i} className="text-[10px] font-bold text-muted-foreground font-mono">
-                        #{i + 1} {safeFormat(r.start_date, "dd/MM/yyyy")} → {safeFormat(r.end_date, "dd/MM/yyyy")}
-                        {i === project.dateRanges!.length - 1 && <span className="text-emerald-600 ml-1">• current</span>}
-                      </p>
-                    ))}
-                  </div>
-                )}
               </div>
-            </div>
-          </div>
 
-          {/* K10: Finance & Payments — date, amount, work period, next reminder + followups */}
-          <div id="finance-section" className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm scroll-mt-4">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
-                  <IndianRupee className="w-5 h-5" />
+              {/* F3: Revenue total instead of Budget (transcript: budget is not needed) */}
+              <div className="bg-card border border-border/60 rounded-3xl p-6 flex items-center gap-5 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => { setRevenueForm({ date: "", revenue: "", editId: "" }); setIsRevenueOpen(true); }}
+                  className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0 hover:bg-emerald-500/20 transition-colors"
+                  title="Revenue log kholo"
+                >
+                  <IndianRupee className="w-6 h-6" />
+                </button>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Total Revenue</p>
+                  <h3 className="text-3xl font-black text-emerald-600 font-mono">₹{revenueTotal.toLocaleString("en-IN")}</h3>
+                </div>
+              </div>
+
+              <div className="bg-card border border-border/60 rounded-3xl p-6 flex items-center gap-5 shadow-sm">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center shrink-0">
+                  <Calendar className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-foreground">Finance & Payments</h3>
-                  <p className="text-[11px] text-muted-foreground font-medium">
-                    Total received: ₹{((project.payments || []).reduce((s, e) => s + (Number(e.amount) || 0), 0)).toLocaleString("en-IN")} • {(project.payments || []).length} entries
-                  </p>
+                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Timeline</p>
+                  <h3 className="text-sm font-black text-foreground">{safeFormat(project.startDate, "dd/MM/yyyy")} - {safeFormat(project.endDate, "dd/MM/yyyy")}</h3>
+                  {(() => {
+                    const dp = getDateProgress(project.startDate, project.endDate);
+                    return dp ? (
+                      <p className="text-[11px] font-bold text-primary mt-1">{dp.total} days • {dp.elapsed} elapsed</p>
+                    ) : null;
+                  })()}
+                  {/* Renewals: month-wise periods (reporting mate) */}
+                  {(project.dateRanges || []).length > 1 && (
+                    <div className="mt-2 space-y-1 border-t border-border/40 pt-2">
+                      {project.dateRanges!.map((r, i) => (
+                        <p key={i} className="text-[10px] font-bold text-muted-foreground font-mono">
+                          #{i + 1} {safeFormat(r.start_date, "dd/MM/yyyy")} → {safeFormat(r.end_date, "dd/MM/yyyy")}
+                          {i === project.dateRanges!.length - 1 && <span className="text-emerald-600 ml-1">• current</span>}
+                        </p>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsPayFormOpen(v => !v)}
-                className="px-4 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/90 transition-all shadow-sm"
-              >
-                {isPayFormOpen ? "Close" : "+ Add Payment"}
-              </button>
             </div>
 
-            {/* Payment entries */}
-            <div className="space-y-2 mb-4">
-              {(project.payments || []).length === 0 && (
-                <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">No payment entries yet.</p>
-              )}
-              {(project.payments || []).map(e => (
-                <div key={e.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 rounded-2xl border border-border/40 bg-muted/20 text-xs">
-                  <span className="font-mono font-bold text-foreground">{e.date || "—"}</span>
-                  <span className="font-black text-emerald-600 font-mono">₹{(Number(e.amount) || 0).toLocaleString("en-IN")}</span>
-                  {(e.work_from || e.work_to) && (
-                    <span className="font-semibold text-muted-foreground">Work: {e.work_from || ""}{e.work_from && e.work_to ? " → " : ""}{e.work_to || ""}</span>
-                  )}
-                  {e.next_reminder && (
-                    <span className="font-bold text-amber-600">Next: {e.next_reminder}</span>
-                  )}
-                  {e.note && <span className="text-muted-foreground truncate max-w-[220px]" title={e.note}>{e.note}</span>}
-                  <button type="button" onClick={() => handleDeletePayment(project, e.id)} className="ml-auto p-1 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors" title="Delete entry">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            {/* Add payment form */}
-            {isPayFormOpen && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 rounded-2xl bg-muted/30 border border-border/40 mb-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Date *</label>
-                  <DatePicker value={payForm.date} onChange={(val) => setPayForm({ ...payForm, date: val })} placeholder="Select date" className="w-full h-10 bg-background border-border rounded-xl text-xs" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Amount *</label>
-                  <input type="number" min="0" value={payForm.amount} onChange={e => setPayForm({ ...payForm, amount: e.target.value })} placeholder="e.g. 50000" className="w-full px-3 h-10 bg-background border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Work From</label>
-                  <DatePicker value={payForm.work_from} onChange={(val) => setPayForm({ ...payForm, work_from: val })} placeholder="Select date" className="w-full h-10 bg-background border-border rounded-xl text-xs" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Work To</label>
-                  <DatePicker value={payForm.work_to} onChange={(val) => setPayForm({ ...payForm, work_to: val })} placeholder="Select date" className="w-full h-10 bg-background border-border rounded-xl text-xs" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Next Reminder</label>
-                  <DatePicker value={payForm.next_reminder} onChange={(val) => setPayForm({ ...payForm, next_reminder: val })} placeholder="Select date" className="w-full h-10 bg-background border-border rounded-xl text-xs" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Responsibility (auto-task)</label>
-                  <select value={payForm.ownerId} onChange={e => setPayForm({ ...payForm, ownerId: e.target.value })} className="w-full px-3 h-10 bg-background border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20">
-                    <option value="">Select...</option>
-                    {(employees || []).map(emp => (
-                      <option key={emp.id} value={emp.id}>{emp.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1 col-span-2 md:col-span-1">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Note</label>
-                  <input type="text" value={payForm.note} onChange={e => setPayForm({ ...payForm, note: e.target.value })} placeholder="Optional" className="w-full px-3 h-10 bg-background border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20" />
-                </div>
-                <div className="flex items-end col-span-2 md:col-span-1">
-                  <button type="button" onClick={() => handleSavePayment(project, client.name)} className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors shadow-sm">
-                    Save Payment
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Followups: recent + quick add (text + next date) */}
-            <div className="border-t border-border/40 pt-4">
-              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Followups {projectFollowups.length > 0 && `(${projectFollowups.length})`}</p>
-              <div className="space-y-1.5 mb-3 max-h-32 overflow-y-auto pr-1">
-                {projectFollowups.length === 0 && (
-                  <p className="text-[11px] text-muted-foreground/60 font-medium">No follow-ups yet.</p>
-                )}
-                {projectFollowups.slice(0, 5).map((f: any, i: number) => {
-                  const rawDate = f.created_at ? String(f.created_at).split("T")[0] : "";
-                  const formattedDate = rawDate ? rawDate.split("-").reverse().join("/") : "";
-                  return (
-                    <p key={f.id || i} className="text-xs text-foreground bg-muted/30 border border-border/30 rounded-xl px-3 py-1.5 flex items-center justify-between">
-                      <span className="font-bold">{f.text}</span>
-                      {formattedDate && <span className="text-muted-foreground font-mono text-[10px] ml-2 shrink-0">{formattedDate}</span>}
+            {/* K10: Finance & Payments — date, amount, work period, next reminder + followups */}
+            <div id="finance-section" className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm scroll-mt-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
+                    <IndianRupee className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-foreground">Finance & Payments</h3>
+                    <p className="text-[11px] text-muted-foreground font-medium">
+                      Total received: ₹{((project.payments || []).reduce((s, e) => s + (Number(e.amount) || 0), 0)).toLocaleString("en-IN")} • {(project.payments || []).length} entries
                     </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsPayFormOpen(v => !v)}
+                  className="px-4 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/90 transition-all shadow-sm"
+                >
+                  {isPayFormOpen ? "Close" : "+ Add Payment"}
+                </button>
+              </div>
+
+              {/* Payment entries */}
+              <div className="space-y-2 mb-4">
+                {(project.payments || []).length === 0 && (
+                  <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">No payment entries yet.</p>
+                )}
+                {(project.payments || []).map(e => (
+                  <div key={e.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 rounded-2xl border border-border/40 bg-muted/20 text-xs">
+                    <span className="font-mono font-bold text-foreground">{e.date || "—"}</span>
+                    <span className="font-black text-emerald-600 font-mono">₹{(Number(e.amount) || 0).toLocaleString("en-IN")}</span>
+                    {(e.work_from || e.work_to) && (
+                      <span className="font-semibold text-muted-foreground">Work: {e.work_from || ""}{e.work_from && e.work_to ? " → " : ""}{e.work_to || ""}</span>
+                    )}
+                    {e.next_reminder && (
+                      <span className="font-bold text-amber-600">Next: {e.next_reminder}</span>
+                    )}
+                    {e.note && <span className="text-muted-foreground truncate max-w-[220px]" title={e.note}>{e.note}</span>}
+                    <button type="button" onClick={() => handleDeletePayment(project, e.id)} className="ml-auto p-1 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors" title="Delete entry">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Add payment form */}
+              {isPayFormOpen && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 rounded-2xl bg-muted/30 border border-border/40 mb-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Date *</label>
+                    <DatePicker value={payForm.date} onChange={(val) => setPayForm({ ...payForm, date: val })} placeholder="Select date" className="w-full h-10 bg-background border-border rounded-xl text-xs" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Amount *</label>
+                    <input type="number" min="0" value={payForm.amount} onChange={e => setPayForm({ ...payForm, amount: e.target.value })} placeholder="e.g. 50000" className="w-full px-3 h-10 bg-background border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Work From</label>
+                    <DatePicker value={payForm.work_from} onChange={(val) => setPayForm({ ...payForm, work_from: val })} placeholder="Select date" className="w-full h-10 bg-background border-border rounded-xl text-xs" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Work To</label>
+                    <DatePicker value={payForm.work_to} onChange={(val) => setPayForm({ ...payForm, work_to: val })} placeholder="Select date" className="w-full h-10 bg-background border-border rounded-xl text-xs" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Next Reminder</label>
+                    <DatePicker value={payForm.next_reminder} onChange={(val) => setPayForm({ ...payForm, next_reminder: val })} placeholder="Select date" className="w-full h-10 bg-background border-border rounded-xl text-xs" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Responsibility (auto-task)</label>
+                    <Select
+                      value={payForm.ownerId || "none"}
+                      onValueChange={(val) => setPayForm({ ...payForm, ownerId: val === "none" ? "" : val })}
+                    >
+                      <SelectTrigger className="w-full h-10 px-3 bg-background border border-border rounded-xl text-xs font-medium shadow-xs">
+                        <SelectValue placeholder="Select Responsibility..." />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300] max-h-56">
+                        <SelectItem value="none" className="text-xs font-semibold text-muted-foreground rounded-lg cursor-pointer">
+                          Select...
+                        </SelectItem>
+                        {(employees || []).map(emp => (
+                          <SelectItem key={emp.id} value={emp.id} className="text-xs font-semibold rounded-lg cursor-pointer">
+                            {emp.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1 col-span-2 md:col-span-1">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Note</label>
+                    <input type="text" value={payForm.note} onChange={e => setPayForm({ ...payForm, note: e.target.value })} placeholder="Optional" className="w-full px-3 h-10 bg-background border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                  </div>
+                  <div className="flex items-end col-span-2 md:col-span-1">
+                    <button type="button" onClick={() => handleSavePayment(project, client.name)} className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors shadow-sm">
+                      Save Payment
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Followups: recent + quick add (text + next date) */}
+              <div className="border-t border-border/40 pt-4">
+                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Followups {projectFollowups.length > 0 && `(${projectFollowups.length})`}</p>
+                <div className="space-y-1.5 mb-3 max-h-32 overflow-y-auto pr-1">
+                  {projectFollowups.length === 0 && (
+                    <p className="text-[11px] text-muted-foreground/60 font-medium">No follow-ups yet.</p>
+                  )}
+                  {projectFollowups.slice(0, 5).map((f: any, i: number) => {
+                    const rawDate = f.created_at ? String(f.created_at).split("T")[0] : "";
+                    const formattedDate = rawDate ? rawDate.split("-").reverse().join("/") : "";
+                    return (
+                      <p key={f.id || i} className="text-xs text-foreground bg-muted/30 border border-border/30 rounded-xl px-3 py-1.5 flex items-center justify-between">
+                        <span className="font-bold">{f.text}</span>
+                        {formattedDate && <span className="text-muted-foreground font-mono text-[10px] ml-2 shrink-0">{formattedDate}</span>}
+                      </p>
+                    );
+                  })}
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    value={followupText}
+                    onChange={e => setFollowupText(e.target.value)}
+                    placeholder="Enter follow-up text..."
+                    className="flex-1 px-3 h-10 bg-background border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                  <DatePicker
+                    value={followupNextDate}
+                    onChange={(val) => setFollowupNextDate(val)}
+                    placeholder="Next date"
+                    className="h-10 bg-background border-border rounded-xl text-xs font-medium sm:w-[160px]"
+                  />
+                  <button type="button" onClick={() => handleAddFollowup(project)} className="px-4 h-10 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/90 transition-colors shrink-0">
+                    + Followup
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Creative Team Allocation Strip */}
+            <div className="bg-card/70 border border-border/50 rounded-2xl p-4 shadow-sm backdrop-blur-md">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 pb-2 border-b border-border/40">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black text-foreground uppercase tracking-wider">Creative Team Allocation</h3>
+                    <p className="text-[10px] text-muted-foreground">Pipeline roles assigned to brand members</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAssigningProject(project);
+                    setCreativeTeamForm({
+                      cc_creator: project.creativeTeam?.["cc_creator"] || "",
+                      scripting: project.creativeTeam?.["scripting"] || "",
+                      shoot_videography: project.creativeTeam?.["shoot_videography"] || "",
+                      reel_editing: project.creativeTeam?.["reel_editing"] || "",
+                      post_graphics: project.creativeTeam?.["post_graphics"] || "",
+                      thumbnail: project.creativeTeam?.["thumbnail"] || "",
+                      approval_qc: project.creativeTeam?.["approval_qc"] || "",
+                      caption: project.creativeTeam?.["caption"] || "",
+                      posting_publisher: project.creativeTeam?.["posting_publisher"] || "",
+                    });
+                    setIsAssignCreativeTeamModalOpen(true);
+                  }}
+                  className="text-xs font-bold text-primary hover:underline flex items-center gap-1.5 self-start sm:self-auto"
+                >
+                  <Edit2 className="w-3 h-3" /> Reassign Roles
+                </button>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
+                {CREATIVE_ROLES.map(role => {
+                  const assignedId = project.creativeTeam?.[role.key];
+                  const detail = project.creativeTeamDetails?.[role.key];
+                  const emp = assignedId ? employees.find(e => String(e.id) === String(assignedId) || String((e as any)._id) === String(assignedId)) : null;
+                  const memberName = emp?.name || detail?.employee_name || (assignedId ? "Assigned" : "Unassigned");
+                  const isAssigned = !!assignedId || !!detail?.employee_name;
+
+                  return (
+                    <div key={role.key} className={cn("p-2.5 rounded-xl border text-left transition-all", isAssigned ? "bg-muted/30 border-border/60" : "bg-muted/10 border-dashed border-border/40 opacity-70")}>
+                      <div className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground mb-1 truncate">
+                        <span>{role.icon}</span>
+                        <span className="truncate">{role.label}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+                        {isAssigned && (
+                          <UserAvatar name={memberName} avatar={emp?.avatar} size="w-5 h-5" />
+                        )}
+                        <span className={cn("text-xs font-black truncate min-w-0", isAssigned ? "text-foreground" : "text-muted-foreground/60 italic text-[11px]")}>
+                          {memberName}
+                        </span>
+                      </div>
+                    </div>
                   );
                 })}
               </div>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <input
-                  type="text"
-                  value={followupText}
-                  onChange={e => setFollowupText(e.target.value)}
-                  placeholder="Enter follow-up text..."
-                  className="flex-1 px-3 h-10 bg-background border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
-                />
-                <DatePicker
-                  value={followupNextDate}
-                  onChange={(val) => setFollowupNextDate(val)}
-                  placeholder="Next date"
-                  className="h-10 bg-background border-border rounded-xl text-xs font-medium sm:w-[160px]"
-                />
-                <button type="button" onClick={() => handleAddFollowup(project)} className="px-4 h-10 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/90 transition-colors shrink-0">
-                  + Followup
-                </button>
-              </div>
             </div>
-          </div>
 
-          {/* Creative Team Allocation Strip */}
-          <div className="bg-card/70 border border-border/50 rounded-2xl p-4 shadow-sm backdrop-blur-md">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 pb-2 border-b border-border/40">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-                  <Sparkles className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-xs font-black text-foreground uppercase tracking-wider">Creative Team Allocation</h3>
-                  <p className="text-[10px] text-muted-foreground">Pipeline roles assigned to brand members</p>
-                </div>
-              </div>
+            {/* Sub-tab Bar */}
+            <div className="flex gap-2 border-b border-border/40 pb-2 overflow-x-auto hide-scrollbar">
               <button
-                type="button"
-                onClick={() => {
-                  setAssigningProject(project);
-                  setCreativeTeamForm({
-                    scripting: project.creativeTeam?.["scripting"] || "",
-                    shoot_videography: project.creativeTeam?.["shoot_videography"] || "",
-                    reel_editing: project.creativeTeam?.["reel_editing"] || "",
-                    post_graphics: project.creativeTeam?.["post_graphics"] || "",
-                    thumbnail: project.creativeTeam?.["thumbnail"] || "",
-                    approval_qc: project.creativeTeam?.["approval_qc"] || "",
-                    caption: project.creativeTeam?.["caption"] || "",
-                    posting_publisher: project.creativeTeam?.["posting_publisher"] || "",
-                  });
-                  setIsAssignCreativeTeamModalOpen(true);
-                }}
-                className="text-xs font-bold text-primary hover:underline flex items-center gap-1.5 self-start sm:self-auto"
+                onClick={() => setProjectSubTab("workspace")}
+                className={cn(
+                  "px-5 py-2 rounded-full text-xs font-black uppercase tracking-wider transition-all duration-300",
+                  projectSubTab === "workspace"
+                    ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
+                    : "bg-card text-foreground/70 hover:bg-muted/80 border border-border/40"
+                )}
               >
-                <Edit2 className="w-3 h-3" /> Reassign Roles
+                💼 Workspace
+              </button>
+              <button
+                onClick={() => setProjectSubTab("logs")}
+                className={cn(
+                  "px-5 py-2 rounded-full text-xs font-black uppercase tracking-wider transition-all duration-300",
+                  projectSubTab === "logs"
+                    ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
+                    : "bg-card text-foreground/70 hover:bg-muted/80 border border-border/40"
+                )}
+              >
+                📋 Activity Logs
               </button>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
-              {CREATIVE_ROLES.map(role => {
-                const assignedId = project.creativeTeam?.[role.key];
-                const detail = project.creativeTeamDetails?.[role.key];
-                const emp = assignedId ? employees.find(e => String(e.id) === String(assignedId) || String((e as any)._id) === String(assignedId)) : null;
-                const memberName = emp?.name || detail?.employee_name || (assignedId ? "Assigned" : "Unassigned");
-                const isAssigned = !!assignedId || !!detail?.employee_name;
 
-                return (
-                  <div key={role.key} className={cn("p-2.5 rounded-xl border text-left transition-all", isAssigned ? "bg-muted/30 border-border/60" : "bg-muted/10 border-dashed border-border/40 opacity-70")}>
-                    <div className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground mb-1 truncate">
-                      <span>{role.icon}</span>
-                      <span className="truncate">{role.label}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
-                      {isAssigned && (
-                        <UserAvatar name={memberName} avatar={emp?.avatar} size="w-5 h-5" />
-                      )}
-                      <span className={cn("text-xs font-black truncate min-w-0", isAssigned ? "text-foreground" : "text-muted-foreground/60 italic text-[11px]")}>
-                        {memberName}
-                      </span>
-                    </div>
+            {projectSubTab === "logs" ? (
+              <div className="bg-card border border-border/60 rounded-[2.5rem] p-6 md:p-8 shadow-sm space-y-6">
+                <div className="flex justify-between items-center border-b border-border/40 pb-4">
+                  <div>
+                    <h3 className="text-lg font-black tracking-tight text-foreground">Project Activity Logs</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">Chronological record of all actions performed inside this project</p>
                   </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Sub-tab Bar */}
-          <div className="flex gap-2 border-b border-border/40 pb-2 overflow-x-auto hide-scrollbar">
-            <button
-              onClick={() => setProjectSubTab("workspace")}
-              className={cn(
-                "px-5 py-2 rounded-full text-xs font-black uppercase tracking-wider transition-all duration-300",
-                projectSubTab === "workspace" 
-                  ? "bg-primary text-primary-foreground shadow-md shadow-primary/20" 
-                  : "bg-card text-foreground/70 hover:bg-muted/80 border border-border/40"
-              )}
-            >
-              💼 Workspace
-            </button>
-            <button
-              onClick={() => setProjectSubTab("logs")}
-              className={cn(
-                "px-5 py-2 rounded-full text-xs font-black uppercase tracking-wider transition-all duration-300",
-                projectSubTab === "logs" 
-                  ? "bg-primary text-primary-foreground shadow-md shadow-primary/20" 
-                  : "bg-card text-foreground/70 hover:bg-muted/80 border border-border/40"
-              )}
-            >
-              📋 Activity Logs
-            </button>
-          </div>
-
-          {projectSubTab === "logs" ? (
-            <div className="bg-card border border-border/60 rounded-[2.5rem] p-6 md:p-8 shadow-sm space-y-6">
-              <div className="flex justify-between items-center border-b border-border/40 pb-4">
-                <div>
-                  <h3 className="text-lg font-black tracking-tight text-foreground">Project Activity Logs</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">Chronological record of all actions performed inside this project</p>
+                </div>
+                <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+                  {(() => {
+                    // K11: backend logs (by default) + local logs, dedupe by id
+                    const seen = new Set<string>();
+                    const combined = [...backendActivityLogs, ...(project.activityLogs || [])].filter(l => {
+                      const k = String(l.id || `${l.action}-${l.timestamp}`);
+                      if (seen.has(k)) return false;
+                      seen.add(k);
+                      return true;
+                    });
+                    if (combined.length === 0) {
+                      return (
+                        <div className="text-center py-16 text-sm text-muted-foreground/60 font-semibold italic">
+                          No activity logs recorded yet.
+                        </div>
+                      );
+                    }
+                    return combined.map((log: any) => (
+                      <div key={log.id} className="flex gap-4 p-4 bg-muted/20 hover:bg-muted/30 rounded-2xl border border-border/40 transition-colors">
+                        <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 font-bold text-sm">
+                          ⚙️
+                        </div>
+                        <div className="flex-1 space-y-1 text-left">
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1">
+                            <h4 className="text-sm font-black text-foreground">{log.action}</h4>
+                            <span className="text-[10px] text-muted-foreground font-mono bg-background px-2.5 py-0.5 rounded-lg border border-border/40">{log.timestamp}</span>
+                          </div>
+                          {log.details && (
+                            <p className="text-xs font-semibold text-muted-foreground leading-relaxed">{log.details}</p>
+                          )}
+                          <p className="text-[10px] font-bold text-primary/80">Performed by: {log.performedBy}</p>
+                        </div>
+                      </div>
+                    ));
+                  })()}
                 </div>
               </div>
-              <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
-                {(() => {
-                  // K11: backend logs (by default) + local logs, dedupe by id
-                  const seen = new Set<string>();
-                  const combined = [...backendActivityLogs, ...(project.activityLogs || [])].filter(l => {
-                    const k = String(l.id || `${l.action}-${l.timestamp}`);
-                    if (seen.has(k)) return false;
-                    seen.add(k);
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {(isSocialMediaCategory(project.category) && (!isMarketingCategory(project.category) || dmWorkspaceView === "social")) ? (() => {
+                  const projectCalendar: CalendarItem[] = project.contentCalendar || [];
+                  const filteredCalendar = projectCalendar.filter(item => {
+                    if (calendarTypeFilter !== "All" && item.type !== calendarTypeFilter) return false;
+                    if (calendarStatusFilter !== "All" && item.status !== calendarStatusFilter) return false;
                     return true;
                   });
-                  if (combined.length === 0) {
-                    return (
-                      <div className="text-center py-16 text-sm text-muted-foreground/60 font-semibold italic">
-                        No activity logs recorded yet.
-                      </div>
-                    );
-                  }
-                  return combined.map((log: any) => (
-                    <div key={log.id} className="flex gap-4 p-4 bg-muted/20 hover:bg-muted/30 rounded-2xl border border-border/40 transition-colors">
-                      <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 font-bold text-sm">
-                        ⚙️
-                      </div>
-                      <div className="flex-1 space-y-1 text-left">
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1">
-                          <h4 className="text-sm font-black text-foreground">{log.action}</h4>
-                          <span className="text-[10px] text-muted-foreground font-mono bg-background px-2.5 py-0.5 rounded-lg border border-border/40">{log.timestamp}</span>
-                        </div>
-                        {log.details && (
-                          <p className="text-xs font-semibold text-muted-foreground leading-relaxed">{log.details}</p>
-                        )}
-                        <p className="text-[10px] font-bold text-primary/80">Performed by: {log.performedBy}</p>
-                      </div>
-                    </div>
-                  ));
-                })()}
-              </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {(isSocialMediaCategory(project.category) && (!isMarketingCategory(project.category) || dmWorkspaceView === "social")) ? (() => {
-              const projectCalendar: CalendarItem[] = project.contentCalendar || [];
-              const filteredCalendar = projectCalendar.filter(item => {
-                if (calendarTypeFilter !== "All" && item.type !== calendarTypeFilter) return false;
-                if (calendarStatusFilter !== "All" && item.status !== calendarStatusFilter) return false;
-                return true;
-              });
 
-              const getCalTypeColor = (type: string) => {
-                switch (type) {
-                  case "Reel": return "bg-purple-500/10 text-purple-600 border-purple-500/20";
-                  case "Post": return "bg-blue-500/10 text-blue-600 border-blue-500/20";
-                  case "Story": return "bg-pink-500/10 text-pink-600 border-pink-500/20";
-                  case "Carousel": return "bg-orange-500/10 text-orange-600 border-orange-500/20";
-                  default: return "bg-muted text-muted-foreground border-border";
-                }
-              };
-
-              const getCalStatusColor = (status: string) => {
-                switch (status) {
-                  case "To Do": return "bg-amber-500/10 text-amber-600 border-amber-500/20";
-                  case "In Progress": return "bg-blue-500/10 text-blue-600 border-blue-500/20";
-                  case "Pending Approval": return "bg-purple-500/10 text-purple-600 border-purple-500/20";
-                  case "Approved": return "bg-emerald-500/10 text-emerald-600 border-emerald-500/20";
-                  case "Published": return "bg-green-500/10 text-green-600 border-green-500/20";
-                  default: return "bg-muted text-muted-foreground border-border";
-                }
-              };
-
-              return (
-                <div className="lg:col-span-3 space-y-6">
-                  {/* K4: SMM dept dropdown header — click = auto SMM content + collapse */}
-                  <button
-                    type="button"
-                    id="dept-section-smm"
-                    onClick={() => {
-                      setOpenDept(prev => ({ ...prev, smm: !(prev["smm"] !== false) }));
-                      setDmWorkspaceView("social");
-                    }}
-                    className="flex items-center justify-between w-full p-3.5 bg-card/90 border border-border/60 rounded-2xl shadow-sm hover:bg-muted/40 transition-colors"
-                  >
-                    <span className="flex items-center gap-2 text-sm font-black text-foreground">
-                      <span>📱</span> Social Media (SMM)
-                      <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-black">{filteredCalendar.length} items</span>
-                    </span>
-                    <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", openDept["smm"] !== false && "rotate-180")} />
-                  </button>
-                  {(openDept["smm"] !== false) && (
-                  <>
-                  {/* Digital Marketing View Switcher */}
-                  {isMarketingCategory(project.category) && (
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-card/90 border border-border/60 rounded-2xl shadow-sm backdrop-blur-md gap-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setDmWorkspaceView("social")}
-                          className={cn(
-                            "flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 whitespace-nowrap",
-                            dmWorkspaceView === "social"
-                              ? "bg-primary text-primary-foreground shadow-sm"
-                              : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                          )}
-                        >
-                          <span>📱 Social Media & Content Calendar</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDmWorkspaceView("stats")}
-                          className={cn(
-                            "flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 whitespace-nowrap",
-                            dmWorkspaceView === "stats"
-                              ? "bg-primary text-primary-foreground shadow-sm"
-                              : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                          )}
-                        >
-                          <span>📈 Paid Campaigns & Daily Stats</span>
-                        </button>
-                      </div>
-                      <span className="text-[11px] font-bold text-muted-foreground px-2 whitespace-nowrap">
-                        Showing Content Calendar & Social Media
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Feature 4: Monthly Target vs Completed Content Delivery Scorecard */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 p-4 sm:p-5 bg-card/80 border border-border/60 rounded-2xl sm:rounded-3xl shadow-sm backdrop-blur-md">
-                    {/* Posts Progress */}
-                    <div className="space-y-2.5 p-4 bg-blue-500/5 rounded-2xl border border-blue-500/15">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="font-extrabold text-blue-700 flex items-center gap-1.5">
-                          🖼️ Posts Delivery
-                        </span>
-                        <span className="font-black text-blue-900 font-mono text-base">
-                          {currentMonthStats.completedPosts} / {currentMonthStats.targetPosts}
-                        </span>
-                      </div>
-                      <div className="h-2.5 w-full bg-blue-500/15 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-blue-600 rounded-full transition-all duration-500" 
-                          style={{ width: `${Math.min(100, Math.round((currentMonthStats.completedPosts / Math.max(1, currentMonthStats.targetPosts)) * 100))}%` }} 
-                        />
-                      </div>
-                      <div className="flex justify-between items-center text-[10px] text-muted-foreground font-bold">
-                        <span>{Math.round((currentMonthStats.completedPosts / Math.max(1, currentMonthStats.targetPosts)) * 100)}% Completed</span>
-                        <span className={cn("px-2 py-0.5 rounded-full text-[9px]", currentMonthStats.completedPosts >= currentMonthStats.targetPosts ? "bg-emerald-500/10 text-emerald-600 font-black" : "bg-blue-500/10 text-blue-600")}>
-                          {currentMonthStats.completedPosts >= currentMonthStats.targetPosts ? "Goal Met ✅" : `${currentMonthStats.targetPosts - currentMonthStats.completedPosts} Posts Left`}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Reels Progress */}
-                    <div className="space-y-2.5 p-4 bg-purple-500/5 rounded-2xl border border-purple-500/15">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="font-extrabold text-purple-700 flex items-center gap-1.5">
-                          🎥 Reels Delivery
-                        </span>
-                        <span className="font-black text-purple-900 font-mono text-base">
-                          {currentMonthStats.completedReels} / {currentMonthStats.targetReels}
-                        </span>
-                      </div>
-                      <div className="h-2.5 w-full bg-purple-500/15 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-purple-600 rounded-full transition-all duration-500" 
-                          style={{ width: `${Math.min(100, Math.round((currentMonthStats.completedReels / Math.max(1, currentMonthStats.targetReels)) * 100))}%` }} 
-                        />
-                      </div>
-                      <div className="flex justify-between items-center text-[10px] text-muted-foreground font-bold">
-                        <span>{Math.round((currentMonthStats.completedReels / Math.max(1, currentMonthStats.targetReels)) * 100)}% Completed</span>
-                        <span className={cn("px-2 py-0.5 rounded-full text-[9px]", currentMonthStats.completedReels >= currentMonthStats.targetReels ? "bg-emerald-500/10 text-emerald-600 font-black" : "bg-purple-500/10 text-purple-600")}>
-                          {currentMonthStats.completedReels >= currentMonthStats.targetReels ? "Goal Met ✅" : `${currentMonthStats.targetReels - currentMonthStats.completedReels} Reels Left`}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Total Summary & Edit Target */}
-                    <div className="flex flex-col justify-between p-4 bg-muted/30 rounded-2xl border border-border/50">
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Monthly Delivery</span>
-                        <button 
-                          type="button"
-                          onClick={() => {
-                            setTargetsForm({ post: project.post || 8, reel: project.reel || 8 });
-                            setIsEditTargetsModalOpen(true);
-                          }}
-                          className="text-[10px] font-bold text-primary hover:underline flex items-center gap-1 bg-primary/10 px-2.5 py-1 rounded-lg transition-colors"
-                        >
-                          <Settings2 className="w-3 h-3" /> Edit Targets
-                        </button>
-                      </div>
-                      <div className="flex items-baseline gap-2 my-1">
-                        <span className="text-3xl font-black text-foreground font-mono">
-                          {currentMonthStats.totalCompleted} / {currentMonthStats.totalTarget}
-                        </span>
-                        <span className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Deliverables</span>
-                      </div>
-                      <div className="flex items-center justify-between text-[11px] pt-1 border-t border-border/40 gap-1.5">
-                        <span className="text-muted-foreground font-medium">Tracking Period:</span>
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const monthsList = [
-                                "All",
-                                "Current",
-                                ...getProjectMonths(project.startDate, project.endDate).months.map(m => m.value)
-                              ];
-                              const currentIndex = monthsList.indexOf(calendarMonthFilter);
-                              if (currentIndex > 0) {
-                                const prevM = monthsList[currentIndex - 1];
-                                if (prevM) setCalendarMonthFilter(prevM);
-                              } else if (currentIndex === -1 && monthsList.length > 2) {
-                                const curM = monthsList[1];
-                                if (curM) setCalendarMonthFilter(curM);
-                              }
-                            }}
-                            title="Previous Month (Arrow navigation)"
-                            className="p-1 rounded-lg bg-background border border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-                          >
-                            <ChevronLeft className="w-3.5 h-3.5" />
-                          </button>
-                          <Select value={calendarMonthFilter} onValueChange={(val) => setCalendarMonthFilter(val)}>
-                            <SelectTrigger className="h-7 px-2 text-[11px] font-bold bg-background border-border/60 rounded-lg min-w-[110px]">
-                              <SelectValue placeholder="Period" />
-                            </SelectTrigger>
-                            <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
-                              <SelectItem value="Current" className="text-xs font-semibold">Current Month</SelectItem>
-                              <SelectItem value="All" className="text-xs font-semibold">All Items</SelectItem>
-                              {getProjectMonths(project.startDate, project.endDate).months.map(m => (
-                                <SelectItem key={m.value} value={m.value} className="text-xs font-semibold">{m.label}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const monthsList = [
-                                "All",
-                                "Current",
-                                ...getProjectMonths(project.startDate, project.endDate).months.map(m => m.value)
-                              ];
-                              const currentIndex = monthsList.indexOf(calendarMonthFilter);
-                              if (currentIndex >= 0 && currentIndex < monthsList.length - 1) {
-                                const nextM = monthsList[currentIndex + 1];
-                                if (nextM) setCalendarMonthFilter(nextM);
-                              } else if (currentIndex === -1 && monthsList.length > 2) {
-                                const defaultM = monthsList[2];
-                                if (defaultM) setCalendarMonthFilter(defaultM);
-                              }
-                            }}
-                            title="Next Month (Arrow navigation)"
-                            className="p-1 rounded-lg bg-background border border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-                          >
-                            <ChevronRight className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* K17: timeline completion — final-link rule (posting date sudhi final link = done) */}
-                  {(() => {
-                    const todayStr = new Date().toISOString().split("T")[0] ?? "";
-                    const due = filteredCalendar.filter(i => i.postingDate && i.postingDate <= todayStr);
-                    const done = due.filter(i => (i.finalPostLink || i.finalReelLink || i.postingLinkOfIg || "").trim() !== "");
-                    const pct = due.length > 0 ? Math.round((done.length / due.length) * 100) : 0;
-                    return (
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 px-4 py-3 bg-card/80 border border-border/60 rounded-2xl shadow-sm">
-                        <div className="flex items-baseline gap-2 shrink-0">
-                          <span className="text-2xl font-black text-foreground font-mono">{done.length}/{due.length}</span>
-                          <span className="text-[11px] text-muted-foreground font-bold uppercase tracking-wider">done</span>
-                        </div>
-                        <div className="flex-1 h-2 bg-muted/60 rounded-full overflow-hidden min-w-[120px]">
-                          <div className={cn("h-full rounded-full transition-all duration-500", pct === 100 ? "bg-emerald-500" : "bg-primary")} style={{ width: `${pct}%` }} />
-                        </div>
-                        <span className="text-[11px] font-bold text-muted-foreground shrink-0">{pct}% • Final link rule</span>
-                      </div>
-                    );
-                  })()}
-                  {/* K18: CC status inline (month approval + overlap months + update) */}
-                  {(() => {
-                    const now = new Date();
-                    const ck = /^\d{4}-\d{2}$/.test(calendarMonthFilter)
-                      ? calendarMonthFilter
-                      : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-                    const [yy, mm] = ck.split("-").map(Number);
-                    const ap = ccApprovals[ck];
-                    const chipCls =
-                      ap?.status === "Approved by Client"
-                        ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
-                        : ap?.status === "Rejected"
-                        ? "bg-rose-500/10 text-rose-500 border-rose-500/30"
-                        : ap?.status === "Changes Requested"
-                        ? "bg-amber-500/10 text-amber-600 border-amber-500/30"
-                        : "bg-muted text-muted-foreground border-border/50";
-                    // overlap months (range ma avta months — Sept approved + new pending banne dekhay)
-                    const f = customDateRange?.from ? new Date(customDateRange.from) : null;
-                    const t = customDateRange?.to ? new Date(customDateRange.to) : null;
-                    const overlapKeys: string[] = [];
-                    if (f && t && !isNaN(f.getTime()) && !isNaN(t.getTime())) {
-                      const cur = new Date(f.getFullYear(), f.getMonth(), 1);
-                      const last = new Date(t.getFullYear(), t.getMonth(), 1);
-                      let g = 0;
-                      while (cur <= last && g < 13) {
-                        const k = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}`;
-                        if (!overlapKeys.includes(k)) overlapKeys.push(k);
-                        cur.setMonth(cur.getMonth() + 1);
-                        g++;
-                      }
+                  const getCalTypeColor = (type: string) => {
+                    switch (type) {
+                      case "Reel": return "bg-purple-500/10 text-purple-600 border-purple-500/20";
+                      case "Post": return "bg-blue-500/10 text-blue-600 border-blue-500/20";
+                      case "Story": return "bg-pink-500/10 text-pink-600 border-pink-500/20";
+                      case "Carousel": return "bg-orange-500/10 text-orange-600 border-orange-500/20";
+                      default: return "bg-muted text-muted-foreground border-border";
                     }
-                    return (
-                      <div className="flex flex-col gap-2 px-4 py-3 bg-card/80 border border-border/60 rounded-2xl shadow-sm">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[11px] font-black text-muted-foreground uppercase tracking-widest">CC Status:</span>
-                          <span className={cn("px-2.5 py-1 rounded-full text-[11px] font-black border", chipCls)}>
-                            {ck} • {ap?.status || "Pending"}
-                          </span>
-                          {overlapKeys.filter(k => k !== ck).map(k => (
-                            <span key={k} className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-muted text-muted-foreground border border-border/40">
-                              {k} • {ccApprovals[k]?.status || "—"}
-                            </span>
-                          ))}
-                        </div>
-                        <div className="flex flex-col sm:flex-row gap-2">
-                          <select
-                            value={ccStatusDraft}
-                            onChange={e => setCcStatusDraft(e.target.value)}
-                            className="h-9 px-3 bg-background border border-border/60 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-primary"
-                          >
-                            {["Pending", "Approved by Client", "Changes Requested", "Rejected"].map(s => (
-                              <option key={s} value={s}>{s}</option>
-                            ))}
-                          </select>
-                          {ccStatusDraft !== "Approved by Client" && (
-                            <input
-                              type="text"
-                              value={ccReasonDraft}
-                              onChange={e => setCcReasonDraft(e.target.value)}
-                              placeholder="Reason compulsory..."
-                              className="flex-1 px-3 h-9 bg-background border border-border/60 rounded-xl text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary"
-                            />
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => handleSaveCcStatus(project.id, (mm as number), (yy as number))}
-                            className="h-9 px-4 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/90 transition-colors shrink-0"
-                          >
-                            Save
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4">
-                    <div>
-                      <h2 className="text-base sm:text-lg lg:text-xl font-bold tracking-tight">Content Calendar</h2>
-                      <p className="text-xs text-muted-foreground mt-0.5">Plan, schedule, and track content approval pipeline</p>
-                    </div>
-                    <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar w-full lg:w-auto py-0.5 shrink-0">
-                      {/* K17: explanation mode (Meet presentation) */}
+                  };
+
+                  const getCalStatusColor = (status: string) => {
+                    switch (status) {
+                      case "To Do": return "bg-amber-500/10 text-amber-600 border-amber-500/20";
+                      case "In Progress": return "bg-blue-500/10 text-blue-600 border-blue-500/20";
+                      case "Pending Approval": return "bg-purple-500/10 text-purple-600 border-purple-500/20";
+                      case "Approved": return "bg-emerald-500/10 text-emerald-600 border-emerald-500/20";
+                      case "Published": return "bg-green-500/10 text-green-600 border-green-500/20";
+                      default: return "bg-muted text-muted-foreground border-border";
+                    }
+                  };
+
+                  return (
+                    <div className="lg:col-span-3 space-y-6">
+                      {/* K4: SMM dept dropdown header — click = auto SMM content + collapse */}
                       <button
                         type="button"
+                        id="dept-section-smm"
                         onClick={() => {
-                          if (explainMode) setExplainedIds([]);
-                          setExplainMode(v => !v);
+                          setOpenDept(prev => ({ ...prev, smm: !(prev["smm"] !== false) }));
+                          setDmWorkspaceView("social");
                         }}
-                        className={cn(
-                          "h-8 px-3 rounded-xl text-xs font-bold shrink-0 shadow-sm transition-all border",
-                          explainMode
-                            ? "bg-violet-600 text-white border-violet-600"
-                            : "bg-card hover:bg-card border-border/60 text-foreground"
-                        )}
-                        title="Google Meet ma samjavva: items par click = highlight"
+                        className="flex items-center justify-between w-full p-3.5 bg-card/90 border border-border/60 rounded-2xl shadow-sm hover:bg-muted/40 transition-colors"
                       >
-                        {explainMode ? `✨ Explaining (${explainedIds.length})` : "✨ Explain"}
+                        <span className="flex items-center gap-2 text-sm font-black text-foreground">
+                          <span>📱</span> Social Media (SMM)
+                          <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-black">{filteredCalendar.length} items</span>
+                        </span>
+                        <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", openDept["smm"] !== false && "rotate-180")} />
                       </button>
-                      {explainMode && explainedIds.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setExplainedIds([])}
-                          className="h-8 px-3 rounded-xl text-xs font-bold shrink-0 shadow-sm transition-all border bg-card hover:bg-muted border-border/60 text-muted-foreground"
-                        >
-                          Clear
-                        </button>
-                      )}
-                      {/* Post / Reel Quick Filters (Audio Transcript) */}
-                      <div className="flex items-center gap-1 bg-muted/60 p-0.5 rounded-xl border border-border/50 shrink-0">
-                        {[
-                          { label: "All", value: "All" },
-                          { label: "📸 Posts", value: "Post" },
-                          { label: "🎥 Reels", value: "Reel" },
-                        ].map((btn) => (
-                          <button
-                            key={btn.value}
-                            type="button"
-                            onClick={() => setCalendarTypeFilter(btn.value)}
-                            className={cn(
-                              "h-7 px-2.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
-                              calendarTypeFilter === btn.value
-                                ? "bg-card text-foreground shadow-xs font-bold border border-border/40"
-                                : "text-muted-foreground hover:text-foreground"
-                            )}
-                          >
-                            {btn.label}
-                          </button>
-                        ))}
-                      </div>
-
-                      <Select value={calendarTypeFilter} onValueChange={(val) => setCalendarTypeFilter(val)}>
-                        <SelectTrigger className="h-8 w-auto min-w-[95px] max-w-[120px] px-2.5 bg-card/90 hover:bg-card border border-border/60 rounded-xl text-xs font-semibold text-foreground shrink-0 shadow-sm transition-all focus:ring-1 focus:ring-primary/30 gap-1.5">
-                          <SelectValue placeholder="All Types" />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
-                          <SelectItem value="All" className="text-xs font-semibold rounded-lg cursor-pointer">All Types</SelectItem>
-                          <SelectItem value="Post" className="text-xs font-semibold rounded-lg cursor-pointer">Post</SelectItem>
-                          <SelectItem value="Reel" className="text-xs font-semibold rounded-lg cursor-pointer">Reel</SelectItem>
-                          <SelectItem value="Story" className="text-xs font-semibold rounded-lg cursor-pointer">Story</SelectItem>
-                          <SelectItem value="Carousel" className="text-xs font-semibold rounded-lg cursor-pointer">Carousel</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Select value={calendarStatusFilter} onValueChange={(val) => setCalendarStatusFilter(val)}>
-                        <SelectTrigger className="h-8 w-auto min-w-[110px] max-w-[135px] px-2.5 bg-card/90 hover:bg-card border border-border/60 rounded-xl text-xs font-semibold text-foreground shrink-0 shadow-sm transition-all focus:ring-1 focus:ring-primary/30 gap-1.5">
-                          <SelectValue placeholder="All Statuses" />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
-                          <SelectItem value="All" className="text-xs font-semibold rounded-lg cursor-pointer">All Statuses</SelectItem>
-                          <SelectItem value="To Do" className="text-xs font-semibold rounded-lg cursor-pointer">To Do</SelectItem>
-                          <SelectItem value="In Progress" className="text-xs font-semibold rounded-lg cursor-pointer">In Progress</SelectItem>
-                          <SelectItem value="Pending Approval" className="text-xs font-semibold rounded-lg cursor-pointer">Pending Approval</SelectItem>
-                          <SelectItem value="Approved" className="text-xs font-semibold rounded-lg cursor-pointer">Approved</SelectItem>
-                          <SelectItem value="Published" className="text-xs font-semibold rounded-lg cursor-pointer">Published</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setIsCalendarSettingsOpen(true);
-                        }}
-                        className="h-8 px-2.5 bg-card/90 hover:bg-muted border border-border/60 rounded-xl text-xs font-semibold text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap shadow-sm"
-                        title="Calendar Settings"
-                      >
-                        <Settings2 className="w-3.5 h-3.5 shrink-0" />
-                        <span className="whitespace-nowrap">Settings</span>
-                      </button>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setIsPdfExportModalOpen(true);
-                        }}
-                        className="h-8 px-2.5 bg-card/90 hover:bg-muted border border-border/60 rounded-xl text-xs font-semibold text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap shadow-sm"
-                        title="Export Content Calendar to PDF"
-                      >
-                        <Download className="w-3.5 h-3.5 shrink-0 text-primary" />
-                        <span className="whitespace-nowrap">Export PDF</span>
-                      </button>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const today = new Date().toISOString().split('T')[0] || "";
-                          const future = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] || "";
-                          setBulkStartDate(today);
-                          setBulkEndDate(future);
-                          setBulkSelectedDays([1, 3, 5]); // default Mon, Wed, Fri
-                          setBulkFormatType("Post");
-                          setBulkAddTab('range');
-                          setVisualSelectedDates([]);
-                          setIsBulkAddModalOpen(true);
-                        }}
-                        className="h-8 flex items-center gap-1.5 px-3 border border-border/60 bg-card/90 text-foreground hover:bg-muted/80 font-semibold text-xs rounded-xl transition-all shadow-sm shrink-0 whitespace-nowrap"
-                      >
-                        <Layers className="w-3.5 h-3.5 text-primary shrink-0" />
-                        <span className="whitespace-nowrap">Bulk Add Slots</span>
-                      </button>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingCalendarItem(null);
-                          setCalendarForm({ ...defaultCalendarForm });
-                          setIsAddCalendarItemModalOpen(true);
-                        }}
-                        className="h-8 flex items-center gap-1.5 px-3.5 bg-primary text-primary-foreground font-semibold text-xs rounded-xl hover:bg-primary/90 transition-all shadow-sm shrink-0 whitespace-nowrap active:scale-[0.98]"
-                      >
-                        <Plus className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
-                        <span className="whitespace-nowrap">Add Idea</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {(() => {
-                    const hasApprovalQcAssigned = Boolean(project?.creativeTeam?.["approval_qc"] || project?.creativeTeam?.approval_qc);
-                    return (
-                      <div className="bg-card/40 border border-border/40 rounded-[2rem] shadow-xl overflow-hidden backdrop-blur-md">
-                        {filteredCalendar.length === 0 ? (
-                          <div className="text-center py-16 text-sm text-muted-foreground font-medium">
-                            No calendar items found matching the filters.
-                          </div>
-                        ) : (
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-center border-collapse text-xs">
-                              <thead>
-                                <tr className="border-b border-border/40 text-muted-foreground font-extrabold uppercase tracking-widest bg-muted/30">
-                                  <th className="py-4 px-5 text-center whitespace-nowrap">Schedule</th>
-                                  <th className="py-4 px-5 text-center whitespace-nowrap">Type</th>
-                                  <th className="py-4 px-5 text-center whitespace-nowrap">Topic / Concept</th>
-                                  <th className="py-4 px-5 text-center whitespace-nowrap">Brand Person</th>
-                                  <th className="py-4 px-5 text-center whitespace-nowrap">Script</th>
-                                  <th className="py-4 px-5 text-center whitespace-nowrap">Shoot</th>
-                                  <th className="py-4 px-5 text-center whitespace-nowrap">Editing</th>
-                                  <th className="py-4 px-5 text-center whitespace-nowrap">Thumbnail</th>
-                                  <th className="py-4 px-5 text-center whitespace-nowrap">Caption</th>
-                                  <th className="py-4 px-5 text-center whitespace-nowrap">Instagram Status</th>
-                                  <th className="py-4 px-5 text-center whitespace-nowrap">Issues</th>
-                                  <th className="py-4 px-5 text-center whitespace-nowrap">{hasApprovalQcAssigned ? "Approval & Status" : "Status"}</th>
-                                  <th className="py-4 px-5 text-center whitespace-nowrap">Actions</th>
-                                </tr>
-                              </thead>
-                          <tbody className="divide-y divide-border/20">
-                            {filteredCalendar.map((item) => {
-                              const isExpanded = expandedRowId === item.id;
-
-                              const saveInlineEdit = async (field: string, value: string) => {
-                                const updated = projectCalendar.map((x: any) =>
-                                  x.id === item.id ? { ...x, [field]: value, ...(field === 'postingDate' ? { postingDay: new Date(value).toLocaleDateString("en-US", { weekday: "long" }) } : {}) } : x
-                                );
-                                setProjects(projects.map(p => p.id === project.id ? { ...p, contentCalendar: updated, modules: syncSocialMediaTasksForProject(p, updated) } : p));
-                                setInlineEdit(null);
-
-                                try {
-                                  const updatedItem = updated.find((x: any) => x.id === item.id);
-                                  if (updatedItem && project.id) {
-                                    const payload = mapCalendarItemToBackendPayload(updatedItem, project.id);
-                                    await api.put(`/projects/${project.id}/content/${item.id}`, payload);
-                                  }
-                                } catch (e) {
-                                  console.error("Failed to sync inline edit to backend:", e);
-                                }
-                              };
-
-                              const startEdit = (e: React.MouseEvent, field: string, value: string) => {
-                                e.stopPropagation();
-                                setInlineEdit({ id: item.id, field, value: value || '' });
-                              };
-
-                              const isEd = (field: string) => inlineEdit?.id === item.id && inlineEdit?.field === field;
-
-                              const InlineText = ({ field, value, placeholder, cls }: { field: string; value?: string | undefined; placeholder?: string | undefined; cls?: string | undefined }) =>
-                                isEd(field) ? (
-                                  <input
-                                    autoFocus
-                                    type="text"
-                                    value={inlineEdit!.value}
-                                    onChange={e => setInlineEdit({ ...inlineEdit!, value: e.target.value })}
-                                    onBlur={() => saveInlineEdit(field, inlineEdit!.value)}
-                                    onKeyDown={e => { if (e.key === 'Enter') saveInlineEdit(field, inlineEdit!.value); if (e.key === 'Escape') setInlineEdit(null); }}
-                                    onClick={e => e.stopPropagation()}
-                                    className="w-full px-2 py-1 bg-primary/5 border border-primary/40 rounded-lg text-xs font-bold focus:outline-none focus:ring-1 focus:ring-primary text-center"
-                                  />
-                                ) : (
-                                  <span onClick={e => startEdit(e, field, value || '')} className={cn("cursor-text hover:bg-primary/5 rounded px-1 py-0.5 transition-colors block text-center group/cell", cls)} title="Click to edit">
-                                    {value || <span className="text-muted-foreground/30 italic text-[10px]">{placeholder || 'Click to add'}</span>}
-                                    <span className="ml-1 opacity-0 group-hover/cell:opacity-50 transition-opacity text-[9px]">✏️</span>
-                                  </span>
-                                );
-
-                              const InlineDate = ({ field, value }: { field: string; value?: string | undefined }) =>
-                                isEd(field) ? (
-                                  <div onClick={e => e.stopPropagation()} className="inline-block">
-                                    <DatePicker
-                                      value={inlineEdit!.value}
-                                      onChange={(val) => {
-                                        setInlineEdit({ ...inlineEdit!, value: val });
-                                        saveInlineEdit(field, val);
-                                      }}
-                                      className="w-[125px] h-7 text-xs font-bold bg-primary/5 border border-primary/40"
-                                    />
-                                  </div>
-                                ) : (
-                                  <span onClick={e => startEdit(e, field, value || '')} className="cursor-text hover:bg-primary/5 rounded px-1 py-0.5 transition-colors inline-flex items-center gap-1 group/dc" title="Click to edit date">
-                                    {value ? (<><Calendar className="w-2.5 h-2.5 text-muted-foreground" /><span className="text-[11px] font-extrabold text-foreground">{safeFormat(value, "dd/MM/yyyy")}</span></>) : <span className="text-muted-foreground/30 text-[10px] italic">-</span>}
-                                    <span className="opacity-0 group-hover/dc:opacity-50 transition-opacity text-[9px]">✏️</span>
-                                  </span>
-                                );
-
-                              const InlineLink = ({ field, value, label, cc }: { field: string; value?: string | undefined; label: string; cc: string }) =>
-                                isEd(field) ? (
-                                  <input autoFocus type="text" value={inlineEdit!.value} onChange={e => setInlineEdit({ ...inlineEdit!, value: e.target.value })} onBlur={() => saveInlineEdit(field, inlineEdit!.value)} onKeyDown={e => { if (e.key === 'Enter') saveInlineEdit(field, inlineEdit!.value); if (e.key === 'Escape') setInlineEdit(null); }} onClick={e => e.stopPropagation()} placeholder="Paste URL..." className="w-full max-w-[120px] px-2 py-1 bg-primary/5 border border-primary/40 rounded-lg text-[10px] font-bold focus:outline-none focus:ring-1 focus:ring-primary" />
-                                ) : value ? (
-                                  <div className="flex items-center justify-center gap-0.5 group/lc">
-                                    <a href={value} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className={cn("px-2 py-0.5 font-bold rounded-md text-[10px] flex items-center gap-1 border", cc)}>{label}</a>
-                                    <button
-                                      type="button"
-                                      title="Copy link"
-                                      onClick={e => {
-                                        e.stopPropagation();
-                                        navigator.clipboard.writeText(value);
-                                        toast.success("Link copied!");
-                                      }}
-                                      className="opacity-0 group-hover/lc:opacity-70 hover:opacity-100 p-0.5 hover:text-primary transition-opacity text-[10px]"
-                                    >
-                                      <Copy className="w-2.5 h-2.5" />
-                                    </button>
-                                    <button onClick={e => startEdit(e, field, value)} className="opacity-0 group-hover/lc:opacity-60 text-[9px] hover:opacity-100 transition-opacity ml-0.5">✏️</button>
-                                  </div>
-                                ) : (
-                                  <button onClick={e => startEdit(e, field, '')} className="text-muted-foreground/30 text-[10px] italic hover:text-primary/50 transition-colors">+ {label}</button>
-                                );
-
-                              return (
-                                <tr
-                                  key={item.id}
-                                  onClick={() => {
-                                    // K17: explain mode ma click = highlight, normal ma expand
-                                    if (explainMode) toggleExplain(item.id);
-                                    else setExpandedRowId(isExpanded ? null : item.id);
-                                  }}
-                                  className={cn(
-                                    "hover:bg-muted/20 transition-all group cursor-pointer",
-                                    isExpanded ? "bg-muted/10 align-top" : "h-[80px]",
-                                    explainMode && "hover:bg-violet-500/15 hover:ring-2 hover:ring-inset hover:ring-violet-500/70 hover:shadow-md",
-                                    explainMode && explainedIds.includes(item.id) && "bg-violet-500/15 ring-2 ring-inset ring-violet-500/80"
-                                  )}
-                                >
-
-                                  {/* Schedule */}
-                                  <td className="py-2 px-5 text-center whitespace-nowrap">
-                                    <div className="flex flex-col items-center gap-0.5">
-                                      {isEd('postingDate') ? (
-                                        <div onClick={e => e.stopPropagation()} className="inline-block">
-                                          <DatePicker
-                                            value={inlineEdit!.value}
-                                            onChange={(val) => {
-                                              if (!val || !val.trim()) {
-                                                toast.error("Schedule date is compulsory and cannot be removed.");
-                                                return;
-                                              }
-                                              setInlineEdit({ ...inlineEdit!, value: val });
-                                              saveInlineEdit('postingDate', val);
-                                            }}
-                                            className="w-[130px] h-7 text-xs font-semibold bg-primary/5 border border-primary/40"
-                                          />
-                                        </div>
-                                      ) : (
-                                        <span onClick={e => startEdit(e, 'postingDate', item.postingDate)} className="font-semibold text-foreground block text-sm cursor-text hover:bg-primary/5 rounded px-1 py-0.5 transition-colors group/pd" title="Click to edit">
-                                          {safeFormat(item.postingDate, "dd/MM/yyyy")}
-                                          <span className="ml-1 opacity-0 group-hover/pd:opacity-50 transition-opacity text-[9px]">✏️</span>
-                                        </span>
-                                      )}
-                                      <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider block mt-0.5">
-                                        {item.postingDay || (item.postingDate ? new Date(item.postingDate).toLocaleDateString("en-US", { weekday: "long" }) : "-")}
-                                      </span>
-                                    </div>
-                                  </td>
-
-                                  {/* Type */}
-                                  <td className="py-2 px-5 text-center">
-                                    {isEd('type') ? (
-                                      <select autoFocus value={inlineEdit!.value} onChange={e => saveInlineEdit('type', e.target.value)} onBlur={() => saveInlineEdit('type', inlineEdit!.value)} onKeyDown={e => { if (e.key === 'Escape') setInlineEdit(null); }} onClick={e => e.stopPropagation()} className="px-2 py-1 bg-primary/5 border border-primary/40 rounded-lg text-xs font-bold focus:outline-none focus:ring-1 focus:ring-primary mx-auto block">
-                                        {["Post", "Reel", "Story", "Carousel"].map(o => <option key={o} value={o}>{o}</option>)}
-                                      </select>
-                                    ) : (
-                                      <span onClick={e => startEdit(e, 'type', item.type)} className={cn("mx-auto px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-widest border rounded-full block text-center max-w-[90px] cursor-pointer hover:opacity-80", getCalTypeColor(item.type))} title="Click to change">{item.type}</span>
-                                    )}
-                                  </td>
-
-                                  {/* Topic / Concept */}
-                                  <td className={cn("py-2 px-5 text-center min-w-[200px]", isExpanded ? "max-w-none" : "max-w-[240px]")}>
-                                    <InlineText field="topic" value={item.topic} placeholder="Enter topic..." cls={cn("font-medium text-foreground leading-normal", isExpanded ? "" : "line-clamp-1")} />
-                                    <InlineText field="concept" value={item.concept} placeholder="+ concept" cls={cn("text-muted-foreground mt-0.5 leading-normal text-[11px]", isExpanded ? "" : "line-clamp-1")} />
-                                    {isEd('reference') ? (
-                                      <input
-                                        autoFocus
-                                        type="text"
-                                        value={inlineEdit!.value}
-                                        onChange={e => setInlineEdit({ ...inlineEdit!, value: e.target.value })}
-                                        onBlur={() => saveInlineEdit('reference', inlineEdit!.value)}
-                                        onKeyDown={e => { if (e.key === 'Enter') saveInlineEdit('reference', inlineEdit!.value); if (e.key === 'Escape') setInlineEdit(null); }}
-                                        onClick={e => e.stopPropagation()}
-                                        placeholder="Paste reference link..."
-                                        className="w-full max-w-[180px] px-2 py-1 bg-primary/5 border border-primary/40 rounded-lg text-[10px] font-bold focus:outline-none focus:ring-1 focus:ring-primary mx-auto block text-center"
-                                      />
-                                    ) : item.reference ? (
-                                      <div className="flex items-center justify-center gap-1 group/ref">
-                                        <a 
-                                          href={item.reference} 
-                                          target="_blank" 
-                                          rel="noopener noreferrer" 
-                                          onClick={e => e.stopPropagation()} 
-                                          className={cn("text-primary/70 hover:underline block mt-0.5 text-[10px]", isExpanded ? "whitespace-pre-wrap break-all" : "truncate max-w-[150px]")}
-                                          title={item.reference}
-                                        >
-                                          Ref: {item.reference}
-                                        </a>
-                                        <button 
-                                          onClick={e => startEdit(e, 'reference', item.reference || '')} 
-                                          className="opacity-0 group-hover/ref:opacity-60 text-[9px] hover:opacity-100 transition-opacity"
-                                          title="Edit reference link"
-                                        >
-                                          ✏️
-                                        </button>
-                                      </div>
-                                    ) : (
-                                      <span 
-                                        onClick={e => startEdit(e, 'reference', '')} 
-                                        className="cursor-text hover:bg-primary/5 rounded px-1 py-0.5 transition-colors block text-center text-muted-foreground/30 text-[10px] italic"
-                                        title="Click to add reference link"
-                                      >
-                                        + ref link
-                                      </span>
-                                    )}
-                                  </td>
-
-                                  {/* Brand Person */}
-                                  <td className="py-2 px-5 text-center whitespace-nowrap">
-                                    <InlineText field="_assignedTo" value={item.brand_person_details?.employee_name || (item.assignedTo || []).join(", ")} placeholder="Unassigned" cls="text-foreground font-medium text-[13px]" />
-                                  </td>
-
-                                  {/* Script */}
-                                  <td className="py-2 px-5 text-center whitespace-nowrap">
-                                    <div className="flex flex-col items-center gap-1">
-                                      <InlineDate field="scriptDate" value={item.scriptDate} />
-                                      <InlineLink field="scriptLink" value={item.scriptLink} label="📄 Script" cc="bg-primary/10 hover:bg-primary/20 text-primary border-primary/20" />
-                                    </div>
-                                  </td>
-
-                                  {/* Shoot */}
-                                  <td className="py-2 px-5 text-center whitespace-nowrap">
-                                    <div className="flex flex-col items-center gap-1">
-                                      <InlineDate field="shootDate" value={item.shootDate} />
-                                      <InlineLink field="shootLink" value={item.shootLink} label="🎬 Assets" cc="bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 border-amber-500/20" />
-                                    </div>
-                                  </td>
-
-                                  {/* Editing */}
-                                  <td className="py-2 px-5 text-center whitespace-nowrap">
-                                    <div className="flex flex-col items-center gap-1">
-                                      <InlineDate field="editingStart" value={item.editingStart} />
-                                      <div className="flex gap-1 justify-center">
-                                        {item.type === "Reel" ? (
-                                          <InlineLink field="finalReelLink" value={item.finalReelLink} label="🎥 Reel" cc="bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 border-violet-500/20" />
-                                        ) : item.type === "Post" || item.type === "Carousel" ? (
-                                          <InlineLink field="finalPostLink" value={item.finalPostLink} label="📸 Post" cc="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 border-emerald-500/20" />
-                                        ) : (
-                                          <>
-                                            <InlineLink field="finalReelLink" value={item.finalReelLink} label="🎥 Reel" cc="bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 border-violet-500/20" />
-                                            <InlineLink field="finalPostLink" value={item.finalPostLink} label="📸 Post" cc="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 border-emerald-500/20" />
-                                          </>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </td>
-
-                                  {/* Thumbnail */}
-                                  <td className="py-2 px-5 text-center whitespace-nowrap">
-                                    <div className="flex flex-col items-center gap-1">
-                                      <InlineDate field="thumbnailDate" value={item.thumbnailDate} />
-                                      <InlineLink field="thumbnailLink" value={item.thumbnailLink} label="🖼️ Design" cc="bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 border-blue-500/20" />
-                                    </div>
-                                  </td>
-
-                                  {/* Caption */}
-                                  <td className={cn("py-2 px-5 text-center", isExpanded ? "min-w-[200px]" : "min-w-[150px] max-w-[200px]")}>
-                                    <div className="flex flex-col items-center gap-1">
-                                      <InlineDate field="captionDate" value={item.captionDate} />
-                                      <InlineText field="caption" value={item.caption} placeholder="+ caption" cls={cn("text-muted-foreground text-[11px] leading-normal", isExpanded ? "whitespace-pre-wrap" : "line-clamp-1")} />
-                                    </div>
-                                  </td>
-
-                                  {/* Instagram Status */}
-                                  <td className="py-2 px-5 text-center whitespace-nowrap">
-                                    <div className="flex flex-col items-center gap-1">
-                                      <InlineDate field="actualPostingDate" value={item.actualPostingDate} />
-                                      <InlineLink field="postingLinkOfIg" value={item.postingLinkOfIg} label="🔗 IG Post" cc="bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 border-rose-500/20" />
-                                    </div>
-                                  </td>
-
-                                  {/* Issues */}
-                                  <td className="py-2 px-5 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                                    <CalendarIssuesCell
-                                      item={item}
-                                      projectCalendar={projectCalendar}
-                                      project={project}
-                                      projects={projects}
-                                      setProjects={setProjects}
-                                      onLogActivity={(act, det) => logProjectActivity(project.id, act, det)}
-                                    />
-                                  </td>
-
-                                  {/* Approval & Status */}
-                                  <td className="py-2 px-5 text-center whitespace-nowrap">
-                                    {hasApprovalQcAssigned && (
-                                      <InlineText field="approval" value={item.approved_by_details?.employee_name || item.approval} placeholder="+ feedback" cls="text-[11px] text-foreground font-semibold mb-1" />
-                                    )}
-                                    {isEd('status') ? (
-                                      <select autoFocus value={inlineEdit!.value} onChange={e => saveInlineEdit('status', e.target.value)} onBlur={() => saveInlineEdit('status', inlineEdit!.value)} onKeyDown={e => { if (e.key === 'Escape') setInlineEdit(null); }} onClick={e => e.stopPropagation()} className="px-2 py-1 bg-primary/5 border border-primary/40 rounded-lg text-xs font-bold focus:outline-none mx-auto block">
-                                        {["To Do", "In Progress", "Pending Approval", "Approved", "Published"].map(o => <option key={o} value={o}>{o}</option>)}
-                                      </select>
-                                    ) : (
-                                      <div className="flex flex-col items-center gap-1">
-                                        <span onClick={e => startEdit(e, 'status', item.status)} className={cn("mx-auto px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider block text-center max-w-[110px] cursor-pointer hover:opacity-80", getCalStatusColor(item.status))} title="Click to change status">{item.status}</span>
-                                        {(() => {
-                                          const todayStr = new Date().toISOString().split('T')[0] || '';
-                                          const isOverdue = Boolean(item.postingDate && todayStr && item.postingDate < todayStr && item.status !== 'Published' && item.status !== 'Approved');
-                                          if (isOverdue) {
-                                            return (
-                                              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-rose-500/15 text-rose-600 border border-rose-500/30 flex items-center gap-0.5 animate-pulse">
-                                                ⚠️ Overdue
-                                              </span>
-                                            );
-                                          }
-                                          return null;
-                                        })()}
-                                      </div>
-                                    )}
-                                  </td>
-
-                                  {/* Actions */}
-                                  <td className="py-2 px-5 text-center whitespace-nowrap">
-                                    <div className="flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                      <button onClick={(e) => { e.stopPropagation(); setEditingCalendarItem(item); setCalendarForm({ ...item }); setIsAddCalendarItemModalOpen(true); }} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors border border-border/30 shadow-sm bg-card" title="Full edit">
-                                        <Edit2 className="w-3.5 h-3.5" />
-                                      </button>
-                                      <button 
-                                        onClick={(e) => { 
-                                          e.stopPropagation(); 
-                                          setConfirmModalState({
-                                            isOpen: true,
-                                            title: "Delete Content Idea",
-                                            description: "Are you sure you want to delete this content idea? This action cannot be undone.",
-                                            itemName: item.topic || "Untitled Idea",
-                                            action: async () => {
-                                              try {
-                                                if (project.id && item.id) {
-                                                  await api.delete(`/projects/${project.id}/content/${item.id}`);
-                                                }
-                                                const updated = projectCalendar.filter((x: any) => x.id !== item.id);
-                                                setProjects(projects.map(p => p.id === project.id ? { ...p, contentCalendar: updated, modules: syncSocialMediaTasksForProject(p, updated) } : p));
-                                                toast.success("Content idea deleted successfully");
-                                              } catch (err: any) {
-                                                toast.error(err.message || "Failed to delete content idea");
-                                              } finally {
-                                                setConfirmModalState(prev => ({ ...prev, isOpen: false }));
-                                              }
-                                            }
-                                          });
-                                        }} 
-                                        className="p-1.5 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors border border-border/30 shadow-sm bg-card"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                    </div>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-                  </>
-                  )}
-                </div>
-              );
-            })() : isMarketingCategory(project.category) ? (() => {
-              const dailyStatsList = project.dailyStats || [];
-              
-              // Filter by campaign
-              const campaignFiltered = dailyStatsList.filter((s: any) => {
-                if (selectedCampaignForStats === "All Campaigns") return true;
-                const cleanSelected = selectedCampaignForStats.replace(" (Inactive)", "");
-                return s.campaignName === cleanSelected;
-              });
-
-              // Filter by date range
-              const dateFiltered = campaignFiltered.filter((s: any) => {
-                if (!customDateRange?.from) return true;
-                const statDate = new Date(s.date);
-                const fromDate = new Date(customDateRange.from);
-                const toDate = customDateRange.to ? new Date(customDateRange.to) : fromDate;
-                
-                statDate.setHours(0,0,0,0);
-                fromDate.setHours(0,0,0,0);
-                toDate.setHours(0,0,0,0);
-                
-                return statDate >= fromDate && statDate <= toDate;
-              });
-
-              const totalReach = dateFiltered.reduce((sum: number, s: any) => sum + Number(s.reach || 0), 0);
-              const totalLeads = dateFiltered.reduce((sum: number, s: any) => sum + Number(s.leads || 0), 0);
-              const totalSpent = dateFiltered.reduce((sum: number, s: any) => sum + Number(s.spend || 0), 0);
-              const computedCPL = totalLeads > 0 ? Math.round(totalSpent / totalLeads) : 0;
-
-              let reach = totalReach > 0 ? (totalReach >= 1000000 ? `${(totalReach / 1000000).toFixed(1)}M` : `${Math.round(totalReach / 1000)}K`) : "0";
-              let leads = totalLeads.toLocaleString("en-IN");
-              let cpl = computedCPL.toString();
-              let amountSpent = totalSpent.toLocaleString("en-IN");
-
-              let reachTrend = "+0.0%", leadsTrend = "+0.0%", cplTrend = "+0.0%", amountSpentTrend = "+0.0%";
-
-              // F1+F2: backend summary hoy to real KPIs + growth (filter-wired, live)
-              const fmtGrowth = (g: any) => {
-                if (typeof g !== "number" || isNaN(g)) return "+0.0%";
-                return `${g >= 0 ? "+" : ""}${g}%`;
-              };
-              const sk = dmSummary?.kpis;
-              if (sk) {
-                const rv = Number(sk.reach?.value);
-                if (!isNaN(rv)) reach = rv >= 1000000 ? `${(rv / 1000000).toFixed(1)}M` : rv >= 1000 ? `${Math.round(rv / 1000)}K` : `${Math.round(rv)}`;
-                const lv = Number(sk.leads?.value);
-                if (!isNaN(lv)) leads = Math.round(lv).toLocaleString("en-IN");
-                const cv = Number(sk.cost_per_lead?.value);
-                if (!isNaN(cv)) cpl = `${Math.round(cv)}`;
-                const sv = Number(sk.amount_spent?.value);
-                if (!isNaN(sv)) amountSpent = Math.round(sv).toLocaleString("en-IN");
-                reachTrend = fmtGrowth(sk.reach?.growth_pct);
-                leadsTrend = fmtGrowth(sk.leads?.growth_pct);
-                cplTrend = fmtGrowth(sk.cost_per_lead?.growth_pct);
-                amountSpentTrend = fmtGrowth(sk.amount_spent?.growth_pct);
-              }
-
-              return (
-                <div className="lg:col-span-3 space-y-6">
-                  {/* K4: Digital Marketing dept dropdown header — click = auto DM stats + collapse */}
-                  <button
-                    type="button"
-                    id="dept-section-dm"
-                    onClick={() => {
-                      setOpenDept(prev => ({ ...prev, dm: !(prev["dm"] !== false) }));
-                      setDmWorkspaceView("stats");
-                    }}
-                    className="flex items-center justify-between w-full p-3.5 bg-card/90 border border-border/60 rounded-2xl shadow-sm hover:bg-muted/40 transition-colors"
-                  >
-                    <span className="flex items-center gap-2 text-sm font-black text-foreground">
-                      <span>📈</span> Digital Marketing
-                      <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-black">{dailyStatsList.length} logs</span>
-                    </span>
-                    <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", openDept["dm"] !== false && "rotate-180")} />
-                  </button>
-                  {(openDept["dm"] !== false) && (
-                  <>
-                  {/* Digital Marketing View Switcher */}
-                  <div className="flex flex-wrap items-center justify-between p-2.5 bg-card/90 border border-border/60 rounded-2xl shadow-sm backdrop-blur-md gap-3">
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setDmWorkspaceView("social")}
-                        className={cn(
-                          "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all",
-                          dmWorkspaceView === "social"
-                            ? "bg-primary text-primary-foreground shadow-sm"
-                            : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                        )}
-                      >
-                        <span>📱 Social Media & Content Calendar</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDmWorkspaceView("stats")}
-                        className={cn(
-                          "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all",
-                          dmWorkspaceView === "stats"
-                            ? "bg-primary text-primary-foreground shadow-sm"
-                            : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                        )}
-                      >
-                        <span>📈 Paid Campaigns & Daily Stats</span>
-                      </button>
-                    </div>
-                    <span className="text-[11px] font-bold text-muted-foreground px-2">
-                      Showing Ad Performance & Leads
-                    </span>
-                  </div>
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div>
-                      <h2 className="text-xl font-bold tracking-tight flex items-center gap-2">
-                        <Target className="w-5 h-5 text-primary" />
-                        Campaign Performance
-                      </h2>
-                      <p className="text-xs text-muted-foreground mt-0.5 font-medium">Reach, leads, and conversion analytics</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setIsLogDailyStatsOpen(true)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground font-bold text-xs rounded-lg hover:bg-primary/90 transition-all shadow-sm whitespace-nowrap"
-                      >
-                        <Plus className="w-3.5 h-3.5" /> Log Stats
-                      </button>
-                      {/* F3: revenue icon → popup (page nai) */}
-                      <button
-                        onClick={() => { setRevenueForm({ date: "", revenue: "", editId: "" }); setIsRevenueOpen(true); }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white font-bold text-xs rounded-lg hover:bg-emerald-700 transition-all shadow-sm whitespace-nowrap"
-                        title="Revenue log (popup)"
-                      >
-                        <IndianRupee className="w-3.5 h-3.5" /> Revenue
-                      </button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button className="flex items-center gap-2 px-3 py-1.5 bg-card border border-border/60 text-foreground font-bold text-xs rounded-lg hover:bg-muted/80 transition-all shadow-sm">
-                            <Filter className="w-3 h-3 text-muted-foreground" />
-                            {selectedCampaignForStats}
-                            <ChevronDown className="w-3 h-3 text-muted-foreground ml-1" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48 rounded-xl p-1.5 border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-50">
-                          {(() => {
-                            const campaignList = (project.campaigns && project.campaigns.length > 0)
-                              ? project.campaigns.map(c => {
-                                  const name = typeof c === 'string' ? c : (c.name || "");
-                                  const status = typeof c === 'string' ? 'Active' : (c.status || 'Active');
-                                  return status === 'Inactive' ? `${name} (Inactive)` : name;
-                                })
-                              : ["Q4 Retargeting Ads", "Holiday Social Push", "B2B Email Drip"];
-                            return ["All Campaigns", ...campaignList];
-                          })().map(opt => (
-                            <DropdownMenuItem 
-                              key={opt}
-                              onSelect={() => setSelectedCampaignForStats(opt)}
-                              className={cn(
-                                "rounded-lg cursor-pointer py-2 focus:bg-primary/10 focus:text-primary font-medium text-xs transition-colors flex items-center justify-between",
-                                selectedCampaignForStats === opt && "bg-primary/10 text-primary font-bold"
-                              )}
-                            >
-                              {opt}
-                              {selectedCampaignForStats === opt && <CheckCircle2 className="w-3 h-3" />}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <button className="flex items-center gap-2 px-3 py-1.5 bg-card border border-border/60 text-foreground font-bold text-xs rounded-lg hover:bg-muted/80 transition-all shadow-sm whitespace-nowrap">
-                            <Calendar className="w-3 h-3 text-muted-foreground" />
-                            {campaignDateRange === "Custom" && customDateRange?.from ? (
-                              customDateRange.to ? (
-                                <>
-                                  {format(customDateRange.from, "dd/MM/yyyy")} -{" "}
-                                  {format(customDateRange.to, "dd/MM/yyyy")}
-                                </>
-                              ) : (
-                                format(customDateRange.from, "dd/MM/yyyy")
-                              )
-                            ) : (
-                              campaignDateRange
-                            )}
-                            <ChevronDown className="w-3 h-3 text-muted-foreground ml-1" />
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="end">
-                          <div className="flex flex-col sm:flex-row">
-                            <div className="flex flex-col gap-1 p-3 border-b sm:border-b-0 sm:border-r border-border/50 bg-muted/20 w-full sm:w-40">
-                              {["Today", "Yesterday", "Last 7 Days", "Last 30 Days", "This Month", "Year to Date", "Custom"].map(opt => (
+                      {(openDept["smm"] !== false) && (
+                        <>
+                          {/* Digital Marketing View Switcher */}
+                          {isMarketingCategory(project.category) && (
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-card/90 border border-border/60 rounded-2xl shadow-sm backdrop-blur-md gap-3">
+                              <div className="flex flex-wrap items-center gap-2">
                                 <button
-                                  key={opt}
-                                  onClick={() => {
-                                     setCampaignDateRange(opt);
-                                     if (opt === "Today") setCustomDateRange({ from: new Date(), to: new Date() });
-                                     else if (opt === "Yesterday") setCustomDateRange({ from: subDays(new Date(), 1), to: subDays(new Date(), 1) });
-                                     else if (opt === "Last 7 Days") setCustomDateRange({ from: subDays(new Date(), 7), to: new Date() });
-                                     else if (opt === "Last 30 Days") setCustomDateRange({ from: subDays(new Date(), 30), to: new Date() });
-                                     else if (opt === "This Month") {
-                                       const today = new Date();
-                                       setCustomDateRange({ from: new Date(today.getFullYear(), today.getMonth(), 1), to: today });
-                                     }
-                                     else if (opt === "Year to Date") setCustomDateRange({ from: startOfYear(new Date()), to: new Date() });
-                                  }}
+                                  type="button"
+                                  onClick={() => setDmWorkspaceView("social")}
                                   className={cn(
-                                    "text-left px-3 py-2 text-xs font-bold rounded-lg transition-colors",
-                                    campaignDateRange === opt ? "bg-primary text-primary-foreground shadow-sm" : "hover:bg-muted/60 text-foreground"
+                                    "flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 whitespace-nowrap",
+                                    dmWorkspaceView === "social"
+                                      ? "bg-primary text-primary-foreground shadow-sm"
+                                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
                                   )}
                                 >
-                                  {opt}
+                                  <span>📱 Social Media & Content Calendar</span>
                                 </button>
-                              ))}
+                                <button
+                                  type="button"
+                                  onClick={() => setDmWorkspaceView("stats")}
+                                  className={cn(
+                                    "flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 whitespace-nowrap",
+                                    dmWorkspaceView === "stats"
+                                      ? "bg-primary text-primary-foreground shadow-sm"
+                                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                  )}
+                                >
+                                  <span>📈 Paid Campaigns & Daily Stats</span>
+                                </button>
+                              </div>
+                              <span className="text-[11px] font-bold text-muted-foreground px-2 whitespace-nowrap">
+                                Showing Content Calendar & Social Media
+                              </span>
                             </div>
-                            <div className="p-3">
-                              <CalendarUI
-                                initialFocus
-                                mode="range"
-                                defaultMonth={customDateRange?.from || new Date()}
-                                selected={customDateRange}
-                                onSelect={(range) => {
-                                   setCustomDateRange(range);
-                                   setCampaignDateRange("Custom");
-                                }}
-                                numberOfMonths={2}
-                                className="rounded-md p-0"
-                              />
+                          )}
+
+                          {/* Feature 4: Monthly Target vs Completed Content Delivery Scorecard */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 p-4 sm:p-5 bg-card/80 border border-border/60 rounded-2xl sm:rounded-3xl shadow-sm backdrop-blur-md">
+                            {/* Posts Progress */}
+                            <div className="space-y-2.5 p-4 bg-blue-500/5 rounded-2xl border border-blue-500/15">
+                              <div className="flex justify-between items-center text-xs">
+                                <span className="font-extrabold text-blue-700 flex items-center gap-1.5">
+                                  🖼️ Posts Delivery
+                                </span>
+                                <span className="font-black text-blue-900 font-mono text-base">
+                                  {currentMonthStats.completedPosts} / {currentMonthStats.targetPosts}
+                                </span>
+                              </div>
+                              <div className="h-2.5 w-full bg-blue-500/15 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-blue-600 rounded-full transition-all duration-500"
+                                  style={{ width: `${Math.min(100, Math.round((currentMonthStats.completedPosts / Math.max(1, currentMonthStats.targetPosts)) * 100))}%` }}
+                                />
+                              </div>
+                              <div className="flex justify-between items-center text-[10px] text-muted-foreground font-bold">
+                                <span>{Math.round((currentMonthStats.completedPosts / Math.max(1, currentMonthStats.targetPosts)) * 100)}% Completed</span>
+                                <span className={cn("px-2 py-0.5 rounded-full text-[9px]", currentMonthStats.completedPosts >= currentMonthStats.targetPosts ? "bg-emerald-500/10 text-emerald-600 font-black" : "bg-blue-500/10 text-blue-600")}>
+                                  {currentMonthStats.completedPosts >= currentMonthStats.targetPosts ? "Goal Met ✅" : `${currentMonthStats.targetPosts - currentMonthStats.completedPosts} Posts Left`}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Reels Progress */}
+                            <div className="space-y-2.5 p-4 bg-purple-500/5 rounded-2xl border border-purple-500/15">
+                              <div className="flex justify-between items-center text-xs">
+                                <span className="font-extrabold text-purple-700 flex items-center gap-1.5">
+                                  🎥 Reels Delivery
+                                </span>
+                                <span className="font-black text-purple-900 font-mono text-base">
+                                  {currentMonthStats.completedReels} / {currentMonthStats.targetReels}
+                                </span>
+                              </div>
+                              <div className="h-2.5 w-full bg-purple-500/15 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-purple-600 rounded-full transition-all duration-500"
+                                  style={{ width: `${Math.min(100, Math.round((currentMonthStats.completedReels / Math.max(1, currentMonthStats.targetReels)) * 100))}%` }}
+                                />
+                              </div>
+                              <div className="flex justify-between items-center text-[10px] text-muted-foreground font-bold">
+                                <span>{Math.round((currentMonthStats.completedReels / Math.max(1, currentMonthStats.targetReels)) * 100)}% Completed</span>
+                                <span className={cn("px-2 py-0.5 rounded-full text-[9px]", currentMonthStats.completedReels >= currentMonthStats.targetReels ? "bg-emerald-500/10 text-emerald-600 font-black" : "bg-purple-500/10 text-purple-600")}>
+                                  {currentMonthStats.completedReels >= currentMonthStats.targetReels ? "Goal Met ✅" : `${currentMonthStats.targetReels - currentMonthStats.completedReels} Reels Left`}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Total Summary & Edit Target */}
+                            <div className="flex flex-col justify-between p-4 bg-muted/30 rounded-2xl border border-border/50">
+                              <div className="flex justify-between items-center">
+                                <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Monthly Delivery</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setTargetsForm({ post: project.post || 8, reel: project.reel || 8 });
+                                    setIsEditTargetsModalOpen(true);
+                                  }}
+                                  className="text-[10px] font-bold text-primary hover:underline flex items-center gap-1 bg-primary/10 px-2.5 py-1 rounded-lg transition-colors"
+                                >
+                                  <Settings2 className="w-3 h-3" /> Edit Targets
+                                </button>
+                              </div>
+                              <div className="flex items-baseline gap-2 my-1">
+                                <span className="text-3xl font-black text-foreground font-mono">
+                                  {currentMonthStats.totalCompleted} / {currentMonthStats.totalTarget}
+                                </span>
+                                <span className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Deliverables</span>
+                              </div>
+                              <div className="flex items-center justify-between text-[11px] pt-1 border-t border-border/40 gap-1.5">
+                                <span className="text-muted-foreground font-medium">Tracking Period:</span>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const monthsList = [
+                                        "All",
+                                        "Current",
+                                        ...getProjectMonths(project.startDate, project.endDate).months.map(m => m.value)
+                                      ];
+                                      const currentIndex = monthsList.indexOf(calendarMonthFilter);
+                                      if (currentIndex > 0) {
+                                        const prevM = monthsList[currentIndex - 1];
+                                        if (prevM) setCalendarMonthFilter(prevM);
+                                      } else if (currentIndex === -1 && monthsList.length > 2) {
+                                        const curM = monthsList[1];
+                                        if (curM) setCalendarMonthFilter(curM);
+                                      }
+                                    }}
+                                    title="Previous Month (Arrow navigation)"
+                                    className="p-1 rounded-lg bg-background border border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                                  >
+                                    <ChevronLeft className="w-3.5 h-3.5" />
+                                  </button>
+                                  <Select value={calendarMonthFilter} onValueChange={(val) => setCalendarMonthFilter(val)}>
+                                    <SelectTrigger className="h-7 px-2 text-[11px] font-bold bg-background border-border/60 rounded-lg min-w-[110px]">
+                                      <SelectValue placeholder="Period" />
+                                    </SelectTrigger>
+                                    <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                                      <SelectItem value="Current" className="text-xs font-semibold">Current Month</SelectItem>
+                                      <SelectItem value="All" className="text-xs font-semibold">All Items</SelectItem>
+                                      {getProjectMonths(project.startDate, project.endDate).months.map(m => (
+                                        <SelectItem key={m.value} value={m.value} className="text-xs font-semibold">{m.label}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const monthsList = [
+                                        "All",
+                                        "Current",
+                                        ...getProjectMonths(project.startDate, project.endDate).months.map(m => m.value)
+                                      ];
+                                      const currentIndex = monthsList.indexOf(calendarMonthFilter);
+                                      if (currentIndex >= 0 && currentIndex < monthsList.length - 1) {
+                                        const nextM = monthsList[currentIndex + 1];
+                                        if (nextM) setCalendarMonthFilter(nextM);
+                                      } else if (currentIndex === -1 && monthsList.length > 2) {
+                                        const defaultM = monthsList[2];
+                                        if (defaultM) setCalendarMonthFilter(defaultM);
+                                      }
+                                    }}
+                                    title="Next Month (Arrow navigation)"
+                                    className="p-1 rounded-lg bg-background border border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                                  >
+                                    <ChevronRight className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
                             </div>
                           </div>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                  </div>
 
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-in fade-in zoom-in-95 duration-300" key={`${selectedCampaignForStats}-${campaignDateRange}`}>
-                    <div className="bg-card border border-border/60 rounded-3xl p-5 shadow-sm relative overflow-hidden group hover:border-primary/30 transition-colors">
-                      <div className="absolute -right-4 -top-4 w-16 h-16 bg-blue-500/10 rounded-full blur-xl group-hover:bg-blue-500/20 transition-colors"></div>
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-8 h-8 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500">
-                          <Users className="w-4 h-4" />
-                        </div>
-                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Reach</span>
-                      </div>
-                      <h4 className="text-2xl font-black text-foreground font-mono">{reach}</h4>
-                      <p className="text-xs font-bold text-emerald-500 flex items-center gap-1 mt-1">
-                        <TrendingUp className="w-3 h-3" /> {reachTrend}
-                      </p>
-                    </div>
-
-                    <div className="bg-card border border-border/60 rounded-3xl p-5 shadow-sm relative overflow-hidden group hover:border-primary/30 transition-colors">
-                      <div className="absolute -right-4 -top-4 w-16 h-16 bg-purple-500/10 rounded-full blur-xl group-hover:bg-purple-500/20 transition-colors"></div>
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-8 h-8 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-500">
-                          <Target className="w-4 h-4" />
-                        </div>
-                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Leads</span>
-                      </div>
-                      <h4 className="text-2xl font-black text-foreground font-mono">{leads}</h4>
-                      <p className="text-xs font-bold text-emerald-500 flex items-center gap-1 mt-1">
-                        <TrendingUp className="w-3 h-3" /> {leadsTrend}
-                      </p>
-                    </div>
-
-                    <div className="bg-card border border-border/60 rounded-3xl p-5 shadow-sm relative overflow-hidden group hover:border-primary/30 transition-colors">
-                      <div className="absolute -right-4 -top-4 w-16 h-16 bg-emerald-500/10 rounded-full blur-xl group-hover:bg-emerald-500/20 transition-colors"></div>
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
-                          <TrendingUp className="w-4 h-4" />
-                        </div>
-                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Cost Per Lead</span>
-                      </div>
-                      <h4 className="text-2xl font-black text-foreground font-mono">₹{cpl}</h4>
-                      <p className="text-xs font-bold text-emerald-500 flex items-center gap-1 mt-1 font-mono">
-                        {cplTrend}
-                      </p>
-                    </div>
-
-                    <div className="bg-card border border-border/60 rounded-3xl p-5 shadow-sm relative overflow-hidden group hover:border-primary/30 transition-colors">
-                      <div className="absolute -right-4 -top-4 w-16 h-16 bg-amber-500/10 rounded-full blur-xl group-hover:bg-amber-500/20 transition-colors"></div>
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-8 h-8 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500">
-                          <IndianRupee className="w-4 h-4" />
-                        </div>
-                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Amount Spent</span>
-                      </div>
-                      <h4 className="text-2xl font-black text-foreground font-mono">₹{amountSpent}</h4>
-                      <p className="text-xs font-bold text-emerald-500 flex items-center gap-1 mt-1">
-                        <TrendingUp className="w-3 h-3" /> {amountSpentTrend}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* K7: Daily Data Entry Tasks card removed (no tasks in DM) */}
-                  <div className="grid grid-cols-1 gap-6">
-                    {/* Top Performing Campaigns (F6: backend auto) */}
-                    <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm">
-                      <div className="flex items-center justify-between mb-6">
-                        <h3 className="text-sm font-bold text-foreground">Top Performing Campaigns</h3>
-                        <span className="text-[10px] font-bold text-muted-foreground uppercase">Auto • by leads</span>
-                      </div>
-                      <div className="space-y-4">
-                        {topCampaigns.length === 0 && (
-                          <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">No campaign data yet.</p>
-                        )}
-                        {(() => {
-                          const maxLeads = Math.max(1, ...topCampaigns.map(c => Number(c.leads) || 0));
-                          return topCampaigns.slice(0, 5).map((camp: any, i: number) => {
-                            const leads = Number(camp.leads) || 0;
-                            const spend = Number(camp.spend) || 0;
-                            const pct = Math.round((leads / maxLeads) * 100);
+                          {/* K17: timeline completion — final-link rule (posting date sudhi final link = done) */}
+                          {(() => {
+                            const todayStr = new Date().toISOString().split("T")[0] ?? "";
+                            const due = filteredCalendar.filter(i => i.postingDate && i.postingDate <= todayStr);
+                            const done = due.filter(i => (i.finalPostLink || i.finalReelLink || i.postingLinkOfIg || "").trim() !== "");
+                            const pct = due.length > 0 ? Math.round((done.length / due.length) * 100) : 0;
                             return (
-                              <div key={camp.campaign_name || i} className="flex items-center gap-4">
-                                <div className="flex-1">
-                                  <div className="flex justify-between items-center mb-1 gap-2">
-                                    <span className="text-sm font-bold text-foreground truncate">{camp.campaign_name}</span>
-                                    <span className="text-xs font-bold text-muted-foreground font-mono whitespace-nowrap">
-                                      {leads.toLocaleString()} leads • ₹{spend.toLocaleString("en-IN")}
-                                      {Number(camp.revenue) > 0 && (
-                                        <span className="text-emerald-600"> • ₹{Number(camp.revenue).toLocaleString("en-IN")}</span>
-                                      )}
+                              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 px-4 py-3 bg-card/80 border border-border/60 rounded-2xl shadow-sm">
+                                <div className="flex items-baseline gap-2 shrink-0">
+                                  <span className="text-2xl font-black text-foreground font-mono">{done.length}/{due.length}</span>
+                                  <span className="text-[11px] text-muted-foreground font-bold uppercase tracking-wider">done</span>
+                                </div>
+                                <div className="flex-1 h-2 bg-muted/60 rounded-full overflow-hidden min-w-[120px]">
+                                  <div className={cn("h-full rounded-full transition-all duration-500", pct === 100 ? "bg-emerald-500" : "bg-primary")} style={{ width: `${pct}%` }} />
+                                </div>
+                                <span className="text-[11px] font-bold text-muted-foreground shrink-0">{pct}% • Final link rule</span>
+                              </div>
+                            );
+                          })()}
+                          {/* K18: CC status inline (month approval + overlap months + update) */}
+                          {(() => {
+                            const now = new Date();
+                            const ck = /^\d{4}-\d{2}$/.test(calendarMonthFilter)
+                              ? calendarMonthFilter
+                              : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+                            const [yy, mm] = ck.split("-").map(Number);
+                            const ap = ccApprovals[ck];
+                            const chipCls =
+                              ap?.status === "Approved by Client"
+                                ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
+                                : ap?.status === "Rejected"
+                                  ? "bg-rose-500/10 text-rose-500 border-rose-500/30"
+                                  : ap?.status === "Changes Requested"
+                                    ? "bg-amber-500/10 text-amber-600 border-amber-500/30"
+                                    : "bg-muted text-muted-foreground border-border/50";
+                            // overlap months (range ma avta months — Sept approved + new pending banne dekhay)
+                            const f = customDateRange?.from ? new Date(customDateRange.from) : null;
+                            const t = customDateRange?.to ? new Date(customDateRange.to) : null;
+                            const overlapKeys: string[] = [];
+                            if (f && t && !isNaN(f.getTime()) && !isNaN(t.getTime())) {
+                              const cur = new Date(f.getFullYear(), f.getMonth(), 1);
+                              const last = new Date(t.getFullYear(), t.getMonth(), 1);
+                              let g = 0;
+                              while (cur <= last && g < 13) {
+                                const k = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}`;
+                                if (!overlapKeys.includes(k)) overlapKeys.push(k);
+                                cur.setMonth(cur.getMonth() + 1);
+                                g++;
+                              }
+                            }
+                            return (
+                              <div className="flex flex-col gap-2 px-4 py-3 bg-card/80 border border-border/60 rounded-2xl shadow-sm">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-[11px] font-black text-muted-foreground uppercase tracking-widest">CC Status:</span>
+                                  <span className={cn("px-2.5 py-1 rounded-full text-[11px] font-black border", chipCls)}>
+                                    {ck} • {ap?.status || "Pending"}
+                                  </span>
+                                  {overlapKeys.filter(k => k !== ck).map(k => (
+                                    <span key={k} className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-muted text-muted-foreground border border-border/40">
+                                      {k} • {ccApprovals[k]?.status || "—"}
                                     </span>
-                                  </div>
-                                  <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                                    <div className={cn("h-full rounded-full transition-all duration-1000", i === 0 ? "bg-emerald-500" : "bg-primary")} style={{ width: `${pct}%` }}></div>
-                                  </div>
+                                  ))}
+                                </div>
+                                <div className="flex flex-col sm:flex-row gap-2 items-center">
+                                  <Select
+                                    value={ccStatusDraft}
+                                    onValueChange={(val) => setCcStatusDraft(val)}
+                                  >
+                                    <SelectTrigger className="h-9 min-w-[170px] w-auto px-3 bg-background border border-border/60 rounded-xl text-xs font-bold shadow-xs">
+                                      <SelectValue placeholder="Select Status" />
+                                    </SelectTrigger>
+                                    <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                                      {["Pending", "Approved by Client", "Changes Requested", "Rejected"].map(s => (
+                                        <SelectItem key={s} value={s} className="text-xs font-semibold rounded-lg cursor-pointer">
+                                          {s}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  {ccStatusDraft !== "Approved by Client" && (
+                                    <input
+                                      type="text"
+                                      value={ccReasonDraft}
+                                      onChange={e => setCcReasonDraft(e.target.value)}
+                                      placeholder="Reason compulsory..."
+                                      className="flex-1 w-full sm:w-auto px-3 h-9 bg-background border border-border/60 rounded-xl text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary"
+                                    />
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveCcStatus(project.id, (mm as number), (yy as number))}
+                                    className="h-9 px-4 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/90 transition-colors shrink-0"
+                                  >
+                                    Save
+                                  </button>
                                 </div>
                               </div>
                             );
-                          });
-                        })()}
-                      </div>
-                    </div>
+                          })()}
+                          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                              <div>
+                                <h2 className="text-base sm:text-lg lg:text-xl font-bold tracking-tight">Content Calendar</h2>
+                                <p className="text-xs text-muted-foreground mt-0.5">Plan, schedule, and track content approval pipeline</p>
+                              </div>
+                              <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/5 border border-primary/20 rounded-xl shadow-xs text-xs self-start sm:self-auto">
+                                <span className="font-extrabold text-foreground flex items-center gap-1 shrink-0">
+                                  <span>📅</span> CC Creator:
+                                </span>
+                                <Select
+                                  value={project.creativeTeam?.cc_creator || "none"}
+                                  onValueChange={async (newEmpId) => {
+                                    const val = newEmpId === "none" ? "" : newEmpId;
+                                    const updatedTeam = { ...(project.creativeTeam || {}), cc_creator: val };
+                                    await handleSaveCreativeTeam(project.id, updatedTeam);
+                                  }}
+                                >
+                                  <SelectTrigger className="h-7 min-w-[150px] max-w-[200px] bg-background border-border/60 rounded-lg text-xs font-bold text-primary shadow-xs">
+                                    <SelectValue placeholder="Select CC Creator..." />
+                                  </SelectTrigger>
+                                  <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300] max-h-64">
+                                    <SelectItem value="none" className="text-xs font-semibold text-muted-foreground rounded-lg cursor-pointer">
+                                      Select CC Creator...
+                                    </SelectItem>
+                                    {employees.map(emp => (
+                                      <SelectItem key={emp.id} value={emp.id} className="text-xs font-semibold rounded-lg cursor-pointer">
+                                        {emp.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar w-full lg:w-auto py-0.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (explainMode) setExplainedIds([]);
+                                  setExplainMode(v => !v);
+                                }}
+                                className={cn(
+                                  "h-8 px-3 rounded-xl text-xs font-bold shrink-0 shadow-sm transition-all border",
+                                  explainMode
+                                    ? "bg-violet-600 text-white border-violet-600"
+                                    : "bg-card hover:bg-card border-border/60 text-foreground"
+                                )}
+                                title="Google Meet ma samjavva: items par click = highlight"
+                              >
+                                {explainMode ? `✨ Explaining (${explainedIds.length})` : "✨ Explain"}
+                              </button>
+                              {explainMode && explainedIds.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setExplainedIds([])}
+                                  className="h-8 px-3 rounded-xl text-xs font-bold shrink-0 shadow-sm transition-all border bg-card hover:bg-muted border-border/60 text-muted-foreground"
+                                >
+                                  Clear
+                                </button>
+                              )}
+                              {/* Post / Reel Quick Filters (Audio Transcript) */}
+                              <div className="flex items-center gap-1 bg-muted/60 p-0.5 rounded-xl border border-border/50 shrink-0">
+                                {[
+                                  { label: "All", value: "All" },
+                                  { label: "📸 Posts", value: "Post" },
+                                  { label: "🎥 Reels", value: "Reel" },
+                                ].map((btn) => (
+                                  <button
+                                    key={btn.value}
+                                    type="button"
+                                    onClick={() => setCalendarTypeFilter(btn.value)}
+                                    className={cn(
+                                      "h-7 px-2.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+                                      calendarTypeFilter === btn.value
+                                        ? "bg-card text-foreground shadow-xs font-bold border border-border/40"
+                                        : "text-muted-foreground hover:text-foreground"
+                                    )}
+                                  >
+                                    {btn.label}
+                                  </button>
+                                ))}
+                              </div>
 
-                    {/* F8: Monthly Report — 1 month select = full data auto (ochha button) */}
-                    <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm">
-                      <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-                        <h3 className="text-sm font-bold text-foreground">Monthly Report <span className="text-[10px] font-bold text-muted-foreground uppercase ml-1">Auto</span></h3>
-                        <select
-                          value={reportMonth}
-                          onChange={(e) => setReportMonth(e.target.value)}
-                          className="h-9 px-3 bg-muted/50 border border-border/60 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-primary"
-                        >
-                          <option value="">Select month...</option>
-                          {getProjectMonths(project.startDate, project.endDate).months.map(m => (
-                            <option key={m.value} value={m.value}>{m.label}</option>
-                          ))}
-                        </select>
-                      </div>
-                      {reportLoading ? (
-                        <p className="text-xs text-muted-foreground font-semibold text-center py-6">Loading report...</p>
-                      ) : !reportData ? (
-                        <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">Select a month — all data loads automatically.</p>
-                      ) : (
-                        <>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-4">
-                            {[
-                              { label: "Reach", v: reportData?.kpis?.reach },
-                              { label: "Impressions", v: reportData?.kpis?.impressions },
-                              { label: "Leads", v: reportData?.kpis?.leads },
-                              { label: "Cost / Lead", v: reportData?.kpis?.cost_per_lead },
-                              { label: "Spend", v: reportData?.kpis?.amount_spent },
-                              { label: "Revenue", v: reportData?.kpis?.revenue },
-                            ].map(k => (
-                              <div key={k.label} className="rounded-2xl border border-border/40 bg-muted/20 px-3.5 py-3">
-                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{k.label}</p>
-                                <p className="text-lg font-black text-foreground font-mono mt-0.5">{k.v?.formatted ?? "—"}</p>
-                                {typeof k.v?.growth_pct === "number" && (
-                                  <p className={`text-[10px] font-bold font-mono ${k.v.growth_pct >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
-                                    {k.v.growth_pct >= 0 ? "▲" : "▼"} {Math.abs(k.v.growth_pct)}%
-                                  </p>
+                              <Select value={calendarTypeFilter} onValueChange={(val) => setCalendarTypeFilter(val)}>
+                                <SelectTrigger className="h-8 w-auto min-w-[95px] max-w-[120px] px-2.5 bg-card/90 hover:bg-card border border-border/60 rounded-xl text-xs font-semibold text-foreground shrink-0 shadow-sm transition-all focus:ring-1 focus:ring-primary/30 gap-1.5">
+                                  <SelectValue placeholder="All Types" />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                                  <SelectItem value="All" className="text-xs font-semibold rounded-lg cursor-pointer">All Types</SelectItem>
+                                  <SelectItem value="Post" className="text-xs font-semibold rounded-lg cursor-pointer">Post</SelectItem>
+                                  <SelectItem value="Reel" className="text-xs font-semibold rounded-lg cursor-pointer">Reel</SelectItem>
+                                  <SelectItem value="Story" className="text-xs font-semibold rounded-lg cursor-pointer">Story</SelectItem>
+                                  <SelectItem value="Carousel" className="text-xs font-semibold rounded-lg cursor-pointer">Carousel</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <Select value={calendarStatusFilter} onValueChange={(val) => setCalendarStatusFilter(val)}>
+                                <SelectTrigger className="h-8 w-auto min-w-[110px] max-w-[135px] px-2.5 bg-card/90 hover:bg-card border border-border/60 rounded-xl text-xs font-semibold text-foreground shrink-0 shadow-sm transition-all focus:ring-1 focus:ring-primary/30 gap-1.5">
+                                  <SelectValue placeholder="All Statuses" />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                                  <SelectItem value="All" className="text-xs font-semibold rounded-lg cursor-pointer">All Statuses</SelectItem>
+                                  <SelectItem value="To Do" className="text-xs font-semibold rounded-lg cursor-pointer">To Do</SelectItem>
+                                  <SelectItem value="In Progress" className="text-xs font-semibold rounded-lg cursor-pointer">In Progress</SelectItem>
+                                  <SelectItem value="Pending Approval" className="text-xs font-semibold rounded-lg cursor-pointer">Pending Approval</SelectItem>
+                                  <SelectItem value="Approved" className="text-xs font-semibold rounded-lg cursor-pointer">Approved</SelectItem>
+                                  <SelectItem value="Published" className="text-xs font-semibold rounded-lg cursor-pointer">Published</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setIsCalendarSettingsOpen(true);
+                                }}
+                                className="h-8 px-2.5 bg-card/90 hover:bg-muted border border-border/60 rounded-xl text-xs font-semibold text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap shadow-sm"
+                                title="Calendar Settings"
+                              >
+                                <Settings2 className="w-3.5 h-3.5 shrink-0" />
+                                <span className="whitespace-nowrap">Settings</span>
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPdfMonthFilter(calendarMonthFilter);
+                                  setIsPdfExportModalOpen(true);
+                                }}
+                                className="h-8 px-2.5 bg-card/90 hover:bg-muted border border-border/60 rounded-xl text-xs font-semibold text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap shadow-sm"
+                                title="Export Content Calendar to PDF"
+                              >
+                                <Download className="w-3.5 h-3.5 shrink-0 text-primary" />
+                                <span className="whitespace-nowrap">Export PDF</span>
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const today = new Date().toISOString().split('T')[0] || "";
+                                  const future = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] || "";
+                                  setBulkStartDate(today);
+                                  setBulkEndDate(future);
+                                  setBulkSelectedDays([1, 3, 5]); // default Mon, Wed, Fri
+                                  setBulkFormatType("Post");
+                                  setBulkAddTab('range');
+                                  setVisualSelectedDates([]);
+                                  setIsBulkAddModalOpen(true);
+                                }}
+                                className="h-8 flex items-center gap-1.5 px-3 border border-border/60 bg-card/90 text-foreground hover:bg-muted/80 font-semibold text-xs rounded-xl transition-all shadow-sm shrink-0 whitespace-nowrap"
+                              >
+                                <Layers className="w-3.5 h-3.5 text-primary shrink-0" />
+                                <span className="whitespace-nowrap">Bulk Add Slots</span>
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingCalendarItem(null);
+                                  setCalendarForm({ ...defaultCalendarForm });
+                                  setIsAddCalendarItemModalOpen(true);
+                                }}
+                                className="h-8 flex items-center gap-1.5 px-3.5 bg-primary text-primary-foreground font-semibold text-xs rounded-xl hover:bg-primary/90 transition-all shadow-sm shrink-0 whitespace-nowrap active:scale-[0.98]"
+                              >
+                                <Plus className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
+                                <span className="whitespace-nowrap">Add Idea</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {(() => {
+                            const hasApprovalQcAssigned = Boolean(project?.creativeTeam?.["approval_qc"] || project?.creativeTeam?.approval_qc);
+                            return (
+                              <div className="bg-card/40 border border-border/40 rounded-[2rem] shadow-xl overflow-hidden backdrop-blur-md">
+                                {filteredCalendar.length === 0 ? (
+                                  <div className="text-center py-16 text-sm text-muted-foreground font-medium">
+                                    No calendar items found matching the filters.
+                                  </div>
+                                ) : (
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full text-center border-collapse text-xs">
+                                      <thead>
+                                        <tr className="border-b border-border/40 text-muted-foreground font-extrabold uppercase tracking-widest bg-muted/30">
+                                          <th className="py-4 px-5 text-center whitespace-nowrap">Schedule</th>
+                                          <th className="py-4 px-5 text-center whitespace-nowrap">Type</th>
+                                          <th className="py-4 px-5 text-center whitespace-nowrap">Topic / Concept</th>
+                                          <th className="py-4 px-5 text-center whitespace-nowrap">Brand Person</th>
+                                          <th className="py-4 px-5 text-center whitespace-nowrap">Script</th>
+                                          <th className="py-4 px-5 text-center whitespace-nowrap">Shoot</th>
+                                          <th className="py-4 px-5 text-center whitespace-nowrap">Editing</th>
+                                          <th className="py-4 px-5 text-center whitespace-nowrap">Thumbnail</th>
+                                          <th className="py-4 px-5 text-center whitespace-nowrap">Caption</th>
+                                          <th className="py-4 px-5 text-center whitespace-nowrap">Instagram Status</th>
+                                          <th className="py-4 px-5 text-center whitespace-nowrap">Issues</th>
+                                          <th className="py-4 px-5 text-center whitespace-nowrap">{hasApprovalQcAssigned ? "Approval & Status" : "Status"}</th>
+                                          <th className="py-4 px-5 text-center whitespace-nowrap">Actions</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-border/20">
+                                        {filteredCalendar.map((item) => {
+                                          const isExpanded = expandedRowId === item.id;
+
+                                          const saveInlineEdit = async (field: string, value: string) => {
+                                            const updated = projectCalendar.map((x: any) =>
+                                              x.id === item.id ? { ...x, [field]: value, ...(field === 'postingDate' ? { postingDay: new Date(value).toLocaleDateString("en-US", { weekday: "long" }) } : {}) } : x
+                                            );
+                                            setProjects(projects.map(p => p.id === project.id ? { ...p, contentCalendar: updated, modules: syncSocialMediaTasksForProject(p, updated) } : p));
+                                            setInlineEdit(null);
+
+                                            try {
+                                              const updatedItem = updated.find((x: any) => x.id === item.id);
+                                              if (updatedItem && project.id) {
+                                                const payload = mapCalendarItemToBackendPayload(updatedItem, project.id);
+                                                await api.put(`/projects/${project.id}/content/${item.id}`, payload);
+                                              }
+                                            } catch (e) {
+                                              console.error("Failed to sync inline edit to backend:", e);
+                                            }
+                                          };
+
+                                          const startEdit = (e: React.MouseEvent, field: string, value: string) => {
+                                            e.stopPropagation();
+                                            setInlineEdit({ id: item.id, field, value: value || '' });
+                                          };
+
+                                          const isEd = (field: string) => inlineEdit?.id === item.id && inlineEdit?.field === field;
+
+                                          const InlineText = ({ field, value, placeholder, cls }: { field: string; value?: string | undefined; placeholder?: string | undefined; cls?: string | undefined }) =>
+                                            isEd(field) ? (
+                                              <input
+                                                autoFocus
+                                                type="text"
+                                                value={inlineEdit!.value}
+                                                onChange={e => setInlineEdit({ ...inlineEdit!, value: e.target.value })}
+                                                onBlur={() => saveInlineEdit(field, inlineEdit!.value)}
+                                                onKeyDown={e => { if (e.key === 'Enter') saveInlineEdit(field, inlineEdit!.value); if (e.key === 'Escape') setInlineEdit(null); }}
+                                                onClick={e => e.stopPropagation()}
+                                                className="w-full px-2 py-1 bg-primary/5 border border-primary/40 rounded-lg text-xs font-bold focus:outline-none focus:ring-1 focus:ring-primary text-center"
+                                              />
+                                            ) : (
+                                              <span onClick={e => startEdit(e, field, value || '')} className={cn("cursor-text hover:bg-primary/5 rounded px-1 py-0.5 transition-colors block text-center group/cell", cls)} title="Click to edit">
+                                                {value || <span className="text-muted-foreground/30 italic text-[10px]">{placeholder || 'Click to add'}</span>}
+                                                <span className="ml-1 opacity-0 group-hover/cell:opacity-50 transition-opacity text-[9px]">✏️</span>
+                                              </span>
+                                            );
+
+                                          const InlineDate = ({ field, value }: { field: string; value?: string | undefined }) =>
+                                            isEd(field) ? (
+                                              <div onClick={e => e.stopPropagation()} className="inline-block">
+                                                <DatePicker
+                                                  value={inlineEdit!.value}
+                                                  onChange={(val) => {
+                                                    setInlineEdit({ ...inlineEdit!, value: val });
+                                                    saveInlineEdit(field, val);
+                                                  }}
+                                                  className="w-[125px] h-7 text-xs font-bold bg-primary/5 border border-primary/40"
+                                                />
+                                              </div>
+                                            ) : (
+                                              <span onClick={e => startEdit(e, field, value || '')} className="cursor-text hover:bg-primary/5 rounded px-1 py-0.5 transition-colors inline-flex items-center gap-1 group/dc" title="Click to edit date">
+                                                {value ? (<><Calendar className="w-2.5 h-2.5 text-muted-foreground" /><span className="text-[11px] font-extrabold text-foreground">{safeFormat(value, "dd/MM/yyyy")}</span></>) : <span className="text-muted-foreground/30 text-[10px] italic">-</span>}
+                                                <span className="opacity-0 group-hover/dc:opacity-50 transition-opacity text-[9px]">✏️</span>
+                                              </span>
+                                            );
+
+                                          const InlineLink = ({ field, value, label, cc }: { field: string; value?: string | undefined; label: string; cc: string }) =>
+                                            isEd(field) ? (
+                                              <input autoFocus type="text" value={inlineEdit!.value} onChange={e => setInlineEdit({ ...inlineEdit!, value: e.target.value })} onBlur={() => saveInlineEdit(field, inlineEdit!.value)} onKeyDown={e => { if (e.key === 'Enter') saveInlineEdit(field, inlineEdit!.value); if (e.key === 'Escape') setInlineEdit(null); }} onClick={e => e.stopPropagation()} placeholder="Paste URL..." className="w-full max-w-[120px] px-2 py-1 bg-primary/5 border border-primary/40 rounded-lg text-[10px] font-bold focus:outline-none focus:ring-1 focus:ring-primary" />
+                                            ) : value ? (
+                                              <div className="flex items-center justify-center gap-0.5 group/lc">
+                                                <a href={value} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className={cn("px-2 py-0.5 font-bold rounded-md text-[10px] flex items-center gap-1 border", cc)}>{label}</a>
+                                                <button
+                                                  type="button"
+                                                  title="Copy link"
+                                                  onClick={e => {
+                                                    e.stopPropagation();
+                                                    navigator.clipboard.writeText(value);
+                                                    toast.success("Link copied!");
+                                                  }}
+                                                  className="opacity-0 group-hover/lc:opacity-70 hover:opacity-100 p-0.5 hover:text-primary transition-opacity text-[10px]"
+                                                >
+                                                  <Copy className="w-2.5 h-2.5" />
+                                                </button>
+                                                <button onClick={e => startEdit(e, field, value)} className="opacity-0 group-hover/lc:opacity-60 text-[9px] hover:opacity-100 transition-opacity ml-0.5">✏️</button>
+                                              </div>
+                                            ) : (
+                                              <button onClick={e => startEdit(e, field, '')} className="text-muted-foreground/30 text-[10px] italic hover:text-primary/50 transition-colors">+ {label}</button>
+                                            );
+
+                                          return (
+                                            <tr
+                                              key={item.id}
+                                              onClick={() => {
+                                                // K17: explain mode ma click = highlight, normal ma expand
+                                                if (explainMode) toggleExplain(item.id);
+                                                else setExpandedRowId(isExpanded ? null : item.id);
+                                              }}
+                                              className={cn(
+                                                "hover:bg-muted/20 transition-all group cursor-pointer",
+                                                isExpanded ? "bg-muted/10 align-top" : "h-[80px]",
+                                                explainMode && "hover:bg-violet-500/15 hover:ring-2 hover:ring-inset hover:ring-violet-500/70 hover:shadow-md",
+                                                explainMode && explainedIds.includes(item.id) && "bg-violet-500/15 ring-2 ring-inset ring-violet-500/80"
+                                              )}
+                                            >
+
+                                              {/* Schedule */}
+                                              <td className="py-2 px-5 text-center whitespace-nowrap">
+                                                <div className="flex flex-col items-center gap-0.5">
+                                                  {isEd('postingDate') ? (
+                                                    <div onClick={e => e.stopPropagation()} className="inline-block">
+                                                      <DatePicker
+                                                        value={inlineEdit!.value}
+                                                        onChange={(val) => {
+                                                          if (!val || !val.trim()) {
+                                                            toast.error("Schedule date is compulsory and cannot be removed.");
+                                                            return;
+                                                          }
+                                                          setInlineEdit({ ...inlineEdit!, value: val });
+                                                          saveInlineEdit('postingDate', val);
+                                                        }}
+                                                        className="w-[130px] h-7 text-xs font-semibold bg-primary/5 border border-primary/40"
+                                                      />
+                                                    </div>
+                                                  ) : (
+                                                    <span onClick={e => startEdit(e, 'postingDate', item.postingDate)} className="font-semibold text-foreground block text-sm cursor-text hover:bg-primary/5 rounded px-1 py-0.5 transition-colors group/pd" title="Click to edit">
+                                                      {safeFormat(item.postingDate, "dd/MM/yyyy")}
+                                                      <span className="ml-1 opacity-0 group-hover/pd:opacity-50 transition-opacity text-[9px]">✏️</span>
+                                                    </span>
+                                                  )}
+                                                  <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider block mt-0.5">
+                                                    {item.postingDay || (item.postingDate ? new Date(item.postingDate).toLocaleDateString("en-US", { weekday: "long" }) : "-")}
+                                                  </span>
+                                                </div>
+                                              </td>
+
+                                              {/* Type */}
+                                              <td className="py-2 px-5 text-center">
+                                                  <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                      <span className={cn("mx-auto px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-widest border rounded-full block text-center max-w-[90px] cursor-pointer hover:opacity-80 shadow-xs transition-opacity", getCalTypeColor(item.type))} title="Click to change">{item.type}</span>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="center" className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300] min-w-[120px] p-1">
+                                                      {["Post", "Reel", "Story", "Carousel"].map(o => (
+                                                        <DropdownMenuItem
+                                                          key={o}
+                                                          onSelect={() => saveInlineEdit('type', o)}
+                                                          className={cn("text-xs font-semibold rounded-lg cursor-pointer py-1.5 px-2.5 flex items-center justify-between", item.type === o && "bg-primary/10 text-primary font-bold")}
+                                                        >
+                                                          <span>{o}</span>
+                                                          {item.type === o && <Check className="w-3.5 h-3.5 text-primary" />}
+                                                        </DropdownMenuItem>
+                                                      ))}
+                                                    </DropdownMenuContent>
+                                                  </DropdownMenu>
+                                              </td>
+
+                                              {/* Topic / Concept */}
+                                              <td className={cn("py-2 px-5 text-center min-w-[200px]", isExpanded ? "max-w-none" : "max-w-[240px]")}>
+                                                <InlineText field="topic" value={item.topic} placeholder="Enter topic..." cls={cn("font-medium text-foreground leading-normal", isExpanded ? "" : "line-clamp-1")} />
+                                                <InlineText field="concept" value={item.concept} placeholder="+ concept" cls={cn("text-muted-foreground mt-0.5 leading-normal text-[11px]", isExpanded ? "" : "line-clamp-1")} />
+                                                {isEd('reference') ? (
+                                                  <input
+                                                    autoFocus
+                                                    type="text"
+                                                    value={inlineEdit!.value}
+                                                    onChange={e => setInlineEdit({ ...inlineEdit!, value: e.target.value })}
+                                                    onBlur={() => saveInlineEdit('reference', inlineEdit!.value)}
+                                                    onKeyDown={e => { if (e.key === 'Enter') saveInlineEdit('reference', inlineEdit!.value); if (e.key === 'Escape') setInlineEdit(null); }}
+                                                    onClick={e => e.stopPropagation()}
+                                                    placeholder="Paste reference link..."
+                                                    className="w-full max-w-[180px] px-2 py-1 bg-primary/5 border border-primary/40 rounded-lg text-[10px] font-bold focus:outline-none focus:ring-1 focus:ring-primary mx-auto block text-center"
+                                                  />
+                                                ) : item.reference ? (
+                                                  <div className="flex items-center justify-center gap-1 group/ref">
+                                                    <a
+                                                      href={item.reference}
+                                                      target="_blank"
+                                                      rel="noopener noreferrer"
+                                                      onClick={e => e.stopPropagation()}
+                                                      className={cn("text-primary/70 hover:underline block mt-0.5 text-[10px]", isExpanded ? "whitespace-pre-wrap break-all" : "truncate max-w-[150px]")}
+                                                      title={item.reference}
+                                                    >
+                                                      Ref: {item.reference}
+                                                    </a>
+                                                    <button
+                                                      onClick={e => startEdit(e, 'reference', item.reference || '')}
+                                                      className="opacity-0 group-hover/ref:opacity-60 text-[9px] hover:opacity-100 transition-opacity"
+                                                      title="Edit reference link"
+                                                    >
+                                                      ✏️
+                                                    </button>
+                                                  </div>
+                                                ) : (
+                                                  <span
+                                                    onClick={e => startEdit(e, 'reference', '')}
+                                                    className="cursor-text hover:bg-primary/5 rounded px-1 py-0.5 transition-colors block text-center text-muted-foreground/30 text-[10px] italic"
+                                                    title="Click to add reference link"
+                                                  >
+                                                    + ref link
+                                                  </span>
+                                                )}
+                                              </td>
+
+                                              {/* Brand Person */}
+                                              <td className="py-2 px-5 text-center whitespace-nowrap">
+                                                <InlineText field="_assignedTo" value={item.brand_person_details?.employee_name || (item.assignedTo || []).join(", ")} placeholder="Unassigned" cls="text-foreground font-medium text-[13px]" />
+                                              </td>
+
+                                              {/* Script */}
+                                              <td className="py-2 px-5 text-center whitespace-nowrap">
+                                                <div className="flex flex-col items-center gap-1">
+                                                  <InlineDate field="scriptDate" value={item.scriptDate} />
+                                                  <InlineLink field="scriptLink" value={item.scriptLink} label="📄 Script" cc="bg-primary/10 hover:bg-primary/20 text-primary border-primary/20" />
+                                                </div>
+                                              </td>
+
+                                              {/* Shoot */}
+                                              <td className="py-2 px-5 text-center whitespace-nowrap">
+                                                <div className="flex flex-col items-center gap-1">
+                                                  <InlineDate field="shootDate" value={item.shootDate} />
+                                                  <InlineLink field="shootLink" value={item.shootLink} label="🎬 Assets" cc="bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 border-amber-500/20" />
+                                                </div>
+                                              </td>
+
+                                              {/* Editing */}
+                                              <td className="py-2 px-5 text-center whitespace-nowrap">
+                                                <div className="flex flex-col items-center gap-1">
+                                                  <InlineDate field="editingStart" value={item.editingStart} />
+                                                  <div className="flex gap-1 justify-center">
+                                                    {item.type === "Reel" ? (
+                                                      <InlineLink field="finalReelLink" value={item.finalReelLink} label="🎥 Reel" cc="bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 border-violet-500/20" />
+                                                    ) : item.type === "Post" || item.type === "Carousel" ? (
+                                                      <InlineLink field="finalPostLink" value={item.finalPostLink} label="📸 Post" cc="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 border-emerald-500/20" />
+                                                    ) : (
+                                                      <>
+                                                        <InlineLink field="finalReelLink" value={item.finalReelLink} label="🎥 Reel" cc="bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 border-violet-500/20" />
+                                                        <InlineLink field="finalPostLink" value={item.finalPostLink} label="📸 Post" cc="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 border-emerald-500/20" />
+                                                      </>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                              </td>
+
+                                              {/* Thumbnail */}
+                                              <td className="py-2 px-5 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                                <ThumbnailCell item={item} saveInlineEdit={saveInlineEdit} />
+                                              </td>
+
+                                              {/* Caption */}
+                                              <td className={cn("py-2 px-5 text-center", isExpanded ? "min-w-[200px]" : "min-w-[150px] max-w-[200px]")}>
+                                                <div className="flex flex-col items-center gap-1">
+                                                  <InlineDate field="captionDate" value={item.captionDate} />
+                                                  <InlineText field="caption" value={item.caption} placeholder="+ caption" cls={cn("text-muted-foreground text-[11px] leading-normal", isExpanded ? "whitespace-pre-wrap" : "line-clamp-1")} />
+                                                </div>
+                                              </td>
+
+                                              {/* Instagram Status */}
+                                              <td className="py-2 px-5 text-center whitespace-nowrap">
+                                                <div className="flex flex-col items-center gap-1">
+                                                  <InlineDate field="actualPostingDate" value={item.actualPostingDate} />
+                                                  <InlineLink field="postingLinkOfIg" value={item.postingLinkOfIg} label="🔗 IG Post" cc="bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 border-rose-500/20" />
+                                                </div>
+                                              </td>
+
+                                              {/* Issues */}
+                                              <td className="py-2 px-5 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                                <CalendarIssuesCell
+                                                  item={item}
+                                                  projectCalendar={projectCalendar}
+                                                  project={project}
+                                                  projects={projects}
+                                                  setProjects={setProjects}
+                                                  onLogActivity={(act, det) => logProjectActivity(project.id, act, det)}
+                                                />
+                                              </td>
+
+                                              {/* Approval & Status */}
+                                              <td className="py-2 px-5 text-center whitespace-nowrap">
+                                                {hasApprovalQcAssigned && (
+                                                  <InlineText field="approval" value={item.approved_by_details?.employee_name || item.approval} placeholder="+ feedback" cls="text-[11px] text-foreground font-semibold mb-1" />
+                                                )}
+                                                  <div className="flex flex-col items-center gap-1">
+                                                    <DropdownMenu>
+                                                      <DropdownMenuTrigger asChild>
+                                                        <span className={cn("mx-auto px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider block text-center max-w-[110px] cursor-pointer hover:opacity-80 shadow-xs", getCalStatusColor(item.status))} title="Click to change status">{item.status}</span>
+                                                      </DropdownMenuTrigger>
+                                                      <DropdownMenuContent align="center" className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300] min-w-[140px] p-1">
+                                                        {["To Do", "In Progress", "Pending Approval", "Approved", "Published"].map(o => (
+                                                          <DropdownMenuItem
+                                                            key={o}
+                                                            onSelect={() => saveInlineEdit('status', o)}
+                                                            className={cn("text-xs font-semibold rounded-lg cursor-pointer py-1.5 px-2.5 flex items-center justify-between", item.status === o && "bg-primary/10 text-primary font-bold")}
+                                                          >
+                                                            <span>{o}</span>
+                                                            {item.status === o && <Check className="w-3.5 h-3.5 text-primary" />}
+                                                          </DropdownMenuItem>
+                                                        ))}
+                                                      </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                    {(() => {
+                                                      const todayStr = new Date().toISOString().split('T')[0] || '';
+                                                      const isOverdue = Boolean(item.postingDate && todayStr && item.postingDate < todayStr && item.status !== 'Published' && item.status !== 'Approved');
+                                                      if (isOverdue) {
+                                                        return (
+                                                          <span className="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-rose-500/15 text-rose-600 border border-rose-500/30 flex items-center gap-0.5 animate-pulse">
+                                                            ⚠️ Overdue
+                                                          </span>
+                                                        );
+                                                      }
+                                                      return null;
+                                                    })()}
+                                                  </div>
+                                              </td>
+
+                                              {/* Actions */}
+                                              <td className="py-2 px-5 text-center whitespace-nowrap">
+                                                <div className="flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                  <button onClick={(e) => { e.stopPropagation(); setEditingCalendarItem(item); setCalendarForm({ ...item }); setIsAddCalendarItemModalOpen(true); }} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors border border-border/30 shadow-sm bg-card" title="Full edit">
+                                                    <Edit2 className="w-3.5 h-3.5" />
+                                                  </button>
+                                                  <button
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      setConfirmModalState({
+                                                        isOpen: true,
+                                                        title: "Delete Content Idea",
+                                                        description: "Are you sure you want to delete this content idea? This action cannot be undone.",
+                                                        itemName: item.topic || "Untitled Idea",
+                                                        action: async () => {
+                                                          try {
+                                                            if (project.id && item.id) {
+                                                              await api.delete(`/projects/${project.id}/content/${item.id}`);
+                                                            }
+                                                            const updated = projectCalendar.filter((x: any) => x.id !== item.id);
+                                                            setProjects(projects.map(p => p.id === project.id ? { ...p, contentCalendar: updated, modules: syncSocialMediaTasksForProject(p, updated) } : p));
+                                                            toast.success("Content idea deleted successfully");
+                                                          } catch (err: any) {
+                                                            toast.error(err.message || "Failed to delete content idea");
+                                                          } finally {
+                                                            setConfirmModalState(prev => ({ ...prev, isOpen: false }));
+                                                          }
+                                                        }
+                                                      });
+                                                    }}
+                                                    className="p-1.5 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors border border-border/30 shadow-sm bg-card"
+                                                  >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                  </button>
+                                                </div>
+                                              </td>
+                                            </tr>
+                                          );
+                                        })}
+                                      </tbody>
+                                    </table>
+                                  </div>
                                 )}
                               </div>
-                            ))}
-                          </div>
-                          {(reportData?.top_campaigns || []).length > 0 && (
-                            <div className="text-[11px] text-muted-foreground font-semibold">
-                              Top: {(reportData.top_campaigns || []).slice(0, 3).map((c: any) => c.campaign_name).join(" • ")}
-                            </div>
-                          )}
+                            );
+                          })()}
                         </>
                       )}
                     </div>
+                  );
+                })() : isMarketingCategory(project.category) ? (() => {
+                  const dailyStatsList = project.dailyStats || [];
 
-                  <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm">
-                    <div className="flex items-center justify-between mb-6">
-                      <div>
-                        <h3 className="text-sm font-bold text-foreground">Recent Marketing Stats Logs</h3>
-                        <p className="text-xs text-muted-foreground mt-0.5 font-medium">Daily log history for active campaigns</p>
-                      </div>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          {/* F7: full columns — Sr, date, campaign, reach, impression, lead, followers, revenue, spend, cost + action */}
-                          <tr className="border-b border-border/40 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                            <th className="pb-3 pl-4">Sr</th>
-                            <th className="pb-3">Date</th>
-                            <th className="pb-3">Campaign</th>
-                            <th className="pb-3 text-right">Reach</th>
-                            <th className="pb-3 text-right">Impr.</th>
-                            <th className="pb-3 text-right">Leads</th>
-                            <th className="pb-3 text-right">Followers</th>
-                            <th className="pb-3 text-right">Revenue</th>
-                            <th className="pb-3 text-right">Spend</th>
-                            <th className="pb-3 text-right">CPL</th>
-                            <th className="pb-3 text-right pr-4">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border/20 text-xs font-semibold text-foreground">
-                          {/* F5: same-name combine → 1 dropdown per campaign (totals + collapse) */}
-                          {(() => {
-                            const dailyStats = dateFiltered || [];
-                            if (dailyStats.length === 0) {
-                              return (
-                                <tr>
-                                  <td colSpan={11} className="py-8 text-center text-xs font-semibold text-muted-foreground/40">
-                                    No stats logged yet matching the filters.
-                                  </td>
-                                </tr>
-                              );
-                            }
-                            const groups = new Map<string, any[]>();
-                            dailyStats.forEach((s: any) => {
-                              const k = s.campaignName || "Unknown";
-                              if (!groups.has(k)) groups.set(k, []);
-                              groups.get(k)!.push(s);
-                            });
-                            let sr = 0;
-                            return Array.from(groups.entries()).flatMap(([name, items]) => {
-                              const open = openCampGroups[name] !== false;
-                              const tLeads = items.reduce((a, s) => a + (Number(s.leads) || 0), 0);
-                              const tSpend = items.reduce((a, s) => a + (Number(s.spend) || 0), 0);
-                              const tRev = items.reduce((a, s) => a + (Number(s.revenue) || 0), 0);
-                              const rows: any[] = [(
-                                <tr key={`g-${name}`} onClick={() => toggleCampGroup(name)} className="cursor-pointer bg-muted/30 hover:bg-muted/50 transition-colors">
-                                  <td colSpan={11} className="py-2.5 pl-4 pr-4">
-                                    <span className="flex items-center gap-2 flex-wrap">
-                                      <span className="text-muted-foreground text-[10px]">{open ? "▼" : "▶"}</span>
-                                      <span className="font-black text-foreground">{name}</span>
-                                      <span className="px-1.5 py-0.5 rounded-md bg-primary/10 text-primary text-[10px] font-black">{items.length} logs</span>
-                                      <span className="text-[11px] text-muted-foreground font-bold ml-auto">
-                                        Leads: <span className="text-foreground font-mono">{tLeads.toLocaleString()}</span>
-                                        {" • "}Spend: <span className="text-foreground font-mono">₹{tSpend.toLocaleString("en-IN")}</span>
-                                        {" • "}Rev: <span className="text-emerald-600 font-mono">₹{tRev.toLocaleString("en-IN")}</span>
-                                      </span>
-                                    </span>
-                                  </td>
-                                </tr>
-                              )];
-                              if (open) {
-                                items.slice(0, 30).forEach((stat: any) => {
-                                  sr += 1;
-                                  const cpl = stat.leads > 0 ? Math.round(stat.spend / stat.leads) : 0;
-                                  rows.push((
-                                    <tr key={stat.id} className="hover:bg-muted/10 transition-colors">
-                                      <td className="py-3.5 pl-4 font-mono text-muted-foreground">{sr}</td>
-                                      <td className="py-3.5 font-mono">{safeFormat(stat.date, "dd/MM/yyyy")}</td>
-                                      <td className="py-3.5 text-muted-foreground">↳ {stat.campaignName}</td>
-                                      <td className="py-3.5 text-right font-mono">{Number(stat.reach || 0).toLocaleString()}</td>
-                                      <td className="py-3.5 text-right font-mono">{Number(stat.impressions || 0).toLocaleString()}</td>
-                                      <td className="py-3.5 text-right font-mono">{Number(stat.leads || 0).toLocaleString()}</td>
-                                      <td className="py-3.5 text-right font-mono">{Number(stat.followers || 0).toLocaleString()}</td>
-                                      <td className="py-3.5 text-right font-mono text-emerald-600">₹{Number(stat.revenue || 0).toLocaleString("en-IN")}</td>
-                                      <td className="py-3.5 text-right font-mono">₹{Number(stat.spend || 0).toLocaleString()}</td>
-                                      <td className="py-3.5 text-right font-mono text-primary">₹{cpl}</td>
-                                      <td className="py-3.5 text-right pr-4">
-                                        <span className="inline-flex items-center gap-1">
-                                          <button
-                                            onClick={() => openEditStat(stat)}
-                                            className="p-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors border border-border/30 shadow-sm bg-card inline-flex items-center justify-center"
-                                            title="Edit stats log"
-                                          >
-                                            <Edit2 className="w-3.5 h-3.5" />
-                                          </button>
-                                          <button
-                                            onClick={() => {
-                                              setConfirmModalState({
-                                                isOpen: true,
-                                                title: "Delete Daily Stats Log",
-                                                description: `Are you sure you want to delete this daily stat log for "${stat.campaignName}" on ${stat.date}? This action cannot be undone.`,
-                                                itemName: `${stat.campaignName} (${stat.date})`,
-                                                action: () => {
-                                                  (async () => {
-                                                    try {
-                                                      await api.delete(`/projects/${project.id}/marketing-stats/${stat.id}`, { showErrorToast: false });
-                                                      await fetchDmStats(project.id);
-                                                      await fetchDmCampaigns(project.id);
-                                                      toast.success("Daily stats log deleted successfully!");
-                                                    } catch (err: any) {
-                                                      toast.error(err?.message || "Failed to delete stats log");
-                                                    } finally {
-                                                      setConfirmModalState(prev => ({ ...prev, isOpen: false }));
-                                                    }
-                                                  })();
-                                                }
-                                              });
-                                            }}
-                                            className="p-1 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors border border-border/30 shadow-sm bg-card inline-flex items-center justify-center"
-                                            title="Delete stats log"
-                                          >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                          </button>
-                                        </span>
-                                      </td>
-                                    </tr>
-                                  ));
-                                });
-                              }
-                              return rows;
-                            });
-                          })()}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                  </div>
-                  </>
-                  )}
-                </div>
-              );
-            })() : (
-              <>
-                {/* Left Col: Tasks / Kanban */}
-                <div className="lg:col-span-2 space-y-6">
-                  {isDevCategory(project.category) ? (() => {
-                    const projectModules: NonNullable<Project['modules']> = project.modules || [];
-                    const activeModule = projectModules.find(m => m.id === selectedModuleId) || projectModules[0];
-                    
-                    const handleAddModule = (e: React.FormEvent) => {
-                      e.preventDefault();
-                      if (!addModuleForm.name.trim()) return;
-                      const newModule: any = {
-                        id: `mod-${Date.now()}`,
-                        name: addModuleForm.name.trim(),
-                        assignedToName: addModuleForm.assignedToName || undefined,
-                        status: addModuleForm.status,
-                        priority: addModuleForm.priority,
-                        estimatedHours: addModuleForm.estimatedHours || undefined,
-                        dueDate: addModuleForm.dueDate || undefined,
-                        tasks: []
-                      };
-                      const updatedModules: any = [...projectModules, newModule];
-                      saveProjectModules(project.id, updatedModules, "Added Module", `Added new module "${newModule.name}"`);
-                      setSelectedModuleId(newModule.id);
-                      setAddModuleForm({
-                        name: "",
-                        assignedToName: "",
-                        status: "todo",
-                        priority: "medium",
-                        estimatedHours: 0,
-                        dueDate: ""
-                      });
-                      toast.success(`Module "${newModule.name}" created!`);
-                    };
+                  // Filter by campaign
+                  const campaignFiltered = dailyStatsList.filter((s: any) => {
+                    if (selectedCampaignForStats === "All Campaigns") return true;
+                    const cleanSelected = selectedCampaignForStats.replace(" (Inactive)", "");
+                    return s.campaignName === cleanSelected;
+                  });
 
-                    const handleAddModuleTask = (columnStatus: "todo" | "in-progress" | "bugs" | "onhold" | "pending" | "completed") => {
-                      if (!newModuleTaskTitle.trim() || !activeModule) return;
-                      const newTask = {
-                        id: `task-${Date.now()}`,
-                        title: newModuleTaskTitle.trim(),
-                        status: columnStatus
-                      };
-                      const updatedTasks = [...activeModule.tasks, newTask];
-                      const updatedModules: NonNullable<Project['modules']> = projectModules.map(m => m.id === activeModule.id ? { ...m, tasks: updatedTasks } : m);
-                      saveProjectModules(project.id, updatedModules, "Added Task", `Added task "${newTask.title}" inside module "${activeModule.name}"`);
-                      setNewModuleTaskTitle("");
-                      setInlineEdit(null); // Close task input
-                      toast.success("Task added successfully!");
-                    };
+                  // Filter by date range
+                  const dateFiltered = campaignFiltered.filter((s: any) => {
+                    if (!customDateRange?.from) return true;
+                    const statDate = new Date(s.date);
+                    const fromDate = new Date(customDateRange.from);
+                    const toDate = customDateRange.to ? new Date(customDateRange.to) : fromDate;
 
-                    const handleDeleteTask = (taskId: string) => {
-                      if (!activeModule) return;
-                      const taskToDelete = activeModule.tasks.find(t => t.id === taskId);
-                      const updatedTasks = activeModule.tasks.filter(t => t.id !== taskId);
-                      const updatedModules: NonNullable<Project['modules']> = projectModules.map(m => m.id === activeModule.id ? { ...m, tasks: updatedTasks } : m);
-                      saveProjectModules(project.id, updatedModules, "Deleted Task", `Deleted task "${taskToDelete?.title || taskId}" from module "${activeModule.name}"`);
-                      toast.success("Task deleted");
-                    };
+                    statDate.setHours(0, 0, 0, 0);
+                    fromDate.setHours(0, 0, 0, 0);
+                    toDate.setHours(0, 0, 0, 0);
 
-                    const handleMoveTask = (taskId: string, direction: 'left' | 'right') => {
-                      if (!activeModule) return;
-                      const task = activeModule.tasks.find(t => t.id === taskId);
-                      if (!task) return;
-                      
-                      const statusFlow: ("todo" | "in-progress" | "bugs" | "onhold" | "pending" | "completed")[] = ["todo", "in-progress", "bugs", "onhold", "pending", "completed"];
-                      const currIdx = statusFlow.indexOf(task.status);
-                      let nextIdx = currIdx + (direction === 'right' ? 1 : -1);
-                      if (nextIdx < 0 || nextIdx >= statusFlow.length) return;
-                      
-                      const updatedTasks = activeModule.tasks.map(t => t.id === taskId ? { ...t, status: statusFlow[nextIdx] as any } : t);
-                      const updatedModules: NonNullable<Project['modules']> = projectModules.map(m => m.id === activeModule.id ? { ...m, tasks: updatedTasks } : m);
-                      saveProjectModules(project.id, updatedModules, "Moved Task", `Moved task "${task.title}" to ${statusFlow[nextIdx]}`);
-                    };
+                    return statDate >= fromDate && statDate <= toDate;
+                  });
 
-                    return (
-                      <div className="space-y-6 animate-in fade-in duration-300">
-                        {/* Modules Header */}
-                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                          <div>
-                            <h2 className="text-xl font-bold tracking-tight">Module-wise Kanban</h2>
-                            <p className="text-xs text-muted-foreground mt-1">Manage project components and developer boards</p>
+                  const totalReach = dateFiltered.reduce((sum: number, s: any) => sum + Number(s.reach || 0), 0);
+                  const totalLeads = dateFiltered.reduce((sum: number, s: any) => sum + Number(s.leads || 0), 0);
+                  const totalSpent = dateFiltered.reduce((sum: number, s: any) => sum + Number(s.spend || 0), 0);
+                  const computedCPL = totalLeads > 0 ? Math.round(totalSpent / totalLeads) : 0;
+
+                  let reach = totalReach > 0 ? (totalReach >= 1000000 ? `${(totalReach / 1000000).toFixed(1)}M` : `${Math.round(totalReach / 1000)}K`) : "0";
+                  let leads = totalLeads.toLocaleString("en-IN");
+                  let cpl = computedCPL.toString();
+                  let amountSpent = totalSpent.toLocaleString("en-IN");
+
+                  let reachTrend = "+0.0%", leadsTrend = "+0.0%", cplTrend = "+0.0%", amountSpentTrend = "+0.0%";
+
+                  // F1+F2: backend summary hoy to real KPIs + growth (filter-wired, live)
+                  const fmtGrowth = (g: any) => {
+                    if (typeof g !== "number" || isNaN(g)) return "+0.0%";
+                    return `${g >= 0 ? "+" : ""}${g}%`;
+                  };
+                  const sk = dmSummary?.kpis;
+                  if (sk) {
+                    const rv = Number(sk.reach?.value);
+                    if (!isNaN(rv)) reach = rv >= 1000000 ? `${(rv / 1000000).toFixed(1)}M` : rv >= 1000 ? `${Math.round(rv / 1000)}K` : `${Math.round(rv)}`;
+                    const lv = Number(sk.leads?.value);
+                    if (!isNaN(lv)) leads = Math.round(lv).toLocaleString("en-IN");
+                    const cv = Number(sk.cost_per_lead?.value);
+                    if (!isNaN(cv)) cpl = `${Math.round(cv)}`;
+                    const sv = Number(sk.amount_spent?.value);
+                    if (!isNaN(sv)) amountSpent = Math.round(sv).toLocaleString("en-IN");
+                    reachTrend = fmtGrowth(sk.reach?.growth_pct);
+                    leadsTrend = fmtGrowth(sk.leads?.growth_pct);
+                    cplTrend = fmtGrowth(sk.cost_per_lead?.growth_pct);
+                    amountSpentTrend = fmtGrowth(sk.amount_spent?.growth_pct);
+                  }
+
+                  return (
+                    <div className="lg:col-span-3 space-y-6">
+                      {/* K4: Digital Marketing dept dropdown header — click = auto DM stats + collapse */}
+                      <button
+                        type="button"
+                        id="dept-section-dm"
+                        onClick={() => {
+                          setOpenDept(prev => ({ ...prev, dm: !(prev["dm"] !== false) }));
+                          setDmWorkspaceView("stats");
+                        }}
+                        className="flex items-center justify-between w-full p-3.5 bg-card/90 border border-border/60 rounded-2xl shadow-sm hover:bg-muted/40 transition-colors"
+                      >
+                        <span className="flex items-center gap-2 text-sm font-black text-foreground">
+                          <span>📈</span> Digital Marketing
+                          <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-black">{dailyStatsList.length} logs</span>
+                        </span>
+                        <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", openDept["dm"] !== false && "rotate-180")} />
+                      </button>
+                      {(openDept["dm"] !== false) && (
+                        <>
+                          {/* Digital Marketing View Switcher */}
+                          <div className="flex flex-wrap items-center justify-between p-2.5 bg-card/90 border border-border/60 rounded-2xl shadow-sm backdrop-blur-md gap-3">
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setDmWorkspaceView("social")}
+                                className={cn(
+                                  "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all",
+                                  dmWorkspaceView === "social"
+                                    ? "bg-primary text-primary-foreground shadow-sm"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                )}
+                              >
+                                <span>📱 Social Media & Content Calendar</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDmWorkspaceView("stats")}
+                                className={cn(
+                                  "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all",
+                                  dmWorkspaceView === "stats"
+                                    ? "bg-primary text-primary-foreground shadow-sm"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                )}
+                              >
+                                <span>📈 Paid Campaigns & Daily Stats</span>
+                              </button>
+                            </div>
+                            <span className="text-[11px] font-bold text-muted-foreground px-2">
+                              Showing Ad Performance & Leads
+                            </span>
+                          </div>
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                            <div>
+                              <h2 className="text-xl font-bold tracking-tight flex items-center gap-2">
+                                <Target className="w-5 h-5 text-primary" />
+                                Campaign Performance
+                              </h2>
+                              <p className="text-xs text-muted-foreground mt-0.5 font-medium">Reach, leads, and conversion analytics</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => setIsLogDailyStatsOpen(true)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground font-bold text-xs rounded-lg hover:bg-primary/90 transition-all shadow-sm whitespace-nowrap"
+                              >
+                                <Plus className="w-3.5 h-3.5" /> Log Stats
+                              </button>
+                              {/* F3: revenue icon → popup (page nai) */}
+                              <button
+                                onClick={() => { setRevenueForm({ date: "", revenue: "", editId: "" }); setIsRevenueOpen(true); }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white font-bold text-xs rounded-lg hover:bg-emerald-700 transition-all shadow-sm whitespace-nowrap"
+                                title="Revenue log (popup)"
+                              >
+                                <IndianRupee className="w-3.5 h-3.5" /> Revenue
+                              </button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button className="flex items-center gap-2 px-3 py-1.5 bg-card border border-border/60 text-foreground font-bold text-xs rounded-lg hover:bg-muted/80 transition-all shadow-sm">
+                                    <Filter className="w-3 h-3 text-muted-foreground" />
+                                    {selectedCampaignForStats}
+                                    <ChevronDown className="w-3 h-3 text-muted-foreground ml-1" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-48 rounded-xl p-1.5 border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-50">
+                                  {(() => {
+                                    const campaignList = (project.campaigns && project.campaigns.length > 0)
+                                      ? project.campaigns.map(c => {
+                                        const name = typeof c === 'string' ? c : (c.name || "");
+                                        const status = typeof c === 'string' ? 'Active' : (c.status || 'Active');
+                                        return status === 'Inactive' ? `${name} (Inactive)` : name;
+                                      })
+                                      : ["Q4 Retargeting Ads", "Holiday Social Push", "B2B Email Drip"];
+                                    return ["All Campaigns", ...campaignList];
+                                  })().map(opt => (
+                                    <DropdownMenuItem
+                                      key={opt}
+                                      onSelect={() => setSelectedCampaignForStats(opt)}
+                                      className={cn(
+                                        "rounded-lg cursor-pointer py-2 focus:bg-primary/10 focus:text-primary font-medium text-xs transition-colors flex items-center justify-between",
+                                        selectedCampaignForStats === opt && "bg-primary/10 text-primary font-bold"
+                                      )}
+                                    >
+                                      {opt}
+                                      {selectedCampaignForStats === opt && <CheckCircle2 className="w-3 h-3" />}
+                                    </DropdownMenuItem>
+                                  ))}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <button className="flex items-center gap-2 px-3 py-1.5 bg-card border border-border/60 text-foreground font-bold text-xs rounded-lg hover:bg-muted/80 transition-all shadow-sm whitespace-nowrap">
+                                    <Calendar className="w-3 h-3 text-muted-foreground" />
+                                    {campaignDateRange === "Custom" && customDateRange?.from ? (
+                                      customDateRange.to ? (
+                                        <>
+                                          {format(customDateRange.from, "dd/MM/yyyy")} -{" "}
+                                          {format(customDateRange.to, "dd/MM/yyyy")}
+                                        </>
+                                      ) : (
+                                        format(customDateRange.from, "dd/MM/yyyy")
+                                      )
+                                    ) : (
+                                      campaignDateRange
+                                    )}
+                                    <ChevronDown className="w-3 h-3 text-muted-foreground ml-1" />
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="end">
+                                  <div className="flex flex-col sm:flex-row">
+                                    <div className="flex flex-col gap-1 p-3 border-b sm:border-b-0 sm:border-r border-border/50 bg-muted/20 w-full sm:w-40">
+                                      {["Today", "Yesterday", "Last 7 Days", "Last 30 Days", "This Month", "Year to Date", "Custom"].map(opt => (
+                                        <button
+                                          key={opt}
+                                          onClick={() => {
+                                            setCampaignDateRange(opt);
+                                            if (opt === "Today") setCustomDateRange({ from: new Date(), to: new Date() });
+                                            else if (opt === "Yesterday") setCustomDateRange({ from: subDays(new Date(), 1), to: subDays(new Date(), 1) });
+                                            else if (opt === "Last 7 Days") setCustomDateRange({ from: subDays(new Date(), 7), to: new Date() });
+                                            else if (opt === "Last 30 Days") setCustomDateRange({ from: subDays(new Date(), 30), to: new Date() });
+                                            else if (opt === "This Month") {
+                                              const today = new Date();
+                                              setCustomDateRange({ from: new Date(today.getFullYear(), today.getMonth(), 1), to: today });
+                                            }
+                                            else if (opt === "Year to Date") setCustomDateRange({ from: startOfYear(new Date()), to: new Date() });
+                                          }}
+                                          className={cn(
+                                            "text-left px-3 py-2 text-xs font-bold rounded-lg transition-colors",
+                                            campaignDateRange === opt ? "bg-primary text-primary-foreground shadow-sm" : "hover:bg-muted/60 text-foreground"
+                                          )}
+                                        >
+                                          {opt}
+                                        </button>
+                                      ))}
+                                    </div>
+                                    <div className="p-3">
+                                      <CalendarUI
+                                        initialFocus
+                                        mode="range"
+                                        defaultMonth={customDateRange?.from || new Date()}
+                                        selected={customDateRange}
+                                        onSelect={(range) => {
+                                          setCustomDateRange(range);
+                                          setCampaignDateRange("Custom");
+                                        }}
+                                        numberOfMonths={2}
+                                        className="rounded-md p-0"
+                                      />
+                                    </div>
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
+                            </div>
                           </div>
 
-                          <div className="flex gap-2 shrink-0">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setIsPresetsModalOpen(true);
-                              }}
-                              className="px-3 py-1.5 bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 text-xs font-bold rounded-xl flex items-center gap-1.5 border border-border/60 transition-colors shadow-sm"
-                            >
-                              ⚙️ Load from Presets
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setAddModuleForm({
-                                  name: "",
-                                  assignedToName: "",
-                                  status: "todo",
-                                  priority: "medium",
-                                  estimatedHours: 0,
-                                  dueDate: ""
-                                });
-                                setIsAddModuleModalOpen(true);
-                              }}
-                              className="px-3 py-1.5 bg-primary text-primary-foreground text-xs font-bold rounded-xl hover:bg-primary/90 flex items-center gap-1 shrink-0 shadow-sm"
-                            >
-                              <Plus className="w-3.5 h-3.5" /> Add Module
-                            </button>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-in fade-in zoom-in-95 duration-300" key={`${selectedCampaignForStats}-${campaignDateRange}`}>
+                            <div className="bg-card border border-border/60 rounded-3xl p-5 shadow-sm relative overflow-hidden group hover:border-primary/30 transition-colors">
+                              <div className="absolute -right-4 -top-4 w-16 h-16 bg-blue-500/10 rounded-full blur-xl group-hover:bg-blue-500/20 transition-colors"></div>
+                              <div className="flex items-center gap-3 mb-3">
+                                <div className="w-8 h-8 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500">
+                                  <Users className="w-4 h-4" />
+                                </div>
+                                <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Reach</span>
+                              </div>
+                              <h4 className="text-2xl font-black text-foreground font-mono">{reach}</h4>
+                              <p className="text-xs font-bold text-emerald-500 flex items-center gap-1 mt-1">
+                                <TrendingUp className="w-3 h-3" /> {reachTrend}
+                              </p>
+                            </div>
+
+                            <div className="bg-card border border-border/60 rounded-3xl p-5 shadow-sm relative overflow-hidden group hover:border-primary/30 transition-colors">
+                              <div className="absolute -right-4 -top-4 w-16 h-16 bg-purple-500/10 rounded-full blur-xl group-hover:bg-purple-500/20 transition-colors"></div>
+                              <div className="flex items-center gap-3 mb-3">
+                                <div className="w-8 h-8 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-500">
+                                  <Target className="w-4 h-4" />
+                                </div>
+                                <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Leads</span>
+                              </div>
+                              <h4 className="text-2xl font-black text-foreground font-mono">{leads}</h4>
+                              <p className="text-xs font-bold text-emerald-500 flex items-center gap-1 mt-1">
+                                <TrendingUp className="w-3 h-3" /> {leadsTrend}
+                              </p>
+                            </div>
+
+                            <div className="bg-card border border-border/60 rounded-3xl p-5 shadow-sm relative overflow-hidden group hover:border-primary/30 transition-colors">
+                              <div className="absolute -right-4 -top-4 w-16 h-16 bg-emerald-500/10 rounded-full blur-xl group-hover:bg-emerald-500/20 transition-colors"></div>
+                              <div className="flex items-center gap-3 mb-3">
+                                <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                                  <TrendingUp className="w-4 h-4" />
+                                </div>
+                                <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Cost Per Lead</span>
+                              </div>
+                              <h4 className="text-2xl font-black text-foreground font-mono">₹{cpl}</h4>
+                              <p className="text-xs font-bold text-emerald-500 flex items-center gap-1 mt-1 font-mono">
+                                {cplTrend}
+                              </p>
+                            </div>
+
+                            <div className="bg-card border border-border/60 rounded-3xl p-5 shadow-sm relative overflow-hidden group hover:border-primary/30 transition-colors">
+                              <div className="absolute -right-4 -top-4 w-16 h-16 bg-amber-500/10 rounded-full blur-xl group-hover:bg-amber-500/20 transition-colors"></div>
+                              <div className="flex items-center gap-3 mb-3">
+                                <div className="w-8 h-8 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500">
+                                  <IndianRupee className="w-4 h-4" />
+                                </div>
+                                <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Amount Spent</span>
+                              </div>
+                              <h4 className="text-2xl font-black text-foreground font-mono">₹{amountSpent}</h4>
+                              <p className="text-xs font-bold text-emerald-500 flex items-center gap-1 mt-1">
+                                <TrendingUp className="w-3 h-3" /> {amountSpentTrend}
+                              </p>
+                            </div>
                           </div>
-                        </div>
 
-                        {/* Modules List Tabs */}
-                        {projectModules.length === 0 ? (
-                          <div className="bg-card border border-border/40 rounded-[2rem] p-12 text-center">
-                            <Layers className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
-                            <h3 className="font-bold text-foreground text-sm">No modules added yet</h3>
-                            <p className="text-xs text-muted-foreground mt-1">Create your first development module above to start tracking tasks.</p>
-                          </div>
-                        ) : (
-                          <>
-                             <div className="flex flex-wrap gap-2 pb-2 border-b border-border/20 items-center">
-                               {projectModules.map(m => {
-                                 const isActive = activeModule?.id === m.id;
-                                 return (
-                                   <div key={m.id} className="flex items-center gap-1 bg-muted/30 p-1.5 rounded-2xl border border-border/10">
-                                     <button
-                                       onClick={() => setSelectedModuleId(m.id)}
-                                       className={cn(
-                                         "px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5",
-                                         isActive
-                                           ? "bg-primary text-primary-foreground shadow-sm shadow-primary/10"
-                                           : "text-muted-foreground hover:bg-muted"
-                                       )}
-                                     >
-                                       📦 {m.name}
-                                     </button>
-                                     {isActive && (
-                                       <div className="flex gap-0.5 ml-1">
-                                         <button
-                                            onClick={() => {
-                                              setEditModuleForm({
-                                                id: m.id,
-                                                name: m.name,
-                                                assignedToName: m.assignedToName || "",
-                                                status: m.status || "todo",
-                                                priority: m.priority || "medium",
-                                                estimatedHours: m.estimatedHours || 0,
-                                                dueDate: m.dueDate || ""
-                                              });
-                                              setIsEditModuleModalOpen(true);
-                                            }}
-                                           className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
-                                           title="Rename module"
-                                         >
-                                           <Edit2 className="w-3.5 h-3.5" />
-                                         </button>
-                                         <button
-                                           onClick={() => {
-                                             setConfirmModalState({
-                                               isOpen: true,
-                                               title: "Delete Module",
-                                               description: "Are you sure you want to delete this module and all its tasks? This action cannot be undone.",
-                                               itemName: m.name,
-                                               action: () => {
-                                                 const updatedModules = projectModules.filter(pm => pm.id !== m.id);
-                                                 saveProjectModules(project.id, updatedModules, "Deleted Module", `Deleted module "${m.name}"`);
-                                                 setSelectedModuleId(updatedModules[0]?.id || null);
-                                                 toast.success(`Module "${m.name}" deleted successfully!`);
-                                               }
-                                             });
-                                           }}
-                                           className="p-1 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors"
-                                           title="Delete module"
-                                         >
-                                           <Trash2 className="w-3.5 h-3.5" />
-                                         </button>
-                                       </div>
-                                     )}
-                                   </div>
-                                 );
-                               })}
-                             </div>
-
-                            {/* Kanban Grid */}
-                            {activeModule && (
-                              <div className="flex gap-4 overflow-x-auto pb-4 w-full snap-x">
-                                {([
-                                  { status: "todo" as const, title: "To Do", color: "text-slate-500", bg: "bg-slate-500/5" },
-                                  { status: "in-progress" as const, title: "In Progress", color: "text-blue-500", bg: "bg-blue-500/5" },
-                                  { status: "bugs" as const, title: "Bugs", color: "text-rose-500", bg: "bg-rose-500/5" },
-                                  { status: "onhold" as const, title: "On Hold", color: "text-amber-500", bg: "bg-amber-500/5" },
-                                  { status: "pending" as const, title: "Pending", color: "text-purple-500", bg: "bg-purple-500/5" },
-                                  { status: "completed" as any, title: "Completed", color: "text-emerald-500", bg: "bg-emerald-500/5" },
-                                ]).map((col) => {
-                                  const colTasks = activeModule.tasks.filter(t => t.status === col.status);
-                                  const isAdding = inlineEdit?.id === activeModule!.id && inlineEdit?.field === col.status;
-                                  
-                                  return (
-                                    <div key={col.status} className={cn("space-y-3 p-4 rounded-[2rem] border border-border/40 flex flex-col min-w-[280px] max-w-[300px] w-full shrink-0 snap-align-start", col.bg)}>
-                                      <h4 className={cn("font-extrabold text-xs uppercase tracking-widest mb-4 flex items-center justify-between", col.color)}>
-                                        {col.title} <span className="bg-background border border-border/20 px-2 py-0.5 rounded-md text-foreground font-mono text-[10px]">{colTasks.length}</span>
-                                      </h4>
-
-                                      <div className="space-y-2.5 flex-1 overflow-y-auto max-h-[350px]">
-                                        {colTasks.map((t) => (
-                                          <div
-                                            key={t.id}
-                                            onClick={() => {
-                                              setEditingModuleTask({ ...t });
-                                              setIsModuleTaskModalOpen(true);
-                                            }}
-                                            className="bg-card border border-border/60 p-4 rounded-2xl shadow-sm hover:shadow-md hover:border-primary/20 transition-all group relative flex flex-col justify-between min-h-[110px] cursor-pointer"
-                                          >
-                                            <div>
-                                              <div className="flex flex-wrap gap-1 mb-2">
-                                                {t.phase && (
-                                                  <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 uppercase tracking-wide">
-                                                    {t.phase}
-                                                  </span>
-                                                )}
-                                                {t.dueDate && (
-                                                  <span className="text-[9px] font-black text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                                                    📅 {t.dueDate}
-                                                  </span>
-                                                )}
-                                              </div>
-                                              
-                                              <p className="font-bold text-sm text-foreground break-words pr-6 leading-snug">{t.title}</p>
-                                              
-                                              {/* Pending Reason Alert */}
-                                              {(t.status === 'onhold' || t.status === 'pending') && t.reasonForPending && (
-                                                <div className="mt-2 flex items-start gap-1 bg-amber-500/10 border border-amber-500/20 rounded-lg p-1.5">
-                                                  <span className="text-[9px] font-medium text-amber-700 leading-normal break-words">
-                                                    ⚠️ {t.reasonForPending}
-                                                  </span>
-                                                </div>
+                          {/* K7: Daily Data Entry Tasks card removed (no tasks in DM) */}
+                          <div className="grid grid-cols-1 gap-6">
+                            {/* Top Performing Campaigns (F6: backend auto) */}
+                            <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm">
+                              <div className="flex items-center justify-between mb-6">
+                                <h3 className="text-sm font-bold text-foreground">Top Performing Campaigns</h3>
+                                <span className="text-[10px] font-bold text-muted-foreground uppercase">Auto • by leads</span>
+                              </div>
+                              <div className="space-y-4">
+                                {topCampaigns.length === 0 && (
+                                  <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">No campaign data yet.</p>
+                                )}
+                                {(() => {
+                                  const maxLeads = Math.max(1, ...topCampaigns.map(c => Number(c.leads) || 0));
+                                  return topCampaigns.slice(0, 5).map((camp: any, i: number) => {
+                                    const leads = Number(camp.leads) || 0;
+                                    const spend = Number(camp.spend) || 0;
+                                    const pct = Math.round((leads / maxLeads) * 100);
+                                    return (
+                                      <div key={camp.campaign_name || i} className="flex items-center gap-4">
+                                        <div className="flex-1">
+                                          <div className="flex justify-between items-center mb-1 gap-2">
+                                            <span className="text-sm font-bold text-foreground truncate">{camp.campaign_name}</span>
+                                            <span className="text-xs font-bold text-muted-foreground font-mono whitespace-nowrap">
+                                              {leads.toLocaleString()} leads • ₹{spend.toLocaleString("en-IN")}
+                                              {Number(camp.revenue) > 0 && (
+                                                <span className="text-emerald-600"> • ₹{Number(camp.revenue).toLocaleString("en-IN")}</span>
                                               )}
-                                            </div>
-                                            
-                                            <div className="flex justify-between items-center mt-4 pt-3 border-t border-border/20">
-                                              <div className="flex items-center gap-1.5 max-w-[120px] truncate">
-                                                <div className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-black shrink-0 border border-primary/20">
-                                                  {(t.assignedToName || "U").charAt(0).toUpperCase()}
-                                                </div>
-                                                <span className="text-[11px] font-bold text-muted-foreground truncate">{t.assignedToName || "Unassigned"}</span>
-                                              </div>
-
-                                              <div className="flex gap-1 items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <div className="flex gap-0.5 mr-1">
-                                                  {col.status !== "todo" && (
-                                                    <button onClick={(e) => { e.stopPropagation(); handleMoveTask(t.id, 'left'); }} className="p-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground text-[9px] font-bold">←</button>
-                                                  )}
-                                                  {col.status !== "completed" && (
-                                                    <button onClick={(e) => { e.stopPropagation(); handleMoveTask(t.id, 'right'); }} className="p-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground text-[9px] font-bold">→</button>
-                                                  )}
-                                                </div>
-
-                                                <button
-                                                  onClick={(e) => { e.stopPropagation(); handleDeleteTask(t.id); }}
-                                                  className="text-rose-500 hover:text-rose-600 transition-colors p-1 rounded hover:bg-rose-500/10"
-                                                  title="Delete task"
-                                                >
-                                                  <Trash2 className="w-3.5 h-3.5" />
-                                                </button>
-                                              </div>
-                                            </div>
+                                            </span>
                                           </div>
-                                        ))}
+                                          <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                                            <div className={cn("h-full rounded-full transition-all duration-1000", i === 0 ? "bg-emerald-500" : "bg-primary")} style={{ width: `${pct}%` }}></div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  });
+                                })()}
+                              </div>
+                            </div>
 
-                                        {colTasks.length === 0 && (
-                                          <div className="py-8 text-center text-xs font-semibold text-muted-foreground/40 border-2 border-dashed border-border/20 rounded-2xl">
-                                            No tasks
+                            {/* F8: Monthly Report — 1 month select = full data auto (ochha button) */}
+                            <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm">
+                              <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+                                <h3 className="text-sm font-bold text-foreground">Monthly Report <span className="text-[10px] font-bold text-muted-foreground uppercase ml-1">Auto</span></h3>
+                                <Select
+                                  value={reportMonth || "none"}
+                                  onValueChange={(val) => setReportMonth(val === "none" ? "" : val)}
+                                >
+                                  <SelectTrigger className="h-9 min-w-[150px] px-3 bg-muted/50 border border-border/60 rounded-xl text-xs font-bold shadow-xs">
+                                    <SelectValue placeholder="Select month..." />
+                                  </SelectTrigger>
+                                  <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                                    <SelectItem value="none" className="text-xs font-semibold text-muted-foreground rounded-lg cursor-pointer">
+                                      Select month...
+                                    </SelectItem>
+                                    {getProjectMonths(project.startDate, project.endDate).months.map(m => (
+                                      <SelectItem key={m.value} value={m.value} className="text-xs font-semibold rounded-lg cursor-pointer">
+                                        {m.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              {reportLoading ? (
+                                <p className="text-xs text-muted-foreground font-semibold text-center py-6">Loading report...</p>
+                              ) : !reportData ? (
+                                <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">Select a month — all data loads automatically.</p>
+                              ) : (
+                                <>
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-4">
+                                    {[
+                                      { label: "Reach", v: reportData?.kpis?.reach },
+                                      { label: "Impressions", v: reportData?.kpis?.impressions },
+                                      { label: "Leads", v: reportData?.kpis?.leads },
+                                      { label: "Cost / Lead", v: reportData?.kpis?.cost_per_lead },
+                                      { label: "Spend", v: reportData?.kpis?.amount_spent },
+                                      { label: "Revenue", v: reportData?.kpis?.revenue },
+                                    ].map(k => (
+                                      <div key={k.label} className="rounded-2xl border border-border/40 bg-muted/20 px-3.5 py-3">
+                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{k.label}</p>
+                                        <p className="text-lg font-black text-foreground font-mono mt-0.5">{k.v?.formatted ?? "—"}</p>
+                                        {typeof k.v?.growth_pct === "number" && (
+                                          <p className={`text-[10px] font-bold font-mono ${k.v.growth_pct >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
+                                            {k.v.growth_pct >= 0 ? "▲" : "▼"} {Math.abs(k.v.growth_pct)}%
+                                          </p>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {(reportData?.top_campaigns || []).length > 0 && (
+                                    <div className="text-[11px] text-muted-foreground font-semibold">
+                                      Top: {(reportData.top_campaigns || []).slice(0, 3).map((c: any) => c.campaign_name).join(" • ")}
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </div>
+
+                            <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm">
+                              <div className="flex items-center justify-between mb-6">
+                                <div>
+                                  <h3 className="text-sm font-bold text-foreground">Recent Marketing Stats Logs</h3>
+                                  <p className="text-xs text-muted-foreground mt-0.5 font-medium">Daily log history for active campaigns</p>
+                                </div>
+                              </div>
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                  <thead>
+                                    {/* F7: full columns — Sr, date, campaign, reach, impression, lead, followers, revenue, spend, cost + action */}
+                                    <tr className="border-b border-border/40 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                                      <th className="pb-3 pl-4">Sr</th>
+                                      <th className="pb-3">Date</th>
+                                      <th className="pb-3">Campaign</th>
+                                      <th className="pb-3 text-right">Reach</th>
+                                      <th className="pb-3 text-right">Impr.</th>
+                                      <th className="pb-3 text-right">Leads</th>
+                                      <th className="pb-3 text-right">Followers</th>
+                                      <th className="pb-3 text-right">Revenue</th>
+                                      <th className="pb-3 text-right">Spend</th>
+                                      <th className="pb-3 text-right">CPL</th>
+                                      <th className="pb-3 text-right pr-4">Actions</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-border/20 text-xs font-semibold text-foreground">
+                                    {/* F5: same-name combine → 1 dropdown per campaign (totals + collapse) */}
+                                    {(() => {
+                                      const dailyStats = dateFiltered || [];
+                                      if (dailyStats.length === 0) {
+                                        return (
+                                          <tr>
+                                            <td colSpan={11} className="py-8 text-center text-xs font-semibold text-muted-foreground/40">
+                                              No stats logged yet matching the filters.
+                                            </td>
+                                          </tr>
+                                        );
+                                      }
+                                      const groups = new Map<string, any[]>();
+                                      dailyStats.forEach((s: any) => {
+                                        const k = s.campaignName || "Unknown";
+                                        if (!groups.has(k)) groups.set(k, []);
+                                        groups.get(k)!.push(s);
+                                      });
+                                      let sr = 0;
+                                      return Array.from(groups.entries()).flatMap(([name, items]) => {
+                                        const open = openCampGroups[name] !== false;
+                                        const tLeads = items.reduce((a, s) => a + (Number(s.leads) || 0), 0);
+                                        const tSpend = items.reduce((a, s) => a + (Number(s.spend) || 0), 0);
+                                        const tRev = items.reduce((a, s) => a + (Number(s.revenue) || 0), 0);
+                                        const rows: any[] = [(
+                                          <tr key={`g-${name}`} onClick={() => toggleCampGroup(name)} className="cursor-pointer bg-muted/30 hover:bg-muted/50 transition-colors">
+                                            <td colSpan={11} className="py-2.5 pl-4 pr-4">
+                                              <span className="flex items-center gap-2 flex-wrap">
+                                                <span className="text-muted-foreground text-[10px]">{open ? "▼" : "▶"}</span>
+                                                <span className="font-black text-foreground">{name}</span>
+                                                <span className="px-1.5 py-0.5 rounded-md bg-primary/10 text-primary text-[10px] font-black">{items.length} logs</span>
+                                                <span className="text-[11px] text-muted-foreground font-bold ml-auto">
+                                                  Leads: <span className="text-foreground font-mono">{tLeads.toLocaleString()}</span>
+                                                  {" • "}Spend: <span className="text-foreground font-mono">₹{tSpend.toLocaleString("en-IN")}</span>
+                                                  {" • "}Rev: <span className="text-emerald-600 font-mono">₹{tRev.toLocaleString("en-IN")}</span>
+                                                </span>
+                                              </span>
+                                            </td>
+                                          </tr>
+                                        )];
+                                        if (open) {
+                                          items.slice(0, 30).forEach((stat: any) => {
+                                            sr += 1;
+                                            const cpl = stat.leads > 0 ? Math.round(stat.spend / stat.leads) : 0;
+                                            rows.push((
+                                              <tr key={stat.id} className="hover:bg-muted/10 transition-colors">
+                                                <td className="py-3.5 pl-4 font-mono text-muted-foreground">{sr}</td>
+                                                <td className="py-3.5 font-mono">{safeFormat(stat.date, "dd/MM/yyyy")}</td>
+                                                <td className="py-3.5 text-muted-foreground">↳ {stat.campaignName}</td>
+                                                <td className="py-3.5 text-right font-mono">{Number(stat.reach || 0).toLocaleString()}</td>
+                                                <td className="py-3.5 text-right font-mono">{Number(stat.impressions || 0).toLocaleString()}</td>
+                                                <td className="py-3.5 text-right font-mono">{Number(stat.leads || 0).toLocaleString()}</td>
+                                                <td className="py-3.5 text-right font-mono">{Number(stat.followers || 0).toLocaleString()}</td>
+                                                <td className="py-3.5 text-right font-mono text-emerald-600">₹{Number(stat.revenue || 0).toLocaleString("en-IN")}</td>
+                                                <td className="py-3.5 text-right font-mono">₹{Number(stat.spend || 0).toLocaleString()}</td>
+                                                <td className="py-3.5 text-right font-mono text-primary">₹{cpl}</td>
+                                                <td className="py-3.5 text-right pr-4">
+                                                  <span className="inline-flex items-center gap-1">
+                                                    <button
+                                                      onClick={() => openEditStat(stat)}
+                                                      className="p-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors border border-border/30 shadow-sm bg-card inline-flex items-center justify-center"
+                                                      title="Edit stats log"
+                                                    >
+                                                      <Edit2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <button
+                                                      onClick={() => {
+                                                        setConfirmModalState({
+                                                          isOpen: true,
+                                                          title: "Delete Daily Stats Log",
+                                                          description: `Are you sure you want to delete this daily stat log for "${stat.campaignName}" on ${stat.date}? This action cannot be undone.`,
+                                                          itemName: `${stat.campaignName} (${stat.date})`,
+                                                          action: () => {
+                                                            (async () => {
+                                                              try {
+                                                                await api.delete(`/projects/${project.id}/marketing-stats/${stat.id}`, { showErrorToast: false });
+                                                                await fetchDmStats(project.id);
+                                                                await fetchDmCampaigns(project.id);
+                                                                toast.success("Daily stats log deleted successfully!");
+                                                              } catch (err: any) {
+                                                                toast.error(err?.message || "Failed to delete stats log");
+                                                              } finally {
+                                                                setConfirmModalState(prev => ({ ...prev, isOpen: false }));
+                                                              }
+                                                            })();
+                                                          }
+                                                        });
+                                                      }}
+                                                      className="p-1 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors border border-border/30 shadow-sm bg-card inline-flex items-center justify-center"
+                                                      title="Delete stats log"
+                                                    >
+                                                      <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                  </span>
+                                                </td>
+                                              </tr>
+                                            ));
+                                          });
+                                        }
+                                        return rows;
+                                      });
+                                    })()}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })() : (
+                  <>
+                    {/* Left Col: Tasks / Kanban */}
+                    <div className="lg:col-span-2 space-y-6">
+                      {isDevCategory(project.category) ? (() => {
+                        const projectModules: NonNullable<Project['modules']> = project.modules || [];
+                        const activeModule = projectModules.find(m => m.id === selectedModuleId) || projectModules[0];
+
+                        const handleAddModule = (e: React.FormEvent) => {
+                          e.preventDefault();
+                          if (!addModuleForm.name.trim()) return;
+                          const newModule: any = {
+                            id: `mod-${Date.now()}`,
+                            name: addModuleForm.name.trim(),
+                            assignedToName: addModuleForm.assignedToName || undefined,
+                            status: addModuleForm.status,
+                            priority: addModuleForm.priority,
+                            estimatedHours: addModuleForm.estimatedHours || undefined,
+                            dueDate: addModuleForm.dueDate || undefined,
+                            tasks: []
+                          };
+                          const updatedModules: any = [...projectModules, newModule];
+                          saveProjectModules(project.id, updatedModules, "Added Module", `Added new module "${newModule.name}"`);
+                          setSelectedModuleId(newModule.id);
+                          setAddModuleForm({
+                            name: "",
+                            assignedToName: "",
+                            status: "todo",
+                            priority: "medium",
+                            estimatedHours: 0,
+                            dueDate: ""
+                          });
+                          toast.success(`Module "${newModule.name}" created!`);
+                        };
+
+                        const handleAddModuleTask = (columnStatus: "todo" | "in-progress" | "bugs" | "onhold" | "pending" | "completed") => {
+                          if (!newModuleTaskTitle.trim() || !activeModule) return;
+                          const newTask = {
+                            id: `task-${Date.now()}`,
+                            title: newModuleTaskTitle.trim(),
+                            status: columnStatus
+                          };
+                          const updatedTasks = [...activeModule.tasks, newTask];
+                          const updatedModules: NonNullable<Project['modules']> = projectModules.map(m => m.id === activeModule.id ? { ...m, tasks: updatedTasks } : m);
+                          saveProjectModules(project.id, updatedModules, "Added Task", `Added task "${newTask.title}" inside module "${activeModule.name}"`);
+                          setNewModuleTaskTitle("");
+                          setInlineEdit(null); // Close task input
+                          toast.success("Task added successfully!");
+                        };
+
+                        const handleDeleteTask = (taskId: string) => {
+                          if (!activeModule) return;
+                          const taskToDelete = activeModule.tasks.find(t => t.id === taskId);
+                          const updatedTasks = activeModule.tasks.filter(t => t.id !== taskId);
+                          const updatedModules: NonNullable<Project['modules']> = projectModules.map(m => m.id === activeModule.id ? { ...m, tasks: updatedTasks } : m);
+                          saveProjectModules(project.id, updatedModules, "Deleted Task", `Deleted task "${taskToDelete?.title || taskId}" from module "${activeModule.name}"`);
+                          toast.success("Task deleted");
+                        };
+
+                        const handleMoveTask = (taskId: string, direction: 'left' | 'right') => {
+                          if (!activeModule) return;
+                          const task = activeModule.tasks.find(t => t.id === taskId);
+                          if (!task) return;
+
+                          const statusFlow: ("todo" | "in-progress" | "bugs" | "onhold" | "pending" | "completed")[] = ["todo", "in-progress", "bugs", "onhold", "pending", "completed"];
+                          const currIdx = statusFlow.indexOf(task.status);
+                          let nextIdx = currIdx + (direction === 'right' ? 1 : -1);
+                          if (nextIdx < 0 || nextIdx >= statusFlow.length) return;
+
+                          const updatedTasks = activeModule.tasks.map(t => t.id === taskId ? { ...t, status: statusFlow[nextIdx] as any } : t);
+                          const updatedModules: NonNullable<Project['modules']> = projectModules.map(m => m.id === activeModule.id ? { ...m, tasks: updatedTasks } : m);
+                          saveProjectModules(project.id, updatedModules, "Moved Task", `Moved task "${task.title}" to ${statusFlow[nextIdx]}`);
+                        };
+
+                        return (
+                          <div className="space-y-6 animate-in fade-in duration-300">
+                            {/* Modules Header */}
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                              <div>
+                                <h2 className="text-xl font-bold tracking-tight">Module-wise Kanban</h2>
+                                <p className="text-xs text-muted-foreground mt-1">Manage project components and developer boards</p>
+                              </div>
+
+                              <div className="flex gap-2 shrink-0">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setIsPresetsModalOpen(true);
+                                  }}
+                                  className="px-3 py-1.5 bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 text-xs font-bold rounded-xl flex items-center gap-1.5 border border-border/60 transition-colors shadow-sm"
+                                >
+                                  ⚙️ Load from Presets
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setAddModuleForm({
+                                      name: "",
+                                      assignedToName: "",
+                                      status: "todo",
+                                      priority: "medium",
+                                      estimatedHours: 0,
+                                      dueDate: ""
+                                    });
+                                    setIsAddModuleModalOpen(true);
+                                  }}
+                                  className="px-3 py-1.5 bg-primary text-primary-foreground text-xs font-bold rounded-xl hover:bg-primary/90 flex items-center gap-1 shrink-0 shadow-sm"
+                                >
+                                  <Plus className="w-3.5 h-3.5" /> Add Module
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Modules List Tabs */}
+                            {projectModules.length === 0 ? (
+                              <div className="bg-card border border-border/40 rounded-[2rem] p-12 text-center">
+                                <Layers className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
+                                <h3 className="font-bold text-foreground text-sm">No modules added yet</h3>
+                                <p className="text-xs text-muted-foreground mt-1">Create your first development module above to start tracking tasks.</p>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="flex flex-wrap gap-2 pb-2 border-b border-border/20 items-center">
+                                  {projectModules.map(m => {
+                                    const isActive = activeModule?.id === m.id;
+                                    return (
+                                      <div key={m.id} className="flex items-center gap-1 bg-muted/30 p-1.5 rounded-2xl border border-border/10">
+                                        <button
+                                          onClick={() => setSelectedModuleId(m.id)}
+                                          className={cn(
+                                            "px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5",
+                                            isActive
+                                              ? "bg-primary text-primary-foreground shadow-sm shadow-primary/10"
+                                              : "text-muted-foreground hover:bg-muted"
+                                          )}
+                                        >
+                                          📦 {m.name}
+                                        </button>
+                                        {isActive && (
+                                          <div className="flex gap-0.5 ml-1">
+                                            <button
+                                              onClick={() => {
+                                                setEditModuleForm({
+                                                  id: m.id,
+                                                  name: m.name,
+                                                  assignedToName: m.assignedToName || "",
+                                                  status: m.status || "todo",
+                                                  priority: m.priority || "medium",
+                                                  estimatedHours: m.estimatedHours || 0,
+                                                  dueDate: m.dueDate || ""
+                                                });
+                                                setIsEditModuleModalOpen(true);
+                                              }}
+                                              className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+                                              title="Rename module"
+                                            >
+                                              <Edit2 className="w-3.5 h-3.5" />
+                                            </button>
+                                            <button
+                                              onClick={() => {
+                                                setConfirmModalState({
+                                                  isOpen: true,
+                                                  title: "Delete Module",
+                                                  description: "Are you sure you want to delete this module and all its tasks? This action cannot be undone.",
+                                                  itemName: m.name,
+                                                  action: () => {
+                                                    const updatedModules = projectModules.filter(pm => pm.id !== m.id);
+                                                    saveProjectModules(project.id, updatedModules, "Deleted Module", `Deleted module "${m.name}"`);
+                                                    setSelectedModuleId(updatedModules[0]?.id || null);
+                                                    toast.success(`Module "${m.name}" deleted successfully!`);
+                                                  }
+                                                });
+                                              }}
+                                              className="p-1 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors"
+                                              title="Delete module"
+                                            >
+                                              <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
                                           </div>
                                         )}
                                       </div>
+                                    );
+                                  })}
+                                </div>
 
-                                      {/* Add Task Control */}
-                                      <button
-                                        onClick={() => {
-                                          setAddTaskForm({
-                                            title: "",
-                                            phase: "",
-                                            dueDate: "",
-                                            assignedToName: "",
-                                            status: col.status,
-                                            reasonForPending: ""
-                                          });
-                                          setIsAddTaskModalOpen(true);
-                                        }}
-                                        className="w-full py-2 border-2 border-dashed border-border/50 hover:border-primary/30 rounded-xl text-xs font-extrabold text-muted-foreground/60 hover:text-primary transition-all flex items-center justify-center gap-1 bg-card/40"
-                                      >
-                                        <Plus className="w-3 h-3" /> Add Task
-                                      </button>
-                                    </div>
-                                  );
-                                })}
-                              </div>
+                                {/* Kanban Grid */}
+                                {activeModule && (
+                                  <div className="flex gap-4 overflow-x-auto pb-4 w-full snap-x">
+                                    {([
+                                      { status: "todo" as const, title: "To Do", color: "text-slate-500", bg: "bg-slate-500/5" },
+                                      { status: "in-progress" as const, title: "In Progress", color: "text-blue-500", bg: "bg-blue-500/5" },
+                                      { status: "bugs" as const, title: "Bugs", color: "text-rose-500", bg: "bg-rose-500/5" },
+                                      { status: "onhold" as const, title: "On Hold", color: "text-amber-500", bg: "bg-amber-500/5" },
+                                      { status: "pending" as const, title: "Pending", color: "text-purple-500", bg: "bg-purple-500/5" },
+                                      { status: "completed" as any, title: "Completed", color: "text-emerald-500", bg: "bg-emerald-500/5" },
+                                    ]).map((col) => {
+                                      const colTasks = activeModule.tasks.filter(t => t.status === col.status);
+                                      const isAdding = inlineEdit?.id === activeModule!.id && inlineEdit?.field === col.status;
+
+                                      return (
+                                        <div key={col.status} className={cn("space-y-3 p-4 rounded-[2rem] border border-border/40 flex flex-col min-w-[280px] max-w-[300px] w-full shrink-0 snap-align-start", col.bg)}>
+                                          <h4 className={cn("font-extrabold text-xs uppercase tracking-widest mb-4 flex items-center justify-between", col.color)}>
+                                            {col.title} <span className="bg-background border border-border/20 px-2 py-0.5 rounded-md text-foreground font-mono text-[10px]">{colTasks.length}</span>
+                                          </h4>
+
+                                          <div className="space-y-2.5 flex-1 overflow-y-auto max-h-[350px]">
+                                            {colTasks.map((t) => (
+                                              <div
+                                                key={t.id}
+                                                onClick={() => {
+                                                  setEditingModuleTask({ ...t });
+                                                  setIsModuleTaskModalOpen(true);
+                                                }}
+                                                className="bg-card border border-border/60 p-4 rounded-2xl shadow-sm hover:shadow-md hover:border-primary/20 transition-all group relative flex flex-col justify-between min-h-[110px] cursor-pointer"
+                                              >
+                                                <div>
+                                                  <div className="flex flex-wrap gap-1 mb-2">
+                                                    {t.phase && (
+                                                      <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 uppercase tracking-wide">
+                                                        {t.phase}
+                                                      </span>
+                                                    )}
+                                                    {t.dueDate && (
+                                                      <span className="text-[9px] font-black text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                                                        📅 {t.dueDate}
+                                                      </span>
+                                                    )}
+                                                  </div>
+
+                                                  <p className="font-bold text-sm text-foreground break-words pr-6 leading-snug">{t.title}</p>
+
+                                                  {/* Pending Reason Alert */}
+                                                  {(t.status === 'onhold' || t.status === 'pending') && t.reasonForPending && (
+                                                    <div className="mt-2 flex items-start gap-1 bg-amber-500/10 border border-amber-500/20 rounded-lg p-1.5">
+                                                      <span className="text-[9px] font-medium text-amber-700 leading-normal break-words">
+                                                        ⚠️ {t.reasonForPending}
+                                                      </span>
+                                                    </div>
+                                                  )}
+                                                </div>
+
+                                                <div className="flex justify-between items-center mt-4 pt-3 border-t border-border/20">
+                                                  <div className="flex items-center gap-1.5 max-w-[120px] truncate">
+                                                    <div className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-black shrink-0 border border-primary/20">
+                                                      {(t.assignedToName || "U").charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <span className="text-[11px] font-bold text-muted-foreground truncate">{t.assignedToName || "Unassigned"}</span>
+                                                  </div>
+
+                                                  <div className="flex gap-1 items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <div className="flex gap-0.5 mr-1">
+                                                      {col.status !== "todo" && (
+                                                        <button onClick={(e) => { e.stopPropagation(); handleMoveTask(t.id, 'left'); }} className="p-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground text-[9px] font-bold">←</button>
+                                                      )}
+                                                      {col.status !== "completed" && (
+                                                        <button onClick={(e) => { e.stopPropagation(); handleMoveTask(t.id, 'right'); }} className="p-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground text-[9px] font-bold">→</button>
+                                                      )}
+                                                    </div>
+
+                                                    <button
+                                                      onClick={(e) => { e.stopPropagation(); handleDeleteTask(t.id); }}
+                                                      className="text-rose-500 hover:text-rose-600 transition-colors p-1 rounded hover:bg-rose-500/10"
+                                                      title="Delete task"
+                                                    >
+                                                      <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            ))}
+
+                                            {colTasks.length === 0 && (
+                                              <div className="py-8 text-center text-xs font-semibold text-muted-foreground/40 border-2 border-dashed border-border/20 rounded-2xl">
+                                                No tasks
+                                              </div>
+                                            )}
+                                          </div>
+
+                                          {/* Add Task Control */}
+                                          <button
+                                            onClick={() => {
+                                              setAddTaskForm({
+                                                title: "",
+                                                phase: "",
+                                                dueDate: "",
+                                                assignedToName: "",
+                                                status: col.status,
+                                                reasonForPending: ""
+                                              });
+                                              setIsAddTaskModalOpen(true);
+                                            }}
+                                            className="w-full py-2 border-2 border-dashed border-border/50 hover:border-primary/30 rounded-xl text-xs font-extrabold text-muted-foreground/60 hover:text-primary transition-all flex items-center justify-center gap-1 bg-card/40"
+                                          >
+                                            <Plus className="w-3 h-3" /> Add Task
+                                          </button>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </>
                             )}
-                          </>
-                        )}
-                      </div>
-                    );
-                  })() : (() => {
-                    const projectModules = project.modules || [];
-                    let milestonesModule = projectModules.find(m => m.id === "mod-milestones" || m.name === "Milestones");
-                    if (!milestonesModule) {
-                      milestonesModule = projectModules[0] || {
-                        id: "mod-milestones",
-                        name: "Milestones",
-                        tasks: [
-                          { id: "ms-1", title: "Requirement Analysis", status: "completed", dueDate: "25/09/2026", assignedToName: "Alex" },
-                          { id: "ms-2", title: "Design Phase", status: "completed", dueDate: "02/10/2026", assignedToName: "Sarah" },
-                          { id: "ms-3", title: "Development Sprint 1", status: "todo", dueDate: "09/10/2026", assignedToName: "Mike" },
-                          { id: "ms-4", title: "QA & Testing", status: "todo", dueDate: "16/10/2026", assignedToName: "Alex" },
-                        ]
-                      };
-                    }
-                    const milestones = milestonesModule.tasks || [];
-
-                    const handleToggleMilestone = (milestoneId: string) => {
-                      const updatedTasks = milestones.map(m => {
-                        if (m.id === milestoneId) {
-                          const nextStatus = m.status === "completed" ? "todo" : "completed";
-                          return { ...m, status: nextStatus as any };
+                          </div>
+                        );
+                      })() : (() => {
+                        const projectModules = project.modules || [];
+                        let milestonesModule = projectModules.find(m => m.id === "mod-milestones" || m.name === "Milestones");
+                        if (!milestonesModule) {
+                          milestonesModule = projectModules[0] || {
+                            id: "mod-milestones",
+                            name: "Milestones",
+                            tasks: [
+                              { id: "ms-1", title: "Requirement Analysis", status: "completed", dueDate: "25/09/2026", assignedToName: "Alex" },
+                              { id: "ms-2", title: "Design Phase", status: "completed", dueDate: "02/10/2026", assignedToName: "Sarah" },
+                              { id: "ms-3", title: "Development Sprint 1", status: "todo", dueDate: "09/10/2026", assignedToName: "Mike" },
+                              { id: "ms-4", title: "QA & Testing", status: "todo", dueDate: "16/10/2026", assignedToName: "Alex" },
+                            ]
+                          };
                         }
-                        return m;
-                      });
-                      const updatedModule = { ...milestonesModule, tasks: updatedTasks };
-                      const updatedModules = projectModules.some(m => m.id === milestonesModule.id)
-                        ? projectModules.map(m => m.id === milestonesModule.id ? updatedModule : m)
-                        : [updatedModule, ...projectModules];
-                      saveProjectModules(project.id, updatedModules, "Toggled Milestone", "Toggled milestone completion status");
-                    };
+                        const milestones = milestonesModule.tasks || [];
 
-                    const handleDeleteMilestone = (milestoneId: string, milestoneTitle: string) => {
-                      setConfirmModalState({
-                        isOpen: true,
-                        title: "Delete Milestone",
-                        description: `Are you sure you want to delete "${milestoneTitle}"? This action cannot be undone.`,
-                        itemName: milestoneTitle,
-                        action: () => {
-                          const updatedTasks = milestones.filter(m => m.id !== milestoneId);
+                        const handleToggleMilestone = (milestoneId: string) => {
+                          const updatedTasks = milestones.map(m => {
+                            if (m.id === milestoneId) {
+                              const nextStatus = m.status === "completed" ? "todo" : "completed";
+                              return { ...m, status: nextStatus as any };
+                            }
+                            return m;
+                          });
                           const updatedModule = { ...milestonesModule, tasks: updatedTasks };
                           const updatedModules = projectModules.some(m => m.id === milestonesModule.id)
                             ? projectModules.map(m => m.id === milestonesModule.id ? updatedModule : m)
                             : [updatedModule, ...projectModules];
-                          saveProjectModules(project.id, updatedModules, "Deleted Milestone", `Deleted milestone "${milestoneTitle}"`);
-                          toast.success("Milestone deleted successfully!");
-                        }
-                      });
-                    };
+                          saveProjectModules(project.id, updatedModules, "Toggled Milestone", "Toggled milestone completion status");
+                        };
 
-                    const handleMoveMilestone = (milestoneId: string, direction: 'left' | 'right') => {
-                      const mItem = milestones.find(m => m.id === milestoneId);
-                      if (!mItem) return;
-                      const flow: ("todo" | "in-progress" | "completed")[] = ["todo", "in-progress", "completed"];
-                      const currentStatus = (mItem.status === "completed" ? "completed" : mItem.status === "in-progress" ? "in-progress" : "todo");
-                      const currIdx = flow.indexOf(currentStatus);
-                      let nextIdx = currIdx + (direction === 'right' ? 1 : -1);
-                      if (nextIdx < 0 || nextIdx >= flow.length) return;
-                      const updatedTasks = milestones.map(m => m.id === milestoneId ? { ...m, status: flow[nextIdx] as any } : m);
-                      const updatedModule = { ...milestonesModule, tasks: updatedTasks };
-                      const updatedModules = projectModules.some(m => m.id === milestonesModule.id)
-                        ? projectModules.map(m => m.id === milestonesModule.id ? updatedModule : m)
-                        : [updatedModule, ...projectModules];
-                      saveProjectModules(project.id, updatedModules, "Moved Milestone", `Moved milestone "${mItem.title}" to ${flow[nextIdx]}`);
-                    };
+                        const handleDeleteMilestone = (milestoneId: string, milestoneTitle: string) => {
+                          setConfirmModalState({
+                            isOpen: true,
+                            title: "Delete Milestone",
+                            description: `Are you sure you want to delete "${milestoneTitle}"? This action cannot be undone.`,
+                            itemName: milestoneTitle,
+                            action: () => {
+                              const updatedTasks = milestones.filter(m => m.id !== milestoneId);
+                              const updatedModule = { ...milestonesModule, tasks: updatedTasks };
+                              const updatedModules = projectModules.some(m => m.id === milestonesModule.id)
+                                ? projectModules.map(m => m.id === milestonesModule.id ? updatedModule : m)
+                                : [updatedModule, ...projectModules];
+                              saveProjectModules(project.id, updatedModules, "Deleted Milestone", `Deleted milestone "${milestoneTitle}"`);
+                              toast.success("Milestone deleted successfully!");
+                            }
+                          });
+                        };
 
-                    const openAddMilestone = (defaultStatus: "todo" | "in-progress" | "completed" = "todo") => {
-                      setEditingMilestone(null);
-                      setMilestoneForm({
-                        title: "",
-                        dueDate: "",
-                        status: defaultStatus,
-                        assignedToName: ""
-                      });
-                      setIsAddMilestoneModalOpen(true);
-                    };
+                        const handleMoveMilestone = (milestoneId: string, direction: 'left' | 'right') => {
+                          const mItem = milestones.find(m => m.id === milestoneId);
+                          if (!mItem) return;
+                          const flow: ("todo" | "in-progress" | "completed")[] = ["todo", "in-progress", "completed"];
+                          const currentStatus = (mItem.status === "completed" ? "completed" : mItem.status === "in-progress" ? "in-progress" : "todo");
+                          const currIdx = flow.indexOf(currentStatus);
+                          let nextIdx = currIdx + (direction === 'right' ? 1 : -1);
+                          if (nextIdx < 0 || nextIdx >= flow.length) return;
+                          const updatedTasks = milestones.map(m => m.id === milestoneId ? { ...m, status: flow[nextIdx] as any } : m);
+                          const updatedModule = { ...milestonesModule, tasks: updatedTasks };
+                          const updatedModules = projectModules.some(m => m.id === milestonesModule.id)
+                            ? projectModules.map(m => m.id === milestonesModule.id ? updatedModule : m)
+                            : [updatedModule, ...projectModules];
+                          saveProjectModules(project.id, updatedModules, "Moved Milestone", `Moved milestone "${mItem.title}" to ${flow[nextIdx]}`);
+                        };
 
-                    const openEditMilestone = (task: any) => {
-                      setEditingMilestone(task);
-                      setMilestoneForm({
-                        title: task.title,
-                        dueDate: task.dueDate || "",
-                        status: task.status === "completed" ? "completed" : task.status === "in-progress" ? "in-progress" : "todo",
-                        assignedToName: task.assignedToName || ""
-                      });
-                      setIsAddMilestoneModalOpen(true);
-                    };
+                        const openAddMilestone = (defaultStatus: "todo" | "in-progress" | "completed" = "todo") => {
+                          setEditingMilestone(null);
+                          setMilestoneForm({
+                            title: "",
+                            dueDate: "",
+                            status: defaultStatus,
+                            assignedToName: ""
+                          });
+                          setIsAddMilestoneModalOpen(true);
+                        };
 
-                    return (
-                      <>
-                        {/* Milestones & Tasks Header */}
-                        <div className="flex items-center justify-between">
-                          <h2 className="text-xl font-bold tracking-tight">Milestones &amp; Tasks</h2>
-                          <div className="flex items-center gap-3">
-                            <button 
-                              onClick={() => openAddMilestone("todo")}
-                              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/90 transition-all shadow-sm"
-                            >
-                              <Plus className="w-3.5 h-3.5" /> Add Milestone
-                            </button>
-                            <button 
-                              onClick={() => setIsKanbanView(!isKanbanView)}
-                              className="text-xs font-bold text-primary hover:underline flex items-center gap-1 bg-primary/5 hover:bg-primary/10 px-3 py-1.5 rounded-xl transition-colors"
-                            >
-                              {isKanbanView ? "View List" : "View Kanban"}
-                            </button>
-                          </div>
-                        </div>
-                        
-                        {isKanbanView ? (
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                             {/* To Do Column */}
-                             <div className="space-y-3 bg-muted/20 p-4 rounded-3xl border border-border/40">
-                                <h4 className="font-bold text-xs text-muted-foreground uppercase tracking-widest mb-4 flex items-center justify-between">
-                                  To Do <span className="bg-background px-2 py-0.5 rounded-md font-mono text-foreground">{milestones.filter(m => m.status === 'todo' || (m.status !== 'in-progress' && m.status !== 'completed')).length}</span>
-                                </h4>
-                                {milestones.filter(m => m.status === 'todo' || (m.status !== 'in-progress' && m.status !== 'completed')).map((task) => (
-                                  <div key={task.id} className="bg-card border border-border/60 p-4 rounded-2xl shadow-sm hover:border-primary/30 hover:shadow-md transition-all group">
-                                     <p className="font-bold text-sm text-foreground break-words">{task.title}</p>
-                                     {task.dueDate && (
-                                       <p className="text-xs font-medium text-muted-foreground mt-2 flex items-center gap-1.5">
-                                         <Calendar className="w-3 h-3" /> Due {task.dueDate}
-                                       </p>
-                                     )}
-                                     <div className="flex items-center justify-between mt-3 pt-2 border-t border-border/20">
-                                       <span className="text-[11px] font-bold text-muted-foreground">{task.assignedToName || "Unassigned"}</span>
-                                       <div className="flex items-center gap-1">
-                                         <button onClick={() => handleMoveMilestone(task.id, 'right')} className="p-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground text-[10px] font-bold" title="Move to In Progress">→</button>
-                                         <button onClick={() => openEditMilestone(task)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground" title="Edit"><Edit2 className="w-3 h-3" /></button>
-                                         <button onClick={() => handleDeleteMilestone(task.id, task.title)} className="p-1 rounded hover:bg-rose-500/10 text-rose-500" title="Delete"><Trash2 className="w-3 h-3" /></button>
-                                       </div>
-                                     </div>
-                                  </div>
-                                ))}
-                                <button 
-                                  onClick={() => openAddMilestone("todo")} 
-                                  className="w-full py-2 border-2 border-dashed border-border/60 rounded-xl text-xs font-bold text-muted-foreground hover:bg-muted/50 transition-colors flex items-center justify-center gap-1"
+                        const openEditMilestone = (task: any) => {
+                          setEditingMilestone(task);
+                          setMilestoneForm({
+                            title: task.title,
+                            dueDate: task.dueDate || "",
+                            status: task.status === "completed" ? "completed" : task.status === "in-progress" ? "in-progress" : "todo",
+                            assignedToName: task.assignedToName || ""
+                          });
+                          setIsAddMilestoneModalOpen(true);
+                        };
+
+                        return (
+                          <>
+                            {/* Milestones & Tasks Header */}
+                            <div className="flex items-center justify-between">
+                              <h2 className="text-xl font-bold tracking-tight">Milestones &amp; Tasks</h2>
+                              <div className="flex items-center gap-3">
+                                <button
+                                  onClick={() => openAddMilestone("todo")}
+                                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/90 transition-all shadow-sm"
                                 >
-                                  <Plus className="w-3 h-3" /> Add Task
+                                  <Plus className="w-3.5 h-3.5" /> Add Milestone
                                 </button>
-                             </div>
-                             
-                             {/* In Progress Column */}
-                             <div className="space-y-3 bg-muted/20 p-4 rounded-3xl border border-border/40">
-                                <h4 className="font-bold text-xs text-primary uppercase tracking-widest mb-4 flex items-center justify-between">
-                                  In Progress <span className="bg-primary/10 text-primary px-2 py-0.5 rounded-md font-mono">{milestones.filter(m => m.status === 'in-progress').length}</span>
-                                </h4>
-                                {milestones.filter(m => m.status === 'in-progress').map((task) => (
-                                  <div key={task.id} className="bg-card border border-primary/20 p-4 rounded-2xl shadow-sm hover:shadow-md transition-all group">
-                                     <p className="font-bold text-sm text-foreground break-words">{task.title}</p>
-                                     {task.dueDate && (
-                                       <p className="text-xs font-medium text-muted-foreground mt-2 flex items-center gap-1.5">
-                                         <Calendar className="w-3 h-3" /> Due {task.dueDate}
-                                       </p>
-                                     )}
-                                     <div className="flex items-center justify-between mt-3 pt-2 border-t border-border/20">
-                                       <span className="text-[11px] font-bold text-muted-foreground">{task.assignedToName || "Unassigned"}</span>
-                                       <div className="flex items-center gap-1">
-                                         <button onClick={() => handleMoveMilestone(task.id, 'left')} className="p-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground text-[10px] font-bold" title="Move to To Do">←</button>
-                                         <button onClick={() => handleMoveMilestone(task.id, 'right')} className="p-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground text-[10px] font-bold" title="Move to Done">→</button>
-                                         <button onClick={() => openEditMilestone(task)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground" title="Edit"><Edit2 className="w-3 h-3" /></button>
-                                         <button onClick={() => handleDeleteMilestone(task.id, task.title)} className="p-1 rounded hover:bg-rose-500/10 text-rose-500" title="Delete"><Trash2 className="w-3 h-3" /></button>
-                                       </div>
-                                     </div>
-                                  </div>
-                                ))}
-                                {milestones.filter(m => m.status === 'in-progress').length === 0 && (
-                                  <div className="p-4 rounded-2xl border-2 border-border/40 border-dashed text-center py-8">
-                                    <p className="text-xs font-bold text-muted-foreground">No tasks</p>
-                                  </div>
-                                )}
-                                <button 
-                                  onClick={() => openAddMilestone("in-progress")} 
-                                  className="w-full py-2 border-2 border-dashed border-border/60 rounded-xl text-xs font-bold text-muted-foreground hover:bg-muted/50 transition-colors flex items-center justify-center gap-1"
+                                <button
+                                  onClick={() => setIsKanbanView(!isKanbanView)}
+                                  className="text-xs font-bold text-primary hover:underline flex items-center gap-1 bg-primary/5 hover:bg-primary/10 px-3 py-1.5 rounded-xl transition-colors"
                                 >
-                                  <Plus className="w-3 h-3" /> Add Task
+                                  {isKanbanView ? "View List" : "View Kanban"}
                                 </button>
-                             </div>
-                             
-                             {/* Done Column */}
-                             <div className="space-y-3 bg-muted/20 p-4 rounded-3xl border border-border/40">
-                                <h4 className="font-bold text-xs text-emerald-500 uppercase tracking-widest mb-4 flex items-center justify-between">
-                                  Done <span className="bg-emerald-500/10 text-emerald-500 px-2 py-0.5 rounded-md font-mono">{milestones.filter(m => m.status === 'completed').length}</span>
-                                </h4>
-                                {milestones.filter(m => m.status === 'completed').map((task) => (
-                                  <div key={task.id} className="bg-muted/40 border border-border/40 p-4 rounded-2xl group">
-                                     <p className="font-bold text-sm text-muted-foreground line-through decoration-muted-foreground/50 break-words">{task.title}</p>
-                                     <p className="text-xs font-medium text-emerald-600 mt-2 flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3" /> Completed</p>
-                                     <div className="flex items-center justify-between mt-3 pt-2 border-t border-border/20">
-                                       <span className="text-[11px] font-bold text-muted-foreground">{task.assignedToName || "Unassigned"}</span>
-                                       <div className="flex items-center gap-1">
-                                         <button onClick={() => handleMoveMilestone(task.id, 'left')} className="p-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground text-[10px] font-bold" title="Move back to In Progress">←</button>
-                                         <button onClick={() => openEditMilestone(task)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground" title="Edit"><Edit2 className="w-3 h-3" /></button>
-                                         <button onClick={() => handleDeleteMilestone(task.id, task.title)} className="p-1 rounded hover:bg-rose-500/10 text-rose-500" title="Delete"><Trash2 className="w-3 h-3" /></button>
-                                       </div>
-                                     </div>
-                                  </div>
-                                ))}
-                                <button 
-                                  onClick={() => openAddMilestone("completed")} 
-                                  className="w-full py-2 border-2 border-dashed border-border/60 rounded-xl text-xs font-bold text-muted-foreground hover:bg-muted/50 transition-colors flex items-center justify-center gap-1"
-                                >
-                                  <Plus className="w-3 h-3" /> Add Task
-                                </button>
-                             </div>
-                          </div>
-                        ) : (
-                          <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                            {milestones.map((task) => {
-                              const isDone = task.status === "completed";
-                              return (
-                                <div 
-                                  key={task.id} 
-                                  className="flex items-center justify-between p-4 rounded-2xl border border-border/40 hover:bg-muted/30 transition-all group"
-                                >
-                                  <div className="flex items-center gap-4 flex-1">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleToggleMilestone(task.id)}
-                                      className={cn(
-                                        "w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer shrink-0",
-                                        isDone 
-                                          ? "border-emerald-500 bg-emerald-500/10 text-emerald-500 shadow-sm" 
-                                          : "border-muted-foreground/40 hover:border-primary text-transparent hover:bg-primary/5"
+                              </div>
+                            </div>
+
+                            {isKanbanView ? (
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                {/* To Do Column */}
+                                <div className="space-y-3 bg-muted/20 p-4 rounded-3xl border border-border/40">
+                                  <h4 className="font-bold text-xs text-muted-foreground uppercase tracking-widest mb-4 flex items-center justify-between">
+                                    To Do <span className="bg-background px-2 py-0.5 rounded-md font-mono text-foreground">{milestones.filter(m => m.status === 'todo' || (m.status !== 'in-progress' && m.status !== 'completed')).length}</span>
+                                  </h4>
+                                  {milestones.filter(m => m.status === 'todo' || (m.status !== 'in-progress' && m.status !== 'completed')).map((task) => (
+                                    <div key={task.id} className="bg-card border border-border/60 p-4 rounded-2xl shadow-sm hover:border-primary/30 hover:shadow-md transition-all group">
+                                      <p className="font-bold text-sm text-foreground break-words">{task.title}</p>
+                                      {task.dueDate && (
+                                        <p className="text-xs font-medium text-muted-foreground mt-2 flex items-center gap-1.5">
+                                          <Calendar className="w-3 h-3" /> Due {task.dueDate}
+                                        </p>
                                       )}
-                                      title={isDone ? "Mark as Incomplete" : "Mark as Completed"}
-                                    >
-                                      <CheckCircle2 className={cn("w-4 h-4 transition-transform", isDone ? "scale-100" : "scale-0")} />
-                                    </button>
-                                    <div className="flex-1">
-                                      <p className={cn("font-bold text-sm transition-colors", isDone ? "line-through text-muted-foreground" : "text-foreground")}>
-                                        {task.title}
-                                      </p>
-                                      <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground font-medium">
-                                        {task.dueDate && (
-                                          <span className="flex items-center gap-1">
-                                            Due {task.dueDate}
-                                          </span>
-                                        )}
-                                        {task.assignedToName && (
-                                          <span className="flex items-center gap-1 text-[11px] font-bold text-primary/80">
-                                            👤 {task.assignedToName}
-                                          </span>
-                                        )}
-                                        <span className={cn(
-                                          "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase",
-                                          isDone ? "bg-emerald-500/10 text-emerald-600" : task.status === "in-progress" ? "bg-blue-500/10 text-blue-600" : "bg-muted text-muted-foreground"
-                                        )}>
-                                          {isDone ? "Completed" : task.status === "in-progress" ? "In Progress" : "To Do"}
-                                        </span>
+                                      <div className="flex items-center justify-between mt-3 pt-2 border-t border-border/20">
+                                        <span className="text-[11px] font-bold text-muted-foreground">{task.assignedToName || "Unassigned"}</span>
+                                        <div className="flex items-center gap-1">
+                                          <button onClick={() => handleMoveMilestone(task.id, 'right')} className="p-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground text-[10px] font-bold" title="Move to In Progress">→</button>
+                                          <button onClick={() => openEditMilestone(task)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground" title="Edit"><Edit2 className="w-3 h-3" /></button>
+                                          <button onClick={() => handleDeleteMilestone(task.id, task.title)} className="p-1 rounded hover:bg-rose-500/10 text-rose-500" title="Delete"><Trash2 className="w-3 h-3" /></button>
+                                        </div>
                                       </div>
                                     </div>
-                                  </div>
-                                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button
-                                      type="button"
-                                      onClick={() => openEditMilestone(task)}
-                                      className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors border border-border/40"
-                                      title="Edit milestone"
-                                    >
-                                      <Edit2 className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteMilestone(task.id, task.title)}
-                                      className="p-1.5 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors border border-border/40"
-                                      title="Delete milestone"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
+                                  ))}
+                                  <button
+                                    onClick={() => openAddMilestone("todo")}
+                                    className="w-full py-2 border-2 border-dashed border-border/60 rounded-xl text-xs font-bold text-muted-foreground hover:bg-muted/50 transition-colors flex items-center justify-center gap-1"
+                                  >
+                                    <Plus className="w-3 h-3" /> Add Task
+                                  </button>
                                 </div>
-                              );
-                            })}
-                            {milestones.length === 0 && (
-                              <div className="text-center py-12 text-muted-foreground text-xs font-semibold">
-                                No milestones added yet. Click "+ Add Milestone" to create your first milestone.
+
+                                {/* In Progress Column */}
+                                <div className="space-y-3 bg-muted/20 p-4 rounded-3xl border border-border/40">
+                                  <h4 className="font-bold text-xs text-primary uppercase tracking-widest mb-4 flex items-center justify-between">
+                                    In Progress <span className="bg-primary/10 text-primary px-2 py-0.5 rounded-md font-mono">{milestones.filter(m => m.status === 'in-progress').length}</span>
+                                  </h4>
+                                  {milestones.filter(m => m.status === 'in-progress').map((task) => (
+                                    <div key={task.id} className="bg-card border border-primary/20 p-4 rounded-2xl shadow-sm hover:shadow-md transition-all group">
+                                      <p className="font-bold text-sm text-foreground break-words">{task.title}</p>
+                                      {task.dueDate && (
+                                        <p className="text-xs font-medium text-muted-foreground mt-2 flex items-center gap-1.5">
+                                          <Calendar className="w-3 h-3" /> Due {task.dueDate}
+                                        </p>
+                                      )}
+                                      <div className="flex items-center justify-between mt-3 pt-2 border-t border-border/20">
+                                        <span className="text-[11px] font-bold text-muted-foreground">{task.assignedToName || "Unassigned"}</span>
+                                        <div className="flex items-center gap-1">
+                                          <button onClick={() => handleMoveMilestone(task.id, 'left')} className="p-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground text-[10px] font-bold" title="Move to To Do">←</button>
+                                          <button onClick={() => handleMoveMilestone(task.id, 'right')} className="p-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground text-[10px] font-bold" title="Move to Done">→</button>
+                                          <button onClick={() => openEditMilestone(task)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground" title="Edit"><Edit2 className="w-3 h-3" /></button>
+                                          <button onClick={() => handleDeleteMilestone(task.id, task.title)} className="p-1 rounded hover:bg-rose-500/10 text-rose-500" title="Delete"><Trash2 className="w-3 h-3" /></button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                  {milestones.filter(m => m.status === 'in-progress').length === 0 && (
+                                    <div className="p-4 rounded-2xl border-2 border-border/40 border-dashed text-center py-8">
+                                      <p className="text-xs font-bold text-muted-foreground">No tasks</p>
+                                    </div>
+                                  )}
+                                  <button
+                                    onClick={() => openAddMilestone("in-progress")}
+                                    className="w-full py-2 border-2 border-dashed border-border/60 rounded-xl text-xs font-bold text-muted-foreground hover:bg-muted/50 transition-colors flex items-center justify-center gap-1"
+                                  >
+                                    <Plus className="w-3 h-3" /> Add Task
+                                  </button>
+                                </div>
+
+                                {/* Done Column */}
+                                <div className="space-y-3 bg-muted/20 p-4 rounded-3xl border border-border/40">
+                                  <h4 className="font-bold text-xs text-emerald-500 uppercase tracking-widest mb-4 flex items-center justify-between">
+                                    Done <span className="bg-emerald-500/10 text-emerald-500 px-2 py-0.5 rounded-md font-mono">{milestones.filter(m => m.status === 'completed').length}</span>
+                                  </h4>
+                                  {milestones.filter(m => m.status === 'completed').map((task) => (
+                                    <div key={task.id} className="bg-muted/40 border border-border/40 p-4 rounded-2xl group">
+                                      <p className="font-bold text-sm text-muted-foreground line-through decoration-muted-foreground/50 break-words">{task.title}</p>
+                                      <p className="text-xs font-medium text-emerald-600 mt-2 flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3" /> Completed</p>
+                                      <div className="flex items-center justify-between mt-3 pt-2 border-t border-border/20">
+                                        <span className="text-[11px] font-bold text-muted-foreground">{task.assignedToName || "Unassigned"}</span>
+                                        <div className="flex items-center gap-1">
+                                          <button onClick={() => handleMoveMilestone(task.id, 'left')} className="p-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground text-[10px] font-bold" title="Move back to In Progress">←</button>
+                                          <button onClick={() => openEditMilestone(task)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground" title="Edit"><Edit2 className="w-3 h-3" /></button>
+                                          <button onClick={() => handleDeleteMilestone(task.id, task.title)} className="p-1 rounded hover:bg-rose-500/10 text-rose-500" title="Delete"><Trash2 className="w-3 h-3" /></button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                  <button
+                                    onClick={() => openAddMilestone("completed")}
+                                    className="w-full py-2 border-2 border-dashed border-border/60 rounded-xl text-xs font-bold text-muted-foreground hover:bg-muted/50 transition-colors flex items-center justify-center gap-1"
+                                  >
+                                    <Plus className="w-3 h-3" /> Add Task
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                {milestones.map((task) => {
+                                  const isDone = task.status === "completed";
+                                  return (
+                                    <div
+                                      key={task.id}
+                                      className="flex items-center justify-between p-4 rounded-2xl border border-border/40 hover:bg-muted/30 transition-all group"
+                                    >
+                                      <div className="flex items-center gap-4 flex-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleToggleMilestone(task.id)}
+                                          className={cn(
+                                            "w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer shrink-0",
+                                            isDone
+                                              ? "border-emerald-500 bg-emerald-500/10 text-emerald-500 shadow-sm"
+                                              : "border-muted-foreground/40 hover:border-primary text-transparent hover:bg-primary/5"
+                                          )}
+                                          title={isDone ? "Mark as Incomplete" : "Mark as Completed"}
+                                        >
+                                          <CheckCircle2 className={cn("w-4 h-4 transition-transform", isDone ? "scale-100" : "scale-0")} />
+                                        </button>
+                                        <div className="flex-1">
+                                          <p className={cn("font-bold text-sm transition-colors", isDone ? "line-through text-muted-foreground" : "text-foreground")}>
+                                            {task.title}
+                                          </p>
+                                          <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground font-medium">
+                                            {task.dueDate && (
+                                              <span className="flex items-center gap-1">
+                                                Due {task.dueDate}
+                                              </span>
+                                            )}
+                                            {task.assignedToName && (
+                                              <span className="flex items-center gap-1 text-[11px] font-bold text-primary/80">
+                                                👤 {task.assignedToName}
+                                              </span>
+                                            )}
+                                            <span className={cn(
+                                              "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase",
+                                              isDone ? "bg-emerald-500/10 text-emerald-600" : task.status === "in-progress" ? "bg-blue-500/10 text-blue-600" : "bg-muted text-muted-foreground"
+                                            )}>
+                                              {isDone ? "Completed" : task.status === "in-progress" ? "In Progress" : "To Do"}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button
+                                          type="button"
+                                          onClick={() => openEditMilestone(task)}
+                                          className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors border border-border/40"
+                                          title="Edit milestone"
+                                        >
+                                          <Edit2 className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteMilestone(task.id, task.title)}
+                                          className="p-1.5 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors border border-border/40"
+                                          title="Delete milestone"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                                {milestones.length === 0 && (
+                                  <div className="text-center py-12 text-muted-foreground text-xs font-semibold">
+                                    No milestones added yet. Click "+ Add Milestone" to create your first milestone.
+                                  </div>
+                                )}
                               </div>
                             )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                    <div className="space-y-6">
+                      <h2 className="text-xl font-bold tracking-tight">Team Members</h2>
+                      <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm space-y-4">
+                        {project.team.map((member, i) => (
+                          <div key={i} className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl overflow-hidden bg-muted">
+                              <img src={member.avatar} alt={member.name} className="w-full h-full object-cover" />
+                            </div>
+                            <div>
+                              <p className="font-bold text-foreground text-sm">{member.name}</p>
+                              <p className="text-xs text-muted-foreground">Team Member</p>
+                            </div>
                           </div>
-                        )}
-                      </>
-                    );
-                  })()}
-                </div>
-                <div className="space-y-6">
-                  <h2 className="text-xl font-bold tracking-tight">Team Members</h2>
-                  <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm space-y-4">
-                     {project.team.map((member, i) => (
-                       <div key={i} className="flex items-center gap-3">
-                         <div className="w-10 h-10 rounded-xl overflow-hidden bg-muted">
-                           <img src={member.avatar} alt={member.name} className="w-full h-full object-cover" />
-                         </div>
-                         <div>
-                           <p className="font-bold text-foreground text-sm">{member.name}</p>
-                           <p className="text-xs text-muted-foreground">Team Member</p>
-                         </div>
-                       </div>
-                     ))}
-                  </div>
-                </div>
-              </>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
+
           </div>
-          )}
-
-        </div>
-        {/* SMM Content Calendar Settings Modal */}
-        {isCalendarSettingsOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-card w-full max-w-sm rounded-[2rem] border border-border/60 shadow-2xl overflow-hidden flex flex-col">
-              <div className="flex items-center justify-between px-6 py-5 border-b border-border/50">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 text-primary rounded-xl">
-                    <Settings2 className="w-5 h-5" />
-                  </div>
-                  <h3 className="text-base font-black text-foreground">Calendar Settings</h3>
-                </div>
-                <button onClick={() => setIsCalendarSettingsOpen(false)} className="p-2 text-muted-foreground hover:bg-muted rounded-full transition-colors">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="p-6 space-y-4">
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  Set the default number of days *prior* to the posting date for each pipeline stage.
-                </p>
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Script Date (Days Before)</label>
-                    <input type="number" min="0" value={calendarOffsets.script} onChange={(e) => setCalendarOffsets({ ...calendarOffsets, script: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Shoot Date (Days Before)</label>
-                    <input type="number" min="0" value={calendarOffsets.shoot} onChange={(e) => setCalendarOffsets({ ...calendarOffsets, shoot: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Editing/Graphics (Days Before)</label>
-                    <input type="number" min="0" value={calendarOffsets.editing} onChange={(e) => setCalendarOffsets({ ...calendarOffsets, editing: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Thumbnail (Days Before)</label>
-                    <input type="number" min="0" value={calendarOffsets.thumbnail ?? 5} onChange={(e) => setCalendarOffsets({ ...calendarOffsets, thumbnail: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Approval (Days Before)</label>
-                    <input type="number" min="0" value={calendarOffsets.approval} onChange={(e) => setCalendarOffsets({ ...calendarOffsets, approval: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
-                  </div>
-                </div>
-              </div>
-              <div className="px-6 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
-                <button onClick={() => setIsCalendarSettingsOpen(false)} className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors">Cancel</button>
-                <button
-                  onClick={async () => {
-                    localStorage.setItem('hrms_calendar_offsets', JSON.stringify(calendarOffsets));
-                    if (selectedProjectId) {
-                      try {
-                        await api.put(`/projects/${selectedProjectId}/content/settings`, {
-                          project_id: selectedProjectId,
-                          script_days_before: Number(calendarOffsets.script) || 0,
-                          shoot_days_before: Number(calendarOffsets.shoot) || 0,
-                          editing_graphics_days_before: Number(calendarOffsets.editing) || 0,
-                          thumbnail_days_before: Number(calendarOffsets.thumbnail) || 0,
-                          approval_days_before: Number(calendarOffsets.approval) || 0,
-                        });
-                      } catch (err) {
-                        console.error("Failed to save settings to backend:", err);
-                      }
-                    }
-                    setIsCalendarSettingsOpen(false);
-                    toast.success("Calendar offset presets saved!");
-                  }}
-                  className="px-5 py-2 bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm rounded-xl transition-all shadow-sm"
-                >
-                  Save Presets
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Task 24: CC Custom PDF Export Modal */}
-        {isPdfExportModalOpen && (() => {
-          const allColumns = [
-            "Schedule",
-            "Type",
-            "Topic / Concept",
-            "Brand Person",
-            "Script",
-            "Shoot",
-            "Editing",
-            "Thumbnail",
-            "Caption",
-            "Final Link",
-            "Status"
-          ];
-
-          return (
-            <div className="fixed inset-0 z-[200] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-              <div className="bg-card w-full max-w-md rounded-[2rem] border border-border/60 shadow-2xl overflow-hidden flex flex-col">
+          {/* SMM Content Calendar Settings Modal */}
+          {isCalendarSettingsOpen && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+              <div className="bg-card w-full max-w-sm rounded-[2rem] border border-border/60 shadow-2xl overflow-hidden flex flex-col">
                 <div className="flex items-center justify-between px-6 py-5 border-b border-border/50">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-primary/10 text-primary rounded-xl">
-                      <Download className="w-5 h-5" />
+                      <Settings2 className="w-5 h-5" />
                     </div>
-                    <div>
-                      <h3 className="text-base font-black text-foreground">Export Content Calendar</h3>
-                      <p className="text-[11px] text-muted-foreground">Select columns to include in PDF export</p>
-                    </div>
+                    <h3 className="text-base font-black text-foreground">Calendar Settings</h3>
                   </div>
-                  <button onClick={() => setIsPdfExportModalOpen(false)} className="p-2 text-muted-foreground hover:bg-muted rounded-full transition-colors">
+                  <button onClick={() => setIsCalendarSettingsOpen(false)} className="p-2 text-muted-foreground hover:bg-muted rounded-full transition-colors">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
-
                 <div className="p-6 space-y-4">
-                  <div className="flex justify-between items-center pb-2 border-b border-border/40">
-                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Visible Columns ({pdfSelectedColumns.length}/{allColumns.length})</span>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setPdfSelectedColumns([...allColumns])}
-                        className="text-[11px] font-bold text-primary hover:underline"
-                      >
-                        Select All
-                      </button>
-                      <span className="text-muted-foreground text-xs">•</span>
-                      <button
-                        type="button"
-                        onClick={() => setPdfSelectedColumns(["Schedule", "Topic / Concept", "Status"])}
-                        className="text-[11px] font-bold text-muted-foreground hover:text-foreground"
-                      >
-                        Reset Minimal
-                      </button>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Set the default number of days *prior* to the posting date for each pipeline stage.
+                  </p>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Script Date (Days Before)</label>
+                      <input type="number" min="0" value={calendarOffsets.script} onChange={(e) => setCalendarOffsets({ ...calendarOffsets, script: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Shoot Date (Days Before)</label>
+                      <input type="number" min="0" value={calendarOffsets.shoot} onChange={(e) => setCalendarOffsets({ ...calendarOffsets, shoot: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Editing/Graphics (Days Before)</label>
+                      <input type="number" min="0" value={calendarOffsets.editing} onChange={(e) => setCalendarOffsets({ ...calendarOffsets, editing: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Thumbnail (Days Before)</label>
+                      <input type="number" min="0" value={calendarOffsets.thumbnail ?? 5} onChange={(e) => setCalendarOffsets({ ...calendarOffsets, thumbnail: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Approval (Days Before)</label>
+                      <input type="number" min="0" value={calendarOffsets.approval} onChange={(e) => setCalendarOffsets({ ...calendarOffsets, approval: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
                     </div>
                   </div>
-
-                  <div className="grid grid-cols-2 gap-2.5 max-h-[300px] overflow-y-auto pr-1">
-                    {allColumns.map((col) => {
-                      const isChecked = pdfSelectedColumns.includes(col);
-                      return (
-                        <label
-                          key={col}
-                          className={cn(
-                            "flex items-center gap-2.5 p-2.5 rounded-xl border text-xs font-semibold cursor-pointer transition-all",
-                            isChecked 
-                              ? "bg-primary/5 border-primary/40 text-foreground" 
-                              : "bg-muted/20 border-border/40 text-muted-foreground hover:bg-muted/40"
-                          )}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setPdfSelectedColumns([...pdfSelectedColumns, col]);
-                              } else {
-                                setPdfSelectedColumns(pdfSelectedColumns.filter(c => c !== col));
-                              }
-                            }}
-                            className="rounded border-border text-primary focus:ring-primary w-4 h-4"
-                          />
-                          <span>{col}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
                 </div>
-
                 <div className="px-6 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
-                  <button onClick={() => setIsPdfExportModalOpen(false)} className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors">
-                    Cancel
-                  </button>
+                  <button onClick={() => setIsCalendarSettingsOpen(false)} className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors">Cancel</button>
                   <button
-                    onClick={handleGenerateCcPdf}
-                    className="px-5 py-2 bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm rounded-xl transition-all shadow-sm flex items-center gap-1.5"
+                    onClick={async () => {
+                      localStorage.setItem('hrms_calendar_offsets', JSON.stringify(calendarOffsets));
+                      if (selectedProjectId) {
+                        try {
+                          await api.put(`/projects/${selectedProjectId}/content/settings`, {
+                            project_id: selectedProjectId,
+                            script_days_before: Number(calendarOffsets.script) || 0,
+                            shoot_days_before: Number(calendarOffsets.shoot) || 0,
+                            editing_graphics_days_before: Number(calendarOffsets.editing) || 0,
+                            thumbnail_days_before: Number(calendarOffsets.thumbnail) || 0,
+                            approval_days_before: Number(calendarOffsets.approval) || 0,
+                          });
+                        } catch (err) {
+                          console.error("Failed to save settings to backend:", err);
+                        }
+                      }
+                      setIsCalendarSettingsOpen(false);
+                      toast.success("Calendar offset presets saved!");
+                    }}
+                    className="px-5 py-2 bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm rounded-xl transition-all shadow-sm"
                   >
-                    <Printer className="w-4 h-4" />
-                    <span>Generate & Print PDF</span>
+                    Save Presets
                   </button>
                 </div>
               </div>
             </div>
-          );
-        })()}
+          )}
 
-        {/* SMM Content Calendar Modal - plain overlay */}
-        {isAddCalendarItemModalOpen && (() => {
-          const currentSelectedProject = projects.find(p => p.id === selectedProjectId);
-          return (
-            <div
-              className="fixed inset-0 z-[200] flex items-center justify-center"
-              onClick={() => { setIsAddCalendarItemModalOpen(false); setEditingCalendarItem(null); setActiveCalendarTab('general'); }}
-            >
-              {/* Backdrop */}
-              <div className="absolute inset-0 bg-black/80" />
-              {/* Modal Panel */}
-              <div
-                className="relative z-10 w-[calc(100%-2rem)] max-w-[700px] bg-card border border-border/60 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden"
-                style={{ height: '550px' }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Header */}
-                <div className="flex items-center justify-between px-8 py-6 border-b border-border/50 bg-muted/30 shrink-0">
-                  <div>
-                    <h2 className="text-xl md:text-2xl font-black tracking-tight">{editingCalendarItem ? "Edit Content Idea" : "New Content Idea"}</h2>
-                    <p className="text-xs text-muted-foreground mt-1">Configure SMM posting slots, pipeline assets and approvals</p>
+          {/* Task 24: CC Custom PDF Export Modal */}
+          {isPdfExportModalOpen && (() => {
+            const allColumns = [
+              "Schedule",
+              "Type",
+              "Topic / Concept",
+              "Brand Person",
+              "Script",
+              "Shoot",
+              "Editing",
+              "Thumbnail",
+              "Caption",
+              "Final Link",
+              "Status"
+            ];
+
+            return (
+              <div className="fixed inset-0 z-[200] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                <div className="bg-card w-full max-w-md rounded-[2rem] border border-border/60 shadow-2xl overflow-hidden flex flex-col">
+                  <div className="flex items-center justify-between px-6 py-5 border-b border-border/50">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-primary/10 text-primary rounded-xl">
+                        <Download className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-black text-foreground">Export Content Calendar</h3>
+                        <p className="text-[11px] text-muted-foreground">Select columns to include in PDF export</p>
+                      </div>
+                    </div>
+                    <button onClick={() => setIsPdfExportModalOpen(false)} className="p-2 text-muted-foreground hover:bg-muted rounded-full transition-colors">
+                      <X className="w-4 h-4" />
+                    </button>
                   </div>
+
+                  <div className="p-6 space-y-4">
+                    <div className="space-y-1.5 pb-2 border-b border-border/40">
+                      <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                        Calendar Month
+                      </label>
+                      <Select value={pdfMonthFilter} onValueChange={(val) => setPdfMonthFilter(val)}>
+                        <SelectTrigger className="h-9 w-full bg-background border border-border/60 rounded-xl text-xs font-bold">
+                          <SelectValue placeholder="Select Month" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                          <SelectItem value="Current" className="text-xs font-semibold">Current Month ({format(new Date(), "MMM yyyy")})</SelectItem>
+                          <SelectItem value="All" className="text-xs font-semibold">All Months</SelectItem>
+                          {(() => {
+                            const currentProj = projects.find(p => p.id === selectedProjectId);
+                            if (!currentProj) return null;
+                            return getProjectMonths(currentProj.startDate, currentProj.endDate).months.map(m => (
+                              <SelectItem key={m.value} value={m.value} className="text-xs font-semibold">{m.label}</SelectItem>
+                            ));
+                          })()}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex justify-between items-center pb-2 border-b border-border/40">
+                      <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Visible Columns ({pdfSelectedColumns.length}/{allColumns.length})</span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPdfSelectedColumns([...allColumns])}
+                          className="text-[11px] font-bold text-primary hover:underline"
+                        >
+                          Select All
+                        </button>
+                        <span className="text-muted-foreground text-xs">•</span>
+                        <button
+                          type="button"
+                          onClick={() => setPdfSelectedColumns(["Schedule", "Topic / Concept", "Status"])}
+                          className="text-[11px] font-bold text-muted-foreground hover:text-foreground"
+                        >
+                          Reset Minimal
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2.5 max-h-[300px] overflow-y-auto pr-1">
+                      {allColumns.map((col) => {
+                        const isChecked = pdfSelectedColumns.includes(col);
+                        return (
+                          <label
+                            key={col}
+                            className={cn(
+                              "flex items-center gap-2.5 p-2.5 rounded-xl border text-xs font-semibold cursor-pointer transition-all",
+                              isChecked
+                                ? "bg-primary/5 border-primary/40 text-foreground"
+                                : "bg-muted/20 border-border/40 text-muted-foreground hover:bg-muted/40"
+                            )}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setPdfSelectedColumns([...pdfSelectedColumns, col]);
+                                } else {
+                                  setPdfSelectedColumns(pdfSelectedColumns.filter(c => c !== col));
+                                }
+                              }}
+                              className="rounded border-border text-primary focus:ring-primary w-4 h-4"
+                            />
+                            <span>{col}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="px-6 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
+                    <button onClick={() => setIsPdfExportModalOpen(false)} className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors">
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleGenerateCcPdf}
+                      className="px-5 py-2 bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm rounded-xl transition-all shadow-sm flex items-center gap-1.5"
+                    >
+                      <Printer className="w-4 h-4" />
+                      <span>Generate & Print PDF</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* SMM Content Calendar Modal - plain overlay */}
+          {isAddCalendarItemModalOpen && (() => {
+            const currentSelectedProject = projects.find(p => p.id === selectedProjectId);
+            return (
+              <div
+                className="fixed inset-0 z-[200] flex items-center justify-center"
+                onClick={() => { setIsAddCalendarItemModalOpen(false); setEditingCalendarItem(null); setActiveCalendarTab('general'); }}
+              >
+                {/* Backdrop */}
+                <div className="absolute inset-0 bg-black/80" />
+                {/* Modal Panel */}
+                <div
+                  className="relative z-10 w-[calc(100%-2rem)] max-w-[700px] bg-card border border-border/60 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden"
+                  style={{ height: '550px' }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-8 py-6 border-b border-border/50 bg-muted/30 shrink-0">
+                    <div>
+                      <h2 className="text-xl md:text-2xl font-black tracking-tight">{editingCalendarItem ? "Edit Content Idea" : "New Content Idea"}</h2>
+                      <p className="text-xs text-muted-foreground mt-1">Configure SMM posting slots, pipeline assets and approvals</p>
+                    </div>
+                    <button
+                      onClick={() => { setIsAddCalendarItemModalOpen(false); setEditingCalendarItem(null); setActiveCalendarTab('general'); }}
+                      className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  {/* Body */}
+                  <div className="flex flex-row overflow-hidden flex-1">
+                    {/* Sidebar Tabs */}
+                    <div className="w-44 shrink-0 border-r border-border/50 bg-muted/20 p-3 flex flex-col gap-1 overflow-y-auto">
+                      {([
+                        { id: 'general', label: 'General Info', icon: <FileText className="w-4 h-4" /> },
+                        { id: 'production', label: 'Production', icon: <Video className="w-4 h-4" /> },
+                        { id: 'publishing', label: 'Publishing', icon: <Instagram className="w-4 h-4" /> },
+                      ] as const).map(tab => (
+                        <button
+                          key={tab.id}
+                          onClick={() => setActiveCalendarTab(tab.id)}
+                          className={cn(
+                            "flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold transition-all text-left w-full",
+                            activeCalendarTab === tab.id
+                              ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20"
+                              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                          )}
+                        >
+                          {tab.icon}
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+                    {/* Tab Contents */}
+                    <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-5">
+                      {activeCalendarTab === 'general' && (
+                        <>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Posting Date <span className="text-rose-500">*</span></label>
+                              <DatePicker
+                                value={calendarForm.postingDate || ""}
+                                onChange={(newDate) => {
+                                  const dates = getPresetDates(newDate);
+                                  setCalendarForm({
+                                    ...calendarForm,
+                                    postingDate: newDate,
+                                    scriptDate: calendarForm.scriptDate || dates.scriptDate || "",
+                                    shootDate: calendarForm.shootDate || dates.shootDate || "",
+                                    editingStart: calendarForm.editingStart || dates.editingStart || "",
+                                    captionDate: calendarForm.captionDate || dates.captionDate || "",
+                                    thumbnailDate: calendarForm.thumbnailDate || dates.thumbnailDate || "",
+                                    approval: calendarForm.approval || dates.approval || ""
+                                  });
+                                }}
+                                className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-semibold"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Format Type</label>
+                              <Select value={calendarForm.type || "Post"} onValueChange={(val) => setCalendarForm({ ...calendarForm, type: val })}>
+                                <SelectTrigger className="w-full h-9 bg-muted/50 border-border/50 rounded-xl text-xs font-semibold">
+                                  <SelectValue placeholder="Format Type" />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                                  {["Post", "Reel", "Story", "Carousel"].map(t => (
+                                    <SelectItem key={t} value={t} className="text-xs font-semibold rounded-lg cursor-pointer">
+                                      {t}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Topic / Hook <span className="text-rose-500">*</span></label>
+                            <input type="text" value={calendarForm.topic || ""} onChange={(e) => setCalendarForm({ ...calendarForm, topic: e.target.value })} placeholder="Hook title or main idea" className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Concept Details &amp; Notes</label>
+                            <textarea value={calendarForm.concept || ""} onChange={(e) => setCalendarForm({ ...calendarForm, concept: e.target.value })} placeholder="Brief storyboard or visual concepts..." rows={2} className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none resize-none font-medium" />
+                          </div>
+                          {/* Issues List inside Full Edit Modal */}
+                          {editingCalendarItem && currentSelectedProject && (
+                            <div className="space-y-2 p-4 bg-rose-500/5 rounded-2xl border border-rose-500/20">
+                              <h4 className="text-[10px] font-bold text-rose-600 uppercase tracking-wider block mb-1">Active Issues ({(calendarForm.issues || []).length})</h4>
+                              <div className="space-y-1.5 max-h-[100px] overflow-y-auto pr-1">
+                                {((calendarForm.issues || [])).map((issue: any) => (
+                                  <div key={issue.id} className="flex justify-between items-start text-[11px] font-bold text-rose-700 bg-white/50 p-1.5 rounded-lg border border-rose-500/10">
+                                    <span className="text-left">{issue.text} <span className="text-[9px] text-rose-400 font-mono">({issue.timestamp})</span></span>
+                                    <button type="button" onClick={() => {
+                                      const updated = (calendarForm.issues || []).filter((i: any) => i.id !== issue.id);
+                                      setCalendarForm({ ...calendarForm, issues: updated });
+                                      logProjectActivity(currentSelectedProject.id, "Resolved Issue", `Resolved issue "${issue.text}" on content idea "${calendarForm.topic}"`);
+                                    }} className="text-[9px] text-rose-500 hover:text-rose-700 ml-1">✕</button>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="flex gap-2 mt-2">
+                                <input
+                                  type="text"
+                                  placeholder="Log a new issue..."
+                                  id="modal_new_issue_input"
+                                  className="flex-1 px-3 py-1.5 bg-background border border-border/50 rounded-xl text-xs focus:outline-none font-semibold text-foreground"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const input = document.getElementById("modal_new_issue_input") as HTMLInputElement;
+                                    if (input && input.value.trim()) {
+                                      const now = new Date();
+                                      const dateStr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+                                      const newIssue = {
+                                        id: `issue-${Date.now()}`,
+                                        text: input.value.trim(),
+                                        timestamp: dateStr
+                                      };
+                                      setCalendarForm({
+                                        ...calendarForm,
+                                        issues: [...(calendarForm.issues || []), newIssue]
+                                      });
+                                      logProjectActivity(currentSelectedProject.id, "Logged Issue", `Added issue "${input.value.trim()}" on content idea "${calendarForm.topic}"`);
+                                      input.value = "";
+                                    }
+                                  }}
+                                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl transition-colors shadow-sm"
+                                >
+                                  Log
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                          <div>
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Reference / Inspiration Link</label>
+                            <input type="text" value={calendarForm.reference || ""} onChange={(e) => setCalendarForm({ ...calendarForm, reference: e.target.value })} placeholder="Inspiration URL or references" className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                                Assign Team / Brand Person
+                              </label>
+                              <span className="text-[10px] text-muted-foreground font-medium">
+                                {((calendarForm.assignedTo || []).length > 0) ? `${calendarForm.assignedTo.length} selected` : "Select members"}
+                              </span>
+                            </div>
+                            <div className="max-h-[160px] overflow-y-auto pr-1 space-y-1.5 custom-scrollbar border border-border/50 rounded-xl p-2 bg-muted/20">
+                              {(() => {
+                                const peopleList: { id: string; name: string; avatar: string; subtitle: string; isCreativeRole?: boolean }[] = [];
+                                const seen = new Set<string>();
+
+                                // 1. Creative team members assigned to this project
+                                if (currentSelectedProject?.creativeTeam) {
+                                  Object.entries(currentSelectedProject.creativeTeam).forEach(([roleKey, empId]) => {
+                                    if (!empId) return;
+                                    const emp = employees.find(e => String(e.id) === String(empId) || String((e as any)._id) === String(empId));
+                                    const roleObj = CREATIVE_ROLES.find(r => r.key === roleKey);
+                                    const name = emp?.name || currentSelectedProject.creativeTeamDetails?.[roleKey]?.employee_name;
+                                    if (name && !seen.has(name) && name !== "Team Member") {
+                                      seen.add(name);
+                                      peopleList.push({
+                                        id: String(emp?.id || empId),
+                                        name,
+                                        avatar: emp?.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(name)}`,
+                                        subtitle: roleObj?.label || "Creative Team",
+                                        isCreativeRole: true
+                                      });
+                                    }
+                                  });
+                                }
+
+                                // 2. All company employees from HRMS
+                                employees.forEach(emp => {
+                                  if (emp && emp.name && !seen.has(emp.name) && emp.name !== "Team Member") {
+                                    seen.add(emp.name);
+                                    peopleList.push({
+                                      id: String(emp.id),
+                                      name: emp.name,
+                                      avatar: emp.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(emp.name)}`,
+                                      subtitle: emp.department || emp.role || "Staff",
+                                      isCreativeRole: false
+                                    });
+                                  }
+                                });
+
+                                if (peopleList.length === 0) {
+                                  return (
+                                    <div className="py-3 text-center text-xs text-muted-foreground">
+                                      No team members found.
+                                    </div>
+                                  );
+                                }
+
+                                return (
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                    {peopleList.map(person => {
+                                      const isAssigned = (calendarForm.assignedTo || []).includes(person.name);
+                                      return (
+                                        <button
+                                          key={person.name}
+                                          type="button"
+                                          onClick={() => {
+                                            const list = calendarForm.assignedTo || [];
+                                            setCalendarForm({
+                                              ...calendarForm,
+                                              assignedTo: isAssigned
+                                                ? list.filter((n: string) => n !== person.name)
+                                                : [...list, person.name]
+                                            });
+                                          }}
+                                          className={cn(
+                                            "flex items-center gap-2 p-2 rounded-xl text-left border text-xs font-semibold transition-all",
+                                            isAssigned
+                                              ? "border-primary/50 bg-primary/10 text-primary shadow-xs"
+                                              : "border-border/50 bg-card hover:bg-muted text-muted-foreground hover:text-foreground"
+                                          )}
+                                        >
+                                          <div className="relative shrink-0">
+                                            <img src={person.avatar} className="w-6 h-6 rounded-full object-cover" />
+                                            {isAssigned && (
+                                              <div className="absolute -top-1 -right-1 w-3 h-3 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-[8px] font-bold">
+                                                ✓
+                                              </div>
+                                            )}
+                                          </div>
+                                          <div className="min-w-0 flex-1">
+                                            <span className="truncate block font-bold text-foreground text-xs leading-tight">
+                                              {person.name}
+                                            </span>
+                                            <span className={cn(
+                                              "truncate block text-[10px]",
+                                              person.isCreativeRole ? "text-primary font-bold" : "text-muted-foreground"
+                                            )}>
+                                              {person.subtitle}
+                                            </span>
+                                          </div>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                        </>
+                      )}
+                      {activeCalendarTab === 'production' && (
+                        <>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Script Date</label>
+                              <DatePicker
+                                value={calendarForm.scriptDate || ""}
+                                onChange={(val) => setCalendarForm({ ...calendarForm, scriptDate: val })}
+                                className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-semibold"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Script Link</label>
+                              <input type="text" value={calendarForm.scriptLink || ""} onChange={(e) => setCalendarForm({ ...calendarForm, scriptLink: e.target.value })} placeholder="Docs script Link" className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Shoot Date</label>
+                              <DatePicker
+                                value={calendarForm.shootDate || ""}
+                                onChange={(val) => setCalendarForm({ ...calendarForm, shootDate: val })}
+                                className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-semibold"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Shoot Assets Link</label>
+                              <input type="text" value={calendarForm.shootLink || ""} onChange={(e) => setCalendarForm({ ...calendarForm, shootLink: e.target.value })} placeholder="Drive assets folder URL" className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Editing Start Date</label>
+                              <DatePicker
+                                value={calendarForm.editingStart || ""}
+                                onChange={(val) => setCalendarForm({ ...calendarForm, editingStart: val })}
+                                className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-semibold"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Final Reel Link (Video)</label>
+                              <input type="text" value={calendarForm.finalReelLink || ""} onChange={(e) => setCalendarForm({ ...calendarForm, finalReelLink: e.target.value })} placeholder="Reel draft link (Drive/Vimeo)" className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Final Post Link (Graphic / Carousel)</label>
+                              <input type="text" value={calendarForm.finalPostLink || ""} onChange={(e) => setCalendarForm({ ...calendarForm, finalPostLink: e.target.value })} placeholder="Post / Carousel design draft link" className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Thumbnail Date</label>
+                              <DatePicker
+                                value={calendarForm.thumbnailDate || ""}
+                                onChange={(val) => setCalendarForm({ ...calendarForm, thumbnailDate: val })}
+                                className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-semibold"
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Thumbnail Link</label>
+                              <input type="text" value={calendarForm.thumbnailLink || ""} onChange={(e) => setCalendarForm({ ...calendarForm, thumbnailLink: e.target.value })} placeholder="Cover / Thumbnail design link" className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Caption Date</label>
+                              <DatePicker
+                                value={calendarForm.captionDate || ""}
+                                onChange={(val) => setCalendarForm({ ...calendarForm, captionDate: val })}
+                                className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-semibold"
+                              />
+                            </div>
+                          </div>
+                        </>
+                      )}
+                      {activeCalendarTab === 'publishing' && (
+                        <>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Approval Feedback (Het / Client)</label>
+                              <input type="text" value={calendarForm.approval || ""} onChange={(e) => setCalendarForm({ ...calendarForm, approval: e.target.value })} placeholder="e.g. Approved / Changes requested" className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Workflow Status</label>
+                              <Select value={calendarForm.status || "To Do"} onValueChange={(val) => setCalendarForm({ ...calendarForm, status: val })}>
+                                <SelectTrigger className="w-full h-9 bg-muted/50 border-border/50 rounded-xl text-xs font-semibold">
+                                  <SelectValue placeholder="Workflow Status" />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                                  {["To Do", "In Progress", "Pending Approval", "Approved", "Published"].map(st => (
+                                    <SelectItem key={st} value={st} className="text-xs font-semibold rounded-lg cursor-pointer">
+                                      {st}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Caption Text &amp; Hashtags</label>
+                            <textarea value={calendarForm.caption || ""} onChange={(e) => setCalendarForm({ ...calendarForm, caption: e.target.value })} placeholder="Write finalized copy and hashtags here..." rows={3} className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none resize-none font-medium" />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Actual Posting Date</label>
+                              <DatePicker
+                                value={calendarForm.actualPostingDate || ""}
+                                onChange={(val) => setCalendarForm({ ...calendarForm, actualPostingDate: val })}
+                                className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-semibold"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Live Instagram Link</label>
+                              <input type="text" value={calendarForm.postingLinkOfIg || ""} onChange={(e) => setCalendarForm({ ...calendarForm, postingLinkOfIg: e.target.value })} placeholder="https://www.instagram.com/p/..." className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Remarks &amp; Details</label>
+                            <input type="text" value={calendarForm.remark || ""} onChange={(e) => setCalendarForm({ ...calendarForm, remark: e.target.value })} placeholder="e.g. Needs collab tag with client" className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  {/* Footer */}
+                  <div className="px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
+                    <button onClick={() => { setIsAddCalendarItemModalOpen(false); setEditingCalendarItem(null); }} className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors">Cancel</button>
+                    <button
+                      onClick={async () => {
+                        if (!calendarForm.postingDate || !calendarForm.topic || !calendarForm.topic.trim()) {
+                          toast.error("Posting Date and Topic Hook are required");
+                          return;
+                        }
+                        if (!currentSelectedProject) return;
+
+                        const payload = mapCalendarItemToBackendPayload(calendarForm, currentSelectedProject.id);
+
+                        try {
+                          if (editingCalendarItem) {
+                            const res = await api.put(`/projects/${currentSelectedProject.id}/content/${editingCalendarItem.id}`, payload);
+                            const savedItem = res ? mapBackendContentToCalendarItem(res) : {
+                              ...editingCalendarItem,
+                              ...calendarForm,
+                            };
+                            const updated = (currentSelectedProject.contentCalendar || []).map((item: any) =>
+                              item.id === editingCalendarItem.id ? savedItem : item
+                            );
+                            setProjects(projects.map(p => p.id === currentSelectedProject.id ? { ...p, contentCalendar: updated, modules: syncSocialMediaTasksForProject(p, updated) } : p));
+                            toast.success("Content Idea updated successfully!");
+                          } else {
+                            const res = await api.post(`/projects/${currentSelectedProject.id}/content`, payload);
+                            const completeItem = res ? mapBackendContentToCalendarItem(res) : {
+                              id: `cal-${Date.now()}`,
+                              ...calendarForm,
+                            };
+                            const updated = [...(currentSelectedProject.contentCalendar || []), completeItem];
+                            setProjects(projects.map(p => p.id === currentSelectedProject.id ? { ...p, contentCalendar: updated, modules: syncSocialMediaTasksForProject(p, updated) } : p));
+                            toast.success("Content Idea added to calendar!");
+                          }
+                          setIsAddCalendarItemModalOpen(false);
+                          setEditingCalendarItem(null);
+                        } catch (err: any) {
+                          toast.error(err.message || "Failed to save content idea");
+                        }
+                      }}
+                      className="px-5 py-2 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all text-sm"
+                    >
+                      {editingCalendarItem ? "Save Changes" : "Create Idea"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Bulk Add Calendar Slots Modal */}
+          {isBulkAddModalOpen && (() => {
+            const currentSelectedProject = projects.find(p => p.id === selectedProjectId);
+
+            const getDatesForFormat = (formatType: string): Date[] => {
+              if (!currentSelectedProject || !currentSelectedProject.contentCalendar) return [];
+              const target = formatType.toLowerCase();
+              return currentSelectedProject.contentCalendar
+                .filter(item => {
+                  const it = (item.type || "").toLowerCase();
+                  if (target === "reel") return it === "reel";
+                  if (target === "post") return it === "post";
+                  if (target === "carousel") return it === "carousel";
+                  if (target === "story") return it === "story";
+                  return it === target;
+                })
+                .map(item => {
+                  const rawDate = item.scheduledDate || item.postingDate;
+                  if (!rawDate) return null;
+                  const datePart = String(rawDate).split("T")[0] || "";
+                  const parts = datePart.split("-");
+                  if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+                    return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+                  }
+                  const d = new Date(rawDate);
+                  return isNaN(d.getTime()) ? null : d;
+                })
+                .filter((d): d is Date => d !== null);
+            };
+
+            const handleSelectFormatType = (newType: string) => {
+              setBulkFormatType(newType);
+              if (bulkAddTab === 'visual') {
+                const dates = getDatesForFormat(newType);
+                setVisualSelectedDates(dates);
+              }
+            };
+
+            const handleGenerateBulkSlots = async () => {
+              if (!bulkStartDate || !bulkEndDate) {
+                toast.error("Please select start and end dates");
+                return;
+              }
+              if (bulkSelectedDays.length === 0) {
+                toast.error("Please select at least one day of the week");
+                return;
+              }
+              if (!currentSelectedProject) return;
+
+              const start = new Date(bulkStartDate);
+              const end = new Date(bulkEndDate);
+
+              if (end < start) {
+                toast.error("End date cannot be before start date");
+                return;
+              }
+
+              // Map JS getDay (0=Sun, 1=Mon, ..., 6=Sat) to Python weekday (0=Mon, ..., 6=Sun)
+              const pythonWeekdays = bulkSelectedDays.map(d => (d === 0 ? 6 : d - 1));
+
+              try {
+                const res = await api.post<any[]>(`/projects/${currentSelectedProject.id}/content/bulk`, {
+                  default_format: bulkFormatType === "Carousel" ? "Post" : bulkFormatType,
+                  date_range: {
+                    start_date: bulkStartDate,
+                    end_date: bulkEndDate,
+                    weekdays: pythonWeekdays
+                  }
+                });
+
+                if (Array.isArray(res) && res.length > 0) {
+                  await fetchProjectContentCalendar(currentSelectedProject.id);
+                  setIsBulkAddModalOpen(false);
+                  toast.success(`Generated ${res.length} calendar slots successfully!`);
+                } else {
+                  toast.info("No new slots generated matching the criteria.");
+                }
+              } catch (err: any) {
+                toast.error(err.message || "Failed to generate bulk slots");
+              }
+            };
+
+            const handleSyncVisualDates = async () => {
+              if (!currentSelectedProject) return;
+
+              const selectedStrings = (visualSelectedDates || []).map(date => {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+              });
+
+              const calendarItems = currentSelectedProject.contentCalendar || [];
+              const targetType = bulkFormatType.toLowerCase();
+
+              const existingForFormat = calendarItems.filter(item => {
+                const it = (item.type || "").toLowerCase();
+                if (targetType === "reel") return it === "reel";
+                if (targetType === "post") return it === "post";
+                if (targetType === "carousel") return it === "carousel";
+                if (targetType === "story") return it === "story";
+                return it === targetType;
+              });
+
+              const existingDateStrings = existingForFormat.map(item => {
+                const raw = item.scheduledDate || item.postingDate || "";
+                return String(raw).split("T")[0] || "";
+              }).filter(Boolean);
+
+              const datesToAdd = selectedStrings.filter(d => !existingDateStrings.includes(d));
+              const itemsToDelete = existingForFormat.filter(item => {
+                const d = String(item.scheduledDate || item.postingDate || "").split("T")[0] || "";
+                return Boolean(d) && !selectedStrings.includes(d);
+              });
+
+              try {
+                let addedCount = 0;
+                let deletedCount = 0;
+
+                if (datesToAdd.length > 0) {
+                  const res = await api.post<any[]>(`/projects/${currentSelectedProject.id}/content/bulk`, {
+                    default_format: bulkFormatType === "Carousel" ? "Post" : bulkFormatType,
+                    specific_dates: datesToAdd
+                  });
+                  if (Array.isArray(res)) addedCount = res.length;
+                }
+
+                for (const item of itemsToDelete) {
+                  try {
+                    await api.delete(`/projects/${currentSelectedProject.id}/content/${item.id}`);
+                    deletedCount++;
+                  } catch (delErr) {
+                    console.warn("Failed to delete content slot:", item.id, delErr);
+                  }
+                }
+
+                await fetchProjectContentCalendar(currentSelectedProject.id);
+                setIsBulkAddModalOpen(false);
+
+                if (addedCount > 0 || deletedCount > 0) {
+                  toast.success(`Successfully synced ${bulkFormatType} slots (Added: ${addedCount}, Removed: ${deletedCount})`);
+                } else {
+                  toast.info(`No changes to sync for ${bulkFormatType}`);
+                }
+              } catch (err: any) {
+                toast.error(err.message || "Failed to sync content slots");
+              }
+            };
+
+            const toggleDay = (dayIndex: number) => {
+              if (bulkSelectedDays.includes(dayIndex)) {
+                setBulkSelectedDays(bulkSelectedDays.filter(d => d !== dayIndex));
+              } else {
+                setBulkSelectedDays([...bulkSelectedDays, dayIndex]);
+              }
+            };
+
+            const daysConfig = [
+              { label: "M", index: 1, name: "Monday" },
+              { label: "T", index: 2, name: "Tuesday" },
+              { label: "W", index: 3, name: "Wednesday" },
+              { label: "T", index: 4, name: "Thursday" },
+              { label: "F", index: 5, name: "Friday" },
+              { label: "S", index: 6, name: "Saturday" },
+              { label: "S", index: 0, name: "Sunday" },
+            ];
+
+            const formatOptions = [
+              { key: "Post", label: "🖼️ Post", count: getDatesForFormat("Post").length },
+              { key: "Reel", label: "🎥 Reel", count: getDatesForFormat("Reel").length },
+              { key: "Carousel", label: "🎠 Carousel", count: getDatesForFormat("Carousel").length },
+              { key: "Story", label: "📖 Story", count: getDatesForFormat("Story").length },
+            ];
+
+            return (
+              <div
+                className="fixed inset-0 z-[200] flex items-center justify-center animate-in fade-in duration-200"
+                onClick={() => setIsBulkAddModalOpen(false)}
+              >
+                {/* Backdrop */}
+                <div className="absolute inset-0 bg-black/80" />
+                {/* Modal Panel */}
+                <div
+                  className="relative z-10 w-[calc(100%-2rem)] max-w-[550px] bg-card border border-border/60 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-8 py-6 border-b border-border/50 bg-muted/30 shrink-0">
+                    <div>
+                      <h2 className="text-xl font-black tracking-tight">Bulk Add Options</h2>
+                      <p className="text-xs text-muted-foreground mt-1">Select dates visually or generate using a range</p>
+                    </div>
+                    <button
+                      onClick={() => setIsBulkAddModalOpen(false)}
+                      className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* Tab Switcher */}
+                  <div className="flex border-b border-border/30 bg-muted/10 p-2 gap-2 shrink-0">
+                    <button
+                      onClick={() => setBulkAddTab('range')}
+                      className={cn(
+                        "flex-1 py-2 text-xs font-bold rounded-xl transition-all",
+                        bulkAddTab === 'range'
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:bg-muted"
+                      )}
+                    >
+                      📅 Date Range &amp; Weekdays
+                    </button>
+                    <button
+                      onClick={() => {
+                        setBulkAddTab('visual');
+                        const dates = getDatesForFormat(bulkFormatType);
+                        setVisualSelectedDates(dates);
+                      }}
+                      className={cn(
+                        "flex-1 py-2 text-xs font-bold rounded-xl transition-all",
+                        bulkAddTab === 'visual'
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:bg-muted"
+                      )}
+                    >
+                      ✨ Visual Calendar Sync
+                    </button>
+                  </div>
+
+                  {/* Body */}
+                  <div className="p-6 md:p-8 space-y-5 overflow-y-auto max-h-[60vh] flex flex-col items-center">
+                    {bulkAddTab === 'range' ? (
+                      <div className="w-full space-y-6">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Start Date</label>
+                            <DatePicker
+                              value={bulkStartDate}
+                              onChange={(val) => setBulkStartDate(val)}
+                              className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-bold text-center"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">End Date</label>
+                            <DatePicker
+                              value={bulkEndDate}
+                              onChange={(val) => setBulkEndDate(val)}
+                              className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-bold text-center"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-2">Days of the Week</label>
+                          <div className="flex justify-between items-center gap-1.5 bg-muted/20 p-2 rounded-xl border border-border/30">
+                            {daysConfig.map((day) => {
+                              const isSelected = bulkSelectedDays.includes(day.index);
+                              return (
+                                <button
+                                  key={day.index}
+                                  type="button"
+                                  onClick={() => toggleDay(day.index)}
+                                  title={day.name}
+                                  className={cn(
+                                    "w-9 h-9 rounded-lg text-xs font-black transition-all flex items-center justify-center border shadow-sm",
+                                    isSelected
+                                      ? "bg-primary text-primary-foreground border-primary"
+                                      : "bg-card text-muted-foreground border-border/50 hover:bg-muted"
+                                  )}
+                                >
+                                  {day.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center w-full space-y-4">
+                        {/* Format Selector Pills for Instant Visual Toggle */}
+                        <div className="flex flex-wrap items-center justify-center gap-2 p-1.5 bg-muted/30 border border-border/50 rounded-2xl w-full">
+                          {formatOptions.map(f => {
+                            const isSelected = bulkFormatType === f.key;
+                            return (
+                              <button
+                                key={f.key}
+                                type="button"
+                                onClick={() => handleSelectFormatType(f.key)}
+                                className={cn(
+                                  "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border",
+                                  isSelected
+                                    ? "bg-primary text-primary-foreground border-primary shadow-sm ring-2 ring-primary/30"
+                                    : "bg-card text-muted-foreground border-border/60 hover:text-foreground hover:bg-muted"
+                                )}
+                              >
+                                <span>{f.label}</span>
+                                <span className={cn(
+                                  "text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold",
+                                  isSelected ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+                                )}>
+                                  {f.count}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Active Status Banner */}
+                        <div className="flex items-center justify-between w-full px-3.5 py-2 bg-primary/5 border border-primary/20 rounded-xl text-xs">
+                          <span className="font-bold text-foreground flex items-center gap-1.5">
+                            Viewing slots for: <strong className="text-primary underline font-extrabold">{bulkFormatType}</strong>
+                          </span>
+                          <span className="text-[11px] font-mono font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-lg">
+                            {(visualSelectedDates || []).length} dates active
+                          </span>
+                        </div>
+
+                        <p className="text-[11px] text-muted-foreground text-center font-medium max-w-[420px]">
+                          Click dates in the calendar below to toggle <strong>{bulkFormatType}</strong> slots. Selected dates are scheduled for this format.
+                        </p>
+
+                        <div className="border border-border/50 rounded-2xl p-4 bg-muted/10 shadow-inner flex justify-center w-full">
+                          <CalendarUI
+                            mode="multiple"
+                            selected={visualSelectedDates}
+                            onSelect={(newDates) => setVisualSelectedDates(newDates || [])}
+                            className="rounded-md border-0 bg-transparent font-medium"
+                            {...({ required: false } as any)}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="w-full">
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">Format Type</label>
+                      <Select value={bulkFormatType} onValueChange={(val) => handleSelectFormatType(val)}>
+                        <SelectTrigger className="w-full h-9 px-3 bg-muted/50 border border-border/50 rounded-xl text-xs font-bold shadow-xs">
+                          <SelectValue placeholder="Format Type" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                          {["Post", "Reel", "Story", "Carousel"].map(t => (
+                            <SelectItem key={t} value={t} className="text-xs font-semibold rounded-lg cursor-pointer">
+                              {t}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Footer */}
+                  <div className="px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
+                    <button
+                      onClick={() => setIsBulkAddModalOpen(false)}
+                      className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={bulkAddTab === 'range' ? handleGenerateBulkSlots : handleSyncVisualDates}
+                      className="px-5 py-2 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all text-sm"
+                    >
+                      {bulkAddTab === 'range' ? "Generate Slots" : `Sync ${bulkFormatType} Dates`}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Add Module Modal - plain overlay */}
+          {isAddModuleModalOpen && (() => {
+            const currentSelectedProject = projects.find(p => p.id === selectedProjectId);
+            if (!currentSelectedProject) return null;
+
+            const handleSaveNewModule = (e: React.FormEvent) => {
+              e.preventDefault();
+              if (!addModuleForm.name.trim()) return;
+              const projectModules = currentSelectedProject.modules || [];
+              const newModule: any = {
+                id: `mod-${Date.now()}`,
+                name: addModuleForm.name.trim(),
+                assignedToName: addModuleForm.assignedToName || undefined,
+                status: addModuleForm.status,
+                priority: addModuleForm.priority,
+                estimatedHours: addModuleForm.estimatedHours || undefined,
+                dueDate: addModuleForm.dueDate || undefined,
+                tasks: []
+              };
+              const updatedModules: any = [...projectModules, newModule];
+              saveProjectModules(currentSelectedProject.id, updatedModules, "Added Module", `Created module "${newModule.name}"`);
+              setSelectedModuleId(newModule.id);
+              setAddModuleForm({
+                name: "",
+                assignedToName: "",
+                status: "todo",
+                priority: "medium",
+                estimatedHours: 0,
+                dueDate: ""
+              });
+              setIsAddModuleModalOpen(false);
+              toast.success(`Module "${newModule.name}" created successfully!`);
+            };
+
+            return (
+              <div
+                className="fixed inset-0 z-[200] flex items-center justify-center animate-in fade-in duration-200"
+                onClick={() => setIsAddModuleModalOpen(false)}
+              >
+                {/* Backdrop */}
+                <div className="absolute inset-0 bg-black/80" />
+                {/* Modal Panel */}
+                <div
+                  className="relative z-10 w-[calc(100%-2rem)] max-w-[450px] bg-card border border-border/60 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-8 py-6 border-b border-border/50 bg-muted/30 shrink-0">
+                    <div>
+                      <h2 className="text-lg font-black tracking-tight">Add New Module</h2>
+                      <p className="text-xs text-muted-foreground mt-1">Configure and assign a new development module component</p>
+                    </div>
+                    <button
+                      onClick={() => setIsAddModuleModalOpen(false)}
+                      className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  {/* Body */}
+                  <form onSubmit={handleSaveNewModule}>
+                    <div className="p-8 space-y-4 max-h-[60vh] overflow-y-auto">
+                      <div>
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Module Name <span className="text-rose-500">*</span></label>
+                        <input
+                          type="text"
+                          required
+                          autoFocus
+                          placeholder="e.g. User Authentication, Shopping Cart"
+                          value={addModuleForm.name}
+                          onChange={(e) => setAddModuleForm({ ...addModuleForm, name: e.target.value })}
+                          className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Assign To</label>
+                          <Select
+                            value={addModuleForm.assignedToName || "unassigned"}
+                            onValueChange={(val) => setAddModuleForm({ ...addModuleForm, assignedToName: val === "unassigned" ? "" : val })}
+                          >
+                            <SelectTrigger className="w-full h-9 bg-muted/50 border-border/50 rounded-xl text-xs font-semibold">
+                              <SelectValue placeholder="Unassigned" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                              <SelectItem value="unassigned" className="text-xs font-semibold rounded-lg cursor-pointer">Unassigned</SelectItem>
+                              {currentSelectedProject.team.map(m => (
+                                <SelectItem key={m.name} value={m.name} className="text-xs font-semibold rounded-lg cursor-pointer">{m.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Stage Status</label>
+                          <Select
+                            value={addModuleForm.status || "todo"}
+                            onValueChange={(val) => setAddModuleForm({ ...addModuleForm, status: val as any })}
+                          >
+                            <SelectTrigger className="w-full h-9 bg-muted/50 border-border/50 rounded-xl text-xs font-semibold">
+                              <SelectValue placeholder="Stage Status" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                              {[
+                                { label: "To Do", val: "todo" },
+                                { label: "In Progress", val: "in-progress" },
+                                { label: "Bugs", val: "bugs" },
+                                { label: "On Hold", val: "onhold" },
+                                { label: "Pending", val: "pending" },
+                                { label: "Completed", val: "completed" },
+                              ].map(st => (
+                                <SelectItem key={st.val} value={st.val} className="text-xs font-semibold rounded-lg cursor-pointer">{st.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Priority</label>
+                          <Select
+                            value={addModuleForm.priority || "medium"}
+                            onValueChange={(val) => setAddModuleForm({ ...addModuleForm, priority: val as any })}
+                          >
+                            <SelectTrigger className="w-full h-9 bg-muted/50 border-border/50 rounded-xl text-xs font-semibold">
+                              <SelectValue placeholder="Priority" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                              {[
+                                { label: "Low", val: "low" },
+                                { label: "Medium", val: "medium" },
+                                { label: "High", val: "high" },
+                                { label: "Urgent", val: "urgent" },
+                              ].map(pr => (
+                                <SelectItem key={pr.val} value={pr.val} className="text-xs font-semibold rounded-lg cursor-pointer">{pr.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Estimated Hours</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.5"
+                            placeholder="e.g. 12"
+                            value={addModuleForm.estimatedHours || ""}
+                            onChange={(e) => setAddModuleForm({ ...addModuleForm, estimatedHours: parseFloat(e.target.value) || 0 })}
+                            className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-bold text-center"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Module Deadline</label>
+                        <DatePicker
+                          value={addModuleForm.dueDate}
+                          onChange={(val) => setAddModuleForm({ ...addModuleForm, dueDate: val })}
+                          className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-bold text-center"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setIsAddModuleModalOpen(false)}
+                        className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-5 py-2 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all text-sm"
+                      >
+                        Create Module
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Edit Module Modal - plain overlay */}
+          {isEditModuleModalOpen && editModuleForm.id && (() => {
+            const currentSelectedProject = projects.find(p => p.id === selectedProjectId);
+            if (!currentSelectedProject) return null;
+
+            const handleEditModuleSubmit = (e: React.FormEvent) => {
+              e.preventDefault();
+              if (!editModuleForm.name.trim()) return;
+              const projectModules = currentSelectedProject.modules || [];
+
+              const updatedModules: any = projectModules.map(m => {
+                if (m.id === editModuleForm.id) {
+                  return {
+                    ...m,
+                    name: editModuleForm.name.trim(),
+                    assignedToName: editModuleForm.assignedToName || undefined,
+                    status: editModuleForm.status,
+                    priority: editModuleForm.priority,
+                    estimatedHours: editModuleForm.estimatedHours || undefined,
+                    dueDate: editModuleForm.dueDate || undefined
+                  };
+                }
+                return m;
+              });
+
+              saveProjectModules(currentSelectedProject.id, updatedModules, "Updated Module", `Updated module "${editModuleForm.name.trim()}"`);
+              setIsEditModuleModalOpen(false);
+              toast.success("Module updated successfully!");
+            };
+
+            return (
+              <div
+                className="fixed inset-0 z-[200] flex items-center justify-center animate-in fade-in duration-200"
+                onClick={() => setIsEditModuleModalOpen(false)}
+              >
+                {/* Backdrop */}
+                <div className="absolute inset-0 bg-black/80" />
+                {/* Modal Panel */}
+                <div
+                  className="relative z-10 w-[calc(100%-2rem)] max-w-[450px] bg-card border border-border/60 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-8 py-6 border-b border-border/50 bg-muted/30 shrink-0">
+                    <div>
+                      <h2 className="text-lg font-black tracking-tight">Edit Module Details</h2>
+                      <p className="text-xs text-muted-foreground mt-1">Modify metadata and developer assignment details</p>
+                    </div>
+                    <button
+                      onClick={() => setIsEditModuleModalOpen(false)}
+                      className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  {/* Body */}
+                  <form onSubmit={handleEditModuleSubmit}>
+                    <div className="p-8 space-y-4 max-h-[60vh] overflow-y-auto">
+                      <div>
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Module Name <span className="text-rose-500">*</span></label>
+                        <input
+                          type="text"
+                          required
+                          autoFocus
+                          value={editModuleForm.name}
+                          onChange={(e) => setEditModuleForm({ ...editModuleForm, name: e.target.value })}
+                          className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Assign To</label>
+                          <Select
+                            value={editModuleForm.assignedToName || "unassigned"}
+                            onValueChange={(val) => setEditModuleForm({ ...editModuleForm, assignedToName: val === "unassigned" ? "" : val })}
+                          >
+                            <SelectTrigger className="w-full h-9 bg-muted/50 border-border/50 rounded-xl text-xs font-semibold">
+                              <SelectValue placeholder="Unassigned" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                              <SelectItem value="unassigned" className="text-xs font-semibold rounded-lg cursor-pointer">Unassigned</SelectItem>
+                              {currentSelectedProject.team.map(m => (
+                                <SelectItem key={m.name} value={m.name} className="text-xs font-semibold rounded-lg cursor-pointer">{m.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Stage Status</label>
+                          <Select
+                            value={editModuleForm.status || "todo"}
+                            onValueChange={(val) => setEditModuleForm({ ...editModuleForm, status: val as any })}
+                          >
+                            <SelectTrigger className="w-full h-9 bg-muted/50 border-border/50 rounded-xl text-xs font-semibold">
+                              <SelectValue placeholder="Stage Status" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                              {[
+                                { label: "To Do", val: "todo" },
+                                { label: "In Progress", val: "in-progress" },
+                                { label: "Bugs", val: "bugs" },
+                                { label: "On Hold", val: "onhold" },
+                                { label: "Pending", val: "pending" },
+                                { label: "Completed", val: "completed" },
+                              ].map(st => (
+                                <SelectItem key={st.val} value={st.val} className="text-xs font-semibold rounded-lg cursor-pointer">{st.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Priority</label>
+                          <Select
+                            value={editModuleForm.priority || "medium"}
+                            onValueChange={(val) => setEditModuleForm({ ...editModuleForm, priority: val as any })}
+                          >
+                            <SelectTrigger className="w-full h-9 bg-muted/50 border-border/50 rounded-xl text-xs font-semibold">
+                              <SelectValue placeholder="Priority" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                              {[
+                                { label: "Low", val: "low" },
+                                { label: "Medium", val: "medium" },
+                                { label: "High", val: "high" },
+                                { label: "Urgent", val: "urgent" },
+                              ].map(pr => (
+                                <SelectItem key={pr.val} value={pr.val} className="text-xs font-semibold rounded-lg cursor-pointer">{pr.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Estimated Hours</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.5"
+                            placeholder="e.g. 12"
+                            value={editModuleForm.estimatedHours || ""}
+                            onChange={(e) => setEditModuleForm({ ...editModuleForm, estimatedHours: parseFloat(e.target.value) || 0 })}
+                            className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-bold text-center"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Module Deadline</label>
+                        <DatePicker
+                          value={editModuleForm.dueDate}
+                          onChange={(val) => setEditModuleForm({ ...editModuleForm, dueDate: val })}
+                          className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-bold text-center"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setIsEditModuleModalOpen(false)}
+                        className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-5 py-2 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all text-sm"
+                      >
+                        Save Changes
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Presets Selection Modal - plain overlay */}
+          {isPresetsModalOpen && (() => {
+            const currentSelectedProject = projects.find(p => p.id === selectedProjectId);
+            if (!currentSelectedProject) return null;
+
+            const handleApplyPreset = (preset: any) => {
+              const projectModules = currentSelectedProject.modules || [];
+
+              const newModulesMapped: any[] = preset.modules.map((m: any) => ({
+                id: `mod-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                name: m.name,
+                assignedToName: m.assignedToName || undefined,
+                status: m.status || "todo",
+                priority: m.priority || "medium",
+                estimatedHours: m.estimatedHours,
+                dueDate: m.dueDate || undefined,
+                tasks: (m.tasks || []).map((t: any) => ({
+                  id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                  title: t.title,
+                  status: t.status || "todo"
+                }))
+              }));
+
+              const updatedModules: any = [...projectModules, ...newModulesMapped];
+              saveProjectModules(currentSelectedProject.id, updatedModules, "Applied Preset", `Loaded preset "${preset.name}"`);
+              if (newModulesMapped[0]) {
+                setSelectedModuleId(newModulesMapped[0].id);
+              }
+              setIsPresetsModalOpen(false);
+              toast.success(`Successfully loaded preset "${preset.name}"!`);
+            };
+
+            return (
+              <div
+                className="fixed inset-0 z-[200] flex items-center justify-center animate-in fade-in duration-200"
+                onClick={() => setIsPresetsModalOpen(false)}
+              >
+                {/* Backdrop */}
+                <div className="absolute inset-0 bg-black/80" />
+                {/* Modal Panel */}
+                <div
+                  className="relative z-10 w-[calc(100%-2rem)] max-w-[500px] bg-card border border-border/60 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-8 py-6 border-b border-border/50 bg-muted/30 shrink-0">
+                    <div>
+                      <h2 className="text-lg font-black tracking-tight">Load Modules from Preset</h2>
+                      <p className="text-xs text-muted-foreground mt-1">Select a development template checklist to append</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => {
+                          setNewPresetForm({
+                            name: "",
+                            description: "",
+                            modules: [{ name: "", tasks: [""] }]
+                          });
+                          setIsCreatePresetModalOpen(true);
+                        }}
+                        className="px-3 py-1.5 bg-primary text-primary-foreground text-xs font-bold rounded-xl shadow-md hover:bg-primary/90 flex items-center gap-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Create Template
+                      </button>
+                      <button
+                        onClick={() => setIsPresetsModalOpen(false)}
+                        className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                  {/* Body */}
+                  <div className="p-8 space-y-4 max-h-[60vh] overflow-y-auto">
+                    {presets.map((preset, index) => (
+                      <div
+                        key={index}
+                        className="p-5 border border-border/50 rounded-[2rem] hover:border-primary/30 bg-muted/20 hover:bg-muted/30 transition-all flex flex-col justify-between gap-4"
+                      >
+                        <div>
+                          <h3 className="text-sm font-bold text-foreground">⚙️ {preset.name}</h3>
+                          <p className="text-xs text-muted-foreground mt-1 leading-normal">{preset.description}</p>
+
+                          <div className="mt-3 flex flex-wrap gap-1.5">
+                            {preset.modules.map((m: any, idx: number) => (
+                              <span key={idx} className="text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-lg">
+                                📦 {m.name} ({m.tasks.length} tasks)
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="flex justify-between items-center mt-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setConfirmModalState({
+                                isOpen: true,
+                                title: "Delete Preset Template",
+                                description: `Are you sure you want to delete the preset template "${preset.name}"? This action cannot be undone.`,
+                                itemName: preset.name,
+                                action: () => {
+                                  setPresets(presets.filter((_, i) => i !== index));
+                                  toast.success(`Preset "${preset.name}" deleted successfully!`);
+                                }
+                              });
+                            }}
+                            className="text-xs font-bold text-rose-500 hover:text-rose-600 px-3 py-1.5 rounded-xl hover:bg-rose-500/10 transition-all"
+                          >
+                            Delete Template
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleApplyPreset(preset)}
+                            className="px-4 py-2 bg-primary text-primary-foreground text-xs font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all"
+                          >
+                            Apply Template
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Footer */}
+                  <div className="px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setIsPresetsModalOpen(false)}
+                      className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Create Preset Template Modal - plain overlay */}
+          {isCreatePresetModalOpen && (() => {
+            const handleSavePresetTemplate = (e: React.FormEvent) => {
+              e.preventDefault();
+              if (!newPresetForm.name.trim()) return;
+
+              // Validate modules and tasks are filled
+              const validModules = newPresetForm.modules
+                .filter(m => m.name.trim() !== "")
+                .map(m => ({
+                  name: m.name.trim(),
+                  assignedToName: "",
+                  status: "todo",
+                  priority: "medium",
+                  estimatedHours: 4,
+                  dueDate: "",
+                  tasks: m.tasks
+                    .filter(t => t.trim() !== "")
+                    .map((t, idx) => ({
+                      id: `t-preset-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 3)}`,
+                      title: t.trim(),
+                      status: "todo"
+                    }))
+                }));
+
+              if (validModules.length === 0) {
+                toast.error("Template must contain at least one module with name!");
+                return;
+              }
+
+              const newPreset = {
+                name: newPresetForm.name.trim(),
+                description: newPresetForm.description.trim() || "Custom project module template",
+                modules: validModules
+              };
+
+              setPresets([newPreset, ...presets]);
+              setIsCreatePresetModalOpen(false);
+              toast.success(`Preset Template "${newPreset.name}" created successfully!`);
+            };
+
+            const addModule = () => {
+              setNewPresetForm({
+                ...newPresetForm,
+                modules: [...newPresetForm.modules, { name: "", tasks: [""] }]
+              });
+            };
+
+            const removeModule = (mIdx: number) => {
+              setNewPresetForm({
+                ...newPresetForm,
+                modules: newPresetForm.modules.filter((_, idx) => idx !== mIdx)
+              });
+            };
+
+            const updateModuleName = (mIdx: number, val: string) => {
+              setNewPresetForm({
+                ...newPresetForm,
+                modules: newPresetForm.modules.map((m, idx) => idx === mIdx ? { ...m, name: val } : m)
+              });
+            };
+
+            const addTask = (mIdx: number) => {
+              setNewPresetForm({
+                ...newPresetForm,
+                modules: newPresetForm.modules.map((m, idx) => idx === mIdx ? { ...m, tasks: [...m.tasks, ""] } : m)
+              });
+            };
+
+            const removeTask = (mIdx: number, tIdx: number) => {
+              setNewPresetForm({
+                ...newPresetForm,
+                modules: newPresetForm.modules.map((m, idx) => {
+                  if (idx === mIdx) {
+                    return { ...m, tasks: m.tasks.filter((_, idx2) => idx2 !== tIdx) };
+                  }
+                  return m;
+                })
+              });
+            };
+
+            const updateTaskVal = (mIdx: number, tIdx: number, val: string) => {
+              setNewPresetForm({
+                ...newPresetForm,
+                modules: newPresetForm.modules.map((m, idx) => {
+                  if (idx === mIdx) {
+                    return { ...m, tasks: m.tasks.map((t, idx2) => idx2 === tIdx ? val : t) };
+                  }
+                  return m;
+                })
+              });
+            };
+
+            return (
+              <div
+                className="fixed inset-0 z-[210] flex items-center justify-center animate-in fade-in duration-200"
+                onClick={() => setIsCreatePresetModalOpen(false)}
+              >
+                {/* Backdrop */}
+                <div className="absolute inset-0 bg-black/80" />
+                {/* Modal Panel */}
+                <div
+                  className="relative z-10 w-[calc(100%-2rem)] max-w-[500px] bg-card border border-border/60 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-8 py-6 border-b border-border/50 bg-muted/30 shrink-0">
+                    <div>
+                      <h2 className="text-lg font-black tracking-tight">Create Preset Template</h2>
+                      <p className="text-xs text-muted-foreground mt-1">Define custom reusable project modules & tasks checklist</p>
+                    </div>
+                    <button
+                      onClick={() => setIsCreatePresetModalOpen(false)}
+                      className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  {/* Body */}
+                  <form onSubmit={handleSavePresetTemplate}>
+                    <div className="p-8 space-y-4 max-h-[60vh] overflow-y-auto">
+                      <div>
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Template Name <span className="text-rose-500">*</span></label>
+                        <input
+                          type="text"
+                          required
+                          autoFocus
+                          placeholder="e.g. Core App Modules, Landing Page Setup"
+                          value={newPresetForm.name}
+                          onChange={(e) => setNewPresetForm({ ...newPresetForm, name: e.target.value })}
+                          className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Description</label>
+                        <input
+                          type="text"
+                          placeholder="Provide details on what this template covers..."
+                          value={newPresetForm.description}
+                          onChange={(e) => setNewPresetForm({ ...newPresetForm, description: e.target.value })}
+                          className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold"
+                        />
+                      </div>
+
+                      <div className="border-t border-border/30 pt-4 space-y-4">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs font-bold text-foreground">📦 Modules List</span>
+                          <button
+                            type="button"
+                            onClick={addModule}
+                            className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5"
+                          >
+                            + Add Module
+                          </button>
+                        </div>
+
+                        {newPresetForm.modules.map((m, mIdx) => (
+                          <div key={mIdx} className="p-4 border border-border/50 rounded-2xl bg-muted/10 space-y-3">
+                            <div className="flex justify-between items-center gap-2">
+                              <input
+                                type="text"
+                                required
+                                placeholder="Module Name (e.g. Profile Setup)"
+                                value={m.name}
+                                onChange={(e) => updateModuleName(mIdx, e.target.value)}
+                                className="px-2.5 py-1.5 bg-card border border-border/50 rounded-xl text-xs focus:outline-none font-bold flex-1"
+                              />
+                              {newPresetForm.modules.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeModule(mIdx)}
+                                  className="text-xs text-rose-500 hover:text-rose-600 font-bold px-1.5"
+                                >
+                                  Remove
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="space-y-2 pl-4 border-l-2 border-border/30">
+                              <div className="flex justify-between items-center">
+                                <span className="text-[10px] font-bold text-muted-foreground">Tasks</span>
+                                <button
+                                  type="button"
+                                  onClick={() => addTask(mIdx)}
+                                  className="text-[9px] font-bold text-primary hover:underline"
+                                >
+                                  + Add Task
+                                </button>
+                              </div>
+
+                              {m.tasks.map((t, tIdx) => (
+                                <div key={tIdx} className="flex items-center gap-1">
+                                  <input
+                                    type="text"
+                                    required
+                                    placeholder={`Task #${tIdx + 1} title`}
+                                    value={t}
+                                    onChange={(e) => updateTaskVal(mIdx, tIdx, e.target.value)}
+                                    className="px-2.5 py-1 bg-card border border-border/30 rounded-lg text-xs focus:outline-none font-semibold flex-1"
+                                  />
+                                  {m.tasks.length > 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => removeTask(mIdx, tIdx)}
+                                      className="text-xs text-rose-500 hover:text-rose-600 font-bold px-1"
+                                    >
+                                      &times;
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setIsCreatePresetModalOpen(false)}
+                        className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-5 py-2 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all text-sm"
+                      >
+                        Save Template
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Module Task Details Modal - plain overlay */}
+          {isModuleTaskModalOpen && editingModuleTask && (() => {
+            const currentSelectedProject = projects.find(p => p.id === selectedProjectId);
+            if (!currentSelectedProject) return null;
+            const projectModules: NonNullable<Project['modules']> = currentSelectedProject.modules || [];
+            const activeModule = projectModules.find(m => m.id === selectedModuleId) || projectModules[0];
+            if (!activeModule) return null;
+
+            const handleSaveTaskDetails = (e: React.FormEvent) => {
+              e.preventDefault();
+              const updatedTasks = activeModule.tasks.map(t => t.id === editingModuleTask.id ? editingModuleTask : t);
+              const updatedModules: NonNullable<Project['modules']> = projectModules.map(m => m.id === activeModule.id ? { ...m, tasks: updatedTasks } : m);
+              saveProjectModules(currentSelectedProject.id, updatedModules, "Updated Task", `Updated task "${editingModuleTask.title}"`);
+              setIsModuleTaskModalOpen(false);
+              setEditingModuleTask(null);
+              toast.success("Task details saved successfully!");
+            };
+
+            return (
+              <div
+                className="fixed inset-0 z-[200] flex items-center justify-center animate-in fade-in duration-200"
+                onClick={() => {
+                  setIsModuleTaskModalOpen(false);
+                  setEditingModuleTask(null);
+                }}
+              >
+                {/* Backdrop */}
+                <div className="absolute inset-0 bg-black/80" />
+                {/* Modal Panel */}
+                <div
+                  className="relative z-10 w-[calc(100%-2rem)] max-w-[450px] bg-card border border-border/60 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-8 py-6 border-b border-border/50 bg-muted/30 shrink-0">
+                    <div>
+                      <h2 className="text-lg font-black tracking-tight">Edit Task Details</h2>
+                      <p className="text-xs text-muted-foreground mt-1">Modify task metadata, assignment and status</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setIsModuleTaskModalOpen(false);
+                        setEditingModuleTask(null);
+                      }}
+                      className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  {/* Body */}
+                  <form onSubmit={handleSaveTaskDetails}>
+                    <div className="p-8 space-y-4 max-h-[50vh] overflow-y-auto">
+                      <div>
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Task Title</label>
+                        <input
+                          type="text"
+                          required
+                          value={editingModuleTask.title}
+                          onChange={(e) => setEditingModuleTask({ ...editingModuleTask, title: e.target.value })}
+                          className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Phase</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Phase 1, Sprint A"
+                            value={editingModuleTask.phase || ""}
+                            onChange={(e) => setEditingModuleTask({ ...editingModuleTask, phase: e.target.value })}
+                            className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Due Date</label>
+                          <DatePicker
+                            value={editingModuleTask.dueDate || ""}
+                            onChange={(val) => setEditingModuleTask({ ...editingModuleTask, dueDate: val })}
+                            className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-bold text-center"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Assigned Developer</label>
+                          <Select 
+                            value={editingModuleTask.assignedToName || "none"} 
+                            onValueChange={(val) => setEditingModuleTask({ ...editingModuleTask, assignedToName: val === "none" ? "" : val })}
+                          >
+                            <SelectTrigger className="w-full h-9 px-3 bg-muted/50 border border-border/50 rounded-xl text-xs font-bold shadow-xs">
+                              <SelectValue placeholder="Unassigned" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                              <SelectItem value="none" className="text-xs font-semibold text-muted-foreground rounded-lg cursor-pointer">
+                                Unassigned
+                              </SelectItem>
+                              {currentSelectedProject.team.map(m => (
+                                <SelectItem key={m.name} value={m.name} className="text-xs font-semibold rounded-lg cursor-pointer">
+                                  {m.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Status</label>
+                          <Select 
+                            value={editingModuleTask.status} 
+                            onValueChange={(val) => setEditingModuleTask({ ...editingModuleTask, status: val as any })}
+                          >
+                            <SelectTrigger className="w-full h-9 px-3 bg-muted/50 border border-border/50 rounded-xl text-xs font-bold shadow-xs">
+                              <SelectValue placeholder="Status" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                              {["todo", "in-progress", "bugs", "onhold", "pending", "completed"].map(st => (
+                                <SelectItem key={st} value={st} className="text-xs font-semibold rounded-lg cursor-pointer">
+                                  {st === "todo" ? "To Do" : st === "in-progress" ? "In Progress" : st.charAt(0).toUpperCase() + st.slice(1)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      {(editingModuleTask.status === "onhold" || editingModuleTask.status === "pending") && (
+                        <div>
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Pending/Hold Reason</label>
+                          <textarea
+                            placeholder="Provide details on why this task is pending or on hold..."
+                            value={editingModuleTask.reasonForPending || ""}
+                            onChange={(e) => setEditingModuleTask({ ...editingModuleTask, reasonForPending: e.target.value })}
+                            rows={3}
+                            className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Footer */}
+                    <div className="px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsModuleTaskModalOpen(false);
+                          setEditingModuleTask(null);
+                        }}
+                        className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-5 py-2 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all text-sm"
+                      >
+                        Save Details
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Add Module Task Modal - plain overlay */}
+          {/* Add/Edit Milestone Modal for Design & UI/UX */}
+          {isAddMilestoneModalOpen && (() => {
+            const currentSelectedProject = projects.find(p => p.id === selectedProjectId);
+            if (!currentSelectedProject) return null;
+
+            const handleSaveMilestone = (e: React.FormEvent) => {
+              e.preventDefault();
+              if (!milestoneForm.title.trim()) return;
+
+              const projectModules = currentSelectedProject.modules || [];
+              let milestonesModule = projectModules.find(m => m.id === "mod-milestones" || m.name === "Milestones");
+              if (!milestonesModule) {
+                milestonesModule = projectModules[0] || { id: "mod-milestones", name: "Milestones", tasks: [] };
+              }
+              const currentTasks = milestonesModule.tasks || [];
+
+              let updatedTasks: any[];
+              if (editingMilestone) {
+                updatedTasks = currentTasks.map(t => t.id === editingMilestone.id ? {
+                  ...t,
+                  title: milestoneForm.title.trim(),
+                  dueDate: milestoneForm.dueDate || undefined,
+                  status: milestoneForm.status,
+                  assignedToName: milestoneForm.assignedToName || undefined
+                } : t);
+              } else {
+                const newTask = {
+                  id: `ms-${Date.now()}`,
+                  title: milestoneForm.title.trim(),
+                  dueDate: milestoneForm.dueDate || undefined,
+                  status: milestoneForm.status,
+                  assignedToName: milestoneForm.assignedToName || undefined
+                };
+                updatedTasks = [...currentTasks, newTask];
+              }
+
+              const updatedModule = { ...milestonesModule, tasks: updatedTasks };
+              const updatedModules = projectModules.some(m => m.id === milestonesModule.id)
+                ? projectModules.map(m => m.id === milestonesModule.id ? updatedModule : m)
+                : [updatedModule, ...projectModules];
+
+              saveProjectModules(
+                currentSelectedProject.id,
+                updatedModules,
+                editingMilestone ? "Updated Milestone" : "Added Milestone",
+                `${editingMilestone ? "Updated" : "Added"} milestone "${milestoneForm.title.trim()}"`
+              );
+
+              setIsAddMilestoneModalOpen(false);
+              setEditingMilestone(null);
+              toast.success(editingMilestone ? "Milestone updated successfully!" : "Milestone created successfully!");
+            };
+
+            return (
+              <div
+                className="fixed inset-0 z-[200] flex items-center justify-center animate-in fade-in duration-200"
+                onClick={() => {
+                  setIsAddMilestoneModalOpen(false);
+                  setEditingMilestone(null);
+                }}
+              >
+                <div className="absolute inset-0 bg-black/80" />
+                <div
+                  className="relative z-10 w-[calc(100%-2rem)] max-w-[450px] bg-card border border-border/60 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between px-8 py-6 border-b border-border/50 bg-muted/30 shrink-0">
+                    <div>
+                      <h2 className="text-lg font-black tracking-tight">{editingMilestone ? "Edit Milestone" : "Add Milestone"}</h2>
+                      <p className="text-xs text-muted-foreground mt-1">Configure milestone deliverable and schedule</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setIsAddMilestoneModalOpen(false);
+                        setEditingMilestone(null);
+                      }}
+                      className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <form onSubmit={handleSaveMilestone}>
+                    <div className="p-8 space-y-4 max-h-[60vh] overflow-y-auto">
+                      <div>
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
+                          Milestone Title <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          autoFocus
+                          placeholder="e.g. Requirement Analysis, Design Phase"
+                          value={milestoneForm.title}
+                          onChange={(e) => setMilestoneForm({ ...milestoneForm, title: e.target.value })}
+                          className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Due Date</label>
+                          <DatePicker
+                            value={milestoneForm.dueDate}
+                            onChange={(val) => setMilestoneForm({ ...milestoneForm, dueDate: val })}
+                            className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-bold text-center"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Status</label>
+                          <Select
+                            value={milestoneForm.status}
+                            onValueChange={(val) => setMilestoneForm({ ...milestoneForm, status: val as any })}
+                          >
+                            <SelectTrigger className="w-full h-9 px-3 bg-muted/50 border border-border/50 rounded-xl text-xs font-bold shadow-xs">
+                              <SelectValue placeholder="Status" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                              <SelectItem value="todo" className="text-xs font-semibold rounded-lg cursor-pointer">To Do</SelectItem>
+                              <SelectItem value="in-progress" className="text-xs font-semibold rounded-lg cursor-pointer">In Progress</SelectItem>
+                              <SelectItem value="completed" className="text-xs font-semibold rounded-lg cursor-pointer">Completed</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Assign Team Member</label>
+                        <Select
+                          value={milestoneForm.assignedToName || "none"}
+                          onValueChange={(val) => setMilestoneForm({ ...milestoneForm, assignedToName: val === "none" ? "" : val })}
+                        >
+                          <SelectTrigger className="w-full h-9 px-3 bg-muted/50 border border-border/50 rounded-xl text-xs font-bold shadow-xs">
+                            <SelectValue placeholder="Unassigned" />
+                          </SelectTrigger>
+                          <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                            <SelectItem value="none" className="text-xs font-semibold text-muted-foreground rounded-lg cursor-pointer">
+                              Unassigned
+                            </SelectItem>
+                            {currentSelectedProject.team.map(m => (
+                              <SelectItem key={m.name} value={m.name} className="text-xs font-semibold rounded-lg cursor-pointer">{m.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAddMilestoneModalOpen(false);
+                          setEditingMilestone(null);
+                        }}
+                        className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-5 py-2 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all text-sm"
+                      >
+                        {editingMilestone ? "Save Changes" : "Create Milestone"}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            );
+          })()}
+
+          {isAddTaskModalOpen && (() => {
+            const currentSelectedProject = projects.find(p => p.id === selectedProjectId);
+            if (!currentSelectedProject) return null;
+            const projectModules: NonNullable<Project['modules']> = currentSelectedProject.modules || [];
+            const activeModule = projectModules.find(m => m.id === selectedModuleId) || projectModules[0];
+            if (!activeModule) return null;
+
+            const handleCreateNewTask = (e: React.FormEvent) => {
+              e.preventDefault();
+              if (!addTaskForm.title.trim()) return;
+
+              const newTask: any = {
+                id: `task-${Date.now()}`,
+                title: addTaskForm.title.trim(),
+                status: addTaskForm.status,
+                phase: addTaskForm.phase.trim() || undefined,
+                dueDate: addTaskForm.dueDate || undefined,
+                assignedToName: addTaskForm.assignedToName || undefined,
+                reasonForPending: (addTaskForm.status === "onhold" || addTaskForm.status === "pending") ? addTaskForm.reasonForPending.trim() : undefined
+              };
+
+              const updatedTasks = [...activeModule.tasks, newTask];
+              const updatedModules: NonNullable<Project['modules']> = projectModules.map(m => m.id === activeModule.id ? { ...m, tasks: updatedTasks } : m);
+              saveProjectModules(currentSelectedProject.id, updatedModules, "Created Task", `Added new task "${addTaskForm.title.trim()}" inside module "${activeModule.name}"`);
+              setIsAddTaskModalOpen(false);
+              toast.success("New task created successfully!");
+            };
+
+            return (
+              <div
+                className="fixed inset-0 z-[200] flex items-center justify-center animate-in fade-in duration-200"
+                onClick={() => setIsAddTaskModalOpen(false)}
+              >
+                {/* Backdrop */}
+                <div className="absolute inset-0 bg-black/80" />
+                {/* Modal Panel */}
+                <div
+                  className="relative z-10 w-[calc(100%-2rem)] max-w-[450px] bg-card border border-border/60 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-8 py-6 border-b border-border/50 bg-muted/30 shrink-0">
+                    <div>
+                      <h2 className="text-lg font-black tracking-tight">Add New Task</h2>
+                      <p className="text-xs text-muted-foreground mt-1">Create a new task inside "{activeModule.name}"</p>
+                    </div>
+                    <button
+                      onClick={() => setIsAddTaskModalOpen(false)}
+                      className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  {/* Body */}
+                  <form onSubmit={handleCreateNewTask}>
+                    <div className="p-8 space-y-4 max-h-[50vh] overflow-y-auto">
+                      <div>
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Task Title</label>
+                        <input
+                          type="text"
+                          required
+                          autoFocus
+                          placeholder="Enter task title..."
+                          value={addTaskForm.title}
+                          onChange={(e) => setAddTaskForm({ ...addTaskForm, title: e.target.value })}
+                          className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Phase</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Phase 1, Sprint A"
+                            value={addTaskForm.phase}
+                            onChange={(e) => setAddTaskForm({ ...addTaskForm, phase: e.target.value })}
+                            className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Due Date</label>
+                          <DatePicker
+                            value={addTaskForm.dueDate}
+                            onChange={(val) => setAddTaskForm({ ...addTaskForm, dueDate: val })}
+                            className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-bold text-center"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Assigned Developer</label>
+                          <Select
+                            value={addTaskForm.assignedToName || "none"}
+                            onValueChange={(val) => setAddTaskForm({ ...addTaskForm, assignedToName: val === "none" ? "" : val })}
+                          >
+                            <SelectTrigger className="w-full h-9 px-3 bg-muted/50 border border-border/50 rounded-xl text-xs font-bold shadow-xs">
+                              <SelectValue placeholder="Unassigned" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                              <SelectItem value="none" className="text-xs font-semibold text-muted-foreground rounded-lg cursor-pointer">
+                                Unassigned
+                              </SelectItem>
+                              {currentSelectedProject.team.map(m => (
+                                <SelectItem key={m.name} value={m.name} className="text-xs font-semibold rounded-lg cursor-pointer">{m.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Status</label>
+                          <Select
+                            value={addTaskForm.status}
+                            onValueChange={(val) => setAddTaskForm({ ...addTaskForm, status: val as any })}
+                          >
+                            <SelectTrigger className="w-full h-9 px-3 bg-muted/50 border border-border/50 rounded-xl text-xs font-bold shadow-xs">
+                              <SelectValue placeholder="Status" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                              {["todo", "in-progress", "bugs", "onhold", "pending", "completed"].map(st => (
+                                <SelectItem key={st} value={st} className="text-xs font-semibold rounded-lg cursor-pointer">
+                                  {st === "todo" ? "To Do" : st === "in-progress" ? "In Progress" : st.charAt(0).toUpperCase() + st.slice(1)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      {(addTaskForm.status === "onhold" || addTaskForm.status === "pending") && (
+                        <div>
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Pending/Hold Reason</label>
+                          <textarea
+                            placeholder="Provide details on why this task is pending or on hold..."
+                            value={addTaskForm.reasonForPending}
+                            onChange={(e) => setAddTaskForm({ ...addTaskForm, reasonForPending: e.target.value })}
+                            rows={3}
+                            className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Footer */}
+                    <div className="px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setIsAddTaskModalOpen(false)}
+                        className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-5 py-2 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all text-sm"
+                      >
+                        Create Task
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            );
+          })()}
+
+          <ConfirmModal
+            isOpen={confirmModalState.isOpen}
+            onClose={() => setConfirmModalState(prev => ({ ...prev, isOpen: false }))}
+            onConfirm={confirmModalState.action}
+            title={confirmModalState.title}
+            description={confirmModalState.description}
+            itemName={confirmModalState.itemName}
+          />
+
+          <Dialog open={isLogDailyStatsOpen} onOpenChange={(open) => { setIsLogDailyStatsOpen(open); if (!open) setEditingStatId(null); }}>
+            <DialogContent className={cn("p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl bg-card z-50 transition-all duration-300", isBulkAdd ? "max-w-[700px]" : "max-w-[450px]")}>
+              <div className="p-6 md:p-8 border-b border-border/40">
+                <h2 className="text-lg font-black tracking-tight text-foreground flex items-center gap-2">
+                  📈 {editingStatId ? "Edit Stats Entry" : "Log Daily Marketing Stats"}
+                </h2>
+                <p className="text-xs text-muted-foreground mt-1 font-medium">Enter performance metrics for the selected campaign and date.</p>
+              </div>
+
+              <form onSubmit={handleLogDailyStats} className="p-6 md:p-8 space-y-5">
+                {/* Mode Switcher (F7: edit vakhte single j) */}
+                {!editingStatId && (
+                  <div className="flex items-center justify-between border-b border-border/40 pb-3">
+                    <span className="text-xs font-black uppercase tracking-wider text-foreground">Entry Mode</span>
+                    <div className="flex bg-muted/60 p-0.5 rounded-lg border border-border/50 text-[10px] font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setIsBulkAdd(false)}
+                        className={cn("px-2.5 py-1 rounded-md transition-all", !isBulkAdd ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+                      >
+                        Single
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsBulkAdd(true)}
+                        className={cn("px-2.5 py-1 rounded-md transition-all", isBulkAdd ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+                      >
+                        Bulk Add
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Date</label>
+                  <DatePicker
+                    value={dailyStatsForm.date}
+                    onChange={(val) => setDailyStatsForm({ ...dailyStatsForm, date: val })}
+                    className="w-full h-[42px] px-4 bg-muted/50 border border-border rounded-xl text-sm font-semibold text-foreground"
+                  />
+                </div>
+
+                {!isBulkAdd ? (
+                  <>
+                    <div className="space-y-1.5 relative">
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Campaign (type = auto-new, no confirm)</label>
+                      <input
+                        type="text"
+                        value={dailyStatsForm.campaignName}
+                        onChange={(e) => { setDailyStatsForm({ ...dailyStatsForm, campaignName: e.target.value }); setCampSuggestOpen(true); }}
+                        onFocus={() => setCampSuggestOpen(true)}
+                        onBlur={() => setTimeout(() => setCampSuggestOpen(false), 150)}
+                        placeholder="e.g. HKL Leads (navu hoy to auto-banse)"
+                        className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold text-foreground"
+                      />
+                      {campSuggestOpen && (() => {
+                        const project = projects.find(p => p.id === selectedProjectId);
+                        const base = dmCampaigns.length > 0
+                          ? dmCampaigns
+                          : (project?.campaigns && project.campaigns.length > 0)
+                            ? project.campaigns.map(c => typeof c === 'string' ? c : (c.name || "")).filter(Boolean)
+                            : ["Q4 Retargeting Ads", "Holiday Social Push", "B2B Email Drip"];
+                        const q = dailyStatsForm.campaignName.trim().toLowerCase();
+                        const opts = base.filter(n => !q || n.toLowerCase().includes(q)).slice(0, 6);
+                        if (opts.length === 0) return null;
+                        return (
+                          <div className="absolute left-0 right-0 top-full mt-1 z-20 bg-card border border-border/60 rounded-xl shadow-xl overflow-hidden">
+                            {opts.map(opt => (
+                              <button
+                                key={opt}
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  setDailyStatsForm({ ...dailyStatsForm, campaignName: opt });
+                                  setCampSuggestOpen(false);
+                                }}
+                                className="w-full text-left px-4 py-2 text-xs font-bold hover:bg-primary/10 hover:text-primary transition-colors"
+                              >
+                                {opt}
+                              </button>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Reach</label>
+                        <input
+                          type="number"
+                          placeholder="e.g. 15000"
+                          value={dailyStatsForm.reach}
+                          onChange={(e) => setDailyStatsForm({ ...dailyStatsForm, reach: e.target.value })}
+                          className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Impressions</label>
+                        <input
+                          type="number"
+                          placeholder="e.g. 18000"
+                          value={dailyStatsForm.impressions}
+                          onChange={(e) => setDailyStatsForm({ ...dailyStatsForm, impressions: e.target.value })}
+                          className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Leads</label>
+                        <input
+                          type="number"
+                          placeholder="e.g. 42"
+                          value={dailyStatsForm.leads}
+                          onChange={(e) => setDailyStatsForm({ ...dailyStatsForm, leads: e.target.value })}
+                          className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Followers</label>
+                        <input
+                          type="number"
+                          placeholder="e.g. 15"
+                          value={dailyStatsForm.followers}
+                          onChange={(e) => setDailyStatsForm({ ...dailyStatsForm, followers: e.target.value })}
+                          className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Revenue (₹)</label>
+                        <input
+                          type="number"
+                          placeholder="e.g. 25000"
+                          value={dailyStatsForm.revenue}
+                          onChange={(e) => setDailyStatsForm({ ...dailyStatsForm, revenue: e.target.value })}
+                          className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Spend (₹)</label>
+                      <input
+                        type="number"
+                        placeholder="e.g. 5000"
+                        value={dailyStatsForm.spend}
+                        onChange={(e) => setDailyStatsForm({ ...dailyStatsForm, spend: e.target.value })}
+                        className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
+                    {Object.keys(bulkStatsEntries).map((campaignName) => {
+                      const entry = bulkStatsEntries[campaignName] || { reach: "", impressions: "", leads: "", followers: "", revenue: "", spend: "" };
+                      const setEntry = (patch: Partial<{ reach: string; impressions: string; leads: string; followers: string; revenue: string; spend: string }>) => setBulkStatsEntries({
+                        ...bulkStatsEntries,
+                        [campaignName]: { ...entry, ...patch }
+                      });
+                      const numCls = "w-full px-2.5 h-[34px] bg-background border border-border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold";
+                      const lblCls = "text-[9px] font-bold text-muted-foreground uppercase mb-1 block";
+                      return (
+                        <div key={campaignName} className="p-4 bg-muted/20 border border-border/40 rounded-2xl space-y-3">
+                          <p className="text-xs font-black text-foreground">{campaignName}</p>
+                          <div className="grid grid-cols-3 gap-2">
+                            <div>
+                              <label className={lblCls}>Reach</label>
+                              <input
+                                type="number"
+                                placeholder="e.g. 12000"
+                                value={entry.reach}
+                                onChange={(e) => setEntry({ reach: e.target.value })}
+                                className={numCls}
+                              />
+                            </div>
+                            <div>
+                              <label className={lblCls}>Impressions</label>
+                              <input
+                                type="number"
+                                placeholder="e.g. 15000"
+                                value={entry.impressions}
+                                onChange={(e) => setEntry({ impressions: e.target.value })}
+                                className={numCls}
+                              />
+                            </div>
+                            <div>
+                              <label className={lblCls}>Leads</label>
+                              <input
+                                type="number"
+                                placeholder="e.g. 35"
+                                value={entry.leads}
+                                onChange={(e) => setEntry({ leads: e.target.value })}
+                                className={numCls}
+                              />
+                            </div>
+                            <div>
+                              <label className={lblCls}>Followers</label>
+                              <input
+                                type="number"
+                                placeholder="e.g. 10"
+                                value={entry.followers}
+                                onChange={(e) => setEntry({ followers: e.target.value })}
+                                className={numCls}
+                              />
+                            </div>
+                            <div>
+                              <label className={lblCls}>Revenue (₹)</label>
+                              <input
+                                type="number"
+                                placeholder="e.g. 8000"
+                                value={entry.revenue}
+                                onChange={(e) => setEntry({ revenue: e.target.value })}
+                                className={numCls}
+                              />
+                            </div>
+                            <div>
+                              <label className={lblCls}>Spend (₹)</label>
+                              <input
+                                type="number"
+                                placeholder="e.g. 3000"
+                                value={entry.spend}
+                                onChange={(e) => setEntry({ spend: e.target.value })}
+                                className={numCls}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <DialogClose asChild>
+                    <button type="button" className="px-4 py-2.5 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors">
+                      Cancel
+                    </button>
+                  </DialogClose>
                   <button
-                    onClick={() => { setIsAddCalendarItemModalOpen(false); setEditingCalendarItem(null); setActiveCalendarTab('general'); }}
-                    className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
+                    type="submit"
+                    className="px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all text-xs"
                   >
-                    <X className="w-5 h-5" />
+                    Submit Stats
                   </button>
                 </div>
-                {/* Body */}
-                <div className="flex flex-row overflow-hidden flex-1">
+              </form>
+            </DialogContent>
+          </Dialog>
+          {/* F3: Revenue popup (page nai) — date + revenue, total, edit/delete */}
+          <Dialog open={isRevenueOpen} onOpenChange={(open) => { setIsRevenueOpen(open); if (!open) setRevenueForm({ date: "", revenue: "", editId: "" }); }}>
+            <DialogContent className="w-[calc(100vw-16px)] sm:max-w-[440px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+              <div className="px-6 py-5 border-b border-border/50 bg-muted/30 flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-black tracking-tight flex items-center gap-2">
+                    <IndianRupee className="w-5 h-5 text-emerald-600" /> Revenue
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">Total: <span className="font-black text-emerald-600 font-mono">₹{revenueTotal.toLocaleString("en-IN")}</span></p>
+                </div>
+                <DialogClose asChild>
+                  <button className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
+                    <X className="w-5 h-5" />
+                  </button>
+                </DialogClose>
+              </div>
+              <div className="p-6 space-y-3 max-h-[40vh] overflow-y-auto">
+                {revenues.length === 0 && (
+                  <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">No revenue entries yet.</p>
+                )}
+                {[...revenues].sort((a, b) => String(b.date || "").localeCompare(String(a.date || ""))).map((r: any) => (
+                  <div key={String(r.id || r._id)} className="flex items-center gap-3 px-4 py-2.5 rounded-2xl border border-border/40 bg-muted/20 text-xs">
+                    <span className="font-mono font-bold">{String(r.date || "").split("T")[0]}</span>
+                    <span className="font-black text-emerald-600 font-mono ml-auto">₹{Number(r.revenue || 0).toLocaleString("en-IN")}</span>
+                    <button
+                      type="button"
+                      onClick={() => setRevenueForm({ date: (String(r.date || "").split("T")[0] ?? ""), revenue: String(r.revenue ?? ""), editId: String(r.id || r._id) })}
+                      className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                      title="Edit"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteRevenue(String(r.id || r._id))}
+                      className="p-1.5 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="px-6 py-4 bg-muted/30 border-t border-border/50">
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  <DatePicker
+                    value={revenueForm.date}
+                    onChange={(val) => setRevenueForm({ ...revenueForm, date: val })}
+                    placeholder="Date"
+                    className="h-10 bg-background border-border rounded-xl text-xs"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    value={revenueForm.revenue}
+                    onChange={(e) => setRevenueForm({ ...revenueForm, revenue: e.target.value })}
+                    placeholder="e.g. 50000"
+                    className="px-3 h-10 bg-background border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSaveRevenue}
+                  className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors shadow-sm"
+                >
+                  {revenueForm.editId ? "Update Revenue" : "Save Revenue"}
+                </button>
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={isEditProjectModalOpen} onOpenChange={setIsEditProjectModalOpen}>
+            <DialogContent className="max-w-[90vw] md:max-w-[700px] p-0 overflow-hidden rounded-[2.5rem] border-border/60 shadow-2xl [&>button]:hidden bg-card flex flex-col h-[90vh] md:h-[550px] gap-0">
+              <div className="p-6 pb-4">
+                <div className="flex items-center justify-between px-6 md:px-8 py-6 border-b border-border/50 bg-muted/30">
+                  <div>
+                    <h2 className="text-xl md:text-2xl font-black tracking-tight">Edit Project</h2>
+                    <p className="text-xs text-muted-foreground mt-1">Modify project details, stats targets, and budgets</p>
+                  </div>
+                  <DialogClose asChild>
+                    <button className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
+                      <X className="w-5 h-5" />
+                    </button>
+                  </DialogClose>
+                </div>
+              </div>
+              {editingProject && (
+                <div className="flex flex-row overflow-hidden flex-1" style={{ maxHeight: 'calc(90vh - 130px)' }}>
                   {/* Sidebar Tabs */}
                   <div className="w-44 shrink-0 border-r border-border/50 bg-muted/20 p-3 flex flex-col gap-1 overflow-y-auto">
                     {([
-                      { id: 'general', label: 'General Info', icon: <FileText className="w-4 h-4" /> },
-                      { id: 'production', label: 'Production', icon: <Video className="w-4 h-4" /> },
-                      { id: 'publishing', label: 'Publishing', icon: <Instagram className="w-4 h-4" /> },
+                      { id: 'general', label: 'General', icon: <FolderGit2 className="w-4 h-4" /> },
+                      { id: 'finance', label: 'Finance', icon: <IndianRupee className="w-4 h-4" /> },
+                      ...(editingProject.category === "Digital Marketing" ? [{ id: 'campaigns' as const, label: 'Campaigns', icon: <TrendingUp className="w-4 h-4" /> }] : []),
                     ] as const).map(tab => (
                       <button
                         key={tab.id}
-                        onClick={() => setActiveCalendarTab(tab.id)}
+                        onClick={() => setActiveProjectTab(tab.id)}
                         className={cn(
                           "flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold transition-all text-left w-full",
-                          activeCalendarTab === tab.id
+                          activeProjectTab === tab.id
                             ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20"
                             : "text-muted-foreground hover:bg-muted hover:text-foreground"
                         )}
@@ -7220,308 +9979,117 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       </button>
                     ))}
                   </div>
-                  {/* Tab Contents */}
+
+                  {/* Tab Content */}
                   <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-5">
-                    {activeCalendarTab === 'general' && (
+                    {activeProjectTab === 'general' && (
                       <>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Project Name <span className="text-red-500">*</span></label>
+                          <input
+                            type="text"
+                            value={editingProject.name}
+                            onChange={(e) => setEditingProject({ ...editingProject, name: e.target.value })}
+                            className={"w-full px-4 py-3 bg-muted/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium " + (showEditProjectErrors && !editingProject.name.trim() ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Description</label>
+                          <textarea
+                            value={editingProject.description || ""}
+                            onChange={(e) => setEditingProject({ ...editingProject, description: e.target.value })}
+                            placeholder="Brief project description..."
+                            rows={2}
+                            className="w-full px-4 py-3 bg-muted/50 border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium resize-none"
+                          />
+                        </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Posting Date <span className="text-rose-500">*</span></label>
-                            <DatePicker 
-                              value={calendarForm.postingDate || ""} 
-                              onChange={(newDate) => {
-                                const dates = getPresetDates(newDate);
-                                setCalendarForm({ 
-                                  ...calendarForm, 
-                                  postingDate: newDate,
-                                  scriptDate: calendarForm.scriptDate || dates.scriptDate || "",
-                                  shootDate: calendarForm.shootDate || dates.shootDate || "",
-                                  editingStart: calendarForm.editingStart || dates.editingStart || "",
-                                  captionDate: calendarForm.captionDate || dates.captionDate || "",
-                                  thumbnailDate: calendarForm.thumbnailDate || dates.thumbnailDate || "",
-                                  approval: calendarForm.approval || dates.approval || ""
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Start Date <span className="text-red-500">*</span></label>
+                            <DatePicker
+                              value={editingProject.startDate}
+                              onChange={(newStart) => {
+                                setEditingProject({
+                                  ...editingProject,
+                                  startDate: newStart,
+                                  endDate: editingProject.endDate < newStart ? newStart : editingProject.endDate
                                 });
-                              }} 
-                              className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-semibold" 
+                              }}
+                              placeholder="Select start date"
+                              className={"w-full h-[42px] bg-muted/50 border rounded-xl font-medium " + (showEditProjectErrors && !editingProject.startDate ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
                             />
                           </div>
                           <div>
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Format Type</label>
-                            <Select value={calendarForm.type || "Post"} onValueChange={(val) => setCalendarForm({ ...calendarForm, type: val })}>
-                              <SelectTrigger className="w-full h-9 bg-muted/50 border-border/50 rounded-xl text-xs font-semibold">
-                                <SelectValue placeholder="Format Type" />
-                              </SelectTrigger>
-                              <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
-                                {["Post", "Reel", "Story", "Carousel"].map(t => (
-                                  <SelectItem key={t} value={t} className="text-xs font-semibold rounded-lg cursor-pointer">
-                                    {t}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">End Date <span className="text-red-500">*</span></label>
+                            <DatePicker
+                              value={editingProject.endDate}
+                              minDate={editingProject.startDate}
+                              onChange={(val) => setEditingProject({ ...editingProject, endDate: val })}
+                              placeholder="Select end date"
+                              className={"w-full h-[42px] bg-muted/50 border rounded-xl font-medium " + (showEditProjectErrors && !editingProject.endDate ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
+                            />
                           </div>
                         </div>
+                        <RenewalsManager
+                          ranges={editingProject.dateRanges || []}
+                          onChange={(dateRanges) => {
+                            const last = dateRanges[dateRanges.length - 1];
+                            setEditingProject({
+                              ...editingProject,
+                              dateRanges,
+                              ...(last && last.start_date && last.end_date ? { startDate: last.start_date, endDate: last.end_date } : {}),
+                            });
+                          }}
+                        />
                         <div>
-                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Topic / Hook <span className="text-rose-500">*</span></label>
-                          <input type="text" value={calendarForm.topic || ""} onChange={(e) => setCalendarForm({ ...calendarForm, topic: e.target.value })} placeholder="Hook title or main idea" className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Concept Details &amp; Notes</label>
-                          <textarea value={calendarForm.concept || ""} onChange={(e) => setCalendarForm({ ...calendarForm, concept: e.target.value })} placeholder="Brief storyboard or visual concepts..." rows={2} className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none resize-none font-medium" />
-                        </div>
-                        {/* Issues List inside Full Edit Modal */}
-                        {editingCalendarItem && currentSelectedProject && (
-                          <div className="space-y-2 p-4 bg-rose-500/5 rounded-2xl border border-rose-500/20">
-                            <h4 className="text-[10px] font-bold text-rose-600 uppercase tracking-wider block mb-1">Active Issues ({(calendarForm.issues || []).length})</h4>
-                            <div className="space-y-1.5 max-h-[100px] overflow-y-auto pr-1">
-                              {((calendarForm.issues || [])).map((issue: any) => (
-                                <div key={issue.id} className="flex justify-between items-start text-[11px] font-bold text-rose-700 bg-white/50 p-1.5 rounded-lg border border-rose-500/10">
-                                  <span className="text-left">{issue.text} <span className="text-[9px] text-rose-400 font-mono">({issue.timestamp})</span></span>
-                                  <button type="button" onClick={() => {
-                                    const updated = (calendarForm.issues || []).filter((i: any) => i.id !== issue.id);
-                                    setCalendarForm({ ...calendarForm, issues: updated });
-                                    logProjectActivity(currentSelectedProject.id, "Resolved Issue", `Resolved issue "${issue.text}" on content idea "${calendarForm.topic}"`);
-                                  }} className="text-[9px] text-rose-500 hover:text-rose-700 ml-1">✕</button>
-                                </div>
-                              ))}
-                            </div>
-                            <div className="flex gap-2 mt-2">
-                              <input 
-                                type="text"
-                                placeholder="Log a new issue..."
-                                id="modal_new_issue_input"
-                                className="flex-1 px-3 py-1.5 bg-background border border-border/50 rounded-xl text-xs focus:outline-none font-semibold text-foreground"
-                              />
-                              <button 
-                                type="button"
-                                onClick={() => {
-                                  const input = document.getElementById("modal_new_issue_input") as HTMLInputElement;
-                                  if (input && input.value.trim()) {
-                                    const now = new Date();
-                                    const dateStr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-                                    const newIssue = {
-                                      id: `issue-${Date.now()}`,
-                                      text: input.value.trim(),
-                                      timestamp: dateStr
-                                    };
-                                    setCalendarForm({
-                                      ...calendarForm,
-                                      issues: [...(calendarForm.issues || []), newIssue]
-                                    });
-                                    logProjectActivity(currentSelectedProject.id, "Logged Issue", `Added issue "${input.value.trim()}" on content idea "${calendarForm.topic}"`);
-                                    input.value = "";
-                                  }
-                                }}
-                                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl transition-colors shadow-sm"
-                              >
-                                Log
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                        <div>
-                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Reference / Inspiration Link</label>
-                          <input type="text" value={calendarForm.reference || ""} onChange={(e) => setCalendarForm({ ...calendarForm, reference: e.target.value })} placeholder="Inspiration URL or references" className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
-                        </div>
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                              Assign Team / Brand Person
-                            </label>
-                            <span className="text-[10px] text-muted-foreground font-medium">
-                              {((calendarForm.assignedTo || []).length > 0) ? `${calendarForm.assignedTo.length} selected` : "Select members"}
-                            </span>
-                          </div>
-                          <div className="max-h-[160px] overflow-y-auto pr-1 space-y-1.5 custom-scrollbar border border-border/50 rounded-xl p-2 bg-muted/20">
-                            {(() => {
-                              const peopleList: { id: string; name: string; avatar: string; subtitle: string; isCreativeRole?: boolean }[] = [];
-                              const seen = new Set<string>();
-
-                              // 1. Creative team members assigned to this project
-                              if (currentSelectedProject?.creativeTeam) {
-                                Object.entries(currentSelectedProject.creativeTeam).forEach(([roleKey, empId]) => {
-                                  if (!empId) return;
-                                  const emp = employees.find(e => String(e.id) === String(empId) || String((e as any)._id) === String(empId));
-                                  const roleObj = CREATIVE_ROLES.find(r => r.key === roleKey);
-                                  const name = emp?.name || currentSelectedProject.creativeTeamDetails?.[roleKey]?.employee_name;
-                                  if (name && !seen.has(name) && name !== "Team Member") {
-                                    seen.add(name);
-                                    peopleList.push({
-                                      id: String(emp?.id || empId),
-                                      name,
-                                      avatar: emp?.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(name)}`,
-                                      subtitle: roleObj?.label || "Creative Team",
-                                      isCreativeRole: true
-                                    });
-                                  }
-                                });
-                              }
-
-                              // 2. All company employees from HRMS
-                              employees.forEach(emp => {
-                                if (emp && emp.name && !seen.has(emp.name) && emp.name !== "Team Member") {
-                                  seen.add(emp.name);
-                                  peopleList.push({
-                                    id: String(emp.id),
-                                    name: emp.name,
-                                    avatar: emp.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(emp.name)}`,
-                                    subtitle: emp.department || emp.role || "Staff",
-                                    isCreativeRole: false
-                                  });
-                                }
-                              });
-
-                              if (peopleList.length === 0) {
-                                return (
-                                  <div className="py-3 text-center text-xs text-muted-foreground">
-                                    No team members found.
-                                  </div>
-                                );
-                              }
-
+                          <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 flex items-center justify-between">
+                            <span>Departments / Categories <span className="text-red-500">*</span></span>
+                            <span className="text-[10px] text-muted-foreground font-normal">Select one or more</span>
+                          </label>
+                          <div className="flex flex-wrap gap-2 pt-0.5">
+                            {FIXED_DEPARTMENTS.map(cat => {
+                              const selectedDepts = parseDepartments(editingProject.category);
+                              const isSelected = selectedDepts.includes(cat);
                               return (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                                  {peopleList.map(person => {
-                                    const isAssigned = (calendarForm.assignedTo || []).includes(person.name);
-                                    return (
-                                      <button
-                                        key={person.name}
-                                        type="button"
-                                        onClick={() => {
-                                          const list = calendarForm.assignedTo || [];
-                                          setCalendarForm({
-                                            ...calendarForm,
-                                            assignedTo: isAssigned 
-                                              ? list.filter((n: string) => n !== person.name)
-                                              : [...list, person.name]
-                                          });
-                                        }}
-                                        className={cn(
-                                          "flex items-center gap-2 p-2 rounded-xl text-left border text-xs font-semibold transition-all",
-                                          isAssigned
-                                            ? "border-primary/50 bg-primary/10 text-primary shadow-xs"
-                                            : "border-border/50 bg-card hover:bg-muted text-muted-foreground hover:text-foreground"
-                                        )}
-                                      >
-                                        <div className="relative shrink-0">
-                                          <img src={person.avatar} className="w-6 h-6 rounded-full object-cover" />
-                                          {isAssigned && (
-                                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-[8px] font-bold">
-                                              ✓
-                                            </div>
-                                          )}
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                          <span className="truncate block font-bold text-foreground text-xs leading-tight">
-                                            {person.name}
-                                          </span>
-                                          <span className={cn(
-                                            "truncate block text-[10px]",
-                                            person.isCreativeRole ? "text-primary font-bold" : "text-muted-foreground"
-                                          )}>
-                                            {person.subtitle}
-                                          </span>
-                                        </div>
-                                      </button>
-                                    );
-                                  })}
-                                </div>
+                                <button
+                                  key={cat}
+                                  type="button"
+                                  onClick={() => {
+                                    let next: string[];
+                                    if (isSelected) {
+                                      next = selectedDepts.filter(d => d !== cat);
+                                      if (next.length === 0) next = [cat];
+                                    } else {
+                                      next = [...selectedDepts, cat];
+                                    }
+                                    setEditingProject({ ...editingProject, category: next.join(", ") });
+                                  }}
+                                  className={cn(
+                                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer",
+                                    isSelected
+                                      ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                                      : "bg-muted/40 text-muted-foreground border-border hover:bg-muted"
+                                  )}
+                                >
+                                  {cat} {isSelected ? "✓" : "+"}
+                                </button>
                               );
-                            })()}
-                          </div>
-                        </div>
-                      </>
-                    )}
-                    {activeCalendarTab === 'production' && (
-                      <>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Script Date</label>
-                            <DatePicker 
-                              value={calendarForm.scriptDate || ""} 
-                              onChange={(val) => setCalendarForm({ ...calendarForm, scriptDate: val })} 
-                              className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-semibold" 
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Script Link</label>
-                            <input type="text" value={calendarForm.scriptLink || ""} onChange={(e) => setCalendarForm({ ...calendarForm, scriptLink: e.target.value })} placeholder="Docs script Link" className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
+                            })}
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Shoot Date</label>
-                            <DatePicker 
-                              value={calendarForm.shootDate || ""} 
-                              onChange={(val) => setCalendarForm({ ...calendarForm, shootDate: val })} 
-                              className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-semibold" 
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Shoot Assets Link</label>
-                            <input type="text" value={calendarForm.shootLink || ""} onChange={(e) => setCalendarForm({ ...calendarForm, shootLink: e.target.value })} placeholder="Drive assets folder URL" className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Editing Start Date</label>
-                            <DatePicker 
-                              value={calendarForm.editingStart || ""} 
-                              onChange={(val) => setCalendarForm({ ...calendarForm, editingStart: val })} 
-                              className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-semibold" 
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Final Reel Link (Video)</label>
-                            <input type="text" value={calendarForm.finalReelLink || ""} onChange={(e) => setCalendarForm({ ...calendarForm, finalReelLink: e.target.value })} placeholder="Reel draft link (Drive/Vimeo)" className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Final Post Link (Graphic / Carousel)</label>
-                            <input type="text" value={calendarForm.finalPostLink || ""} onChange={(e) => setCalendarForm({ ...calendarForm, finalPostLink: e.target.value })} placeholder="Post / Carousel design draft link" className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Thumbnail Date</label>
-                            <DatePicker 
-                              value={calendarForm.thumbnailDate || ""} 
-                              onChange={(val) => setCalendarForm({ ...calendarForm, thumbnailDate: val })} 
-                              className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-semibold" 
-                            />
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Thumbnail Link</label>
-                            <input type="text" value={calendarForm.thumbnailLink || ""} onChange={(e) => setCalendarForm({ ...calendarForm, thumbnailLink: e.target.value })} placeholder="Cover / Thumbnail design link" className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Caption Date</label>
-                            <DatePicker 
-                              value={calendarForm.captionDate || ""} 
-                              onChange={(val) => setCalendarForm({ ...calendarForm, captionDate: val })} 
-                              className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-semibold" 
-                            />
-                          </div>
-                        </div>
-                      </>
-                    )}
-                    {activeCalendarTab === 'publishing' && (
-                      <>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Approval Feedback (Het / Client)</label>
-                            <input type="text" value={calendarForm.approval || ""} onChange={(e) => setCalendarForm({ ...calendarForm, approval: e.target.value })} placeholder="e.g. Approved / Changes requested" className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Workflow Status</label>
-                            <Select value={calendarForm.status || "To Do"} onValueChange={(val) => setCalendarForm({ ...calendarForm, status: val })}>
-                              <SelectTrigger className="w-full h-9 bg-muted/50 border-border/50 rounded-xl text-xs font-semibold">
-                                <SelectValue placeholder="Workflow Status" />
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Status <span className="text-red-500">*</span></label>
+                            <Select
+                              value={editingProject.status || "In Progress"}
+                              onValueChange={(val) => setEditingProject({ ...editingProject, status: val as ProjectStatus })}
+                            >
+                              <SelectTrigger className="w-full h-[46px] px-4 bg-muted/50 border border-border/50 rounded-xl text-sm font-medium">
+                                <SelectValue placeholder="Select Status" />
                               </SelectTrigger>
                               <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
-                                {["To Do", "In Progress", "Pending Approval", "Approved", "Published"].map(st => (
-                                  <SelectItem key={st} value={st} className="text-xs font-semibold rounded-lg cursor-pointer">
+                                {["In Progress", "In Review", "Completed", "On Hold"].map(st => (
+                                  <SelectItem key={st} value={st} className="text-sm font-medium rounded-lg cursor-pointer">
                                     {st}
                                   </SelectItem>
                                 ))}
@@ -7529,2002 +10097,654 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                             </Select>
                           </div>
                         </div>
-                        <div>
-                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Caption Text &amp; Hashtags</label>
-                          <textarea value={calendarForm.caption || ""} onChange={(e) => setCalendarForm({ ...calendarForm, caption: e.target.value })} placeholder="Write finalized copy and hashtags here..." rows={3} className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none resize-none font-medium" />
-                        </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Actual Posting Date</label>
-                            <DatePicker 
-                              value={calendarForm.actualPostingDate || ""} 
-                              onChange={(val) => setCalendarForm({ ...calendarForm, actualPostingDate: val })} 
-                              className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-semibold" 
-                            />
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Priority</label>
+                            <Select
+                              value={editingProject.priority || "Medium"}
+                              onValueChange={(val) => setEditingProject({ ...editingProject, priority: val as any })}
+                            >
+                              <SelectTrigger className="w-full h-[46px] px-4 bg-muted/50 border border-border rounded-xl text-sm font-medium">
+                                <SelectValue placeholder="Select Priority" />
+                              </SelectTrigger>
+                              <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                                {["Low", "Medium", "High", "Critical"].map(p => (
+                                  <SelectItem key={p} value={p} className="text-sm font-medium rounded-lg cursor-pointer">
+                                    {p}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
                           <div>
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Live Instagram Link</label>
-                            <input type="text" value={calendarForm.postingLinkOfIg || ""} onChange={(e) => setCalendarForm({ ...calendarForm, postingLinkOfIg: e.target.value })} placeholder="https://www.instagram.com/p/..." className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 flex justify-between">
+                              <span>Dynamic Progress</span>
+                              <span className="text-primary font-black">{editingProject.progress}%</span>
+                            </label>
+                            <div className="w-full h-2 bg-muted rounded-full overflow-hidden mt-3 border border-border/40">
+                              <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${editingProject.progress}%` }} />
+                            </div>
+                            <span className="text-[10px] text-muted-foreground/60 italic block mt-1">Calculated dynamically from timeline & tasks</span>
                           </div>
                         </div>
-                        <div>
-                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Remarks &amp; Details</label>
-                          <input type="text" value={calendarForm.remark || ""} onChange={(e) => setCalendarForm({ ...calendarForm, remark: e.target.value })} placeholder="e.g. Needs collab tag with client" className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
+                        {(editingProject.category === "Creative" || editingProject.category === "Digital Marketing") && (
+                          <div className="space-y-4 pt-4 border-t border-border/40 mt-4">
+                            <h4 className="text-xs font-bold text-foreground uppercase tracking-widest">Monthly Social Media Delivery Targets</h4>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Posts Target / Month</label>
+                                <input
+                                  type="number"
+                                  value={editingProject.post ?? 0}
+                                  onChange={(e) => setEditingProject({ ...editingProject, post: parseInt(e.target.value) || 0 })}
+                                  placeholder="e.g. 8"
+                                  className="w-full px-3 h-[38px] bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 font-semibold"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Reels Target / Month</label>
+                                <input
+                                  type="number"
+                                  value={editingProject.reel ?? 0}
+                                  onChange={(e) => setEditingProject({ ...editingProject, reel: parseInt(e.target.value) || 0 })}
+                                  placeholder="e.g. 8"
+                                  className="w-full px-3 h-[38px] bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 font-semibold"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {editingProject.category === "Digital Marketing" && (
+                          <div className="space-y-4 pt-4 border-t border-border/40 mt-4">
+                            <h4 className="text-xs font-bold text-foreground uppercase tracking-widest">Digital Marketing Stats</h4>
+                            <div className="grid grid-cols-3 gap-3">
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Reach Target</label>
+                                <input
+                                  type="text"
+                                  value={editingProject.reach || ""}
+                                  onChange={(e) => setEditingProject({ ...editingProject, reach: e.target.value })}
+                                  placeholder="e.g. 1.2M"
+                                  className="w-full px-3 h-[38px] bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Leads Target</label>
+                                <input
+                                  type="text"
+                                  value={editingProject.leads || ""}
+                                  onChange={(e) => setEditingProject({ ...editingProject, leads: e.target.value })}
+                                  placeholder="e.g. 3,240"
+                                  className="w-full px-3 h-[38px] bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">CPL (₹)</label>
+                                <input
+                                  type="text"
+                                  value={editingProject.cpl || ""}
+                                  onChange={(e) => setEditingProject({ ...editingProject, cpl: e.target.value })}
+                                  placeholder="e.g. 250"
+                                  className="w-full px-3 h-[38px] bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                    {activeProjectTab === 'finance' && (
+                      <>
+                        <div className="space-y-2">
+                          <label className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">Project Budget</label>
+                          <input type="text" value={editingProject.budget || ""} onChange={(e) => setEditingProject({ ...editingProject, budget: e.target.value.replace(/[^0-9]/g, "") })} placeholder="e.g. 10000" className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">Amount Received</label>
+                          <input type="text" value={editingProject.amountReceived || ""} onChange={(e) => setEditingProject({ ...editingProject, amountReceived: e.target.value.replace(/[^0-9]/g, "") })} placeholder="e.g. 5000" className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">Next Payment Date</label>
+                          <DatePicker
+                            value={editingProject.nextPaymentDate || ""}
+                            onChange={(val) => setEditingProject({ ...editingProject, nextPaymentDate: val })}
+                            placeholder="Select payment date"
+                            className="w-full h-[42px] bg-muted/50 border border-border rounded-xl text-sm font-medium"
+                          />
                         </div>
                       </>
                     )}
-                  </div>
-                </div>
-                {/* Footer */}
-                <div className="px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
-                  <button onClick={() => { setIsAddCalendarItemModalOpen(false); setEditingCalendarItem(null); }} className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors">Cancel</button>
-                  <button
-                    onClick={async () => {
-                      if (!calendarForm.postingDate || !calendarForm.topic || !calendarForm.topic.trim()) {
-                        toast.error("Posting Date and Topic Hook are required");
-                        return;
-                      }
-                      if (!currentSelectedProject) return;
-
-                      const payload = mapCalendarItemToBackendPayload(calendarForm, currentSelectedProject.id);
-
-                      try {
-                        if (editingCalendarItem) {
-                          const res = await api.put(`/projects/${currentSelectedProject.id}/content/${editingCalendarItem.id}`, payload);
-                          const savedItem = res ? mapBackendContentToCalendarItem(res) : {
-                            ...editingCalendarItem,
-                            ...calendarForm,
-                          };
-                          const updated = (currentSelectedProject.contentCalendar || []).map((item: any) =>
-                            item.id === editingCalendarItem.id ? savedItem : item
-                          );
-                          setProjects(projects.map(p => p.id === currentSelectedProject.id ? { ...p, contentCalendar: updated, modules: syncSocialMediaTasksForProject(p, updated) } : p));
-                          toast.success("Content Idea updated successfully!");
-                        } else {
-                          const res = await api.post(`/projects/${currentSelectedProject.id}/content`, payload);
-                          const completeItem = res ? mapBackendContentToCalendarItem(res) : {
-                            id: `cal-${Date.now()}`,
-                            ...calendarForm,
-                          };
-                          const updated = [...(currentSelectedProject.contentCalendar || []), completeItem];
-                          setProjects(projects.map(p => p.id === currentSelectedProject.id ? { ...p, contentCalendar: updated, modules: syncSocialMediaTasksForProject(p, updated) } : p));
-                          toast.success("Content Idea added to calendar!");
-                        }
-                        setIsAddCalendarItemModalOpen(false);
-                        setEditingCalendarItem(null);
-                      } catch (err: any) {
-                        toast.error(err.message || "Failed to save content idea");
-                      }
-                    }}
-                    className="px-5 py-2 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all text-sm"
-                  >
-                    {editingCalendarItem ? "Save Changes" : "Create Idea"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-
-        {/* Bulk Add Calendar Slots Modal */}
-        {isBulkAddModalOpen && (() => {
-          const currentSelectedProject = projects.find(p => p.id === selectedProjectId);
-          
-          const getDatesForFormat = (formatType: string): Date[] => {
-            if (!currentSelectedProject || !currentSelectedProject.contentCalendar) return [];
-            const target = formatType.toLowerCase();
-            return currentSelectedProject.contentCalendar
-              .filter(item => {
-                const it = (item.type || "").toLowerCase();
-                if (target === "reel") return it === "reel";
-                if (target === "post") return it === "post";
-                if (target === "carousel") return it === "carousel";
-                if (target === "story") return it === "story";
-                return it === target;
-              })
-              .map(item => {
-                const rawDate = item.scheduledDate || item.postingDate;
-                if (!rawDate) return null;
-                const datePart = String(rawDate).split("T")[0] || "";
-                const parts = datePart.split("-");
-                if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
-                  return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-                }
-                const d = new Date(rawDate);
-                return isNaN(d.getTime()) ? null : d;
-              })
-              .filter((d): d is Date => d !== null);
-          };
-
-          const handleSelectFormatType = (newType: string) => {
-            setBulkFormatType(newType);
-            if (bulkAddTab === 'visual') {
-              const dates = getDatesForFormat(newType);
-              setVisualSelectedDates(dates);
-            }
-          };
-
-          const handleGenerateBulkSlots = async () => {
-            if (!bulkStartDate || !bulkEndDate) {
-              toast.error("Please select start and end dates");
-              return;
-            }
-            if (bulkSelectedDays.length === 0) {
-              toast.error("Please select at least one day of the week");
-              return;
-            }
-            if (!currentSelectedProject) return;
-
-            const start = new Date(bulkStartDate);
-            const end = new Date(bulkEndDate);
-            
-            if (end < start) {
-              toast.error("End date cannot be before start date");
-              return;
-            }
-
-            // Map JS getDay (0=Sun, 1=Mon, ..., 6=Sat) to Python weekday (0=Mon, ..., 6=Sun)
-            const pythonWeekdays = bulkSelectedDays.map(d => (d === 0 ? 6 : d - 1));
-
-            try {
-              const res = await api.post<any[]>(`/projects/${currentSelectedProject.id}/content/bulk`, {
-                default_format: bulkFormatType === "Carousel" ? "Post" : bulkFormatType,
-                date_range: {
-                  start_date: bulkStartDate,
-                  end_date: bulkEndDate,
-                  weekdays: pythonWeekdays
-                }
-              });
-
-              if (Array.isArray(res) && res.length > 0) {
-                await fetchProjectContentCalendar(currentSelectedProject.id);
-                setIsBulkAddModalOpen(false);
-                toast.success(`Generated ${res.length} calendar slots successfully!`);
-              } else {
-                toast.info("No new slots generated matching the criteria.");
-              }
-            } catch (err: any) {
-              toast.error(err.message || "Failed to generate bulk slots");
-            }
-          };
-
-          const handleSyncVisualDates = async () => {
-            if (!currentSelectedProject) return;
-            
-            const selectedStrings = (visualSelectedDates || []).map(date => {
-              const year = date.getFullYear();
-              const month = String(date.getMonth() + 1).padStart(2, '0');
-              const day = String(date.getDate()).padStart(2, '0');
-              return `${year}-${month}-${day}`;
-            });
-
-            const calendarItems = currentSelectedProject.contentCalendar || [];
-            const targetType = bulkFormatType.toLowerCase();
-
-            const existingForFormat = calendarItems.filter(item => {
-              const it = (item.type || "").toLowerCase();
-              if (targetType === "reel") return it === "reel";
-              if (targetType === "post") return it === "post";
-              if (targetType === "carousel") return it === "carousel";
-              if (targetType === "story") return it === "story";
-              return it === targetType;
-            });
-
-            const existingDateStrings = existingForFormat.map(item => {
-              const raw = item.scheduledDate || item.postingDate || "";
-              return String(raw).split("T")[0] || "";
-            }).filter(Boolean);
-
-            const datesToAdd = selectedStrings.filter(d => !existingDateStrings.includes(d));
-            const itemsToDelete = existingForFormat.filter(item => {
-              const d = String(item.scheduledDate || item.postingDate || "").split("T")[0] || "";
-              return Boolean(d) && !selectedStrings.includes(d);
-            });
-
-            try {
-              let addedCount = 0;
-              let deletedCount = 0;
-
-              if (datesToAdd.length > 0) {
-                const res = await api.post<any[]>(`/projects/${currentSelectedProject.id}/content/bulk`, {
-                  default_format: bulkFormatType === "Carousel" ? "Post" : bulkFormatType,
-                  specific_dates: datesToAdd
-                });
-                if (Array.isArray(res)) addedCount = res.length;
-              }
-
-              for (const item of itemsToDelete) {
-                try {
-                  await api.delete(`/projects/${currentSelectedProject.id}/content/${item.id}`);
-                  deletedCount++;
-                } catch (delErr) {
-                  console.warn("Failed to delete content slot:", item.id, delErr);
-                }
-              }
-
-              await fetchProjectContentCalendar(currentSelectedProject.id);
-              setIsBulkAddModalOpen(false);
-
-              if (addedCount > 0 || deletedCount > 0) {
-                toast.success(`Successfully synced ${bulkFormatType} slots (Added: ${addedCount}, Removed: ${deletedCount})`);
-              } else {
-                toast.info(`No changes to sync for ${bulkFormatType}`);
-              }
-            } catch (err: any) {
-              toast.error(err.message || "Failed to sync content slots");
-            }
-          };
-
-          const toggleDay = (dayIndex: number) => {
-            if (bulkSelectedDays.includes(dayIndex)) {
-              setBulkSelectedDays(bulkSelectedDays.filter(d => d !== dayIndex));
-            } else {
-              setBulkSelectedDays([...bulkSelectedDays, dayIndex]);
-            }
-          };
-
-          const daysConfig = [
-            { label: "M", index: 1, name: "Monday" },
-            { label: "T", index: 2, name: "Tuesday" },
-            { label: "W", index: 3, name: "Wednesday" },
-            { label: "T", index: 4, name: "Thursday" },
-            { label: "F", index: 5, name: "Friday" },
-            { label: "S", index: 6, name: "Saturday" },
-            { label: "S", index: 0, name: "Sunday" },
-          ];
-
-          const formatOptions = [
-            { key: "Post", label: "🖼️ Post", count: getDatesForFormat("Post").length },
-            { key: "Reel", label: "🎥 Reel", count: getDatesForFormat("Reel").length },
-            { key: "Carousel", label: "🎠 Carousel", count: getDatesForFormat("Carousel").length },
-            { key: "Story", label: "📖 Story", count: getDatesForFormat("Story").length },
-          ];
-
-          return (
-            <div
-              className="fixed inset-0 z-[200] flex items-center justify-center animate-in fade-in duration-200"
-              onClick={() => setIsBulkAddModalOpen(false)}
-            >
-              {/* Backdrop */}
-              <div className="absolute inset-0 bg-black/80" />
-              {/* Modal Panel */}
-              <div
-                className="relative z-10 w-[calc(100%-2rem)] max-w-[550px] bg-card border border-border/60 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Header */}
-                <div className="flex items-center justify-between px-8 py-6 border-b border-border/50 bg-muted/30 shrink-0">
-                  <div>
-                    <h2 className="text-xl font-black tracking-tight">Bulk Add Options</h2>
-                    <p className="text-xs text-muted-foreground mt-1">Select dates visually or generate using a range</p>
-                  </div>
-                  <button
-                    onClick={() => setIsBulkAddModalOpen(false)}
-                    className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                {/* Tab Switcher */}
-                <div className="flex border-b border-border/30 bg-muted/10 p-2 gap-2 shrink-0">
-                  <button
-                    onClick={() => setBulkAddTab('range')}
-                    className={cn(
-                      "flex-1 py-2 text-xs font-bold rounded-xl transition-all",
-                      bulkAddTab === 'range'
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "text-muted-foreground hover:bg-muted"
-                    )}
-                  >
-                    📅 Date Range &amp; Weekdays
-                  </button>
-                  <button
-                    onClick={() => {
-                      setBulkAddTab('visual');
-                      const dates = getDatesForFormat(bulkFormatType);
-                      setVisualSelectedDates(dates);
-                    }}
-                    className={cn(
-                      "flex-1 py-2 text-xs font-bold rounded-xl transition-all",
-                      bulkAddTab === 'visual'
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "text-muted-foreground hover:bg-muted"
-                    )}
-                  >
-                    ✨ Visual Calendar Sync
-                  </button>
-                </div>
-
-                {/* Body */}
-                <div className="p-6 md:p-8 space-y-5 overflow-y-auto max-h-[60vh] flex flex-col items-center">
-                  {bulkAddTab === 'range' ? (
-                    <div className="w-full space-y-6">
-                      <div className="grid grid-cols-2 gap-4">
+                    {activeProjectTab === 'campaigns' && (
+                      <div className="space-y-4 text-left">
                         <div>
-                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Start Date</label>
-                          <DatePicker 
-                            value={bulkStartDate} 
-                            onChange={(val) => setBulkStartDate(val)} 
-                            className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-bold text-center" 
-                          />
+                          <h4 className="text-xs font-black uppercase tracking-wider text-foreground mb-1">Marketing Campaigns</h4>
+                          <p className="text-[10px] text-muted-foreground font-semibold">Manage active ad campaigns and performance targets</p>
                         </div>
-                        <div>
-                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">End Date</label>
-                          <DatePicker 
-                            value={bulkEndDate} 
-                            onChange={(val) => setBulkEndDate(val)} 
-                            className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-bold text-center" 
-                          />
-                        </div>
-                      </div>
 
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-2">Days of the Week</label>
-                        <div className="flex justify-between items-center gap-1.5 bg-muted/20 p-2 rounded-xl border border-border/30">
-                          {daysConfig.map((day) => {
-                            const isSelected = bulkSelectedDays.includes(day.index);
+                        <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                          {(editingProject.campaigns || []).map((c: any, index: number) => {
+                            const campaignObj = typeof c === 'string' ? { name: c, status: 'Active' } : { name: c.name || "", status: c.status || 'Active' };
                             return (
-                              <button
-                                key={day.index}
-                                type="button"
-                                onClick={() => toggleDay(day.index)}
-                                title={day.name}
-                                className={cn(
-                                  "w-9 h-9 rounded-lg text-xs font-black transition-all flex items-center justify-center border shadow-sm",
-                                  isSelected 
-                                    ? "bg-primary text-primary-foreground border-primary" 
-                                    : "bg-card text-muted-foreground border-border/50 hover:bg-muted"
-                                )}
-                              >
-                                {day.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center w-full space-y-4">
-                      {/* Format Selector Pills for Instant Visual Toggle */}
-                      <div className="flex flex-wrap items-center justify-center gap-2 p-1.5 bg-muted/30 border border-border/50 rounded-2xl w-full">
-                        {formatOptions.map(f => {
-                          const isSelected = bulkFormatType === f.key;
-                          return (
-                            <button
-                              key={f.key}
-                              type="button"
-                              onClick={() => handleSelectFormatType(f.key)}
-                              className={cn(
-                                "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border",
-                                isSelected
-                                  ? "bg-primary text-primary-foreground border-primary shadow-sm ring-2 ring-primary/30"
-                                  : "bg-card text-muted-foreground border-border/60 hover:text-foreground hover:bg-muted"
-                              )}
-                            >
-                              <span>{f.label}</span>
-                              <span className={cn(
-                                "text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold",
-                                isSelected ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
-                              )}>
-                                {f.count}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      {/* Active Status Banner */}
-                      <div className="flex items-center justify-between w-full px-3.5 py-2 bg-primary/5 border border-primary/20 rounded-xl text-xs">
-                        <span className="font-bold text-foreground flex items-center gap-1.5">
-                          Viewing slots for: <strong className="text-primary underline font-extrabold">{bulkFormatType}</strong>
-                        </span>
-                        <span className="text-[11px] font-mono font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-lg">
-                          {(visualSelectedDates || []).length} dates active
-                        </span>
-                      </div>
-
-                      <p className="text-[11px] text-muted-foreground text-center font-medium max-w-[420px]">
-                        Click dates in the calendar below to toggle <strong>{bulkFormatType}</strong> slots. Selected dates are scheduled for this format.
-                      </p>
-
-                      <div className="border border-border/50 rounded-2xl p-4 bg-muted/10 shadow-inner flex justify-center w-full">
-                        <CalendarUI
-                          mode="multiple"
-                          selected={visualSelectedDates}
-                          onSelect={(newDates) => setVisualSelectedDates(newDates || [])}
-                          className="rounded-md border-0 bg-transparent font-medium"
-                          {...({ required: false } as any)}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="w-full">
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">Format Type</label>
-                    <div className="relative">
-                      <select 
-                        value={bulkFormatType} 
-                        onChange={(e) => handleSelectFormatType(e.target.value)}
-                        className="w-full h-9 px-3 bg-muted/50 border border-border/50 rounded-xl text-xs font-bold appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
-                      >
-                        {["Post", "Reel", "Story", "Carousel"].map(t => (
-                          <option key={t} value={t} className="bg-background text-foreground font-semibold py-1">
-                            {t}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground">
-                        <ChevronDown className="w-3.5 h-3.5" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Footer */}
-                <div className="px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
-                  <button 
-                    onClick={() => setIsBulkAddModalOpen(false)} 
-                    className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={bulkAddTab === 'range' ? handleGenerateBulkSlots : handleSyncVisualDates}
-                    className="px-5 py-2 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all text-sm"
-                  >
-                    {bulkAddTab === 'range' ? "Generate Slots" : `Sync ${bulkFormatType} Dates`}
-                  </button>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-
-        {/* Add Module Modal - plain overlay */}
-        {isAddModuleModalOpen && (() => {
-          const currentSelectedProject = projects.find(p => p.id === selectedProjectId);
-          if (!currentSelectedProject) return null;
-
-          const handleSaveNewModule = (e: React.FormEvent) => {
-            e.preventDefault();
-            if (!addModuleForm.name.trim()) return;
-            const projectModules = currentSelectedProject.modules || [];
-            const newModule: any = {
-              id: `mod-${Date.now()}`,
-              name: addModuleForm.name.trim(),
-              assignedToName: addModuleForm.assignedToName || undefined,
-              status: addModuleForm.status,
-              priority: addModuleForm.priority,
-              estimatedHours: addModuleForm.estimatedHours || undefined,
-              dueDate: addModuleForm.dueDate || undefined,
-              tasks: []
-            };
-            const updatedModules: any = [...projectModules, newModule];
-            saveProjectModules(currentSelectedProject.id, updatedModules, "Added Module", `Created module "${newModule.name}"`);
-            setSelectedModuleId(newModule.id);
-            setAddModuleForm({
-              name: "",
-              assignedToName: "",
-              status: "todo",
-              priority: "medium",
-              estimatedHours: 0,
-              dueDate: ""
-            });
-            setIsAddModuleModalOpen(false);
-            toast.success(`Module "${newModule.name}" created successfully!`);
-          };
-
-          return (
-            <div
-              className="fixed inset-0 z-[200] flex items-center justify-center animate-in fade-in duration-200"
-              onClick={() => setIsAddModuleModalOpen(false)}
-            >
-              {/* Backdrop */}
-              <div className="absolute inset-0 bg-black/80" />
-              {/* Modal Panel */}
-              <div
-                className="relative z-10 w-[calc(100%-2rem)] max-w-[450px] bg-card border border-border/60 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Header */}
-                <div className="flex items-center justify-between px-8 py-6 border-b border-border/50 bg-muted/30 shrink-0">
-                  <div>
-                    <h2 className="text-lg font-black tracking-tight">Add New Module</h2>
-                    <p className="text-xs text-muted-foreground mt-1">Configure and assign a new development module component</p>
-                  </div>
-                  <button
-                    onClick={() => setIsAddModuleModalOpen(false)}
-                    className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                {/* Body */}
-                <form onSubmit={handleSaveNewModule}>
-                  <div className="p-8 space-y-4 max-h-[60vh] overflow-y-auto">
-                    <div>
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Module Name <span className="text-rose-500">*</span></label>
-                      <input 
-                        type="text" 
-                        required
-                        autoFocus
-                        placeholder="e.g. User Authentication, Shopping Cart"
-                        value={addModuleForm.name} 
-                        onChange={(e) => setAddModuleForm({ ...addModuleForm, name: e.target.value })} 
-                        className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold" 
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Assign To</label>
-                        <Select 
-                          value={addModuleForm.assignedToName || "unassigned"} 
-                          onValueChange={(val) => setAddModuleForm({ ...addModuleForm, assignedToName: val === "unassigned" ? "" : val })}
-                        >
-                          <SelectTrigger className="w-full h-9 bg-muted/50 border-border/50 rounded-xl text-xs font-semibold">
-                            <SelectValue placeholder="Unassigned" />
-                          </SelectTrigger>
-                          <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
-                            <SelectItem value="unassigned" className="text-xs font-semibold rounded-lg cursor-pointer">Unassigned</SelectItem>
-                            {currentSelectedProject.team.map(m => (
-                              <SelectItem key={m.name} value={m.name} className="text-xs font-semibold rounded-lg cursor-pointer">{m.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Stage Status</label>
-                        <Select 
-                          value={addModuleForm.status || "todo"} 
-                          onValueChange={(val) => setAddModuleForm({ ...addModuleForm, status: val as any })}
-                        >
-                          <SelectTrigger className="w-full h-9 bg-muted/50 border-border/50 rounded-xl text-xs font-semibold">
-                            <SelectValue placeholder="Stage Status" />
-                          </SelectTrigger>
-                          <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
-                            {[
-                              { label: "To Do", val: "todo" },
-                              { label: "In Progress", val: "in-progress" },
-                              { label: "Bugs", val: "bugs" },
-                              { label: "On Hold", val: "onhold" },
-                              { label: "Pending", val: "pending" },
-                              { label: "Completed", val: "completed" },
-                            ].map(st => (
-                              <SelectItem key={st.val} value={st.val} className="text-xs font-semibold rounded-lg cursor-pointer">{st.label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Priority</label>
-                        <Select 
-                          value={addModuleForm.priority || "medium"} 
-                          onValueChange={(val) => setAddModuleForm({ ...addModuleForm, priority: val as any })}
-                        >
-                          <SelectTrigger className="w-full h-9 bg-muted/50 border-border/50 rounded-xl text-xs font-semibold">
-                            <SelectValue placeholder="Priority" />
-                          </SelectTrigger>
-                          <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
-                            {[
-                              { label: "Low", val: "low" },
-                              { label: "Medium", val: "medium" },
-                              { label: "High", val: "high" },
-                              { label: "Urgent", val: "urgent" },
-                            ].map(pr => (
-                              <SelectItem key={pr.val} value={pr.val} className="text-xs font-semibold rounded-lg cursor-pointer">{pr.label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Estimated Hours</label>
-                        <input 
-                          type="number" 
-                          min="0"
-                          step="0.5"
-                          placeholder="e.g. 12"
-                          value={addModuleForm.estimatedHours || ""} 
-                          onChange={(e) => setAddModuleForm({ ...addModuleForm, estimatedHours: parseFloat(e.target.value) || 0 })} 
-                          className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-bold text-center" 
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Module Deadline</label>
-                      <DatePicker 
-                        value={addModuleForm.dueDate} 
-                        onChange={(val) => setAddModuleForm({ ...addModuleForm, dueDate: val })} 
-                        className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-bold text-center" 
-                      />
-                    </div>
-                  </div>
-
-                  {/* Footer */}
-                  <div className="px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
-                    <button 
-                      type="button"
-                      onClick={() => setIsAddModuleModalOpen(false)} 
-                      className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-5 py-2 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all text-sm"
-                    >
-                      Create Module
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          );
-        })()}
-
-        {/* Edit Module Modal - plain overlay */}
-        {isEditModuleModalOpen && editModuleForm.id && (() => {
-          const currentSelectedProject = projects.find(p => p.id === selectedProjectId);
-          if (!currentSelectedProject) return null;
-
-          const handleEditModuleSubmit = (e: React.FormEvent) => {
-            e.preventDefault();
-            if (!editModuleForm.name.trim()) return;
-            const projectModules = currentSelectedProject.modules || [];
-            
-            const updatedModules: any = projectModules.map(m => {
-              if (m.id === editModuleForm.id) {
-                return {
-                  ...m,
-                  name: editModuleForm.name.trim(),
-                  assignedToName: editModuleForm.assignedToName || undefined,
-                  status: editModuleForm.status,
-                  priority: editModuleForm.priority,
-                  estimatedHours: editModuleForm.estimatedHours || undefined,
-                  dueDate: editModuleForm.dueDate || undefined
-                };
-              }
-              return m;
-            });
-
-            saveProjectModules(currentSelectedProject.id, updatedModules, "Updated Module", `Updated module "${editModuleForm.name.trim()}"`);
-            setIsEditModuleModalOpen(false);
-            toast.success("Module updated successfully!");
-          };
-
-          return (
-            <div
-              className="fixed inset-0 z-[200] flex items-center justify-center animate-in fade-in duration-200"
-              onClick={() => setIsEditModuleModalOpen(false)}
-            >
-              {/* Backdrop */}
-              <div className="absolute inset-0 bg-black/80" />
-              {/* Modal Panel */}
-              <div
-                className="relative z-10 w-[calc(100%-2rem)] max-w-[450px] bg-card border border-border/60 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Header */}
-                <div className="flex items-center justify-between px-8 py-6 border-b border-border/50 bg-muted/30 shrink-0">
-                  <div>
-                    <h2 className="text-lg font-black tracking-tight">Edit Module Details</h2>
-                    <p className="text-xs text-muted-foreground mt-1">Modify metadata and developer assignment details</p>
-                  </div>
-                  <button
-                    onClick={() => setIsEditModuleModalOpen(false)}
-                    className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                {/* Body */}
-                <form onSubmit={handleEditModuleSubmit}>
-                  <div className="p-8 space-y-4 max-h-[60vh] overflow-y-auto">
-                    <div>
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Module Name <span className="text-rose-500">*</span></label>
-                      <input 
-                        type="text" 
-                        required
-                        autoFocus
-                        value={editModuleForm.name} 
-                        onChange={(e) => setEditModuleForm({ ...editModuleForm, name: e.target.value })} 
-                        className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold" 
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Assign To</label>
-                        <Select 
-                          value={editModuleForm.assignedToName || "unassigned"} 
-                          onValueChange={(val) => setEditModuleForm({ ...editModuleForm, assignedToName: val === "unassigned" ? "" : val })}
-                        >
-                          <SelectTrigger className="w-full h-9 bg-muted/50 border-border/50 rounded-xl text-xs font-semibold">
-                            <SelectValue placeholder="Unassigned" />
-                          </SelectTrigger>
-                          <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
-                            <SelectItem value="unassigned" className="text-xs font-semibold rounded-lg cursor-pointer">Unassigned</SelectItem>
-                            {currentSelectedProject.team.map(m => (
-                              <SelectItem key={m.name} value={m.name} className="text-xs font-semibold rounded-lg cursor-pointer">{m.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Stage Status</label>
-                        <Select 
-                          value={editModuleForm.status || "todo"} 
-                          onValueChange={(val) => setEditModuleForm({ ...editModuleForm, status: val as any })}
-                        >
-                          <SelectTrigger className="w-full h-9 bg-muted/50 border-border/50 rounded-xl text-xs font-semibold">
-                            <SelectValue placeholder="Stage Status" />
-                          </SelectTrigger>
-                          <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
-                            {[
-                              { label: "To Do", val: "todo" },
-                              { label: "In Progress", val: "in-progress" },
-                              { label: "Bugs", val: "bugs" },
-                              { label: "On Hold", val: "onhold" },
-                              { label: "Pending", val: "pending" },
-                              { label: "Completed", val: "completed" },
-                            ].map(st => (
-                              <SelectItem key={st.val} value={st.val} className="text-xs font-semibold rounded-lg cursor-pointer">{st.label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Priority</label>
-                        <Select 
-                          value={editModuleForm.priority || "medium"} 
-                          onValueChange={(val) => setEditModuleForm({ ...editModuleForm, priority: val as any })}
-                        >
-                          <SelectTrigger className="w-full h-9 bg-muted/50 border-border/50 rounded-xl text-xs font-semibold">
-                            <SelectValue placeholder="Priority" />
-                          </SelectTrigger>
-                          <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
-                            {[
-                              { label: "Low", val: "low" },
-                              { label: "Medium", val: "medium" },
-                              { label: "High", val: "high" },
-                              { label: "Urgent", val: "urgent" },
-                            ].map(pr => (
-                              <SelectItem key={pr.val} value={pr.val} className="text-xs font-semibold rounded-lg cursor-pointer">{pr.label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Estimated Hours</label>
-                        <input 
-                          type="number" 
-                          min="0"
-                          step="0.5"
-                          placeholder="e.g. 12"
-                          value={editModuleForm.estimatedHours || ""} 
-                          onChange={(e) => setEditModuleForm({ ...editModuleForm, estimatedHours: parseFloat(e.target.value) || 0 })} 
-                          className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-bold text-center" 
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Module Deadline</label>
-                      <DatePicker 
-                        value={editModuleForm.dueDate} 
-                        onChange={(val) => setEditModuleForm({ ...editModuleForm, dueDate: val })} 
-                        className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-bold text-center" 
-                      />
-                    </div>
-                  </div>
-
-                  {/* Footer */}
-                  <div className="px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
-                    <button 
-                      type="button"
-                      onClick={() => setIsEditModuleModalOpen(false)} 
-                      className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-5 py-2 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all text-sm"
-                    >
-                      Save Changes
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          );
-        })()}
-
-        {/* Presets Selection Modal - plain overlay */}
-        {isPresetsModalOpen && (() => {
-          const currentSelectedProject = projects.find(p => p.id === selectedProjectId);
-          if (!currentSelectedProject) return null;
-
-          const handleApplyPreset = (preset: any) => {
-            const projectModules = currentSelectedProject.modules || [];
-            
-            const newModulesMapped: any[] = preset.modules.map((m: any) => ({
-              id: `mod-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-              name: m.name,
-              assignedToName: m.assignedToName || undefined,
-              status: m.status || "todo",
-              priority: m.priority || "medium",
-              estimatedHours: m.estimatedHours,
-              dueDate: m.dueDate || undefined,
-              tasks: (m.tasks || []).map((t: any) => ({
-                id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-                title: t.title,
-                status: t.status || "todo"
-              }))
-            }));
-
-            const updatedModules: any = [...projectModules, ...newModulesMapped];
-            saveProjectModules(currentSelectedProject.id, updatedModules, "Applied Preset", `Loaded preset "${preset.name}"`);
-            if (newModulesMapped[0]) {
-              setSelectedModuleId(newModulesMapped[0].id);
-            }
-            setIsPresetsModalOpen(false);
-            toast.success(`Successfully loaded preset "${preset.name}"!`);
-          };
-
-          return (
-            <div
-              className="fixed inset-0 z-[200] flex items-center justify-center animate-in fade-in duration-200"
-              onClick={() => setIsPresetsModalOpen(false)}
-            >
-              {/* Backdrop */}
-              <div className="absolute inset-0 bg-black/80" />
-              {/* Modal Panel */}
-              <div
-                className="relative z-10 w-[calc(100%-2rem)] max-w-[500px] bg-card border border-border/60 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Header */}
-                <div className="flex items-center justify-between px-8 py-6 border-b border-border/50 bg-muted/30 shrink-0">
-                  <div>
-                    <h2 className="text-lg font-black tracking-tight">Load Modules from Preset</h2>
-                    <p className="text-xs text-muted-foreground mt-1">Select a development template checklist to append</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => {
-                        setNewPresetForm({
-                          name: "",
-                          description: "",
-                          modules: [{ name: "", tasks: [""] }]
-                        });
-                        setIsCreatePresetModalOpen(true);
-                      }}
-                      className="px-3 py-1.5 bg-primary text-primary-foreground text-xs font-bold rounded-xl shadow-md hover:bg-primary/90 flex items-center gap-1"
-                    >
-                      <Plus className="w-3.5 h-3.5" /> Create Template
-                    </button>
-                    <button
-                      onClick={() => setIsPresetsModalOpen(false)}
-                      className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-                {/* Body */}
-                <div className="p-8 space-y-4 max-h-[60vh] overflow-y-auto">
-                  {presets.map((preset, index) => (
-                    <div 
-                      key={index}
-                      className="p-5 border border-border/50 rounded-[2rem] hover:border-primary/30 bg-muted/20 hover:bg-muted/30 transition-all flex flex-col justify-between gap-4"
-                    >
-                      <div>
-                        <h3 className="text-sm font-bold text-foreground">⚙️ {preset.name}</h3>
-                        <p className="text-xs text-muted-foreground mt-1 leading-normal">{preset.description}</p>
-                        
-                        <div className="mt-3 flex flex-wrap gap-1.5">
-                          {preset.modules.map((m: any, idx: number) => (
-                            <span key={idx} className="text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-lg">
-                              📦 {m.name} ({m.tasks.length} tasks)
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                      
-                      <div className="flex justify-between items-center mt-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setConfirmModalState({
-                              isOpen: true,
-                              title: "Delete Preset Template",
-                              description: `Are you sure you want to delete the preset template "${preset.name}"? This action cannot be undone.`,
-                              itemName: preset.name,
-                              action: () => {
-                                setPresets(presets.filter((_, i) => i !== index));
-                                toast.success(`Preset "${preset.name}" deleted successfully!`);
-                              }
-                            });
-                          }}
-                          className="text-xs font-bold text-rose-500 hover:text-rose-600 px-3 py-1.5 rounded-xl hover:bg-rose-500/10 transition-all"
-                        >
-                          Delete Template
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleApplyPreset(preset)}
-                          className="px-4 py-2 bg-primary text-primary-foreground text-xs font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all"
-                        >
-                          Apply Template
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Footer */}
-                <div className="px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end shrink-0">
-                  <button 
-                    type="button"
-                    onClick={() => setIsPresetsModalOpen(false)} 
-                    className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-
-        {/* Create Preset Template Modal - plain overlay */}
-        {isCreatePresetModalOpen && (() => {
-          const handleSavePresetTemplate = (e: React.FormEvent) => {
-            e.preventDefault();
-            if (!newPresetForm.name.trim()) return;
-
-            // Validate modules and tasks are filled
-            const validModules = newPresetForm.modules
-              .filter(m => m.name.trim() !== "")
-              .map(m => ({
-                name: m.name.trim(),
-                assignedToName: "",
-                status: "todo",
-                priority: "medium",
-                estimatedHours: 4,
-                dueDate: "",
-                tasks: m.tasks
-                  .filter(t => t.trim() !== "")
-                  .map((t, idx) => ({
-                    id: `t-preset-${Date.now()}-${idx}-${Math.random().toString(36).substr(2,3)}`,
-                    title: t.trim(),
-                    status: "todo"
-                  }))
-              }));
-
-            if (validModules.length === 0) {
-              toast.error("Template must contain at least one module with name!");
-              return;
-            }
-
-            const newPreset = {
-              name: newPresetForm.name.trim(),
-              description: newPresetForm.description.trim() || "Custom project module template",
-              modules: validModules
-            };
-
-            setPresets([newPreset, ...presets]);
-            setIsCreatePresetModalOpen(false);
-            toast.success(`Preset Template "${newPreset.name}" created successfully!`);
-          };
-
-          const addModule = () => {
-            setNewPresetForm({
-              ...newPresetForm,
-              modules: [...newPresetForm.modules, { name: "", tasks: [""] }]
-            });
-          };
-
-          const removeModule = (mIdx: number) => {
-            setNewPresetForm({
-              ...newPresetForm,
-              modules: newPresetForm.modules.filter((_, idx) => idx !== mIdx)
-            });
-          };
-
-          const updateModuleName = (mIdx: number, val: string) => {
-            setNewPresetForm({
-              ...newPresetForm,
-              modules: newPresetForm.modules.map((m, idx) => idx === mIdx ? { ...m, name: val } : m)
-            });
-          };
-
-          const addTask = (mIdx: number) => {
-            setNewPresetForm({
-              ...newPresetForm,
-              modules: newPresetForm.modules.map((m, idx) => idx === mIdx ? { ...m, tasks: [...m.tasks, ""] } : m)
-            });
-          };
-
-          const removeTask = (mIdx: number, tIdx: number) => {
-            setNewPresetForm({
-              ...newPresetForm,
-              modules: newPresetForm.modules.map((m, idx) => {
-                if (idx === mIdx) {
-                  return { ...m, tasks: m.tasks.filter((_, idx2) => idx2 !== tIdx) };
-                }
-                return m;
-              })
-            });
-          };
-
-          const updateTaskVal = (mIdx: number, tIdx: number, val: string) => {
-            setNewPresetForm({
-              ...newPresetForm,
-              modules: newPresetForm.modules.map((m, idx) => {
-                if (idx === mIdx) {
-                  return { ...m, tasks: m.tasks.map((t, idx2) => idx2 === tIdx ? val : t) };
-                }
-                return m;
-              })
-            });
-          };
-
-          return (
-            <div
-              className="fixed inset-0 z-[210] flex items-center justify-center animate-in fade-in duration-200"
-              onClick={() => setIsCreatePresetModalOpen(false)}
-            >
-              {/* Backdrop */}
-              <div className="absolute inset-0 bg-black/80" />
-              {/* Modal Panel */}
-              <div
-                className="relative z-10 w-[calc(100%-2rem)] max-w-[500px] bg-card border border-border/60 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Header */}
-                <div className="flex items-center justify-between px-8 py-6 border-b border-border/50 bg-muted/30 shrink-0">
-                  <div>
-                    <h2 className="text-lg font-black tracking-tight">Create Preset Template</h2>
-                    <p className="text-xs text-muted-foreground mt-1">Define custom reusable project modules & tasks checklist</p>
-                  </div>
-                  <button
-                    onClick={() => setIsCreatePresetModalOpen(false)}
-                    className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                {/* Body */}
-                <form onSubmit={handleSavePresetTemplate}>
-                  <div className="p-8 space-y-4 max-h-[60vh] overflow-y-auto">
-                    <div>
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Template Name <span className="text-rose-500">*</span></label>
-                      <input 
-                        type="text" 
-                        required
-                        autoFocus
-                        placeholder="e.g. Core App Modules, Landing Page Setup"
-                        value={newPresetForm.name} 
-                        onChange={(e) => setNewPresetForm({ ...newPresetForm, name: e.target.value })} 
-                        className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold" 
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Description</label>
-                      <input 
-                        type="text" 
-                        placeholder="Provide details on what this template covers..."
-                        value={newPresetForm.description} 
-                        onChange={(e) => setNewPresetForm({ ...newPresetForm, description: e.target.value })} 
-                        className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold" 
-                      />
-                    </div>
-
-                    <div className="border-t border-border/30 pt-4 space-y-4">
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs font-bold text-foreground">📦 Modules List</span>
-                        <button
-                          type="button"
-                          onClick={addModule}
-                          className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5"
-                        >
-                          + Add Module
-                        </button>
-                      </div>
-
-                      {newPresetForm.modules.map((m, mIdx) => (
-                        <div key={mIdx} className="p-4 border border-border/50 rounded-2xl bg-muted/10 space-y-3">
-                          <div className="flex justify-between items-center gap-2">
-                            <input 
-                              type="text" 
-                              required
-                              placeholder="Module Name (e.g. Profile Setup)"
-                              value={m.name} 
-                              onChange={(e) => updateModuleName(mIdx, e.target.value)} 
-                              className="px-2.5 py-1.5 bg-card border border-border/50 rounded-xl text-xs focus:outline-none font-bold flex-1" 
-                            />
-                            {newPresetForm.modules.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => removeModule(mIdx)}
-                                className="text-xs text-rose-500 hover:text-rose-600 font-bold px-1.5"
-                              >
-                                Remove
-                              </button>
-                            )}
-                          </div>
-
-                          <div className="space-y-2 pl-4 border-l-2 border-border/30">
-                            <div className="flex justify-between items-center">
-                              <span className="text-[10px] font-bold text-muted-foreground">Tasks</span>
-                              <button
-                                type="button"
-                                onClick={() => addTask(mIdx)}
-                                className="text-[9px] font-bold text-primary hover:underline"
-                              >
-                                + Add Task
-                              </button>
-                            </div>
-
-                            {m.tasks.map((t, tIdx) => (
-                              <div key={tIdx} className="flex items-center gap-1">
-                                <input 
-                                  type="text" 
-                                  required
-                                  placeholder={`Task #${tIdx + 1} title`}
-                                  value={t} 
-                                  onChange={(e) => updateTaskVal(mIdx, tIdx, e.target.value)} 
-                                  className="px-2.5 py-1 bg-card border border-border/30 rounded-lg text-xs focus:outline-none font-semibold flex-1" 
-                                />
-                                {m.tasks.length > 1 && (
+                              <div key={index} className="flex justify-between items-center p-3 bg-muted/20 border border-border/40 rounded-2xl group/campaign">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-bold text-foreground">{campaignObj.name}</span>
                                   <button
                                     type="button"
-                                    onClick={() => removeTask(mIdx, tIdx)}
-                                    className="text-xs text-rose-500 hover:text-rose-600 font-bold px-1"
+                                    onClick={() => {
+                                      const nextStatus = campaignObj.status === 'Active' ? 'Inactive' : 'Active';
+                                      const updated = [...(editingProject.campaigns || [])];
+                                      updated[index] = { name: campaignObj.name, status: nextStatus };
+                                      setEditingProject({ ...editingProject, campaigns: updated });
+                                      toast.success(`Campaign marked ${nextStatus}`);
+                                    }}
+                                    className={cn("px-2 py-0.5 text-[9px] font-black rounded-lg uppercase tracking-wider transition-colors",
+                                      campaignObj.status === 'Active' ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-muted text-muted-foreground hover:bg-muted-foreground/20")}
                                   >
-                                    &times;
+                                    {campaignObj.status}
                                   </button>
-                                )}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setConfirmModalState({
+                                      isOpen: true,
+                                      title: "Remove Campaign",
+                                      description: "Are you sure you want to remove this campaign?",
+                                      itemName: campaignObj.name,
+                                      action: () => {
+                                        const updated = (editingProject.campaigns || []).filter((_: any, i: number) => i !== index);
+                                        setEditingProject({ ...editingProject, campaigns: updated });
+                                        setConfirmModalState(prev => ({ ...prev, isOpen: false }));
+                                        toast.success("Campaign removed");
+                                      }
+                                    });
+                                  }}
+                                  className="text-xs text-rose-500 hover:text-rose-700 font-extrabold opacity-0 group-hover/campaign:opacity-100 transition-opacity"
+                                >
+                                  Remove
+                                </button>
                               </div>
-                            ))}
-                          </div>
+                            );
+                          })}
+                          {(editingProject.campaigns || []).length === 0 && (
+                            <p className="text-xs text-muted-foreground italic font-medium py-4 text-center">No campaigns created yet.</p>
+                          )}
                         </div>
-                      ))}
-                    </div>
-                  </div>
 
-                  {/* Footer */}
-                  <div className="px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
-                    <button 
-                      type="button"
-                      onClick={() => setIsCreatePresetModalOpen(false)} 
-                      className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-5 py-2 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all text-sm"
-                    >
-                      Save Template
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          );
-        })()}
-
-        {/* Module Task Details Modal - plain overlay */}
-        {isModuleTaskModalOpen && editingModuleTask && (() => {
-          const currentSelectedProject = projects.find(p => p.id === selectedProjectId);
-          if (!currentSelectedProject) return null;
-          const projectModules: NonNullable<Project['modules']> = currentSelectedProject.modules || [];
-          const activeModule = projectModules.find(m => m.id === selectedModuleId) || projectModules[0];
-          if (!activeModule) return null;
-
-          const handleSaveTaskDetails = (e: React.FormEvent) => {
-            e.preventDefault();
-            const updatedTasks = activeModule.tasks.map(t => t.id === editingModuleTask.id ? editingModuleTask : t);
-            const updatedModules: NonNullable<Project['modules']> = projectModules.map(m => m.id === activeModule.id ? { ...m, tasks: updatedTasks } : m);
-            saveProjectModules(currentSelectedProject.id, updatedModules, "Updated Task", `Updated task "${editingModuleTask.title}"`);
-            setIsModuleTaskModalOpen(false);
-            setEditingModuleTask(null);
-            toast.success("Task details saved successfully!");
-          };
-
-          return (
-            <div
-              className="fixed inset-0 z-[200] flex items-center justify-center animate-in fade-in duration-200"
-              onClick={() => {
-                setIsModuleTaskModalOpen(false);
-                setEditingModuleTask(null);
-              }}
-            >
-              {/* Backdrop */}
-              <div className="absolute inset-0 bg-black/80" />
-              {/* Modal Panel */}
-              <div
-                className="relative z-10 w-[calc(100%-2rem)] max-w-[450px] bg-card border border-border/60 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Header */}
-                <div className="flex items-center justify-between px-8 py-6 border-b border-border/50 bg-muted/30 shrink-0">
-                  <div>
-                    <h2 className="text-lg font-black tracking-tight">Edit Task Details</h2>
-                    <p className="text-xs text-muted-foreground mt-1">Modify task metadata, assignment and status</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setIsModuleTaskModalOpen(false);
-                      setEditingModuleTask(null);
-                    }}
-                    className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                {/* Body */}
-                <form onSubmit={handleSaveTaskDetails}>
-                  <div className="p-8 space-y-4 max-h-[50vh] overflow-y-auto">
-                    <div>
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Task Title</label>
-                      <input 
-                        type="text" 
-                        required
-                        value={editingModuleTask.title} 
-                        onChange={(e) => setEditingModuleTask({ ...editingModuleTask, title: e.target.value })} 
-                        className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold" 
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Phase</label>
-                        <input 
-                          type="text" 
-                          placeholder="e.g. Phase 1, Sprint A"
-                          value={editingModuleTask.phase || ""} 
-                          onChange={(e) => setEditingModuleTask({ ...editingModuleTask, phase: e.target.value })} 
-                          className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold" 
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Due Date</label>
-                        <DatePicker 
-                          value={editingModuleTask.dueDate || ""} 
-                          onChange={(val) => setEditingModuleTask({ ...editingModuleTask, dueDate: val })} 
-                          className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-bold text-center" 
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Assigned Developer</label>
-                        <select 
-                          value={editingModuleTask.assignedToName || ""} 
-                          onChange={(e) => setEditingModuleTask({ ...editingModuleTask, assignedToName: e.target.value })}
-                          className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none font-bold"
-                        >
-                          <option value="">Unassigned</option>
-                          {currentSelectedProject.team.map(m => (
-                            <option key={m.name} value={m.name}>{m.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Status</label>
-                        <select 
-                          value={editingModuleTask.status} 
-                          onChange={(e) => setEditingModuleTask({ ...editingModuleTask, status: e.target.value as any })}
-                          className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none font-bold"
-                        >
-                          {["todo", "in-progress", "bugs", "onhold", "pending", "completed"].map(st => (
-                            <option key={st} value={st}>{st === "todo" ? "To Do" : st === "in-progress" ? "In Progress" : st.charAt(0).toUpperCase() + st.slice(1)}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    {(editingModuleTask.status === "onhold" || editingModuleTask.status === "pending") && (
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Pending/Hold Reason</label>
-                        <textarea 
-                          placeholder="Provide details on why this task is pending or on hold..."
-                          value={editingModuleTask.reasonForPending || ""} 
-                          onChange={(e) => setEditingModuleTask({ ...editingModuleTask, reasonForPending: e.target.value })} 
-                          rows={3}
-                          className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold" 
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Footer */}
-                  <div className="px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
-                    <button 
-                      type="button"
-                      onClick={() => {
-                        setIsModuleTaskModalOpen(false);
-                        setEditingModuleTask(null);
-                      }} 
-                      className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-5 py-2 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all text-sm"
-                    >
-                      Save Details
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          );
-        })()}
-
-        {/* Add Module Task Modal - plain overlay */}
-                {/* Add/Edit Milestone Modal for Design & UI/UX */}
-        {isAddMilestoneModalOpen && (() => {
-          const currentSelectedProject = projects.find(p => p.id === selectedProjectId);
-          if (!currentSelectedProject) return null;
-
-          const handleSaveMilestone = (e: React.FormEvent) => {
-            e.preventDefault();
-            if (!milestoneForm.title.trim()) return;
-
-            const projectModules = currentSelectedProject.modules || [];
-            let milestonesModule = projectModules.find(m => m.id === "mod-milestones" || m.name === "Milestones");
-            if (!milestonesModule) {
-              milestonesModule = projectModules[0] || { id: "mod-milestones", name: "Milestones", tasks: [] };
-            }
-            const currentTasks = milestonesModule.tasks || [];
-
-            let updatedTasks: any[];
-            if (editingMilestone) {
-              updatedTasks = currentTasks.map(t => t.id === editingMilestone.id ? {
-                ...t,
-                title: milestoneForm.title.trim(),
-                dueDate: milestoneForm.dueDate || undefined,
-                status: milestoneForm.status,
-                assignedToName: milestoneForm.assignedToName || undefined
-              } : t);
-            } else {
-              const newTask = {
-                id: `ms-${Date.now()}`,
-                title: milestoneForm.title.trim(),
-                dueDate: milestoneForm.dueDate || undefined,
-                status: milestoneForm.status,
-                assignedToName: milestoneForm.assignedToName || undefined
-              };
-              updatedTasks = [...currentTasks, newTask];
-            }
-
-            const updatedModule = { ...milestonesModule, tasks: updatedTasks };
-            const updatedModules = projectModules.some(m => m.id === milestonesModule.id)
-              ? projectModules.map(m => m.id === milestonesModule.id ? updatedModule : m)
-              : [updatedModule, ...projectModules];
-
-            saveProjectModules(
-              currentSelectedProject.id, 
-              updatedModules, 
-              editingMilestone ? "Updated Milestone" : "Added Milestone",
-              `${editingMilestone ? "Updated" : "Added"} milestone "${milestoneForm.title.trim()}"`
-            );
-
-            setIsAddMilestoneModalOpen(false);
-            setEditingMilestone(null);
-            toast.success(editingMilestone ? "Milestone updated successfully!" : "Milestone created successfully!");
-          };
-
-          return (
-            <div
-              className="fixed inset-0 z-[200] flex items-center justify-center animate-in fade-in duration-200"
-              onClick={() => {
-                setIsAddMilestoneModalOpen(false);
-                setEditingMilestone(null);
-              }}
-            >
-              <div className="absolute inset-0 bg-black/80" />
-              <div
-                className="relative z-10 w-[calc(100%-2rem)] max-w-[450px] bg-card border border-border/60 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="flex items-center justify-between px-8 py-6 border-b border-border/50 bg-muted/30 shrink-0">
-                  <div>
-                    <h2 className="text-lg font-black tracking-tight">{editingMilestone ? "Edit Milestone" : "Add Milestone"}</h2>
-                    <p className="text-xs text-muted-foreground mt-1">Configure milestone deliverable and schedule</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setIsAddMilestoneModalOpen(false);
-                      setEditingMilestone(null);
-                    }}
-                    className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                <form onSubmit={handleSaveMilestone}>
-                  <div className="p-8 space-y-4 max-h-[60vh] overflow-y-auto">
-                    <div>
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
-                        Milestone Title <span className="text-rose-500">*</span>
-                      </label>
-                      <input 
-                        type="text" 
-                        required
-                        autoFocus
-                        placeholder="e.g. Requirement Analysis, Design Phase"
-                        value={milestoneForm.title} 
-                        onChange={(e) => setMilestoneForm({ ...milestoneForm, title: e.target.value })} 
-                        className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold" 
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Due Date</label>
-                        <DatePicker 
-                          value={milestoneForm.dueDate} 
-                          onChange={(val) => setMilestoneForm({ ...milestoneForm, dueDate: val })} 
-                          className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-bold text-center" 
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Status</label>
-                        <select 
-                          value={milestoneForm.status} 
-                          onChange={(e) => setMilestoneForm({ ...milestoneForm, status: e.target.value as any })}
-                          className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none font-bold"
-                        >
-                          <option value="todo">To Do</option>
-                          <option value="in-progress">In Progress</option>
-                          <option value="completed">Completed</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Assign Team Member</label>
-                      <select 
-                        value={milestoneForm.assignedToName} 
-                        onChange={(e) => setMilestoneForm({ ...milestoneForm, assignedToName: e.target.value })}
-                        className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none font-bold"
-                      >
-                        <option value="">Unassigned</option>
-                        {currentSelectedProject.team.map(m => (
-                          <option key={m.name} value={m.name}>{m.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
-                    <button 
-                      type="button"
-                      onClick={() => {
-                        setIsAddMilestoneModalOpen(false);
-                        setEditingMilestone(null);
-                      }} 
-                      className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-5 py-2 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all text-sm"
-                    >
-                      {editingMilestone ? "Save Changes" : "Create Milestone"}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          );
-        })()}
-
-{isAddTaskModalOpen && (() => {
-          const currentSelectedProject = projects.find(p => p.id === selectedProjectId);
-          if (!currentSelectedProject) return null;
-          const projectModules: NonNullable<Project['modules']> = currentSelectedProject.modules || [];
-          const activeModule = projectModules.find(m => m.id === selectedModuleId) || projectModules[0];
-          if (!activeModule) return null;
-
-          const handleCreateNewTask = (e: React.FormEvent) => {
-            e.preventDefault();
-            if (!addTaskForm.title.trim()) return;
-
-            const newTask: any = {
-              id: `task-${Date.now()}`,
-              title: addTaskForm.title.trim(),
-              status: addTaskForm.status,
-              phase: addTaskForm.phase.trim() || undefined,
-              dueDate: addTaskForm.dueDate || undefined,
-              assignedToName: addTaskForm.assignedToName || undefined,
-              reasonForPending: (addTaskForm.status === "onhold" || addTaskForm.status === "pending") ? addTaskForm.reasonForPending.trim() : undefined
-            };
-
-            const updatedTasks = [...activeModule.tasks, newTask];
-            const updatedModules: NonNullable<Project['modules']> = projectModules.map(m => m.id === activeModule.id ? { ...m, tasks: updatedTasks } : m);
-            saveProjectModules(currentSelectedProject.id, updatedModules, "Created Task", `Added new task "${addTaskForm.title.trim()}" inside module "${activeModule.name}"`);
-            setIsAddTaskModalOpen(false);
-            toast.success("New task created successfully!");
-          };
-
-          return (
-            <div
-              className="fixed inset-0 z-[200] flex items-center justify-center animate-in fade-in duration-200"
-              onClick={() => setIsAddTaskModalOpen(false)}
-            >
-              {/* Backdrop */}
-              <div className="absolute inset-0 bg-black/80" />
-              {/* Modal Panel */}
-              <div
-                className="relative z-10 w-[calc(100%-2rem)] max-w-[450px] bg-card border border-border/60 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Header */}
-                <div className="flex items-center justify-between px-8 py-6 border-b border-border/50 bg-muted/30 shrink-0">
-                  <div>
-                    <h2 className="text-lg font-black tracking-tight">Add New Task</h2>
-                    <p className="text-xs text-muted-foreground mt-1">Create a new task inside "{activeModule.name}"</p>
-                  </div>
-                  <button
-                    onClick={() => setIsAddTaskModalOpen(false)}
-                    className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                {/* Body */}
-                <form onSubmit={handleCreateNewTask}>
-                  <div className="p-8 space-y-4 max-h-[50vh] overflow-y-auto">
-                    <div>
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Task Title</label>
-                      <input 
-                        type="text" 
-                        required
-                        autoFocus
-                        placeholder="Enter task title..."
-                        value={addTaskForm.title} 
-                        onChange={(e) => setAddTaskForm({ ...addTaskForm, title: e.target.value })} 
-                        className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold" 
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Phase</label>
-                        <input 
-                          type="text" 
-                          placeholder="e.g. Phase 1, Sprint A"
-                          value={addTaskForm.phase} 
-                          onChange={(e) => setAddTaskForm({ ...addTaskForm, phase: e.target.value })} 
-                          className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold" 
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Due Date</label>
-                        <DatePicker 
-                          value={addTaskForm.dueDate} 
-                          onChange={(val) => setAddTaskForm({ ...addTaskForm, dueDate: val })} 
-                          className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-bold text-center" 
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Assigned Developer</label>
-                        <select 
-                          value={addTaskForm.assignedToName} 
-                          onChange={(e) => setAddTaskForm({ ...addTaskForm, assignedToName: e.target.value })}
-                          className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none font-bold"
-                        >
-                          <option value="">Unassigned</option>
-                          {currentSelectedProject.team.map(m => (
-                            <option key={m.name} value={m.name}>{m.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Status</label>
-                        <select 
-                          value={addTaskForm.status} 
-                          onChange={(e) => setAddTaskForm({ ...addTaskForm, status: e.target.value as any })}
-                          className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none font-bold"
-                        >
-                          {["todo", "in-progress", "bugs", "onhold", "pending", "completed"].map(st => (
-                            <option key={st} value={st}>{st === "todo" ? "To Do" : st === "in-progress" ? "In Progress" : st.charAt(0).toUpperCase() + st.slice(1)}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    {(addTaskForm.status === "onhold" || addTaskForm.status === "pending") && (
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Pending/Hold Reason</label>
-                        <textarea 
-                          placeholder="Provide details on why this task is pending or on hold..."
-                          value={addTaskForm.reasonForPending} 
-                          onChange={(e) => setAddTaskForm({ ...addTaskForm, reasonForPending: e.target.value })} 
-                          rows={3}
-                          className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold" 
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Footer */}
-                  <div className="px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
-                    <button 
-                      type="button"
-                      onClick={() => setIsAddTaskModalOpen(false)} 
-                      className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-5 py-2 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all text-sm"
-                    >
-                      Create Task
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          );
-        })()}
-
-      <ConfirmModal 
-        isOpen={confirmModalState.isOpen}
-        onClose={() => setConfirmModalState(prev => ({ ...prev, isOpen: false }))}
-        onConfirm={confirmModalState.action}
-        title={confirmModalState.title}
-        description={confirmModalState.description}
-        itemName={confirmModalState.itemName}
-      />
-
-      <Dialog open={isLogDailyStatsOpen} onOpenChange={(open) => { setIsLogDailyStatsOpen(open); if (!open) setEditingStatId(null); }}>
-        <DialogContent className={cn("p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl bg-card z-50 transition-all duration-300", isBulkAdd ? "max-w-[700px]" : "max-w-[450px]")}>
-          <div className="p-6 md:p-8 border-b border-border/40">
-            <h2 className="text-lg font-black tracking-tight text-foreground flex items-center gap-2">
-              📈 {editingStatId ? "Edit Stats Entry" : "Log Daily Marketing Stats"}
-            </h2>
-            <p className="text-xs text-muted-foreground mt-1 font-medium">Enter performance metrics for the selected campaign and date.</p>
-          </div>
-
-          <form onSubmit={handleLogDailyStats} className="p-6 md:p-8 space-y-5">
-            {/* Mode Switcher (F7: edit vakhte single j) */}
-            {!editingStatId && (
-            <div className="flex items-center justify-between border-b border-border/40 pb-3">
-              <span className="text-xs font-black uppercase tracking-wider text-foreground">Entry Mode</span>
-              <div className="flex bg-muted/60 p-0.5 rounded-lg border border-border/50 text-[10px] font-bold">
-                <button
-                  type="button"
-                  onClick={() => setIsBulkAdd(false)}
-                  className={cn("px-2.5 py-1 rounded-md transition-all", !isBulkAdd ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
-                >
-                  Single
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsBulkAdd(true)}
-                  className={cn("px-2.5 py-1 rounded-md transition-all", isBulkAdd ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
-                >
-                  Bulk Add
-                </button>
-              </div>
-            </div>
-            )}
-
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Date</label>
-              <DatePicker
-                value={dailyStatsForm.date}
-                onChange={(val) => setDailyStatsForm({ ...dailyStatsForm, date: val })}
-                className="w-full h-[42px] px-4 bg-muted/50 border border-border rounded-xl text-sm font-semibold text-foreground"
-              />
-            </div>
-
-            {!isBulkAdd ? (
-              <>
-                <div className="space-y-1.5 relative">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Campaign (type = auto-new, no confirm)</label>
-                  <input
-                    type="text"
-                    value={dailyStatsForm.campaignName}
-                    onChange={(e) => { setDailyStatsForm({ ...dailyStatsForm, campaignName: e.target.value }); setCampSuggestOpen(true); }}
-                    onFocus={() => setCampSuggestOpen(true)}
-                    onBlur={() => setTimeout(() => setCampSuggestOpen(false), 150)}
-                    placeholder="e.g. HKL Leads (navu hoy to auto-banse)"
-                    className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold text-foreground"
-                  />
-                  {campSuggestOpen && (() => {
-                    const project = projects.find(p => p.id === selectedProjectId);
-                    const base = dmCampaigns.length > 0
-                      ? dmCampaigns
-                      : (project?.campaigns && project.campaigns.length > 0)
-                        ? project.campaigns.map(c => typeof c === 'string' ? c : (c.name || "")).filter(Boolean)
-                        : ["Q4 Retargeting Ads", "Holiday Social Push", "B2B Email Drip"];
-                    const q = dailyStatsForm.campaignName.trim().toLowerCase();
-                    const opts = base.filter(n => !q || n.toLowerCase().includes(q)).slice(0, 6);
-                    if (opts.length === 0) return null;
-                    return (
-                      <div className="absolute left-0 right-0 top-full mt-1 z-20 bg-card border border-border/60 rounded-xl shadow-xl overflow-hidden">
-                        {opts.map(opt => (
-                          <button
-                            key={opt}
-                            type="button"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              setDailyStatsForm({ ...dailyStatsForm, campaignName: opt });
-                              setCampSuggestOpen(false);
+                        <div className="flex gap-2 pt-2 border-t border-border/40">
+                          <input
+                            type="text"
+                            placeholder="Campaign name (e.g. Winter Sales Ads)..."
+                            id="edit_project_new_campaign_input"
+                            className="flex-1 px-4 py-2.5 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none font-semibold text-foreground"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const btn = document.getElementById("add_campaign_edit_modal_btn");
+                                if (btn) btn.click();
+                              }
                             }}
-                            className="w-full text-left px-4 py-2 text-xs font-bold hover:bg-primary/10 hover:text-primary transition-colors"
+                          />
+                          <button
+                            type="button"
+                            id="add_campaign_edit_modal_btn"
+                            onClick={() => {
+                              const input = document.getElementById("edit_project_new_campaign_input") as HTMLInputElement;
+                              if (input && input.value.trim()) {
+                                const newCampaignName = input.value.trim();
+                                const currentList = editingProject.campaigns || [];
+                                const exists = currentList.some((c: any) => {
+                                  const name = typeof c === 'string' ? c : (c.name || "");
+                                  return name.toLowerCase() === newCampaignName.toLowerCase();
+                                });
+                                if (exists) {
+                                  toast.error("Campaign name already exists");
+                                  return;
+                                }
+                                setEditingProject({
+                                  ...editingProject,
+                                  campaigns: [...currentList, newCampaignName]
+                                });
+                                input.value = "";
+                                toast.success("Campaign added!");
+                              }
+                            }}
+                            className="px-4 py-2.5 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/95 transition-all shadow-sm flex items-center justify-center shrink-0"
                           >
-                            {opt}
+                            Add
                           </button>
-                        ))}
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Reach</label>
-                    <input
-                      type="number"
-                      placeholder="e.g. 15000"
-                      value={dailyStatsForm.reach}
-                      onChange={(e) => setDailyStatsForm({ ...dailyStatsForm, reach: e.target.value })}
-                      className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Impressions</label>
-                    <input
-                      type="number"
-                      placeholder="e.g. 18000"
-                      value={dailyStatsForm.impressions}
-                      onChange={(e) => setDailyStatsForm({ ...dailyStatsForm, impressions: e.target.value })}
-                      className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Leads</label>
-                    <input
-                      type="number"
-                      placeholder="e.g. 42"
-                      value={dailyStatsForm.leads}
-                      onChange={(e) => setDailyStatsForm({ ...dailyStatsForm, leads: e.target.value })}
-                      className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Followers</label>
-                    <input
-                      type="number"
-                      placeholder="e.g. 15"
-                      value={dailyStatsForm.followers}
-                      onChange={(e) => setDailyStatsForm({ ...dailyStatsForm, followers: e.target.value })}
-                      className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Revenue (₹)</label>
-                    <input
-                      type="number"
-                      placeholder="e.g. 25000"
-                      value={dailyStatsForm.revenue}
-                      onChange={(e) => setDailyStatsForm({ ...dailyStatsForm, revenue: e.target.value })}
-                      className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Spend (₹)</label>
-                  <input
-                    type="number"
-                    placeholder="e.g. 5000"
-                    value={dailyStatsForm.spend}
-                    onChange={(e) => setDailyStatsForm({ ...dailyStatsForm, spend: e.target.value })}
-                    className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
-                  />
-                </div>
-              </>
-            ) : (
-              <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
-                {Object.keys(bulkStatsEntries).map((campaignName) => {
-                  const entry = bulkStatsEntries[campaignName] || { reach: "", impressions: "", leads: "", followers: "", revenue: "", spend: "" };
-                  const setEntry = (patch: Partial<{ reach: string; impressions: string; leads: string; followers: string; revenue: string; spend: string }>) => setBulkStatsEntries({
-                    ...bulkStatsEntries,
-                    [campaignName]: { ...entry, ...patch }
-                  });
-                  const numCls = "w-full px-2.5 h-[34px] bg-background border border-border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary font-semibold";
-                  const lblCls = "text-[9px] font-bold text-muted-foreground uppercase mb-1 block";
-                  return (
-                    <div key={campaignName} className="p-4 bg-muted/20 border border-border/40 rounded-2xl space-y-3">
-                      <p className="text-xs font-black text-foreground">{campaignName}</p>
-                      <div className="grid grid-cols-3 gap-2">
-                        <div>
-                          <label className={lblCls}>Reach</label>
-                          <input
-                            type="number"
-                            placeholder="e.g. 12000"
-                            value={entry.reach}
-                            onChange={(e) => setEntry({ reach: e.target.value })}
-                            className={numCls}
-                          />
-                        </div>
-                        <div>
-                          <label className={lblCls}>Impressions</label>
-                          <input
-                            type="number"
-                            placeholder="e.g. 15000"
-                            value={entry.impressions}
-                            onChange={(e) => setEntry({ impressions: e.target.value })}
-                            className={numCls}
-                          />
-                        </div>
-                        <div>
-                          <label className={lblCls}>Leads</label>
-                          <input
-                            type="number"
-                            placeholder="e.g. 35"
-                            value={entry.leads}
-                            onChange={(e) => setEntry({ leads: e.target.value })}
-                            className={numCls}
-                          />
-                        </div>
-                        <div>
-                          <label className={lblCls}>Followers</label>
-                          <input
-                            type="number"
-                            placeholder="e.g. 10"
-                            value={entry.followers}
-                            onChange={(e) => setEntry({ followers: e.target.value })}
-                            className={numCls}
-                          />
-                        </div>
-                        <div>
-                          <label className={lblCls}>Revenue (₹)</label>
-                          <input
-                            type="number"
-                            placeholder="e.g. 8000"
-                            value={entry.revenue}
-                            onChange={(e) => setEntry({ revenue: e.target.value })}
-                            className={numCls}
-                          />
-                        </div>
-                        <div>
-                          <label className={lblCls}>Spend (₹)</label>
-                          <input
-                            type="number"
-                            placeholder="e.g. 3000"
-                            value={entry.spend}
-                            onChange={(e) => setEntry({ spend: e.target.value })}
-                            className={numCls}
-                          />
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <DialogClose asChild>
-                <button type="button" className="px-4 py-2.5 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors">
+                    )}
+                  </div>
+                </div>
+              )}
+              <div className="px-6 md:px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
+                <button
+                  onClick={() => { setIsEditProjectModalOpen(false); setEditingProject(null); }}
+                  className="px-5 py-2.5 rounded-xl font-bold text-muted-foreground hover:bg-muted transition-colors"
+                >
                   Cancel
                 </button>
-              </DialogClose>
-              <button
-                type="submit"
-                className="px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all text-xs"
-              >
-                Submit Stats
-              </button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-      {/* F3: Revenue popup (page nai) — date + revenue, total, edit/delete */}
-      <Dialog open={isRevenueOpen} onOpenChange={(open) => { setIsRevenueOpen(open); if (!open) setRevenueForm({ date: "", revenue: "", editId: "" }); }}>
-        <DialogContent className="w-[calc(100vw-16px)] sm:max-w-[440px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
-          <div className="px-6 py-5 border-b border-border/50 bg-muted/30 flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-black tracking-tight flex items-center gap-2">
-                <IndianRupee className="w-5 h-5 text-emerald-600" /> Revenue
-              </h2>
-              <p className="text-xs text-muted-foreground mt-0.5">Total: <span className="font-black text-emerald-600 font-mono">₹{revenueTotal.toLocaleString("en-IN")}</span></p>
-            </div>
-            <DialogClose asChild>
-              <button className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </DialogClose>
-          </div>
-          <div className="p-6 space-y-3 max-h-[40vh] overflow-y-auto">
-            {revenues.length === 0 && (
-                <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">No revenue entries yet.</p>
-            )}
-            {[...revenues].sort((a, b) => String(b.date || "").localeCompare(String(a.date || ""))).map((r: any) => (
-              <div key={String(r.id || r._id)} className="flex items-center gap-3 px-4 py-2.5 rounded-2xl border border-border/40 bg-muted/20 text-xs">
-                <span className="font-mono font-bold">{String(r.date || "").split("T")[0]}</span>
-                <span className="font-black text-emerald-600 font-mono ml-auto">₹{Number(r.revenue || 0).toLocaleString("en-IN")}</span>
                 <button
-                  type="button"
-                  onClick={() => setRevenueForm({ date: (String(r.date || "").split("T")[0] ?? ""), revenue: String(r.revenue ?? ""), editId: String(r.id || r._id) })}
-                  className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
-                  title="Edit"
+                  onClick={handleUpdateProject}
+                  className="px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all disabled:opacity-50"
                 >
-                  <Edit2 className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDeleteRevenue(String(r.id || r._id))}
-                  className="p-1.5 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors"
-                  title="Delete"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  Save Changes
                 </button>
               </div>
-            ))}
-          </div>
-          <div className="px-6 py-4 bg-muted/30 border-t border-border/50">
-            <div className="grid grid-cols-2 gap-2 mb-2">
-              <DatePicker
-                value={revenueForm.date}
-                onChange={(val) => setRevenueForm({ ...revenueForm, date: val })}
-                placeholder="Date"
-                className="h-10 bg-background border-border rounded-xl text-xs"
-              />
-              <input
-                type="number"
-                min="0"
-                value={revenueForm.revenue}
-                onChange={(e) => setRevenueForm({ ...revenueForm, revenue: e.target.value })}
-                placeholder="e.g. 50000"
-                className="px-3 h-10 bg-background border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
-              />
+
+              {/* Nested Manage Categories Modal for Edit */}
+              <Dialog open={isManageCategoriesModalOpen} onOpenChange={setIsManageCategoriesModalOpen}>
+                <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+                  <div className="p-6 pb-4">
+                    <div className="flex items-center justify-between px-6 md:px-8 py-6 border-b border-border/50 bg-muted/30">
+                      <div>
+                        <h2 className="text-xl md:text-2xl font-black tracking-tight">Manage Categories</h2>
+
+                      </div>
+                      <DialogClose asChild>
+                        <button className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
+                          <X className="w-5 h-5" />
+                        </button>
+                      </DialogClose>
+                    </div>
+                  </div>
+
+                  <div className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[70vh]">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        placeholder="e.g. E-Commerce"
+                        className={"flex-1 px-4 py-2.5 bg-muted/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium " + (showCategoryErrors && !newCategoryName.trim() ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleAddCategory();
+                        }}
+                      />
+                      <button
+                        onClick={handleAddCategory}
+                        className="px-4 py-2.5 bg-foreground text-background font-bold rounded-xl shadow-md hover:bg-foreground/90 transition-all disabled:opacity-50"
+                      >
+                        Add
+                      </button>
+                    </div>
+
+                    <div className="space-y-2 mt-4 max-h-[250px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-muted">
+                      {categories.map(cat => {
+                        const isLocked = LOCKED_CATEGORIES.includes(cat);
+                        const isPending = categoryPendingDelete === cat;
+                        return (
+                          <div key={cat} className={cn("flex flex-col border rounded-xl overflow-hidden transition-all", isLocked ? "bg-primary/5 border-primary/20" : isPending ? "bg-rose-50 border-rose-300" : "bg-muted/30 border-border/50")}>
+                            <div className="flex items-center justify-between p-3">
+                              <div className="flex items-center gap-2">
+                                {isLocked && <span className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-md uppercase tracking-wider">Fixed</span>}
+                                <span className="font-bold text-sm">{cat}</span>
+                              </div>
+                              {isLocked ? (
+                                <span className="text-[10px] text-muted-foreground font-medium italic">System</span>
+                              ) : (
+                                <button onClick={() => setCategoryPendingDelete(isPending ? null : cat)} className={cn("p-1.5 rounded-lg transition-colors", isPending ? "text-rose-500 bg-rose-100" : "text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10")}>
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                            {isPending && (
+                              <div className="flex items-center justify-between px-3 py-2 bg-rose-50 border-t border-rose-200 gap-2">
+                                <span className="text-xs font-bold text-rose-600">Delete "{cat}"?</span>
+                                <div className="flex gap-2">
+                                  <button onClick={() => setCategoryPendingDelete(null)} className="px-3 py-1 text-xs font-bold text-muted-foreground bg-white border border-border/50 rounded-lg hover:bg-muted transition-colors">Cancel</button>
+                                  <button onClick={() => { confirmDeleteCategory(cat); setCategoryPendingDelete(null); }} className="px-3 py-1 text-xs font-bold text-white bg-rose-500 rounded-lg hover:bg-rose-600 transition-colors">Delete</button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
+                    <button
+                      onClick={() => setIsManageCategoriesModalOpen(false)}
+                      className="px-5 py-2.5 bg-foreground text-background font-bold rounded-xl hover:bg-foreground/90 transition-colors"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+            </DialogContent>
+          </Dialog>
+
+
+
+          <ConfirmModal
+            isOpen={confirmModalState.isOpen}
+            onClose={() => setConfirmModalState(prev => ({ ...prev, isOpen: false }))}
+            onConfirm={confirmModalState.action}
+            title={confirmModalState.title}
+            description={confirmModalState.description}
+            itemName={confirmModalState.itemName}
+          />
+          {renderSmmModals()}
+
+        </>
+      );
+    }
+
+
+    const clientProjects = projects.filter(p => {
+      if (p.clientId !== client.id) return false;
+      if (projectFilterStatuses.length > 0 && !projectFilterStatuses.includes(p.status)) return false;
+      if (projectFilterCategories.length > 0 && !projectFilterCategories.includes(p.category)) return false;
+      return true;
+    });
+
+    return (
+      <>
+        <div className="w-full space-y-8 animate-in fade-in duration-500">
+          {/* Detail View Header */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setSelectedClientId(null)}
+                className="p-2.5 bg-card border border-border/60 rounded-xl hover:bg-muted/80 hover:text-primary transition-colors shadow-sm group"
+              >
+                <ArrowLeft className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+              </button>
+              {/* K5: highlighted logo */}
+              <BrandLogo src={client.logo} alt={client.name} size="w-20 h-20" />
+              <div>
+                <h1 className="text-3xl font-black tracking-tight text-foreground leading-tight">{client.name}</h1>
+                <span className="px-2 py-0.5 mt-1 inline-flex text-[10px] font-bold uppercase tracking-widest rounded-lg items-center gap-1.5 text-primary bg-primary/10">
+                  <Circle className="w-1.5 h-1.5 fill-current" />
+                  {client.status} Client
+                </span>
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={handleSaveRevenue}
-              className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors shadow-sm"
-            >
-              {revenueForm.editId ? "Update Revenue" : "Save Revenue"}
-            </button>
+
+            <div className="flex items-center gap-3">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-2 px-4 py-2.5 bg-card border border-border/60 text-foreground font-bold text-sm rounded-xl hover:bg-muted/80 transition-all shadow-sm">
+                    <Filter className="w-4 h-4 text-muted-foreground" />
+                    <span className="hidden sm:inline">Filter</span>
+                    {(projectFilterStatuses.length > 0 || projectFilterCategories.length > 0) && (
+                      <span className="w-2 h-2 rounded-full bg-primary ml-1"></span>
+                    )}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 rounded-2xl p-2 border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-50">
+                  <div className="px-2 py-1.5 text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1 flex justify-between items-center">
+                    <span>Status</span>
+                    {(projectFilterStatuses.length > 0 || projectFilterCategories.length > 0) && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setProjectFilterStatuses([]); setProjectFilterCategories([]); }}
+                        className="text-[10px] text-primary hover:underline"
+                      >
+                        Clear All
+                      </button>
+                    )}
+                  </div>
+                  {["In Progress", "In Review", "Completed", "On Hold"].map(status => (
+                    <DropdownMenuItem
+                      key={status}
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        setProjectFilterStatuses(prev =>
+                          prev.includes(status as ProjectStatus)
+                            ? prev.filter(s => s !== status)
+                            : [...prev, status as ProjectStatus]
+                        );
+                      }}
+                      className={cn(
+                        "rounded-xl cursor-pointer py-2 focus:bg-primary/10 focus:text-primary font-medium transition-colors flex items-center justify-between",
+                        projectFilterStatuses.includes(status as ProjectStatus) && "bg-primary/10 text-primary"
+                      )}
+                    >
+                      <span>{status}</span>
+                      {projectFilterStatuses.includes(status as ProjectStatus) && <CheckCircle2 className="w-4 h-4" />}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator className="bg-border/50 my-2" />
+                  <div className="px-2 py-1.5 text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">Category</div>
+                  {categories.map(cat => (
+                    <DropdownMenuItem
+                      key={cat}
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        setProjectFilterCategories(prev =>
+                          prev.includes(cat)
+                            ? prev.filter(c => c !== cat)
+                            : [...prev, cat]
+                        );
+                      }}
+                      className={cn(
+                        "rounded-xl cursor-pointer py-2 focus:bg-primary/10 focus:text-primary font-medium transition-colors flex items-center justify-between",
+                        projectFilterCategories.includes(cat) && "bg-primary/10 text-primary"
+                      )}
+                    >
+                      <span>{cat}</span>
+                      {projectFilterCategories.includes(cat) && <CheckCircle2 className="w-4 h-4" />}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <button onClick={() => setIsNewProjectModalOpen(true)} className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground font-bold text-sm rounded-xl hover:bg-primary/90 transition-all shadow-sm">
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">New Project</span>
+              </button>
+            </div>
           </div>
-        </DialogContent>
-      </Dialog>
-        <Dialog open={isEditProjectModalOpen} onOpenChange={setIsEditProjectModalOpen}>
-          <DialogContent className="max-w-[90vw] md:max-w-[700px] p-0 overflow-hidden rounded-[2.5rem] border-border/60 shadow-2xl [&>button]:hidden bg-card flex flex-col h-[90vh] md:h-[550px] gap-0">
-            <div className="p-6 pb-4">
-              <div className="flex items-center justify-between px-6 md:px-8 py-6 border-b border-border/50 bg-muted/30">
+
+          {/* Summary Section */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="bg-card border border-border/60 rounded-3xl p-5 flex flex-col justify-center shadow-sm">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <FolderGit2 className="w-4 h-4" />
+                </div>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Total Projects</p>
+              </div>
+              <h3 className="text-2xl font-black text-foreground font-mono">{clientProjects.length}</h3>
+            </div>
+            <div className="bg-card border border-border/60 rounded-3xl p-5 flex flex-col justify-center shadow-sm">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
+                  <IndianRupee className="w-4 h-4" />
+                </div>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Total Budget</p>
+              </div>
+              <h3 className="text-2xl font-black text-foreground font-mono">{client.totalBudget}</h3>
+            </div>
+            <div className="bg-card border border-border/60 rounded-3xl p-5 flex flex-col justify-center shadow-sm">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center shrink-0">
+                  <TrendingUp className="w-4 h-4" />
+                </div>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Outstanding</p>
+              </div>
+              <h3 className="text-2xl font-black text-foreground font-mono">{client.outstandingPayment}</h3>
+            </div>
+            <div className="bg-card border border-border/60 rounded-3xl p-5 flex flex-col justify-center shadow-sm">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+                  <Calendar className="w-4 h-4" />
+                </div>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Onboarded</p>
+              </div>
+              <h3 className="text-2xl font-black text-foreground font-mono">{safeFormat(client.onboardingDate, "dd/MM/yyyy")}</h3>
+            </div>
+            <div className="bg-card border border-border/60 rounded-3xl p-5 flex flex-col justify-center shadow-sm">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center shrink-0">
+                  <Users className="w-4 h-4" />
+                </div>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Contacts</p>
+              </div>
+              <div className="flex -space-x-2">
+                {(client.contacts ?? []).map((contact, i) => (
+                  <div key={i} className="w-8 h-8 rounded-full border-2 border-card overflow-hidden bg-muted shadow-sm">
+                    <img src={contact.avatar} alt={contact.name} className="w-full h-full object-cover" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Projects Grid for this Client */}
+          <div>
+            <h2 className="text-xl font-bold tracking-tight mb-4">Projects</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {clientProjects.map((project) => (
+                <div
+                  key={project.id}
+                  onClick={(e) => {
+                    const target = e.target as HTMLElement;
+                    if (target.closest('button') || target.closest('[role="menuitem"]')) {
+                      return;
+                    }
+                    setSelectedProjectId(project.id);
+                  }}
+                  className="group bg-card border border-border/60 rounded-3xl p-6 shadow-sm hover:shadow-xl hover:-translate-y-1 hover:border-primary/30 transition-all duration-300 relative overflow-hidden flex flex-col h-full cursor-pointer"
+                >
+                  {/* Background Accent */}
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none transition-opacity opacity-0 group-hover:opacity-100"></div>
+
+                  <div className="flex justify-between items-start mb-4 relative z-10">
+                    <div className="flex flex-col items-start gap-2">
+                      <span className={cn("px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-lg flex items-center gap-1.5", getStatusColor(project.status))}>
+                        <Circle className="w-2 h-2 fill-current" />
+                        {project.status}
+                      </span>
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1">
+                        <Briefcase className="w-3 h-3" /> {project.category || "General"}
+                      </span>
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground rounded-lg transition-colors outline-none focus:ring-2 focus:ring-primary/20">
+                          <MoreHorizontal className="w-5 h-5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="end"
+                        className="w-48 rounded-2xl p-2 border-border/60 shadow-xl bg-background/95 backdrop-blur-md"
+                      >
+                        <DropdownMenuItem
+                          onSelect={() => {
+                            setTimeout(() => {
+                              openEditModal(project);
+                            }, 100);
+                          }}
+                          className="rounded-xl cursor-pointer py-2.5 focus:bg-primary/10 focus:text-primary font-medium transition-colors"
+                        >
+                          <Edit2 className="w-4 h-4 mr-2" /> Edit Project
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator className="bg-border/50" />
+                        <DropdownMenuItem
+                          onSelect={() => {
+                            setTimeout(() => {
+                              confirmDeleteProject(project);
+                            }, 100);
+                          }}
+                          className="rounded-xl cursor-pointer py-2.5 focus:bg-rose-500/10 focus:text-rose-600 font-medium text-rose-600 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" /> Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+
+                  <div className="relative z-10 mb-4">
+                    <h3 className="text-xl font-black tracking-tight text-foreground line-clamp-2 leading-tight">{project.name}</h3>
+                  </div>
+
+                  {/* Finance Info */}
+                  <div className="grid grid-cols-2 gap-3 mb-4 p-3 bg-muted/20 rounded-2xl border border-border/40 relative z-10">
+                    <div>
+                      <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block mb-0.5">Budget</span>
+                      <span className="text-xs font-black text-foreground font-mono">{project.budget || "₹0"}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block mb-0.5">Received</span>
+                      <span className="text-xs font-black text-emerald-500 font-mono">{project.amountReceived || "₹0"}</span>
+                    </div>
+                  </div>
+
+                  {/* Progress */}
+                  <div className="mb-6 relative z-10">
+                    {(() => {
+                      const wp = getWorkProgress(project);
+                      const dp = getDateProgress(project.startDate, project.endDate);
+                      const pct = wp !== null ? wp.pct : (dp ? dp.pct : (project.progress || 0));
+                      return (
+                        <>
+                          <div className="flex justify-between items-end mb-2">
+                            <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
+                              {wp !== null ? "Work Progress" : "Progress"}
+                            </span>
+                            <span className="text-sm font-black text-foreground">{pct}%</span>
+                          </div>
+                          <div className="h-2 w-full bg-muted/60 rounded-full overflow-hidden">
+                            <div
+                              className={cn("h-full rounded-full transition-all duration-1000 ease-out", getProgressColor(project.status))}
+                              style={{ width: `${pct}%` }}
+                            ></div>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Footer */}
+                  <div className="flex justify-between items-center pt-4 border-t border-border/40 relative z-10">
+                    <div className="flex -space-x-2">
+                      {project.team.slice(0, 3).map((member, i) => (
+                        <div key={i} className="w-8 h-8 rounded-full border-2 border-card overflow-hidden bg-muted relative shadow-sm">
+                          <img src={member.avatar} alt={member.name} className="w-full h-full object-cover" />
+                        </div>
+                      ))}
+                      {project.team.length > 3 && (
+                        <div className="w-8 h-8 rounded-full border-2 border-card bg-muted flex items-center justify-center text-[10px] font-bold text-muted-foreground z-10 shadow-sm">
+                          +{project.team.length - 3}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-muted/30 rounded-lg border border-border/30">
+                      <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="text-xs font-bold text-foreground/80">{safeFormat(project.startDate, "dd/MM/yyyy")} - {safeFormat(project.endDate, "dd/MM/yyyy")}</span>
+                    </div>
+                  </div>
+
+                </div>
+              ))}
+              {clientProjects.length === 0 && (
+                <div className="col-span-full py-12 flex flex-col items-center justify-center text-center bg-card border border-border/60 border-dashed rounded-3xl">
+                  <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4">
+                    <FolderGit2 className="w-8 h-8 text-muted-foreground" />
+                  </div>
+                  <h3 className="text-lg font-bold text-foreground">No projects yet</h3>
+                  <p className="text-muted-foreground mt-1 mb-4">This client doesn't have any active projects.</p>
+                  <button onClick={() => setIsNewProjectModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary font-bold text-sm rounded-xl hover:bg-primary/20 transition-all">
+                    <Plus className="w-4 h-4" /> Add Project
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+          {/* New Project Modal */}
+          <Dialog open={isNewProjectModalOpen} onOpenChange={(open) => { setIsNewProjectModalOpen(open); if (!open) { setActiveProjectTab('general'); setShowNewProjectErrors(false); } }}>
+            <DialogContent className="sm:max-w-[700px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card max-h-[90vh]">
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 md:px-8 py-5 border-b border-border/50 bg-muted/30 shrink-0">
                 <div>
-                  <h2 className="text-xl md:text-2xl font-black tracking-tight">Edit Project</h2>
-                  <p className="text-xs text-muted-foreground mt-1">Modify project details, stats targets, and budgets</p>
+                  <h2 className="text-xl md:text-2xl font-black tracking-tight">New Project</h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">Fill in the details to create a new project.</p>
                 </div>
                 <DialogClose asChild>
                   <button className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
@@ -9532,15 +10752,13 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   </button>
                 </DialogClose>
               </div>
-            </div>
-            {editingProject && (
-              <div className="flex flex-row overflow-hidden flex-1" style={{ maxHeight: 'calc(90vh - 130px)' }}>
+              {/* Body: sidebar + content */}
+              <div className="flex flex-row overflow-hidden" style={{ maxHeight: 'calc(90vh - 130px)' }}>
                 {/* Sidebar Tabs */}
                 <div className="w-44 shrink-0 border-r border-border/50 bg-muted/20 p-3 flex flex-col gap-1 overflow-y-auto">
                   {([
                     { id: 'general', label: 'General', icon: <FolderGit2 className="w-4 h-4" /> },
                     { id: 'finance', label: 'Finance', icon: <IndianRupee className="w-4 h-4" /> },
-                    ...(editingProject.category === "Digital Marketing" ? [{ id: 'campaigns' as const, label: 'Campaigns', icon: <TrendingUp className="w-4 h-4" /> }] : []),
                   ] as const).map(tab => (
                     <button
                       key={tab.id}
@@ -9557,76 +10775,38 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     </button>
                   ))}
                 </div>
-
                 {/* Tab Content */}
                 <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-5">
                   {activeProjectTab === 'general' && (
                     <>
                       <div className="space-y-2">
-                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Project Name <span className="text-red-500">*</span></label>
-                        <input 
-                          type="text" 
-                          value={editingProject.name}
-                          onChange={(e) => setEditingProject({...editingProject, name: e.target.value})}
-                          className={"w-full px-4 py-3 bg-muted/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium " + (showEditProjectErrors && !editingProject.name.trim() ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
+                        <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Project Name <span className="text-red-500">*</span></label>
+                        <input
+                          type="text"
+                          value={newProjectName}
+                          onChange={(e) => setNewProjectName(e.target.value)}
+                          placeholder="e.g. Website Redesign"
+                          className={cn("w-full px-4 h-[42px] bg-muted/50 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all", showNewProjectErrors && !newProjectName.trim() ? "border-red-500 ring-1 ring-red-500" : "border-border")}
                         />
                       </div>
                       <div className="space-y-2">
-                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Description</label>
-                        <textarea 
-                          value={editingProject.description || ""}
-                          onChange={(e) => setEditingProject({...editingProject, description: e.target.value})}
+                        <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Description</label>
+                        <textarea
+                          value={newProjectDescription}
+                          onChange={(e) => setNewProjectDescription(e.target.value)}
                           placeholder="Brief project description..."
-                          rows={2}
-                          className="w-full px-4 py-3 bg-muted/50 border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium resize-none"
+                          rows={3}
+                          className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all resize-none"
                         />
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Start Date <span className="text-red-500">*</span></label>
-                          <DatePicker
-                            value={editingProject.startDate}
-                            onChange={(newStart) => {
-                              setEditingProject({
-                                ...editingProject, 
-                                startDate: newStart,
-                                endDate: editingProject.endDate < newStart ? newStart : editingProject.endDate
-                              });
-                            }}
-                            placeholder="Select start date"
-                            className={"w-full h-[42px] bg-muted/50 border rounded-xl font-medium " + (showEditProjectErrors && !editingProject.startDate ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">End Date <span className="text-red-500">*</span></label>
-                          <DatePicker
-                            value={editingProject.endDate}
-                            minDate={editingProject.startDate}
-                            onChange={(val) => setEditingProject({...editingProject, endDate: val})}
-                            placeholder="Select end date"
-                            className={"w-full h-[42px] bg-muted/50 border rounded-xl font-medium " + (showEditProjectErrors && !editingProject.endDate ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
-                          />
-                        </div>
-                      </div>
-                      <RenewalsManager
-                        ranges={editingProject.dateRanges || []}
-                        onChange={(dateRanges) => {
-                          const last = dateRanges[dateRanges.length - 1];
-                          setEditingProject({
-                            ...editingProject,
-                            dateRanges,
-                            ...(last && last.start_date && last.end_date ? { startDate: last.start_date, endDate: last.end_date } : {}),
-                          });
-                        }}
-                      />
-                      <div>
-                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 flex items-center justify-between">
+                      <div className="space-y-2">
+                        <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider flex items-center justify-between">
                           <span>Departments / Categories <span className="text-red-500">*</span></span>
                           <span className="text-[10px] text-muted-foreground font-normal">Select one or more</span>
                         </label>
                         <div className="flex flex-wrap gap-2 pt-0.5">
                           {FIXED_DEPARTMENTS.map(cat => {
-                            const selectedDepts = parseDepartments(editingProject.category);
+                            const selectedDepts = parseDepartments(newProjectCategory);
                             const isSelected = selectedDepts.includes(cat);
                             return (
                               <button
@@ -9640,7 +10820,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                   } else {
                                     next = [...selectedDepts, cat];
                                   }
-                                  setEditingProject({...editingProject, category: next.join(", ")});
+                                  setNewProjectCategory(next.join(", "));
                                 }}
                                 className={cn(
                                   "px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer",
@@ -9656,33 +10836,10 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Status <span className="text-red-500">*</span></label>
-                          <Select 
-                            value={editingProject.status || "In Progress"}
-                            onValueChange={(val) => setEditingProject({...editingProject, status: val as ProjectStatus})}
-                          >
-                            <SelectTrigger className="w-full h-[46px] px-4 bg-muted/50 border border-border/50 rounded-xl text-sm font-medium">
-                              <SelectValue placeholder="Select Status" />
-                            </SelectTrigger>
-                            <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
-                              {["In Progress", "In Review", "Completed", "On Hold"].map(st => (
-                                <SelectItem key={st} value={st} className="text-sm font-medium rounded-lg cursor-pointer">
-                                  {st}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Priority</label>
-                          <Select 
-                            value={editingProject.priority || "Medium"} 
-                            onValueChange={(val) => setEditingProject({...editingProject, priority: val as any})} 
-                          >
-                            <SelectTrigger className="w-full h-[46px] px-4 bg-muted/50 border border-border rounded-xl text-sm font-medium">
+                        <div className="space-y-2">
+                          <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Priority</label>
+                          <Select value={newProjectPriority} onValueChange={(val) => setNewProjectPriority(val as any)}>
+                            <SelectTrigger className="w-full h-[42px] px-4 bg-muted/50 border border-border rounded-xl text-sm font-medium">
                               <SelectValue placeholder="Select Priority" />
                             </SelectTrigger>
                             <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
@@ -9694,76 +10851,69 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                             </SelectContent>
                           </Select>
                         </div>
-                        <div>
-                          <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 flex justify-between">
-                            <span>Dynamic Progress</span>
-                            <span className="text-primary font-black">{editingProject.progress}%</span>
-                          </label>
-                          <div className="w-full h-2 bg-muted rounded-full overflow-hidden mt-3 border border-border/40">
-                            <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${editingProject.progress}%` }} />
-                          </div>
-                          <span className="text-[10px] text-muted-foreground/60 italic block mt-1">Calculated dynamically from timeline & tasks</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Start Date <span className="text-red-500">*</span></label>
+                          <DatePicker
+                            value={newProjectStartDate}
+                            onChange={(val) => { const v = val; setNewProjectStartDate(v); if (newProjectEndDate < v) setNewProjectEndDate(v); }}
+                            placeholder="Select start date"
+                            className={cn("w-full h-[42px] bg-muted/50 border rounded-xl text-sm font-medium", showNewProjectErrors && !newProjectStartDate ? "border-red-500" : "border-border")}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">End Date <span className="text-red-500">*</span></label>
+                          <DatePicker
+                            value={newProjectEndDate}
+                            minDate={newProjectStartDate}
+                            onChange={(val) => setNewProjectEndDate(val)}
+                            placeholder="Select end date"
+                            className={cn("w-full h-[42px] bg-muted/50 border rounded-xl text-sm font-medium", showNewProjectErrors && !newProjectEndDate ? "border-red-500" : "border-border")}
+                          />
                         </div>
                       </div>
-                      {(editingProject.category === "Creative" || editingProject.category === "Digital Marketing") && (
-                        <div className="space-y-4 pt-4 border-t border-border/40 mt-4">
-                          <h4 className="text-xs font-bold text-foreground uppercase tracking-widest">Monthly Social Media Delivery Targets</h4>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Posts Target / Month</label>
-                              <input 
-                                type="number" 
-                                value={editingProject.post ?? 0} 
-                                onChange={(e) => setEditingProject({...editingProject, post: parseInt(e.target.value) || 0})} 
-                                placeholder="e.g. 8" 
-                                className="w-full px-3 h-[38px] bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 font-semibold" 
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Reels Target / Month</label>
-                              <input 
-                                type="number" 
-                                value={editingProject.reel ?? 0} 
-                                onChange={(e) => setEditingProject({...editingProject, reel: parseInt(e.target.value) || 0})} 
-                                placeholder="e.g. 8" 
-                                className="w-full px-3 h-[38px] bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 font-semibold" 
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      {editingProject.category === "Digital Marketing" && (
+                      <div className="space-y-2">
+                        <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Team Deadline (Internal)</label>
+                        <DatePicker
+                          value={newProjectTeamDeadline}
+                          onChange={(val) => setNewProjectTeamDeadline(val)}
+                          placeholder="Select team deadline"
+                          className="w-full h-[42px] bg-muted/50 border border-border rounded-xl text-sm font-medium"
+                        />
+                      </div>
+                      {newProjectCategory === "Digital Marketing" && (
                         <div className="space-y-4 pt-4 border-t border-border/40 mt-4">
                           <h4 className="text-xs font-bold text-foreground uppercase tracking-widest">Digital Marketing Stats</h4>
                           <div className="grid grid-cols-3 gap-3">
                             <div className="space-y-2">
                               <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Reach Target</label>
-                              <input 
-                                type="text" 
-                                value={editingProject.reach || ""} 
-                                onChange={(e) => setEditingProject({...editingProject, reach: e.target.value})} 
-                                placeholder="e.g. 1.2M" 
-                                className="w-full px-3 h-[38px] bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20" 
+                              <input
+                                type="text"
+                                value={newProjectReach}
+                                onChange={(e) => setNewProjectReach(e.target.value)}
+                                placeholder="e.g. 1.2M"
+                                className="w-full px-3 h-[38px] bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
                               />
                             </div>
                             <div className="space-y-2">
                               <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Leads Target</label>
-                              <input 
-                                type="text" 
-                                value={editingProject.leads || ""} 
-                                onChange={(e) => setEditingProject({...editingProject, leads: e.target.value})} 
-                                placeholder="e.g. 3,240" 
-                                className="w-full px-3 h-[38px] bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20" 
+                              <input
+                                type="text"
+                                value={newProjectLeads}
+                                onChange={(e) => setNewProjectLeads(e.target.value)}
+                                placeholder="e.g. 3,240"
+                                className="w-full px-3 h-[38px] bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
                               />
                             </div>
                             <div className="space-y-2">
                               <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">CPL (₹)</label>
-                              <input 
-                                type="text" 
-                                value={editingProject.cpl || ""} 
-                                onChange={(e) => setEditingProject({...editingProject, cpl: e.target.value})} 
-                                placeholder="e.g. 250" 
-                                className="w-full px-3 h-[38px] bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20" 
+                              <input
+                                type="text"
+                                value={newProjectCpl}
+                                onChange={(e) => setNewProjectCpl(e.target.value)}
+                                placeholder="e.g. 250"
+                                className="w-full px-3 h-[38px] bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
                               />
                             </div>
                           </div>
@@ -9771,1336 +10921,608 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       )}
                     </>
                   )}
-                  {activeProjectTab === 'finance' && (
-                    <>
-                      <div className="space-y-2">
-                        <label className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">Project Budget</label>
-                        <input type="text" value={editingProject.budget || ""} onChange={(e) => setEditingProject({...editingProject, budget: e.target.value.replace(/[^0-9]/g, "")})} placeholder="e.g. 10000" className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium" />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">Amount Received</label>
-                        <input type="text" value={editingProject.amountReceived || ""} onChange={(e) => setEditingProject({...editingProject, amountReceived: e.target.value.replace(/[^0-9]/g, "")})} placeholder="e.g. 5000" className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium" />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">Next Payment Date</label>
-                        <DatePicker
-                          value={editingProject.nextPaymentDate || ""}
-                          onChange={(val) => setEditingProject({...editingProject, nextPaymentDate: val})}
-                          placeholder="Select payment date"
-                          className="w-full h-[42px] bg-muted/50 border border-border rounded-xl text-sm font-medium"
-                        />
-                      </div>
-                    </>
-                  )}
-                  {activeProjectTab === 'campaigns' && (
-                    <div className="space-y-4 text-left">
-                      <div>
-                        <h4 className="text-xs font-black uppercase tracking-wider text-foreground mb-1">Marketing Campaigns</h4>
-                        <p className="text-[10px] text-muted-foreground font-semibold">Manage active ad campaigns and performance targets</p>
-                      </div>
-
-                      <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
-                        {(editingProject.campaigns || []).map((c: any, index: number) => {
-                          const campaignObj = typeof c === 'string' ? { name: c, status: 'Active' } : { name: c.name || "", status: c.status || 'Active' };
-                          return (
-                            <div key={index} className="flex justify-between items-center p-3 bg-muted/20 border border-border/40 rounded-2xl group/campaign">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-bold text-foreground">{campaignObj.name}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const nextStatus = campaignObj.status === 'Active' ? 'Inactive' : 'Active';
-                                    const updated = [...(editingProject.campaigns || [])];
-                                    updated[index] = { name: campaignObj.name, status: nextStatus };
-                                    setEditingProject({ ...editingProject, campaigns: updated });
-                                    toast.success(`Campaign marked ${nextStatus}`);
-                                  }}
-                                  className={cn("px-2 py-0.5 text-[9px] font-black rounded-lg uppercase tracking-wider transition-colors", 
-                                    campaignObj.status === 'Active' ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-muted text-muted-foreground hover:bg-muted-foreground/20")}
-                                >
-                                  {campaignObj.status}
-                                </button>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setConfirmModalState({
-                                    isOpen: true,
-                                    title: "Remove Campaign",
-                                    description: "Are you sure you want to remove this campaign?",
-                                    itemName: campaignObj.name,
-                                    action: () => {
-                                      const updated = (editingProject.campaigns || []).filter((_: any, i: number) => i !== index);
-                                      setEditingProject({ ...editingProject, campaigns: updated });
-                                      setConfirmModalState(prev => ({ ...prev, isOpen: false }));
-                                      toast.success("Campaign removed");
-                                    }
-                                  });
-                                }}
-                                className="text-xs text-rose-500 hover:text-rose-700 font-extrabold opacity-0 group-hover/campaign:opacity-100 transition-opacity"
-                              >
-                                Remove
-                              </button>
-                            </div>
-                          );
-                        })}
-                        {(editingProject.campaigns || []).length === 0 && (
-                          <p className="text-xs text-muted-foreground italic font-medium py-4 text-center">No campaigns created yet.</p>
-                        )}
-                      </div>
-
-                      <div className="flex gap-2 pt-2 border-t border-border/40">
-                        <input
-                          type="text"
-                          placeholder="Campaign name (e.g. Winter Sales Ads)..."
-                          id="edit_project_new_campaign_input"
-                          className="flex-1 px-4 py-2.5 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none font-semibold text-foreground"
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              const btn = document.getElementById("add_campaign_edit_modal_btn");
-                              if (btn) btn.click();
-                            }
-                          }}
-                        />
-                        <button
-                          type="button"
-                          id="add_campaign_edit_modal_btn"
-                          onClick={() => {
-                            const input = document.getElementById("edit_project_new_campaign_input") as HTMLInputElement;
-                            if (input && input.value.trim()) {
-                              const newCampaignName = input.value.trim();
-                              const currentList = editingProject.campaigns || [];
-                              const exists = currentList.some((c: any) => {
-                                const name = typeof c === 'string' ? c : (c.name || "");
-                                return name.toLowerCase() === newCampaignName.toLowerCase();
-                              });
-                              if (exists) {
-                                toast.error("Campaign name already exists");
-                                return;
-                              }
-                              setEditingProject({
-                                ...editingProject,
-                                campaigns: [...currentList, newCampaignName]
-                              });
-                              input.value = "";
-                              toast.success("Campaign added!");
-                            }
-                          }}
-                          className="px-4 py-2.5 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/95 transition-all shadow-sm flex items-center justify-center shrink-0"
-                        >
-                          Add
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-            <div className="px-6 md:px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
-              <button 
-                onClick={() => { setIsEditProjectModalOpen(false); setEditingProject(null); }}
-                className="px-5 py-2.5 rounded-xl font-bold text-muted-foreground hover:bg-muted transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={handleUpdateProject}
-                className="px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all disabled:opacity-50"
-              >
-                Save Changes
-              </button>
-            </div>
-            
-            {/* Nested Manage Categories Modal for Edit */}
-            <Dialog open={isManageCategoriesModalOpen} onOpenChange={setIsManageCategoriesModalOpen}>
-              <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
-                <div className="p-6 pb-4">
-                  <div className="flex items-center justify-between px-6 md:px-8 py-6 border-b border-border/50 bg-muted/30">
-          <div>
-            <h2 className="text-xl md:text-2xl font-black tracking-tight">Manage Categories</h2>
-            
-          </div>
-          <DialogClose asChild>
-            <button className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
-              <X className="w-5 h-5" />
-            </button>
-          </DialogClose>
-        </div>
-                </div>
-                
-                <div className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[70vh]">
-                  <div className="flex gap-2">
-                    <input 
-                      type="text" 
-                      value={newCategoryName}
-                      onChange={(e) => setNewCategoryName(e.target.value)}
-                      placeholder="e.g. E-Commerce"
-                      className={"flex-1 px-4 py-2.5 bg-muted/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium " + (showCategoryErrors && !newCategoryName.trim() ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleAddCategory();
-                      }}
-                    />
-                    <button 
-                      onClick={handleAddCategory}
-                      className="px-4 py-2.5 bg-foreground text-background font-bold rounded-xl shadow-md hover:bg-foreground/90 transition-all disabled:opacity-50"
-                    >
-                      Add
-                    </button>
-                  </div>
-                  
-                  <div className="space-y-2 mt-4 max-h-[250px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-muted">
-                    {categories.map(cat => {
-                      const isLocked = LOCKED_CATEGORIES.includes(cat);
-                      const isPending = categoryPendingDelete === cat;
-                      return (
-                        <div key={cat} className={cn("flex flex-col border rounded-xl overflow-hidden transition-all", isLocked ? "bg-primary/5 border-primary/20" : isPending ? "bg-rose-50 border-rose-300" : "bg-muted/30 border-border/50")}>
-                          <div className="flex items-center justify-between p-3">
-                            <div className="flex items-center gap-2">
-                              {isLocked && <span className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-md uppercase tracking-wider">Fixed</span>}
-                              <span className="font-bold text-sm">{cat}</span>
-                            </div>
-                            {isLocked ? (
-                              <span className="text-[10px] text-muted-foreground font-medium italic">System</span>
-                            ) : (
-                              <button onClick={() => setCategoryPendingDelete(isPending ? null : cat)} className={cn("p-1.5 rounded-lg transition-colors", isPending ? "text-rose-500 bg-rose-100" : "text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10")}>
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                          {isPending && (
-                            <div className="flex items-center justify-between px-3 py-2 bg-rose-50 border-t border-rose-200 gap-2">
-                              <span className="text-xs font-bold text-rose-600">Delete "{cat}"?</span>
-                              <div className="flex gap-2">
-                                <button onClick={() => setCategoryPendingDelete(null)} className="px-3 py-1 text-xs font-bold text-muted-foreground bg-white border border-border/50 rounded-lg hover:bg-muted transition-colors">Cancel</button>
-                                <button onClick={() => { confirmDeleteCategory(cat); setCategoryPendingDelete(null); }} className="px-3 py-1 text-xs font-bold text-white bg-rose-500 rounded-lg hover:bg-rose-600 transition-colors">Delete</button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                
-                <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
-                  <button 
-                    onClick={() => setIsManageCategoriesModalOpen(false)}
-                    className="px-5 py-2.5 bg-foreground text-background font-bold rounded-xl hover:bg-foreground/90 transition-colors"
-                  >
-                    Done
-                  </button>
-                </div>
-              </DialogContent>
-            </Dialog>
-
-          </DialogContent>
-        </Dialog>
-
-
-
-      <ConfirmModal 
-        isOpen={confirmModalState.isOpen}
-        onClose={() => setConfirmModalState(prev => ({ ...prev, isOpen: false }))}
-        onConfirm={confirmModalState.action}
-        title={confirmModalState.title}
-        description={confirmModalState.description}
-        itemName={confirmModalState.itemName}
-      />
-      {renderSmmModals()}
-
-    </>
-    );
-    }
-
-
-    const clientProjects = projects.filter(p => {
-      if (p.clientId !== client.id) return false;
-      if (projectFilterStatuses.length > 0 && !projectFilterStatuses.includes(p.status)) return false;
-      if (projectFilterCategories.length > 0 && !projectFilterCategories.includes(p.category)) return false;
-      return true;
-    });
-
-    return (
-      <>
-        <div className="w-full space-y-8 animate-in fade-in duration-500">
-        {/* Detail View Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={() => setSelectedClientId(null)}
-              className="p-2.5 bg-card border border-border/60 rounded-xl hover:bg-muted/80 hover:text-primary transition-colors shadow-sm group"
-            >
-              <ArrowLeft className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
-            </button>
-            {/* K5: highlighted logo */}
-            <BrandLogo src={client.logo} alt={client.name} size="w-20 h-20" />
-            <div>
-              <h1 className="text-3xl font-black tracking-tight text-foreground leading-tight">{client.name}</h1>
-              <span className="px-2 py-0.5 mt-1 inline-flex text-[10px] font-bold uppercase tracking-widest rounded-lg items-center gap-1.5 text-primary bg-primary/10">
-                <Circle className="w-1.5 h-1.5 fill-current" />
-                {client.status} Client
-              </span>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-2 px-4 py-2.5 bg-card border border-border/60 text-foreground font-bold text-sm rounded-xl hover:bg-muted/80 transition-all shadow-sm">
-                  <Filter className="w-4 h-4 text-muted-foreground" />
-                  <span className="hidden sm:inline">Filter</span>
-                  {(projectFilterStatuses.length > 0 || projectFilterCategories.length > 0) && (
-                    <span className="w-2 h-2 rounded-full bg-primary ml-1"></span>
-                  )}
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56 rounded-2xl p-2 border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-50">
-                <div className="px-2 py-1.5 text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1 flex justify-between items-center">
-                  <span>Status</span>
-                  {(projectFilterStatuses.length > 0 || projectFilterCategories.length > 0) && (
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); setProjectFilterStatuses([]); setProjectFilterCategories([]); }}
-                      className="text-[10px] text-primary hover:underline"
-                    >
-                      Clear All
-                    </button>
-                  )}
-                </div>
-                {["In Progress", "In Review", "Completed", "On Hold"].map(status => (
-                  <DropdownMenuItem 
-                    key={status}
-                    onSelect={(e) => { 
-                      e.preventDefault(); 
-                      setProjectFilterStatuses(prev => 
-                        prev.includes(status as ProjectStatus) 
-                          ? prev.filter(s => s !== status) 
-                          : [...prev, status as ProjectStatus]
-                      ); 
-                    }}
-                    className={cn(
-                      "rounded-xl cursor-pointer py-2 focus:bg-primary/10 focus:text-primary font-medium transition-colors flex items-center justify-between",
-                      projectFilterStatuses.includes(status as ProjectStatus) && "bg-primary/10 text-primary"
-                    )}
-                  >
-                    <span>{status}</span>
-                    {projectFilterStatuses.includes(status as ProjectStatus) && <CheckCircle2 className="w-4 h-4" />}
-                  </DropdownMenuItem>
-                ))}
-                <DropdownMenuSeparator className="bg-border/50 my-2" />
-                <div className="px-2 py-1.5 text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">Category</div>
-                {categories.map(cat => (
-                  <DropdownMenuItem 
-                    key={cat}
-                    onSelect={(e) => { 
-                      e.preventDefault(); 
-                      setProjectFilterCategories(prev => 
-                        prev.includes(cat) 
-                          ? prev.filter(c => c !== cat) 
-                          : [...prev, cat]
-                      ); 
-                    }}
-                    className={cn(
-                      "rounded-xl cursor-pointer py-2 focus:bg-primary/10 focus:text-primary font-medium transition-colors flex items-center justify-between",
-                      projectFilterCategories.includes(cat) && "bg-primary/10 text-primary"
-                    )}
-                  >
-                    <span>{cat}</span>
-                    {projectFilterCategories.includes(cat) && <CheckCircle2 className="w-4 h-4" />}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <button onClick={() => setIsNewProjectModalOpen(true)} className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground font-bold text-sm rounded-xl hover:bg-primary/90 transition-all shadow-sm">
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">New Project</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Summary Section */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
-          <div className="bg-card border border-border/60 rounded-3xl p-5 flex flex-col justify-center shadow-sm">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                <FolderGit2 className="w-4 h-4" />
-              </div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Total Projects</p>
-            </div>
-            <h3 className="text-2xl font-black text-foreground font-mono">{clientProjects.length}</h3>
-          </div>
-          <div className="bg-card border border-border/60 rounded-3xl p-5 flex flex-col justify-center shadow-sm">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
-                <IndianRupee className="w-4 h-4" />
-              </div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Total Budget</p>
-            </div>
-            <h3 className="text-2xl font-black text-foreground font-mono">{client.totalBudget}</h3>
-          </div>
-          <div className="bg-card border border-border/60 rounded-3xl p-5 flex flex-col justify-center shadow-sm">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center shrink-0">
-                <TrendingUp className="w-4 h-4" />
-              </div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Outstanding</p>
-            </div>
-            <h3 className="text-2xl font-black text-foreground font-mono">{client.outstandingPayment}</h3>
-          </div>
-          <div className="bg-card border border-border/60 rounded-3xl p-5 flex flex-col justify-center shadow-sm">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
-                <Calendar className="w-4 h-4" />
-              </div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Onboarded</p>
-            </div>
-            <h3 className="text-2xl font-black text-foreground font-mono">{safeFormat(client.onboardingDate, "dd/MM/yyyy")}</h3>
-          </div>
-          <div className="bg-card border border-border/60 rounded-3xl p-5 flex flex-col justify-center shadow-sm">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center shrink-0">
-                <Users className="w-4 h-4" />
-              </div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Contacts</p>
-            </div>
-            <div className="flex -space-x-2">
-              {(client.contacts ?? []).map((contact, i) => (
-                <div key={i} className="w-8 h-8 rounded-full border-2 border-card overflow-hidden bg-muted shadow-sm">
-                  <img src={contact.avatar} alt={contact.name} className="w-full h-full object-cover" />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Projects Grid for this Client */}
-        <div>
-          <h2 className="text-xl font-bold tracking-tight mb-4">Projects</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {clientProjects.map((project) => (
-              <div 
-                key={project.id} 
-                onClick={(e) => {
-                  const target = e.target as HTMLElement;
-                  if (target.closest('button') || target.closest('[role="menuitem"]')) {
-                    return;
-                  }
-                  setSelectedProjectId(project.id);
-                }}
-                className="group bg-card border border-border/60 rounded-3xl p-6 shadow-sm hover:shadow-xl hover:-translate-y-1 hover:border-primary/30 transition-all duration-300 relative overflow-hidden flex flex-col h-full cursor-pointer"
-              >
-                {/* Background Accent */}
-                <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none transition-opacity opacity-0 group-hover:opacity-100"></div>
-
-                <div className="flex justify-between items-start mb-4 relative z-10">
-                  <div className="flex flex-col items-start gap-2">
-                    <span className={cn("px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-lg flex items-center gap-1.5", getStatusColor(project.status))}>
-                      <Circle className="w-2 h-2 fill-current" />
-                      {project.status}
-                    </span>
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1">
-                      <Briefcase className="w-3 h-3" /> {project.category || "General"}
-                    </span>
-                  </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button className="p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground rounded-lg transition-colors outline-none focus:ring-2 focus:ring-primary/20">
-                        <MoreHorizontal className="w-5 h-5" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent 
-                      align="end" 
-                      className="w-48 rounded-2xl p-2 border-border/60 shadow-xl bg-background/95 backdrop-blur-md"
-                    >
-                      <DropdownMenuItem 
-                        onSelect={() => {
-                          setTimeout(() => {
-                            openEditModal(project);
-                          }, 100);
-                        }}
-                        className="rounded-xl cursor-pointer py-2.5 focus:bg-primary/10 focus:text-primary font-medium transition-colors"
-                      >
-                        <Edit2 className="w-4 h-4 mr-2" /> Edit Project
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator className="bg-border/50" />
-                      <DropdownMenuItem 
-                        onSelect={() => {
-                          setTimeout(() => {
-                            confirmDeleteProject(project);
-                          }, 100);
-                        }}
-                        className="rounded-xl cursor-pointer py-2.5 focus:bg-rose-500/10 focus:text-rose-600 font-medium text-rose-600 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" /> Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-
-                <div className="relative z-10 mb-4">
-                  <h3 className="text-xl font-black tracking-tight text-foreground line-clamp-2 leading-tight">{project.name}</h3>
-                </div>
-
-                {/* Finance Info */}
-                <div className="grid grid-cols-2 gap-3 mb-4 p-3 bg-muted/20 rounded-2xl border border-border/40 relative z-10">
-                  <div>
-                    <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block mb-0.5">Budget</span>
-                    <span className="text-xs font-black text-foreground font-mono">{project.budget || "₹0"}</span>
-                  </div>
-                  <div>
-                    <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block mb-0.5">Received</span>
-                    <span className="text-xs font-black text-emerald-500 font-mono">{project.amountReceived || "₹0"}</span>
-                  </div>
-                </div>
-
-                {/* Progress */}
-                <div className="mb-6 relative z-10">
-                  {(() => {
-                    const wp = getWorkProgress(project);
-                    const dp = getDateProgress(project.startDate, project.endDate);
-                    const pct = wp !== null ? wp.pct : (dp ? dp.pct : (project.progress || 0));
-                    return (
-                      <>
-                        <div className="flex justify-between items-end mb-2">
-                          <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
-                            {wp !== null ? "Work Progress" : "Progress"}
-                          </span>
-                          <span className="text-sm font-black text-foreground">{pct}%</span>
-                        </div>
-                        <div className="h-2 w-full bg-muted/60 rounded-full overflow-hidden">
-                          <div 
-                            className={cn("h-full rounded-full transition-all duration-1000 ease-out", getProgressColor(project.status))}
-                            style={{ width: `${pct}%` }}
-                          ></div>
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-
-                {/* Footer */}
-                <div className="flex justify-between items-center pt-4 border-t border-border/40 relative z-10">
-                  <div className="flex -space-x-2">
-                    {project.team.slice(0, 3).map((member, i) => (
-                      <div key={i} className="w-8 h-8 rounded-full border-2 border-card overflow-hidden bg-muted relative shadow-sm">
-                        <img src={member.avatar} alt={member.name} className="w-full h-full object-cover" />
-                      </div>
-                    ))}
-                    {project.team.length > 3 && (
-                      <div className="w-8 h-8 rounded-full border-2 border-card bg-muted flex items-center justify-center text-[10px] font-bold text-muted-foreground z-10 shadow-sm">
-                        +{project.team.length - 3}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-muted/30 rounded-lg border border-border/30">
-                    <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
-                    <span className="text-xs font-bold text-foreground/80">{safeFormat(project.startDate, "dd/MM/yyyy")} - {safeFormat(project.endDate, "dd/MM/yyyy")}</span>
-                  </div>
-                </div>
-
-              </div>
-            ))}
-            {clientProjects.length === 0 && (
-              <div className="col-span-full py-12 flex flex-col items-center justify-center text-center bg-card border border-border/60 border-dashed rounded-3xl">
-                <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4">
-                  <FolderGit2 className="w-8 h-8 text-muted-foreground" />
-                </div>
-                <h3 className="text-lg font-bold text-foreground">No projects yet</h3>
-                <p className="text-muted-foreground mt-1 mb-4">This client doesn't have any active projects.</p>
-                <button onClick={() => setIsNewProjectModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary font-bold text-sm rounded-xl hover:bg-primary/20 transition-all">
-                  <Plus className="w-4 h-4" /> Add Project
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-        {/* New Project Modal */}
-        <Dialog open={isNewProjectModalOpen} onOpenChange={(open) => { setIsNewProjectModalOpen(open); if (!open) { setActiveProjectTab('general'); setShowNewProjectErrors(false); } }}>
-          <DialogContent className="sm:max-w-[700px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card max-h-[90vh]">
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 md:px-8 py-5 border-b border-border/50 bg-muted/30 shrink-0">
-              <div>
-                <h2 className="text-xl md:text-2xl font-black tracking-tight">New Project</h2>
-                <p className="text-sm text-muted-foreground mt-0.5">Fill in the details to create a new project.</p>
-              </div>
-              <DialogClose asChild>
-                <button className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
-                  <X className="w-5 h-5" />
-                </button>
-              </DialogClose>
-            </div>
-            {/* Body: sidebar + content */}
-            <div className="flex flex-row overflow-hidden" style={{ maxHeight: 'calc(90vh - 130px)' }}>
-              {/* Sidebar Tabs */}
-              <div className="w-44 shrink-0 border-r border-border/50 bg-muted/20 p-3 flex flex-col gap-1 overflow-y-auto">
-                {([
-                  { id: 'general', label: 'General', icon: <FolderGit2 className="w-4 h-4" /> },
-                  { id: 'finance', label: 'Finance', icon: <IndianRupee className="w-4 h-4" /> },
-                ] as const).map(tab => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveProjectTab(tab.id)}
-                    className={cn(
-                      "flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold transition-all text-left w-full",
-                      activeProjectTab === tab.id
-                        ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                    )}
-                  >
-                    {tab.icon}
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-              {/* Tab Content */}
-              <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-5">
-                {activeProjectTab === 'general' && (
-                  <>
-                    <div className="space-y-2">
-                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Project Name <span className="text-red-500">*</span></label>
-                      <input
-                        type="text"
-                        value={newProjectName}
-                        onChange={(e) => setNewProjectName(e.target.value)}
-                        placeholder="e.g. Website Redesign"
-                        className={cn("w-full px-4 h-[42px] bg-muted/50 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all", showNewProjectErrors && !newProjectName.trim() ? "border-red-500 ring-1 ring-red-500" : "border-border")}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Description</label>
-                      <textarea
-                        value={newProjectDescription}
-                        onChange={(e) => setNewProjectDescription(e.target.value)}
-                        placeholder="Brief project description..."
-                        rows={3}
-                        className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all resize-none"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider flex items-center justify-between">
-                        <span>Departments / Categories <span className="text-red-500">*</span></span>
-                        <span className="text-[10px] text-muted-foreground font-normal">Select one or more</span>
-                      </label>
-                      <div className="flex flex-wrap gap-2 pt-0.5">
-                        {FIXED_DEPARTMENTS.map(cat => {
-                          const selectedDepts = parseDepartments(newProjectCategory);
-                          const isSelected = selectedDepts.includes(cat);
-                          return (
-                            <button
-                              key={cat}
-                              type="button"
-                              onClick={() => {
-                                let next: string[];
-                                if (isSelected) {
-                                  next = selectedDepts.filter(d => d !== cat);
-                                  if (next.length === 0) next = [cat];
-                                } else {
-                                  next = [...selectedDepts, cat];
-                                }
-                                setNewProjectCategory(next.join(", "));
-                              }}
-                              className={cn(
-                                "px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer",
-                                isSelected
-                                  ? "bg-primary text-primary-foreground border-primary shadow-xs"
-                                  : "bg-muted/40 text-muted-foreground border-border hover:bg-muted"
-                              )}
-                            >
-                              {cat} {isSelected ? "✓" : "+"}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Priority</label>
-                        <Select value={newProjectPriority} onValueChange={(val) => setNewProjectPriority(val as any)}>
-                          <SelectTrigger className="w-full h-[42px] px-4 bg-muted/50 border border-border rounded-xl text-sm font-medium">
-                            <SelectValue placeholder="Select Priority" />
-                          </SelectTrigger>
-                          <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
-                            {["Low", "Medium", "High", "Critical"].map(p => (
-                              <SelectItem key={p} value={p} className="text-sm font-medium rounded-lg cursor-pointer">
-                                {p}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Start Date <span className="text-red-500">*</span></label>
-                        <DatePicker
-                          value={newProjectStartDate}
-                          onChange={(val) => { const v = val; setNewProjectStartDate(v); if (newProjectEndDate < v) setNewProjectEndDate(v); }}
-                          placeholder="Select start date"
-                          className={cn("w-full h-[42px] bg-muted/50 border rounded-xl text-sm font-medium", showNewProjectErrors && !newProjectStartDate ? "border-red-500" : "border-border")}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">End Date <span className="text-red-500">*</span></label>
-                        <DatePicker
-                          value={newProjectEndDate}
-                          minDate={newProjectStartDate}
-                          onChange={(val) => setNewProjectEndDate(val)}
-                          placeholder="Select end date"
-                          className={cn("w-full h-[42px] bg-muted/50 border rounded-xl text-sm font-medium", showNewProjectErrors && !newProjectEndDate ? "border-red-500" : "border-border")}
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Team Deadline (Internal)</label>
-                      <DatePicker
-                        value={newProjectTeamDeadline}
-                        onChange={(val) => setNewProjectTeamDeadline(val)}
-                        placeholder="Select team deadline"
-                        className="w-full h-[42px] bg-muted/50 border border-border rounded-xl text-sm font-medium"
-                      />
-                    </div>
-                    {newProjectCategory === "Digital Marketing" && (
-                      <div className="space-y-4 pt-4 border-t border-border/40 mt-4">
-                        <h4 className="text-xs font-bold text-foreground uppercase tracking-widest">Digital Marketing Stats</h4>
-                        <div className="grid grid-cols-3 gap-3">
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Reach Target</label>
-                            <input 
-                              type="text" 
-                              value={newProjectReach} 
-                              onChange={(e) => setNewProjectReach(e.target.value)} 
-                              placeholder="e.g. 1.2M" 
-                              className="w-full px-3 h-[38px] bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20" 
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Leads Target</label>
-                            <input 
-                              type="text" 
-                              value={newProjectLeads} 
-                              onChange={(e) => setNewProjectLeads(e.target.value)} 
-                              placeholder="e.g. 3,240" 
-                              className="w-full px-3 h-[38px] bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20" 
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">CPL (₹)</label>
-                            <input 
-                              type="text" 
-                              value={newProjectCpl} 
-                              onChange={(e) => setNewProjectCpl(e.target.value)} 
-                              placeholder="e.g. 250" 
-                              className="w-full px-3 h-[38px] bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20" 
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </>
-)}
                   {activeProjectTab === 'finance' && editingProject && (
                     <>
                       <div className="space-y-2">
                         <label className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">Project Budget</label>
-                        <input type="text" value={String(editingProject.budget || "").replace(/[^0-9]/g, "")} onChange={(e) => setEditingProject(prev => prev ? {...prev, budget: e.target.value.replace(/[^0-9]/g, "")} : null)} placeholder="e.g. 10000" className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium" />
+                        <input type="text" value={String(editingProject.budget || "").replace(/[^0-9]/g, "")} onChange={(e) => setEditingProject(prev => prev ? { ...prev, budget: e.target.value.replace(/[^0-9]/g, "") } : null)} placeholder="e.g. 10000" className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium" />
                       </div>
                       <div className="space-y-2">
                         <label className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">Amount Received</label>
-                        <input type="text" value={String(editingProject.amountReceived || "").replace(/[^0-9]/g, "")} onChange={(e) => setEditingProject(prev => prev ? {...prev, amountReceived: e.target.value.replace(/[^0-9]/g, "")} : null)} placeholder="e.g. 5000" className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium" />
+                        <input type="text" value={String(editingProject.amountReceived || "").replace(/[^0-9]/g, "")} onChange={(e) => setEditingProject(prev => prev ? { ...prev, amountReceived: e.target.value.replace(/[^0-9]/g, "") } : null)} placeholder="e.g. 5000" className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium" />
                       </div>
                       <div className="space-y-2">
                         <label className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">Next Payment Date</label>
                         <DatePicker
                           value={editingProject.nextPaymentDate || ""}
-                          onChange={(val) => setEditingProject(prev => prev ? {...prev, nextPaymentDate: val} : null)}
+                          onChange={(val) => setEditingProject(prev => prev ? { ...prev, nextPaymentDate: val } : null)}
                           placeholder="Select payment date"
                           className="w-full h-[42px] bg-muted/50 border border-border rounded-xl text-sm font-medium"
                         />
                       </div>
                     </>
                   )}
+                </div>
               </div>
-            </div>
-            {/* Footer */}
-            <div className="px-6 md:px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
-              <button onClick={() => { setIsNewProjectModalOpen(false); setActiveProjectTab('general'); setShowNewProjectErrors(false); }} className="px-5 py-2.5 rounded-xl font-bold text-muted-foreground hover:bg-muted transition-colors">
-                Cancel
-              </button>
-              <button onClick={handleCreateProject} className="px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all">
-                Create Project
-              </button>
-            </div>
-            
-            {/* Nested Manage Categories Modal */}
-            <Dialog open={isManageCategoriesModalOpen} onOpenChange={setIsManageCategoriesModalOpen}>
-              <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
-                <div className="p-6 pb-4">
-                  <div className="flex items-center justify-between px-6 md:px-8 py-6 border-b border-border/50 bg-muted/30">
-          <div>
-            <h2 className="text-xl md:text-2xl font-black tracking-tight">Manage Categories</h2>
-            
-          </div>
-          <DialogClose asChild>
-            <button className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
-              <X className="w-5 h-5" />
-            </button>
-          </DialogClose>
-        </div>
-                </div>
-                
-                <div className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[70vh]">
-                  <div className="flex gap-2">
-                    <input 
-                      type="text" 
-                      value={newCategoryName}
-                      onChange={(e) => setNewCategoryName(e.target.value)}
-                      placeholder="e.g. E-Commerce"
-                      className={"flex-1 px-4 py-2.5 bg-muted/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium " + (showCategoryErrors && !newCategoryName.trim() ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleAddCategory();
-                      }}
-                    />
-                    <button 
-                      onClick={handleAddCategory}
-                      className="px-4 py-2.5 bg-foreground text-background font-bold rounded-xl shadow-md hover:bg-foreground/90 transition-all disabled:opacity-50"
-                    >
-                      Add
-                    </button>
-                  </div>
-                  
-                  <div className="space-y-2 mt-4 max-h-[250px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-muted">
-                    {categories.map(cat => {
-                      const isLocked = LOCKED_CATEGORIES.includes(cat);
-                      const isPending = categoryPendingDelete === cat;
-                      return (
-                        <div key={cat} className={cn("flex flex-col border rounded-xl overflow-hidden transition-all", isLocked ? "bg-primary/5 border-primary/20" : isPending ? "bg-rose-50 border-rose-300" : "bg-muted/30 border-border/50")}>
-                          <div className="flex items-center justify-between p-3">
-                            <div className="flex items-center gap-2">
-                              {isLocked && <span className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-md uppercase tracking-wider">Fixed</span>}
-                              <span className="font-bold text-sm">{cat}</span>
-                            </div>
-                            {isLocked ? (
-                              <span className="text-[10px] text-muted-foreground font-medium italic">System</span>
-                            ) : (
-                              <button onClick={() => setCategoryPendingDelete(isPending ? null : cat)} className={cn("p-1.5 rounded-lg transition-colors", isPending ? "text-rose-500 bg-rose-100" : "text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10")}>
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                          {isPending && (
-                            <div className="flex items-center justify-between px-3 py-2 bg-rose-50 border-t border-rose-200 gap-2">
-                              <span className="text-xs font-bold text-rose-600">Delete "{cat}"?</span>
-                              <div className="flex gap-2">
-                                <button onClick={() => setCategoryPendingDelete(null)} className="px-3 py-1 text-xs font-bold text-muted-foreground bg-white border border-border/50 rounded-lg hover:bg-muted transition-colors">Cancel</button>
-                                <button onClick={() => { confirmDeleteCategory(cat); setCategoryPendingDelete(null); }} className="px-3 py-1 text-xs font-bold text-white bg-rose-500 rounded-lg hover:bg-rose-600 transition-colors">Delete</button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                
-                <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
-                  <button 
-                    onClick={() => setIsManageCategoriesModalOpen(false)}
-                    className="px-5 py-2.5 bg-foreground text-background font-bold rounded-xl hover:bg-foreground/90 transition-colors"
-                  >
-                    Done
-                  </button>
-                </div>
-              </DialogContent>
-            </Dialog>
-            
-          </DialogContent>
-        </Dialog>
-
-        {/* Edit Project Modal */}
-        <Dialog open={isEditProjectModalOpen} onOpenChange={setIsEditProjectModalOpen}>
-          <DialogContent className="max-w-[90vw] md:max-w-[700px] p-0 overflow-hidden rounded-[2.5rem] border-border/60 shadow-2xl [&>button]:hidden bg-card flex flex-col h-[90vh] md:h-[550px] gap-0">
-            <div className="p-6 pb-4">
-              <div className="flex items-center justify-between px-6 md:px-8 py-6 border-b border-border/50 bg-muted/30">
-                <div>
-                  <h2 className="text-xl md:text-2xl font-black tracking-tight">Edit Project</h2>
-                  <p className="text-xs text-muted-foreground mt-1">Modify project details, stats targets, and budgets</p>
-                </div>
-                <DialogClose asChild>
-                  <button className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
-                    <X className="w-5 h-5" />
-                  </button>
-                </DialogClose>
+              {/* Footer */}
+              <div className="px-6 md:px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
+                <button onClick={() => { setIsNewProjectModalOpen(false); setActiveProjectTab('general'); setShowNewProjectErrors(false); }} className="px-5 py-2.5 rounded-xl font-bold text-muted-foreground hover:bg-muted transition-colors">
+                  Cancel
+                </button>
+                <button onClick={handleCreateProject} className="px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all">
+                  Create Project
+                </button>
               </div>
-            </div>
-            {editingProject && (
-              <div className="flex flex-row overflow-hidden flex-1" style={{ maxHeight: 'calc(90vh - 130px)' }}>
-                {/* Sidebar Tabs */}
-                <div className="w-44 shrink-0 border-r border-border/50 bg-muted/20 p-3 flex flex-col gap-1 overflow-y-auto">
-                  {([
-                    { id: 'general', label: 'General', icon: <FolderGit2 className="w-4 h-4" /> },
-                    { id: 'finance', label: 'Finance', icon: <IndianRupee className="w-4 h-4" /> },
-                    ...(editingProject.category === "Digital Marketing" ? [{ id: 'campaigns' as const, label: 'Campaigns', icon: <TrendingUp className="w-4 h-4" /> }] : []),
-                  ] as const).map(tab => (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveProjectTab(tab.id)}
-                      className={cn(
-                        "flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold transition-all text-left w-full",
-                        activeProjectTab === tab.id
-                          ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20"
-                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                      )}
-                    >
-                      {tab.icon}
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
 
-                {/* Tab Content */}
-                <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-5">
-                  {activeProjectTab === 'general' && (
-                    <>
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Project Name <span className="text-red-500">*</span></label>
-                        <input 
-                          type="text" 
-                          value={editingProject.name}
-                          onChange={(e) => setEditingProject({...editingProject, name: e.target.value})}
-                          className={"w-full px-4 py-3 bg-muted/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium " + (showEditProjectErrors && !editingProject.name.trim() ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
-                        />
+              {/* Nested Manage Categories Modal */}
+              <Dialog open={isManageCategoriesModalOpen} onOpenChange={setIsManageCategoriesModalOpen}>
+                <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+                  <div className="p-6 pb-4">
+                    <div className="flex items-center justify-between px-6 md:px-8 py-6 border-b border-border/50 bg-muted/30">
+                      <div>
+                        <h2 className="text-xl md:text-2xl font-black tracking-tight">Manage Categories</h2>
+
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Description</label>
-                        <textarea 
-                          value={editingProject.description || ""}
-                          onChange={(e) => setEditingProject({...editingProject, description: e.target.value})}
-                          placeholder="Brief project description..."
-                          rows={2}
-                          className="w-full px-4 py-3 bg-muted/50 border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium resize-none"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Start Date <span className="text-red-500">*</span></label>
-                          <DatePicker
-                            value={editingProject.startDate}
-                            onChange={(newStart) => {
-                              setEditingProject({
-                                ...editingProject, 
-                                startDate: newStart,
-                                endDate: editingProject.endDate < newStart ? newStart : editingProject.endDate
-                              });
-                            }}
-                            placeholder="Select start date"
-                            className={"w-full h-[42px] bg-muted/50 border rounded-xl font-medium " + (showEditProjectErrors && !editingProject.startDate ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">End Date <span className="text-red-500">*</span></label>
-                          <DatePicker
-                            value={editingProject.endDate}
-                            minDate={editingProject.startDate}
-                            onChange={(val) => setEditingProject({...editingProject, endDate: val})}
-                            placeholder="Select end date"
-                            className={"w-full h-[42px] bg-muted/50 border rounded-xl font-medium " + (showEditProjectErrors && !editingProject.endDate ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
-                          />
-                        </div>
-                      </div>
-                      <RenewalsManager
-                        ranges={editingProject.dateRanges || []}
-                        onChange={(dateRanges) => {
-                          const last = dateRanges[dateRanges.length - 1];
-                          setEditingProject({
-                            ...editingProject,
-                            dateRanges,
-                            ...(last && last.start_date && last.end_date ? { startDate: last.start_date, endDate: last.end_date } : {}),
-                          });
+                      <DialogClose asChild>
+                        <button className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
+                          <X className="w-5 h-5" />
+                        </button>
+                      </DialogClose>
+                    </div>
+                  </div>
+
+                  <div className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[70vh]">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        placeholder="e.g. E-Commerce"
+                        className={"flex-1 px-4 py-2.5 bg-muted/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium " + (showCategoryErrors && !newCategoryName.trim() ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleAddCategory();
                         }}
                       />
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Category <span className="text-red-500">*</span></label>
-                          <Select 
-                            value={editingProject.category || "Creative"}
-                            onValueChange={(val) => setEditingProject({...editingProject, category: val})}
-                          >
-                            <SelectTrigger className={cn("w-full h-[46px] px-4 bg-muted/50 border rounded-xl text-sm font-medium", showEditProjectErrors && !editingProject.category ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}>
-                              <SelectValue placeholder="Select Category" />
-                            </SelectTrigger>
-                            <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
-                              {FIXED_DEPARTMENTS.map(cat => (
-                                <SelectItem key={cat} value={cat} className="text-sm font-medium rounded-lg cursor-pointer">
-                                  {cat}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Status <span className="text-red-500">*</span></label>
-                          <Select 
-                            value={editingProject.status || "In Progress"}
-                            onValueChange={(val) => setEditingProject({...editingProject, status: val as ProjectStatus})}
-                          >
-                            <SelectTrigger className="w-full h-[46px] px-4 bg-muted/50 border border-border/50 rounded-xl text-sm font-medium">
-                              <SelectValue placeholder="Select Status" />
-                            </SelectTrigger>
-                            <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
-                              {["In Progress", "In Review", "Completed", "On Hold"].map(st => (
-                                <SelectItem key={st} value={st} className="text-sm font-medium rounded-lg cursor-pointer">
-                                  {st}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Priority</label>
-                          <Select 
-                            value={editingProject.priority || "Medium"} 
-                            onValueChange={(val) => setEditingProject({...editingProject, priority: val as any})} 
-                          >
-                            <SelectTrigger className="w-full h-[46px] px-4 bg-muted/50 border border-border rounded-xl text-sm font-medium">
-                              <SelectValue placeholder="Select Priority" />
-                            </SelectTrigger>
-                            <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
-                              {["Low", "Medium", "High", "Critical"].map(p => (
-                                <SelectItem key={p} value={p} className="text-sm font-medium rounded-lg cursor-pointer">
-                                  {p}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 flex justify-between">
-                            <span>Progress</span>
-                            <span className="text-foreground">{editingProject.progress}%</span>
-                          </label>
-                          <input 
-                            type="range" 
-                            min="0" max="100" 
-                            value={editingProject.progress}
-                            onChange={(e) => setEditingProject({...editingProject, progress: parseInt(e.target.value)})}
-                            className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary mt-3"
+                      <button
+                        onClick={handleAddCategory}
+                        className="px-4 py-2.5 bg-foreground text-background font-bold rounded-xl shadow-md hover:bg-foreground/90 transition-all disabled:opacity-50"
+                      >
+                        Add
+                      </button>
+                    </div>
+
+                    <div className="space-y-2 mt-4 max-h-[250px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-muted">
+                      {categories.map(cat => {
+                        const isLocked = LOCKED_CATEGORIES.includes(cat);
+                        const isPending = categoryPendingDelete === cat;
+                        return (
+                          <div key={cat} className={cn("flex flex-col border rounded-xl overflow-hidden transition-all", isLocked ? "bg-primary/5 border-primary/20" : isPending ? "bg-rose-50 border-rose-300" : "bg-muted/30 border-border/50")}>
+                            <div className="flex items-center justify-between p-3">
+                              <div className="flex items-center gap-2">
+                                {isLocked && <span className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-md uppercase tracking-wider">Fixed</span>}
+                                <span className="font-bold text-sm">{cat}</span>
+                              </div>
+                              {isLocked ? (
+                                <span className="text-[10px] text-muted-foreground font-medium italic">System</span>
+                              ) : (
+                                <button onClick={() => setCategoryPendingDelete(isPending ? null : cat)} className={cn("p-1.5 rounded-lg transition-colors", isPending ? "text-rose-500 bg-rose-100" : "text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10")}>
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                            {isPending && (
+                              <div className="flex items-center justify-between px-3 py-2 bg-rose-50 border-t border-rose-200 gap-2">
+                                <span className="text-xs font-bold text-rose-600">Delete "{cat}"?</span>
+                                <div className="flex gap-2">
+                                  <button onClick={() => setCategoryPendingDelete(null)} className="px-3 py-1 text-xs font-bold text-muted-foreground bg-white border border-border/50 rounded-lg hover:bg-muted transition-colors">Cancel</button>
+                                  <button onClick={() => { confirmDeleteCategory(cat); setCategoryPendingDelete(null); }} className="px-3 py-1 text-xs font-bold text-white bg-rose-500 rounded-lg hover:bg-rose-600 transition-colors">Delete</button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
+                    <button
+                      onClick={() => setIsManageCategoriesModalOpen(false)}
+                      className="px-5 py-2.5 bg-foreground text-background font-bold rounded-xl hover:bg-foreground/90 transition-colors"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+            </DialogContent>
+          </Dialog>
+
+          {/* Edit Project Modal */}
+          <Dialog open={isEditProjectModalOpen} onOpenChange={setIsEditProjectModalOpen}>
+            <DialogContent className="max-w-[90vw] md:max-w-[700px] p-0 overflow-hidden rounded-[2.5rem] border-border/60 shadow-2xl [&>button]:hidden bg-card flex flex-col h-[90vh] md:h-[550px] gap-0">
+              <div className="p-6 pb-4">
+                <div className="flex items-center justify-between px-6 md:px-8 py-6 border-b border-border/50 bg-muted/30">
+                  <div>
+                    <h2 className="text-xl md:text-2xl font-black tracking-tight">Edit Project</h2>
+                    <p className="text-xs text-muted-foreground mt-1">Modify project details, stats targets, and budgets</p>
+                  </div>
+                  <DialogClose asChild>
+                    <button className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
+                      <X className="w-5 h-5" />
+                    </button>
+                  </DialogClose>
+                </div>
+              </div>
+              {editingProject && (
+                <div className="flex flex-row overflow-hidden flex-1" style={{ maxHeight: 'calc(90vh - 130px)' }}>
+                  {/* Sidebar Tabs */}
+                  <div className="w-44 shrink-0 border-r border-border/50 bg-muted/20 p-3 flex flex-col gap-1 overflow-y-auto">
+                    {([
+                      { id: 'general', label: 'General', icon: <FolderGit2 className="w-4 h-4" /> },
+                      { id: 'finance', label: 'Finance', icon: <IndianRupee className="w-4 h-4" /> },
+                      ...(editingProject.category === "Digital Marketing" ? [{ id: 'campaigns' as const, label: 'Campaigns', icon: <TrendingUp className="w-4 h-4" /> }] : []),
+                    ] as const).map(tab => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveProjectTab(tab.id)}
+                        className={cn(
+                          "flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold transition-all text-left w-full",
+                          activeProjectTab === tab.id
+                            ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20"
+                            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                        )}
+                      >
+                        {tab.icon}
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Tab Content */}
+                  <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-5">
+                    {activeProjectTab === 'general' && (
+                      <>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Project Name <span className="text-red-500">*</span></label>
+                          <input
+                            type="text"
+                            value={editingProject.name}
+                            onChange={(e) => setEditingProject({ ...editingProject, name: e.target.value })}
+                            className={"w-full px-4 py-3 bg-muted/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium " + (showEditProjectErrors && !editingProject.name.trim() ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
                           />
                         </div>
-                      </div>
-                      {(editingProject.category === "Creative" || editingProject.category === "Digital Marketing") && (
-                        <div className="space-y-4 pt-4 border-t border-border/40 mt-4">
-                          <h4 className="text-xs font-bold text-foreground uppercase tracking-widest">Monthly Social Media Delivery Targets</h4>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Posts Target / Month</label>
-                              <input 
-                                type="number" 
-                                value={editingProject.post ?? 0} 
-                                onChange={(e) => setEditingProject({...editingProject, post: parseInt(e.target.value) || 0})} 
-                                placeholder="e.g. 8" 
-                                className="w-full px-3 h-[38px] bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 font-semibold" 
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Reels Target / Month</label>
-                              <input 
-                                type="number" 
-                                value={editingProject.reel ?? 0} 
-                                onChange={(e) => setEditingProject({...editingProject, reel: parseInt(e.target.value) || 0})} 
-                                placeholder="e.g. 8" 
-                                className="w-full px-3 h-[38px] bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 font-semibold" 
-                              />
-                            </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Description</label>
+                          <textarea
+                            value={editingProject.description || ""}
+                            onChange={(e) => setEditingProject({ ...editingProject, description: e.target.value })}
+                            placeholder="Brief project description..."
+                            rows={2}
+                            className="w-full px-4 py-3 bg-muted/50 border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium resize-none"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Start Date <span className="text-red-500">*</span></label>
+                            <DatePicker
+                              value={editingProject.startDate}
+                              onChange={(newStart) => {
+                                setEditingProject({
+                                  ...editingProject,
+                                  startDate: newStart,
+                                  endDate: editingProject.endDate < newStart ? newStart : editingProject.endDate
+                                });
+                              }}
+                              placeholder="Select start date"
+                              className={"w-full h-[42px] bg-muted/50 border rounded-xl font-medium " + (showEditProjectErrors && !editingProject.startDate ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">End Date <span className="text-red-500">*</span></label>
+                            <DatePicker
+                              value={editingProject.endDate}
+                              minDate={editingProject.startDate}
+                              onChange={(val) => setEditingProject({ ...editingProject, endDate: val })}
+                              placeholder="Select end date"
+                              className={"w-full h-[42px] bg-muted/50 border rounded-xl font-medium " + (showEditProjectErrors && !editingProject.endDate ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
+                            />
                           </div>
                         </div>
-                      )}
-                      {editingProject.category === "Digital Marketing" && (
-                        <div className="space-y-4 pt-4 border-t border-border/40 mt-4">
-                          <h4 className="text-xs font-bold text-foreground uppercase tracking-widest">Digital Marketing Stats</h4>
-                          <div className="grid grid-cols-3 gap-3">
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Reach Target</label>
-                              <input 
-                                type="text" 
-                                value={editingProject.reach || ""} 
-                                onChange={(e) => setEditingProject({...editingProject, reach: e.target.value})} 
-                                placeholder="e.g. 1.2M" 
-                                className="w-full px-3 h-[38px] bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20" 
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Leads Target</label>
-                              <input 
-                                type="text" 
-                                value={editingProject.leads || ""} 
-                                onChange={(e) => setEditingProject({...editingProject, leads: e.target.value})} 
-                                placeholder="e.g. 3,240" 
-                                className="w-full px-3 h-[38px] bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20" 
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">CPL (₹)</label>
-                              <input 
-                                type="text" 
-                                value={editingProject.cpl || ""} 
-                                onChange={(e) => setEditingProject({...editingProject, cpl: e.target.value})} 
-                                placeholder="e.g. 250" 
-                                className="w-full px-3 h-[38px] bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20" 
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-                  {activeProjectTab === 'finance' && (
-                    <>
-                      <div className="space-y-2">
-                        <label className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">Project Budget</label>
-                        <input type="text" value={editingProject.budget || ""} onChange={(e) => setEditingProject({...editingProject, budget: e.target.value.replace(/[^0-9]/g, "")})} placeholder="e.g. 10000" className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium" />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">Amount Received</label>
-                        <input type="text" value={editingProject.amountReceived || ""} onChange={(e) => setEditingProject({...editingProject, amountReceived: e.target.value.replace(/[^0-9]/g, "")})} placeholder="e.g. 5000" className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium" />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">Next Payment Date</label>
-                        <DatePicker
-                          value={editingProject.nextPaymentDate || ""}
-                          onChange={(val) => setEditingProject({...editingProject, nextPaymentDate: val})}
-                          placeholder="Select payment date"
-                          className="w-full h-[42px] bg-muted/50 border border-border rounded-xl text-sm font-medium"
+                        <RenewalsManager
+                          ranges={editingProject.dateRanges || []}
+                          onChange={(dateRanges) => {
+                            const last = dateRanges[dateRanges.length - 1];
+                            setEditingProject({
+                              ...editingProject,
+                              dateRanges,
+                              ...(last && last.start_date && last.end_date ? { startDate: last.start_date, endDate: last.end_date } : {}),
+                            });
+                          }}
                         />
-                      </div>
-                    </>
-                  )}
-                  {activeProjectTab === 'campaigns' && (
-                    <div className="space-y-4 text-left">
-                      <div>
-                        <h4 className="text-xs font-black uppercase tracking-wider text-foreground mb-1">Marketing Campaigns</h4>
-                        <p className="text-[10px] text-muted-foreground font-semibold">Manage active ad campaigns and performance targets</p>
-                      </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Category <span className="text-red-500">*</span></label>
+                            <Select
+                              value={editingProject.category || "Creative"}
+                              onValueChange={(val) => setEditingProject({ ...editingProject, category: val })}
+                            >
+                              <SelectTrigger className={cn("w-full h-[46px] px-4 bg-muted/50 border rounded-xl text-sm font-medium", showEditProjectErrors && !editingProject.category ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}>
+                                <SelectValue placeholder="Select Category" />
+                              </SelectTrigger>
+                              <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                                {FIXED_DEPARTMENTS.map(cat => (
+                                  <SelectItem key={cat} value={cat} className="text-sm font-medium rounded-lg cursor-pointer">
+                                    {cat}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Status <span className="text-red-500">*</span></label>
+                            <Select
+                              value={editingProject.status || "In Progress"}
+                              onValueChange={(val) => setEditingProject({ ...editingProject, status: val as ProjectStatus })}
+                            >
+                              <SelectTrigger className="w-full h-[46px] px-4 bg-muted/50 border border-border/50 rounded-xl text-sm font-medium">
+                                <SelectValue placeholder="Select Status" />
+                              </SelectTrigger>
+                              <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                                {["In Progress", "In Review", "Completed", "On Hold"].map(st => (
+                                  <SelectItem key={st} value={st} className="text-sm font-medium rounded-lg cursor-pointer">
+                                    {st}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Priority</label>
+                            <Select
+                              value={editingProject.priority || "Medium"}
+                              onValueChange={(val) => setEditingProject({ ...editingProject, priority: val as any })}
+                            >
+                              <SelectTrigger className="w-full h-[46px] px-4 bg-muted/50 border border-border rounded-xl text-sm font-medium">
+                                <SelectValue placeholder="Select Priority" />
+                              </SelectTrigger>
+                              <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                                {["Low", "Medium", "High", "Critical"].map(p => (
+                                  <SelectItem key={p} value={p} className="text-sm font-medium rounded-lg cursor-pointer">
+                                    {p}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 flex justify-between">
+                              <span>Progress</span>
+                              <span className="text-foreground">{editingProject.progress}%</span>
+                            </label>
+                            <input
+                              type="range"
+                              min="0" max="100"
+                              value={editingProject.progress}
+                              onChange={(e) => setEditingProject({ ...editingProject, progress: parseInt(e.target.value) })}
+                              className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary mt-3"
+                            />
+                          </div>
+                        </div>
+                        {(editingProject.category === "Creative" || editingProject.category === "Digital Marketing") && (
+                          <div className="space-y-4 pt-4 border-t border-border/40 mt-4">
+                            <h4 className="text-xs font-bold text-foreground uppercase tracking-widest">Monthly Social Media Delivery Targets</h4>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Posts Target / Month</label>
+                                <input
+                                  type="number"
+                                  value={editingProject.post ?? 0}
+                                  onChange={(e) => setEditingProject({ ...editingProject, post: parseInt(e.target.value) || 0 })}
+                                  placeholder="e.g. 8"
+                                  className="w-full px-3 h-[38px] bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 font-semibold"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Reels Target / Month</label>
+                                <input
+                                  type="number"
+                                  value={editingProject.reel ?? 0}
+                                  onChange={(e) => setEditingProject({ ...editingProject, reel: parseInt(e.target.value) || 0 })}
+                                  placeholder="e.g. 8"
+                                  className="w-full px-3 h-[38px] bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 font-semibold"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {editingProject.category === "Digital Marketing" && (
+                          <div className="space-y-4 pt-4 border-t border-border/40 mt-4">
+                            <h4 className="text-xs font-bold text-foreground uppercase tracking-widest">Digital Marketing Stats</h4>
+                            <div className="grid grid-cols-3 gap-3">
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Reach Target</label>
+                                <input
+                                  type="text"
+                                  value={editingProject.reach || ""}
+                                  onChange={(e) => setEditingProject({ ...editingProject, reach: e.target.value })}
+                                  placeholder="e.g. 1.2M"
+                                  className="w-full px-3 h-[38px] bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Leads Target</label>
+                                <input
+                                  type="text"
+                                  value={editingProject.leads || ""}
+                                  onChange={(e) => setEditingProject({ ...editingProject, leads: e.target.value })}
+                                  placeholder="e.g. 3,240"
+                                  className="w-full px-3 h-[38px] bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">CPL (₹)</label>
+                                <input
+                                  type="text"
+                                  value={editingProject.cpl || ""}
+                                  onChange={(e) => setEditingProject({ ...editingProject, cpl: e.target.value })}
+                                  placeholder="e.g. 250"
+                                  className="w-full px-3 h-[38px] bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                    {activeProjectTab === 'finance' && (
+                      <>
+                        <div className="space-y-2">
+                          <label className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">Project Budget</label>
+                          <input type="text" value={editingProject.budget || ""} onChange={(e) => setEditingProject({ ...editingProject, budget: e.target.value.replace(/[^0-9]/g, "") })} placeholder="e.g. 10000" className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">Amount Received</label>
+                          <input type="text" value={editingProject.amountReceived || ""} onChange={(e) => setEditingProject({ ...editingProject, amountReceived: e.target.value.replace(/[^0-9]/g, "") })} placeholder="e.g. 5000" className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">Next Payment Date</label>
+                          <DatePicker
+                            value={editingProject.nextPaymentDate || ""}
+                            onChange={(val) => setEditingProject({ ...editingProject, nextPaymentDate: val })}
+                            placeholder="Select payment date"
+                            className="w-full h-[42px] bg-muted/50 border border-border rounded-xl text-sm font-medium"
+                          />
+                        </div>
+                      </>
+                    )}
+                    {activeProjectTab === 'campaigns' && (
+                      <div className="space-y-4 text-left">
+                        <div>
+                          <h4 className="text-xs font-black uppercase tracking-wider text-foreground mb-1">Marketing Campaigns</h4>
+                          <p className="text-[10px] text-muted-foreground font-semibold">Manage active ad campaigns and performance targets</p>
+                        </div>
 
-                      <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
-                        {(editingProject.campaigns || []).map((c: any, index: number) => {
-                          const campaignObj = typeof c === 'string' ? { name: c, status: 'Active' } : { name: c.name || "", status: c.status || 'Active' };
-                          return (
-                            <div key={index} className="flex justify-between items-center p-3 bg-muted/20 border border-border/40 rounded-2xl group/campaign">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-bold text-foreground">{campaignObj.name}</span>
+                        <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                          {(editingProject.campaigns || []).map((c: any, index: number) => {
+                            const campaignObj = typeof c === 'string' ? { name: c, status: 'Active' } : { name: c.name || "", status: c.status || 'Active' };
+                            return (
+                              <div key={index} className="flex justify-between items-center p-3 bg-muted/20 border border-border/40 rounded-2xl group/campaign">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-bold text-foreground">{campaignObj.name}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const nextStatus = campaignObj.status === 'Active' ? 'Inactive' : 'Active';
+                                      const updated = [...(editingProject.campaigns || [])];
+                                      updated[index] = { name: campaignObj.name, status: nextStatus };
+                                      setEditingProject({ ...editingProject, campaigns: updated });
+                                      toast.success(`Campaign marked ${nextStatus}`);
+                                    }}
+                                    className={cn("px-2 py-0.5 text-[9px] font-black rounded-lg uppercase tracking-wider transition-colors",
+                                      campaignObj.status === 'Active' ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-muted text-muted-foreground hover:bg-muted-foreground/20")}
+                                  >
+                                    {campaignObj.status}
+                                  </button>
+                                </div>
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    const nextStatus = campaignObj.status === 'Active' ? 'Inactive' : 'Active';
-                                    const updated = [...(editingProject.campaigns || [])];
-                                    updated[index] = { name: campaignObj.name, status: nextStatus };
-                                    setEditingProject({ ...editingProject, campaigns: updated });
-                                    toast.success(`Campaign marked ${nextStatus}`);
+                                    setConfirmModalState({
+                                      isOpen: true,
+                                      title: "Remove Campaign",
+                                      description: "Are you sure you want to remove this campaign?",
+                                      itemName: campaignObj.name,
+                                      action: () => {
+                                        const updated = (editingProject.campaigns || []).filter((_: any, i: number) => i !== index);
+                                        setEditingProject({ ...editingProject, campaigns: updated });
+                                        setConfirmModalState(prev => ({ ...prev, isOpen: false }));
+                                        toast.success("Campaign removed");
+                                      }
+                                    });
                                   }}
-                                  className={cn("px-2 py-0.5 text-[9px] font-black rounded-lg uppercase tracking-wider transition-colors", 
-                                    campaignObj.status === 'Active' ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-muted text-muted-foreground hover:bg-muted-foreground/20")}
+                                  className="text-xs text-rose-500 hover:text-rose-700 font-extrabold opacity-0 group-hover/campaign:opacity-100 transition-opacity"
                                 >
-                                  {campaignObj.status}
+                                  Remove
                                 </button>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setConfirmModalState({
-                                    isOpen: true,
-                                    title: "Remove Campaign",
-                                    description: "Are you sure you want to remove this campaign?",
-                                    itemName: campaignObj.name,
-                                    action: () => {
-                                      const updated = (editingProject.campaigns || []).filter((_: any, i: number) => i !== index);
-                                      setEditingProject({ ...editingProject, campaigns: updated });
-                                      setConfirmModalState(prev => ({ ...prev, isOpen: false }));
-                                      toast.success("Campaign removed");
-                                    }
-                                  });
-                                }}
-                                className="text-xs text-rose-500 hover:text-rose-700 font-extrabold opacity-0 group-hover/campaign:opacity-100 transition-opacity"
-                              >
-                                Remove
-                              </button>
-                            </div>
-                          );
-                        })}
-                        {(editingProject.campaigns || []).length === 0 && (
-                          <p className="text-xs text-muted-foreground italic font-medium py-4 text-center">No campaigns created yet.</p>
-                        )}
-                      </div>
-
-                      <div className="flex gap-2 pt-2 border-t border-border/40">
-                        <input
-                          type="text"
-                          placeholder="Campaign name (e.g. Winter Sales Ads)..."
-                          id="edit_project_new_campaign_input"
-                          className="flex-1 px-4 py-2.5 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none font-semibold text-foreground"
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              const btn = document.getElementById("add_campaign_edit_modal_btn");
-                              if (btn) btn.click();
-                            }
-                          }}
-                        />
-                        <button
-                          type="button"
-                          id="add_campaign_edit_modal_btn"
-                          onClick={() => {
-                            const input = document.getElementById("edit_project_new_campaign_input") as HTMLInputElement;
-                            if (input && input.value.trim()) {
-                              const newCampaignName = input.value.trim();
-                              const currentList = editingProject.campaigns || [];
-                              const exists = currentList.some((c: any) => {
-                                const name = typeof c === 'string' ? c : (c.name || "");
-                                return name.toLowerCase() === newCampaignName.toLowerCase();
-                              });
-                              if (exists) {
-                                toast.error("Campaign name already exists");
-                                return;
-                              }
-                              setEditingProject({
-                                ...editingProject,
-                                campaigns: [...currentList, newCampaignName]
-                              });
-                              input.value = "";
-                              toast.success("Campaign added!");
-                            }
-                          }}
-                          className="px-4 py-2.5 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/95 transition-all shadow-sm flex items-center justify-center shrink-0"
-                        >
-                          Add
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-            <div className="px-6 md:px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
-              <button 
-                onClick={() => { setIsEditProjectModalOpen(false); setEditingProject(null); }}
-                className="px-5 py-2.5 rounded-xl font-bold text-muted-foreground hover:bg-muted transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={handleUpdateProject}
-                className="px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all disabled:opacity-50"
-              >
-                Save Changes
-              </button>
-            </div>
-            
-            {/* Nested Manage Categories Modal for Edit */}
-            <Dialog open={isManageCategoriesModalOpen} onOpenChange={setIsManageCategoriesModalOpen}>
-              <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
-                <div className="p-6 pb-4">
-                  <div className="flex items-center justify-between px-6 md:px-8 py-6 border-b border-border/50 bg-muted/30">
-          <div>
-            <h2 className="text-xl md:text-2xl font-black tracking-tight">Manage Categories</h2>
-            
-          </div>
-          <DialogClose asChild>
-            <button className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
-              <X className="w-5 h-5" />
-            </button>
-          </DialogClose>
-        </div>
-                </div>
-                
-                <div className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[70vh]">
-                  <div className="flex gap-2">
-                    <input 
-                      type="text" 
-                      value={newCategoryName}
-                      onChange={(e) => setNewCategoryName(e.target.value)}
-                      placeholder="e.g. E-Commerce"
-                      className={"flex-1 px-4 py-2.5 bg-muted/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium " + (showCategoryErrors && !newCategoryName.trim() ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleAddCategory();
-                      }}
-                    />
-                    <button 
-                      onClick={handleAddCategory}
-                      className="px-4 py-2.5 bg-foreground text-background font-bold rounded-xl shadow-md hover:bg-foreground/90 transition-all disabled:opacity-50"
-                    >
-                      Add
-                    </button>
-                  </div>
-                  
-                  <div className="space-y-2 mt-4 max-h-[250px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-muted">
-                    {categories.map(cat => {
-                      const isLocked = LOCKED_CATEGORIES.includes(cat);
-                      const isPending = categoryPendingDelete === cat;
-                      return (
-                        <div key={cat} className={cn("flex flex-col border rounded-xl overflow-hidden transition-all", isLocked ? "bg-primary/5 border-primary/20" : isPending ? "bg-rose-50 border-rose-300" : "bg-muted/30 border-border/50")}>
-                          <div className="flex items-center justify-between p-3">
-                            <div className="flex items-center gap-2">
-                              {isLocked && <span className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-md uppercase tracking-wider">Fixed</span>}
-                              <span className="font-bold text-sm">{cat}</span>
-                            </div>
-                            {isLocked ? (
-                              <span className="text-[10px] text-muted-foreground font-medium italic">System</span>
-                            ) : (
-                              <button onClick={() => setCategoryPendingDelete(isPending ? null : cat)} className={cn("p-1.5 rounded-lg transition-colors", isPending ? "text-rose-500 bg-rose-100" : "text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10")}>
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                          {isPending && (
-                            <div className="flex items-center justify-between px-3 py-2 bg-rose-50 border-t border-rose-200 gap-2">
-                              <span className="text-xs font-bold text-rose-600">Delete "{cat}"?</span>
-                              <div className="flex gap-2">
-                                <button onClick={() => setCategoryPendingDelete(null)} className="px-3 py-1 text-xs font-bold text-muted-foreground bg-white border border-border/50 rounded-lg hover:bg-muted transition-colors">Cancel</button>
-                                <button onClick={() => { confirmDeleteCategory(cat); setCategoryPendingDelete(null); }} className="px-3 py-1 text-xs font-bold text-white bg-rose-500 rounded-lg hover:bg-rose-600 transition-colors">Delete</button>
-                              </div>
-                            </div>
+                            );
+                          })}
+                          {(editingProject.campaigns || []).length === 0 && (
+                            <p className="text-xs text-muted-foreground italic font-medium py-4 text-center">No campaigns created yet.</p>
                           )}
                         </div>
-                      );
-                    })}
+
+                        <div className="flex gap-2 pt-2 border-t border-border/40">
+                          <input
+                            type="text"
+                            placeholder="Campaign name (e.g. Winter Sales Ads)..."
+                            id="edit_project_new_campaign_input"
+                            className="flex-1 px-4 py-2.5 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none font-semibold text-foreground"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const btn = document.getElementById("add_campaign_edit_modal_btn");
+                                if (btn) btn.click();
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            id="add_campaign_edit_modal_btn"
+                            onClick={() => {
+                              const input = document.getElementById("edit_project_new_campaign_input") as HTMLInputElement;
+                              if (input && input.value.trim()) {
+                                const newCampaignName = input.value.trim();
+                                const currentList = editingProject.campaigns || [];
+                                const exists = currentList.some((c: any) => {
+                                  const name = typeof c === 'string' ? c : (c.name || "");
+                                  return name.toLowerCase() === newCampaignName.toLowerCase();
+                                });
+                                if (exists) {
+                                  toast.error("Campaign name already exists");
+                                  return;
+                                }
+                                setEditingProject({
+                                  ...editingProject,
+                                  campaigns: [...currentList, newCampaignName]
+                                });
+                                input.value = "";
+                                toast.success("Campaign added!");
+                              }
+                            }}
+                            className="px-4 py-2.5 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/95 transition-all shadow-sm flex items-center justify-center shrink-0"
+                          >
+                            Add
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
-                
-                <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
-                  <button 
-                    onClick={() => setIsManageCategoriesModalOpen(false)}
-                    className="px-5 py-2.5 bg-foreground text-background font-bold rounded-xl hover:bg-foreground/90 transition-colors"
-                  >
-                    Done
-                  </button>
-                </div>
-              </DialogContent>
-            </Dialog>
+              )}
+              <div className="px-6 md:px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
+                <button
+                  onClick={() => { setIsEditProjectModalOpen(false); setEditingProject(null); }}
+                  className="px-5 py-2.5 rounded-xl font-bold text-muted-foreground hover:bg-muted transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUpdateProject}
+                  className="px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all disabled:opacity-50"
+                >
+                  Save Changes
+                </button>
+              </div>
 
-          </DialogContent>
-        </Dialog>
+              {/* Nested Manage Categories Modal for Edit */}
+              <Dialog open={isManageCategoriesModalOpen} onOpenChange={setIsManageCategoriesModalOpen}>
+                <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+                  <div className="p-6 pb-4">
+                    <div className="flex items-center justify-between px-6 md:px-8 py-6 border-b border-border/50 bg-muted/30">
+                      <div>
+                        <h2 className="text-xl md:text-2xl font-black tracking-tight">Manage Categories</h2>
+
+                      </div>
+                      <DialogClose asChild>
+                        <button className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
+                          <X className="w-5 h-5" />
+                        </button>
+                      </DialogClose>
+                    </div>
+                  </div>
+
+                  <div className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[70vh]">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        placeholder="e.g. E-Commerce"
+                        className={"flex-1 px-4 py-2.5 bg-muted/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium " + (showCategoryErrors && !newCategoryName.trim() ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleAddCategory();
+                        }}
+                      />
+                      <button
+                        onClick={handleAddCategory}
+                        className="px-4 py-2.5 bg-foreground text-background font-bold rounded-xl shadow-md hover:bg-foreground/90 transition-all disabled:opacity-50"
+                      >
+                        Add
+                      </button>
+                    </div>
+
+                    <div className="space-y-2 mt-4 max-h-[250px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-muted">
+                      {categories.map(cat => {
+                        const isLocked = LOCKED_CATEGORIES.includes(cat);
+                        const isPending = categoryPendingDelete === cat;
+                        return (
+                          <div key={cat} className={cn("flex flex-col border rounded-xl overflow-hidden transition-all", isLocked ? "bg-primary/5 border-primary/20" : isPending ? "bg-rose-50 border-rose-300" : "bg-muted/30 border-border/50")}>
+                            <div className="flex items-center justify-between p-3">
+                              <div className="flex items-center gap-2">
+                                {isLocked && <span className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-md uppercase tracking-wider">Fixed</span>}
+                                <span className="font-bold text-sm">{cat}</span>
+                              </div>
+                              {isLocked ? (
+                                <span className="text-[10px] text-muted-foreground font-medium italic">System</span>
+                              ) : (
+                                <button onClick={() => setCategoryPendingDelete(isPending ? null : cat)} className={cn("p-1.5 rounded-lg transition-colors", isPending ? "text-rose-500 bg-rose-100" : "text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10")}>
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                            {isPending && (
+                              <div className="flex items-center justify-between px-3 py-2 bg-rose-50 border-t border-rose-200 gap-2">
+                                <span className="text-xs font-bold text-rose-600">Delete "{cat}"?</span>
+                                <div className="flex gap-2">
+                                  <button onClick={() => setCategoryPendingDelete(null)} className="px-3 py-1 text-xs font-bold text-muted-foreground bg-white border border-border/50 rounded-lg hover:bg-muted transition-colors">Cancel</button>
+                                  <button onClick={() => { confirmDeleteCategory(cat); setCategoryPendingDelete(null); }} className="px-3 py-1 text-xs font-bold text-white bg-rose-500 rounded-lg hover:bg-rose-600 transition-colors">Delete</button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
+                    <button
+                      onClick={() => setIsManageCategoriesModalOpen(false)}
+                      className="px-5 py-2.5 bg-foreground text-background font-bold rounded-xl hover:bg-foreground/90 transition-colors"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+            </DialogContent>
+          </Dialog>
 
 
 
-      </div>
-      <ConfirmModal 
-        isOpen={confirmModalState.isOpen}
-        onClose={() => setConfirmModalState(prev => ({ ...prev, isOpen: false }))}
-        onConfirm={confirmModalState.action}
-        title={confirmModalState.title}
-        description={confirmModalState.description}
-        itemName={confirmModalState.itemName}
-      />
-      {renderSmmModals()}
-    </>
-  );
-}
+        </div>
+        <ConfirmModal
+          isOpen={confirmModalState.isOpen}
+          onClose={() => setConfirmModalState(prev => ({ ...prev, isOpen: false }))}
+          onConfirm={confirmModalState.action}
+          title={confirmModalState.title}
+          description={confirmModalState.description}
+          itemName={confirmModalState.itemName}
+        />
+        {renderSmmModals()}
+      </>
+    );
+  }
 
   return (
     <div className="w-full space-y-6 animate-in fade-in duration-500">
-      
+
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -11111,8 +11533,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             {showBrandDivision
               ? "Team members and their assigned brands."
               : PROJECT_TABS.includes(activeTab)
-              ? "Manage your projects across departments."
-              : "Manage your clients and view their projects."}
+                ? "Manage your projects across departments."
+                : "Manage your clients and view their projects."}
           </p>
         </div>
         <div className="flex items-center gap-3 w-full md:w-auto">
@@ -11141,7 +11563,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 <span>Status</span>
               </div>
               {TABS.map(tab => (
-                <DropdownMenuItem 
+                <DropdownMenuItem
                   key={tab}
                   onSelect={(e) => { e.preventDefault(); selectTab(tab); }}
                   className={cn(
@@ -11155,7 +11577,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               ))}
               <DropdownMenuSeparator className="bg-border/50 my-2" />
               <div className="px-2 py-1.5 text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">Sort By</div>
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 onSelect={(e) => { e.preventDefault(); setClientSort("name"); }}
                 className={cn(
                   "rounded-xl cursor-pointer py-2 focus:bg-primary/10 focus:text-primary font-medium transition-colors flex items-center justify-between",
@@ -11165,7 +11587,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 <span>A-Z Name</span>
                 {clientSort === "name" && <CheckCircle2 className="w-4 h-4" />}
               </DropdownMenuItem>
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 onSelect={(e) => { e.preventDefault(); setClientSort("budgetDesc"); }}
                 className={cn(
                   "rounded-xl cursor-pointer py-2 focus:bg-primary/10 focus:text-primary font-medium transition-colors flex items-center justify-between",
@@ -11175,7 +11597,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 <span>Highest Budget</span>
                 {clientSort === "budgetDesc" && <CheckCircle2 className="w-4 h-4" />}
               </DropdownMenuItem>
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 onSelect={(e) => { e.preventDefault(); setClientSort("projectsDesc"); }}
                 className={cn(
                   "rounded-xl cursor-pointer py-2 focus:bg-primary/10 focus:text-primary font-medium transition-colors flex items-center justify-between",
@@ -11188,13 +11610,13 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               <DropdownMenuSeparator className="bg-border/50 my-2" />
               <div className="px-2 py-1.5 text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">Project Category</div>
               {categories.map(cat => (
-                <DropdownMenuItem 
+                <DropdownMenuItem
                   key={cat}
-                  onSelect={(e) => { 
-                    e.preventDefault(); 
-                    setClientFilterCategories(prev => 
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    setClientFilterCategories(prev =>
                       prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
-                    ); 
+                    );
                   }}
                   className={cn(
                     "rounded-xl cursor-pointer py-2 focus:bg-primary/10 focus:text-primary font-medium transition-colors flex items-center justify-between",
@@ -11208,10 +11630,10 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               {(clientFilterCategories.length > 0 || clientSort !== "name" || activeTab !== TABS[0]) && (
                 <>
                   <DropdownMenuSeparator className="bg-border/50 my-2" />
-                  <DropdownMenuItem 
-                    onSelect={(e) => { 
-                      e.preventDefault(); 
-                      setClientFilterCategories([]); 
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      setClientFilterCategories([]);
                       setClientSort("name");
                       selectTab(TABS[0] ?? "Active Projects");
                     }}
@@ -11225,9 +11647,9 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           </DropdownMenu>
 
           {/* Feature 3: Pending Brands Button */}
-          <button 
+          <button
             type="button"
-            onClick={() => setIsPendingBrandsModalOpen(true)} 
+            onClick={() => setIsPendingBrandsModalOpen(true)}
             className="flex items-center gap-2 px-3.5 py-2.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-bold text-sm rounded-xl transition-all shadow-sm relative group"
             title="Brands awaiting Creative Team assignment"
           >
@@ -11344,31 +11766,41 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               {/* Role Filter */}
               <div className="flex items-center gap-1.5">
                 <span className="text-xs font-bold text-muted-foreground whitespace-nowrap">Role:</span>
-                <select
-                  value={brandDivisionRole}
-                  onChange={(e) => setBrandDivisionRole(e.target.value)}
-                  className="h-9 px-3 bg-muted/30 border border-border/60 rounded-xl text-xs font-semibold focus:outline-none text-foreground"
-                >
-                  <option value="All">All Roles</option>
-                  {CREATIVE_ROLES.map(r => (
-                    <option key={r.key} value={r.label}>{r.icon} {r.label}</option>
-                  ))}
-                </select>
+                <Select value={brandDivisionRole} onValueChange={(val) => setBrandDivisionRole(val)}>
+                  <SelectTrigger className="h-9 min-w-[140px] px-3 bg-muted/30 border border-border/60 rounded-xl text-xs font-semibold shadow-xs">
+                    <SelectValue placeholder="All Roles" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300] max-h-60">
+                    <SelectItem value="All" className="text-xs font-semibold rounded-lg cursor-pointer">
+                      All Roles
+                    </SelectItem>
+                    {CREATIVE_ROLES.map(r => (
+                      <SelectItem key={r.key} value={r.label} className="text-xs font-semibold rounded-lg cursor-pointer">
+                        {r.icon} {r.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Category Filter */}
               <div className="flex items-center gap-1.5">
                 <span className="text-xs font-bold text-muted-foreground whitespace-nowrap">Category:</span>
-                <select
-                  value={brandDivisionCategory}
-                  onChange={(e) => setBrandDivisionCategory(e.target.value)}
-                  className="h-9 px-3 bg-muted/30 border border-border/60 rounded-xl text-xs font-semibold focus:outline-none text-foreground"
-                >
-                  <option value="All">All Categories</option>
-                  {categories.map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
+                <Select value={brandDivisionCategory} onValueChange={(val) => setBrandDivisionCategory(val)}>
+                  <SelectTrigger className="h-9 min-w-[140px] px-3 bg-muted/30 border border-border/60 rounded-xl text-xs font-semibold shadow-xs">
+                    <SelectValue placeholder="All Categories" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                    <SelectItem value="All" className="text-xs font-semibold rounded-lg cursor-pointer">
+                      All Categories
+                    </SelectItem>
+                    {categories.map(c => (
+                      <SelectItem key={c} value={c} className="text-xs font-semibold rounded-lg cursor-pointer">
+                        {c}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {(brandDivisionSearch || brandDivisionRole !== "All" || brandDivisionCategory !== "All") && (
@@ -11515,10 +11947,10 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               project.status === "Completed"
                 ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
                 : project.status === "In Review"
-                ? "bg-amber-500/10 text-amber-600 border-amber-500/30"
-                : project.status === "On Hold"
-                ? "bg-rose-500/10 text-rose-500 border-rose-500/30"
-                : "bg-blue-500/10 text-blue-600 border-blue-500/30";
+                  ? "bg-amber-500/10 text-amber-600 border-amber-500/30"
+                  : project.status === "On Hold"
+                    ? "bg-rose-500/10 text-rose-500 border-rose-500/30"
+                    : "bg-blue-500/10 text-blue-600 border-blue-500/30";
             return (
               <div
                 key={project.id}
@@ -11643,8 +12075,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         /* Clients Grid */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
           {filteredClients.map((client) => (
-            <div 
-              key={client.id} 
+            <div
+              key={client.id}
               onClick={(e) => {
                 const target = e.target as HTMLElement;
                 if (target.closest('button') || target.closest('[role="menuitem"]')) {
@@ -11661,18 +12093,18 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               <div className="flex justify-between items-start mb-5 relative z-10">
                 {/* K5: highlighted logo */}
                 <BrandLogo src={client.logo} alt={client.name} size="w-20 h-20" />
-                
+
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button className="p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground rounded-lg transition-colors outline-none focus:ring-2 focus:ring-primary/20 bg-background/50 backdrop-blur-sm">
                       <MoreHorizontal className="w-5 h-5" />
                     </button>
                   </DropdownMenuTrigger>
-                   <DropdownMenuContent 
-                    align="end" 
+                  <DropdownMenuContent
+                    align="end"
                     className="w-48 rounded-2xl p-2 border-border/60 shadow-xl bg-background/95 backdrop-blur-md"
                   >
-                    <DropdownMenuItem 
+                    <DropdownMenuItem
                       onSelect={() => {
                         setTimeout(() => {
                           setEditingClient(client);
@@ -11685,7 +12117,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     </DropdownMenuItem>
                     <DropdownMenuSeparator className="bg-border/50" />
                     {client.status === 'Archived' ? (
-                      <DropdownMenuItem 
+                      <DropdownMenuItem
                         onSelect={() => {
                           setTimeout(() => {
                             unarchiveClient(client);
@@ -11696,7 +12128,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         <ArchiveRestore className="w-4 h-4 mr-2" /> Unarchive Client
                       </DropdownMenuItem>
                     ) : (
-                      <DropdownMenuItem 
+                      <DropdownMenuItem
                         onSelect={() => {
                           setTimeout(() => {
                             archiveClient(client);
@@ -11707,7 +12139,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         <Archive className="w-4 h-4 mr-2" /> Archive Client
                       </DropdownMenuItem>
                     )}
-                    <DropdownMenuItem 
+                    <DropdownMenuItem
                       onSelect={() => {
                         setTimeout(() => {
                           confirmDeleteClient(client);
@@ -11723,7 +12155,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
               <div className="relative z-10 mb-6 flex-grow">
                 <h3 className="text-xl font-black tracking-tight text-foreground line-clamp-2 leading-tight group-hover:text-primary transition-colors">{client.name}</h3>
-                
+
                 <div className="flex flex-wrap items-center gap-3 mt-3">
                   <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-1 bg-primary/10 text-primary rounded-md">
                     <Briefcase className="w-3.5 h-3.5" /> {projects.filter(p => p.clientId === client.id).length} Active Projects
@@ -11777,14 +12209,14 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               <h2 className="text-2xl font-black tracking-tight">Add Client</h2>
               <p className="text-sm text-muted-foreground mt-1">Complete all sections to register a new client.</p>
             </div>
-            <button 
+            <button
               onClick={() => { setIsNewClientModalOpen(false); setNewClientFormData(defaultClientForm); setShowNewClientErrors(false); setActiveClientTab('general'); }}
               className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
-          
+
           <div className="flex flex-col md:flex-row h-[70vh] max-h-[800px]">
             {/* Sidebar Tabs */}
             <div className="w-full md:w-64 bg-muted/20 border-r border-border/50 p-4 space-y-2 overflow-y-auto shrink-0">
@@ -11798,8 +12230,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     onClick={() => setActiveClientTab(tab.id as ClientTab)}
                     className={cn(
                       "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all",
-                      isActive 
-                        ? "bg-primary text-primary-foreground shadow-md" 
+                      isActive
+                        ? "bg-primary text-primary-foreground shadow-md"
                         : "text-muted-foreground hover:bg-muted hover:text-foreground"
                     )}
                   >
@@ -11822,21 +12254,21 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
                         <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Contact Person Name <span className="text-red-500">*</span></label>
-                        <input 
+                        <input
                           type="text" value={newClientFormData.name} onChange={(e) => handleClientFormChange('name', e.target.value)} placeholder="e.g. John Doe"
                           className={cn("w-full px-4 h-[42px] bg-muted/50 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all", showNewClientErrors && !newClientFormData.name.trim() ? "border-red-500 ring-1 ring-red-500" : "border-border")}
                         />
                       </div>
                       <div className="space-y-2">
                         <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Phone Number <span className="text-red-500">*</span></label>
-                        <input 
+                        <input
                           type="text" value={newClientFormData.phone} onChange={(e) => handleClientFormChange('phone', e.target.value)} placeholder="+91 00000 00000"
                           className={cn("w-full px-4 h-[42px] bg-muted/50 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all", showNewClientErrors && !newClientFormData.phone?.trim() ? "border-red-500 ring-1 ring-red-500" : "border-border")}
                         />
                       </div>
                       <div className="space-y-2 md:col-span-2">
                         <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Email Address</label>
-                        <input 
+                        <input
                           type="email" value={newClientFormData.email} onChange={(e) => handleClientFormChange('email', e.target.value)} placeholder="client@example.com"
                           className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                         />
@@ -11853,28 +12285,28 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2 md:col-span-2">
                         <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Company Name <span className="text-red-500">*</span></label>
-                        <input 
+                        <input
                           type="text" value={newClientFormData.companyName} onChange={(e) => handleClientFormChange('companyName', e.target.value)} placeholder="e.g. Acme Corp"
                           className={cn("w-full px-4 h-[42px] bg-muted/50 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all", showNewClientErrors && !newClientFormData.companyName?.trim() ? "border-red-500 ring-1 ring-red-500" : "border-border")}
                         />
                       </div>
                       <div className="space-y-2 md:col-span-2">
                         <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Address</label>
-                        <input 
+                        <input
                           type="text" value={newClientFormData.address} onChange={(e) => handleClientFormChange('address', e.target.value)} placeholder="123 Main St, City"
                           className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                         />
                       </div>
                       <div className="space-y-2">
                         <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">State / UT</label>
-                        <input 
+                        <input
                           type="text" value={newClientFormData.state} onChange={(e) => handleClientFormChange('state', e.target.value)} placeholder="e.g. MH"
                           className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                         />
                       </div>
                       <div className="space-y-2">
                         <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">GSTIN</label>
-                        <input 
+                        <input
                           type="text" value={newClientFormData.gstin} onChange={(e) => handleClientFormChange('gstin', e.target.value)} placeholder="e.g. 22AAAAA0000A1Z5"
                           className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                         />
@@ -11917,7 +12349,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         {/* K3: jetla departments select, etla projects auto-create thashe */}
                         {parseDepartments(newClientFormData.department).length > 0 && (
                           <p className="text-[11px] font-semibold text-primary bg-primary/5 border border-primary/20 rounded-xl px-3 py-2">
-                            {parseDepartments(newClientFormData.department).length} department{parseDepartments(newClientFormData.department).length > 1 ? "s" : ""} selected → {parseDepartments(newClientFormData.department).length} project{parseDepartments(newClientFormData.department).length > 1 ? "s" : ""} auto-create thashe ({parseDepartments(newClientFormData.department).join(", ")})
+                            {parseDepartments(newClientFormData.department).length} department{parseDepartments(newClientFormData.department).length > 1 ? "s" : ""} selected → {parseDepartments(newClientFormData.department).length} project{parseDepartments(newClientFormData.department).length > 1 ? "s" : ""} will be auto-created ({parseDepartments(newClientFormData.department).join(", ")})
                           </p>
                         )}
                       </div>
@@ -11971,16 +12403,16 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               </div>
             </div>
           </div>
-          
+
           {/* Footer Actions */}
           <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-between gap-3 mt-auto shrink-0">
-            <button 
+            <button
               onClick={() => { setIsNewClientModalOpen(false); setNewClientFormData(defaultClientForm); setShowNewClientErrors(false); setActiveClientTab('general'); }}
               className="px-5 py-2.5 rounded-xl font-bold text-muted-foreground hover:bg-muted transition-colors"
             >
               Cancel
             </button>
-            <button 
+            <button
               onClick={handleCreateClient}
               className="px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all"
             >
@@ -12008,21 +12440,21 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             <div className="space-y-2">
               <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Client *</label>
               <div className="flex gap-2">
-                <select
+                <SearchableSelect
+                  options={clients.filter(c => c.status === "Active").sort((a, b) => a.name.localeCompare(b.name)).map(c => ({ value: c.id, label: c.name }))}
                   value={landingProjectClientId}
-                  onChange={(e) => setLandingProjectClientId(e.target.value)}
-                  className={"flex-1 px-4 h-[42px] bg-muted/50 border rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all " + (showNewProjectErrors && !landingProjectClientId ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
-                >
-                  <option value="">Select client...</option>
-                  {clients.filter(c => c.status === "Active").sort((a, b) => a.name.localeCompare(b.name)).map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
+                  onChange={(val) => setLandingProjectClientId(val)}
+                  placeholder="Select client..."
+                  className={cn(
+                    "flex-1 h-[42px] bg-muted/50 border rounded-xl text-sm font-medium",
+                    showNewProjectErrors && !landingProjectClientId ? "border-red-500 ring-1 ring-red-500" : "border-border/50"
+                  )}
+                />
                 <button
                   type="button"
                   onClick={() => { setIsLandingProjectOpen(false); setIsNewClientModalOpen(true); }}
                   className="px-4 h-[42px] bg-primary/10 text-primary font-bold rounded-xl hover:bg-primary/20 transition-all text-sm whitespace-nowrap"
-                  title="Navo client banavo"
+                  title="Create new client"
                 >
                   + New
                 </button>
@@ -12040,16 +12472,21 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             </div>
             <div className="space-y-2">
               <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Department *</label>
-              <select
-                value={newProjectCategory}
-                onChange={(e) => setNewProjectCategory(e.target.value)}
-                className={"w-full px-4 h-[42px] bg-muted/50 border rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all " + (showNewProjectErrors && !newProjectCategory ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
-              >
-                <option value="">Select department...</option>
-                {categories.map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
+              <Select value={newProjectCategory} onValueChange={(val) => setNewProjectCategory(val)}>
+                <SelectTrigger className={cn(
+                  "w-full h-[42px] bg-muted/50 border rounded-xl text-sm font-medium",
+                  showNewProjectErrors && !newProjectCategory ? "border-red-500 ring-1 ring-red-500" : "border-border/50"
+                )}>
+                  <SelectValue placeholder="Select department..." />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                  {categories.map(cat => (
+                    <SelectItem key={cat} value={cat} className="text-sm font-medium rounded-lg cursor-pointer">
+                      {cat}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -12106,14 +12543,14 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               <h2 className="text-2xl font-black tracking-tight">Edit Client</h2>
               <p className="text-sm text-muted-foreground mt-1">Update existing client information.</p>
             </div>
-            <button 
+            <button
               onClick={() => { setIsEditClientModalOpen(false); setEditingClient(null); setActiveClientTab('general'); }}
               className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
-          
+
           {editingClient && (
             <div className="flex flex-col md:flex-row h-[70vh] max-h-[800px]">
               {/* Sidebar Tabs */}
@@ -12128,8 +12565,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       onClick={() => setActiveClientTab(tab.id as ClientTab)}
                       className={cn(
                         "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all",
-                        isActive 
-                          ? "bg-primary text-primary-foreground shadow-md" 
+                        isActive
+                          ? "bg-primary text-primary-foreground shadow-md"
                           : "text-muted-foreground hover:bg-muted hover:text-foreground"
                       )}
                     >
@@ -12152,22 +12589,22 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
                           <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Contact Person Name <span className="text-red-500">*</span></label>
-                          <input 
-                            type="text" value={editingClient.name || ''} onChange={(e) => handleClientFormChange('name', e.target.value, true)} 
+                          <input
+                            type="text" value={editingClient.name || ''} onChange={(e) => handleClientFormChange('name', e.target.value, true)}
                             className={cn("w-full px-4 h-[42px] bg-muted/50 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all", showEditClientErrors && !editingClient.name?.trim() ? "border-red-500 ring-1 ring-red-500" : "border-border")}
                           />
                         </div>
                         <div className="space-y-2">
                           <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Phone Number <span className="text-red-500">*</span></label>
-                          <input 
-                            type="text" value={editingClient.phone || ''} onChange={(e) => handleClientFormChange('phone', e.target.value, true)} 
+                          <input
+                            type="text" value={editingClient.phone || ''} onChange={(e) => handleClientFormChange('phone', e.target.value, true)}
                             className={cn("w-full px-4 h-[42px] bg-muted/50 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all", showEditClientErrors && !editingClient.phone?.trim() ? "border-red-500 ring-1 ring-red-500" : "border-border")}
                           />
                         </div>
                         <div className="space-y-2 md:col-span-2">
                           <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Email Address</label>
-                          <input 
-                            type="email" value={editingClient.email || ''} onChange={(e) => handleClientFormChange('email', e.target.value, true)} 
+                          <input
+                            type="email" value={editingClient.email || ''} onChange={(e) => handleClientFormChange('email', e.target.value, true)}
                             className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                           />
                         </div>
@@ -12183,29 +12620,29 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2 md:col-span-2">
                           <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Company Name <span className="text-red-500">*</span></label>
-                          <input 
-                            type="text" value={editingClient.companyName || ''} onChange={(e) => handleClientFormChange('companyName', e.target.value, true)} 
+                          <input
+                            type="text" value={editingClient.companyName || ''} onChange={(e) => handleClientFormChange('companyName', e.target.value, true)}
                             className={cn("w-full px-4 h-[42px] bg-muted/50 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all", showEditClientErrors && !editingClient.companyName?.trim() ? "border-red-500 ring-1 ring-red-500" : "border-border")}
                           />
                         </div>
                         <div className="space-y-2 md:col-span-2">
                           <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Address</label>
-                          <input 
-                            type="text" value={editingClient.address || ''} onChange={(e) => handleClientFormChange('address', e.target.value, true)} 
+                          <input
+                            type="text" value={editingClient.address || ''} onChange={(e) => handleClientFormChange('address', e.target.value, true)}
                             className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                           />
                         </div>
                         <div className="space-y-2">
                           <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">State / UT</label>
-                          <input 
-                            type="text" value={editingClient.state || ''} onChange={(e) => handleClientFormChange('state', e.target.value, true)} 
+                          <input
+                            type="text" value={editingClient.state || ''} onChange={(e) => handleClientFormChange('state', e.target.value, true)}
                             className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                           />
                         </div>
                         <div className="space-y-2">
                           <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">GSTIN</label>
-                          <input 
-                            type="text" value={editingClient.gstin || ''} onChange={(e) => handleClientFormChange('gstin', e.target.value, true)} 
+                          <input
+                            type="text" value={editingClient.gstin || ''} onChange={(e) => handleClientFormChange('gstin', e.target.value, true)}
                             className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                           />
                         </div>
@@ -12225,24 +12662,24 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                 <button
                                   key={dept}
                                   type="button"
-                                onClick={() => toggleClientDepartment(dept, true)}
-                                className={cn(
-                                  "flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-xs font-bold transition-all text-left",
-                                  isSelected
-                                    ? "bg-primary/10 border-primary text-primary shadow-sm"
-                                    : "bg-muted/40 border-border/70 text-muted-foreground hover:bg-muted/80 hover:text-foreground hover:border-border"
-                                )}
-                              >
-                                <span className="truncate">{dept}</span>
-                                <div className={cn(
-                                  "w-4 h-4 rounded-md flex items-center justify-center shrink-0 border ml-1.5 transition-colors",
-                                  isSelected ? "bg-primary border-primary text-primary-foreground" : "border-border bg-background"
-                                )}>
-                                  {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
-                                </div>
-                              </button>
-                            );
-                          })}
+                                  onClick={() => toggleClientDepartment(dept, true)}
+                                  className={cn(
+                                    "flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-xs font-bold transition-all text-left",
+                                    isSelected
+                                      ? "bg-primary/10 border-primary text-primary shadow-sm"
+                                      : "bg-muted/40 border-border/70 text-muted-foreground hover:bg-muted/80 hover:text-foreground hover:border-border"
+                                  )}
+                                >
+                                  <span className="truncate">{dept}</span>
+                                  <div className={cn(
+                                    "w-4 h-4 rounded-md flex items-center justify-center shrink-0 border ml-1.5 transition-colors",
+                                    isSelected ? "bg-primary border-primary text-primary-foreground" : "border-border bg-background"
+                                  )}>
+                                    {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                                  </div>
+                                </button>
+                              );
+                            })}
                           </div>
                           {/* K3: dept add/remove → per-dept projects auto add/remove thashe */}
                           {editingClient && parseDepartments(editingClient.department).length > 0 && (
@@ -12302,16 +12739,16 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               </div>
             </div>
           )}
-          
+
           {/* Footer Actions */}
           <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-between gap-3 mt-auto shrink-0">
-            <button 
+            <button
               onClick={() => { setIsEditClientModalOpen(false); setEditingClient(null); setActiveClientTab('general'); }}
               className="px-5 py-2.5 rounded-xl font-bold text-muted-foreground hover:bg-muted transition-colors"
             >
               Cancel
             </button>
-            <button 
+            <button
               onClick={handleUpdateClient}
               className="px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all"
             >
@@ -12321,7 +12758,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         </DialogContent>
       </Dialog>
 
-      <ConfirmModal 
+      <ConfirmModal
         isOpen={confirmModalState.isOpen}
         onClose={() => setConfirmModalState(prev => ({ ...prev, isOpen: false }))}
         onConfirm={confirmModalState.action}
