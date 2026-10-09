@@ -1,76 +1,129 @@
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Settings2 } from "lucide-react";
+import { Plus, Trash2, Settings2, Pencil, Loader2 } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
-import { moveToRecycleBin } from "@/lib/recycle-bin";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";
+import { api } from "@/lib/api";
+import { toast } from "@/lib/toast";
 
-interface DocType {
+export interface DocType {
   id: string;
   name: string;
   description: string;
   isRequired: boolean;
 }
 
-const DEFAULT_TYPES: DocType[] = [
-  { id: "t1", name: "Aadhaar Card", description: "Government ID Proof", isRequired: true },
-  { id: "t2", name: "PAN Card", description: "Tax ID Proof", isRequired: true },
-  { id: "t3", name: "Degree Certificate", description: "Highest Education Proof", isRequired: false },
-  { id: "t4", name: "Relieving Letter", description: "From previous employer", isRequired: false },
-];
-
 export function DocumentTypes() {
-  const [types, setTypes] = useState<DocType[]>(() => {
-    if (typeof window !== "undefined") {
-      const stored = (typeof window !== 'undefined' ? localStorage.getItem("documentTypes") : null);
-      return stored ? JSON.parse(stored) : DEFAULT_TYPES;
-    }
-    return DEFAULT_TYPES;
-  });
+  const [types, setTypes] = useState<DocType[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  useEffect(() => {
-    localStorage.setItem("documentTypes", JSON.stringify(types));
-  }, [types]);
+  // Form States
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingType, setEditingType] = useState<DocType | null>(null);
+  const [typeName, setTypeName] = useState("");
+  const [typeDesc, setTypeDesc] = useState("");
+  const [typeRequired, setTypeRequired] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [isAddMode, setIsAddMode] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newDesc, setNewDesc] = useState("");
-  const [newRequired, setNewRequired] = useState(false);
-
+  // Confirm Delete Modal State
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     idToDelete?: string;
     nameToDelete?: string;
   }>({ isOpen: false });
 
-  const handleAddType = () => {
-    if (!newName.trim()) return;
-    const newType: DocType = {
-      id: `t${Date.now()}`,
-      name: newName.trim(),
-      description: newDesc.trim(),
-      isRequired: newRequired
-    };
-    setTypes([...types, newType]);
-    setNewName("");
-    setNewDesc("");
-    setNewRequired(false);
-    setIsAddMode(false);
+  // Fetch document types from backend
+  const fetchDocumentTypes = async () => {
+    setIsLoading(true);
+    try {
+      const res = await api.get("/document-types", { showLoader: false, showErrorToast: false });
+      const rawTypes = Array.isArray(res) ? res : res?.items || res?.data || [];
+      
+      const mapped: DocType[] = rawTypes.map((item: any) => ({
+        id: String(item._id || item.id),
+        name: item.name || "Document Type",
+        description: item.description || "",
+        isRequired: Boolean(item.is_mandatory || item.isRequired)
+      }));
+
+      setTypes(mapped);
+    } catch (err: any) {
+      console.error("Failed to load document types:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDocumentTypes();
+  }, []);
+
+  const openAddForm = () => {
+    setEditingType(null);
+    setTypeName("");
+    setTypeDesc("");
+    setTypeRequired(false);
+    setIsFormOpen(true);
+  };
+
+  const openEditForm = (type: DocType) => {
+    setEditingType(type);
+    setTypeName(type.name);
+    setTypeDesc(type.description || "");
+    setTypeRequired(type.isRequired);
+    setIsFormOpen(true);
+  };
+
+  const handleSaveType = async () => {
+    if (!typeName.trim()) {
+      toast.error("Document type name is required");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const payload = {
+        name: typeName.trim(),
+        description: typeDesc.trim() || undefined,
+        is_mandatory: typeRequired
+      };
+
+      if (editingType) {
+        await api.put(`/document-types/${editingType.id}`, payload);
+        toast.success(`Document type "${typeName}" updated successfully!`);
+      } else {
+        await api.post("/document-types", payload);
+        toast.success(`New document type "${typeName}" created successfully!`);
+      }
+
+      setIsFormOpen(false);
+      setEditingType(null);
+      setTypeName("");
+      setTypeDesc("");
+      setTypeRequired(false);
+      await fetchDocumentTypes();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save document type");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const confirmDelete = (id: string, name: string) => {
     setConfirmModal({ isOpen: true, idToDelete: id, nameToDelete: name });
   };
 
-  const executeDelete = () => {
-    if (confirmModal.idToDelete) {
-      const type = types.find(t => t.id === confirmModal.idToDelete);
-      if (type) {
-        moveToRecycleBin('Document Type', type.name, type, 'documentTypes');
-      }
-      setTypes(types.filter(t => t.id !== confirmModal.idToDelete));
+  const executeDelete = async () => {
+    if (!confirmModal.idToDelete) return;
+    try {
+      await api.delete(`/document-types/${confirmModal.idToDelete}`);
+      toast.success(`Document type "${confirmModal.nameToDelete}" deleted successfully`);
+      await fetchDocumentTypes();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete document type");
+    } finally {
+      setConfirmModal({ isOpen: false });
     }
-    setConfirmModal({ isOpen: false });
   };
 
   const { items: sortedTypes, requestSort, sortConfig } = useSortableData(types);
@@ -79,34 +132,36 @@ export function DocumentTypes() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold">Document Types Configuration</h2>
+          <h2 className="text-xl font-extrabold text-foreground">Document Types Configuration</h2>
           <p className="text-sm text-muted-foreground mt-1">Manage the types of documents employees can upload.</p>
         </div>
-        {!isAddMode && (
-          <button
-            onClick={() => setIsAddMode(true)}
-            className="px-4 py-2.5 min-h-[44px] sm:min-h-0 w-full sm:w-auto bg-primary text-primary-foreground hover:bg-primary/90 font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm"
-          >
-            <Plus className="w-4 h-4" />
-            Add Type
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {!isFormOpen && (
+            <button
+              onClick={openAddForm}
+              className="px-4 py-2.5 min-h-[44px] sm:min-h-0 w-full sm:w-auto bg-primary text-primary-foreground hover:bg-primary/90 font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              Add Type
+            </button>
+          )}
+        </div>
       </div>
 
-      {isAddMode && (
+      {isFormOpen && (
         <div className="bg-card border border-border/50 rounded-2xl p-6 shadow-sm animate-in slide-in-from-top-4">
-          <h3 className="font-bold mb-4 flex items-center gap-2">
+          <h3 className="font-bold mb-4 flex items-center gap-2 text-foreground">
             <Settings2 className="w-5 h-5 text-primary" />
-            New Document Type
+            {editingType ? "Edit Document Type" : "New Document Type"}
           </h3>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Type Name</label>
+              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Type Name *</label>
               <input
                 type="text"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder="e.g. Passport"
+                value={typeName}
+                onChange={(e) => setTypeName(e.target.value)}
+                placeholder="e.g. Passport / Aadhaar Card"
                 className="w-full px-4 py-2.5 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium"
               />
             </div>
@@ -114,8 +169,8 @@ export function DocumentTypes() {
               <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Description</label>
               <input
                 type="text"
-                value={newDesc}
-                onChange={(e) => setNewDesc(e.target.value)}
+                value={typeDesc}
+                onChange={(e) => setTypeDesc(e.target.value)}
                 placeholder="Brief description"
                 className="w-full px-4 py-2.5 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium"
               />
@@ -125,25 +180,30 @@ export function DocumentTypes() {
             <input 
               type="checkbox" 
               id="req"
-              checked={newRequired}
-              onChange={(e) => setNewRequired(e.target.checked)}
-              className="w-4 h-4 rounded border-border/50 text-primary focus:ring-primary/20"
+              checked={typeRequired}
+              onChange={(e) => setTypeRequired(e.target.checked)}
+              className="w-4 h-4 rounded border-border/50 text-primary focus:ring-primary/20 cursor-pointer"
             />
-            <label htmlFor="req" className="text-sm font-medium cursor-pointer">Mark as mandatory for all employees</label>
+            <label htmlFor="req" className="text-sm font-semibold text-foreground cursor-pointer select-none">
+              Mark as mandatory for all employees
+            </label>
           </div>
           <div className="mt-6 flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
             <button
-              onClick={() => setIsAddMode(false)}
-              className="px-4 py-2 min-h-[44px] w-full sm:w-auto text-sm font-bold text-muted-foreground hover:bg-muted/50 rounded-lg transition-colors"
+              onClick={() => {
+                setIsFormOpen(false);
+                setEditingType(null);
+              }}
+              className="px-4 py-2 min-h-[44px] w-full sm:w-auto text-sm font-bold text-muted-foreground hover:bg-muted/50 rounded-xl transition-colors"
             >
               Cancel
             </button>
             <button
-              onClick={handleAddType}
-              disabled={!newName.trim()}
-              className="px-6 py-2 min-h-[44px] w-full sm:w-auto text-sm font-bold bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg transition-colors disabled:opacity-50"
+              onClick={handleSaveType}
+              disabled={!typeName.trim() || isSubmitting}
+              className="px-6 py-2 min-h-[44px] w-full sm:w-auto text-sm font-bold bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              Save Type
+              {isSubmitting ? "Saving..." : editingType ? "Update Type" : "Save Type"}
             </button>
           </div>
         </div>
@@ -161,10 +221,17 @@ export function DocumentTypes() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
-              {sortedTypes.length === 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td colSpan={4} className="p-12 text-center text-muted-foreground">
+                    <Loader2 className="w-6 h-6 mx-auto animate-spin mb-2 text-primary" />
+                    <p className="font-bold text-sm">Loading document types...</p>
+                  </td>
+                </tr>
+              ) : sortedTypes.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="p-8 text-center text-muted-foreground">
-                    No document types configured.
+                    No document types configured yet.
                   </td>
                 </tr>
               ) : (
@@ -180,20 +247,28 @@ export function DocumentTypes() {
                     </td>
                     <td className="p-4">
                       {type.isRequired ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase bg-rose-500/10 text-rose-600 border border-rose-500/20">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-rose-500/10 text-rose-600 border border-rose-500/20">
                           Mandatory
                         </span>
                       ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase bg-slate-500/10 text-slate-600 border border-slate-500/20">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-slate-500/10 text-slate-600 border border-slate-500/20">
                           Optional
                         </span>
                       )}
                     </td>
                     <td className="p-4">
-                      <div className="flex justify-end gap-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:focus-within:opacity-100 transition-opacity">
+                      <div className="flex justify-end gap-1">
+                        <button
+                          onClick={() => openEditForm(type)}
+                          className="p-2 text-muted-foreground hover:text-primary hover:bg-muted rounded-xl transition-colors"
+                          title="Edit Document Type"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={() => confirmDelete(type.id, type.name)}
-                          className="p-2 min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors"
+                          className="p-2 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-colors"
+                          title="Delete Document Type"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>

@@ -24,13 +24,25 @@ class DocumentTypeService:
         return created
 
     @staticmethod
-    async def get_all_document_types(is_deleted: bool = False, is_mandatory: Optional[bool] = None, search: Optional[str] = None) -> List[Dict[str, Any]]:
-        cache_key = make_list_key("document_types:list", is_deleted=is_deleted, is_mandatory=is_mandatory, search=search)
+    async def get_all_document_types(
+        is_deleted: bool = False, 
+        is_mandatory: Optional[bool] = None, 
+        search: Optional[str] = None,
+        page: Optional[int] = None,
+        limit: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        cache_key = make_list_key("document_types:list", is_deleted=is_deleted, is_mandatory=is_mandatory, search=search, page=page, limit=limit)
         cached = await get_cache(cache_key)
         if cached is not None:
             return cached
 
-        items = await DocumentTypeRepository.get_all(is_deleted=is_deleted, is_mandatory=is_mandatory, search=search)
+        items = await DocumentTypeRepository.get_all(
+            is_deleted=is_deleted, 
+            is_mandatory=is_mandatory, 
+            search=search,
+            page=page,
+            limit=limit
+        )
         await set_cache(cache_key, items, ttl=1800)
         return items
 

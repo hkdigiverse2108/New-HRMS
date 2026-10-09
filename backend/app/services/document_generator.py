@@ -50,11 +50,16 @@ class DocumentGeneratorService:
         else:
             department = str(dept_obj or "").strip()
 
-        joining_date = str(work.get("joining_date") or "")[:10]
+        raw_jd = str(work.get("joining_date") or "")[:10]
+        joining_date = raw_jd
+        if len(raw_jd) == 10 and raw_jd[4] == "-" and raw_jd[7] == "-":
+            p = raw_jd.split("-")
+            joining_date = f"{p[2]}-{p[1]}-{p[0]}"
+
         address = str(contact.get("address") or contact.get("current_address") or "").strip()
         salary = str(payroll.get("net_salary") or payroll.get("basic_salary") or "").strip()
 
-        today_str = datetime.utcnow().strftime("%Y-%m-%d")
+        today_str = datetime.utcnow().strftime("%d-%m-%Y")
 
         mapping = {
             "employee_name": full_name,
@@ -309,36 +314,29 @@ class DocumentGeneratorService:
         if not template or template.get("is_deleted"):
             return None
 
-        employee = await EmployeeRepository.get_by_id(req.employee_id)
-        if not employee or employee.get("is_deleted"):
-            return None
+        employee = None
+        if req.employee_id and req.employee_id != "manual":
+            employee = await EmployeeRepository.get_by_id(req.employee_id)
 
-        emp_mapping = DocumentGeneratorService._extract_employee_data(employee)
+        emp_mapping = DocumentGeneratorService._extract_employee_data(employee) if employee else {}
         custom_vars = dict(req.variables or {})
         if getattr(req, "placeholder_values", None):
             custom_vars.update(req.placeholder_values)
         merged_variables = {**emp_mapping, **custom_vars}
 
-        # Validate that all placeholders present in template are provided / filled
+        # Ensure all template placeholders present in template have default values if omitted
         placeholders = template.get("placeholders", []) or DocumentTemplateService.extract_placeholders(template.get("content", ""))
-        missing_fields = []
         for key in placeholders:
             val = merged_variables.get(key)
-            if val is None or str(val).strip() == "":
-                missing_fields.append(key)
-
-        if missing_fields:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Missing compulsory template variable(s): {', '.join(missing_fields)}"
-            )
+            if val is None:
+                merged_variables[key] = f"[{key}]"
 
         rendered_html = DocumentGeneratorService._render_html_with_variables(template.get("content", ""), merged_variables)
 
         template_name = template.get("template_name", "Document")
         category = template.get("category", "General")
-        emp_name = emp_mapping.get("employee_name") or "Employee"
-        emp_code = emp_mapping.get("employee_code") or "EMP"
+        emp_name = merged_variables.get("employee_name") or merged_variables.get("name") or "Employee"
+        emp_code = merged_variables.get("employee_code") or merged_variables.get("emp_code") or "EMP"
 
         # Check Letterhead from Admin Settings
         letterhead_path = None
@@ -373,7 +371,7 @@ class DocumentGeneratorService:
             "template_id": str(template["_id"]),
             "template_name": template_name,
             "category": category,
-            "employee_id": str(employee["_id"]),
+            "employee_id": str(employee["_id"]) if employee else (req.employee_id or "manual"),
             "employee_name": emp_name,
             "employee_code": emp_code,
             "variables": merged_variables,

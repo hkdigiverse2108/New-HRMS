@@ -73,6 +73,8 @@ async def get_my_submitted_documents(
     document_type_id: Optional[str] = Query(None, description="Filter by document type ID"),
     status: Optional[str] = Query(None, description="Filter by status (approved, pending, rejected, all)"),
     search: Optional[str] = Query(None, description="Search by document type name or number"),
+    page: Optional[int] = Query(None, ge=1, description="Page number for pagination"),
+    limit: Optional[int] = Query(None, ge=1, le=1000, description="Items per page limit"),
     current_user: dict = Depends(get_current_employee)
 ):
     """Employee Portal View: Returns submitted documents for logged in employee with filters."""
@@ -81,7 +83,9 @@ async def get_my_submitted_documents(
         employee_id=my_employee_id,
         document_type_id=document_type_id,
         status=status,
-        search=search
+        search=search,
+        page=page,
+        limit=limit
     )
 
 @router.get("", response_model=List[SubmittedDocumentResponse])
@@ -90,6 +94,8 @@ async def get_all_submitted_documents(
     document_type_id: Optional[str] = Query(None, description="Filter by document type ID"),
     status: Optional[str] = Query(None, description="Filter by status (approved, pending, rejected, all)"),
     search: Optional[str] = Query(None, description="Search by employee name, code, document type name or number"),
+    page: Optional[int] = Query(None, ge=1, description="Page number for pagination"),
+    limit: Optional[int] = Query(None, ge=1, le=1000, description="Items per page limit"),
     current_user: dict = Depends(get_current_employee)
 ):
     work = current_user.get("work_details", {})
@@ -103,7 +109,9 @@ async def get_all_submitted_documents(
         employee_id=employee_id,
         document_type_id=document_type_id,
         status=status,
-        search=search
+        search=search,
+        page=page,
+        limit=limit
     )
 
 @router.get("/{item_id}/download")

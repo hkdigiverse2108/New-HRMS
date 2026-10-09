@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { Settings, Image as ImageIcon, Layout, Type, Palette, Shield, CreditCard, ChevronDown, CheckCircle2, Search, X, Plus, GripVertical, Settings2, Save, Paintbrush, Square, Briefcase, Trash2, MessageSquare, ShieldAlert } from "lucide-react";
+import { Settings, Image as ImageIcon, Layout, Type, Palette, Shield, CreditCard, ChevronDown, CheckCircle2, Search, X, Plus, GripVertical, Settings2, Save, Paintbrush, Square, Briefcase, Trash2, MessageSquare, ShieldAlert, FileText, Upload, Eye } from "lucide-react";
 import { toast } from "@/lib/toast";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { useTheme } from "../ThemeProvider";
@@ -99,6 +99,248 @@ function FontSelector({ value, onChange }: { value: string; onChange: (v: string
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+interface LetterheadConfig {
+  enabled: boolean;
+  companyName: string;
+  tagline: string;
+  logoUrl: string;
+  headerImageUrl: string;
+}
+
+const DEFAULT_LETTERHEAD: LetterheadConfig = {
+  enabled: true,
+  companyName: "HariKrushn DigiVerse LLP",
+  tagline: "Innovate • Transform • Grow",
+  logoUrl: "",
+  headerImageUrl: "",
+};
+
+export function LetterheadSettingsCard({ className }: { className?: string }) {
+  const [config, setConfig] = useState<LetterheadConfig>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("document_letterhead_config");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          return { ...DEFAULT_LETTERHEAD, ...parsed };
+        } catch (e) {}
+      }
+    }
+    return DEFAULT_LETTERHEAD;
+  });
+
+  const updateConfig = (newConfig: Partial<LetterheadConfig>) => {
+    setConfig((prev) => {
+      const updated = { ...prev, ...newConfig };
+      if (typeof window !== "undefined") {
+        localStorage.setItem("document_letterhead_config", JSON.stringify(updated));
+        window.dispatchEvent(new Event("storage"));
+      }
+      return updated;
+    });
+  };
+
+  const handleHeaderImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select a valid image file");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      if (result) {
+        updateConfig({ headerImageUrl: result });
+        toast.success("Letterhead banner image updated!");
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select a valid image file");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      if (result) {
+        updateConfig({ logoUrl: result });
+        toast.success("Letterhead logo updated!");
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div className={cn("bg-card border border-border/50 rounded-3xl p-6 shadow-sm flex flex-col", className)}>
+      <div className="flex items-center justify-between gap-4 mb-4">
+        <div className="flex items-center gap-2">
+          <FileText className="w-5 h-5 text-primary" />
+          <h3 className="text-lg font-black">Document Letterhead Settings</h3>
+        </div>
+        <div className="flex items-center gap-2 bg-muted/30 px-3 py-1.5 rounded-xl border border-border/50">
+          <span className="text-xs font-bold text-foreground">Enable Letterhead</span>
+          <div
+            className={`w-10 h-6 rounded-full transition-colors relative cursor-pointer ${config.enabled ? 'bg-primary' : 'bg-muted border border-border/50'}`}
+            onClick={() => updateConfig({ enabled: !config.enabled })}
+          >
+            <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${config.enabled ? 'translate-x-4' : ''}`} />
+          </div>
+        </div>
+      </div>
+
+      <p className="text-sm text-muted-foreground mb-6">
+        Configure the company letterhead header image, logo, and tagline used when generating official documents, certificates, and letters.
+      </p>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-muted-foreground mb-1.5 uppercase tracking-wide">
+              Company Name (Letterhead)
+            </label>
+            <input
+              type="text"
+              value={config.companyName}
+              onChange={(e) => updateConfig({ companyName: e.target.value })}
+              placeholder="e.g. HariKrushn DigiVerse LLP"
+              className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 font-medium"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-muted-foreground mb-1.5 uppercase tracking-wide">
+              Tagline / Subheader
+            </label>
+            <input
+              type="text"
+              value={config.tagline}
+              onChange={(e) => updateConfig({ tagline: e.target.value })}
+              placeholder="e.g. Innovate • Transform • Grow"
+              className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 font-medium"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-muted-foreground mb-1.5 uppercase tracking-wide">
+              Custom Header Banner Image (Optional)
+            </label>
+            <div className="flex items-center gap-3">
+              <label className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-dashed border-primary/50 rounded-xl bg-primary/5 hover:bg-primary/10 transition-colors cursor-pointer text-sm font-bold text-primary">
+                <Upload className="w-4 h-4" />
+                <span>Upload Banner Image</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleHeaderImageUpload}
+                  className="hidden"
+                />
+              </label>
+              {config.headerImageUrl && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateConfig({ headerImageUrl: "" });
+                    toast.success("Header banner image removed");
+                  }}
+                  className="p-2.5 text-destructive hover:bg-destructive/10 rounded-xl transition-colors border border-destructive/20"
+                  title="Remove custom header image"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Upload a full letterhead header image (e.g., 1200x250px PNG/JPG) to replace default layout.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-muted-foreground mb-1.5 uppercase tracking-wide">
+              Company Logo (For Letterhead)
+            </label>
+            <div className="flex items-center gap-3">
+              <label className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-border rounded-xl bg-background hover:bg-muted/50 transition-colors cursor-pointer text-sm font-bold text-foreground">
+                <ImageIcon className="w-4 h-4 text-muted-foreground" />
+                <span>Upload Logo Image</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleLogoUpload}
+                  className="hidden"
+                />
+              </label>
+              {config.logoUrl && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateConfig({ logoUrl: "" });
+                    toast.success("Logo image removed");
+                  }}
+                  className="p-2.5 text-destructive hover:bg-destructive/10 rounded-xl transition-colors border border-destructive/20"
+                  title="Remove logo image"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col">
+          <label className="block text-xs font-bold text-muted-foreground mb-1.5 uppercase tracking-wide flex items-center gap-1.5">
+            <Eye className="w-3.5 h-3.5" /> Letterhead Live Preview
+          </label>
+          <div className="flex-1 border border-border rounded-2xl p-4 bg-muted/20 flex flex-col justify-start overflow-hidden">
+            <div className="bg-white text-slate-900 rounded-xl shadow-sm border border-slate-200 overflow-hidden min-h-[140px] flex flex-col">
+              {config.headerImageUrl ? (
+                <div className="w-full">
+                  <img
+                    src={config.headerImageUrl}
+                    alt="Letterhead Header"
+                    className="w-full object-cover max-h-36"
+                  />
+                </div>
+              ) : (
+                <div className="p-4 bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 text-white flex items-center justify-between border-b-4 border-emerald-500">
+                  <div className="flex items-center gap-3">
+                    {config.logoUrl ? (
+                      <div className="w-10 h-10 rounded-lg bg-white p-1 flex items-center justify-center overflow-hidden">
+                        <img src={config.logoUrl} alt="Logo" className="max-w-full max-h-full object-contain" />
+                      </div>
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg bg-emerald-500 text-white flex items-center justify-center font-bold text-lg shadow-md">
+                        {(config?.companyName || "H").charAt(0)}
+                      </div>
+                    )}
+                    <div>
+                      <h4 className="font-extrabold text-sm tracking-tight text-white">{config?.companyName || "HariKrushn DigiVerse LLP"}</h4>
+                      <p className="text-[11px] text-emerald-300/90 font-medium">{config?.tagline || "Innovate • Transform • Grow"}</p>
+                    </div>
+                  </div>
+                  <div className="text-right text-[10px] text-slate-400 font-mono hidden sm:block">
+                    <div>OFFICIAL DOCUMENT</div>
+                    <div className="text-emerald-400">LETTERHEAD HEADER</div>
+                  </div>
+                </div>
+              )}
+
+              <div className="p-4 flex-1 bg-slate-50 text-[11px] text-slate-400 space-y-1.5 flex flex-col justify-center items-center text-center italic">
+                <span>[ Document Content Body Will Appear Here Below Letterhead ]</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -502,6 +744,9 @@ export function AdminSettings() {
             </div>
           </div>
         </div>
+
+        {/* Document Letterhead Configuration Card */}
+        <LetterheadSettingsCard className="md:col-span-2 lg:col-span-2 xl:col-span-3" />
 
         {/* UI Elements Card */}
         <div className="bg-card border border-border/50 rounded-3xl p-6 shadow-sm flex flex-col md:col-span-2 xl:col-span-1">

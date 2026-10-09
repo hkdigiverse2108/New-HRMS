@@ -99,19 +99,50 @@ class SubmittedDocumentService:
         return created
 
     @staticmethod
-    async def get_all_submitted_documents(is_deleted: bool = False, employee_id: Optional[str] = None, document_type_id: Optional[str] = None, status: Optional[str] = None, search: Optional[str] = None) -> List[Dict[str, Any]]:
-        cache_key = make_list_key("submitted_documents:list", is_deleted=is_deleted, employee_id=employee_id, document_type_id=document_type_id, status=status, search=search)
+    async def get_all_submitted_documents(
+        is_deleted: bool = False, 
+        employee_id: Optional[str] = None, 
+        document_type_id: Optional[str] = None, 
+        status: Optional[str] = None, 
+        search: Optional[str] = None,
+        page: Optional[int] = None,
+        limit: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        cache_key = make_list_key("submitted_documents:list", is_deleted=is_deleted, employee_id=employee_id, document_type_id=document_type_id, status=status, search=search, page=page, limit=limit)
         cached = await get_cache(cache_key)
         if cached is not None:
             return cached
 
-        items = await SubmittedDocumentRepository.get_all(is_deleted=is_deleted, employee_id=employee_id, document_type_id=document_type_id, status=status, search=search)
+        items = await SubmittedDocumentRepository.get_all(
+            is_deleted=is_deleted, 
+            employee_id=employee_id, 
+            document_type_id=document_type_id, 
+            status=status, 
+            search=search,
+            page=page,
+            limit=limit
+        )
         await set_cache(cache_key, items, ttl=1800)
         return items
 
     @staticmethod
-    async def get_my_submitted_documents(employee_id: str, document_type_id: Optional[str] = None, status: Optional[str] = None, search: Optional[str] = None) -> List[Dict[str, Any]]:
-        return await SubmittedDocumentService.get_all_submitted_documents(is_deleted=False, employee_id=employee_id, document_type_id=document_type_id, status=status, search=search)
+    async def get_my_submitted_documents(
+        employee_id: str, 
+        document_type_id: Optional[str] = None, 
+        status: Optional[str] = None, 
+        search: Optional[str] = None,
+        page: Optional[int] = None,
+        limit: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        return await SubmittedDocumentService.get_all_submitted_documents(
+            is_deleted=False, 
+            employee_id=employee_id, 
+            document_type_id=document_type_id, 
+            status=status, 
+            search=search,
+            page=page,
+            limit=limit
+        )
 
     @staticmethod
     async def get_by_id(item_id: str) -> Optional[Dict[str, Any]]:

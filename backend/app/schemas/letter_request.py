@@ -4,15 +4,22 @@ from typing import Optional, Dict, Any
 class LetterRequestCreate(BaseModel):
     employee_id: Optional[str] = Field(None, description="Employee ID for request. If omitted, uses current logged-in employee ID.")
     document_type_id: Optional[str] = Field(None, description="Optional ID of DocumentType")
+    letter_type: Optional[str] = Field(None, description="Letter type or template name string")
     template_id: Optional[str] = Field(None, description="DocumentTemplate ID for the letter")
-    needed_by_date: str = Field(..., description="Date needed by (YYYY-MM-DD or DD-MM-YYYY)")
-    reason: str = Field(..., description="Reason for requesting letter")
+    needed_by_date: Optional[str] = Field(None, description="Date needed by (YYYY-MM-DD or DD-MM-YYYY)")
+    reason: Optional[str] = Field(None, description="Reason for requesting letter")
+    status: Optional[str] = Field("Pending", description="Status of request e.g. Pending, Sent, Approved")
+    generated_document_id: Optional[str] = None
+    pdf_url: Optional[str] = None
+    content: Optional[str] = None
 
 class LetterRequestUpdate(BaseModel):
     needed_by_date: Optional[str] = None
     reason: Optional[str] = None
     status: Optional[str] = None
     rejection_reason: Optional[str] = None
+    pdf_url: Optional[str] = None
+    content: Optional[str] = None
 
 class SendDocumentRequest(BaseModel):
     generated_document_id: Optional[str] = Field(None, description="Link an existing generated document ID")
@@ -25,19 +32,20 @@ class RejectRequestInput(BaseModel):
 class LetterRequestResponse(BaseModel):
     id: str
     employee_id: str
-    employee_name: str
+    employee_name: Optional[str] = "Employee"
     employee_code: Optional[str] = None
     document_type_id: Optional[str] = None
     letter_type: Optional[str] = None
     template_id: Optional[str] = None
     template_name: Optional[str] = None
-    requested_date: str
-    needed_by_date: str
-    reason: str
-    status: str  # Pending, Sent, Approved, Rejected
+    requested_date: Optional[str] = None
+    needed_by_date: Optional[str] = None
+    reason: Optional[str] = None
+    status: str = "Pending"  # Pending, Sent, Approved, Rejected
     generated_document_id: Optional[str] = None
     pdf_url: Optional[str] = None
+    content: Optional[str] = None
     rejection_reason: Optional[str] = None
-    created_at: str
-    updated_at: str
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
     is_deleted: bool = False

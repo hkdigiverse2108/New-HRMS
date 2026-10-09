@@ -39,34 +39,46 @@ function NotFoundComponent() {
 }
 
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
-  console.error(error);
+  console.error("Root ErrorComponent caught:", error);
   const router = useRouter();
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
 
+  const handleResetState = () => {
+    if (typeof window !== "undefined") {
+      try {
+        router.invalidate();
+      } catch (e) {}
+      reset();
+      window.location.reload();
+    }
+  };
+
   return (
     <div className="flex min-h-dvh items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">
+      <div className="max-w-lg text-center space-y-4 bg-card p-8 rounded-3xl border border-border/60 shadow-xl">
+        <h1 className="text-2xl font-black tracking-tight text-foreground">
           This page didn't load
         </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. You can try refreshing or head back home.
+        <p className="text-sm text-muted-foreground">
+          Something went wrong on our end. You can try refreshing or resetting state.
         </p>
-        <div className="mt-6 flex flex-wrap justify-center gap-2">
+        {error?.message && (
+          <div className="text-left text-xs font-mono text-destructive bg-destructive/10 p-3 rounded-xl border border-destructive/20 max-h-32 overflow-y-auto break-words">
+            {error.message}
+          </div>
+        )}
+        <div className="pt-2 flex flex-wrap justify-center gap-3">
           <button
-            onClick={() => {
-              router.invalidate();
-              reset();
-            }}
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            onClick={handleResetState}
+            className="inline-flex items-center justify-center rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground shadow-md transition-all hover:bg-primary/90"
           >
             Try again
           </button>
           <a
             href="/"
-            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+            className="inline-flex items-center justify-center rounded-xl border border-border bg-background px-5 py-2.5 text-sm font-bold text-foreground transition-all hover:bg-accent"
           >
             Go home
           </a>
