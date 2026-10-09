@@ -15,9 +15,13 @@ class GoogleCalendarService:
 
     @classmethod
     def get_redirect_uri(cls, request_base_url: Optional[str] = None) -> str:
-        uri = (settings.GOOGLE_REDIRECT_URI or "").strip()
-        if uri:
-            return uri
+        configured_uri = (settings.GOOGLE_REDIRECT_URI or "").strip()
+        if request_base_url:
+            base = request_base_url.rstrip('/')
+            if "localhost" not in base and "127.0.0.1" not in base:
+                return f"{base}/schedule/google/callback"
+        if configured_uri:
+            return configured_uri
         if request_base_url:
             return f"{request_base_url.rstrip('/')}/schedule/google/callback"
         return f"http://localhost:{settings.PORT}/schedule/google/callback"
@@ -33,7 +37,7 @@ class GoogleCalendarService:
             "response_type": "code",
             "scope": " ".join(cls.SCOPES),
             "access_type": "offline",
-            "prompt": "consent",
+            "prompt": "select_account consent",
             "state": employee_id
         }
         auth_url = "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(params)

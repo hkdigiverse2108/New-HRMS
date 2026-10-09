@@ -250,7 +250,7 @@ async def get_google_auth_status(
     Check if current employee has linked their Google Calendar.
     Returns { "is_connected": bool, "google_email": str }
     """
-    user_id = str(current_employee.get("work_details", {}).get("employee_id") or current_employee.get("_id") or current_employee.get("id"))
+    user_id = str(current_employee.get("_id") or current_employee.get("id") or current_employee.get("work_details", {}).get("employee_id"))
     auth_doc = await GoogleAuthRepository.get_auth_by_employee(user_id)
     if auth_doc and auth_doc.get("access_token"):
         return {
@@ -302,7 +302,7 @@ async def google_auth_login(
             detail="Google OAuth is not configured on the backend server. GOOGLE_CLIENT_ID & GOOGLE_CLIENT_SECRET are required."
         )
 
-    user_id = str(current_employee.get("work_details", {}).get("employee_id") or current_employee.get("_id") or current_employee.get("id"))
+    user_id = str(current_employee.get("_id") or current_employee.get("id") or current_employee.get("work_details", {}).get("employee_id"))
     auth_url = GoogleCalendarService.generate_auth_url(employee_id=user_id, request_base_url=str(request.base_url))
     
     if redirect:
@@ -433,8 +433,6 @@ async def google_auth_disconnect(
     """
     Disconnect Google Calendar for current employee.
     """
-    user_id = str(current_employee.get("work_details", {}).get("employee_id") or current_employee.get("_id") or current_employee.get("id"))
-    deleted = await GoogleAuthRepository.delete_tokens(user_id)
-    if not deleted:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No Google connection found to disconnect.")
+    user_id = str(current_employee.get("_id") or current_employee.get("id") or current_employee.get("work_details", {}).get("employee_id"))
+    await GoogleAuthRepository.delete_tokens(user_id)
     return {"message": "Google Calendar disconnected successfully."}

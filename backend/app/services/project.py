@@ -119,10 +119,10 @@ class ProjectService:
         
         next_fup = ProjectService._calculate_next_schedule_date(data_dict, today, "followup")
         if next_fup:
-            data_dict["next_followup_date"] = next_fup
+            data_dict["next_followup_date"] = datetime.combine(next_fup, datetime.min.time()) if isinstance(next_fup, date) and not isinstance(next_fup, datetime) else next_fup
         next_fb = ProjectService._calculate_next_schedule_date(data_dict, today, "feedback")
         if next_fb:
-            data_dict["next_feedback_date"] = next_fb
+            data_dict["next_feedback_date"] = datetime.combine(next_fb, datetime.min.time()) if isinstance(next_fb, date) and not isinstance(next_fb, datetime) else next_fb
             
         created = await ProjectRepository.create(data_dict)
         await clear_pattern("projects:list:*")
@@ -291,11 +291,11 @@ class ProjectService:
         today = date.today()
         next_fup = ProjectService._calculate_next_schedule_date(merged_config, today, "followup")
         if next_fup is not None:
-            data_dict["next_followup_date"] = next_fup.isoformat() if hasattr(next_fup, 'isoformat') else next_fup
+            data_dict["next_followup_date"] = datetime.combine(next_fup, datetime.min.time()) if isinstance(next_fup, date) and not isinstance(next_fup, datetime) else next_fup
             
         next_fb = ProjectService._calculate_next_schedule_date(merged_config, today, "feedback")
         if next_fb is not None:
-            data_dict["next_feedback_date"] = next_fb.isoformat() if hasattr(next_fb, 'isoformat') else next_fb
+            data_dict["next_feedback_date"] = datetime.combine(next_fb, datetime.min.time()) if isinstance(next_fb, date) and not isinstance(next_fb, datetime) else next_fb
 
         old_project = None
         if "creative_team" in data_dict:

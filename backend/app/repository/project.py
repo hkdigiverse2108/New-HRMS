@@ -3,6 +3,15 @@ from datetime import datetime, date
 from bson import ObjectId
 from typing import Optional
 
+def _convert_dates_to_datetime(obj):
+    if isinstance(obj, dict):
+        return {k: _convert_dates_to_datetime(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_convert_dates_to_datetime(item) for item in obj]
+    elif isinstance(obj, date) and not isinstance(obj, datetime):
+        return datetime.combine(obj, datetime.min.time())
+    return obj
+
 class ProjectRepository:
     collection_name = "projects"
 
@@ -18,11 +27,7 @@ class ProjectRepository:
         data["updated_at"] = datetime.utcnow()
         data["is_deleted"] = False
         
-        # Convert date to datetime for MongoDB
-        if "general" in data and isinstance(data["general"], dict):
-            for date_field in ["start_date", "end_date", "team_deadline"]:
-                if date_field in data["general"] and isinstance(data["general"][date_field], date) and not isinstance(data["general"][date_field], datetime):
-                    data["general"][date_field] = datetime.combine(data["general"][date_field], datetime.min.time())
+        data = _convert_dates_to_datetime(data)
                 
         result = await collection.insert_one(data)
         data["_id"] = str(result.inserted_id)
@@ -151,12 +156,8 @@ class ProjectRepository:
             return False
             
         data["updated_at"] = datetime.utcnow()
-        
-        for date_field in ["start_date", "end_date", "team_deadline"]:
-            if "general" in data and data["general"] and isinstance(data["general"], dict):
-                if date_field in data["general"] and data["general"][date_field] and isinstance(data["general"][date_field], date) and not isinstance(data["general"][date_field], datetime):
-                    data["general"][date_field] = datetime.combine(data["general"][date_field], datetime.min.time())
-                    
+        data = _convert_dates_to_datetime(data)
+                     
         result = await collection.update_one(
             {"_id": ObjectId(project_id)},
             {"$set": data}

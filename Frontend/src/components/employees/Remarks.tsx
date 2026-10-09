@@ -141,7 +141,7 @@ export function Remarks() {
       const res = await api.get<any[]>("/remarks/questions/all", { showLoader: false, showErrorToast: false });
       setQuestions(Array.isArray(res) ? res.map((q: any) => ({
         id: String(q.id || q._id),
-        label: q.label || "",
+        label: (q.label || "").toLowerCase().includes("probe") ? "What you want to change ?" : (q.label || ""),
         placeholder: q.placeholder || "",
         required: Boolean(q.required),
       })) : []);
@@ -332,8 +332,9 @@ export function Remarks() {
   });
 
   const answerLabel = (key: string) => {
+    if (key.toLowerCase().includes("probe")) return "What you want to change ?";
     const q = questions.find(x => x.id === key || x.label === key);
-    return q ? q.label : key;
+    return q ? ((q.label || "").toLowerCase().includes("probe") ? "What you want to change ?" : q.label) : key;
   };
 
   return (

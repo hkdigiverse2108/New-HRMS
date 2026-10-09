@@ -123,5 +123,28 @@ class GoogleAuthRepository:
     @classmethod
     async def delete_tokens(cls, employee_id: str) -> bool:
         db = await cls.get_db()
-        result = await db[cls.collection_name].delete_one({"employee_id": employee_id})
-        return result.deleted_count > 0
+        if not employee_id:
+            return True
+            
+        possible_ids = [employee_id]
+        try:
+            from bson import ObjectId
+            emp = None
+            if ObjectId.is_valid(employee_id):
+                emp = await db["employees"].find_one({"_id": ObjectId(employee_id)})
+            if not emp:
+                emp = await db["employees"].find_one({
+                    "$or": [
+                        {"work_details.employee_id": employee_id},
+                        {"employee_id": employee_id}
+                    ]
+                })
+            if emp:
+                for pid in [str(emp.get("_id")), emp.get("work_details", {}).get("employee_id"), emp.get("employee_id")]:
+                    if pid and pid not in possible_ids:
+                        possible_ids.append(pid)
+        except Exception:
+            pass
+
+        await db[cls.collection_name].delete_many({"employee_id": {"$in": possible_ids}})
+        return True

@@ -810,9 +810,6 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
                         Supporting Document / Certificate (Optional)
-                        {(newLeaveType === "Sick Leave" || newLeaveType.toLowerCase().includes("medical")) && (
-                          <span className="text-muted-foreground ml-1 font-medium">(Optional)</span>
-                        )}
                       </label>
                       {attachmentUrl && (
                         <button

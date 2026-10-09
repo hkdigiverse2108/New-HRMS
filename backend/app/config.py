@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_REDIRECT_URI: str = ""
     FRONTEND_SCHEDULE_URL: str = ""
+    FRONTEND_URL: str = "http://localhost:7788"
 
     class Config:
         env_file = [
