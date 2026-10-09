@@ -217,6 +217,12 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
       if (["phone", "phonenumber", "mobile"].includes(norm)) return selectedEmp.phone || "";
       if (["address", "currentaddress", "permanentaddress"].includes(norm)) return selectedEmp.address || "";
       if (["worklocation", "location", "office"].includes(norm)) return selectedEmp.workLocation || "Head Office";
+      if (["signature", "employeesignature", "emp_signature", "signatorysignature", "signatory_signature"].includes(norm)) {
+        const sig = (selectedEmp as any).signature || (selectedEmp as any).signature_url || (typeof window !== "undefined" ? localStorage.getItem(`user_signature_${selectedEmp.id}`) : "") || "";
+        if (sig) {
+          return `<img src="${sig}" alt="Signature" style="max-height: 48px; width: auto; object-fit: contain; display: inline-block; vertical-align: middle; margin-top: 4px;" />`;
+        }
+      }
     }
 
     const normKey = varKey.toLowerCase().replace(/[\s_-]+/g, "");
@@ -270,7 +276,13 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
       }
     });
 
-    setCustomVars(nextVars);
+    setCustomVars((prev) => {
+      const isSame = Object.keys(nextVars).every((k) => prev[k] === nextVars[k]);
+      if (isSame && Object.keys(prev).length === Object.keys(nextVars).length) {
+        return prev;
+      }
+      return { ...nextVars, ...prev };
+    });
   }, [selectedEmpId, selectedEmp, selectedTempId, letterhead.companyName]);
 
   // Extract variables dynamically ONLY from selected template content
@@ -367,8 +379,27 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
       ""
     );
 
-    const blockRegex = /(<p[^>]*>.*?<\/p>|<ul[^>]*>.*?<\/ul>|<ol[^>]*>.*?<\/ol>|<h[1-6][^>]*>.*?<\/h[1-6]>|<table[^>]*>.*?<\/table>|<blockquote[^>]*>.*?<\/blockquote>|<div[^>]*>.*?<\/div>)/gis;
-    const blocks = cleanContent.match(blockRegex);
+    let blocks: string[] = [];
+    if (typeof window !== "undefined") {
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(`<div>${cleanContent}</div>`, "text/html");
+        const container = doc.body.firstElementChild;
+        if (container && container.childNodes.length > 0) {
+          blocks = Array.from(container.childNodes)
+            .map((node) => {
+              if (node.nodeType === Node.ELEMENT_NODE) {
+                return (node as HTMLElement).outerHTML;
+              }
+              const txt = (node.textContent || "").trim();
+              return txt ? `<p>${txt}</p>` : "";
+            })
+            .filter(Boolean);
+        }
+      } catch (e) {
+        console.warn("DOMParser error fallback:", e);
+      }
+    }
 
     if (!blocks || blocks.length <= 5) {
       return [cleanContent];
@@ -377,7 +408,7 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
     const pages: string[] = [];
     let currentPageHtml = "";
     let currentLength = 0;
-    const MAX_PAGE_CHARS = 2000;
+    const MAX_PAGE_CHARS = 3800;
 
     for (const block of blocks) {
       const textLen = block.replace(/<[^>]*>/g, "").trim().length;
@@ -534,58 +565,12 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
   };
 
   const handleExportPDF = async () => {
-    if (!selectedTemp) return;
+    if (!selectedTemp || isExporting) return;
     setIsExporting(true);
 
     const docName = selectedTemp.name.replace(/[^a-zA-Z0-9_-]/g, "_");
     const empNameStr = selectedEmp ? selectedEmp.name.replace(/[^a-zA-Z0-9_-]/g, "_") : "Document";
     const fileName = `${docName}_${empNameStr}.pdf`;
-
-    // 1. Try Backend ReportLab PDF Download
-    try {
-      const genRes = await api.post(
-        "/generated-documents/generate",
-        {
-          template_id: selectedTemp.id,
-          employee_id: selectedEmpId || "manual",
-          variables: customVars,
-        },
-        { showLoader: false, showErrorToast: false }
-      );
-
-      if (genRes && (genRes.id || genRes._id)) {
-        const docId = String(genRes.id || genRes._id);
-        const pdfBlob = await api.getBlob(`/generated-documents/${docId}/pdf`);
-        const blobUrl = window.URL.createObjectURL(pdfBlob);
-        const downloadLink = document.createElement("a");
-        downloadLink.href = blobUrl;
-        downloadLink.download = fileName;
-        document.body.appendChild(downloadLink);
-        downloadLink.click();
-        downloadLink.remove();
-        window.URL.revokeObjectURL(blobUrl);
-        toast.success(`PDF "${fileName}" downloaded successfully!`);
-        setIsExporting(false);
-        return;
-      }
-    } catch (beErr) {
-      console.warn("Backend PDF download fallback to client iframe pdf generator:", beErr);
-    }
-
-    // 2. Client-side html2pdf via isolated iframe (prevents Tailwind v4 oklch color parsing errors completely)
-    let iframe: HTMLIFrameElement | null = null;
-    try {
-      iframe = document.createElement("iframe");
-      iframe.style.position = "fixed";
-      iframe.style.left = "-9999px";
-      iframe.style.top = "-9999px";
-      iframe.style.width = "210mm";
-      iframe.style.height = "297mm";
-      iframe.style.border = "none";
-      document.body.appendChild(iframe);
-
-      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-      if (!iframeDoc) throw new Error("Could not access iframe document");
 
       let letterheadHTML = "";
       if (letterhead.enabled) {
@@ -613,77 +598,112 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
         }
       }
 
-      const pagesContent = pageSections.map((sec, idx) => {
-        const cleanSec = sec
-          .replace(/class="bg-primary\/15[^"]*"/g, 'style="font-weight: bold; color: #0284c7;"')
-          .replace(/class="bg-rose-500\/15[^"]*"/g, 'style="font-weight: bold; color: #e11d48;"');
+    const pagesContent = pageSections.map((sec, idx) => {
+      const cleanSec = sec
+        .replace(/class="bg-primary\/15[^"]*"/g, 'style="font-weight: bold; color: #0284c7;"')
+        .replace(/class="bg-rose-500\/15[^"]*"/g, 'style="font-weight: bold; color: #e11d48;"');
 
-        return `
-          <div style="${idx > 0 ? 'page-break-before: always; break-before: page;' : ''} padding: 12mm 15mm 15mm 15mm;">
-            ${letterheadHTML}
-            <div style="color: #0f172a; line-height: 1.65; word-wrap: break-word;">
-              ${cleanSec}
-            </div>
+      return `
+        <div style="${idx > 0 ? 'page-break-before: always; break-before: page;' : ''} padding: 15mm 15mm 15mm 15mm; background: #ffffff; color: #0f172a;">
+          ${letterheadHTML}
+          <div style="color: #0f172a; line-height: 1.65; word-wrap: break-word;">
+            ${cleanSec}
           </div>
-        `;
-      }).join("");
+        </div>
+      `;
+    }).join("");
 
-      iframeDoc.open();
-      iframeDoc.write(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <style>
-              body {
-                margin: 0;
-                padding: 0;
-                background: #ffffff;
-                color: #0f172a;
-                font-family: 'Segoe UI', Arial, sans-serif;
-                font-size: 14px;
-                line-height: 1.65;
-              }
-              p { margin-top: 6px; margin-bottom: 10px; line-height: 1.65; }
-              h1, h2, h3, h4 { color: #0f172a; margin-top: 14px; margin-bottom: 8px; font-weight: 800; }
-              ul, ol { margin-top: 6px; margin-bottom: 10px; padding-left: 20px; }
-            </style>
-          </head>
-          <body>
-            <div id="pdf-root" style="width: 210mm; background: #ffffff; color: #0f172a;">
-              ${pagesContent}
-            </div>
-          </body>
-        </html>
-      `);
-      iframeDoc.close();
+    const originalBodyStyle = document.body.style.cssText;
+    const originalHtmlStyle = document.documentElement.style.cssText;
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
 
-      const pdfRoot = iframeDoc.getElementById("pdf-root");
-      if (!pdfRoot) throw new Error("PDF root element missing inside iframe");
+    let container: HTMLDivElement | null = null;
 
-      const html2pdfModule = (await import("html2pdf.js")).default || (await import("html2pdf.js"));
+    try {
+      container = document.createElement("div");
+      container.id = "pdf-export-container";
+      container.style.cssText = `
+        width: 210mm;
+        background: #ffffff;
+        color: #0f172a;
+        font-family: 'Segoe UI', Arial, sans-serif;
+        font-size: 14px;
+        line-height: 1.6;
+        margin: 0 auto;
+      `;
+      container.innerHTML = pagesContent;
+      document.body.appendChild(container);
+
+      // Preload all images in container before html2canvas capture
+      const images = Array.from(container.querySelectorAll("img"));
+      if (images.length > 0) {
+        await Promise.all(
+          images.map(
+            (img) =>
+              new Promise((resolve) => {
+                if (img.complete && img.naturalHeight !== 0) {
+                  resolve(true);
+                } else {
+                  img.onload = () => resolve(true);
+                  img.onerror = () => resolve(true);
+                  setTimeout(() => resolve(true), 1500);
+                }
+              })
+          )
+        );
+      }
+
+      const html2pdfModule: any = await import("html2pdf.js");
+      const html2pdf = html2pdfModule.default || html2pdfModule;
 
       const opt = {
         margin: 0,
         filename: fileName,
-        image: { type: 'jpeg' as const, quality: 0.98 },
+        image: { type: "jpeg" as const, quality: 0.98 },
         html2canvas: {
           scale: 2,
           useCORS: true,
-          logging: false
+          logging: false,
+          allowTaint: true,
+          onclone: (clonedDoc: Document) => {
+            // Strip style and stylesheet links to eliminate Tailwind v4 oklch rules
+            clonedDoc.querySelectorAll("style, link").forEach((el) => el.remove());
+            clonedDoc.documentElement.removeAttribute("style");
+            clonedDoc.body.removeAttribute("style");
+
+            // Inject clean standalone base styles for PDF document elements
+            const baseStyle = clonedDoc.createElement("style");
+            baseStyle.textContent = `
+              * { box-sizing: border-box !important; }
+              body { font-family: 'Segoe UI', Arial, sans-serif !important; color: #0f172a !important; background: #ffffff !important; margin: 0 !important; padding: 0 !important; }
+              p { margin-top: 6px !important; margin-bottom: 10px !important; line-height: 1.65 !important; color: #0f172a !important; }
+              h1, h2, h3, h4, h5, h6 { color: #0f2552 !important; margin-top: 14px !important; margin-bottom: 8px !important; font-weight: 800 !important; }
+              ul, ol { margin-top: 6px !important; margin-bottom: 10px !important; padding-left: 20px !important; }
+              table { width: 100% !important; border-collapse: collapse !important; margin-top: 8px !important; margin-bottom: 12px !important; }
+              td, th { padding: 6px 10px !important; border: 1px solid #cbd5e1 !important; font-size: 13px !important; color: #0f172a !important; }
+              img { max-width: 100% !important; height: auto !important; }
+            `;
+            clonedDoc.head.appendChild(baseStyle);
+          },
         },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
-        pagebreak: { mode: ['css', 'legacy'] }
+        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" as const },
+        pagebreak: { mode: ["avoid-all", "css", "legacy"] },
       };
 
-      await html2pdfModule().set(opt).from(pdfRoot).save();
+      await html2pdf().set(opt).from(container).save();
       toast.success(`PDF "${fileName}" downloaded successfully!`);
     } catch (err: any) {
-      console.error("Direct PDF export error:", err);
-      toast.error("Failed to download PDF directly.");
+      console.error("PDF export error:", err);
+      toast.error(`PDF export error: ${err?.message || "Failed to generate PDF download"}`);
     } finally {
-      if (iframe && iframe.parentNode) {
-        iframe.parentNode.removeChild(iframe);
+      if (container && container.parentNode) {
+        container.parentNode.removeChild(container);
       }
+      document.querySelectorAll(".html2pdf__container").forEach((el) => el.remove());
+      document.body.style.cssText = originalBodyStyle;
+      document.documentElement.style.cssText = originalHtmlStyle;
+      window.scrollTo(scrollX, scrollY);
       setIsExporting(false);
     }
   };

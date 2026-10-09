@@ -125,6 +125,18 @@ class EmployeeService:
             update_data["personal_info"]["profile_photo"] = photo
             update_data["profile_photo"] = photo
 
+        # If signature is updated, sync signature & signature_url
+        sig = employee_update.signature or employee_update.signature_url or (
+            employee_update.personal_info.signature if (employee_update.personal_info and getattr(employee_update.personal_info, 'signature', None)) else None
+        )
+        if sig is not None:
+            if "personal_info" not in update_data or not update_data["personal_info"]:
+                update_data["personal_info"] = {}
+            update_data["personal_info"]["signature"] = sig
+            update_data["personal_info"]["signature_url"] = sig
+            update_data["signature"] = sig
+            update_data["signature_url"] = sig
+
         # If password is being updated, hash it (+ refresh vault copy).
         # Blank/missing password = no change (never overwrite).
         # NOTE: repo $set replaces the whole personal_info subdocument, so the

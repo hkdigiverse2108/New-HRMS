@@ -263,19 +263,13 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
       newErrors.firstName = "First Name is required.";
     }
 
-    // 2. Middle Name *
-    const cleanMiddleName = (formData.middleName || "").trim();
-    if (!cleanMiddleName) {
-      newErrors.middleName = "Middle Name is required.";
-    }
-
-    // 3. Last Name *
+    // 2. Last Name *
     const cleanLastName = (formData.lastName || "").trim();
     if (!cleanLastName) {
       newErrors.lastName = "Last Name is required.";
     }
 
-    // 4. Email Address *
+    // 3. Email Address *
     const cleanEmail = (formData.email || "").trim();
     if (!cleanEmail) {
       newErrors.email = "Email Address is required.";
@@ -286,7 +280,7 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
       }
     }
 
-    // 5. Phone Number *
+    // 4. Phone Number *
     const cleanPhone = (formData.phone || "").trim();
     if (!cleanPhone) {
       newErrors.phone = "Phone Number is required.";
@@ -297,7 +291,7 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
       }
     }
 
-    // 6. Password * (Required for new employee)
+    // 5. Password * (Required for new employee)
     const cleanPassword = (formData.password || "").trim();
     if (!initialData && !cleanPassword) {
       newErrors.password = "Password is required.";
@@ -305,53 +299,27 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
       newErrors.password = "Password must be at least 6 characters.";
     }
 
-    // 7. System Role *
+    // 6. System Role *
     const cleanRole = (formData.role || "").trim();
     if (!cleanRole) {
       newErrors.role = "System Role is required.";
     }
 
-    // 8. Department *
+    // 7. Department *
     const cleanDept = (formData.department || "").trim();
     if (!cleanDept) {
       newErrors.department = "Department is required.";
     }
 
-    // 9. Bank Name *
-    const cleanBankName = (formData.bankName || "").trim();
-    if (!cleanBankName) {
-      newErrors.bankName = "Bank Name is required.";
-    }
-
-    // 10. Account Holder Name *
-    const cleanAccountHolderName = (formData.accountHolderName || "").trim();
-    if (!cleanAccountHolderName) {
-      newErrors.accountHolderName = "Account Holder Name is required.";
-    }
-
-    // 11. Account Number *
-    const cleanAccountNumber = (formData.accountNumber || "").trim();
-    if (!cleanAccountNumber) {
-      newErrors.accountNumber = "Account Number is required.";
-    }
-
-    // 12. IFSC Code *
-    const cleanIfscCode = (formData.ifscCode || "").trim();
-    if (!cleanIfscCode) {
-      newErrors.ifscCode = "IFSC Code is required.";
-    }
-
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       // Automatically jump to the tab containing the first error
-      if (newErrors.firstName || newErrors.middleName || newErrors.lastName || newErrors.email || newErrors.phone || newErrors.password) {
+      if (newErrors.firstName || newErrors.lastName || newErrors.email || newErrors.phone || newErrors.password) {
         setActiveTab('personal');
       } else if (newErrors.role || newErrors.department) {
         setActiveTab('work');
-      } else if (newErrors.bankName || newErrors.accountHolderName || newErrors.accountNumber || newErrors.ifscCode) {
-        setActiveTab('bank');
       }
-      toast.error("Please fill in all required fields marked with * across Personal Info, Work Details, and Bank & Docs.");
+      toast.error("Please fill in required fields marked with *.");
       return false;
     }
 
@@ -362,7 +330,6 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
   const isFormValid = Boolean(
     // 1. Personal Info
     (formData.firstName || "").trim() &&
-    (formData.middleName || "").trim() &&
     (formData.lastName || "").trim() &&
     (formData.email || "").trim() &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((formData.email || "").trim()) &&
@@ -370,12 +337,7 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
     (initialData ? true : (formData.password || "").trim().length >= 6) &&
     // 2. Work Details
     (formData.role || "").trim() &&
-    (formData.department || "").trim() &&
-    // 3. Bank & Docs
-    (formData.bankName || "").trim() &&
-    (formData.accountHolderName || "").trim() &&
-    (formData.accountNumber || "").trim() &&
-    (formData.ifscCode || "").trim()
+    (formData.department || "").trim()
   );
 
   const handleSubmit = async (e: React.FormEvent) => {

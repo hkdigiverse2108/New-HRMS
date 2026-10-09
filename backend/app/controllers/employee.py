@@ -239,7 +239,7 @@ async def update_employee(employee_id: str, employee: EmployeeUpdate, request: R
         from app.schemas.employee import PersonalInfoUpdate
         allowed_pi = {"first_name", "middle_name", "last_name", "phone_number", "date_of_birth",
                       "gender", "password", "parent_guardian_name", "contact_number",
-                      "relation", "profile_photo"}
+                      "relation", "profile_photo", "signature", "signature_url"}
         raw_pi = employee.personal_info.model_dump(exclude_unset=True) if employee.personal_info else {}
         clean_pi = {k: v for k, v in raw_pi.items() if k in allowed_pi}
         kwargs: dict = {}
@@ -247,8 +247,12 @@ async def update_employee(employee_id: str, employee: EmployeeUpdate, request: R
             kwargs["personal_info"] = PersonalInfoUpdate(**clean_pi)
         if employee.profile_photo is not None:
             kwargs["profile_photo"] = employee.profile_photo
+        if employee.signature is not None:
+            kwargs["signature"] = employee.signature
+        if employee.signature_url is not None:
+            kwargs["signature_url"] = employee.signature_url
         employee = EmployeeUpdate(**kwargs)
-    elif role != "Admin":
+    elif role not in ("Admin", "HR"):
         await DynamicPermissionChecker()(request, current_user)
 
     updated_emp = await EmployeeService.update_employee(employee_id, employee)
