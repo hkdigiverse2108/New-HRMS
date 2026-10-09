@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { ORG_DATA, OrgNodeData } from "./org-data";
-import { ChevronDown, ChevronUp, Users, ZoomIn, ZoomOut, Maximize, Settings, Plus, Trash2, Network, Building2, Layers, Briefcase } from "lucide-react";
+import { ChevronDown, ChevronUp, Users, ZoomIn, ZoomOut, Maximize, Settings, Plus, Trash2, Network, Building2, Layers, Briefcase, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ManageDepartmentsModal } from "./ManageDepartmentsModal";
+import { DepartmentDesignationManager } from "./DepartmentDesignationManager";
 import { AddOrgNodeModal } from "./AddOrgNodeModal";
 import { DeleteConfirmModal } from "./DeleteConfirmModal";
 import { UnassignedSidebar } from "./UnassignedSidebar";
@@ -173,6 +174,7 @@ export function OrgStructure() {
   const { canCreate, canUpdate, canDelete, isAdmin } = useModulePermissions("/employees/org");
   const [zoom, setZoom] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDeptDesignationOpen, setIsDeptDesignationOpen] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [selectedParent, setSelectedParent] = useState<OrgNodeData | null>(null);
   const [nodeToDelete, setNodeToDelete] = useState<OrgNodeData | null>(null);
@@ -377,13 +379,24 @@ export function OrgStructure() {
 
         <div className="flex flex-wrap gap-2 sm:gap-4 items-center">
           {(isAdmin || canUpdate) && (
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-card border border-border text-foreground/80 font-bold rounded-xl shadow-sm hover:bg-muted/50 transition-colors text-xs"
-            >
-              <Settings className="w-4 h-4" />
-              Manage Departments
-            </button>
+            <>
+              <button
+                onClick={() => setIsDeptDesignationOpen(true)}
+                className="flex items-center gap-2 px-3.5 py-2 bg-primary text-primary-foreground font-bold rounded-xl shadow-sm hover:bg-primary/90 transition-all text-xs active:scale-95 cursor-pointer"
+                title="Manage Sub-Departments & Designations"
+              >
+                <Layers className="w-4 h-4" />
+                <span>Sub-Departments &amp; Designations</span>
+              </button>
+
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="flex items-center gap-2 px-3.5 py-2 bg-card border border-border text-foreground/80 font-bold rounded-xl shadow-sm hover:bg-muted/50 transition-colors text-xs cursor-pointer"
+              >
+                <Settings className="w-4 h-4" />
+                Manage Departments
+              </button>
+            </>
           )}
 
           <div className="flex items-center gap-2 bg-card border border-border p-1.5 rounded-2xl shadow-sm">
@@ -515,6 +528,39 @@ export function OrgStructure() {
         onClose={() => setNodeToDelete(null)}
         onConfirm={confirmDelete}
       />
+
+      {/* Sub-Departments & Designations Modal Popup */}
+      {isDeptDesignationOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-6 animate-in fade-in duration-200">
+          <div className="bg-card border border-border rounded-3xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-border bg-muted/20 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-primary/10 text-primary">
+                  <Layers className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base sm:text-xl font-black text-foreground">
+                    Sub-Departments &amp; Designations
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    Manage departments, sub-departments, and designations
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsDeptDesignationOpen(false)}
+                className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                title="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+              <DepartmentDesignationManager hideHeader={true} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

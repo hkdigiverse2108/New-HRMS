@@ -6,22 +6,24 @@ import { DesignationsManager } from "./DesignationsManager";
 import { useDepartments } from "./DepartmentContext";
 import { cn } from "@/lib/utils";
 
-export function DepartmentDesignationManager() {
+export function DepartmentDesignationManager({ hideHeader = false }: { hideHeader?: boolean } = {}) {
   const [activeTab, setActiveTab] = useState<"sub_departments" | "designations" | "departments">("sub_departments");
   const [subDeptCountMap, setSubDeptCountMap] = useState<Record<string, number>>({});
   const { departments, refreshDepartments } = useDepartments();
 
   return (
-    <div className="w-full animate-in fade-in zoom-in-95 duration-300 flex flex-col h-[calc(100vh-4rem)] pb-8 overflow-y-auto">
+    <div className={cn("w-full animate-in fade-in zoom-in-95 duration-300 flex flex-col pb-8 overflow-y-auto", !hideHeader && "h-[calc(100vh-4rem)]")}>
       {/* Header */}
-      <div className="mb-6 shrink-0">
-        <h1 className="text-xl sm:text-[28px] font-black text-foreground tracking-tight mb-1 break-words">
-          Sub-Departments & Designations
-        </h1>
-        <p className="text-[14px] text-muted-foreground">
-          Dynamically manage sub-departments, designations, and departments for the organization.
-        </p>
-      </div>
+      {!hideHeader && (
+        <div className="mb-6 shrink-0">
+          <h1 className="text-xl sm:text-[28px] font-black text-foreground tracking-tight mb-1 break-words">
+            Sub-Departments & Designations
+          </h1>
+          <p className="text-[14px] text-muted-foreground">
+            Dynamically manage sub-departments, designations, and departments for the organization.
+          </p>
+        </div>
+      )}
 
       {/* Top Division / Tabs */}
       <div className="flex border-b border-border gap-2 sm:gap-6 overflow-x-auto scrollbar-hide mb-6 shrink-0">

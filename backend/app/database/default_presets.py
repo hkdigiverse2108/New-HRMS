@@ -62,8 +62,8 @@ SYSTEM_MODULES: List[Dict[str, Any]] = [
     # 12. Interview (Main Page)
     {"id": "/recruitment/interviews", "name": "Interview", "section": "People", "is_parent": False},
 
-    # 13. Activity Tracker
-    {"id": "/activity-tracker", "name": "Activity Tracker", "section": "Admin", "is_parent": False},
+    # 13. Activity Logs (Moved to #13 per audio transcript 13)
+    {"id": "/activity-logs", "name": "Activity Logs", "section": "Admin", "is_parent": False},
 
     # 14. Invoices (5 Sub-Departments)
     {"id": "/invoice", "name": "Invoices", "section": "Finance", "is_parent": True},
@@ -85,8 +85,8 @@ SYSTEM_MODULES: List[Dict[str, Any]] = [
     # 18. Seating
     {"id": "/workspace/seating", "name": "Seating", "section": "Workplace", "is_parent": False},
 
-    # 19. Recruitment
-    {"id": "/recruitment/hirings", "name": "Recruitment", "section": "People", "is_parent": False},
+    # 19. My Resources (Replaces Recruitment per audio transcript 13)
+    {"id": "/workspace/resource", "name": "My Resources", "section": "Workplace", "is_parent": False},
 
     # 20. Payroll (6 Sub-Departments)
     {"id": "/payroll", "name": "Payroll", "section": "Finance", "is_parent": True},
@@ -117,17 +117,14 @@ SYSTEM_MODULES: List[Dict[str, Any]] = [
     {"id": "/finance/clients", "name": "Other Transactions", "section": "Finance", "parent_id": "/finance"},
     {"id": "/finance/audit", "name": "Audit Logs", "section": "Finance", "parent_id": "/finance"},
 
-    # 25. Employees (Employee list as default, plus sub-departments)
-    {"id": "/employees", "name": "Employees", "section": "People", "is_parent": True},
-    {"id": "/employees/list", "name": "Employee List", "section": "People", "parent_id": "/employees"},
-    {"id": "/employees/org", "name": "Org Structure", "section": "People", "parent_id": "/employees"},
-    {"id": "/employees/departments-setup", "name": "Sub-Departments & Designations", "section": "People", "parent_id": "/employees"},
+    # 25. Employees (Direct Main Page - Employee List, sub-items removed per audio transcript 13)
+    {"id": "/employees", "name": "Employees", "section": "People", "is_parent": False},
 
     # 26. Deposit (Main Page)
     {"id": "/employees/deposits", "name": "Deposit", "section": "People", "is_parent": False},
 
-    # 27. Activity Logs
-    {"id": "/activity-logs", "name": "Activity Logs", "section": "Admin", "is_parent": False},
+    # 27. Org Structure (Promoted to Main Page at #27 per audio transcript 13)
+    {"id": "/employees/org", "name": "Org Structure", "section": "People", "is_parent": False},
 
     # 28. Recycle Bin
     {"id": "/recycle-bin", "name": "Recycle Bin", "section": "Admin", "is_parent": False},
@@ -192,7 +189,12 @@ def normalize_and_expand_permissions(perms: Dict[str, dict]) -> Dict[str, dict]:
         ("/employees/leave-requests", "/leaves"),
         ("/employees/attendance", "/attendance"),
         ("/recruitment/hirings", "/recruitment"),
+        ("/workspace/resource", "/recruitment/hirings"),
+        ("/workspace/resource", "/recruitment"),
+        ("/activity-logs", "/activity-tracker"),
         ("/employees/list", "/employees"),
+        ("/employees/org", "/employees"),
+        ("/employees/org", "/employees/departments-setup"),
     ]
 
     for p1, p2 in aliases:

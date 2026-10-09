@@ -24,7 +24,6 @@ const GROUP_PARENT_MODULES = new Set([
   "/payroll",
   "/finance",
   "/invoice",
-  "/employees",
 ]);
 
 const URL_ALIASES: Record<string, string[]> = {
@@ -49,6 +48,7 @@ const URL_ALIASES: Record<string, string[]> = {
   "/employees/documents/generate": ["/documents/generate", "/employees/documents/generate"],
   "/recruitment/interviews": ["/recruitment", "/recruitment/interviews", "/interviews"],
   "/recruitment/hirings": ["/recruitment", "/recruitment/hirings", "/hirings"],
+  "/workspace/resource": ["/workspace/resource", "/workspace", "/resources", "/recruitment/hirings"],
   "/workspace/seating": ["/workspace", "/workspace/seating", "/seating"],
   "/workspace/gallery": ["/workspace", "/workspace/gallery", "/gallery"],
   "/approvals/daily-progress": ["/approvals", "/approvals/daily-progress", "/daily-progress"],
@@ -59,6 +59,8 @@ const URL_ALIASES: Record<string, string[]> = {
   "/employees/leave-requests": ["/employees/leave-requests", "/leave", "/approvals/leave-requests"],
   "/employees/list": ["/employees", "/employees/list"],
   "/employees": ["/employees/list", "/employees"],
+  "/employees/org": ["/employees/org", "/employees"],
+  "/activity-logs": ["/activity-logs", "/activity-tracker"],
   "/invoice": ["/invoice/all", "/invoice/ledger", "/invoice/create", "/invoice/proforma"],
 };
 

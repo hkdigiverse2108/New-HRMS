@@ -38,6 +38,7 @@ import {
   Gift,
   Target,
   Trash2,
+  Network,
   type LucideIcon,
 } from "lucide-react";
 
@@ -89,8 +90,8 @@ export const navItems: NavItem[] = [
   // 12. Interview
   { title: "Interview", url: "/recruitment/interviews", icon: Users },
 
-  // 13. Activity Tracker
-  { title: "Activity Tracker", url: "/activity-tracker", icon: Activity },
+  // 13. Activity Logs (Moved to #13 per audio transcript 13)
+  { title: "Activity Logs", url: "/activity-logs", icon: Activity },
 
   // 14. Invoices (5 Sub-Departments)
   {
@@ -117,8 +118,8 @@ export const navItems: NavItem[] = [
   // 18. Seating
   { title: "Seating", url: "/workspace/seating", icon: LayoutGrid },
 
-  // 19. Recruitment
-  { title: "Recruitment", url: "/recruitment/hirings", icon: UserPlus },
+  // 19. My Resources (Replaces Recruitment per audio transcript 13)
+  { title: "My Resources", url: "/workspace/resource", icon: Building2 },
 
   // 20. Payroll (Existing sub-departments preserved)
   {
@@ -155,22 +156,14 @@ export const navItems: NavItem[] = [
     ],
   },
 
-  // 25. Employees (Employee list is default main view, plus sub-departments)
-  {
-    title: "Employees",
-    url: "/employees/list",
-    icon: Users,
-    children: [
-      { title: "Org Structure", url: "/employees/org" },
-      { title: "Sub-Departments & Designations", url: "/employees/departments-setup" },
-    ],
-  },
+  // 25. Employees (Direct Main Page - Employee List, sub-items removed per audio transcript 13)
+  { title: "Employees", url: "/employees/list", icon: Users },
 
   // 26. Deposit (Promoted to Main Page)
   { title: "Deposit", url: "/employees/deposits", icon: Wallet },
 
-  // 27. Activity Logs
-  { title: "Activity Logs", url: "/activity-logs", icon: Activity },
+  // 27. Org Structure (Promoted to Main Page at #27 per audio transcript 13)
+  { title: "Org Structure", url: "/employees/org", icon: Network },
 
   // 28. Recycle Bin
   { title: "Recycle Bin", url: "/recycle-bin", icon: Trash2 },
