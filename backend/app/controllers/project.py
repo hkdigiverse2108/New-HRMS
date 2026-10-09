@@ -48,9 +48,10 @@ async def get_all_projects(
     cc_status: Optional[str] = Query(None, description="Filter by content calendar approval status (pending, approved_by_client, changes_requested, rejected)"),
     current_user: dict = Depends(get_current_employee)
 ):
-    user_role = str(current_user.get("role", "")).lower()
-    user_dept = str(current_user.get("department", "") or current_user.get("work_details", {}).get("department", ""))
-    is_admin_or_hr = user_role in ["admin", "superadmin", "hr"]
+    work_details = current_user.get("work_details", {}) or {}
+    user_role = str(current_user.get("role", "") or work_details.get("system_role", "") or current_user.get("system_role", "")).strip().lower()
+    user_dept = str(current_user.get("department", "") or work_details.get("department", ""))
+    is_admin_or_hr = user_role in ["admin", "superadmin", "hr", "subadmin"]
     effective_category = category
     if not is_admin_or_hr and user_dept and not category:
         effective_category = user_dept

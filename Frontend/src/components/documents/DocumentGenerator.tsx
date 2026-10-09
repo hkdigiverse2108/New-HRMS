@@ -12,6 +12,10 @@ interface EmployeeItem {
   joiningDate: string;
   salary?: string;
   email?: string;
+  empCode?: string;
+  phone?: string;
+  address?: string;
+  workLocation?: string;
 }
 
 interface TemplateItem {
@@ -46,7 +50,7 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
   const [selectedTempId, setSelectedTempId] = useState("");
   const [isExporting, setIsExporting] = useState(false);
   const [isSending, setIsSending] = useState(false);
-  
+
   const [customVars, setCustomVars] = useState<Record<string, string>>({});
   const [userCustomKeys, setUserCustomKeys] = useState<string[]>([]);
   const [newCustomKey, setNewCustomKey] = useState("");
@@ -58,7 +62,7 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("document_letterhead_config");
       if (stored) {
-        try { return JSON.parse(stored); } catch (e) {}
+        try { return JSON.parse(stored); } catch (e) { }
       }
     }
     return DEFAULT_LETTERHEAD;
@@ -71,7 +75,7 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
         if (stored) {
           try {
             setLetterhead(JSON.parse(stored));
-          } catch (e) {}
+          } catch (e) { }
         }
       }
     };
@@ -111,11 +115,11 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
           const w = e.work_details || {};
           const c = e.compensation || {};
           const empCode = e.employee_id || e.emp_code || w.employee_id || "";
-          const fullName = [p.first_name, p.middle_name, p.last_name].filter(Boolean).join(" ") 
-            || [e.first_name, e.last_name].filter(Boolean).join(" ") 
-            || e.name 
-            || p.email_address 
-            || e.email 
+          const fullName = [p.first_name, p.middle_name, p.last_name].filter(Boolean).join(" ")
+            || [e.first_name, e.last_name].filter(Boolean).join(" ")
+            || e.name
+            || p.email_address
+            || e.email
             || "Unnamed Employee";
 
           const roleName = w.designation || e.designation || w.system_role || e.role || "Employee";
@@ -137,7 +141,7 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
         setEmployees(mappedEmps);
 
         // Auto select first template if available
-        if (mappedTemplates.length > 0 && !selectedTempId) {
+        if (mappedTemplates.length > 0 && !selectedTempId && mappedTemplates[0]) {
           setSelectedTempId(mappedTemplates[0].id);
         }
       } catch (err: any) {
@@ -252,7 +256,7 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
         } else if (["joiningdate", "dateofjoining", "doj"].includes(norm)) {
           nextVars[key] = selectedEmp.joiningDate;
         } else if (["salary", "monthlysalary", "ctc"].includes(norm)) {
-          nextVars[key] = selectedEmp.salary;
+          nextVars[key] = selectedEmp.salary || "";
         } else if (["email", "emailaddress"].includes(norm)) {
           nextVars[key] = selectedEmp.email || "";
         } else if (["phone", "phonenumber", "mobile"].includes(norm)) {
@@ -268,7 +272,7 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
         nextVars[key] = letterhead.companyName || "HariKrushn DigiVerse LLP";
       }
       if (["date", "today", "issuedate", "letterdate"].includes(norm)) {
-        nextVars[key] = today;
+        nextVars[key] = today || "";
       }
     });
 
@@ -369,7 +373,7 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
 
   const pageSections = useMemo(() => {
     if (!previewContent) return [""];
-    
+
     const cleanContent = previewContent.replace(
       /(?:<hr\s*class="[^"]*page-break[^"]*"[^>]*>|<div\s*class="[^"]*page-break[^"]*"[^>]*><\/div>|<!--\s*pagebreak\s*-->|{{page_break}}|<p[^>]*style="[^"]*page-break-before:\s*always[^"]*"[^>]*>)/gi,
       ""
@@ -442,10 +446,10 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
         letterheadHTML = `
           <div style="position: relative; width: 100%; margin-bottom: 24px; padding-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
             <div style="display: flex; align-items: center; gap: 14px;">
-              ${letterhead.logoUrl 
-                ? `<img src="${letterhead.logoUrl}" style="height: 50px; width: auto;" />` 
-                : `<div style="width: 48px; height: 48px; border-radius: 12px; background: #0f2552; color: white; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 20px;">${letterhead.companyName ? letterhead.companyName.charAt(0) : "HK"}</div>`
-              }
+              ${letterhead.logoUrl
+            ? `<img src="${letterhead.logoUrl}" style="height: 50px; width: auto;" />`
+            : `<div style="width: 48px; height: 48px; border-radius: 12px; background: #0f2552; color: white; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 20px;">${letterhead.companyName ? letterhead.companyName.charAt(0) : "HK"}</div>`
+          }
               <div>
                 <div style="font-size: 22px; font-weight: 900; color: #0f2552; line-height: 1.1;">${letterhead.companyName || "HariKrushn DigiVerse LLP"}</div>
                 <div style="font-size: 13px; font-weight: 700; color: #16a34a; margin-top: 3px;"><span style="color: #0f2552;">|</span> ${letterhead.tagline || "Innovate • Transform • Grow"}</div>
@@ -475,7 +479,7 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
       <!DOCTYPE html>
       <html>
         <head>
-          <title>${selectedTemp.name} - ${customVars.employee_name || "Document"}</title>
+          <title>${selectedTemp.name} - ${customVars["employee_name"] || "Document"}</title>
           <style>
             @page {
               size: A4 portrait;
@@ -568,31 +572,31 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
     const empNameStr = selectedEmp ? selectedEmp.name.replace(/[^a-zA-Z0-9_-]/g, "_") : "Document";
     const fileName = `${docName}_${empNameStr}.pdf`;
 
-    let letterheadHTML = "";
-    if (letterhead.enabled) {
-      if (letterhead.headerImageUrl) {
-        letterheadHTML = `
-          <div style="width: 100%; text-align: center; margin-bottom: 24px; padding-bottom: 8px;">
-            <img src="${letterhead.headerImageUrl}" style="width: 100%; max-height: 140px; object-fit: contain;" />
-          </div>
-        `;
-      } else {
-        letterheadHTML = `
-          <div style="position: relative; width: 100%; margin-bottom: 24px; padding-bottom: 12px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #0f2552;">
-            <div style="display: flex; align-items: center; gap: 14px;">
-              ${letterhead.logoUrl 
-                ? `<img src="${letterhead.logoUrl}" style="height: 50px; width: auto;" />` 
-                : `<div style="width: 48px; height: 48px; border-radius: 12px; background: #0f2552; color: #ffffff; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 20px;">${letterhead.companyName ? letterhead.companyName.charAt(0) : "HK"}</div>`
-              }
-              <div>
-                <div style="font-size: 22px; font-weight: 900; color: #0f2552; line-height: 1.1;">${letterhead.companyName || "HariKrushn DigiVerse LLP"}</div>
-                <div style="font-size: 13px; font-weight: 700; color: #16a34a; margin-top: 3px;"><span style="color: #0f2552;">|</span> ${letterhead.tagline || "Innovate • Transform • Grow"}</div>
+      let letterheadHTML = "";
+      if (letterhead.enabled) {
+        if (letterhead.headerImageUrl) {
+          letterheadHTML = `
+            <div style="width: 100%; text-align: center; margin-bottom: 24px; padding-bottom: 8px;">
+              <img src="${letterhead.headerImageUrl}" style="width: 100%; max-height: 140px; object-fit: contain;" />
+            </div>
+          `;
+        } else {
+          letterheadHTML = `
+            <div style="position: relative; width: 100%; margin-bottom: 24px; padding-bottom: 12px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #0f2552;">
+              <div style="display: flex; align-items: center; gap: 14px;">
+                ${letterhead.logoUrl
+              ? `<img src="${letterhead.logoUrl}" style="height: 50px; width: auto;" />`
+              : `<div style="width: 48px; height: 48px; border-radius: 12px; background: #0f2552; color: white; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 20px;">${letterhead.companyName ? letterhead.companyName.charAt(0) : "HK"}</div>`
+            }
+                <div>
+                  <div style="font-size: 22px; font-weight: 900; color: #0f2552; line-height: 1.1;">${letterhead.companyName || "HariKrushn DigiVerse LLP"}</div>
+                  <div style="font-size: 13px; font-weight: 700; color: #16a34a; margin-top: 3px;"><span style="color: #0f2552;">|</span> ${letterhead.tagline || "Innovate • Transform • Grow"}</div>
+                </div>
               </div>
             </div>
-          </div>
-        `;
+          `;
+        }
       }
-    }
 
     const pagesContent = pageSections.map((sec, idx) => {
       const cleanSec = sec
@@ -656,7 +660,7 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
       const opt = {
         margin: 0,
         filename: fileName,
-        image: { type: "jpeg", quality: 0.98 },
+        image: { type: "jpeg" as const, quality: 0.98 },
         html2canvas: {
           scale: 2,
           useCORS: true,
@@ -683,7 +687,7 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
             clonedDoc.head.appendChild(baseStyle);
           },
         },
-        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" as const },
         pagebreak: { mode: ["avoid-all", "css", "legacy"] },
       };
 
@@ -1017,7 +1021,7 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
                       </label>
                       <input
                         type={isDateType ? "date" : "text"}
-                        value={isDateType ? formatValueForDateInput(currentVal) : currentVal}
+                        value={isDateType ? formatValueForDateInput(currentVal || "") : (currentVal || "")}
                         onChange={(e) => handleVarChange(varKey, e.target.value)}
                         placeholder={`Enter ${fieldLabel}...`}
                         className="w-full px-3.5 py-2 bg-background border border-border/50 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none font-medium transition-all cursor-pointer"

@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export interface DatePickerProps {
   value?: string | Date | null | undefined;
@@ -248,29 +249,37 @@ export function DatePicker({
             </Button>
 
             <div className="flex flex-1 items-center justify-center gap-1.5 min-w-0">
-              <select
-                value={currentMonth.getMonth()}
-                onChange={(e) => handleMonthChange(parseInt(e.target.value, 10))}
-                className="h-7 px-2 min-w-0 max-w-[45%] truncate text-xs font-bold bg-muted/60 hover:bg-muted border border-border/60 rounded-lg cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary text-foreground"
+              <Select
+                value={String(currentMonth.getMonth())}
+                onValueChange={(val) => handleMonthChange(parseInt(val, 10))}
               >
-                {MONTH_NAMES.map((name, idx) => (
-                  <option key={name} value={idx}>
-                    {name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="h-7 px-2 min-w-0 max-w-[50%] text-xs font-bold bg-muted/60 hover:bg-muted border border-border/60 rounded-lg cursor-pointer">
+                  <SelectValue placeholder="Month" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60 z-[350]">
+                  {MONTH_NAMES.map((name, idx) => (
+                    <SelectItem key={name} value={String(idx)} className="text-xs font-semibold rounded-lg cursor-pointer">
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-              <select
-                value={currentMonth.getFullYear()}
-                onChange={(e) => handleYearChange(parseInt(e.target.value, 10))}
-                className="h-7 px-2 text-xs font-bold bg-muted/60 hover:bg-muted border border-border/60 rounded-lg cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary text-foreground"
+              <Select
+                value={String(currentMonth.getFullYear())}
+                onValueChange={(val) => handleYearChange(parseInt(val, 10))}
               >
-                {years.map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="h-7 px-2 min-w-0 max-w-[42%] text-xs font-bold bg-muted/60 hover:bg-muted border border-border/60 rounded-lg cursor-pointer">
+                  <SelectValue placeholder="Year" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60 z-[350]">
+                  {years.map((y) => (
+                    <SelectItem key={y} value={String(y)} className="text-xs font-semibold rounded-lg cursor-pointer">
+                      {y}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <Button

@@ -77,9 +77,9 @@ export function PrintLabelsModal({ isOpen, onClose, resources }: PrintLabelsModa
           </style>
         </head>
         <body>
-          ${pages.map(pageLabels => `
+          ${pages.map((pageLabels: string[]) => `
             <div class="print-page">
-              ${pageLabels.map(id => id ? `
+              ${pageLabels.map((id: string) => id ? `
                 <div class="label-card">
                   <div class="label-title">${title}</div>
                   <div class="label-id">${id}</div>
@@ -128,7 +128,7 @@ export function PrintLabelsModal({ isOpen, onClose, resources }: PrintLabelsModa
     : filteredResources.map(r => r.assetId || "HK-XXX-000");
 
   // Create pages
-  const pages = [];
+  const pages: string[][] = [];
   for (let i = 0; i < displayResources.length; i += labelsPerPage) {
     const pageLabels = displayResources.slice(i, i + labelsPerPage);
     // Pad the last page if needed for visual grid consistency

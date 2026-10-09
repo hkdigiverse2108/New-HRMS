@@ -340,6 +340,27 @@ class ProjectService:
                                     if current_user_id:
                                         update_fields["assigned_by"] = current_user_id
                                     await TaskRepository.update(str(task["_id"]), update_fields)
+                        elif role == "cc_creator":
+                            # Create new Content Calendar task for the assigned person
+                            from app.services.task import TaskService
+                            from app.schemas.task import TaskCreate
+                            from datetime import date, timedelta
+                            proj_name = (
+                                data_dict.get("general", {}).get("project_name")
+                                or (old_project.get("general", {}).get("project_name") if old_project else None)
+                                or "Project"
+                            )
+                            due_date = date.today() + timedelta(days=7)
+                            task_create = TaskCreate(
+                                title=f"📅 Create Content Calendar: {proj_name}",
+                                assigned_to=new_emp_id,
+                                due_date=due_date,
+                                task_category="SMM",
+                                project_id=project_id,
+                                creative_role="cc_creator",
+                                description=f"Plan and create Content Calendar posting ideas for {proj_name}"
+                            )
+                            await TaskService.create_task(task_create, current_user_id or "system")
             except Exception as e:
                 import logging
                 logging.getLogger(__name__).warning(f"Error transferring tasks during creative team reassign: {e}")

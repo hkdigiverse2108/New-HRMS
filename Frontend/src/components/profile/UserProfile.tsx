@@ -62,8 +62,8 @@ export function UserProfile() {
     return employees[0] || null;
   }, [authUser, employees]);
 
-  const roleLower = (authUser?.role || "").toLowerCase();
-  const isAdminOrHR = roleLower === "admin" || roleLower === "superadmin" || roleLower === "hr";
+  const roleLower = String(authUser?.role || (authUser as any)?.work_details?.system_role || "").trim().toLowerCase();
+  const isAdminOrHR = roleLower === "admin" || roleLower === "superadmin" || roleLower === "hr" || roleLower === "subadmin";
 
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -304,25 +304,27 @@ export function UserProfile() {
                   <p className="text-[11px] text-muted-foreground font-bold uppercase tracking-wider">Gender</p>
                   <p className="text-sm font-semibold p-3 bg-muted/20 border border-border/50 rounded-xl">{profileData.gender || '-'}</p>
                 </div>
-                <div className="space-y-2 md:col-span-2">
-                  <p className="text-[11px] text-muted-foreground font-bold uppercase tracking-wider">Password Setup</p>
-                  <div className="flex items-center justify-between p-3 bg-muted/20 border border-border/50 rounded-xl">
-                    <div className="flex items-center gap-3">
-                      <Key className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm font-semibold tracking-widest text-muted-foreground">
-                        {showProfilePassword ? (profileData.password || "Not set") : "••••••••"}
-                      </span>
+                {isAdminOrHR && (
+                  <div className="space-y-2 md:col-span-2">
+                    <p className="text-[11px] text-muted-foreground font-bold uppercase tracking-wider">Password Setup</p>
+                    <div className="flex items-center justify-between p-3 bg-muted/20 border border-border/50 rounded-xl">
+                      <div className="flex items-center gap-3">
+                        <Key className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm font-semibold tracking-widest text-muted-foreground">
+                          {showProfilePassword ? (profileData.password || "Not set") : "••••••••"}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowProfilePassword(!showProfilePassword)}
+                        className="p-1 text-muted-foreground hover:text-foreground rounded-lg transition-colors focus:outline-none"
+                        title={showProfilePassword ? "Hide password" : "Show password"}
+                      >
+                        {showProfilePassword ? <EyeOff className="w-4 h-4 text-primary" /> : <Eye className="w-4 h-4" />}
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowProfilePassword(!showProfilePassword)}
-                      className="p-1 text-muted-foreground hover:text-foreground rounded-lg transition-colors focus:outline-none"
-                      title={showProfilePassword ? "Hide password" : "Show password"}
-                    >
-                      {showProfilePassword ? <EyeOff className="w-4 h-4 text-primary" /> : <Eye className="w-4 h-4" />}
-                    </button>
                   </div>
-                </div>
+                )}
               </div>
 
               <div className="pt-8 border-t border-border/50 space-y-6">
