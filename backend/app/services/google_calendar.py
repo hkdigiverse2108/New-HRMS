@@ -37,7 +37,7 @@ class GoogleCalendarService:
             "response_type": "code",
             "scope": " ".join(cls.SCOPES),
             "access_type": "offline",
-            "prompt": "select_account consent",
+            "prompt": "consent",
             "state": employee_id
         }
         auth_url = "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(params)

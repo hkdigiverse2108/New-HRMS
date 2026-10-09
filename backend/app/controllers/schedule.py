@@ -248,18 +248,27 @@ async def get_google_auth_status(
 ):
     """
     Check if current employee has linked their Google Calendar.
-    Returns { "is_connected": bool, "google_email": str }
+    Returns { "is_connected": bool, "google_email": str, "needs_reconnect": bool }
     """
     user_id = str(current_employee.get("_id") or current_employee.get("id") or current_employee.get("work_details", {}).get("employee_id"))
+    token = await GoogleAuthRepository.get_valid_access_token(user_id)
     auth_doc = await GoogleAuthRepository.get_auth_by_employee(user_id)
-    if auth_doc and auth_doc.get("access_token"):
+    if auth_doc and token:
         return {
             "is_connected": True,
-            "google_email": auth_doc.get("google_email", "")
+            "google_email": auth_doc.get("google_email", ""),
+            "needs_reconnect": False
+        }
+    elif auth_doc and not token:
+        return {
+            "is_connected": False,
+            "google_email": auth_doc.get("google_email", ""),
+            "needs_reconnect": True
         }
     return {
         "is_connected": False,
-        "google_email": None
+        "google_email": None,
+        "needs_reconnect": False
     }
 
 @router.get("/google/config", response_model=Dict[str, Any])

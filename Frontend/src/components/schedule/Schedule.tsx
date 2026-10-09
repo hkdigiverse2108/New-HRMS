@@ -134,12 +134,18 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
     });
   }, [selfEmployeeId, user?.id]);
 
+  const hasInitializedTeamSelection = useRef(false);
   const fetchTeamUsers = useCallback(async () => {
     if (!canViewTeam) return;
     try {
       const params = teamSearch.trim() ? `?q=${encodeURIComponent(teamSearch.trim())}` : "";
       const res = await api.get<any[]>(`/schedule/team-users${params}`, { showErrorToast: false });
-      setTeamUsers(Array.isArray(res) ? res : []);
+      const usersList = Array.isArray(res) ? res : [];
+      setTeamUsers(usersList);
+      if (!hasInitializedTeamSelection.current && usersList.length > 0) {
+        hasInitializedTeamSelection.current = true;
+        setSelectedUserIds(usersList.map((u) => u.employee_id));
+      }
     } catch {
       setTeamUsers([]);
     }
@@ -156,6 +162,7 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
   // Google connection state (per logged-in HRMS user -> their own Google account)
   const [googleConnected, setGoogleConnected] = useState(false);
   const [googleEmail, setGoogleEmail] = useState("");
+  const [googleNeedsReconnect, setGoogleNeedsReconnect] = useState(false);
   const [isConnectingGoogle, setIsConnectingGoogle] = useState(false);
   const [showGoogleHelp, setShowGoogleHelp] = useState(false);
   const [googleConfig, setGoogleConfig] = useState<{ configured?: boolean; client_id_hint?: string; redirect_uri?: string; steps?: string[] } | null>(null);
@@ -217,12 +224,14 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
 
   const fetchGoogleStatus = useCallback(async () => {
     try {
-      const res = await api.get<{ is_connected?: boolean; google_email?: string }>("/schedule/google/status", { showErrorToast: false });
+      const res = await api.get<{ is_connected?: boolean; google_email?: string; needs_reconnect?: boolean }>("/schedule/google/status", { showErrorToast: false });
       setGoogleConnected(!!res?.is_connected);
       setGoogleEmail(res?.google_email || "");
+      setGoogleNeedsReconnect(!!res?.needs_reconnect);
     } catch {
       setGoogleConnected(false);
       setGoogleEmail("");
+      setGoogleNeedsReconnect(false);
     }
   }, []);
 
@@ -526,6 +535,17 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
                 <Link2Off className="w-3.5 h-3.5" />
               </button>
             </div>
+          ) : googleNeedsReconnect ? (
+            <button
+              type="button"
+              onClick={handleGoogleCalendarLogin}
+              disabled={isConnectingGoogle}
+              title={`Google token expired for ${googleEmail}. Click to reconnect.`}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 transition-all shadow-xs cursor-pointer"
+            >
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              <span className="hidden sm:inline">Reconnect Google ({googleEmail ? googleEmail.split('@')[0] : 'Expired'})</span>
+            </button>
           ) : (
             <div className="flex items-center gap-1">
               <button
