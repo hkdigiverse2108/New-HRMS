@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { User, Briefcase, CreditCard, FileText, Mail, Phone, MapPin, Building, Calendar, Key, Shield, CheckCircle2, ChevronRight, Edit2, Eye, EyeOff, Lock, Bell, Camera } from "lucide-react";
+import { User, Briefcase, CreditCard, FileText, Mail, Phone, MapPin, Building, Calendar, Key, Shield, CheckCircle2, ChevronRight, Edit2, Eye, EyeOff, Lock, Bell, Camera, PenTool } from "lucide-react";
 import { cn, formatDate } from "@/lib/utils";
 import { useEmployeesContext } from "@/components/employees/EmployeeContext";
 import { EmployeeFormModal } from "@/components/employees/EmployeeFormModal";
@@ -8,12 +8,13 @@ import { toast } from "@/lib/toast";
 import { NotificationSettingsCard } from "@/components/notifications/NotificationSettingsCard";
 import { getAvatarUrl, handleAvatarError } from "@/lib/config";
 import { ChangePhotoModal } from "./ChangePhotoModal";
+import { ChangeSignatureModal } from "./ChangeSignatureModal";
 
 type TabType = 'overview' | 'personal' | 'financial' | 'offboarding' | 'notifications';
 
 export function UserProfile() {
   const { user: authUser, refreshProfile } = useAuth();
-  const { employees, updateEmployee } = useEmployeesContext();
+  const { employees, updateEmployee, refreshEmployees } = useEmployeesContext();
 
   // Dynamically resolve current logged-in employee record with robust authUser fallback
   const user = useMemo(() => {
@@ -67,6 +68,10 @@ export function UserProfile() {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+  const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
+  const [userSignature, setUserSignature] = useState(() => 
+    user?.signature || user?.signature_url || (typeof window !== "undefined" ? localStorage.getItem(`user_signature_${user?.id}`) : "") || ""
+  );
   const [showProfilePassword, setShowProfilePassword] = useState(false);
 
   if (!user) {
@@ -151,29 +156,28 @@ export function UserProfile() {
               </p>
             </div>
             
-            <div className="flex gap-3 w-full md:w-auto mt-2 md:mt-0">
-              {isAdminOrHR ? (
-                <>
-                  <button 
-                    onClick={() => setIsPhotoModalOpen(true)}
-                    className="flex items-center justify-center gap-2 bg-muted hover:bg-muted/80 text-foreground/80 px-4 py-2.5 rounded-xl font-bold transition-colors text-sm w-full md:w-auto"
-                    title="Change Profile Photo"
-                  >
-                    <Camera className="w-4 h-4" /> Change Photo
-                  </button>
-                  <button 
-                    onClick={() => setIsEditModalOpen(true)}
-                    className="flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2.5 rounded-xl font-bold transition-colors text-sm w-full md:w-auto shadow-sm"
-                  >
-                    <Edit2 className="w-4 h-4" /> Edit Profile
-                  </button>
-                </>
-              ) : (
+            <div className="flex flex-wrap gap-2.5 w-full md:w-auto mt-2 md:mt-0">
+              <button 
+                onClick={() => setIsPhotoModalOpen(true)}
+                className="flex items-center justify-center gap-2 bg-muted hover:bg-muted/80 text-foreground/80 px-4 py-2.5 rounded-xl font-bold transition-colors text-sm w-full md:w-auto"
+                title="Change Profile Photo"
+              >
+                <Camera className="w-4 h-4" /> Change Photo
+              </button>
+              <button 
+                onClick={() => setIsSignatureModalOpen(true)}
+                className="flex items-center justify-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 px-4 py-2.5 rounded-xl font-bold transition-colors text-sm w-full md:w-auto shadow-xs"
+                title="Add or edit your digital signature"
+              >
+                <PenTool className="w-4 h-4 text-emerald-600" />
+                {userSignature || user?.signature || user?.signature_url ? "Change Signature" : "Add Signature"}
+              </button>
+              {isAdminOrHR && (
                 <button 
-                  onClick={() => setIsPhotoModalOpen(true)}
+                  onClick={() => setIsEditModalOpen(true)}
                   className="flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2.5 rounded-xl font-bold transition-colors text-sm w-full md:w-auto shadow-sm"
                 >
-                  <Camera className="w-4 h-4" /> Change Photo
+                  <Edit2 className="w-4 h-4" /> Edit Profile
                 </button>
               )}
             </div>
@@ -469,6 +473,29 @@ export function UserProfile() {
           }
           if (refreshProfile) {
             await refreshProfile();
+          }
+        }}
+      />
+
+      {/* Digital Signature Modal */}
+      <ChangeSignatureModal
+        isOpen={isSignatureModalOpen}
+        onClose={() => setIsSignatureModalOpen(false)}
+        currentSignatureUrl={userSignature || user?.signature || user?.signature_url}
+        userName={profileData.name}
+        employeeId={user.id}
+        onSignatureSaved={async (newSigUrl) => {
+          setUserSignature(newSigUrl);
+          try {
+            await updateEmployee(user.id, { signature: newSigUrl, signature_url: newSigUrl });
+          } catch {
+            // ignore if saved locally
+          }
+          if (refreshProfile) {
+            await refreshProfile();
+          }
+          if (refreshEmployees) {
+            await refreshEmployees();
           }
         }}
       />

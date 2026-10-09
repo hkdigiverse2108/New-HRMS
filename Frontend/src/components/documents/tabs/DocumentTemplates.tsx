@@ -279,8 +279,27 @@ export function DocumentTemplates() {
       ""
     );
 
-    const blockRegex = /(<p[^>]*>.*?<\/p>|<ul[^>]*>.*?<\/ul>|<ol[^>]*>.*?<\/ol>|<h[1-6][^>]*>.*?<\/h[1-6]>|<table[^>]*>.*?<\/table>|<blockquote[^>]*>.*?<\/blockquote>|<div[^>]*>.*?<\/div>)/gis;
-    const blocks = cleanContent.match(blockRegex);
+    let blocks: string[] = [];
+    if (typeof window !== "undefined") {
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(`<div>${cleanContent}</div>`, "text/html");
+        const container = doc.body.firstElementChild;
+        if (container && container.childNodes.length > 0) {
+          blocks = Array.from(container.childNodes)
+            .map((node) => {
+              if (node.nodeType === Node.ELEMENT_NODE) {
+                return (node as HTMLElement).outerHTML;
+              }
+              const txt = (node.textContent || "").trim();
+              return txt ? `<p>${txt}</p>` : "";
+            })
+            .filter(Boolean);
+        }
+      } catch (e) {
+        console.warn("DOMParser error fallback:", e);
+      }
+    }
 
     if (!blocks || blocks.length <= 5) {
       return [cleanContent];
@@ -289,7 +308,7 @@ export function DocumentTemplates() {
     const pages: string[] = [];
     let currentPageHtml = "";
     let currentLength = 0;
-    const MAX_PAGE_CHARS = 2000; // Optimal A4 printable capacity below header (~320-350 words)
+    const MAX_PAGE_CHARS = 3800; // Optimal A4 printable capacity below header (~600 words)
 
     for (const block of blocks) {
       const textLen = block.replace(/<[^>]*>/g, "").trim().length;

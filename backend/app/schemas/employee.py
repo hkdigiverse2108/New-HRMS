@@ -16,6 +16,8 @@ class PersonalInfo(BaseModel):
     contact_number: Optional[str] = None
     relation: Optional[RelationEnum] = None
     profile_photo: Optional[str] = None
+    signature: Optional[str] = None
+    signature_url: Optional[str] = None
     password_enc: Optional[str] = None  # vault copy (self-view only, never for others)
 
 class PersonalInfoOut(PersonalInfo):
@@ -60,8 +62,16 @@ class DocumentChecklist(BaseModel):
 
 class BondAndExit(BaseModel):
     has_active_bond: bool = False
+    bond_start_date: Optional[date] = None
+    bond_end_date: Optional[date] = None
     serving_notice_period: bool = False
+    notice_period_days: Optional[str] = None
+    notice_period_start_date: Optional[date] = None
     has_resigned: bool = False
+    resignation_date: Optional[date] = None
+    has_employment: bool = False
+    employment_start_date: Optional[date] = None
+    contract_status: Optional[str] = "Verified"
 
 class DepositDetails(BaseModel):
     deposit_type: Optional[str] = "Employee"  # "Intern" (₹2,000) or "Employee" (₹10,000)
@@ -81,6 +91,8 @@ class EmployeeCreate(BaseModel):
     bond_and_exit: Optional[BondAndExit] = BondAndExit()
     deposit_details: Optional[DepositDetails] = DepositDetails()
     profile_photo: Optional[str] = None
+    signature: Optional[str] = None
+    signature_url: Optional[str] = None
 
 class PersonalInfoUpdate(BaseModel):
     """Partial personal info for updates — all optional so blank password can be omitted."""
@@ -96,6 +108,8 @@ class PersonalInfoUpdate(BaseModel):
     contact_number: Optional[str] = None
     relation: Optional[RelationEnum] = None
     profile_photo: Optional[str] = None
+    signature: Optional[str] = None
+    signature_url: Optional[str] = None
 
 class PersonalInfoSelfOut(PersonalInfoOut):
     """Self view — decrypted password included ONLY for own record."""
@@ -110,6 +124,8 @@ class EmployeeUpdate(BaseModel):
     bond_and_exit: Optional[BondAndExit] = None
     deposit_details: Optional[DepositDetails] = None
     profile_photo: Optional[str] = None
+    signature: Optional[str] = None
+    signature_url: Optional[str] = None
 
 class EmployeeOut(BaseModel):
     id: str = Field(..., alias="_id")
@@ -121,6 +137,8 @@ class EmployeeOut(BaseModel):
     bond_and_exit: Optional[BondAndExit] = None
     deposit_details: Optional[DepositDetails] = None
     profile_photo: Optional[str] = None
+    signature: Optional[str] = None
+    signature_url: Optional[str] = None
 
     model_config = ConfigDict(populate_by_name=True)
 

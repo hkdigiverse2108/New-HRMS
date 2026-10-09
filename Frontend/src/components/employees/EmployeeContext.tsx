@@ -49,6 +49,8 @@ function mapBackendToEmployee(be: any): Employee {
     relation: p.relation || "",
     avatar: photo,
     profile_photo: photo,
+    signature: be.signature || p.signature || be.signature_url || p.signature_url || (typeof window !== "undefined" ? (localStorage.getItem(`user_signature_${String(be._id || be.id)}`) || localStorage.getItem(`user_signature_${employeeId}`)) : "") || "",
+    signature_url: be.signature || p.signature || be.signature_url || p.signature_url || (typeof window !== "undefined" ? (localStorage.getItem(`user_signature_${String(be._id || be.id)}`) || localStorage.getItem(`user_signature_${employeeId}`)) : "") || "",
 
     role: role,
     department: w.department || "Development",
@@ -71,15 +73,23 @@ function mapBackendToEmployee(be: any): Employee {
     panCard: b.pan_card_number || "",
 
     hasBond: !!e.has_active_bond,
+    bondStartDate: e.bond_start_date ? String(e.bond_start_date) : (be.bondStartDate || ""),
+    bondEndDate: e.bond_end_date ? String(e.bond_end_date) : (be.bondEndDate || ""),
     hasNoticePeriod: !!e.serving_notice_period,
+    noticePeriodDays: e.notice_period_days ? String(e.notice_period_days) : (be.noticePeriodDays || ""),
+    noticePeriodStartDate: e.notice_period_start_date ? String(e.notice_period_start_date) : (be.noticePeriodStartDate || ""),
     hasResignation: !!e.has_resigned,
+    resignationDate: e.resignation_date ? String(e.resignation_date) : (be.resignationDate || ""),
+    hasEmployment: !!e.has_employment || !!be.hasEmployment,
+    employmentStartDate: e.employment_start_date ? String(e.employment_start_date) : (be.employmentStartDate || ""),
+    contractStatus: (e.contract_status || be.contract_status || be.contractStatus || "Pending") as any,
     activelyUsingHRMS: !w.is_block && !w.is_delete,
 
     requiredDocuments: be.required_documents || be.requiredDocuments || (d ? Object.entries(d).filter(([_, v]) => v).map(([k]) => k.replace(/_/g, ' ')) : []),
     securityDepositExempt: be.security_deposit_exempt ?? be.securityDepositExempt ?? false,
     securityDepositDirectPayments: be.security_deposit_direct_payments || be.securityDepositDirectPayments || [],
     targetSecurityDeposit: be.target_security_deposit || be.targetSecurityDeposit || be.deposit_details?.deposit_amount,
-    depositAmount: be.deposit_details?.deposit_amount || be.depositAmount,
+    depositAmount: be.deposit_details?.amount_paid || be.deposit_details?.deposit_amount || be.depositAmount,
     depositPaid: be.deposit_details?.amount_paid || be.depositPaid || 0,
     depositStatus: be.deposit_details?.status || be.depositStatus || "Pending",
     depositPaymentDate: be.deposit_details?.payment_date ? String(be.deposit_details.payment_date) : (be.depositPaymentDate || ""),
@@ -93,8 +103,11 @@ function mapEmployeeToBackendPayload(fe: Partial<Employee>) {
   const firstName = (fe.firstName || parts[0] || "").trim();
   const lastName = (fe.lastName || (parts.length > 1 ? parts.slice(1).join(" ") : "")).trim();
   const photo = fe.profile_photo || fe.avatar || "";
+  const sig = fe.signature || fe.signature_url || null;
 
   return {
+    signature: sig,
+    signature_url: sig,
     personal_info: {
       first_name: firstName,
       middle_name: fe.middleName ? fe.middleName.trim() : null,
@@ -108,7 +121,9 @@ function mapEmployeeToBackendPayload(fe: Partial<Employee>) {
       parent_guardian_name: fe.parentName ? fe.parentName.trim() : null,
       contact_number: fe.parentNumber ? fe.parentNumber.trim() : null,
       relation: fe.relation || null,
-      profile_photo: photo || null
+      profile_photo: photo || null,
+      signature: sig,
+      signature_url: sig
     },
     work_details: {
       system_role: fe.role || "Employee",
@@ -146,8 +161,16 @@ function mapEmployeeToBackendPayload(fe: Partial<Employee>) {
     },
     bond_and_exit: {
       has_active_bond: !!fe.hasBond,
+      bond_start_date: fe.bondStartDate || null,
+      bond_end_date: fe.bondEndDate || null,
       serving_notice_period: !!fe.hasNoticePeriod,
-      has_resigned: !!fe.hasResignation
+      notice_period_days: fe.noticePeriodDays || null,
+      notice_period_start_date: fe.noticePeriodStartDate || null,
+      has_resigned: !!fe.hasResignation,
+      resignation_date: fe.resignationDate || null,
+      has_employment: !!fe.hasEmployment,
+      employment_start_date: fe.employmentStartDate || null,
+      contract_status: (fe as any).contractStatus || "Verified"
     },
     profile_photo: photo || null,
     required_documents: fe.requiredDocuments || [],
