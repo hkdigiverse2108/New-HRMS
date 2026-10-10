@@ -436,6 +436,26 @@ async def verify_otp(verify_data: VerifyOTPRequest):
         data={"sub": verify_data.email}, expires_delta=access_token_expires
     )
     
+    # Log successful login activity
+    try:
+        from app.services.activity import ActivityService
+        personal = employee.get("personal_info", {})
+        work = employee.get("work_details", {})
+        emp_name = f"{personal.get('first_name', '')} {personal.get('last_name', '')}".strip() or employee.get("name") or "User"
+        emp_role = work.get("system_role", "Employee")
+        await ActivityService.log_system_activity(
+            action="User Authenticated Successfully",
+            category="Auth",
+            severity="Info",
+            description=f"{emp_name} logged in successfully via OTP verification.",
+            performed_by_id=str(employee.get("_id", "")),
+            performed_by_name=emp_name,
+            performed_by_role=emp_role,
+            metadata=f"Email: {verify_data.email} | Role: {emp_role}"
+        )
+    except Exception as e:
+        print(f"[ActivityLog] Login activity notice: {e}")
+
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/forgot-password")

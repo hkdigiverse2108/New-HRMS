@@ -14,16 +14,22 @@ interface FollowUpDialogProps {
   lead: Lead;
   userName?: string;
   trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function FollowUpDialog({ lead, userName, trigger }: FollowUpDialogProps) {
+export function FollowUpDialog({ lead, userName, trigger, open, onOpenChange }: FollowUpDialogProps) {
   const { addFollowUp, salesSettings } = useSales();
   const [note, setNote] = useState("");
   const [actionType, setActionType] = useState("Call");
   const [nextDate, setNextDate] = useState("");
   const [nextTime, setNextTime] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+
+  const isControlled = open !== undefined;
+  const isOpen = isControlled ? open : internalOpen;
+  const setIsOpen = isControlled ? (onOpenChange || (() => {})) : setInternalOpen;
 
   const followUps = (lead as any).followUps || (lead as any).follow_ups || [];
 
@@ -109,10 +115,10 @@ export function FollowUpDialog({ lead, userName, trigger }: FollowUpDialogProps)
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        {trigger ? (
-          trigger
-        ) : (
+      {trigger ? (
+        <DialogTrigger asChild>{trigger}</DialogTrigger>
+      ) : !isControlled ? (
+        <DialogTrigger asChild>
           <Button
             variant="outline"
             size="sm"
@@ -122,8 +128,8 @@ export function FollowUpDialog({ lead, userName, trigger }: FollowUpDialogProps)
             <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
             Follow-ups ({followUps.length})
           </Button>
-        )}
-      </DialogTrigger>
+        </DialogTrigger>
+      ) : null}
       <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-lg p-4 sm:p-6 max-h-[90dvh] overflow-y-auto rounded-3xl bg-card border border-border shadow-2xl">
         <DialogHeader>
           <DialogTitle className="flex flex-wrap items-center gap-2 text-base font-bold text-foreground min-w-0">
