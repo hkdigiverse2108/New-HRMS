@@ -41,6 +41,92 @@ const DEFAULT_LETTERHEAD: LetterheadConfig = {
   headerImageUrl: "",
 };
 
+// ─── A4 PAGINATION CONSTANTS & HELPERS ─────────────────────────────────────
+const A4_PAGE1_CONTENT_PX = 870;
+const A4_PAGE_N_CONTENT_PX = 1010;
+const LINE_HEIGHT_PX = 19.2;
+
+function estimateBlockHeight(html: string): number {
+  const text = html.replace(/<[^>]*>/g, "");
+  const lines = Math.max(1, Math.ceil(text.length / 90));
+  const isTable = html.includes("<table");
+  const isHeading = /<h[1-3]/i.test(html);
+  const isList = /<[uo]l/i.test(html);
+  const listItems = (html.match(/<li/gi) || []).length;
+
+  if (isTable) {
+    const rows = (html.match(/<tr/gi) || []).length || 1;
+    return rows * 28 + 20;
+  }
+  if (isList) return listItems * LINE_HEIGHT_PX + 12;
+  if (isHeading) return LINE_HEIGHT_PX * lines * 1.6 + 8;
+  return lines * LINE_HEIGHT_PX + 6;
+}
+
+function parseHtmlToBlocks(html: string): string[] {
+  if (!html || !html.trim()) return [];
+  const blocks: string[] = [];
+
+  let normalizedHtml = html
+    .replace(/(?:<br\s*\/?>[\s]*){2,}/gi, "</p><p>")
+    .replace(/\r?\n\r?\n/g, "</p><p>");
+
+  if (
+    !normalizedHtml.trim().startsWith("<p") &&
+    !normalizedHtml.trim().startsWith("<h") &&
+    !normalizedHtml.trim().startsWith("<ul") &&
+    !normalizedHtml.trim().startsWith("<ol") &&
+    !normalizedHtml.trim().startsWith("<table") &&
+    !normalizedHtml.trim().startsWith("<div")
+  ) {
+    normalizedHtml = `<p>${normalizedHtml}</p>`;
+  }
+
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(`<div>${normalizedHtml}</div>`, "text/html");
+    const container = doc.body.firstElementChild;
+    if (container && container.childNodes.length > 0) {
+      for (const node of Array.from(container.childNodes)) {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          const el = node as HTMLElement;
+          const outer = el.outerHTML.trim();
+          if (outer) blocks.push(outer);
+        } else {
+          const txt = (node.textContent || "").trim();
+          if (txt) blocks.push(`<p>${txt}</p>`);
+        }
+      }
+    }
+  } catch (e) {
+    if (html.trim()) blocks.push(html.trim());
+  }
+  return blocks;
+}
+
+function distributeBlocksToPages(blocks: string[]): string[] {
+  if (blocks.length === 0) return [""];
+  const pages: string[] = [];
+  let pageHtml = "";
+  let usedPx = 0;
+  let maxPx = A4_PAGE1_CONTENT_PX;
+
+  for (const block of blocks) {
+    const h = estimateBlockHeight(block);
+    if (pageHtml && usedPx + h > maxPx) {
+      pages.push(pageHtml);
+      pageHtml = block;
+      usedPx = h;
+      maxPx = A4_PAGE_N_CONTENT_PX;
+    } else {
+      pageHtml += block;
+      usedPx += h;
+    }
+  }
+  if (pageHtml.trim()) pages.push(pageHtml);
+  return pages.length > 0 ? pages : [""];
+}
+
 export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => void; activeTabPath?: string }) {
   const [employees, setEmployees] = useState<EmployeeItem[]>([]);
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
@@ -374,59 +460,20 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
   const pageSections = useMemo(() => {
     if (!previewContent) return [""];
 
-    const cleanContent = previewContent.replace(
-      /(?:<hr\s*class="[^"]*page-break[^"]*"[^>]*>|<div\s*class="[^"]*page-break[^"]*"[^>]*><\/div>|<!--\s*pagebreak\s*-->|{{page_break}}|<p[^>]*style="[^"]*page-break-before:\s*always[^"]*"[^>]*>)/gi,
-      ""
-    );
-
-    let blocks: string[] = [];
-    if (typeof window !== "undefined") {
-      try {
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(`<div>${cleanContent}</div>`, "text/html");
-        const container = doc.body.firstElementChild;
-        if (container && container.childNodes.length > 0) {
-          blocks = Array.from(container.childNodes)
-            .map((node) => {
-              if (node.nodeType === Node.ELEMENT_NODE) {
-                return (node as HTMLElement).outerHTML;
-              }
-              const txt = (node.textContent || "").trim();
-              return txt ? `<p>${txt}</p>` : "";
-            })
-            .filter(Boolean);
-        }
-      } catch (e) {
-        console.warn("DOMParser error fallback:", e);
+    // 1. Check for explicit page break markers first
+    if (/(?:<hr\s*class="[^"]*page-break[^"]*"[^>]*>|<div\s*class="[^"]*page-break[^"]*"[^>]*><\/div>|<!--\s*pagebreak\s*-->|{{page_break}}|<p[^>]*style="[^"]*page-break-before:\s*always[^"]*"[^>]*>)/gi.test(previewContent)) {
+      const explicitPages = previewContent
+        .split(/(?:<hr\s*class="[^"]*page-break[^"]*"[^>]*>|<div\s*class="[^"]*page-break[^"]*"[^>]*><\/div>|<!--\s*pagebreak\s*-->|{{page_break}}|<p[^>]*style="[^"]*page-break-before:\s*always[^"]*"[^>]*>)/gi)
+        .map((p) => p.trim())
+        .filter(Boolean);
+      if (explicitPages.length > 1) {
+        return explicitPages;
       }
     }
 
-    if (!blocks || blocks.length <= 5) {
-      return [cleanContent];
-    }
-
-    const pages: string[] = [];
-    let currentPageHtml = "";
-    let currentLength = 0;
-    const MAX_PAGE_CHARS = 3800;
-
-    for (const block of blocks) {
-      const textLen = block.replace(/<[^>]*>/g, "").trim().length;
-      if (currentPageHtml && (currentLength + textLen > MAX_PAGE_CHARS)) {
-        pages.push(currentPageHtml);
-        currentPageHtml = block;
-        currentLength = textLen;
-      } else {
-        currentPageHtml += block;
-        currentLength += textLen;
-      }
-    }
-
-    if (currentPageHtml.trim()) {
-      pages.push(currentPageHtml);
-    }
-
-    return pages.length > 0 ? pages : [cleanContent];
+    // 2. Auto-paginate based on pixel height estimation matching DocumentTemplates
+    const blocks = parseHtmlToBlocks(previewContent);
+    return distributeBlocksToPages(blocks);
   }, [previewContent]);
 
   const handlePrint = () => {
@@ -490,14 +537,15 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
               margin: 0;
               padding: 0;
               color: #0f172a;
-              line-height: 1.6;
-              font-size: 14px;
+              line-height: 1.4;
+              font-size: 10pt;
               background: #ffffff;
             }
             p {
-              margin-top: 0.35rem !important;
-              margin-bottom: 0.6rem !important;
-              line-height: 1.65 !important;
+              margin-top: 0.2rem !important;
+              margin-bottom: 0.35rem !important;
+              line-height: 1.4 !important;
+              font-size: 10pt !important;
             }
             h1, h2, h3, h4, h5, h6 {
               color: #0f172a;
@@ -572,31 +620,39 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
     const empNameStr = selectedEmp ? selectedEmp.name.replace(/[^a-zA-Z0-9_-]/g, "_") : "Document";
     const fileName = `${docName}_${empNameStr}.pdf`;
 
-      let letterheadHTML = "";
-      if (letterhead.enabled) {
-        if (letterhead.headerImageUrl) {
-          letterheadHTML = `
-            <div style="width: 100%; text-align: center; margin-bottom: 24px; padding-bottom: 8px;">
-              <img src="${letterhead.headerImageUrl}" style="width: 100%; max-height: 140px; object-fit: contain;" />
-            </div>
-          `;
-        } else {
-          letterheadHTML = `
-            <div style="position: relative; width: 100%; margin-bottom: 24px; padding-bottom: 12px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #0f2552;">
-              <div style="display: flex; align-items: center; gap: 14px;">
+    let letterheadHTML = "";
+    if (letterhead.enabled) {
+      if (letterhead.headerImageUrl) {
+        letterheadHTML = `
+          <div style="position: relative; width: 100%; overflow: hidden; background: #ffffff; box-sizing: border-box; margin-bottom: 14px;">
+            <img src="${letterhead.headerImageUrl}" style="width: 100%; max-height: 140px; object-fit: cover;" />
+          </div>
+        `;
+      } else {
+        letterheadHTML = `
+          <div style="position: relative; width: 100%; overflow: hidden; background: #ffffff; border-bottom: 2px solid #0f2552; box-sizing: border-box; margin-bottom: 14px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; min-height: 80px; padding: 8px 24px;">
+              <div style="display: flex; align-items: center; gap: 14px; z-index: 10;">
                 ${letterhead.logoUrl
-              ? `<img src="${letterhead.logoUrl}" style="height: 50px; width: auto;" />`
-              : `<div style="width: 48px; height: 48px; border-radius: 12px; background: #0f2552; color: white; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 20px;">${letterhead.companyName ? letterhead.companyName.charAt(0) : "HK"}</div>`
-            }
+                  ? `<img src="${letterhead.logoUrl}" style="height: 48px; width: auto; object-fit: contain;" />`
+                  : `<div style="width: 44px; height: 44px; border-radius: 10px; background: #0f2552; color: #ffffff; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 18px;">${letterhead.companyName ? letterhead.companyName.charAt(0) : "HK"}</div>`
+                }
                 <div>
-                  <div style="font-size: 22px; font-weight: 900; color: #0f2552; line-height: 1.1;">${letterhead.companyName || "HariKrushn DigiVerse LLP"}</div>
-                  <div style="font-size: 13px; font-weight: 700; color: #16a34a; margin-top: 3px;"><span style="color: #0f2552;">|</span> ${letterhead.tagline || "Innovate • Transform • Grow"}</div>
+                  <div style="font-size: 20px; font-weight: 900; color: #0f2552; line-height: 1.1;">${letterhead.companyName || "HariKrushn DigiVerse LLP"}</div>
+                  <div style="font-size: 12px; font-weight: 700; color: #16a34a; margin-top: 3px;"><span style="color: #0f2552;">|</span> ${letterhead.tagline || "Innovate • Transform • Grow"}</div>
                 </div>
               </div>
+              <div style="position: absolute; right: 0; top: 0; height: 100%; width: 45%; pointer-events: none; overflow: hidden;">
+                <svg viewBox="0 0 350 100" preserveAspectRatio="none" style="height: 100%; width: 100%;">
+                  <path d="M 100,0 C 180,30 250,70 350,100 L 350,0 Z" fill="#0f2552" />
+                  <path d="M 210,100 C 260,75 300,40 350,0 L 350,100 Z" fill="#6bb82d" />
+                </svg>
+              </div>
             </div>
-          `;
-        }
+          </div>
+        `;
       }
+    }
 
     const pagesContent = pageSections.map((sec, idx) => {
       const cleanSec = sec
@@ -604,10 +660,12 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
         .replace(/class="bg-rose-500\/15[^"]*"/g, 'style="font-weight: bold; color: #e11d48;"');
 
       return `
-        <div style="${idx > 0 ? 'page-break-before: always; break-before: page;' : ''} padding: 15mm 15mm 15mm 15mm; background: #ffffff; color: #0f172a;">
-          ${letterheadHTML}
-          <div style="color: #0f172a; line-height: 1.65; word-wrap: break-word;">
-            ${cleanSec}
+        <div class="pdf-page ${idx > 0 ? 'pdf-page-break' : ''}">
+          <div>
+            ${letterheadHTML}
+            <div style="padding: 10px 32px 16px 32px; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 10pt; line-height: 1.4; color: #1e293b; word-wrap: break-word;">
+              ${cleanSec}
+            </div>
           </div>
         </div>
       `;
@@ -627,9 +685,9 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
         width: 210mm;
         background: #ffffff;
         color: #0f172a;
-        font-family: 'Segoe UI', Arial, sans-serif;
-        font-size: 14px;
-        line-height: 1.6;
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 10pt;
+        line-height: 1.4;
         margin: 0 auto;
       `;
       container.innerHTML = pagesContent;
@@ -666,6 +724,8 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
           useCORS: true,
           logging: false,
           allowTaint: true,
+          scrollX: 0,
+          scrollY: 0,
           onclone: (clonedDoc: Document) => {
             // Strip style and stylesheet links to eliminate Tailwind v4 oklch rules
             clonedDoc.querySelectorAll("style, link").forEach((el) => el.remove());
@@ -676,19 +736,26 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
             const baseStyle = clonedDoc.createElement("style");
             baseStyle.textContent = `
               * { box-sizing: border-box !important; }
-              body { font-family: 'Segoe UI', Arial, sans-serif !important; color: #0f172a !important; background: #ffffff !important; margin: 0 !important; padding: 0 !important; }
-              p { margin-top: 6px !important; margin-bottom: 10px !important; line-height: 1.65 !important; color: #0f172a !important; }
-              h1, h2, h3, h4, h5, h6 { color: #0f2552 !important; margin-top: 14px !important; margin-bottom: 8px !important; font-weight: 800 !important; }
-              ul, ol { margin-top: 6px !important; margin-bottom: 10px !important; padding-left: 20px !important; }
-              table { width: 100% !important; border-collapse: collapse !important; margin-top: 8px !important; margin-bottom: 12px !important; }
-              td, th { padding: 6px 10px !important; border: 1px solid #cbd5e1 !important; font-size: 13px !important; color: #0f172a !important; }
+              html, body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important; color: #1e293b !important; background: #ffffff !important; margin: 0 !important; padding: 0 !important; }
+              .pdf-page { width: 210mm !important; min-height: 295mm !important; background: #ffffff !important; box-sizing: border-box !important; display: flex !important; flex-direction: column !important; justify-content: space-between !important; position: relative !important; overflow: hidden !important; }
+              .pdf-page-break { page-break-before: always !important; break-before: page !important; }
+              p { margin-top: 3px !important; margin-bottom: 6px !important; line-height: 1.4 !important; font-size: 10pt !important; color: #1e293b !important; }
+              p:empty { margin-bottom: 3px !important; min-height: 1.4em !important; }
+              h1 { font-size: 1.3rem !important; font-weight: 800 !important; margin: 12px 0 6px !important; color: #0f172a !important; line-height: 1.3 !important; }
+              h2 { font-size: 1.1rem !important; font-weight: 800 !important; margin: 10px 0 5px !important; color: #0f172a !important; line-height: 1.35 !important; }
+              h3 { font-size: 0.95rem !important; font-weight: 700 !important; margin: 8px 0 4px !important; color: #0f172a !important; line-height: 1.4 !important; }
+              ul, ol { margin: 4px 0 6px !important; padding-left: 20px !important; }
+              li { margin-bottom: 3px !important; font-size: 10pt !important; line-height: 1.4 !important; }
+              table { width: 100% !important; border-collapse: collapse !important; margin: 8px 0 !important; font-size: 9pt !important; }
+              td, th { padding: 4px 8px !important; border: 1px solid #cbd5e1 !important; text-align: left !important; }
+              th { background: #f1f5f9 !important; font-weight: 700 !important; }
               img { max-width: 100% !important; height: auto !important; }
             `;
             clonedDoc.head.appendChild(baseStyle);
           },
         },
         jsPDF: { unit: "mm", format: "a4", orientation: "portrait" as const },
-        pagebreak: { mode: ["avoid-all", "css", "legacy"] },
+        pagebreak: { mode: ["css", "legacy"], before: ".pdf-page-break" },
       };
 
       await html2pdf().set(opt).from(container).save();
@@ -817,21 +884,109 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
   return (
     <div className="flex flex-col h-full min-h-[85vh] animate-in fade-in duration-500">
       <style>{`
-        .prose p {
-          margin-top: 0.35rem !important;
-          margin-bottom: 0.6rem !important;
-          line-height: 1.65 !important;
+        .document-preview-body {
+          font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+          font-size: 10pt !important;
+          line-height: 1.4 !important;
+          color: #1e293b !important;
+          padding: 0.75rem 1rem !important;
         }
-        .prose h1, .prose h2, .prose h3, .prose h4 {
-          margin-top: 0.85rem !important;
-          margin-bottom: 0.45rem !important;
-          font-weight: 800 !important;
-          color: #0f172a !important;
+        .document-preview-body p {
+          margin-top: 0.2rem !important;
+          margin-bottom: 0.35rem !important;
+          line-height: 1.4 !important;
+          font-size: 10pt !important;
+          color: #1e293b !important;
         }
-        .prose ul, .prose ol {
-          margin-top: 0.4rem !important;
-          margin-bottom: 0.6rem !important;
-          padding-left: 1.5rem !important;
+        .document-preview-body p:empty {
+          margin-bottom: 0.15rem !important;
+          min-height: 1.4em !important;
+        }
+        .document-preview-body h1 {
+          font-size: 1.3rem !important; font-weight: 800 !important;
+          margin: 0.75rem 0 0.35rem !important; color: #0f172a !important; line-height: 1.3 !important;
+        }
+        .document-preview-body h2 {
+          font-size: 1.1rem !important; font-weight: 800 !important;
+          margin: 0.65rem 0 0.3rem !important; color: #0f172a !important; line-height: 1.35 !important;
+        }
+        .document-preview-body h3 {
+          font-size: 0.95rem !important; font-weight: 700 !important;
+          margin: 0.55rem 0 0.25rem !important; color: #0f172a !important; line-height: 1.4 !important;
+        }
+        .document-preview-body ul, .document-preview-body ol {
+          margin: 0.2rem 0 0.35rem !important; padding-left: 1.25rem !important;
+        }
+        .document-preview-body li {
+          margin-bottom: 0.15rem !important; font-size: 10pt !important; line-height: 1.4 !important;
+        }
+        .document-preview-body a {
+          color: #0284c7 !important; text-decoration: underline !important;
+        }
+        .document-preview-body strong, .document-preview-body b {
+          font-weight: 700 !important; color: #0f172a !important;
+        }
+        .document-preview-body table {
+          width: 100% !important; border-collapse: collapse !important; margin: 0.5rem 0 !important; font-size: 9pt !important;
+        }
+        .document-preview-body td, .document-preview-body th {
+          border: 1px solid #cbd5e1 !important; padding: 0.25rem 0.5rem !important; text-align: left !important;
+        }
+        .document-preview-body th {
+          background: #f1f5f9 !important; font-weight: 700 !important;
+        }
+
+        .var-pill-sample {
+          display: inline; background-color: rgba(209, 250, 229, 0.9); color: #065f46;
+          font-weight: 600; padding: 0.1rem 0.35rem; border-radius: 0.25rem;
+          border: 1px solid rgba(110, 231, 183, 0.6); font-size: 0.85em;
+        }
+        .dark .var-pill-sample { background-color: rgba(6,78,59,0.6); color: #6ee7b7; border-color: rgba(16,185,129,0.4); }
+
+        /* A4 Paper Page */
+        .a4-page-card {
+          width: 210mm;
+          max-width: 210mm;
+          min-height: 297mm;
+          height: 297mm;
+          max-height: 297mm;
+          background: white;
+          border-radius: 1rem;
+          border: 1px solid #e2e8f0;
+          box-shadow: 0 20px 60px -10px rgba(0,0,0,0.18), 0 4px 16px -4px rgba(0,0,0,0.08);
+          display: flex;
+          flex-direction: column;
+          overflow: hidden !important;
+          position: relative;
+          flex-shrink: 0;
+          page-break-after: always;
+        }
+        .a4-page-card:hover { box-shadow: 0 24px 70px -10px rgba(16,185,129,0.15), 0 4px 16px -4px rgba(0,0,0,0.08); }
+        .a4-page-content {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden !important;
+          min-height: 0;
+        }
+        .a4-editable-area {
+          flex: 1;
+          padding: 0.75rem 2rem 1.5rem 2rem;
+          overflow: hidden !important;
+          display: flex;
+          flex-direction: column;
+        }
+        .a4-page-footer {
+          padding: 0.5rem 2rem;
+          background: #f8fafc;
+          border-top: 1px solid #f1f5f9;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          font-size: 0.65rem;
+          color: #94a3b8;
+          font-family: monospace;
+          flex-shrink: 0;
         }
       `}</style>
       {/* Header */}
@@ -1035,7 +1190,7 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
         </div>
 
         {/* Right Panel: Live Preview (A4 Paper Sheet View) */}
-        <div className="flex-grow bg-slate-100 dark:bg-slate-900/60 border border-border/50 rounded-3xl p-3 sm:p-6 flex flex-col h-full min-h-[500px] sm:min-h-[700px] min-w-0 overflow-hidden">
+        <div className="flex-grow bg-slate-100 dark:bg-slate-900/60 border border-border/50 rounded-3xl p-3 sm:p-6 flex flex-col min-h-[500px] sm:min-h-[700px] min-w-0">
           <div className="flex justify-between items-center mb-3 px-2">
             <div className="flex items-center gap-2">
               <h3 className="font-bold text-muted-foreground uppercase tracking-wider text-xs">Live Preview (A4 Page Sheet)</h3>
@@ -1057,18 +1212,14 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
               </p>
             </div>
           ) : (
-            <div className="flex-grow overflow-y-auto custom-scrollbar p-2 sm:p-4 flex flex-col items-center space-y-6">
+            <div className="flex-grow p-2 sm:p-4 flex flex-col items-center space-y-6">
               {pageSections.map((pageHtml, pageIndex) => (
-                <div key={pageIndex} className="w-full flex flex-col items-center">
-                  {/* Individual A4 Paper Sheet Card */}
-                  <div className="w-full max-w-[210mm] min-h-[297mm] bg-white text-slate-900 shadow-md rounded-2xl border border-slate-200 overflow-hidden relative transition-all flex flex-col justify-between">
-                    <div>
-                      {/* Top Letterhead Header on EVERY page */}
-                      {renderLetterheadHeader()}
-
-                      {/* Page Content */}
+                <div key={pageIndex} className="a4-page-card">
+                  <div className="a4-page-content">
+                    {renderLetterheadHeader()}
+                    <div className="a4-editable-area">
                       <div
-                        className="prose prose-sm max-w-none text-slate-800 font-normal leading-relaxed break-words px-8 sm:px-14 pt-2 pb-14"
+                        className="document-preview-body text-slate-800 font-normal text-[10pt] leading-[1.4] break-words flex-1"
                         dangerouslySetInnerHTML={{ __html: pageHtml }}
                       />
                     </div>
