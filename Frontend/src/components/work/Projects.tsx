@@ -1323,11 +1323,35 @@ const ThumbnailCell = ({
   );
 };
 
-export const getWorkProgress = (project: any): { completed: number; total: number; pct: number } | null => {
-  if (!project) return null;
+export const getWorkProgress = (project: any): { completed: number; total: number; pct: number } => {
+  if (!project) return { completed: 0, total: 0, pct: 0 };
   let totalWork = 0;
   let completedWork = 0;
 
+  // 1. Direct project tasks
+  if (project.tasks && Array.isArray(project.tasks) && project.tasks.length > 0) {
+    totalWork += project.tasks.length;
+    completedWork += project.tasks.filter((t: any) => {
+      const s = String(t.status || "").toLowerCase();
+      return s === "completed" || s === "done" || s === "approved" || Boolean(t.completed) || Boolean(t.is_completed);
+    }).length;
+  }
+
+  // 2. Module tasks
+  if (project.modules) {
+    const modList = Array.isArray(project.modules) ? project.modules : Object.values(project.modules);
+    modList.forEach((mod: any) => {
+      if (mod?.tasks && Array.isArray(mod.tasks) && mod.tasks.length > 0) {
+        totalWork += mod.tasks.length;
+        completedWork += mod.tasks.filter((t: any) => {
+          const s = String(t.status || "").toLowerCase();
+          return s === "completed" || s === "done" || s === "approved" || Boolean(t.completed) || Boolean(t.is_completed);
+        }).length;
+      }
+    });
+  }
+
+  // 3. Content Calendar deliverables
   if (project.contentCalendar && Array.isArray(project.contentCalendar) && project.contentCalendar.length > 0) {
     totalWork += project.contentCalendar.length;
     completedWork += project.contentCalendar.filter(
@@ -1338,19 +1362,6 @@ export const getWorkProgress = (project: any): { completed: number; total: numbe
     ).length;
   }
 
-  if (project.modules) {
-    const modList = Array.isArray(project.modules) ? project.modules : Object.values(project.modules);
-    modList.forEach((mod: any) => {
-      if (mod?.tasks && Array.isArray(mod.tasks) && mod.tasks.length > 0) {
-        totalWork += mod.tasks.length;
-        completedWork += mod.tasks.filter((t: any) => {
-          const s = String(t.status || "").toLowerCase();
-          return s === "completed" || s === "done" || Boolean(t.completed);
-        }).length;
-      }
-    });
-  }
-
   if (totalWork > 0) {
     return {
       completed: completedWork,
@@ -1359,7 +1370,12 @@ export const getWorkProgress = (project: any): { completed: number; total: numbe
     };
   }
 
-  return null;
+  const manualPct = typeof project.progress === "number" ? project.progress : 0;
+  return {
+    completed: 0,
+    total: 0,
+    pct: manualPct,
+  };
 };
 
 const subtractDays = (startDate: Date, days: number) => {
@@ -2802,7 +2818,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     "Status"
   ]);
 
-  const handleGenerateCcPdf = () => {
+  const handleGenerateCcPdf = async (mode: "download" | "print" = "download") => {
     const currentProject = projects.find(p => p.id === selectedProjectId);
     if (!currentProject) {
       toast.error("No active project selected");
@@ -2912,42 +2928,45 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       "Brand Person": (i) => i.brand_person || "-",
       "Script": (i) => {
         const formattedDate = formatDayMonthYear(i.scriptDate);
-        const linkPart = i.scriptLink ? ' • Link' : '';
-        if (formattedDate === "-" && !linkPart) return "-";
-        return `${formattedDate === "-" ? "" : formattedDate}${linkPart}`.trim() || "-";
+        const url = (i.scriptLink || "").trim();
+        const linkHtml = url ? `<a href="${url.startsWith("http") ? url : "https://" + url}" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 700; margin-left: 4px;">🔗 Link</a>` : "";
+        if (formattedDate === "-" && !linkHtml) return "-";
+        return `${formattedDate === "-" ? "" : formattedDate} ${linkHtml}`.trim();
       },
       "Shoot": (i) => {
         const formattedDate = formatDayMonthYear(i.shootDate);
-        const linkPart = i.shootLink ? ' • Link' : '';
-        if (formattedDate === "-" && !linkPart) return "-";
-        return `${formattedDate === "-" ? "" : formattedDate}${linkPart}`.trim() || "-";
+        const url = (i.shootLink || "").trim();
+        const linkHtml = url ? `<a href="${url.startsWith("http") ? url : "https://" + url}" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 700; margin-left: 4px;">🔗 Link</a>` : "";
+        if (formattedDate === "-" && !linkHtml) return "-";
+        return `${formattedDate === "-" ? "" : formattedDate} ${linkHtml}`.trim();
       },
       "Editing": (i) => {
         const formattedDate = formatDayMonthYear(i.editingDate);
-        const linkPart = (i.finalPostLink || i.finalReelLink) ? ' • Link' : '';
-        if (formattedDate === "-" && !linkPart) return "-";
-        return `${formattedDate === "-" ? "" : formattedDate}${linkPart}`.trim() || "-";
+        const rawUrl = (i.finalPostLink || i.finalReelLink || "").trim();
+        const linkHtml = rawUrl ? `<a href="${rawUrl.startsWith("http") ? rawUrl : "https://" + rawUrl}" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 700; margin-left: 4px;">🔗 Draft</a>` : "";
+        if (formattedDate === "-" && !linkHtml) return "-";
+        return `${formattedDate === "-" ? "" : formattedDate} ${linkHtml}`.trim();
       },
       "Thumbnail": (i) => {
         const formattedDate = formatDayMonthYear(i.thumbnailDate);
-        const linkPart = i.thumbnailLink ? ' • Link' : '';
-        if (formattedDate === "-" && !linkPart) return "-";
-        return `${formattedDate === "-" ? "" : formattedDate}${linkPart}`.trim() || "-";
+        const url = (i.thumbnailLink || "").trim();
+        const linkHtml = url ? `<a href="${url.startsWith("http") ? url : "https://" + url}" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 700; margin-left: 4px;">🔗 Thumbnail</a>` : "";
+        if (formattedDate === "-" && !linkHtml) return "-";
+        return `${formattedDate === "-" ? "" : formattedDate} ${linkHtml}`.trim();
       },
       "Caption": (i) => i.caption || "-",
-      "Final Link": (i) => i.finalPostLink || i.finalReelLink || i.postingLinkOfIg || "-",
+      "Final Link": (i) => {
+        const rawUrl = (i.finalPostLink || i.finalReelLink || i.postingLinkOfIg || "").trim();
+        if (!rawUrl || rawUrl === "-") return "-";
+        const url = rawUrl.startsWith("http") ? rawUrl : "https://" + rawUrl;
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 700;">🔗 View Post</a>`;
+      },
       "Status": (i) => i.status || "To Do",
     };
 
     const selectedCols = pdfSelectedColumns.filter(c => columnsMap[c]);
     if (selectedCols.length === 0) {
       toast.error("Please select at least one column to export");
-      return;
-    }
-
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      toast.error("Popup blocked! Please allow popups to export PDF.");
       return;
     }
 
@@ -3080,6 +3099,14 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               color: #334155;
               font-size: 11px;
             }
+            td a {
+              color: #0284c7;
+              text-decoration: underline;
+              font-weight: 700;
+            }
+            td a:hover {
+              color: #0369a1;
+            }
             tr:nth-child(even) td { background-color: #f8fafc; }
             tr:last-child td { border-bottom: none; }
             .status-tag {
@@ -3167,22 +3194,69 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             <span>© ${new Date().getFullYear()} ${clientName} — Content Calendar (${ccMonthLabel}) • Generated via HRMS Content Hub</span>
             <span>Confidential & Proprietary</span>
           </div>
-          <script>
-            window.onload = function() {
-              setTimeout(function() {
-                window.print();
-              }, 400);
-            };
-          </script>
         </body>
       </html>
     `;
 
+    const safeFilename = `${clientName}_${projName}_Content_Calendar_${ccMonthLabel}`.replace(/[^a-zA-Z0-9_-]/g, "_") + ".pdf";
+
+    if (mode === "download") {
+      try {
+        toast.info("Preparing PDF download with clickable links...");
+        const html2pdfModule = await import("html2pdf.js");
+        const html2pdf = (html2pdfModule as any).default || html2pdfModule;
+
+        const container = document.createElement("div");
+        container.innerHTML = html;
+        container.style.position = "fixed";
+        container.style.left = "-9999px";
+        container.style.top = "0";
+        container.style.width = "1200px";
+        container.style.background = "#ffffff";
+        document.body.appendChild(container);
+
+        const opt = {
+          margin: [8, 8, 8, 8],
+          filename: safeFilename,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true, logging: false },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+          enableLinks: true
+        };
+
+        await html2pdf().set(opt).from(container).save();
+        document.body.removeChild(container);
+        setIsPdfExportModalOpen(false);
+        toast.success("PDF downloaded successfully!");
+        return;
+      } catch (err) {
+        console.error("html2pdf download error, falling back to print window:", err);
+      }
+    }
+
+    // Direct print preview mode or fallback
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error("Popup blocked! Please allow popups or use direct Download.");
+      return;
+    }
+
+    const printHtml = html.replace('</body>', `
+      <script>
+        window.onload = function() {
+          setTimeout(function() {
+            window.print();
+          }, 400);
+        };
+      </script>
+      </body>
+    `);
+
     printWindow.document.open();
-    printWindow.document.write(html);
+    printWindow.document.write(printHtml);
     printWindow.document.close();
     setIsPdfExportModalOpen(false);
-    toast.success("PDF preview generated!");
+    toast.success("PDF preview opened!");
   };
   // Bulk Add States
   const [isBulkAddModalOpen, setIsBulkAddModalOpen] = useState(false);
@@ -4991,28 +5065,21 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm">
                 {(() => {
-                  // Task 13: Calculate progress from completed tasks / deliverables rather than purely elapsed days
                   const wp = getWorkProgress(project);
                   const dp = getDateProgress(project.startDate, project.endDate);
-                  const pct = wp !== null ? wp.pct : (dp ? dp.pct : (project.progress || 0));
+                  const pct = wp.pct;
                   return (
                     <>
                       <div className="flex justify-between items-end mb-2">
                         <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
-                          {wp !== null ? "Work Progress" : "Progress"}
+                          Task Progress
                         </span>
                         <span className="text-3xl font-black text-foreground font-mono">{pct}%</span>
                       </div>
-                      {wp !== null ? (
-                        <p className="text-[11px] font-bold text-emerald-600">
-                          {wp.completed} / {wp.total} items completed
-                          {dp && <span className="text-muted-foreground font-normal ml-1">({dp.elapsed}/{dp.total} days)</span>}
-                        </p>
-                      ) : dp ? (
-                        <p className="text-[11px] font-bold text-muted-foreground">
-                          {safeFormat(project.startDate, "dd/MM/yyyy")} → {safeFormat(project.endDate, "dd/MM/yyyy")} • {dp.elapsed}/{dp.total} days
-                        </p>
-                      ) : null}
+                      <p className="text-[11px] font-bold text-emerald-600">
+                        {wp.total > 0 ? `${wp.completed} / ${wp.total} tasks completed` : "No tasks added yet"}
+                        {dp && <span className="text-muted-foreground font-normal ml-1">({dp.elapsed}/{dp.total} days elapsed)</span>}
+                      </p>
                       <div className="h-2 w-full bg-muted/60 rounded-full overflow-hidden mt-4">
                         <div
                           className={cn("h-full rounded-full transition-all duration-1000 ease-out", getProgressColor(project.status))}
@@ -7540,16 +7607,25 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     </div>
                   </div>
 
-                  <div className="px-6 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
+                  <div className="px-6 py-4 bg-muted/30 border-t border-border/50 flex flex-wrap justify-end gap-3 shrink-0">
                     <button onClick={() => setIsPdfExportModalOpen(false)} className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors">
                       Cancel
                     </button>
                     <button
-                      onClick={handleGenerateCcPdf}
-                      className="px-5 py-2 bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm rounded-xl transition-all shadow-sm flex items-center gap-1.5"
+                      onClick={() => handleGenerateCcPdf("print")}
+                      className="px-4 py-2 bg-muted hover:bg-muted/80 text-foreground font-bold text-sm rounded-xl transition-all border border-border flex items-center gap-1.5"
+                      title="Open printable preview in new tab"
                     >
-                      <Printer className="w-4 h-4" />
-                      <span>Generate & Print PDF</span>
+                      <Printer className="w-4 h-4 text-muted-foreground" />
+                      <span>Print / Preview</span>
+                    </button>
+                    <button
+                      onClick={() => handleGenerateCcPdf("download")}
+                      className="px-5 py-2 bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm rounded-xl transition-all shadow-sm flex items-center gap-1.5"
+                      title="Download PDF directly to your device with clickable redirect links"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>Download PDF</span>
                     </button>
                   </div>
                 </div>
@@ -10679,16 +10755,20 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   <div className="mb-6 relative z-10">
                     {(() => {
                       const wp = getWorkProgress(project);
-                      const dp = getDateProgress(project.startDate, project.endDate);
-                      const pct = wp !== null ? wp.pct : (dp ? dp.pct : (project.progress || 0));
+                      const pct = wp.pct;
                       return (
                         <>
-                          <div className="flex justify-between items-end mb-2">
+                          <div className="flex justify-between items-end mb-1.5">
                             <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
-                              {wp !== null ? "Work Progress" : "Progress"}
+                              Task Progress
                             </span>
-                            <span className="text-sm font-black text-foreground">{pct}%</span>
+                            <span className="text-sm font-black text-foreground font-mono">{pct}%</span>
                           </div>
+                          {wp.total > 0 && (
+                            <p className="text-[10px] font-semibold text-emerald-600 mb-2">
+                              {wp.completed} / {wp.total} tasks completed
+                            </p>
+                          )}
                           <div className="h-2 w-full bg-muted/60 rounded-full overflow-hidden">
                             <div
                               className={cn("h-full rounded-full transition-all duration-1000 ease-out", getProgressColor(project.status))}
@@ -12027,11 +12107,10 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   </div>
                 )}
 
-                {/* Footer Summary (Task 13: work/task-driven progress) */}
                 {(() => {
                   const wp = getWorkProgress(project);
                   const dp = getDateProgress(project.startDate, project.endDate);
-                  const pct = wp !== null ? wp.pct : (dp ? dp.pct : (project.progress || 0));
+                  const pct = wp.pct;
                   return (
                     <>
                       <div className="flex justify-between items-end pt-4 border-t border-border/40 relative z-10 gap-3">
@@ -12041,7 +12120,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         </div>
                         <div className="flex flex-col text-right shrink-0">
                           <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                            {wp !== null ? "Work Progress" : "Progress"}
+                            Task Progress
                           </span>
                           <span className="text-base font-black text-primary mt-0.5 font-mono">{pct}%</span>
                         </div>
@@ -12049,14 +12128,10 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       <div className="h-1.5 rounded-full bg-muted mt-3 overflow-hidden relative z-10">
                         <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
                       </div>
-                      {wp !== null ? (
-                        <p className="text-[10px] font-bold text-emerald-600 mt-1.5 relative z-10">
-                          {wp.completed}/{wp.total} items completed
-                          {dp && <span className="text-muted-foreground font-normal ml-1">({dp.elapsed}/{dp.total}d)</span>}
-                        </p>
-                      ) : dp ? (
-                        <p className="text-[10px] font-bold text-muted-foreground mt-1.5 relative z-10">{dp.elapsed}/{dp.total} days</p>
-                      ) : null}
+                      <p className="text-[10px] font-bold text-emerald-600 mt-1.5 relative z-10">
+                        {wp.total > 0 ? `${wp.completed}/${wp.total} tasks completed` : "No tasks added"}
+                        {dp && <span className="text-muted-foreground font-normal ml-1">({dp.elapsed}/{dp.total}d)</span>}
+                      </p>
                     </>
                   );
                 })()}

@@ -128,6 +128,18 @@ export function SalesLeads({
   // Drawer for lead details
   const [selectedLeadDrawer, setSelectedLeadDrawer] = useState<Lead | null>(null);
 
+  // Shared Follow-up Dialog state
+  const [selectedFollowUpLead, setSelectedFollowUpLead] = useState<Lead | null>(null);
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(30);
+
+  // Reset pagination when active tab or filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, searchTerm, categoryFilter, sourceFilter, dateFilter, employeeFilter]);
+
   // Quick Add Form with Sticky Dropdowns (Persisted in localStorage)
   const [quickAddName, setQuickAddName] = useState("");
   const [quickAddPhone, setQuickAddPhone] = useState("");
@@ -654,14 +666,20 @@ export function SalesLeads({
   // Render Table Component
   const renderLeadTable = (data: Lead[], type: "overdue" | "active" | "hot" | "converted") => {
     const filtered = filterLeads(data);
+    const totalLeadsCount = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(totalLeadsCount / pageSize));
+    const validPage = Math.min(currentPage, totalPages);
+    const startIndex = (validPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const paginatedLeads = filtered.slice(startIndex, endIndex);
 
-    // Grouping by category
+    // Grouping by category on current page
     const categoriesInUse = Array.from(
-      new Set(filtered.map((l) => (l.category as string) || "Others"))
+      new Set(paginatedLeads.map((l) => (l.category as string) || "Others"))
     );
     categoriesInUse.sort((a, b) => (a === "Others" ? 1 : b === "Others" ? -1 : a.localeCompare(b)));
 
-    const allFilteredIds = filtered.map((l) => l.id || l._id || "");
+    const allFilteredIds = paginatedLeads.map((l) => l.id || l._id || "");
     const isAllSelected = allFilteredIds.length > 0 && allFilteredIds.every((id) => selectedLeads.includes(id));
 
     const toggleSelectAll = () => {
@@ -694,439 +712,513 @@ export function SalesLeads({
     }
 
     return (
-      <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-xs">
-        <table className="w-full min-w-[1020px] text-left border-collapse text-xs">
-          <thead>
-            <tr className="bg-muted/50 border-b border-border text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-              <th className="w-10 px-3 py-3.5 text-center">
-                <input
-                  type="checkbox"
-                  checked={isAllSelected}
-                  onChange={toggleSelectAll}
-                  className="rounded border-border text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
-                />
-              </th>
-              <th className="w-10 px-2 py-3.5 text-center">Hot</th>
-              <th className="px-4 py-3.5">Created Date</th>
-              <th className="px-4 py-3.5">Contact & Company</th>
-              <th className="px-4 py-3.5">Source</th>
-              <th className="px-4 py-3.5">Category</th>
-              <th className="px-4 py-3.5">Status</th>
-              <th className="px-4 py-3.5">Assigned To</th>
-              <th className="px-4 py-3.5">Expected Income</th>
-              <th className="px-4 py-3.5">Remarks</th>
-              <th className="px-4 py-3.5">Follow-ups</th>
-              <th className="px-4 py-3.5 text-right sticky right-0 bg-muted/60 shadow-[-1px_0_0_0_rgba(0,0,0,0.05)]">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border/60">
-            {categoriesInUse.map((catName) => {
-              const catLeads = filtered.filter((l) => ((l.category as string) || "Others") === catName);
-              if (catLeads.length === 0) return null;
-              const isCollapsed = !!collapsedCategories[catName];
+      <div className="space-y-3">
+        <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-xs">
+          <table className="w-full min-w-[1020px] text-left border-collapse text-xs">
+            <thead>
+              <tr className="bg-muted/50 border-b border-border text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                <th className="w-10 px-3 py-3.5 text-center">
+                  <input
+                    type="checkbox"
+                    checked={isAllSelected}
+                    onChange={toggleSelectAll}
+                    className="rounded border-border text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                  />
+                </th>
+                <th className="w-10 px-2 py-3.5 text-center">Hot</th>
+                <th className="px-4 py-3.5">Created Date</th>
+                <th className="px-4 py-3.5">Contact & Company</th>
+                <th className="px-4 py-3.5">Source</th>
+                <th className="px-4 py-3.5">Category</th>
+                <th className="px-4 py-3.5">Status</th>
+                <th className="px-4 py-3.5">Assigned To</th>
+                <th className="px-4 py-3.5">Expected Income</th>
+                <th className="px-4 py-3.5">Remarks</th>
+                <th className="px-4 py-3.5">Follow-ups</th>
+                <th className="px-4 py-3.5 text-right sticky right-0 bg-muted/60 shadow-[-1px_0_0_0_rgba(0,0,0,0.05)]">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/60">
+              {categoriesInUse.map((catName) => {
+                const catLeads = paginatedLeads.filter((l) => ((l.category as string) || "Others") === catName);
+                if (catLeads.length === 0) return null;
+                const isCollapsed = !!collapsedCategories[catName];
 
-              return (
-                <React.Fragment key={catName}>
-                  {/* Category Header Row */}
-                  <tr
-                    onClick={() => toggleCategory(catName)}
-                    className="bg-muted/30 hover:bg-muted/50 cursor-pointer font-bold select-none transition-colors border-y border-border/70"
-                  >
-                    <td colSpan={12} className="px-4 py-2 text-foreground/80">
-                      <div className="flex items-center gap-2">
-                        {isCollapsed ? (
-                          <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                        ) : (
-                          <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                        )}
-                        <span className="text-xs uppercase tracking-wider">{catName}</span>
-                        <Badge variant="secondary" className="text-[10px] h-5 px-2 bg-background font-bold border border-border">
-                          {catLeads.length}
-                        </Badge>
-                      </div>
-                    </td>
-                  </tr>
-
-                  {/* Lead Rows */}
-                  {!isCollapsed &&
-                    catLeads.map((lead) => {
-                      const leadId = lead.id || lead._id || "";
-                      const isSelected = selectedLeads.includes(leadId);
-                      const isHot = !!lead.isHot;
-                      const status = lead.status || lead.stage || "Lead";
-
-                      // Follow-up status check
-                      const today = new Date().toISOString().split("T")[0] || "";
-                      const nextDate = lead.nextFollowUpDate || lead.nextFollowUp;
-                      const nextDateStr = nextDate ? nextDate.split("T")[0] || "" : "";
-                      const isMissed = !!nextDateStr && nextDateStr < today;
-                      const isDueToday = !!nextDateStr && nextDateStr === today;
-
-                      return (
-                        <tr
-                          key={leadId}
-                          className={cn(
-                            "hover:bg-muted/40 transition-colors group relative",
-                            isHot ? "bg-orange-500/5" : ""
+                return (
+                  <React.Fragment key={catName}>
+                    {/* Category Header Row */}
+                    <tr
+                      onClick={() => toggleCategory(catName)}
+                      className="bg-muted/30 hover:bg-muted/50 cursor-pointer font-bold select-none transition-colors border-y border-border/70"
+                    >
+                      <td colSpan={12} className="px-4 py-2 text-foreground/80">
+                        <div className="flex items-center gap-2">
+                          {isCollapsed ? (
+                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4 text-muted-foreground" />
                           )}
-                        >
-                          {/* Checkbox */}
-                          <td className="px-3 py-3 text-center">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => toggleSelectRow(leadId)}
-                              className="rounded border-border text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
-                            />
-                          </td>
+                          <span className="text-xs uppercase tracking-wider">{catName}</span>
+                          <Badge variant="secondary" className="text-[10px] h-5 px-2 bg-background font-bold border border-border">
+                            {catLeads.length}
+                          </Badge>
+                        </div>
+                      </td>
+                    </tr>
 
-                          {/* Hot toggle */}
-                          <td className="px-2 py-3 text-center">
-                            <button
-                              type="button"
-                              onClick={() => handleInlineUpdate(leadId, "isHot", !isHot)}
-                              title={isHot ? "Hot Lead! Click to unmark" : "Mark as Hot Lead"}
-                              className="p-1 hover:scale-110 transition-transform"
-                            >
-                              <Flame
-                                className={cn(
-                                  "w-4 h-4",
-                                  isHot
-                                    ? "text-orange-500 fill-orange-500 drop-shadow-sm"
-                                    : "text-muted-foreground/40 hover:text-orange-400"
-                                )}
-                              />
-                            </button>
-                          </td>
+                    {/* Lead Rows */}
+                    {!isCollapsed &&
+                      catLeads.map((lead) => {
+                        const leadId = lead.id || lead._id || "";
+                        const isSelected = selectedLeads.includes(leadId);
+                        const isHot = !!lead.isHot;
+                        const status = lead.status || lead.stage || "Lead";
 
-                          {/* Created Date */}
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            {inlineEditing?.id === leadId && inlineEditing?.field === "date" ? (
-                              <Input
-                                type="date"
-                                autoFocus
-                                defaultValue={lead.date || lead.createdAt?.split("T")[0] || today}
-                                onBlur={(e) => handleInlineUpdate(leadId, "date", e.target.value)}
-                                className="h-7 text-xs w-32"
-                              />
-                            ) : (
-                              <div
-                                onClick={() => setInlineEditing({ id: leadId, field: "date" })}
-                                className="cursor-pointer hover:bg-muted/80 rounded px-1.5 py-1 text-muted-foreground flex flex-col"
-                              >
-                                <span className="font-semibold text-foreground">
-                                  {lead.date || lead.createdAt?.split("T")[0] || "—"}
-                                </span>
-                                <span className="text-[10px] text-muted-foreground">
-                                  {lead.createdByUserName || "Admin"}
-                                </span>
-                              </div>
+                        // Follow-up status check
+                        const today = new Date().toISOString().split("T")[0] || "";
+                        const nextDate = lead.nextFollowUpDate || lead.nextFollowUp;
+                        const nextDateStr = nextDate ? nextDate.split("T")[0] || "" : "";
+                        const isMissed = !!nextDateStr && nextDateStr < today;
+                        const isDueToday = !!nextDateStr && nextDateStr === today;
+                        const followUpList = (lead as any).followUps || (lead as any).follow_ups || [];
+
+                        return (
+                          <tr
+                            key={leadId}
+                            className={cn(
+                              "hover:bg-muted/40 transition-colors group relative",
+                              isHot ? "bg-orange-500/5" : ""
                             )}
-                          </td>
+                          >
+                            {/* Checkbox */}
+                            <td className="px-3 py-3 text-center">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleSelectRow(leadId)}
+                                className="rounded border-border text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                              />
+                            </td>
 
-                          {/* Contact & Company */}
-                          <td className="px-4 py-3">
-                            <div className="flex flex-col gap-0.5">
-                              {inlineEditing?.id === leadId && inlineEditing?.field === "company" ? (
+                            {/* Hot toggle */}
+                            <td className="px-2 py-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleInlineUpdate(leadId, "isHot", !isHot)}
+                                title={isHot ? "Hot Lead! Click to unmark" : "Mark as Hot Lead"}
+                                className="p-1 hover:scale-110 transition-transform"
+                              >
+                                <Flame
+                                  className={cn(
+                                    "w-4 h-4",
+                                    isHot
+                                      ? "text-orange-500 fill-orange-500 drop-shadow-sm"
+                                      : "text-muted-foreground/40 hover:text-orange-400"
+                                  )}
+                                />
+                              </button>
+                            </td>
+
+                            {/* Created Date */}
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              {inlineEditing?.id === leadId && inlineEditing?.field === "date" ? (
                                 <Input
+                                  type="date"
                                   autoFocus
-                                  defaultValue={lead.company}
-                                  onBlur={(e) => handleInlineUpdate(leadId, "company", e.target.value)}
-                                  className="h-7 text-xs font-bold"
+                                  defaultValue={lead.date || lead.createdAt?.split("T")[0] || today}
+                                  onBlur={(e) => handleInlineUpdate(leadId, "date", e.target.value)}
+                                  className="h-7 text-xs w-32"
                                 />
                               ) : (
-                                <span
-                                  onClick={() => setSelectedLeadDrawer(lead)}
-                                  title={lead.company || lead.contact}
-                                  className="font-bold text-foreground hover:text-emerald-600 cursor-pointer text-[13px] flex items-center gap-1.5 max-w-[180px] truncate"
+                                <div
+                                  onClick={() => setInlineEditing({ id: leadId, field: "date" })}
+                                  className="cursor-pointer hover:bg-muted/80 rounded px-1.5 py-1 text-muted-foreground flex flex-col"
                                 >
-                                  {lead.company || lead.contact}
-                                  {lead.city && (
-                                    <span className="text-[10px] text-muted-foreground font-normal">
-                                      · {lead.city}
-                                    </span>
-                                  )}
-                                </span>
-                              )}
-
-                              {lead.phone && (
-                                <div className="flex items-center gap-1.5 mt-1">
-                                  <a
-                                    href={`tel:${lead.phone}`}
-                                    title="Click to dial directly"
-                                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 font-mono font-black text-sm tracking-wide transition-colors border border-emerald-500/20 shadow-xs"
-                                  >
-                                    <Phone className="w-3.5 h-3.5 text-emerald-600 fill-emerald-600/20" />
-                                    <span>{lead.phone}</span>
-                                  </a>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => handleOpenWhatsApp(lead.phone || "", e)}
-                                    title="Send WhatsApp message (auto-copies phone to clipboard for new chat)"
-                                    className="p-1 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center rounded-lg text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-950 transition-colors border border-emerald-200"
-                                  >
-                                    <MessageSquare className="w-3.5 h-3.5" />
-                                  </button>
+                                  <span className="font-semibold text-foreground">
+                                    {lead.date || lead.createdAt?.split("T")[0] || "—"}
+                                  </span>
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {lead.createdByUserName || "Admin"}
+                                  </span>
                                 </div>
                               )}
+                            </td>
 
-                              <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-0.5">
-                                {lead.contact && lead.contact !== lead.company && (
-                                  <span className="font-medium text-foreground/80">{lead.contact}</span>
-                                )}
-                                {lead.email && (
-                                  <a
-                                    href={`mailto:${lead.email}`}
-                                    title={lead.email}
-                                    className="flex items-center gap-1 hover:text-emerald-600 text-foreground/70 truncate max-w-[160px]"
+                            {/* Contact & Company */}
+                            <td className="px-4 py-3">
+                              <div className="flex flex-col gap-0.5">
+                                {inlineEditing?.id === leadId && inlineEditing?.field === "company" ? (
+                                  <Input
+                                    autoFocus
+                                    defaultValue={lead.company}
+                                    onBlur={(e) => handleInlineUpdate(leadId, "company", e.target.value)}
+                                    className="h-7 text-xs font-bold"
+                                  />
+                                ) : (
+                                  <span
+                                    onClick={() => setSelectedLeadDrawer(lead)}
+                                    title={lead.company || lead.contact}
+                                    className="font-bold text-foreground hover:text-emerald-600 cursor-pointer text-[13px] flex items-center gap-1.5 max-w-[180px] truncate"
                                   >
-                                    <Mail className="w-3 h-3 text-muted-foreground" />
-                                    {lead.email}
-                                  </a>
+                                    {lead.company || lead.contact}
+                                    {lead.city && (
+                                      <span className="text-[10px] text-muted-foreground font-normal">
+                                        · {lead.city}
+                                      </span>
+                                    )}
+                                  </span>
                                 )}
+
+                                {lead.phone && (
+                                  <div className="flex items-center gap-1.5 mt-1">
+                                    <a
+                                      href={`tel:${lead.phone}`}
+                                      title="Click to dial directly"
+                                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 font-mono font-black text-sm tracking-wide transition-colors border border-emerald-500/20 shadow-xs"
+                                    >
+                                      <Phone className="w-3.5 h-3.5 text-emerald-600 fill-emerald-600/20" />
+                                      <span>{lead.phone}</span>
+                                    </a>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => handleOpenWhatsApp(lead.phone || "", e)}
+                                      title="Send WhatsApp message (auto-copies phone to clipboard for new chat)"
+                                      className="p-1 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center rounded-lg text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-950 transition-colors border border-emerald-200"
+                                    >
+                                      <MessageSquare className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                )}
+
+                                <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-0.5">
+                                  {lead.contact && lead.contact !== lead.company && (
+                                    <span className="font-medium text-foreground/80">{lead.contact}</span>
+                                  )}
+                                  {lead.email && (
+                                    <a
+                                      href={`mailto:${lead.email}`}
+                                      title={lead.email}
+                                      className="flex items-center gap-1 hover:text-emerald-600 text-foreground/70 truncate max-w-[160px]"
+                                    >
+                                      <Mail className="w-3 h-3 text-muted-foreground" />
+                                      {lead.email}
+                                    </a>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          </td>
+                            </td>
 
-                          {/* Source Dropdown */}
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <Select
-                              value={availableSources.includes(lead.source as string) ? (lead.source as string) : "Others"}
-                              onValueChange={(val) => handleInlineUpdate(leadId, "source", val)}
-                            >
-                              <SelectTrigger className="h-7 text-xs font-semibold border-border bg-background/50 px-2 min-w-[110px] rounded-lg">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
+                            {/* Source Dropdown */}
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <select
+                                value={availableSources.includes(lead.source as string) ? (lead.source as string) : "Others"}
+                                onChange={(e) => handleInlineUpdate(leadId, "source", e.target.value)}
+                                className="h-7 text-xs font-semibold border border-border bg-background px-2 min-w-[110px] rounded-lg cursor-pointer outline-none text-foreground focus:ring-1 focus:ring-primary"
+                              >
                                 {Array.from(new Set([...availableSources, "Others"])).map((s) => (
-                                  <SelectItem key={s} value={s} className="text-xs">
+                                  <option key={s} value={s} className="bg-popover text-foreground">
                                     {s}
-                                  </SelectItem>
+                                  </option>
                                 ))}
-                              </SelectContent>
-                            </Select>
-                          </td>
+                              </select>
+                            </td>
 
-                          {/* Category */}
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <Select
-                              value={availableCategories.includes(lead.category as string) ? (lead.category as string) : "Others"}
-                              onValueChange={(val) => handleInlineUpdate(leadId, "category", val)}
-                            >
-                              <SelectTrigger className="h-7 text-xs font-semibold border-border bg-background/50 px-2 min-w-[110px]">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
+                            {/* Category */}
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <select
+                                value={availableCategories.includes(lead.category as string) ? (lead.category as string) : "Others"}
+                                onChange={(e) => handleInlineUpdate(leadId, "category", e.target.value)}
+                                className="h-7 text-xs font-semibold border border-border bg-background px-2 min-w-[110px] rounded-lg cursor-pointer outline-none text-foreground focus:ring-1 focus:ring-primary"
+                              >
                                 {Array.from(new Set([...availableCategories, "Others"])).map((c) => (
-                                  <SelectItem key={c} value={c} className="text-xs">
+                                  <option key={c} value={c} className="bg-popover text-foreground">
                                     {c}
-                                  </SelectItem>
+                                  </option>
                                 ))}
-                              </SelectContent>
-                            </Select>
-                          </td>
+                              </select>
+                            </td>
 
-                          {/* Status */}
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <Select
-                              value={availableStages.includes(status) ? status : availableStages[0] || "New Lead"}
-                              onValueChange={(val) => onStatusSelect(lead, val)}
-                            >
-                              <SelectTrigger
+                            {/* Status */}
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <select
+                                value={availableStages.includes(status) ? status : availableStages[0] || "New Lead"}
+                                onChange={(e) => onStatusSelect(lead, e.target.value)}
                                 className={cn(
-                                  "h-7 text-[11px] font-bold border px-2 min-w-[115px] rounded-lg",
+                                  "h-7 text-[11px] font-bold border px-2 min-w-[115px] rounded-lg cursor-pointer outline-none shadow-xs focus:ring-1 focus:ring-primary",
                                   STAGE_COLORS[status] || "bg-muted text-foreground"
                                 )}
                               >
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
                                 {availableStages.map((st) => (
-                                  <SelectItem key={st} value={st} className="text-xs">
+                                  <option key={st} value={st} className="bg-popover text-foreground font-semibold">
                                     {st}{st.toLowerCase().includes("won") ? " 🏆" : ""}
-                                  </SelectItem>
+                                  </option>
                                 ))}
-                              </SelectContent>
-                            </Select>
-                            {status === "On Hold" && lead.holdResumeDate && (
-                              <div className="text-[10px] text-amber-600 font-bold mt-1">
-                                Resume: {lead.holdResumeDate}
-                              </div>
-                            )}
-                          </td>
-
-                          {/* Assigned To */}
-                          <td className="px-4 py-3">
-                            <div className="flex flex-wrap gap-1 max-w-[160px]">
-                              {Array.isArray(lead.assignedTo) && lead.assignedTo.length > 0 ? (
-                                lead.assignedTo.map((name: string) => (
-                                  <Badge
-                                    key={name}
-                                    variant="secondary"
-                                    className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold py-0.5 px-1.5 flex items-center gap-1"
-                                  >
-                                    {name}
-                                  </Badge>
-                                ))
-                              ) : lead.owner ? (
-                                <Badge
-                                  variant="secondary"
-                                  className="bg-muted text-muted-foreground text-[10px] font-medium"
-                                >
-                                  {lead.owner}
-                                </Badge>
-                              ) : (
-                                <span className="text-muted-foreground/60 italic text-[11px]">
-                                  Unassigned
-                                </span>
-                              )}
-                            </div>
-                          </td>
-
-                          {/* Expected Income */}
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            {inlineEditing?.id === leadId && inlineEditing?.field === "expectedIncome" ? (
-                              <Input
-                                autoFocus
-                                defaultValue={lead.expectedIncome || String(lead.budget || "")}
-                                onBlur={(e) => handleInlineUpdate(leadId, "expectedIncome", e.target.value)}
-                                className="h-7 text-xs font-bold w-24"
-                              />
-                            ) : (
-                              <span
-                                onClick={() => setInlineEditing({ id: leadId, field: "expectedIncome" })}
-                                className="cursor-pointer font-bold text-foreground hover:bg-muted/80 rounded px-1.5 py-1"
-                              >
-                                {lead.expectedIncome
-                                  ? lead.expectedIncome.startsWith("₹")
-                                    ? lead.expectedIncome
-                                    : `₹${lead.expectedIncome}`
-                                  : lead.budget
-                                    ? formatCurrency(lead.budget)
-                                    : "—"}
-                              </span>
-                            )}
-                          </td>
-
-                          {/* Remarks */}
-                          <td className="px-4 py-3">
-                            {inlineEditing?.id === leadId && inlineEditing?.field === "remarks" ? (
-                              <Input
-                                autoFocus
-                                defaultValue={lead.remarks}
-                                onBlur={(e) => handleInlineUpdate(leadId, "remarks", e.target.value)}
-                                className="h-7 text-xs w-36"
-                              />
-                            ) : (
-                              <p
-                                onClick={() => setInlineEditing({ id: leadId, field: "remarks" })}
-                                title={lead.remarks}
-                                className="cursor-pointer max-w-[140px] truncate text-muted-foreground italic hover:bg-muted/80 rounded px-1.5 py-1"
-                              >
-                                {lead.remarks ? `"${lead.remarks}"` : "Add remark"}
-                              </p>
-                            )}
-                          </td>
-
-                          {/* Follow-ups */}
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <div className="flex flex-col gap-1.5">
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                <FollowUpDialog
-                                  lead={lead}
-                                  userName={currentUserName}
-                                />
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleQuickCNR(lead);
-                                  }}
-                                  title="1-Click: Record Call Not Received (CNR) & set follow-up for tomorrow"
-                                  className="min-h-[44px] sm:min-h-0 sm:h-7 text-[10px] px-2 font-black text-amber-700 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg shadow-xs"
-                                >
-                                  CNR
-                                </Button>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleQuickCallLater(lead);
-                                  }}
-                                  title="1-Click: Client Busy - Remind in 2 hours"
-                                  className="min-h-[44px] sm:min-h-0 sm:h-7 text-[10px] px-1.5 font-bold text-blue-700 dark:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 rounded-lg shadow-xs"
-                                >
-                                  Later
-                                </Button>
-                              </div>
-                              {nextDateStr && (
-                                <div className="flex items-center gap-1">
-                                  {isMissed ? (
-                                    <span className="text-[9px] font-bold text-rose-600 dark:text-rose-400 animate-pulse uppercase bg-rose-500/10 px-1.5 py-0.5 rounded">
-                                      Missed ({nextDateStr})
-                                    </span>
-                                  ) : isDueToday ? (
-                                    <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 animate-pulse uppercase bg-amber-500/10 px-1.5 py-0.5 rounded">
-                                      Due Today
-                                    </span>
-                                  ) : (
-                                    <span className="text-[10px] text-muted-foreground font-medium">
-                                      Next: {nextDateStr}
-                                    </span>
-                                  )}
+                              </select>
+                              {status === "On Hold" && lead.holdResumeDate && (
+                                <div className="text-[10px] text-amber-600 font-bold mt-1">
+                                  Resume: {lead.holdResumeDate}
                                 </div>
                               )}
-                            </div>
-                          </td>
+                            </td>
 
-                          {/* Row Actions */}
-                          <td className="px-4 py-3 text-right sticky right-0 bg-card group-hover:bg-muted/40 transition-colors shadow-[-1px_0_0_0_rgba(0,0,0,0.05)]">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                                >
-                                  <MoreHorizontal className="w-4 h-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-44 text-xs font-semibold">
-                                <DropdownMenuItem onClick={() => setSelectedLeadDrawer(lead)}>
-                                  View Details
-                                </DropdownMenuItem>
-                                {status !== "Client Won" && (
-                                  <DropdownMenuItem
-                                    onClick={() => setConvertingLead(lead)}
-                                    className="text-emerald-600 font-bold"
+                            {/* Assigned To */}
+                            <td className="px-4 py-3">
+                              <div className="flex flex-wrap gap-1 max-w-[160px]">
+                                {Array.isArray(lead.assignedTo) && lead.assignedTo.length > 0 ? (
+                                  lead.assignedTo.map((name: string) => (
+                                    <Badge
+                                      key={name}
+                                      variant="secondary"
+                                      className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold py-0.5 px-1.5 flex items-center gap-1"
+                                    >
+                                      {name}
+                                    </Badge>
+                                  ))
+                                ) : lead.owner ? (
+                                  <Badge
+                                    variant="secondary"
+                                    className="bg-muted text-muted-foreground text-[10px] font-medium"
                                   >
-                                    Convert to Client 🏆
-                                  </DropdownMenuItem>
+                                    {lead.owner}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-muted-foreground/60 italic text-[11px]">
+                                    Unassigned
+                                  </span>
                                 )}
-                                <div className="h-px bg-border my-1" />
-                                <DropdownMenuItem
-                                  onClick={() => deleteLead(leadId)}
-                                  className="text-rose-600 focus:text-rose-600"
+                              </div>
+                            </td>
+
+                            {/* Expected Income */}
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              {inlineEditing?.id === leadId && inlineEditing?.field === "expectedIncome" ? (
+                                <Input
+                                  autoFocus
+                                  defaultValue={lead.expectedIncome || String(lead.budget || "")}
+                                  onBlur={(e) => handleInlineUpdate(leadId, "expectedIncome", e.target.value)}
+                                  className="h-7 text-xs font-bold w-24"
+                                />
+                              ) : (
+                                <span
+                                  onClick={() => setInlineEditing({ id: leadId, field: "expectedIncome" })}
+                                  className="cursor-pointer font-bold text-foreground hover:bg-muted/80 rounded px-1.5 py-1"
                                 >
-                                  Delete Lead
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
+                                  {lead.expectedIncome
+                                    ? lead.expectedIncome.startsWith("₹")
+                                      ? lead.expectedIncome
+                                      : `₹${lead.expectedIncome}`
+                                    : lead.budget
+                                      ? formatCurrency(lead.budget)
+                                      : "—"}
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Remarks */}
+                            <td className="px-4 py-3">
+                              {inlineEditing?.id === leadId && inlineEditing?.field === "remarks" ? (
+                                <Input
+                                  autoFocus
+                                  defaultValue={lead.remarks}
+                                  onBlur={(e) => handleInlineUpdate(leadId, "remarks", e.target.value)}
+                                  className="h-7 text-xs w-36"
+                                />
+                              ) : (
+                                <p
+                                  onClick={() => setInlineEditing({ id: leadId, field: "remarks" })}
+                                  title={lead.remarks}
+                                  className="cursor-pointer max-w-[140px] truncate text-muted-foreground italic hover:bg-muted/80 rounded px-1.5 py-1"
+                                >
+                                  {lead.remarks ? `"${lead.remarks}"` : "Add remark"}
+                                </p>
+                              )}
+                            </td>
+
+                            {/* Follow-ups */}
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <div className="flex flex-col gap-1.5">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedFollowUpLead(lead);
+                                    }}
+                                    className="min-h-[44px] sm:min-h-0 sm:h-7 text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900 gap-1.5 transition-colors rounded-lg px-2.5 shadow-xs"
+                                    title="Click to view follow-up history or add a new follow-up"
+                                  >
+                                    <MessageSquare className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                    <span>Follow-ups ({followUpList.length})</span>
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleQuickCNR(lead);
+                                    }}
+                                    title="1-Click: Record Call Not Received (CNR) & set follow-up for tomorrow"
+                                    className="min-h-[44px] sm:min-h-0 sm:h-7 text-[10px] px-2 font-black text-amber-700 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg shadow-xs"
+                                  >
+                                    CNR
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleQuickCallLater(lead);
+                                    }}
+                                    title="1-Click: Client Busy - Remind in 2 hours"
+                                    className="min-h-[44px] sm:min-h-0 sm:h-7 text-[10px] px-1.5 font-bold text-blue-700 dark:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 rounded-lg shadow-xs"
+                                  >
+                                    Later
+                                  </Button>
+                                </div>
+                                {nextDateStr && (
+                                  <div className="flex items-center gap-1">
+                                    {isMissed ? (
+                                      <span className="text-[9px] font-bold text-rose-600 dark:text-rose-400 animate-pulse uppercase bg-rose-500/10 px-1.5 py-0.5 rounded">
+                                        Missed ({nextDateStr})
+                                      </span>
+                                    ) : isDueToday ? (
+                                      <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 animate-pulse uppercase bg-amber-500/10 px-1.5 py-0.5 rounded">
+                                        Due Today
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] text-muted-foreground font-medium">
+                                        Next: {nextDateStr}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* Row Actions */}
+                            <td className="px-4 py-3 text-right sticky right-0 bg-card group-hover:bg-muted/40 transition-colors shadow-[-1px_0_0_0_rgba(0,0,0,0.05)]">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                  >
+                                    <MoreHorizontal className="w-4 h-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-44 text-xs font-semibold">
+                                  <DropdownMenuItem onClick={() => setSelectedLeadDrawer(lead)}>
+                                    View Details
+                                  </DropdownMenuItem>
+                                  {status !== "Client Won" && (
+                                    <DropdownMenuItem
+                                      onClick={() => setConvertingLead(lead)}
+                                      className="text-emerald-600 font-bold"
+                                    >
+                                      Convert to Client 🏆
+                                    </DropdownMenuItem>
+                                  )}
+                                  <div className="h-px bg-border my-1" />
+                                  <DropdownMenuItem
+                                    onClick={() => deleteLead(leadId)}
+                                    className="text-rose-600 focus:text-rose-600"
+                                  >
+                                    Delete Lead
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination Bar */}
+        {totalLeadsCount > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-card border border-border rounded-2xl shadow-xs">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground font-medium">
+              <span>
+                Showing <strong className="text-foreground">{startIndex + 1}</strong> to{" "}
+                <strong className="text-foreground">{Math.min(endIndex, totalLeadsCount)}</strong> of{" "}
+                <strong className="text-foreground">{totalLeadsCount}</strong> leads
+              </span>
+              <span className="text-muted-foreground/40">•</span>
+              <div className="flex items-center gap-1.5">
+                <span>Per page:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="h-7 text-xs font-bold rounded-lg border border-border bg-muted/40 px-2 py-0 text-foreground cursor-pointer outline-none"
+                >
+                  <option value={15}>15</option>
+                  <option value={30}>30</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+            </div>
+
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={validPage <= 1}
+                  className="h-8 px-2.5 text-xs font-semibold rounded-lg"
+                >
+                  Previous
+                </Button>
+                <div className="flex items-center gap-1 px-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter((p) => p === 1 || p === totalPages || Math.abs(p - validPage) <= 1)
+                    .map((p, idx, arr) => (
+                      <React.Fragment key={p}>
+                        {idx > 0 && arr[idx - 1] !== p - 1 && (
+                          <span className="text-xs text-muted-foreground px-1">…</span>
+                        )}
+                        <Button
+                          variant={p === validPage ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setCurrentPage(p)}
+                          className={cn(
+                            "h-8 w-8 p-0 text-xs font-bold rounded-lg",
+                            p === validPage ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+                          )}
+                        >
+                          {p}
+                        </Button>
+                      </React.Fragment>
+                    ))}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={validPage >= totalPages}
+                  className="h-8 px-2.5 text-xs font-semibold rounded-lg"
+                >
+                  Next
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   };
@@ -1758,6 +1850,18 @@ export function SalesLeads({
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Shared Follow-up Dialog Modal */}
+      {selectedFollowUpLead && (
+        <FollowUpDialog
+          lead={selectedFollowUpLead}
+          userName={currentUserName}
+          open={!!selectedFollowUpLead}
+          onOpenChange={(op) => {
+            if (!op) setSelectedFollowUpLead(null);
+          }}
+        />
+      )}
 
       {/* Convert to Client Modal */}
       <ConvertToClientModal
