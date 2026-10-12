@@ -280,8 +280,12 @@ class ContentService:
 
             # Check if issues changed
             if "issues" in data_dict:
-                old_issues = set(existing_item.get("issues", []))
-                new_issues = set(data_dict["issues"])
+                def _normalize_issue(iss):
+                    if isinstance(iss, dict):
+                        return iss.get("text") or iss.get("id") or str(iss)
+                    return str(iss)
+                old_issues = {_normalize_issue(i) for i in (existing_item.get("issues") or [])}
+                new_issues = {_normalize_issue(i) for i in (data_dict.get("issues") or [])}
                 added_issues = new_issues - old_issues
                 for issue in added_issues:
                     desc = f"Added issue '{issue}' on content idea '{topic}'"

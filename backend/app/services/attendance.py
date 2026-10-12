@@ -114,8 +114,8 @@ def build_timeline_logs(record: Dict[str, Any]) -> List[Dict[str, Any]]:
     if punches:
         for idx, p in enumerate(punches):
             session_num = idx + 1
-            cin = p.get("check_in")
-            cout = p.get("check_out")
+            cin = p.get("check_in") or p.get("punchIn")
+            cout = p.get("check_out") or p.get("punchOut")
             if cin and cin != "--":
                 logs.append({
                     "action": f"Punched In (Session {session_num})",
@@ -128,22 +128,24 @@ def build_timeline_logs(record: Dict[str, Any]) -> List[Dict[str, Any]]:
                     "time": cout,
                     "type": "punch_out"
                 })
-    elif record.get("check_in") and record.get("check_in") != "--":
+    elif (record.get("check_in") or record.get("checkIn")) and (record.get("check_in") or record.get("checkIn")) != "--":
+        cin = record.get("check_in") or record.get("checkIn")
         logs.append({
             "action": "Punched In (Session 1)",
-            "time": record.get("check_in"),
+            "time": cin,
             "type": "punch_in"
         })
-        if record.get("check_out") and record.get("check_out") != "--":
+        cout = record.get("check_out") or record.get("checkOut")
+        if cout and cout != "--":
             logs.append({
                 "action": "Punched Out (Session 1)",
-                "time": record.get("check_out"),
+                "time": cout,
                 "type": "punch_out"
             })
 
     for b in breaks:
-        b_start = b.get("start_time")
-        b_end = b.get("end_time")
+        b_start = b.get("start_time") or b.get("startTime")
+        b_end = b.get("end_time") or b.get("endTime")
         dur_sec = b.get("duration_seconds", 0)
         dur_str = ""
         if dur_sec:

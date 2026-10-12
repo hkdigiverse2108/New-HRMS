@@ -87,9 +87,8 @@ class ProjectGeneralDetails(BaseModel):
     category: str = Field(..., description="Category or comma-separated departments of the project")
     status: ProjectStatus = Field(default=ProjectStatus.NOT_STARTED, description="Current status of the project")
     priority: ProjectPriority = Field(default=ProjectPriority.MEDIUM)
-    progress: int = Field(default=0, ge=0, le=100, description="Project completion percentage")
-    start_date: date = Field(..., description="Project start date")
-    end_date: date = Field(..., description="Project end date")
+    start_date: Optional[date] = Field(default=None, description="Project start date")
+    end_date: Optional[date] = Field(default=None, description="Project end date")
     team_deadline: Optional[date] = None
     creative_stats: Optional[CreativeStats] = None
     digital_marketing_stats: Optional[DigitalMarketingStats] = None

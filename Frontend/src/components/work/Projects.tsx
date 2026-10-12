@@ -2804,6 +2804,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   // Task 24: CC Custom PDF Export States
   const [isPdfExportModalOpen, setIsPdfExportModalOpen] = useState(false);
   const [pdfMonthFilter, setPdfMonthFilter] = useState<string>("Current");
+  const [pdfOrientation, setPdfOrientation] = useState<"portrait" | "landscape">("portrait");
+  const [isExportingCcPdf, setIsExportingCcPdf] = useState(false);
   const [pdfSelectedColumns, setPdfSelectedColumns] = useState<string[]>([
     "Schedule",
     "Type",
@@ -2814,8 +2816,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     "Editing",
     "Thumbnail",
     "Caption",
-    "Final Link",
-    "Status"
+    "Final Link"
   ]);
 
   const handleGenerateCcPdf = async (mode: "download" | "print" = "download") => {
@@ -2825,8 +2826,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       return;
     }
     const currentClient = clients.find(c => c.id === currentProject.clientId);
-    const clientName = currentClient?.companyName || currentClient?.name || "Client";
-    const projName = currentProject.name || "Project";
+    const clientName = (currentClient?.companyName || currentClient?.name || "").trim() || "Client";
+    const projName = (currentProject.name || "").trim() || "Project";
     const category = currentProject.category || "Creative";
 
     const allItems = currentProject.contentCalendar || [];
@@ -2834,6 +2835,42 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       toast.error("No content calendar items to export");
       return;
     }
+
+    // Deduplicate clientName and projName if projName already includes clientName or is identical
+    const normClient = clientName.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const normProj = projName.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+    let combinedTitle = "";
+    let filePrefix = "";
+
+    if (!normClient || normClient === "client") {
+      combinedTitle = projName;
+      filePrefix = projName;
+    } else if (!normProj || normProj === "project") {
+      combinedTitle = clientName;
+      filePrefix = clientName;
+    } else if (normClient === normProj) {
+      combinedTitle = clientName;
+      filePrefix = clientName;
+    } else if (normProj.startsWith(normClient)) {
+      // projName already starts with clientName, e.g. client "abc infotech" & proj "abc infotech - Creative"
+      combinedTitle = projName;
+      filePrefix = projName;
+    } else if (normClient.startsWith(normProj)) {
+      combinedTitle = clientName;
+      filePrefix = clientName;
+    } else if (projName.toLowerCase().includes(clientName.toLowerCase())) {
+      combinedTitle = projName;
+      filePrefix = projName;
+    } else {
+      combinedTitle = `${clientName} • ${projName}`;
+      filePrefix = `${clientName}_${projName}`;
+    }
+
+    const cleanFilePrefix = filePrefix
+      .replace(/[^a-zA-Z0-9_-]+/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_+|_+$/g, "");
 
     const formatDayMonthYear = (dateVal: any): string => {
       if (!dateVal || dateVal === "-" || dateVal === "null" || dateVal === "undefined") return "-";
@@ -2915,7 +2952,10 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       }
     }
 
-    const docTitle = `${clientName} - ${projName} (${category}) Content Calendar - ${ccMonthLabel}`;
+    const isPortrait = pdfOrientation === "portrait";
+    const docTitle = `${combinedTitle} (${category}) Content Calendar - ${ccMonthLabel}`;
+    const cleanMonthPart = ccMonthLabel.replace(/[^a-zA-Z0-9_-]+/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "");
+    const safeFilename = `${cleanFilePrefix}_Content_Calendar_${cleanMonthPart}_${isPortrait ? "Portrait" : "Landscape"}.pdf`;
 
     const columnsMap: Record<string, (item: any) => string> = {
       "Schedule": (i) => {
@@ -2929,28 +2969,28 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       "Script": (i) => {
         const formattedDate = formatDayMonthYear(i.scriptDate);
         const url = (i.scriptLink || "").trim();
-        const linkHtml = url ? `<a href="${url.startsWith("http") ? url : "https://" + url}" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 700; margin-left: 4px;">🔗 Link</a>` : "";
+        const linkHtml = url ? `<a href="${url.startsWith("http") ? url : "https://" + url}" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 700; display: inline-block; margin-left: 2px;">[Link]</a>` : "";
         if (formattedDate === "-" && !linkHtml) return "-";
         return `${formattedDate === "-" ? "" : formattedDate} ${linkHtml}`.trim();
       },
       "Shoot": (i) => {
         const formattedDate = formatDayMonthYear(i.shootDate);
         const url = (i.shootLink || "").trim();
-        const linkHtml = url ? `<a href="${url.startsWith("http") ? url : "https://" + url}" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 700; margin-left: 4px;">🔗 Link</a>` : "";
+        const linkHtml = url ? `<a href="${url.startsWith("http") ? url : "https://" + url}" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 700; display: inline-block; margin-left: 2px;">[Link]</a>` : "";
         if (formattedDate === "-" && !linkHtml) return "-";
         return `${formattedDate === "-" ? "" : formattedDate} ${linkHtml}`.trim();
       },
       "Editing": (i) => {
         const formattedDate = formatDayMonthYear(i.editingDate);
         const rawUrl = (i.finalPostLink || i.finalReelLink || "").trim();
-        const linkHtml = rawUrl ? `<a href="${rawUrl.startsWith("http") ? rawUrl : "https://" + rawUrl}" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 700; margin-left: 4px;">🔗 Draft</a>` : "";
+        const linkHtml = rawUrl ? `<a href="${rawUrl.startsWith("http") ? rawUrl : "https://" + rawUrl}" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 700; display: inline-block; margin-left: 2px;">[Draft]</a>` : "";
         if (formattedDate === "-" && !linkHtml) return "-";
         return `${formattedDate === "-" ? "" : formattedDate} ${linkHtml}`.trim();
       },
       "Thumbnail": (i) => {
         const formattedDate = formatDayMonthYear(i.thumbnailDate);
         const url = (i.thumbnailLink || "").trim();
-        const linkHtml = url ? `<a href="${url.startsWith("http") ? url : "https://" + url}" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 700; margin-left: 4px;">🔗 Thumbnail</a>` : "";
+        const linkHtml = url ? `<a href="${url.startsWith("http") ? url : "https://" + url}" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 700; display: inline-block; margin-left: 2px;">[Link]</a>` : "";
         if (formattedDate === "-" && !linkHtml) return "-";
         return `${formattedDate === "-" ? "" : formattedDate} ${linkHtml}`.trim();
       },
@@ -2959,7 +2999,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         const rawUrl = (i.finalPostLink || i.finalReelLink || i.postingLinkOfIg || "").trim();
         if (!rawUrl || rawUrl === "-") return "-";
         const url = rawUrl.startsWith("http") ? rawUrl : "https://" + rawUrl;
-        return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 700;">🔗 View Post</a>`;
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 700;">View Post</a>`;
       },
       "Status": (i) => i.status || "To Do",
     };
@@ -2970,267 +3010,347 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       return;
     }
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>${docTitle}</title>
-          <meta charset="utf-8" />
-          <link rel="preconnect" href="https://fonts.googleapis.com">
-          <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-          <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-          <style>
-            @page {
-              size: landscape;
-              margin: 10mm;
-            }
-            * { box-sizing: border-box; }
-            body {
-              font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-              color: #0f172a;
-              margin: 0;
-              padding: 24px;
-              font-size: 11px;
-              background: #f8fafc;
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
-            }
-            .header-banner {
-              background: linear-gradient(135deg, #059669 0%, #0d9488 50%, #0284c7 100%);
-              color: #fff;
-              border-radius: 20px;
-              padding: 24px 28px;
-              margin-bottom: 20px;
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              box-shadow: 0 10px 25px -5px rgba(5, 150, 105, 0.25);
-            }
-            .header-banner h1 {
-              margin: 0;
-              font-size: 22px;
-              font-weight: 900;
-              letter-spacing: -0.03em;
-              display: flex;
-              align-items: center;
-              gap: 10px;
-            }
-            .header-banner p {
-              margin: 6px 0 0 0;
-              color: rgba(255, 255, 255, 0.9);
-              font-size: 11.5px;
-              font-weight: 500;
-            }
-            .badge-pill {
-              display: inline-block;
-              padding: 6px 16px;
-              background: rgba(255, 255, 255, 0.2);
-              backdrop-filter: blur(8px);
-              color: #fff;
-              border: 1px solid rgba(255, 255, 255, 0.4);
-              border-radius: 9999px;
-              font-weight: 800;
-              font-size: 11px;
-              text-transform: uppercase;
-              letter-spacing: 0.05em;
-            }
-            .stats-grid {
-              display: grid;
-              grid-template-columns: repeat(4, 1fr);
-              gap: 12px;
-              margin-bottom: 20px;
-            }
-            .stat-card {
-              background: #fff;
-              border: 1px solid #e2e8f0;
-              border-radius: 14px;
-              padding: 12px 16px;
-              box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
-              display: flex;
-              flex-direction: column;
-              justify-content: center;
-            }
-            .stat-card .num {
-              font-size: 20px;
-              font-weight: 900;
-              color: #0f172a;
-              letter-spacing: -0.02em;
-            }
-            .stat-card .lbl {
-              font-size: 9.5px;
-              text-transform: uppercase;
-              letter-spacing: 0.08em;
-              color: #64748b;
-              font-weight: 800;
-              margin-top: 2px;
-            }
-            .stat-card.published .num { color: #059669; }
-            .stat-card.approved .num { color: #4f46e5; }
-            .stat-card.pending .num { color: #d97706; }
-            table {
-              width: 100%;
-              border-collapse: separate;
-              border-spacing: 0;
-              margin-top: 4px;
-              background: #fff;
-              border-radius: 16px;
-              overflow: hidden;
-              border: 1px solid #e2e8f0;
-              box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03);
-              page-break-inside: auto;
-            }
-            tr { page-break-inside: avoid; page-break-after: auto; }
-            th {
-              background-color: #0f172a;
-              color: #f8fafc;
-              font-weight: 800;
-              text-align: left;
-              padding: 11px 14px;
-              font-size: 10px;
-              text-transform: uppercase;
-              letter-spacing: 0.07em;
-              border-bottom: 2px solid #334155;
-            }
-            td {
-              padding: 10px 14px;
-              border-bottom: 1px solid #f1f5f9;
-              vertical-align: middle;
-              line-height: 1.45;
-              color: #334155;
-              font-size: 11px;
-            }
-            td a {
-              color: #0284c7;
-              text-decoration: underline;
-              font-weight: 700;
-            }
-            td a:hover {
-              color: #0369a1;
-            }
-            tr:nth-child(even) td { background-color: #f8fafc; }
-            tr:last-child td { border-bottom: none; }
-            .status-tag {
-              display: inline-block;
-              padding: 4px 10px;
-              border-radius: 9999px;
-              font-size: 9.5px;
-              font-weight: 800;
-              text-transform: uppercase;
-              letter-spacing: 0.04em;
-            }
-            .status-published { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
-            .status-approved { background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; }
-            .status-progress { background: #e0f2fe; color: #075985; border: 1px solid #bae6fd; }
-            .status-todo { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
-            .footer-strip {
-              margin-top: 20px;
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              color: #94a3b8;
-              font-size: 10px;
-              font-weight: 600;
-              padding-top: 12px;
-              border-top: 1px dashed #cbd5e1;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header-banner">
-            <div>
-              <h1>📅 ${clientName} — ${projName}</h1>
-              <p style="margin-top: 4px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                <span style="display: inline-block; background: #e0e7ff; color: #3730a3; padding: 2px 10px; border-radius: 6px; font-weight: 800; font-size: 11px;">🗓️ Month: ${ccMonthLabel}</span>
-                <span>Content Calendar Specification • Generated on ${formatDayMonthYear(new Date().toISOString())} • Total ${items.length} items</span>
-              </p>
-            </div>
-            <div>
-              <span class="badge-pill" style="background: #e0e7ff; color: #3730a3; font-weight: 800; margin-right: 6px;">🗓️ ${ccMonthLabel}</span>
-              <span class="badge-pill">${category}</span>
-            </div>
-          </div>
-          <div class="stats-grid">
-            <div class="stat-card">
-              <div class="num">${items.length}</div>
-              <div class="lbl">Total Deliverables</div>
-            </div>
-            <div class="stat-card published">
-              <div class="num">${items.filter((i: any) => String(i.status || '').toLowerCase().includes('publish')).length}</div>
-              <div class="lbl">Published Items</div>
-            </div>
-            <div class="stat-card approved">
-              <div class="num">${items.filter((i: any) => String(i.status || '').toLowerCase().includes('approved')).length}</div>
-              <div class="lbl">Approved & Ready</div>
-            </div>
-            <div class="stat-card pending">
-              <div class="num">${items.filter((i: any) => !String(i.status || '').toLowerCase().includes('publish') && !String(i.status || '').toLowerCase().includes('approved')).length}</div>
-              <div class="lbl">In Progress / To Do</div>
-            </div>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                ${selectedCols.map(col => `<th>${col}</th>`).join('')}
-              </tr>
-            </thead>
-            <tbody>
-              ${items.map(item => `
-                <tr>
-                  ${selectedCols.map(col => {
-      const fn = columnsMap[col];
-      const val = fn ? fn(item) : "";
-      if (col === "Status") {
-        const st = String(val).toLowerCase();
-        const cls = st.includes("published") ? "status-published" : st.includes("approved") ? "status-approved" : st.includes("progress") ? "status-progress" : "status-todo";
-        return `<td><span class="status-tag ${cls}">${val}</span></td>`;
+    const colWeights: Record<string, number> = {
+      "Schedule": 14,
+      "Type": 7,
+      "Topic / Concept": 22,
+      "Brand Person": 9,
+      "Script": 11,
+      "Shoot": 11,
+      "Editing": 10,
+      "Thumbnail": 10,
+      "Caption": 14,
+      "Final Link": 9,
+      "Status": 9,
+    };
+
+    const totalColWeight = selectedCols.reduce((sum, col) => sum + (colWeights[col] || 10), 0);
+    const numCols = selectedCols.length;
+
+    let tableFontSize = "9px";
+    let cellPadding = "5px 4px";
+    if (isPortrait) {
+      if (numCols >= 9) {
+        tableFontSize = "7px";
+        cellPadding = "3px 2px";
+      } else if (numCols >= 7) {
+        tableFontSize = "8px";
+        cellPadding = "4px 3px";
+      } else {
+        tableFontSize = "8.5px";
+        cellPadding = "5px 4px";
       }
-      return `<td>${val}</td>`;
-    }).join('')}
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-          <div class="footer-strip">
-            <span>© ${new Date().getFullYear()} ${clientName} — Content Calendar (${ccMonthLabel}) • Generated via HRMS Content Hub</span>
-            <span>Confidential & Proprietary</span>
-          </div>
-        </body>
-      </html>
+    } else {
+      if (numCols >= 9) {
+        tableFontSize = "8.5px";
+        cellPadding = "5px 4px";
+      } else {
+        tableFontSize = "9.5px";
+        cellPadding = "6px 5px";
+      }
+    }
+
+    const pdfCss = `
+      * { box-sizing: border-box !important; }
+      html, body {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+        color: #0f172a !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        width: 100% !important;
+      }
+      .cc-pdf-wrapper {
+        width: 100% !important;
+        max-width: 100% !important;
+        background: #ffffff !important;
+        padding: ${isPortrait ? "8mm 8mm" : "10mm 10mm"} !important;
+        box-sizing: border-box !important;
+      }
+      .header-banner {
+        background-color: #059669 !important;
+        background: linear-gradient(135deg, #059669 0%, #0d9488 50%, #0284c7 100%) !important;
+        color: #ffffff !important;
+        border-radius: 8px !important;
+        padding: ${isPortrait ? "10px 14px" : "14px 18px"} !important;
+        margin-bottom: ${isPortrait ? "8px" : "12px"} !important;
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        box-sizing: border-box !important;
+        width: 100% !important;
+      }
+      .header-banner h1 {
+        margin: 0 !important;
+        font-size: ${isPortrait ? "15px" : "18px"} !important;
+        font-weight: 800 !important;
+        letter-spacing: -0.01em !important;
+        color: #ffffff !important;
+        word-break: break-word !important;
+      }
+      .header-banner p {
+        margin: 3px 0 0 0 !important;
+        color: rgba(255, 255, 255, 0.95) !important;
+        font-size: ${isPortrait ? "8.5px" : "10.5px"} !important;
+        font-weight: 500 !important;
+        line-height: 1.3 !important;
+      }
+      .badge-pill {
+        display: inline-block !important;
+        padding: 4px 10px !important;
+        background: rgba(255, 255, 255, 0.25) !important;
+        color: #ffffff !important;
+        border: 1px solid rgba(255, 255, 255, 0.45) !important;
+        border-radius: 9999px !important;
+        font-weight: 800 !important;
+        font-size: ${isPortrait ? "8.5px" : "10px"} !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.04em !important;
+        white-space: nowrap !important;
+      }
+      .stats-grid {
+        display: grid !important;
+        grid-template-columns: repeat(4, 1fr) !important;
+        gap: ${isPortrait ? "6px" : "10px"} !important;
+        margin-bottom: ${isPortrait ? "8px" : "12px"} !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+      }
+      .stat-card {
+        background: #ffffff !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 6px !important;
+        padding: ${isPortrait ? "5px 6px" : "7px 10px"} !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+        box-sizing: border-box !important;
+      }
+      .stat-card .num {
+        font-size: ${isPortrait ? "13px" : "16px"} !important;
+        font-weight: 900 !important;
+        color: #0f172a !important;
+        line-height: 1.1 !important;
+      }
+      .stat-card .lbl {
+        font-size: ${isPortrait ? "7px" : "8px"} !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.04em !important;
+        color: #64748b !important;
+        font-weight: 800 !important;
+        margin-top: 1px !important;
+      }
+      .stat-card.published .num { color: #059669 !important; }
+      .stat-card.approved .num { color: #4f46e5 !important; }
+      .stat-card.pending .num { color: #d97706 !important; }
+      table {
+        width: 100% !important;
+        max-width: 100% !important;
+        border-collapse: collapse !important;
+        table-layout: fixed !important;
+        margin-top: 4px !important;
+        background: #ffffff !important;
+        border: 1px solid #cbd5e1 !important;
+        box-sizing: border-box !important;
+        page-break-inside: auto !important;
+      }
+      tr { page-break-inside: avoid !important; }
+      th {
+        background-color: #0f172a !important;
+        color: #ffffff !important;
+        font-weight: 800 !important;
+        text-align: center !important;
+        padding: ${cellPadding} !important;
+        font-size: ${tableFontSize} !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.02em !important;
+        border: 1px solid #334155 !important;
+        overflow-wrap: break-word !important;
+        word-break: break-word !important;
+        vertical-align: middle !important;
+        box-sizing: border-box !important;
+      }
+      td {
+        padding: ${cellPadding} !important;
+        border: 1px solid #cbd5e1 !important;
+        vertical-align: middle !important;
+        line-height: 1.25 !important;
+        color: #334155 !important;
+        font-size: ${tableFontSize} !important;
+        overflow-wrap: break-word !important;
+        word-break: break-word !important;
+        text-align: center !important;
+        box-sizing: border-box !important;
+      }
+      td a {
+        color: #0284c7 !important;
+        text-decoration: underline !important;
+        font-weight: 700 !important;
+      }
+      tr:nth-child(even) td { background-color: #f8fafc !important; }
+      .status-tag {
+        display: inline-block !important;
+        padding: 2px 5px !important;
+        border-radius: 9999px !important;
+        font-size: ${isPortrait ? "6.5px" : "7.5px"} !important;
+        font-weight: 800 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.02em !important;
+        white-space: normal !important;
+        word-break: break-word !important;
+        line-height: 1.15 !important;
+      }
+      .status-published { background: #dcfce7 !important; color: #166534 !important; border: 1px solid #bbf7d0 !important; }
+      .status-approved { background: #e0e7ff !important; color: #3730a3 !important; border: 1px solid #c7d2fe !important; }
+      .status-progress { background: #e0f2fe !important; color: #075985 !important; border: 1px solid #bae6fd !important; }
+      .status-todo { background: #fef3c7 !important; color: #92400e !important; border: 1px solid #fde68a !important; }
+      .footer-strip {
+        margin-top: 12px !important;
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        color: #94a3b8 !important;
+        font-size: ${isPortrait ? "7.5px" : "9px"} !important;
+        font-weight: 600 !important;
+        padding-top: 6px !important;
+        border-top: 1px dashed #cbd5e1 !important;
+        box-sizing: border-box !important;
+        width: 100% !important;
+      }
     `;
 
-    const safeFilename = `${clientName}_${projName}_Content_Calendar_${ccMonthLabel}`.replace(/[^a-zA-Z0-9_-]/g, "_") + ".pdf";
+    const innerHtml = `
+      <div class="header-banner">
+        <div style="flex: 1; min-width: 0; padding-right: 10px;">
+          <h1>${combinedTitle}</h1>
+          <p>
+            <span style="display: inline-block; background: rgba(255,255,255,0.22); color: #ffffff; padding: 1.5px 7px; border-radius: 4px; font-weight: 800; margin-right: 6px;">Month: ${ccMonthLabel}</span>
+            <span>Content Calendar (${isPortrait ? "Portrait" : "Landscape"}) • Generated: ${formatDayMonthYear(new Date().toISOString())} • Total: ${items.length} items</span>
+          </p>
+        </div>
+        <div style="flex-shrink: 0;">
+          <span class="badge-pill">${category}</span>
+        </div>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="num">${items.length}</div>
+          <div class="lbl">Total Deliverables</div>
+        </div>
+        <div class="stat-card published">
+          <div class="num">${items.filter((i: any) => String(i.status || '').toLowerCase().includes('publish')).length}</div>
+          <div class="lbl">Published Items</div>
+        </div>
+        <div class="stat-card approved">
+          <div class="num">${items.filter((i: any) => String(i.status || '').toLowerCase().includes('approved')).length}</div>
+          <div class="lbl">Approved & Ready</div>
+        </div>
+        <div class="stat-card pending">
+          <div class="num">${items.filter((i: any) => !String(i.status || '').toLowerCase().includes('publish') && !String(i.status || '').toLowerCase().includes('approved')).length}</div>
+          <div class="lbl">In Progress / To Do</div>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            ${selectedCols.map(col => {
+              const pct = (((colWeights[col] || 10) / totalColWeight) * 100).toFixed(1);
+              return `<th style="width: ${pct}%;">${col}</th>`;
+            }).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${items.map(item => `
+            <tr>
+              ${selectedCols.map(col => {
+                const fn = columnsMap[col];
+                const val = fn ? fn(item) : "";
+                if (col === "Status") {
+                  const st = String(val).toLowerCase();
+                  const cls = st.includes("published") ? "status-published" : st.includes("approved") ? "status-approved" : st.includes("progress") ? "status-progress" : "status-todo";
+                  return `<td><span class="status-tag ${cls}">${val}</span></td>`;
+                }
+                return `<td>${val}</td>`;
+              }).join('')}
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      <div class="footer-strip">
+        <span>© ${new Date().getFullYear()} ${combinedTitle} • Content Calendar (${ccMonthLabel}) • Generated via HRMS Content Hub</span>
+        <span>Confidential & Proprietary</span>
+      </div>
+    `;
 
     if (mode === "download") {
+      setIsExportingCcPdf(true);
+      let container: HTMLDivElement | null = null;
       try {
-        toast.info("Preparing PDF download with clickable links...");
+        toast.info("Preparing PDF download...");
         const html2pdfModule = await import("html2pdf.js");
         const html2pdf = (html2pdfModule as any).default || html2pdfModule;
 
-        const container = document.createElement("div");
-        container.innerHTML = html;
-        container.style.position = "fixed";
-        container.style.left = "-9999px";
-        container.style.top = "0";
-        container.style.width = "1200px";
-        container.style.background = "#ffffff";
+        container = document.createElement("div");
+        container.id = "cc-pdf-export-container";
+        container.style.cssText = `
+          width: ${isPortrait ? "210mm" : "297mm"};
+          max-width: ${isPortrait ? "210mm" : "297mm"};
+          background: #ffffff;
+          color: #0f172a;
+          box-sizing: border-box;
+          margin: 0 auto;
+          overflow: hidden;
+        `;
+        container.innerHTML = `
+          <div class="cc-pdf-wrapper">
+            ${innerHtml}
+          </div>
+        `;
         document.body.appendChild(container);
 
         const opt = {
-          margin: [8, 8, 8, 8],
+          margin: 0,
           filename: safeFilename,
           image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { scale: 2, useCORS: true, logging: false },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-          enableLinks: true
+          html2canvas: {
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            allowTaint: true,
+            scrollX: 0,
+            scrollY: 0,
+            windowWidth: isPortrait ? 794 : 1123,
+            onclone: (clonedDoc: Document) => {
+              // Strip external stylesheets & global style tags with Tailwind v4 oklch rules that crash/hang html2canvas
+              clonedDoc.querySelectorAll("style, link").forEach((el) => el.remove());
+              clonedDoc.documentElement.removeAttribute("style");
+              clonedDoc.body.removeAttribute("style");
+
+              // Inject clean standalone base styles for Content Calendar PDF
+              const baseStyle = clonedDoc.createElement("style");
+              baseStyle.textContent = pdfCss;
+              clonedDoc.head.appendChild(baseStyle);
+            }
+          },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: isPortrait ? 'portrait' : 'landscape' },
+          pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', '.stat-card', '.header-banner'] }
         };
 
         await html2pdf().set(opt).from(container).save();
-        document.body.removeChild(container);
         setIsPdfExportModalOpen(false);
         toast.success("PDF downloaded successfully!");
         return;
       } catch (err) {
-        console.error("html2pdf download error, falling back to print window:", err);
+        console.error("html2pdf download error, opening print preview fallback:", err);
+        toast.error("Direct download failed, opening print preview window instead...");
+      } finally {
+        if (container && container.parentNode) {
+          container.parentNode.removeChild(container);
+        }
+        document.querySelectorAll(".html2pdf__container").forEach((el) => el.remove());
+        setIsExportingCcPdf(false);
       }
     }
 
@@ -3241,16 +3361,37 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       return;
     }
 
-    const printHtml = html.replace('</body>', `
-      <script>
-        window.onload = function() {
-          setTimeout(function() {
-            window.print();
-          }, 400);
-        };
-      </script>
-      </body>
-    `);
+    const printHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${docTitle}</title>
+          <meta charset="utf-8" />
+          <style>
+            @page {
+              size: ${isPortrait ? "A4 portrait" : "A4 landscape"};
+              margin: ${isPortrait ? "8mm" : "10mm"};
+            }
+            ${pdfCss}
+            .cc-pdf-wrapper {
+              padding: 0 !important;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="cc-pdf-wrapper">
+            ${innerHtml}
+          </div>
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+              }, 300);
+            };
+          </script>
+        </body>
+      </html>
+    `;
 
     printWindow.document.open();
     printWindow.document.write(printHtml);
@@ -7554,6 +7695,38 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       </Select>
                     </div>
 
+                    <div className="space-y-1.5 pb-2 border-b border-border/40">
+                      <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                        Page Orientation
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPdfOrientation("portrait")}
+                          className={cn(
+                            "flex items-center justify-center gap-2 py-2 px-3 rounded-xl border text-xs font-bold transition-all",
+                            pdfOrientation === "portrait"
+                              ? "bg-primary/10 border-primary text-primary"
+                              : "bg-muted/20 border-border/40 text-muted-foreground hover:bg-muted/40"
+                          )}
+                        >
+                          <span>📄 Portrait (Default)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPdfOrientation("landscape")}
+                          className={cn(
+                            "flex items-center justify-center gap-2 py-2 px-3 rounded-xl border text-xs font-bold transition-all",
+                            pdfOrientation === "landscape"
+                              ? "bg-primary/10 border-primary text-primary"
+                              : "bg-muted/20 border-border/40 text-muted-foreground hover:bg-muted/40"
+                          )}
+                        >
+                          <span>📑 Landscape</span>
+                        </button>
+                      </div>
+                    </div>
+
                     <div className="flex justify-between items-center pb-2 border-b border-border/40">
                       <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Visible Columns ({pdfSelectedColumns.length}/{allColumns.length})</span>
                       <div className="flex gap-2">
@@ -7567,7 +7740,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         <span className="text-muted-foreground text-xs">•</span>
                         <button
                           type="button"
-                          onClick={() => setPdfSelectedColumns(["Schedule", "Topic / Concept", "Status"])}
+                          onClick={() => setPdfSelectedColumns(["Schedule", "Topic / Concept"])}
                           className="text-[11px] font-bold text-muted-foreground hover:text-foreground"
                         >
                           Reset Minimal
@@ -7608,12 +7781,17 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   </div>
 
                   <div className="px-6 py-4 bg-muted/30 border-t border-border/50 flex flex-wrap justify-end gap-3 shrink-0">
-                    <button onClick={() => setIsPdfExportModalOpen(false)} className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors">
+                    <button 
+                      onClick={() => setIsPdfExportModalOpen(false)} 
+                      disabled={isExportingCcPdf}
+                      className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                    >
                       Cancel
                     </button>
                     <button
                       onClick={() => handleGenerateCcPdf("print")}
-                      className="px-4 py-2 bg-muted hover:bg-muted/80 text-foreground font-bold text-sm rounded-xl transition-all border border-border flex items-center gap-1.5"
+                      disabled={isExportingCcPdf}
+                      className="px-4 py-2 bg-muted hover:bg-muted/80 text-foreground font-bold text-sm rounded-xl transition-all border border-border flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Open printable preview in new tab"
                     >
                       <Printer className="w-4 h-4 text-muted-foreground" />
@@ -7621,11 +7799,21 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     </button>
                     <button
                       onClick={() => handleGenerateCcPdf("download")}
-                      className="px-5 py-2 bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm rounded-xl transition-all shadow-sm flex items-center gap-1.5"
+                      disabled={isExportingCcPdf}
+                      className="px-5 py-2 bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm rounded-xl transition-all shadow-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Download PDF directly to your device with clickable redirect links"
                     >
-                      <Download className="w-4 h-4" />
-                      <span>Download PDF</span>
+                      {isExportingCcPdf ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Generating PDF...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-4 h-4" />
+                          <span>Download PDF</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
