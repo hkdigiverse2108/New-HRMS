@@ -111,7 +111,8 @@ class HiringRepository:
         search: Optional[str] = None,
         skip: int = 0,
         limit: int = 100,
-        filter_emp_id: Optional[str] = None
+        filter_emp_id: Optional[str] = None,
+        filter_email: Optional[str] = None
     ) -> tuple[List[Dict[str, Any]], int]:
         collection = await cls.get_collection()
         query: Dict[str, Any] = {"is_deleted": is_deleted}
@@ -143,31 +144,48 @@ class HiringRepository:
             cursor = cursor.skip(skip)
         if limit > 0:
             cursor = cursor.limit(limit)
-            
+
         items = []
         ref_collection = await cls.get_referral_collection()
         async for doc in cursor:
             doc["_id"] = str(doc["_id"])
             doc = await cls._populate_hiring_manager(doc)
-            
+
             # Fetch referrals
-            ref_query: Dict[str, Any] = {"hiring_id": doc["_id"], "is_deleted": False}
-            if filter_emp_id:
-                ref_query["referred_by.employee_id"] = filter_emp_id
-            
+            h_ids = [doc["_id"]]
+            if ObjectId.is_valid(doc["_id"]):
+                h_ids.append(ObjectId(doc["_id"]))
+
+            ref_query: Dict[str, Any] = {"hiring_id": {"$in": h_ids}, "is_deleted": False}
+            if filter_emp_id or filter_email:
+                conds = []
+                if filter_emp_id:
+                    conds.append({"referred_by.employee_id": str(filter_emp_id).strip()})
+                    if ObjectId.is_valid(str(filter_emp_id).strip()):
+                        conds.append({"referred_by.employee_id": ObjectId(str(filter_emp_id).strip())})
+                if filter_email:
+                    conds.append({"referred_by.email": {"$regex": f"^{re.escape(filter_email.strip())}$", "$options": "i"}})
+                if conds:
+                    ref_query["$and"] = [{"$or": conds}]
+
             ref_cursor = ref_collection.find(ref_query).sort("created_at", -1)
             referrals = []
             async for r_doc in ref_cursor:
                 r_doc["_id"] = str(r_doc["_id"])
                 referrals.append(r_doc)
             doc["referrals"] = referrals
-            
+
             items.append(doc)
 
         return items, total_count
 
     @classmethod
-    async def get_hiring_by_id(cls, hiring_id: str, filter_emp_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    async def get_hiring_by_id(
+        cls,
+        hiring_id: str,
+        filter_emp_id: Optional[str] = None,
+        filter_email: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
         collection = await cls.get_collection()
         if not ObjectId.is_valid(hiring_id):
             return None
@@ -175,20 +193,32 @@ class HiringRepository:
         if doc:
             doc["_id"] = str(doc["_id"])
             doc = await cls._populate_hiring_manager(doc)
-            
+
             # Fetch referrals
             ref_collection = await cls.get_referral_collection()
-            ref_query: Dict[str, Any] = {"hiring_id": doc["_id"], "is_deleted": False}
-            if filter_emp_id:
-                ref_query["referred_by.employee_id"] = filter_emp_id
-                
+            h_ids = [doc["_id"]]
+            if ObjectId.is_valid(doc["_id"]):
+                h_ids.append(ObjectId(doc["_id"]))
+
+            ref_query: Dict[str, Any] = {"hiring_id": {"$in": h_ids}, "is_deleted": False}
+            if filter_emp_id or filter_email:
+                conds = []
+                if filter_emp_id:
+                    conds.append({"referred_by.employee_id": str(filter_emp_id).strip()})
+                    if ObjectId.is_valid(str(filter_emp_id).strip()):
+                        conds.append({"referred_by.employee_id": ObjectId(str(filter_emp_id).strip())})
+                if filter_email:
+                    conds.append({"referred_by.email": {"$regex": f"^{re.escape(filter_email.strip())}$", "$options": "i"}})
+                if conds:
+                    ref_query["$and"] = [{"$or": conds}]
+
             ref_cursor = ref_collection.find(ref_query).sort("created_at", -1)
             referrals = []
             async for r_doc in ref_cursor:
                 r_doc["_id"] = str(r_doc["_id"])
                 referrals.append(r_doc)
             doc["referrals"] = referrals
-            
+
         return doc
 
     @classmethod
@@ -226,7 +256,17 @@ class HiringRepository:
             {"_id": ObjectId(hiring_id)},
             {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}}
         )
-        return res.modified_count > 0
+        if res.modified_count > 0:
+            ref_coll = await cls.get_referral_collection()
+            h_ids = [hiring_id]
+            if ObjectId.is_valid(hiring_id):
+                h_ids.append(ObjectId(hiring_id))
+            await ref_coll.update_many(
+                {"hiring_id": {"$in": h_ids}},
+                {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}}
+            )
+            return True
+        return False
 
     @classmethod
     async def get_referral_collection(cls):
@@ -275,6 +315,7 @@ class HiringRepository:
         is_deleted: bool = False,
         hiring_id: Optional[str] = None,
         referred_by_employee_id: Optional[str] = None,
+        referred_by_email: Optional[str] = None,
         status: Optional[str] = None,
         search: Optional[str] = None
     ) -> List[Dict[str, Any]]:
@@ -284,8 +325,14 @@ class HiringRepository:
         if hiring_id and hiring_id.strip():
             query["hiring_id"] = hiring_id.strip()
 
-        if referred_by_employee_id and referred_by_employee_id.strip():
-            query["referred_by.employee_id"] = referred_by_employee_id.strip()
+        if referred_by_employee_id or referred_by_email:
+            conds = []
+            if referred_by_employee_id and referred_by_employee_id.strip():
+                conds.append({"referred_by.employee_id": referred_by_employee_id.strip()})
+            if referred_by_email and referred_by_email.strip():
+                conds.append({"referred_by.email": {"$regex": f"^{re.escape(referred_by_email.strip())}$", "$options": "i"}})
+            if conds:
+                query["$or"] = conds
 
         if status and status.strip().lower() != "all":
             query["status"] = {"$regex": f"^{re.escape(status.strip())}$", "$options": "i"}
@@ -376,21 +423,32 @@ class HiringRepository:
         first_day_last_month = last_month.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
         # 1. Active Jobs
-        active_jobs_count = await hirings_coll.count_documents({"is_deleted": False, "status": "Open"})
-        jobs_this_month = await hirings_coll.count_documents({
-            "is_deleted": False,
-            "status": "Open",
-            "created_at": {"$gte": first_day_this_month}
-        })
+        active_jobs_cursor = hirings_coll.find({"is_deleted": False}, {"_id": 1, "status": 1, "created_at": 1})
+        active_job_ids = []
+        open_jobs_count = 0
+        open_jobs_this_month = 0
+        async for j in active_jobs_cursor:
+            jid = str(j["_id"])
+            active_job_ids.append(jid)
+            if ObjectId.is_valid(jid):
+                active_job_ids.append(ObjectId(jid))
+            if j.get("status") == "Open":
+                open_jobs_count += 1
+                if j.get("created_at") and j["created_at"] >= first_day_this_month:
+                    open_jobs_this_month += 1
 
-        # 2. Total Applicants
-        total_applicants_count = await referrals_coll.count_documents({"is_deleted": False})
-        applicants_this_month = await referrals_coll.count_documents({
+        # 2. Total Applicants (strictly for active non-deleted jobs)
+        ref_base_query: Dict[str, Any] = {
             "is_deleted": False,
+            "hiring_id": {"$in": active_job_ids}
+        }
+        total_applicants_count = await referrals_coll.count_documents(ref_base_query)
+        applicants_this_month = await referrals_coll.count_documents({
+            **ref_base_query,
             "created_at": {"$gte": first_day_this_month}
         })
         applicants_last_month = await referrals_coll.count_documents({
-            "is_deleted": False,
+            **ref_base_query,
             "created_at": {"$gte": first_day_last_month, "$lt": first_day_this_month}
         })
 
@@ -416,18 +474,18 @@ class HiringRepository:
 
         # 4. Offers Extended (Check for 'Hired', 'Offered', 'Selected', 'Offer')
         offers_count = await referrals_coll.count_documents({
-            "is_deleted": False,
+            **ref_base_query,
             "status": {"$regex": "(?i)^(hired|offered|selected|offer extended)$"}
         })
         accepted_count = await referrals_coll.count_documents({
-            "is_deleted": False,
+            **ref_base_query,
             "status": {"$regex": "(?i)^(hired|accepted)$"}
         })
 
         return {
             "active_jobs": {
-                "count": active_jobs_count,
-                "trend_text": f"+{jobs_this_month} this month" if jobs_this_month > 0 else "0 this month"
+                "count": open_jobs_count,
+                "trend_text": f"+{open_jobs_this_month} this month" if open_jobs_this_month > 0 else "0 this month"
             },
             "total_applicants": {
                 "count": total_applicants_count,

@@ -1,3 +1,5 @@
+from datetime import datetime
+import logging
 from typing import List, Dict, Any, Optional
 from fastapi import HTTPException, status
 from app.repository.interview import InterviewRepository
@@ -6,6 +8,8 @@ from app.schemas.interview import (
     InterviewScheduleCreate, InterviewScheduleUpdate
 )
 from app.redis.service import clear_pattern
+
+logger = logging.getLogger(__name__)
 
 class InterviewService:
 
@@ -16,9 +20,18 @@ class InterviewService:
 
         work = current_user.get("work_details", {}) or {}
         role = str(work.get("system_role") or current_user.get("system_role", "Employee")).strip().lower()
+        dept = str(work.get("department") or current_user.get("department", "")).strip().lower()
+        designation = str(work.get("designation") or current_user.get("designation", "")).strip().lower()
 
-        # Admin, HR, SubAdmin roles have full access to interviews
-        if role in ["admin", "ceo", "hr", "hr manager", "subadmin", "sub admin", "sub_admin"]:
+        # Admin, HR, SubAdmin roles, Team Leaders, and Heads have full management access
+        if (
+            role in ["admin", "superadmin", "super admin", "ceo", "hr", "hr manager", "subadmin", "sub admin", "sub_admin"]
+            or dept == "hr"
+            or "team leader" in role
+            or "head" in role
+            or "team leader" in designation
+            or "head" in designation
+        ):
             return True
 
         if action == "read":
@@ -96,6 +109,39 @@ class InterviewService:
         }
 
         created = await InterviewRepository.create_schedule(schedule_dict)
+
+        # Sync matching referral status in job_referrals
+        stage_name = schedule_dict.get("interview_stage_name")
+        ref_id = schedule_dict.get("referral_id")
+        cand_name = str(schedule_dict.get("candidate_name") or "").strip()
+        cand_email = str(schedule_dict.get("candidate_email") or "").strip()
+        if stage_name:
+            try:
+                from app.repository.hiring import HiringRepository
+                from bson import ObjectId
+                import re
+                db = (await HiringRepository.get_collection()).database
+                ref_coll = db["job_referrals"]
+                
+                conds = []
+                if ref_id:
+                    if ObjectId.is_valid(str(ref_id)):
+                        conds.append({"_id": ObjectId(str(ref_id))})
+                    conds.append({"_id": str(ref_id)})
+                if cand_email:
+                    conds.append({"candidate_email": {"$regex": f"^{re.escape(cand_email)}$", "$options": "i"}, "is_deleted": False})
+                if cand_name:
+                    conds.append({"candidate_name": {"$regex": f"^{re.escape(cand_name)}$", "$options": "i"}, "is_deleted": False})
+                
+                if conds:
+                    await ref_coll.update_many(
+                        {"$or": conds},
+                        {"$set": {"status": stage_name, "updated_at": datetime.utcnow()}}
+                    )
+                await clear_pattern("hiring:*")
+            except Exception as e:
+                logger.warning(f"Failed to sync referral status on interview create: {e}")
+
         await clear_pattern("interview_schedules:*")
         return created
 
@@ -147,12 +193,42 @@ class InterviewService:
         updated = await InterviewRepository.get_schedule_by_id(schedule_id)
         
         # Sync interview stage to referral status if it changed
-        if "interview_stage_name" in data.model_dump(exclude_unset=True) and updated and updated.get("referral_id"):
+        update_dump = data.model_dump(exclude_unset=True)
+        if ("interview_stage_name" in update_dump or "interview_stage_id" in update_dump) and updated:
             from app.repository.hiring import HiringRepository
-            ref_id = updated["referral_id"]
-            new_stage_name = updated["interview_stage_name"]
-            await HiringRepository.update_referral(ref_id, {"status": new_stage_name})
-            await clear_pattern("hiring:*")
+            from bson import ObjectId
+            import re
+            
+            new_stage_name = updated.get("interview_stage_name")
+            if not new_stage_name and updated.get("interview_stage_id"):
+                stg = await InterviewRepository.get_stage_by_id(updated["interview_stage_id"])
+                if stg:
+                    new_stage_name = stg.get("name")
+
+            if new_stage_name:
+                ref_id = updated.get("referral_id")
+                cand_name = str(updated.get("candidate_name") or "").strip()
+                cand_email = str(updated.get("candidate_email") or "").strip()
+                
+                db = (await HiringRepository.get_collection()).database
+                ref_coll = db["job_referrals"]
+
+                conds = []
+                if ref_id:
+                    if ObjectId.is_valid(str(ref_id)):
+                        conds.append({"_id": ObjectId(str(ref_id))})
+                    conds.append({"_id": str(ref_id)})
+                if cand_email:
+                    conds.append({"candidate_email": {"$regex": f"^{re.escape(cand_email)}$", "$options": "i"}, "is_deleted": False})
+                if cand_name:
+                    conds.append({"candidate_name": {"$regex": f"^{re.escape(cand_name)}$", "$options": "i"}, "is_deleted": False})
+
+                if conds:
+                    await ref_coll.update_many(
+                        {"$or": conds},
+                        {"$set": {"status": new_stage_name, "updated_at": datetime.utcnow()}}
+                    )
+                await clear_pattern("hiring:*")
             
         await clear_pattern("interview_schedules:*")
         return updated
@@ -166,5 +242,14 @@ class InterviewService:
             
         success = await InterviewRepository.delete_schedule(schedule_id)
         if success:
+            if existing and existing.get("referral_id"):
+                from app.repository.hiring import HiringRepository
+                from bson import ObjectId
+                db = (await HiringRepository.get_collection()).database
+                ref_coll = db["job_referrals"]
+                ref_id = existing["referral_id"]
+                q = {"$or": [{"_id": ObjectId(ref_id)} if ObjectId.is_valid(ref_id) else {"_id": ref_id}, {"_id": str(ref_id)}]}
+                await ref_coll.update_one(q, {"$set": {"status": "Pending", "updated_at": datetime.utcnow()}})
+                await clear_pattern("hiring:*")
             await clear_pattern("interview_schedules:*")
         return success
