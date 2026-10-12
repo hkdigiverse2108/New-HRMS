@@ -19,6 +19,7 @@ class InterviewStageResponse(BaseModel):
 
 class InterviewScheduleCreate(BaseModel):
     candidate_name: str = Field(..., description="Candidate Name")
+    candidate_email: Optional[str] = Field(None, description="Candidate Email")
     role_position: str = Field(..., description="Job posting title or 'General Application'")
     hiring_id: Optional[str] = Field(None, description="Linked hiring_id, if not General Application")
     referral_id: Optional[str] = Field(None, description="Linked referral_id")
@@ -27,10 +28,14 @@ class InterviewScheduleCreate(BaseModel):
     date: Optional[str] = Field(None, description="Date of interview, e.g., Aug 15 or 2026-08-15")
     time: Optional[str] = Field(None, description="Time of interview, e.g., 2:00 PM")
     interviewer_name: Optional[str] = Field(None, description="Name of the interviewer")
+    meet_link: Optional[str] = Field(None, description="Meeting link e.g. Google Meet or Zoom URL")
+    resume_url: Optional[str] = Field(None, description="Link to candidate resume")
+    linkedin_profile: Optional[str] = Field(None, description="Link to candidate LinkedIn")
     notes: Optional[str] = None
 
 class InterviewScheduleUpdate(BaseModel):
     candidate_name: Optional[str] = None
+    candidate_email: Optional[str] = None
     role_position: Optional[str] = None
     hiring_id: Optional[str] = None
     referral_id: Optional[str] = None
@@ -39,11 +44,15 @@ class InterviewScheduleUpdate(BaseModel):
     date: Optional[str] = None
     time: Optional[str] = None
     interviewer_name: Optional[str] = None
+    meet_link: Optional[str] = None
+    resume_url: Optional[str] = None
+    linkedin_profile: Optional[str] = None
     notes: Optional[str] = None
 
 class InterviewScheduleResponse(BaseModel):
     id: str = Field(alias="_id")
     candidate_name: str
+    candidate_email: Optional[str] = None
     role_position: str
     hiring_id: Optional[str] = None
     referral_id: Optional[str] = None
@@ -52,6 +61,9 @@ class InterviewScheduleResponse(BaseModel):
     date: Optional[str] = None
     time: Optional[str] = None
     interviewer_name: Optional[str] = None
+    meet_link: Optional[str] = None
+    resume_url: Optional[str] = None
+    linkedin_profile: Optional[str] = None
     notes: Optional[str] = None
     created_by: Optional[Dict[str, Any]] = None
     is_deleted: bool = False

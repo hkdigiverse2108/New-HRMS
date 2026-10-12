@@ -3,13 +3,14 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, date
 
 ALLOWED_EMPLOYMENT_TYPES = ["Full-time", "Part-time", "Internship"]
+ALLOWED_STATUSES = ["Open", "Closed", "On Hold"]
 
 class HiringCreate(BaseModel):
     job_title: str = Field(..., description="Job Title e.g. Senior React Developer")
     department: str = Field(..., description="Department e.g. Development, Design, HR")
     location: str = Field(..., description="Location e.g. Surat, Remote")
     employment_type: str = Field(..., description="Employment Type e.g. Full-time, Part-time, Internship")
-    status: str = Field("Open", description="Job status: Open, Closed, Draft")
+    status: str = Field("Open", description="Job status: Open, Closed, On Hold")
     applications_count: int = Field(0, ge=0, description="Count of applications received e.g. 0")
     posted_date: Optional[str] = Field(None, description="Date when job was posted e.g. 06-10-2026 or 2026-10-06")
     experience: Optional[str] = Field(None, description="Required experience e.g. 2-4 years")
@@ -17,6 +18,21 @@ class HiringCreate(BaseModel):
     job_description: Optional[str] = Field(None, description="Detailed job description and requirements")
     description: Optional[str] = Field(None, description="Alternative field for job description")
     hiring_manager_id: Optional[str] = Field(None, description="Employee ID selected as Hiring Manager")
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: str) -> str:
+        clean = (v or "").strip().lower()
+        if clean in ["open", "active"]:
+            return "Open"
+        elif clean in ["closed", "close"]:
+            return "Closed"
+        elif clean in ["on hold", "onhold", "on_hold", "hold"]:
+            return "On Hold"
+        for allowed in ALLOWED_STATUSES:
+            if allowed.lower() == clean:
+                return allowed
+        return "Open"
 
     @field_validator("employment_type")
     @classmethod
@@ -45,6 +61,23 @@ class HiringUpdate(BaseModel):
     job_description: Optional[str] = None
     description: Optional[str] = None
     hiring_manager_id: Optional[str] = None
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        clean = v.strip().lower()
+        if clean in ["open", "active"]:
+            return "Open"
+        elif clean in ["closed", "close"]:
+            return "Closed"
+        elif clean in ["on hold", "onhold", "on_hold", "hold"]:
+            return "On Hold"
+        for allowed in ALLOWED_STATUSES:
+            if allowed.lower() == clean:
+                return allowed
+        return v.title()
 
     @field_validator("employment_type")
     @classmethod

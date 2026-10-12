@@ -16,6 +16,13 @@ async def get_employment_types():
     """
     return await HiringService.get_employment_types()
 
+@router.get("/statuses", response_model=List[str])
+async def get_hiring_statuses():
+    """
+    Get allowed job posting statuses: ['Open', 'Closed', 'On Hold']
+    """
+    return ["Open", "Closed", "On Hold"]
+
 @router.get("/managers", response_model=List[HiringManagerOption])
 async def get_hiring_managers(
     current_user: dict = Depends(get_current_employee)
@@ -217,17 +224,21 @@ async def get_referral_by_id(
     return await HiringService.get_referral_by_id(referral_id, current_user)
 
 @router.put("/referrals/{referral_id}", response_model=ReferralResponse)
+@router.put("/{hiring_id}/referrals/{referral_id}", response_model=ReferralResponse)
 async def update_referral(
     referral_id: str,
     data: ReferralUpdate,
+    hiring_id: Optional[str] = None,
     current_user: dict = Depends(get_current_employee)
 ):
     """Update candidate referral details or status."""
     return await HiringService.update_referral(referral_id, data, current_user)
 
 @router.delete("/referrals/{referral_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{hiring_id}/referrals/{referral_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_referral(
     referral_id: str,
+    hiring_id: Optional[str] = None,
     current_user: dict = Depends(get_current_employee)
 ):
     """Delete candidate referral (Soft delete). Auto-decrements applications_count on associated job posting."""

@@ -95,6 +95,19 @@ export function hasModulePermission(
     return true;
   }
 
+  // Hirings & Recruitment read is accessible for ALL authenticated users (all users can view jobs, interviews, and refer candidates)
+  if (
+    (cleanUrl === "/recruitment/hirings" ||
+      cleanUrl === "/hirings" ||
+      cleanUrl === "/recruitment/interviews" ||
+      cleanUrl === "/recruitment" ||
+      cleanUrl.startsWith("/recruitment/hirings") ||
+      cleanUrl.startsWith("/hirings")) &&
+    (action === "read" || action === "all")
+  ) {
+    return true;
+  }
+
   const perms = user.permissions;
 
   // Strict fallback: if no permissions are configured for the employee, profile view is permitted

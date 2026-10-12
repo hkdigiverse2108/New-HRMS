@@ -169,7 +169,15 @@ export function Index() {
 
   // Permission guard: automatically redirect to /dashboard if current tab is not accessible by this role
   useEffect(() => {
-    if (user && active !== "/dashboard" && !hasModulePermission(user, active, "read")) {
+    if (
+      user &&
+      active !== "/dashboard" &&
+      active !== "/recruitment/hirings" &&
+      active !== "/hirings" &&
+      active !== "/recruitment/interviews" &&
+      active !== "/recruitment" &&
+      !hasModulePermission(user, active, "read")
+    ) {
       setActive("/dashboard");
     }
   }, [user, active]);
@@ -293,8 +301,8 @@ export function Index() {
                   {/* Reports & Analysis sub-department — REMOVED per Audio PDF */}
 
                   {/* Recruitment */}
-                  {basePath === "/recruitment/interviews" && <Interviews />}
-                  {basePath === "/recruitment/hirings" && <Hirings />}
+                  {(basePath === "/recruitment" || basePath === "/recruitment/interviews") && <Interviews setActive={setActive} />}
+                  {(basePath === "/recruitment/hirings" || basePath === "/hirings") && <Hirings setActive={setActive} />}
 
                   {/* Schedule */}
                   {basePath === "/schedule" && <Schedule isNew={isNew} />}

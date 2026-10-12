@@ -38,6 +38,23 @@ class InterviewRepository:
         async for doc in cursor:
             doc["_id"] = str(doc["_id"])
             items.append(doc)
+
+        if not is_deleted:
+            existing_names = {item.get("name", "").strip().lower() for item in items}
+            default_stage_names = ["Screening", "Technical", "Cultural", "Offer"]
+            now = datetime.utcnow()
+            for name in default_stage_names:
+                if name.lower() not in existing_names:
+                    stage_doc = {
+                        "name": name,
+                        "is_deleted": False,
+                        "created_at": now,
+                        "updated_at": now
+                    }
+                    res = await collection.insert_one(stage_doc)
+                    stage_doc["_id"] = str(res.inserted_id)
+                    items.append(stage_doc)
+
         return items
 
     @classmethod
@@ -94,6 +111,7 @@ class InterviewRepository:
             "date": str(data.get("date", "")).strip(),
             "time": str(data.get("time", "")).strip(),
             "interviewer_name": str(data.get("interviewer_name", "")).strip(),
+            "meet_link": str(data.get("meet_link", "")).strip() if data.get("meet_link") else None,
             "notes": str(data.get("notes", "")).strip() if data.get("notes") else None,
             "created_by": data.get("created_by"),
             "is_deleted": False,
@@ -155,7 +173,7 @@ class InterviewRepository:
             return False
             
         payload = {"updated_at": datetime.utcnow()}
-        fields = ["candidate_name", "role_position", "hiring_id", "referral_id", "interview_stage_id", "interview_stage_name", "date", "time", "interviewer_name", "notes"]
+        fields = ["candidate_name", "role_position", "hiring_id", "referral_id", "interview_stage_id", "interview_stage_name", "date", "time", "interviewer_name", "meet_link", "notes"]
         
         for k in fields:
             if k in data and data[k] is not None:

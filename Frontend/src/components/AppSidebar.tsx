@@ -661,7 +661,7 @@ function SidebarBody({
         {filtered.map((item) => {
           const isOpen = openGroups.includes(item.title) || Boolean(q);
           const hasChildren = Boolean(item.children?.length);
-          const selfActive = item.url === active;
+          const selfActive = item.url === active || (item.url === "/recruitment/interviews" && (active === "/recruitment/hirings" || active === "/recruitment"));
           const childActive = item.children?.some((c) => c.url === active);
 
           // Dynamic badge calculation: If active, count is 0. If parent, sum children counts.
