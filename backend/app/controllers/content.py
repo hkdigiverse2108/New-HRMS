@@ -15,6 +15,7 @@ from app.schemas.pagination import PaginatedResponse
 from app.services.content import ContentService
 from app.services.project import ProjectService
 from app.controllers.auth import get_current_employee
+from app.redis.service import get_cache, set_cache, clear_pattern, make_list_key
 
 router = APIRouter(prefix="/projects", tags=["Content Calendar"])
 
@@ -23,7 +24,15 @@ async def get_content_settings(
     project_id: str,
     current_user: dict = Depends(get_current_employee)
 ):
-    return await ContentService.get_settings(project_id)
+    cache_key = f"content:{project_id}:settings"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    result = await ContentService.get_settings(project_id)
+    if result:
+        await set_cache(cache_key, result, ttl=120)
+    return result
 
 @router.put("/{project_id}/content/settings", response_model=ContentTimelineSettings)
 async def update_content_settings(
@@ -33,7 +42,9 @@ async def update_content_settings(
 ):
     if settings.project_id != project_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Project ID mismatch")
-    return await ContentService.update_settings(project_id, settings)
+    res = await ContentService.update_settings(project_id, settings)
+    await clear_pattern(f"content:{project_id}:*")
+    return res
 
 @router.post("/{project_id}/content", response_model=ContentItemResponse, status_code=status.HTTP_201_CREATED)
 async def create_content_item(
@@ -47,7 +58,10 @@ async def create_content_item(
     created = await ContentService.create_content(project_id, data, current_user.get("id"))
     if not created:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-        
+
+    await clear_pattern(f"content:{project_id}:*")
+    await clear_pattern("projects:*")
+    await clear_pattern("tasks:*")
     return await ContentService.get_content_by_id(created["_id"])
 
 @router.post("/{project_id}/content/bulk", response_model=List[ContentItemResponse], status_code=status.HTTP_201_CREATED)
@@ -88,7 +102,11 @@ async def bulk_add_content_items(
             item = await ContentService.get_content_by_id(created["_id"])
             if item:
                 created_items.append(item)
-                
+
+    if created_items:
+        await clear_pattern(f"content:{project_id}:*")
+        await clear_pattern("projects:*")
+        await clear_pattern("tasks:*")
     return created_items
 
 @router.get("/{project_id}/content", response_model=ContentCalendarResponse)
@@ -121,8 +139,23 @@ async def get_all_content_items(
         content_type = [TYPE_MAP.get(v.lower(), v.title()) for v in content_type]
     if status:
         status = [STATUS_MAP.get(v.lower(), v.title()) for v in status]
-        
-    return await ContentService.get_all_content(
+
+    cache_key = make_list_key(
+        f"content:{project_id}",
+        page=page,
+        limit=limit,
+        month=month,
+        year=year,
+        start_date=start_date,
+        end_date=end_date,
+        content_type=",".join(sorted(content_type)) if content_type else None,
+        status=",".join(sorted(status)) if status else None
+    )
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    result = await ContentService.get_all_content(
         project_id=project_id,
         content_type=content_type,
         status=status,
@@ -133,6 +166,8 @@ async def get_all_content_items(
         page=page,
         limit=limit
     )
+    await set_cache(cache_key, result, ttl=60)
+    return result
 
 @router.get("/{project_id}/content/approval", response_model=Optional[ContentCalendarApproval])
 async def get_monthly_approval(
@@ -141,6 +176,11 @@ async def get_monthly_approval(
     year: int = Query(...),
     current_user: dict = Depends(get_current_employee)
 ):
+    cache_key = f"content:{project_id}:approval:{year}:{month}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
     project = await ProjectService.get_project_by_id(project_id)
     if not project:
         return None
@@ -148,6 +188,7 @@ async def get_monthly_approval(
     approvals = project.get("content_approvals", [])
     for approval in approvals:
         if approval.get("month") == month and approval.get("year") == year:
+            await set_cache(cache_key, approval, ttl=60)
             return approval
             
     return None
@@ -167,7 +208,9 @@ async def update_monthly_approval(
     
     if not updated_approval:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to update approval status")
-        
+
+    await clear_pattern(f"content:{project_id}:*")
+    await clear_pattern("projects:*")
     return updated_approval
 
 @router.get("/{project_id}/content/{content_id}", response_model=ContentItemResponse)
@@ -178,10 +221,17 @@ async def get_content_item_by_id(
 ):
     if not ObjectId.is_valid(content_id):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid content ID format")
+
+    cache_key = f"content:{project_id}:item:{content_id}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
     item = await ContentService.get_content_by_id(content_id)
     if not item or item.get("project_id") != project_id or item.get("is_deleted"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Content item not found")
         
+    await set_cache(cache_key, item, ttl=120)
     return item
 
 @router.put("/{project_id}/content/{content_id}", response_model=ContentItemResponse)
@@ -202,7 +252,10 @@ async def update_content_item(
     
     if not updated:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to update content item")
-        
+
+    await clear_pattern(f"content:{project_id}:*")
+    await clear_pattern("projects:*")
+    await clear_pattern("tasks:*")
     return await ContentService.get_content_by_id(content_id)
 
 @router.delete("/{project_id}/content/{content_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -221,3 +274,7 @@ async def delete_content_item(
     success = await ContentService.delete_content(content_id, current_user_id=emp_id)
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to delete content item")
+
+    await clear_pattern(f"content:{project_id}:*")
+    await clear_pattern("projects:*")
+    await clear_pattern("tasks:*")

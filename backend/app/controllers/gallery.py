@@ -7,6 +7,7 @@ from app.schemas.gallery import (
 )
 from app.services.gallery import GalleryService
 from app.controllers.auth import get_current_employee
+from app.redis.service import get_cache, set_cache, clear_pattern, make_list_key
 
 router = APIRouter(prefix="/gallery", tags=["Gallery & Events"])
 
@@ -63,7 +64,9 @@ async def create_gallery_event(
     current_user: dict = Depends(get_current_employee)
 ):
     """Create a new Gallery Event item (Requires 'create' permission)."""
-    return await GalleryService.create_event(data, current_user)
+    res = await GalleryService.create_event(data, current_user)
+    await clear_pattern("gallery:*")
+    return res
 
 @router.get("", response_model=GalleryPaginatedResponse)
 async def get_all_gallery_events(
@@ -78,7 +81,20 @@ async def get_all_gallery_events(
     """
     Get all gallery events with date filters and pagination (Requires 'read' permission).
     """
-    return await GalleryService.get_all_events(
+    cache_key = make_list_key(
+        "gallery:list",
+        search=search,
+        date=date,
+        start_date=start_date,
+        end_date=end_date,
+        page=page,
+        limit=limit
+    )
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    res = await GalleryService.get_all_events(
         current_user,
         search=search,
         date=date,
@@ -87,6 +103,8 @@ async def get_all_gallery_events(
         page=page,
         limit=limit
     )
+    await set_cache(cache_key, res, ttl=120)
+    return res
 
 @router.get("/{item_id}", response_model=GalleryEventResponse)
 async def get_gallery_event_by_id(
@@ -94,9 +112,15 @@ async def get_gallery_event_by_id(
     current_user: dict = Depends(get_current_employee)
 ):
     """Get a single gallery event by ID (Requires 'read' permission)."""
+    cache_key = f"gallery:item:{item_id}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
     item = await GalleryService.get_by_id(item_id, current_user)
     if not item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery event not found")
+    await set_cache(cache_key, item, ttl=180)
     return item
 
 @router.put("/{item_id}", response_model=GalleryEventResponse)
@@ -106,7 +130,9 @@ async def update_gallery_event(
     current_user: dict = Depends(get_current_employee)
 ):
     """Update a gallery event (Requires 'edit' permission)."""
-    return await GalleryService.update_event(item_id, data, current_user)
+    res = await GalleryService.update_event(item_id, data, current_user)
+    await clear_pattern("gallery:*")
+    return res
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_gallery_event(
@@ -117,3 +143,4 @@ async def delete_gallery_event(
     success = await GalleryService.delete_event(item_id, current_user)
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to delete gallery event")
+    await clear_pattern("gallery:*")

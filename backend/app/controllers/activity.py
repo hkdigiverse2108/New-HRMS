@@ -5,6 +5,7 @@ from app.services.activity import ActivityService
 from app.controllers.auth import get_current_employee
 from typing import Optional, Dict, Any
 from pydantic import BaseModel
+from app.redis.service import get_cache, set_cache, clear_pattern, make_list_key
 
 router = APIRouter(tags=["Activity Logs"])
 
@@ -32,7 +33,26 @@ async def get_system_activity_logs(
     sort_order: Optional[str] = Query("desc", description="Sort order (desc or asc)"),
     current_user: dict = Depends(get_current_employee)
 ):
-    return await ActivityService.get_system_activities(
+    cache_key = make_list_key(
+        "activity_logs:system",
+        page=page,
+        limit=limit,
+        category=category,
+        severity=severity,
+        user_name=user_name,
+        department=department,
+        role=role,
+        start_date=start_date,
+        end_date=end_date,
+        action_type=action_type,
+        search=search,
+        sort_order=sort_order
+    )
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    res = await ActivityService.get_system_activities(
         current_user=current_user,
         page=page,
         limit=limit,
@@ -47,6 +67,8 @@ async def get_system_activity_logs(
         search=search,
         sort_order=sort_order or "desc"
     )
+    await set_cache(cache_key, res, ttl=30)
+    return res
 
 @router.post("/activity-logs")
 async def create_activity_log(
@@ -77,6 +99,7 @@ async def create_activity_log(
         metadata=req.metadata,
         ip=client_ip
     )
+    await clear_pattern("activity_logs:*")
     return created
 
 # Project-specific activities endpoint
@@ -87,8 +110,15 @@ async def get_project_activities(
     limit: int = Query(10, ge=1, description="Items per page"),
     current_user: dict = Depends(get_current_employee)
 ):
-    return await ActivityService.get_project_activities(
+    cache_key = make_list_key(f"activity_logs:project:{project_id}", page=page, limit=limit)
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    res = await ActivityService.get_project_activities(
         project_id=project_id,
         page=page,
         limit=limit
     )
+    await set_cache(cache_key, res, ttl=30)
+    return res

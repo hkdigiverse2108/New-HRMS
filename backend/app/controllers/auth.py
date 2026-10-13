@@ -430,7 +430,7 @@ async def verify_otp(verify_data: VerifyOTPRequest):
         pass
     await EmployeeRepository.update_employee(employee["_id"], {"otp": None})
     
-    # Create token - 10 hours expiry
+    # Create token - 7 days (168 hours) expiry
     access_token_expires = timedelta(hours=getattr(settings, "ACCESS_TOKEN_EXPIRE_HOURS", 10))
     access_token = create_access_token(
         data={"sub": verify_data.email}, expires_delta=access_token_expires

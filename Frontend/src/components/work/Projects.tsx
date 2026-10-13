@@ -2017,6 +2017,14 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   useEffect(() => {
     const handleNavigate = (e: any) => {
       if (e.detail === "/work/projects") {
+        const highlightId = typeof window !== "undefined" ? localStorage.getItem("hrms_cc_highlight_id") : null;
+        const savedProjId = typeof window !== "undefined" ? localStorage.getItem("hrms_selected_project_id") : null;
+        if (highlightId && savedProjId) {
+          setSelectedProjectId(savedProjId);
+          setProjectSubTab("workspace");
+          setDmWorkspaceView("social");
+          return;
+        }
         setSelectedClientId(null);
         setSelectedProjectId(null);
       }
@@ -2075,18 +2083,39 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     const highlightId = localStorage.getItem("hrms_cc_highlight_id");
     if (!highlightId) return;
 
-    const timer = setTimeout(() => {
-      const row = document.getElementById(`cc-item-${highlightId}`) || document.querySelector(`[data-cc-id="${highlightId}"]`);
+    let attempts = 0;
+    const maxAttempts = 25; // check over 10 seconds while calendar data finishes loading
+    const interval = setInterval(() => {
+      attempts++;
+      const row =
+        document.getElementById(`cc-item-${highlightId}`) ||
+        document.querySelector(`[data-cc-id="${highlightId}"]`);
       if (row) {
+        clearInterval(interval);
         row.scrollIntoView({ behavior: "smooth", block: "center" });
-        row.classList.add("ring-4", "ring-primary", "bg-primary/10", "transition-all");
+        row.classList.add(
+          "ring-4",
+          "ring-primary",
+          "bg-primary/20",
+          "shadow-xl",
+          "transition-all",
+          "duration-500"
+        );
         setTimeout(() => {
-          row.classList.remove("ring-4", "ring-primary", "bg-primary/10");
-        }, 3500);
+          row.classList.remove(
+            "ring-4",
+            "ring-primary",
+            "bg-primary/20",
+            "shadow-xl"
+          );
+        }, 5000);
         localStorage.removeItem("hrms_cc_highlight_id");
+      } else if (attempts >= maxAttempts) {
+        clearInterval(interval);
       }
-    }, 500);
-    return () => clearTimeout(timer);
+    }, 400);
+
+    return () => clearInterval(interval);
   }, [selectedProjectId, projects]);
 
   const [isLoadingData, setIsLoadingData] = useState(false);
@@ -6335,6 +6364,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                           return (
                                             <tr
                                               key={item.id}
+                                              id={`cc-item-${item.id}`}
+                                              data-cc-id={item.id}
                                               onClick={() => {
                                                 // K17: explain mode ma click = highlight, normal ma expand
                                                 if (explainMode) toggleExplain(item.id);

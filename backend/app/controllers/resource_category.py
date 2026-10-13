@@ -5,6 +5,7 @@ from app.schemas.resource_category import (
 )
 from app.services.resource_category import ResourceCategoryService
 from app.controllers.auth import get_current_employee
+from app.redis.service import get_cache, set_cache, clear_pattern, make_list_key
 
 router = APIRouter(prefix="/resource-categories", tags=["Resource Management & Asset Categories"])
 
@@ -14,7 +15,10 @@ async def create_resource_category(
     current_user: dict = Depends(get_current_employee)
 ):
     """Create a new Resource/Asset Category (Requires 'create' permission)."""
-    return await ResourceCategoryService.create_category(data, current_user)
+    res = await ResourceCategoryService.create_category(data, current_user)
+    await clear_pattern("res_categories:*")
+    await clear_pattern("res_inventory:*")
+    return res
 
 @router.get("", response_model=ResourceCategoryPaginatedResponse)
 async def get_all_resource_categories(
@@ -24,7 +28,15 @@ async def get_all_resource_categories(
     current_user: dict = Depends(get_current_employee)
 ):
     """Get all resource categories with search and pagination (Requires 'read' permission)."""
-    return await ResourceCategoryService.get_all_categories(current_user, search=search, page=page, limit=limit)
+    cache_key = make_list_key("res_categories:list", s=search, p=page, l=limit)
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    res = await ResourceCategoryService.get_all_categories(current_user, search=search, page=page, limit=limit)
+    if res is not None:
+        await set_cache(cache_key, res, ttl=120)
+    return res
 
 @router.get("/{item_id}", response_model=ResourceCategoryResponse)
 async def get_resource_category_by_id(
@@ -32,9 +44,16 @@ async def get_resource_category_by_id(
     current_user: dict = Depends(get_current_employee)
 ):
     """Get a single resource category by ID (Requires 'read' permission)."""
+    cache_key = f"res_categories:item:{item_id}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
     item = await ResourceCategoryService.get_by_id(item_id, current_user)
     if not item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource category not found")
+
+    await set_cache(cache_key, item, ttl=120)
     return item
 
 @router.put("/{item_id}", response_model=ResourceCategoryResponse)
@@ -48,7 +67,10 @@ async def update_resource_category(
     Allows editing Category Name, Description, and Adding/Removing resource inventory count.
     (Requires 'edit' permission).
     """
-    return await ResourceCategoryService.update_category(item_id, data, current_user)
+    res = await ResourceCategoryService.update_category(item_id, data, current_user)
+    await clear_pattern("res_categories:*")
+    await clear_pattern("res_inventory:*")
+    return res
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_resource_category(
@@ -59,3 +81,5 @@ async def delete_resource_category(
     success = await ResourceCategoryService.delete_category(item_id, current_user)
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to delete resource category")
+    await clear_pattern("res_categories:*")
+    await clear_pattern("res_inventory:*")

@@ -357,8 +357,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
             isProjectTask: !!t.project_details || t.task_category === "SMM",
             // K15
             taskCategory: t.task_category || "General",
-            contentItemId: String(t.content_item_id || ""),
-            isAuto: Boolean(t.content_item_id) || t.task_category === "Content Calendar" || t.task_category === "SMM" || Boolean((t as any).is_auto),
+            contentItemId: String(t.content_item_id || t.content_item_details?._id || t.content_item_details?.id || ""),
+            isAuto: Boolean(t.content_item_id || t.content_item_details?._id) || t.task_category === "Content Calendar" || t.task_category === "SMM" || Boolean((t as any).is_auto),
             isTransferred: Boolean(t.transfer_history && t.transfer_history.length > 0) || Boolean(t.transfer_request?.status === "transferred" || t.transfer_request?.status === "accepted"),
             department: t.department || "",
             createdAt: t.created_at || (t as any).createdAt || "",
@@ -899,14 +899,22 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     e?.stopPropagation();
     const projId =
       task.rawBackend?.project_id ||
+      (typeof task.rawBackend?.project_details === "object"
+        ? task.rawBackend.project_details?._id || task.rawBackend.project_details?.id
+        : null) ||
       (typeof task.projectDetails === "object"
         ? task.projectDetails?.id || task.projectDetails?._id
         : task.projectDetails);
     if (projId) {
       localStorage.setItem("hrms_selected_project_id", String(projId));
     }
-    if (task.contentItemId) {
-      localStorage.setItem("hrms_cc_highlight_id", String(task.contentItemId));
+    const cId =
+      task.contentItemId ||
+      task.rawBackend?.content_item_id ||
+      task.rawBackend?.content_item_details?._id ||
+      task.rawBackend?.content_item_details?.id;
+    if (cId) {
+      localStorage.setItem("hrms_cc_highlight_id", String(cId));
     }
     if (setActive) {
       setActive("/work/projects");

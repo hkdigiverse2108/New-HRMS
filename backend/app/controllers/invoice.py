@@ -12,6 +12,7 @@ from app.schemas.invoice import (
 from app.schemas.pagination import PaginatedResponse
 from app.services.invoice import InvoiceService
 from app.controllers.auth import get_current_employee
+from app.redis.service import get_cache, set_cache, clear_pattern, make_list_key
 
 router = APIRouter(prefix="/invoices", tags=["Invoices"])
 
@@ -44,7 +45,26 @@ async def get_brand_invoice_ledger(
     limit: Optional[int] = Query(None, ge=1),
     current_user: dict = Depends(get_current_employee)
 ):
-    return await InvoiceService.get_brand_ledger(
+    u_id = str(current_user.get("_id", "")).strip()
+    cache_key = make_list_key(
+        "invoices:ledger",
+        u_id=u_id,
+        invoice_type=invoice_type,
+        start_date=start_date,
+        end_date=end_date,
+        from_date=from_date,
+        to_date=to_date,
+        month=month,
+        year=year,
+        search=search,
+        page=page,
+        limit=limit
+    )
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    res = await InvoiceService.get_brand_ledger(
         invoice_type=invoice_type,
         start_date=start_date,
         end_date=end_date,
@@ -57,6 +77,9 @@ async def get_brand_invoice_ledger(
         page=page,
         limit=limit
     )
+    if res is not None:
+        await set_cache(cache_key, res, ttl=60)
+    return res
 
 @router.get("/approvals/pending", response_model=PaginatedResponse[InvoiceResponse], response_model_exclude_none=True)
 async def get_pending_invoice_approvals(
@@ -65,13 +88,22 @@ async def get_pending_invoice_approvals(
     current_user: dict = Depends(get_current_employee)
 ):
     check_admin_role(current_user)
-    return await InvoiceService.get_all_invoices(
+    u_id = str(current_user.get("_id", "")).strip()
+    cache_key = make_list_key("invoices:pending_approvals", u_id=u_id, page=page, limit=limit)
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    res = await InvoiceService.get_all_invoices(
         is_deleted=False,
         status="pending_approval",
         current_user=current_user,
         page=page,
         limit=limit
     )
+    if res is not None:
+        await set_cache(cache_key, res, ttl=60)
+    return res
 
 @router.post("/{invoice_id}/approve", response_model=InvoiceResponse, response_model_exclude_none=True)
 async def approve_invoice(
@@ -87,6 +119,7 @@ async def approve_invoice(
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to approve invoice")
 
+    await clear_pattern("invoices:*")
     return await InvoiceService.get_invoice_by_id(invoice_id)
 
 @router.post("/{invoice_id}/reject", response_model=InvoiceResponse, response_model_exclude_none=True)
@@ -105,6 +138,7 @@ async def reject_invoice(
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to reject invoice")
 
+    await clear_pattern("invoices:*")
     return await InvoiceService.get_invoice_by_id(invoice_id)
 
 @router.put("/{invoice_id}/access", response_model=InvoiceResponse, response_model_exclude_none=True)
@@ -129,11 +163,13 @@ async def update_invoice_access(
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to update invoice access")
 
+    await clear_pattern("invoices:*")
     return await InvoiceService.get_invoice_by_id(invoice_id)
 
 @router.post("", response_model=InvoiceResponse, response_model_exclude_none=True, status_code=status.HTTP_201_CREATED)
 async def create_invoice(data: InvoiceCreate, current_user: dict = Depends(get_current_employee)):
     created = await InvoiceService.create_invoice(data, current_user)
+    await clear_pattern("invoices:*")
     return await InvoiceService.get_invoice_by_id(created["_id"])
 
 @router.get("", response_model=PaginatedResponse[InvoiceResponse], response_model_exclude_none=True)
@@ -146,7 +182,22 @@ async def get_all_invoices(
     limit: Optional[int] = Query(None, ge=1, description="Items per page"),
     current_user: dict = Depends(get_current_employee)
 ):
-    return await InvoiceService.get_all_invoices(
+    u_id = str(current_user.get("_id", "")).strip()
+    cache_key = make_list_key(
+        "invoices:list",
+        u_id=u_id,
+        invoice_type=invoice_type,
+        status=status,
+        search=search,
+        client_id=client_id,
+        page=page,
+        limit=limit
+    )
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    res = await InvoiceService.get_all_invoices(
         is_deleted=False,
         invoice_type=invoice_type,
         status=status,
@@ -156,6 +207,9 @@ async def get_all_invoices(
         page=page,
         limit=limit
     )
+    if res is not None:
+        await set_cache(cache_key, res, ttl=60)
+    return res
 
 from fastapi.responses import FileResponse
 import os
@@ -191,6 +245,14 @@ async def download_invoice_pdf(invoice_id: str, current_user: dict = Depends(get
 
 @router.get("/{invoice_id}", response_model=InvoiceResponse, response_model_exclude_none=True)
 async def get_invoice_by_id(invoice_id: str, current_user: dict = Depends(get_current_employee)):
+    cache_key = f"invoices:item:{invoice_id}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        # access check on cached or fresh
+        if not InvoiceService.check_user_access(cached, current_user):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to view this invoice")
+        return cached
+
     item = await InvoiceService.get_invoice_by_id(invoice_id)
     if not item or item.get("is_deleted"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
@@ -198,6 +260,7 @@ async def get_invoice_by_id(invoice_id: str, current_user: dict = Depends(get_cu
     if not InvoiceService.check_user_access(item, current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to view this invoice")
 
+    await set_cache(cache_key, item, ttl=120)
     return item
 
 @router.put("/{invoice_id}", response_model=InvoiceResponse, response_model_exclude_none=True)
@@ -217,6 +280,7 @@ async def update_invoice(
     if not updated:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to update invoice")
 
+    await clear_pattern("invoices:*")
     return await InvoiceService.get_invoice_by_id(invoice_id)
 
 @router.patch("/{invoice_id}/status", response_model=InvoiceResponse, response_model_exclude_none=True)
@@ -236,6 +300,7 @@ async def update_invoice_status(
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to update invoice status")
 
+    await clear_pattern("invoices:*")
     return await InvoiceService.get_invoice_by_id(invoice_id)
 
 @router.delete("/{invoice_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -250,3 +315,4 @@ async def delete_invoice(invoice_id: str, current_user: dict = Depends(get_curre
     success = await InvoiceService.delete_invoice(invoice_id, current_user)
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to delete invoice")
+    await clear_pattern("invoices:*")

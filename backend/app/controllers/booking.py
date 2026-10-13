@@ -12,6 +12,7 @@ from app.schemas.booking import (
 )
 from app.repository.booking import BookingRepository
 from app.controllers.auth import get_current_employee
+from app.redis.service import get_cache, set_cache, clear_pattern, make_list_key
 
 # Authenticated router for logged-in employees
 booking_router = APIRouter(prefix="/schedule", tags=["Booking Page Management"])
@@ -37,6 +38,9 @@ async def create_booking_page(
     data = payload.model_dump()
     data["request_base_url"] = str(request.base_url)
     created = await BookingRepository.create_booking_page(employee_id=user_id, data=data)
+    await clear_pattern("booking_pages:*")
+    await clear_pattern("booking_page:*")
+    await clear_pattern("public_booking:*")
     return created
 
 @booking_router.get("/booking-pages", response_model=List[BookingPageResponse])
@@ -47,7 +51,14 @@ async def get_my_booking_pages(
     Get all booking page configurations & shareable links for the logged-in employee.
     """
     user_id = str(current_employee.get("work_details", {}).get("employee_id") or current_employee.get("_id") or current_employee.get("id"))
+    cache_key = f"booking_pages:{user_id}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
     pages = await BookingRepository.get_employee_booking_pages(employee_id=user_id)
+    if pages is not None:
+        await set_cache(cache_key, pages, ttl=60)
     return pages
 
 @booking_router.get("/booking-pages/{page_id}", response_model=BookingPageResponse)
@@ -59,9 +70,16 @@ async def get_booking_page_by_id(
     Get specific booking page details by ID (strictly isolated to the logged-in user).
     """
     user_id = str(current_employee.get("work_details", {}).get("employee_id") or current_employee.get("_id") or current_employee.get("id"))
+    cache_key = f"booking_page:{page_id}:{user_id}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
     page = await BookingRepository.get_booking_page_by_id(page_id, employee_id=user_id)
     if not page:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking page not found or access denied.")
+
+    await set_cache(cache_key, page, ttl=60)
     return page
 
 @booking_router.put("/booking-pages/{page_id}", response_model=Dict[str, str])
@@ -79,6 +97,10 @@ async def update_booking_page(
     success = await BookingRepository.update_booking_page(page_id=page_id, employee_id=user_id, update_data=update_data)
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to update booking page.")
+
+    await clear_pattern("booking_pages:*")
+    await clear_pattern("booking_page:*")
+    await clear_pattern("public_booking:*")
     return {"message": "Booking page updated successfully."}
 
 @booking_router.delete("/booking-pages/{page_id}", response_model=Dict[str, str])
@@ -93,6 +115,10 @@ async def delete_booking_page(
     success = await BookingRepository.delete_booking_page(page_id=page_id, employee_id=user_id)
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to delete booking page.")
+
+    await clear_pattern("booking_pages:*")
+    await clear_pattern("booking_page:*")
+    await clear_pattern("public_booking:*")
     return {"message": "Booking page deleted successfully."}
 
 @booking_router.get("/bookings", response_model=List[AppointmentBookingResponse])
@@ -103,7 +129,14 @@ async def get_my_appointments(
     Get all confirmed appointments booked by guests with the logged-in employee.
     """
     user_id = str(current_employee.get("work_details", {}).get("employee_id") or current_employee.get("_id") or current_employee.get("id"))
+    cache_key = f"bookings:{user_id}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
     bookings = await BookingRepository.get_employee_bookings(employee_id=user_id)
+    if bookings is not None:
+        await set_cache(cache_key, bookings, ttl=60)
     return bookings
 
 # ===============================================
@@ -118,9 +151,16 @@ async def get_public_employee_booking_profile(
     Public API: Fetch Employee profile info & active booking pages by employee_id.
     Returns 404 if booking page is unavailable or has been deleted.
     """
+    cache_key = f"public_booking:profile:{employee_id}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
     profile = await BookingRepository.get_public_employee_profile(employee_id=employee_id)
     if not profile or not profile.get("booking_pages"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking page is unavailable or has been deleted.")
+
+    await set_cache(cache_key, profile, ttl=60)
     return profile
 
 @public_booking_router.get("/{employee_id}/available-slots", response_model=Dict[str, Any])
@@ -159,6 +199,9 @@ async def submit_guest_appointment_booking(
     booking = await BookingRepository.create_guest_appointment_booking(employee_id=employee_id, booking_data=data)
     if isinstance(booking, dict) and booking.get("error"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=booking.get("error"))
+
+    await clear_pattern("bookings:*")
+    await clear_pattern("schedule:*")
     return booking
 
 @public_booking_router.post("/cancel/{booking_id}", response_model=Dict[str, str])
@@ -171,4 +214,7 @@ async def cancel_appointment_booking(
     success = await BookingRepository.cancel_booking(booking_id=booking_id)
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to cancel appointment booking.")
+
+    await clear_pattern("bookings:*")
+    await clear_pattern("schedule:*")
     return {"message": "Appointment booking cancelled successfully."}
