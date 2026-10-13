@@ -4060,6 +4060,185 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     return a.name.localeCompare(b.name);
   });
 
+  // Consolidate duplicate projects under the same client/brand in the UI landing grid (Issue 6)
+  const groupedProjects = useMemo(() => {
+    const matchedProjects = projects.filter(project => {
+      if (activeTab === "Active Projects" && project.status === "Completed") return false;
+      if (activeTab === "Archived Projects" && project.status !== "Completed") return false;
+      const projClient = clients.find(c => c.id === project.clientId);
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const matchesName = project.name.toLowerCase().includes(query);
+        const matchesClient = (projClient?.name || "").toLowerCase().includes(query);
+        const matchesCompany = (projClient?.companyName || "").toLowerCase().includes(query);
+        if (!matchesName && !matchesClient && !matchesCompany) return false;
+      }
+      return true;
+    });
+
+    const groupsMap = new Map<string, Project[]>();
+    matchedProjects.forEach(p => {
+      let key = "";
+      if (p.clientId && p.clientId.trim() !== "" && p.clientId !== "c-default") {
+        key = `client_${p.clientId}`;
+      } else {
+        const base = p.name.replace(/\s*-\s*(Creative|Digital Marketing|Development|Sales|SMM|SEO).*$/i, '').trim().toLowerCase();
+        key = `base_${base}`;
+      }
+      if (!groupsMap.has(key)) {
+        groupsMap.set(key, []);
+      }
+      groupsMap.get(key)!.push(p);
+    });
+
+    const result: Array<{
+      id: string;
+      groupKey: string;
+      clientId: string;
+      client: Client | undefined;
+      displayName: string;
+      clientPersonName: string;
+      status: ProjectStatus;
+      statusStyle: string;
+      categories: string[];
+      subProjects: Project[];
+      hasWhatsApp: boolean;
+      whatsappLink?: string | undefined;
+      hasFestivalPost: boolean;
+      nextFollowupDate?: string | undefined;
+      startDate?: string | undefined;
+      endDate?: string | undefined;
+      team: { name: string; avatar: string }[];
+      budgetFormatted: string;
+      totalTasks: number;
+      completedTasks: number;
+      taskPct: number;
+      primaryProject: Project;
+    }> = [];
+
+    groupsMap.forEach((subProjects, groupKey) => {
+      if (!subProjects || subProjects.length === 0) return;
+      if (clientFilterCategories.length > 0) {
+        const hasMatchingCat = subProjects.some(p => clientFilterCategories.includes(p.category));
+        if (!hasMatchingCat) return;
+      }
+
+      const primaryProject = (clientFilterCategories.length > 0
+        ? subProjects.find(p => clientFilterCategories.includes(p.category))
+        : null) || subProjects.find(p => p.status !== "Completed") || subProjects[0];
+
+      if (!primaryProject) return;
+
+      const projClient = clients.find(c => c.id === primaryProject.clientId) || clients.find(c => subProjects.some(p => p.clientId === c.id));
+
+      let displayName = "";
+      if (projClient?.companyName && projClient.companyName.trim()) {
+        displayName = projClient.companyName.trim();
+      } else {
+        const cleanBase = primaryProject.name.replace(/\s*-\s*(Creative|Digital Marketing|Development|Sales).*$/i, '').trim();
+        displayName = cleanBase || primaryProject.name;
+      }
+      if (subProjects.length === 1 && !projClient?.companyName) {
+        displayName = primaryProject.name;
+      }
+
+      let overallStatus: ProjectStatus = "Completed";
+      if (subProjects.some(p => p.status === "In Progress")) overallStatus = "In Progress";
+      else if (subProjects.some(p => p.status === "In Review")) overallStatus = "In Review";
+      else if (subProjects.some(p => p.status === "On Hold")) overallStatus = "On Hold";
+      else if (subProjects.every(p => p.status === "Completed")) overallStatus = "Completed";
+      else overallStatus = primaryProject.status;
+
+      const statusStyle =
+        overallStatus === "Completed"
+          ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
+          : overallStatus === "In Review"
+            ? "bg-amber-500/10 text-amber-600 border-amber-500/30"
+            : overallStatus === "On Hold"
+              ? "bg-rose-500/10 text-rose-500 border-rose-500/30"
+              : "bg-blue-500/10 text-blue-600 border-blue-500/30";
+
+      const categories = Array.from(new Set(subProjects.map(p => p.category).filter(Boolean)));
+
+      const waProj = subProjects.find(p => Boolean(p.whatsapp_group_link && p.whatsapp_group_link.trim()));
+      const hasWhatsApp = Boolean(waProj);
+      const whatsappLink = waProj?.whatsapp_group_link;
+      const hasFestivalPost = subProjects.some(p => p.festivalPost === "Yes");
+      const followupProj = subProjects.find(p => Boolean(p.nextFollowupDate && p.nextFollowupDate.trim()));
+      const nextFollowupDate = followupProj?.nextFollowupDate;
+
+      const startDates = subProjects.map(p => p.startDate).filter(Boolean).sort();
+      const endDates = subProjects.map(p => p.endDate).filter(Boolean).sort();
+      const startDate = startDates[0] || primaryProject.startDate;
+      const endDate = endDates[endDates.length - 1] || primaryProject.endDate;
+
+      const teamMap = new Map<string, { name: string; avatar: string }>();
+      subProjects.forEach(p => {
+        (p.team || []).forEach(m => {
+          const mName = (m.name || "").trim();
+          if (mName && !teamMap.has(mName.toLowerCase())) {
+            teamMap.set(mName.toLowerCase(), m);
+          }
+        });
+      });
+      const team = Array.from(teamMap.values());
+
+      let totalBudgetNum = 0;
+      let hasBudget = false;
+      subProjects.forEach(p => {
+        const num = parseInt((p.budget || "").replace(/[^0-9]/g, '')) || 0;
+        if (num > 0) {
+          totalBudgetNum += num;
+          hasBudget = true;
+        }
+      });
+      const budgetFormatted = hasBudget ? `₹${totalBudgetNum.toLocaleString('en-IN')}` : (primaryProject.budget || "₹0");
+
+      let totalTasks = 0;
+      let completedTasks = 0;
+      subProjects.forEach(p => {
+        const wp = getWorkProgress(p);
+        totalTasks += wp.total;
+        completedTasks += wp.completed;
+      });
+      const taskPct = totalTasks > 0
+        ? Math.min(100, Math.round((completedTasks / totalTasks) * 100))
+        : (primaryProject.progress || 0);
+
+      result.push({
+        id: primaryProject.id,
+        groupKey,
+        clientId: primaryProject.clientId,
+        client: projClient,
+        displayName,
+        clientPersonName: projClient?.name || "Client",
+        status: overallStatus,
+        statusStyle,
+        categories,
+        subProjects,
+        hasWhatsApp,
+        whatsappLink,
+        hasFestivalPost,
+        nextFollowupDate,
+        startDate,
+        endDate,
+        team,
+        budgetFormatted,
+        totalTasks,
+        completedTasks,
+        taskPct,
+        primaryProject,
+      });
+    });
+
+    return result.sort((a, b) => {
+      const aHold = a.status === "On Hold" ? 1 : 0;
+      const bHold = b.status === "On Hold" ? 1 : 0;
+      if (aHold !== bHold) return aHold - bHold;
+      return a.displayName.localeCompare(b.displayName);
+    });
+  }, [projects, clients, activeTab, searchQuery, clientFilterCategories]);
+
   const currentProject = selectedProjectId ? (projects.find(p => p.id === selectedProjectId) || null) : null;
   const currentClient = (selectedClientId ? clients.find(c => c.id === selectedClientId) : null)
     || (currentProject ? clients.find(c => c.id === currentProject.clientId) : null)
@@ -12207,28 +12386,20 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           </div>
         </div>
       ) : PROJECT_TABS.includes(activeTab) ? (
-        /* K1: Projects Grid (Active / Archived) */
+        /* K1: Projects Grid (Active / Archived) - Merged by client/brand in UI (Issue 6) */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
-          {filteredProjects.map((project) => {
-            const projClient = clients.find(c => c.id === project.clientId);
-            const statusStyle =
-              project.status === "Completed"
-                ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
-                : project.status === "In Review"
-                  ? "bg-amber-500/10 text-amber-600 border-amber-500/30"
-                  : project.status === "On Hold"
-                    ? "bg-rose-500/10 text-rose-500 border-rose-500/30"
-                    : "bg-blue-500/10 text-blue-600 border-blue-500/30";
+          {groupedProjects.map((group) => {
+            const dp = getDateProgress(group.startDate, group.endDate);
             return (
               <div
-                key={project.id}
+                key={group.groupKey}
                 onClick={(e) => {
                   const target = e.target as HTMLElement;
-                  if (target.closest('button') || target.closest('[role="menuitem"]')) {
+                  if (target.closest('button') || target.closest('[role="menuitem"]') || target.closest('a')) {
                     return;
                   }
-                  if (projClient) setSelectedClientId(projClient.id);
-                  setSelectedProjectId(project.id);
+                  if (group.client) setSelectedClientId(group.client.id);
+                  setSelectedProjectId(group.primaryProject.id);
                 }}
                 className="group bg-white border border-border/40 rounded-[2rem] p-6 shadow-sm hover:shadow-2xl hover:shadow-primary/5 hover:-translate-y-1 hover:border-primary/30 transition-all duration-300 relative flex flex-col cursor-pointer"
               >
@@ -12237,25 +12408,43 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
                 <div className="flex justify-between items-start mb-5 relative z-10">
                   {/* K5: highlighted logo */}
-                  <BrandLogo src={projClient?.logo} alt={project.name} size="w-20 h-20" />
-                  <span className={cn("px-2.5 py-1 rounded-full text-[11px] font-black border shrink-0", statusStyle)}>
-                    {project.status}
+                  <BrandLogo src={group.client?.logo} alt={group.displayName} size="w-20 h-20" />
+                  <span className={cn("px-2.5 py-1 rounded-full text-[11px] font-black border shrink-0", group.statusStyle)}>
+                    {group.status}
                   </span>
                 </div>
 
                 <div className="relative z-10 mb-4 flex-grow">
-                  <h3 className="text-xl font-black tracking-tight text-foreground line-clamp-2 leading-tight group-hover:text-primary transition-colors">{project.name}</h3>
+                  <h3 className="text-xl font-black tracking-tight text-foreground line-clamp-2 leading-tight group-hover:text-primary transition-colors">
+                    {group.displayName}
+                  </h3>
                   <div className="flex flex-wrap items-center gap-2 mt-3">
                     <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-1 bg-muted rounded-md text-muted-foreground">
-                      <Briefcase className="w-3.5 h-3.5" /> {projClient?.name || "Client"}
+                      <Briefcase className="w-3.5 h-3.5" /> {group.clientPersonName}
                     </span>
-                    <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-1 bg-primary/10 text-primary rounded-md">
-                      {project.category}
-                    </span>
+                    {group.categories.map((cat) => {
+                      const matchingSub = group.subProjects.find(p => p.category === cat);
+                      return (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (group.client) setSelectedClientId(group.client.id);
+                            if (matchingSub) setSelectedProjectId(matchingSub.id);
+                            else setSelectedProjectId(group.primaryProject.id);
+                          }}
+                          className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-1 bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground rounded-md transition-colors cursor-pointer"
+                          title={`Open ${cat} project`}
+                        >
+                          {cat}
+                        </button>
+                      );
+                    })}
                   </div>
-                  {/* K14: brand status chips — WA green/red, festival, followup */}
+                  {/* brand status chips — WA green/red, festival, followup */}
                   <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                    {project.whatsapp_group_link ? (
+                    {group.hasWhatsApp ? (
                       <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 bg-emerald-500/10 text-emerald-600 border border-emerald-500/30 rounded-full">
                         ✓ WA Created
                       </span>
@@ -12264,70 +12453,130 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         ✕ WA Not Created
                       </span>
                     )}
-                    {project.festivalPost === "Yes" && (
+                    {group.hasFestivalPost && (
                       <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 bg-emerald-500/10 text-emerald-600 border border-emerald-500/30 rounded-full">
                         ✓ Festival Post
                       </span>
                     )}
-                    {project.nextFollowupDate && (
+                    {group.nextFollowupDate && (
                       <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-amber-500/10 text-amber-600 border border-amber-500/30 rounded-full">
-                        Followup: {safeFormat(project.nextFollowupDate, "dd/MM/yyyy")}
+                        Followup: {safeFormat(group.nextFollowupDate, "dd/MM/yyyy")}
                       </span>
                     )}
                   </div>
-                  {(project.startDate || project.endDate) && (
+                  {(group.startDate || group.endDate) && (
                     <p className="text-[11px] font-semibold text-muted-foreground mt-2 flex items-center gap-1.5">
                       <Calendar className="w-3.5 h-3.5" />
-                      {project.startDate ? safeFormat(project.startDate, "dd/MM/yyyy") : ""}{project.startDate && project.endDate ? " → " : ""}{project.endDate ? safeFormat(project.endDate, "dd/MM/yyyy") : ""}
+                      {group.startDate ? safeFormat(group.startDate, "dd/MM/yyyy") : ""}{group.startDate && group.endDate ? " → " : ""}{group.endDate ? safeFormat(group.endDate, "dd/MM/yyyy") : ""}
                     </p>
                   )}
                 </div>
 
                 {/* Team overlap */}
-                {(project.team ?? []).length > 0 && (
+                {group.team.length > 0 && (
                   <div className="flex items-center gap-3 mb-4 relative z-10">
                     <div className="flex -space-x-2">
-                      {(project.team ?? []).slice(0, 5).map((t, idx) => (
+                      {group.team.slice(0, 5).map((t, idx) => (
                         <img key={idx} src={t.avatar} className="w-8 h-8 rounded-full border-2 border-white shadow-sm" title={t.name} />
                       ))}
                     </div>
-                    <span className="text-xs font-bold text-muted-foreground">{(project.team ?? []).length} Members</span>
+                    <span className="text-xs font-bold text-muted-foreground">{group.team.length} Members</span>
                   </div>
                 )}
 
-                {(() => {
-                  const wp = getWorkProgress(project);
-                  const dp = getDateProgress(project.startDate, project.endDate);
-                  const pct = wp.pct;
-                  return (
-                    <>
-                      <div className="flex justify-between items-end pt-4 border-t border-border/40 relative z-10 gap-3">
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Budget</span>
-                          <span className="text-base font-black text-foreground mt-0.5 font-mono truncate">{project.budget || "—"}</span>
+                <div className="flex justify-between items-end pt-4 border-t border-border/40 relative z-10 gap-3">
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Budget</span>
+                    <span className="text-base font-black text-foreground mt-0.5 font-mono truncate">{group.budgetFormatted || "—"}</span>
+                  </div>
+                  <div className="flex flex-col text-right shrink-0">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                      Task Progress
+                    </span>
+                    <span className="text-base font-black text-primary mt-0.5 font-mono">{group.taskPct}%</span>
+                  </div>
+                </div>
+                <div className="h-1.5 rounded-full bg-muted mt-3 overflow-hidden relative z-10">
+                  <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${Math.min(100, Math.max(0, group.taskPct))}%` }} />
+                </div>
+                <p className="text-[10px] font-bold text-emerald-600 mt-1.5 relative z-10">
+                  {group.totalTasks > 0 ? `${group.completedTasks}/${group.totalTasks} tasks completed` : "No tasks added"}
+                  {dp && <span className="text-muted-foreground font-normal ml-1">({dp.elapsed}/{dp.total}d)</span>}
+                </p>
+
+                {/* Sub-projects list styled like Brand Division with Open Project */}
+                <div className="space-y-2 mt-4 pt-3 border-t border-border/40 relative z-10">
+                  {group.subProjects.map((sp) => (
+                    <div
+                      key={sp.id}
+                      className="p-3 rounded-2xl border border-border/50 bg-muted/20 hover:bg-muted/40 transition-colors space-y-2"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-lg border border-border/50 overflow-hidden bg-white p-0.5 shrink-0">
+                            <BrandLogo src={group.client?.logo} alt={sp.name} size="w-full h-full" rounded="rounded-md" />
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="text-xs font-bold text-foreground truncate">{sp.name}</h4>
+                            <p className="text-[10px] text-muted-foreground truncate">{group.clientPersonName}</p>
+                          </div>
                         </div>
-                        <div className="flex flex-col text-right shrink-0">
-                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                            Task Progress
-                          </span>
-                          <span className="text-base font-black text-primary mt-0.5 font-mono">{pct}%</span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-muted text-muted-foreground border border-border/40 shrink-0">
+                          {sp.category}
+                        </span>
+                      </div>
+
+                      {/* Contact & Open Actions */}
+                      <div className="flex items-center justify-between pt-1 border-t border-border/30 text-xs">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {group.client?.phone && (
+                            <a
+                              href={`tel:${group.client.phone}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-primary transition-colors truncate"
+                              title={`Call ${group.client.phone}`}
+                            >
+                              <Phone className="w-3 h-3 text-primary shrink-0" />
+                              <span className="truncate max-w-[90px]">{group.client.phone}</span>
+                            </a>
+                          )}
+                          {sp.whatsapp_group_link && (
+                            <a
+                              href={sp.whatsapp_group_link}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-1 text-[11px] font-bold text-emerald-600 hover:text-emerald-700 transition-colors shrink-0"
+                              title="Open WhatsApp Group"
+                            >
+                              <MessageSquare className="w-3 h-3 fill-emerald-500/20" />
+                              <span>Group</span>
+                              <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
+                          )}
                         </div>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (group.client) setSelectedClientId(group.client.id);
+                            setSelectedProjectId(sp.id);
+                          }}
+                          className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded-lg shadow-sm hover:shadow transition-all flex items-center gap-1 shrink-0 cursor-pointer"
+                        >
+                          <span>Open Project</span>
+                          <ChevronRight className="w-3 h-3" />
+                        </button>
                       </div>
-                      <div className="h-1.5 rounded-full bg-muted mt-3 overflow-hidden relative z-10">
-                        <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
-                      </div>
-                      <p className="text-[10px] font-bold text-emerald-600 mt-1.5 relative z-10">
-                        {wp.total > 0 ? `${wp.completed}/${wp.total} tasks completed` : "No tasks added"}
-                        {dp && <span className="text-muted-foreground font-normal ml-1">({dp.elapsed}/{dp.total}d)</span>}
-                      </p>
-                    </>
-                  );
-                })()}
+                    </div>
+                  ))}
+                </div>
 
               </div>
             );
           })}
-          {filteredProjects.length === 0 && (
+          {groupedProjects.length === 0 && (
             <div className="col-span-full py-12 flex flex-col items-center justify-center text-center">
               <h3 className="text-lg font-bold text-foreground">No projects found</h3>
               <p className="text-muted-foreground mt-1">Try adjusting your search query.</p>

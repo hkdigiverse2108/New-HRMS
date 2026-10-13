@@ -793,7 +793,25 @@ class ProjectService:
         from datetime import timedelta
         project = await ProjectRepository.get_by_id(project_id)
         if not project:
-            return None
+            return {
+                "project_name": "Project",
+                "timeline": {"start_date": None, "end_date": None},
+                "filters": {
+                    "campaign_name": campaign_name or "All Campaigns",
+                    "preset": preset,
+                    "start_date": str(start_date) if start_date else None,
+                    "end_date": str(end_date) if end_date else None
+                },
+                "kpis": {
+                    "reach": {"value": 0.0, "formatted": "0", "growth_pct": 0.0},
+                    "leads": {"value": 0.0, "formatted": "0", "growth_pct": 0.0},
+                    "cost_per_lead": {"value": 0.0, "formatted": "₹0.00", "growth_pct": 0.0},
+                    "amount_spent": {"value": 0.0, "formatted": "₹0.00", "growth_pct": 0.0},
+                    "impressions": {"value": 0.0, "formatted": "0", "growth_pct": 0.0},
+                    "revenue": {"value": 0.0, "formatted": "₹0.00", "growth_pct": 0.0}
+                },
+                "top_campaigns": []
+            }
             
         stats = await ProjectService.get_daily_marketing_stats(project_id, campaign_name=campaign_name, start_date=start_date, end_date=end_date, preset=preset)
         s_date, e_date = ProjectService._resolve_date_range(preset, start_date, end_date)

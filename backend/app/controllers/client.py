@@ -70,13 +70,19 @@ async def delete_client(client_id: str, current_user: dict = Depends(get_current
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to delete client")
 
+@router.patch("/{client_id}/archive", response_model=ClientResponse, response_model_exclude_none=True)
 @router.post("/{client_id}/archive", response_model=ClientResponse, response_model_exclude_none=True)
-async def archive_client(client_id: str, current_user: dict = Depends(get_current_employee)):
+async def archive_client(
+    client_id: str, 
+    status: Optional[bool] = Query(None), 
+    current_user: dict = Depends(get_current_employee)
+):
     item = await ClientService.get_client_by_id(client_id)
     if not item or item.get("is_deleted"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Client not found")
         
-    success = await ClientService.archive_client(client_id, status=True)
+    archive_status = True if status is None else status
+    success = await ClientService.archive_client(client_id, status=archive_status)
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to archive client")
         

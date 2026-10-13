@@ -160,7 +160,7 @@ async def get_daily_marketing_stats(
 ):
     stats = await ProjectService.get_daily_marketing_stats(project_id, campaign_name=campaign_name, start_date=start_date, end_date=end_date, preset=preset)
     if stats is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        return []
     return stats
 
 @router.get("/{project_id}/marketing-summary", response_model=MarketingSummaryResponse)
@@ -174,7 +174,10 @@ async def get_marketing_summary(
 ):
     summary = await ProjectService.get_marketing_summary(project_id, campaign_name=campaign_name, start_date=start_date, end_date=end_date, preset=preset)
     if summary is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        return MarketingSummaryResponse(
+            total_reach=0, total_impressions=0, total_leads=0, total_revenue=0.0, total_spend=0.0, cost_per_metric=0.0,
+            reach_growth_pct=0.0, impressions_growth_pct=0.0, leads_growth_pct=0.0, revenue_growth_pct=0.0, spend_growth_pct=0.0, cpl_growth_pct=0.0
+        )
     return summary
 
 @router.put("/{project_id}/marketing-stats/{stat_id}", response_model=DailyMarketingStat)
@@ -194,7 +197,7 @@ async def delete_daily_marketing_stat(project_id: str, stat_id: str, current_use
 async def get_marketing_campaigns(project_id: str, current_user: dict = Depends(get_current_employee)):
     campaigns = await ProjectService.get_marketing_campaigns(project_id)
     if campaigns is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        return []
     return campaigns
 
 @router.post("/{project_id}/marketing-campaigns", response_model=List[str], status_code=status.HTTP_201_CREATED)
@@ -222,7 +225,7 @@ async def get_daily_revenues(
 ):
     revenues = await ProjectService.get_daily_revenues(project_id, start_date=start_date, end_date=end_date, preset=preset)
     if revenues is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        return []
     return revenues
 
 @router.put("/{project_id}/daily-revenue/{revenue_id}", response_model=DailyRevenue)

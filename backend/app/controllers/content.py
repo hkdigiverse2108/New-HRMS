@@ -143,7 +143,7 @@ async def get_monthly_approval(
 ):
     project = await ProjectService.get_project_by_id(project_id)
     if not project:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        return None
         
     approvals = project.get("content_approvals", [])
     for approval in approvals:

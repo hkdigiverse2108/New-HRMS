@@ -6,6 +6,7 @@ from app.schemas.project import ProjectCreate, ProjectCategory
 from app.services.project import ProjectService
 from app.repository.project import ProjectRepository
 from app.redis.service import get_cache, set_cache, delete_cache, clear_pattern, make_list_key
+from app.database.db import serialize_mongo_doc
 from datetime import datetime, timedelta
 
 class ClientService:
@@ -48,33 +49,52 @@ class ClientService:
             return cached
 
         result = await ClientRepository.get_all(is_deleted, is_archived, search, project_category, page, limit)
+        client_list = result.get("data", [])
         
-        from app.repository.project import ProjectRepository
-        for client in result.get("data", []):
-            client_id = client.get("_id")
-            if not client_id:
-                continue
+        if client_list:
+            client_ids = [str(c["_id"]) for c in client_list if c.get("_id")]
+            from app.repository.project import ProjectRepository
+            project_coll = await ProjectRepository.get_collection()
+            raw_projects = await project_coll.find({
+                "is_deleted": False,
+                "client_id": {"$in": client_ids}
+            }).to_list(length=None)
+            
+            projects_by_client = {}
+            for p in raw_projects:
+                p_clean = serialize_mongo_doc(p)
+                cid = str(p_clean.get("client_id", ""))
+                if cid:
+                    projects_by_client.setdefault(cid, []).append(p_clean)
+                    
+            for client in client_list:
+                cid = str(client.get("_id", ""))
+                projects = projects_by_client.get(cid, [])
                 
-            projects_data = await ProjectRepository.get_all(is_deleted=False, client_id=str(client_id), limit=1000)
-            projects = projects_data.get("data", [])
-            
-            total_projects = len(projects)
-            total_budget = 0.0
-            outstanding_amount = 0.0
-            
-            for p in projects:
-                if "finance" in p and p["finance"]:
-                    budget = p["finance"].get("project_budget", 0) or 0
-                    received = p["finance"].get("amount_received", 0) or 0
+                total_projects = len(projects)
+                total_budget = 0.0
+                outstanding_amount = 0.0
+                
+                for p in projects:
+                    fin = p.get("finance") or {}
+                    try:
+                        budget = float(fin.get("project_budget") or 0)
+                    except (ValueError, TypeError):
+                        budget = 0.0
+                    try:
+                        received = float(fin.get("amount_received") or 0)
+                    except (ValueError, TypeError):
+                        received = 0.0
+                        
                     total_budget += budget
                     outstanding_amount += (budget - received)
                     
-            client["client_stats"] = {
-                "total_projects": total_projects,
-                "total_budget": total_budget,
-                "outstanding_amount": outstanding_amount
-            }
-            client["projects"] = projects
+                client["client_stats"] = {
+                    "total_projects": total_projects,
+                    "total_budget": total_budget,
+                    "outstanding_amount": outstanding_amount
+                }
+                client["projects"] = projects
             
         await set_cache(cache_key, result, ttl=3600)
         return result
@@ -92,19 +112,26 @@ class ClientService:
             
         from app.repository.project import ProjectRepository
         projects_data = await ProjectRepository.get_all(is_deleted=False, client_id=client_id, limit=1000)
-        projects = projects_data.get("data", [])
+        projects = [serialize_mongo_doc(p) for p in projects_data.get("data", [])]
         
         total_projects = len(projects)
         total_budget = 0.0
         outstanding_amount = 0.0
         
         for p in projects:
-            if "finance" in p and p["finance"]:
-                budget = p["finance"].get("project_budget", 0) or 0
-                received = p["finance"].get("amount_received", 0) or 0
-                total_budget += budget
-                outstanding_amount += (budget - received)
+            fin = p.get("finance") or {}
+            try:
+                budget = float(fin.get("project_budget") or 0)
+            except (ValueError, TypeError):
+                budget = 0.0
+            try:
+                received = float(fin.get("amount_received") or 0)
+            except (ValueError, TypeError):
+                received = 0.0
                 
+            total_budget += budget
+            outstanding_amount += (budget - received)
+            
         client["client_stats"] = {
             "total_projects": total_projects,
             "total_budget": total_budget,

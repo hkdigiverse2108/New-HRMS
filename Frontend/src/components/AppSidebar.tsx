@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef, useLayoutEffect } from "react";
 import {
   ChevronDown,
   ChevronsLeft,
@@ -251,7 +251,54 @@ function SidebarBody({
       setOpenGroups((prev) => (prev.includes(current.title) ? prev : [...prev, current.title]));
     }
   }, [active]);
-  const [pinned, setPinned] = useState<string[]>(["Attendance"]);
+  const userId = String((user as any)?.id || (user as any)?._id || (user as any)?.email || "default");
+
+  const [pinned, setPinned] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem(`sidebar-pinned-${userId}`);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) return parsed;
+        } catch {}
+      }
+    }
+    return ["Attendance"];
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem(`sidebar-pinned-${userId}`);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) setPinned(parsed);
+        } catch {}
+      }
+    }
+  }, [userId]);
+
+  const navRef = useRef<HTMLElement>(null);
+  const scrollPosRef = useRef<number>(0);
+
+  const handleScroll = (e: React.UIEvent<HTMLElement>) => {
+    scrollPosRef.current = e.currentTarget.scrollTop;
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("hrms_sidebar_scroll", String(e.currentTarget.scrollTop));
+    }
+  };
+
+  useLayoutEffect(() => {
+    const el = navRef.current;
+    if (!el) return;
+    const saved = typeof window !== "undefined" ? sessionStorage.getItem("hrms_sidebar_scroll") : null;
+    if (saved !== null) {
+      el.scrollTop = Number(saved);
+    } else if (scrollPosRef.current > 0) {
+      el.scrollTop = scrollPosRef.current;
+    }
+  }, [active, collapsed]);
+
   const [collapsedSections, setCollapsedSections] = useState<string[]>([]);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [recents, setRecents] = useState<{ title: string; url: string }[]>(() => {
@@ -539,10 +586,15 @@ function SidebarBody({
     );
   };
 
-  const togglePin = (title: string) =>
-    setPinned((prev) =>
-      prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title],
-    );
+  const togglePin = (title: string) => {
+    setPinned((prev) => {
+      const updated = prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title];
+      if (typeof window !== "undefined") {
+        localStorage.setItem(`sidebar-pinned-${userId}`, JSON.stringify(updated));
+      }
+      return updated;
+    });
+  };
 
   return (
     <>
@@ -611,7 +663,7 @@ function SidebarBody({
         </div>
       )}
 
-      <nav className="flex-1 overflow-y-auto px-2 pb-4">
+      <nav ref={navRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-2 pb-4">
         {!collapsed && !q && pinnedLinks.length > 0 && (
           <div className="mb-2">
             <button

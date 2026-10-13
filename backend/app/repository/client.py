@@ -1,4 +1,4 @@
-from app.database.db import get_database
+from app.database.db import get_database, serialize_mongo_doc
 from datetime import datetime
 from bson import ObjectId
 from typing import Optional
@@ -70,10 +70,8 @@ class ClientRepository:
             skip = (page - 1) * limit
             cursor = cursor.skip(skip).limit(limit)
             
-        items = await cursor.to_list(length=limit or 1000)
-        
-        for item in items:
-            item["_id"] = str(item["_id"])
+        raw_items = await cursor.to_list(length=limit or 1000)
+        items = [serialize_mongo_doc(item) for item in raw_items]
             
         return {
             "data": items,
@@ -90,7 +88,7 @@ class ClientRepository:
             return None
         item = await collection.find_one({"_id": ObjectId(client_id)})
         if item:
-            item["_id"] = str(item["_id"])
+            item = serialize_mongo_doc(item)
         return item
 
     @classmethod
