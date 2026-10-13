@@ -30,4 +30,5 @@ pywebpush==2.5.0
 # PDF & Image Generation
 Pillow>=10.2.0
 reportlab>=4.1.0
+qrcode>=8.0
 

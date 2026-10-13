@@ -23,12 +23,20 @@ class QuotationService:
             from app.services.settings import SettingsService
             settings = await SettingsService.get_settings()
             
+            # Manually entered quotation values win; bank & terms never fall back to settings
             merged_quo = {
-                **quo,
-                **settings
+                **settings,
+                **{k: v for k, v in quo.items() if v not in (None, "")}
             }
-            if not merged_quo.get("bank_details") and settings.get("default_bank_details"):
-                merged_quo["bank_details"] = settings.get("default_bank_details")
+            merged_quo["_manual_only"] = True
+            merged_quo["bank_details"] = {
+                "bank_name": quo.get("bank_name"),
+                "account_number": quo.get("account_number"),
+                "ifsc_code": quo.get("ifsc_code"),
+                "upi_id": quo.get("upi_id"),
+            }
+            merged_quo["notes"] = quo.get("notes") or ""
+            merged_quo["default_terms"] = quo.get("notes") or ""
 
             pdf_bytes = PDFGeneratorService.generate_quotation_pdf(merged_quo)
             pdf_path, pdf_url = save_pdf_file(pdf_bytes, quo.get("quotation_number", f"QUO-{quotation_id[:6]}"), subfolder="quotations")
@@ -73,7 +81,11 @@ class QuotationService:
                 tax_option = "IGST"
             merged["tax_option"] = tax_option
 
-        if tax_option == "CGST + SGST":
+        if tax_option == "No Tax":
+            merged["cgst_rate"] = 0.0
+            merged["sgst_rate"] = 0.0
+            merged["igst_rate"] = 0.0
+        elif tax_option == "CGST + SGST":
             merged["cgst_rate"] = float(merged.get("cgst_rate") or 9.0)
             merged["sgst_rate"] = float(merged.get("sgst_rate") or 9.0)
             merged["igst_rate"] = 0.0
@@ -116,9 +128,12 @@ class QuotationService:
         merged["line_items"] = processed_items
         merged["total_before_tax"] = round(total_before_tax, 2)
 
-        # 3. Tax amount calculation
-        taxable_amount = max(0.0, merged["total_before_tax"])
-        if merged["tax_option"] == "CGST + SGST":
+        # 3. Tax amount calculation (Tax applies on Total Without GST)
+        add_disc = float(merged.get("additional_discount") or 0.0)
+        taxable_amount = max(0.0, round(merged["total_before_tax"] - add_disc, 2))
+        if merged["tax_option"] == "No Tax":
+            cgst_amt = sgst_amt = igst_amt = 0.0
+        elif merged["tax_option"] == "CGST + SGST":
             cgst_amt = round(taxable_amount * (merged["cgst_rate"] / 100.0), 2)
             sgst_amt = round(taxable_amount * (merged["sgst_rate"] / 100.0), 2)
             igst_amt = 0.0
@@ -133,8 +148,7 @@ class QuotationService:
         merged["total_tax_amount"] = round(cgst_amt + sgst_amt + igst_amt, 2)
 
         # 4. Rounding and Final Total Amount
-        add_disc = float(merged.get("additional_discount") or 0.0)
-        raw_total = merged["total_before_tax"] - add_disc + merged["total_tax_amount"]
+        raw_total = taxable_amount + merged["total_tax_amount"]
         rounded_total = round(raw_total)
         round_off = round(rounded_total - raw_total, 2)
 
@@ -324,6 +338,12 @@ class QuotationService:
             client_gstin=req_dict.get("client_gstin") or quotation.get("client_gstin"),
             client_department=req_dict.get("client_department") or quotation.get("client_department"),
             state_ut=req_dict.get("state_ut") or quotation.get("state_ut"),
+            departments=quotation.get("departments") or [],
+            mode_of_payment=quotation.get("mode_of_payment"),
+            bank_name=quotation.get("bank_name"),
+            account_number=quotation.get("account_number"),
+            ifsc_code=quotation.get("ifsc_code"),
+            upi_id=quotation.get("upi_id"),
             due_date=target_due_date,
             line_items=items_objs,
             tax_option=req_dict.get("tax_option") or quotation.get("tax_option"),

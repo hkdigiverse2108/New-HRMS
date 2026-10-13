@@ -1,5 +1,5 @@
 from typing import Optional, Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timezone
 from app.repository.invoice import InvoiceRepository
 from app.repository.bank_account import BankAccountRepository
 from app.schemas.invoice import InvoiceCreate, InvoiceUpdate
@@ -57,8 +57,12 @@ class InvoiceService:
         if not user:
             return True
         work = user.get("work_details", {})
-        role = str(work.get("system_role") or user.get("system_role", "Employee")).strip()
-        return role.lower() in ["admin", "subadmin"]
+        role = str(work.get("system_role") or user.get("system_role") or user.get("role", "Employee")).strip()
+        dept = str(work.get("department") or user.get("department", "")).strip().lower()
+        return (
+            role.lower() in ["admin", "subadmin", "hr", "accountant", "accounts"]
+            or dept in ["finance", "accounts", "management", "admin"]
+        )
 
     @staticmethod
     def check_user_access(invoice: Dict[str, Any], user: Optional[Dict[str, Any]]) -> bool:
@@ -105,7 +109,13 @@ class InvoiceService:
                 if not merged.get("client_gstin"):
                     merged["client_gstin"] = client_doc.get("gstin") or client_doc.get("client_gstin")
                 if not merged.get("client_department"):
-                    merged["client_department"] = client_doc.get("department") or client_doc.get("client_department")
+                    s_depts = client_doc.get("service_details", {}).get("departments") if isinstance(client_doc.get("service_details"), dict) else None
+                    if s_depts and isinstance(s_depts, list):
+                        merged["client_department"] = ", ".join(s_depts)
+                        if not merged.get("departments"):
+                            merged["departments"] = s_depts
+                    else:
+                        merged["client_department"] = client_doc.get("department") or client_doc.get("client_department")
                 if not merged.get("state_ut"):
                     merged["state_ut"] = client_doc.get("state_ut") or client_doc.get("state")
 
@@ -167,6 +177,10 @@ class InvoiceService:
             merged["cgst_rate"] = float(merged.get("cgst_rate") or 9.0)
             merged["sgst_rate"] = float(merged.get("sgst_rate") or 9.0)
             merged["igst_rate"] = 0.0
+        elif tax_option == "No Tax":
+            merged["cgst_rate"] = 0.0
+            merged["sgst_rate"] = 0.0
+            merged["igst_rate"] = 0.0
         else: # IGST
             merged["igst_rate"] = float(merged.get("igst_rate") or 18.0)
             merged["cgst_rate"] = 0.0
@@ -206,11 +220,16 @@ class InvoiceService:
         merged["line_items"] = processed_items
         merged["total_before_tax"] = round(total_before_tax, 2)
 
-        # 5. Tax amount calculation
-        taxable_amount = max(0.0, merged["total_before_tax"])
+        # 5. Tax amount calculation (Tax applies on Total Without GST = total_before_tax - additional_discount)
+        add_disc = float(merged.get("additional_discount") or 0.0)
+        taxable_amount = max(0.0, round(merged["total_before_tax"] - add_disc, 2))
         if merged["tax_option"] == "CGST + SGST":
             cgst_amt = round(taxable_amount * (merged["cgst_rate"] / 100.0), 2)
             sgst_amt = round(taxable_amount * (merged["sgst_rate"] / 100.0), 2)
+            igst_amt = 0.0
+        elif merged["tax_option"] == "No Tax":
+            cgst_amt = 0.0
+            sgst_amt = 0.0
             igst_amt = 0.0
         else:
             cgst_amt = 0.0
@@ -223,8 +242,7 @@ class InvoiceService:
         merged["total_tax_amount"] = round(cgst_amt + sgst_amt + igst_amt, 2)
 
         # 6. Rounding and Final Total Due
-        add_disc = float(merged.get("additional_discount") or 0.0)
-        raw_total = merged["total_before_tax"] - add_disc + merged["total_tax_amount"]
+        raw_total = taxable_amount + merged["total_tax_amount"]
         rounded_total = round(raw_total)
         round_off = round(rounded_total - raw_total, 2)
 
@@ -250,13 +268,15 @@ class InvoiceService:
         user_role = user_info["role"]
         is_admin = user_role.lower() in ["admin", "subadmin"]
 
-        # Role-based status
-        if is_admin:
-            data_dict["status"] = data_dict.get("status") or "paid"
-            data_dict["approval_status"] = "approved"
+        # Invoices created are paid and approved by default unless explicitly saved as draft.
+        # Proforma invoices are only raised after payment, so they are always paid (never draft).
+        is_proforma = data_dict.get("invoice_type") == "Proforma Invoice"
+        if data_dict.get("status") == "draft" and not is_proforma:
+            data_dict["status"] = "draft"
+            data_dict["approval_status"] = "draft"
         else:
-            data_dict["status"] = "pending_approval"
-            data_dict["approval_status"] = "pending"
+            data_dict["status"] = "paid"
+            data_dict["approval_status"] = "approved"
 
         data_dict["created_by"] = user_info
 
@@ -265,7 +285,7 @@ class InvoiceService:
             "action": "created",
             "description": f"Invoice '{data_dict['invoice_number']}' created by {user_info['name']} ({user_role})",
             "performed_by": user_info,
-            "timestamp": datetime.utcnow()
+            "timestamp": datetime.now(timezone.utc)
         }
         data_dict["activity_logs"] = [log_entry]
 
@@ -284,7 +304,19 @@ class InvoiceService:
 
         created = await InvoiceRepository.create(calculated_data)
         updated_created = await InvoiceService._generate_and_store_invoice_pdf(created["_id"], delete_old=False)
+        await clear_pattern("invoices:*")
         await clear_pattern("invoices:list:*")
+
+        # Converted from a quotation via the invoice form: mark that quotation converted (not for drafts)
+        source_quotation_id = calculated_data.get("source_quotation_id")
+        if source_quotation_id and calculated_data.get("status") != "draft":
+            from app.repository.quotation import QuotationRepository
+            await QuotationRepository.mark_converted(
+                source_quotation_id, created["_id"], calculated_data.get("invoice_number")
+            )
+            await clear_pattern("quotations:list:*")
+            await delete_cache(f"quotation:{source_quotation_id}")
+
         return updated_created or created
 
     @staticmethod
@@ -298,7 +330,7 @@ class InvoiceService:
                 "user_id": user_info["user_id"],
                 "name": user_info["name"],
                 "role": user_info["role"],
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
         }
         success = await InvoiceRepository.update(invoice_id, update_data)
@@ -307,11 +339,12 @@ class InvoiceService:
                 "action": "approved",
                 "description": f"Invoice payment approved by {user_info['name']} ({user_info['role']})",
                 "performed_by": user_info,
-                "timestamp": datetime.utcnow()
+                "timestamp": datetime.now(timezone.utc)
             }
             await InvoiceRepository.append_log(invoice_id, log_entry)
             await InvoiceService._generate_and_store_invoice_pdf(invoice_id, delete_old=True)
             await clear_pattern("invoices:list:*")
+            await clear_pattern("invoices:ledger:*")
             await delete_cache(f"invoice:{invoice_id}")
         return success
 
@@ -328,7 +361,7 @@ class InvoiceService:
                 "user_id": user_info["user_id"],
                 "name": user_info["name"],
                 "role": user_info["role"],
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
         }
         success = await InvoiceRepository.update(invoice_id, update_data)
@@ -337,11 +370,12 @@ class InvoiceService:
                 "action": "rejected",
                 "description": f"Invoice rejected by {user_info['name']} ({user_info['role']}). Reason: {rej_reason}",
                 "performed_by": user_info,
-                "timestamp": datetime.utcnow()
+                "timestamp": datetime.now(timezone.utc)
             }
             await InvoiceRepository.append_log(invoice_id, log_entry)
             await InvoiceService._generate_and_store_invoice_pdf(invoice_id, delete_old=True)
             await clear_pattern("invoices:list:*")
+            await clear_pattern("invoices:ledger:*")
             await delete_cache(f"invoice:{invoice_id}")
         return success
 
@@ -377,10 +411,11 @@ class InvoiceService:
                 "action": "access_updated",
                 "description": f"Invoice access granted to {len(valid_ids)} employee(s) by {user_info['name']}",
                 "performed_by": user_info,
-                "timestamp": datetime.utcnow()
+                "timestamp": datetime.now(timezone.utc)
             }
             await InvoiceRepository.append_log(invoice_id, log_entry)
             await clear_pattern("invoices:list:*")
+            await clear_pattern("invoices:ledger:*")
             await delete_cache(f"invoice:{invoice_id}")
         return success
 
@@ -455,12 +490,23 @@ class InvoiceService:
                 "action": "updated",
                 "description": f"Invoice updated by {user_info['name']} ({user_info['role']})",
                 "performed_by": user_info,
-                "timestamp": datetime.utcnow()
+                "timestamp": datetime.now(timezone.utc)
             }
             await InvoiceRepository.append_log(invoice_id, log_entry)
             await InvoiceService._generate_and_store_invoice_pdf(invoice_id, delete_old=True)
             await clear_pattern("invoices:list:*")
+            await clear_pattern("invoices:ledger:*")
             await delete_cache(f"invoice:{invoice_id}")
+
+            # A draft converted from a quotation is finalized now: mark the quotation converted
+            source_quotation_id = existing.get("source_quotation_id")
+            if source_quotation_id and existing.get("status") == "draft" and calculated_data.get("status") not in (None, "draft"):
+                from app.repository.quotation import QuotationRepository
+                await QuotationRepository.mark_converted(
+                    source_quotation_id, invoice_id, calculated_data.get("invoice_number") or existing.get("invoice_number")
+                )
+                await clear_pattern("quotations:list:*")
+                await delete_cache(f"quotation:{source_quotation_id}")
         return success
 
     @staticmethod
@@ -472,11 +518,12 @@ class InvoiceService:
                 "action": "status_updated",
                 "description": f"Invoice status changed to '{status}' by {user_info['name']}",
                 "performed_by": user_info,
-                "timestamp": datetime.utcnow()
+                "timestamp": datetime.now(timezone.utc)
             }
             await InvoiceRepository.append_log(invoice_id, log_entry)
             await InvoiceService._generate_and_store_invoice_pdf(invoice_id, delete_old=True)
             await clear_pattern("invoices:list:*")
+            await clear_pattern("invoices:ledger:*")
             await delete_cache(f"invoice:{invoice_id}")
         return success
 
@@ -493,10 +540,11 @@ class InvoiceService:
                 "action": "deleted",
                 "description": f"Invoice marked as deleted by {user_info['name']}",
                 "performed_by": user_info,
-                "timestamp": datetime.utcnow()
+                "timestamp": datetime.now(timezone.utc)
             }
             await InvoiceRepository.append_log(invoice_id, log_entry)
             await clear_pattern("invoices:list:*")
+            await clear_pattern("invoices:ledger:*")
             await delete_cache(f"invoice:{invoice_id}")
         return success
 
@@ -543,6 +591,52 @@ class InvoiceService:
             to_date=to_date,
             month=month,
             year=year,
+            search=search,
+            user_id=user_id,
+            is_admin=is_admin,
+            page=page,
+            limit=limit
+        )
+        await set_cache(cache_key, result, ttl=1800)
+        return result
+
+    @staticmethod
+    async def get_ledger_entries(
+        invoice_type: Optional[str] = None,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+        client_name: Optional[str] = None,
+        mode_of_payment: Optional[str] = None,
+        search: Optional[str] = None,
+        current_user: Optional[Dict[str, Any]] = None,
+        page: Optional[int] = None,
+        limit: Optional[int] = None
+    ) -> Dict[str, Any]:
+        is_admin = InvoiceService.is_admin_user(current_user)
+        user_id = str(current_user.get("_id", "")) if current_user else None
+
+        cache_key = make_list_key(
+            "invoices:ledger:entries",
+            invoice_type=invoice_type,
+            from_date=from_date,
+            to_date=to_date,
+            client_name=client_name,
+            mode_of_payment=mode_of_payment,
+            search=search,
+            user_id=user_id if not is_admin else "admin",
+            page=page,
+            limit=limit
+        )
+        cached = await get_cache(cache_key)
+        if cached is not None:
+            return cached
+
+        result = await InvoiceRepository.get_ledger_entries(
+            invoice_type=invoice_type,
+            from_date=from_date,
+            to_date=to_date,
+            client_name=client_name,
+            mode_of_payment=mode_of_payment,
             search=search,
             user_id=user_id,
             is_admin=is_admin,

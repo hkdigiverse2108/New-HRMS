@@ -1,6 +1,6 @@
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_serializer
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 class LineItemSchema(BaseModel):
     description: str = Field("", description="Item or service description")
@@ -24,7 +24,15 @@ class InvoiceLogSchema(BaseModel):
     action: str = Field(..., description="Action name e.g. created, updated, approved, rejected, status_updated, access_updated")
     description: str = Field(..., description="Human readable description of activity log")
     performed_by: Optional[Dict[str, Any]] = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @field_serializer("timestamp")
+    def serialize_timestamp(self, v: datetime, _info):
+        if v:
+            if v.tzinfo is None:
+                v = v.replace(tzinfo=timezone.utc)
+            return v.isoformat()
+        return None
 
 class InvoiceCreate(BaseModel):
     invoice_type: str = Field("Tax Invoice", description="'Tax Invoice' or 'Proforma Invoice'")
@@ -35,6 +43,9 @@ class InvoiceCreate(BaseModel):
     client_phone: Optional[str] = None
     client_gstin: Optional[str] = None
     client_department: Optional[str] = None
+    brand: Optional[str] = None
+    departments: Optional[List[str]] = Field(default_factory=list, description="List of client departments")
+    client_departments: Optional[List[str]] = Field(default_factory=list, description="List of client departments")
     state_ut: Optional[str] = Field(None, description="State / UT e.g. '24 - Gujarat'")
     mode_of_payment: Optional[str] = Field(None, description="Mode of payment")
     bank_account_id: Optional[str] = Field(None, description="ID of selected bank account")
@@ -52,8 +63,10 @@ class InvoiceCreate(BaseModel):
     bank_name: Optional[str] = None
     account_number: Optional[str] = None
     ifsc_code: Optional[str] = None
+    upi_id: Optional[str] = None
     notes: Optional[str] = None
     accessible_employee_ids: Optional[List[str]] = Field(default_factory=list, description="List of employee IDs with access")
+    source_quotation_id: Optional[str] = Field(None, description="Quotation this invoice was converted from; marked converted on create")
 
 class InvoiceUpdate(BaseModel):
     invoice_type: Optional[str] = None
@@ -64,6 +77,9 @@ class InvoiceUpdate(BaseModel):
     client_phone: Optional[str] = None
     client_gstin: Optional[str] = None
     client_department: Optional[str] = None
+    brand: Optional[str] = None
+    departments: Optional[List[str]] = None
+    client_departments: Optional[List[str]] = None
     state_ut: Optional[str] = None
     mode_of_payment: Optional[str] = None
     bank_account_id: Optional[str] = None
@@ -81,6 +97,7 @@ class InvoiceUpdate(BaseModel):
     bank_name: Optional[str] = None
     account_number: Optional[str] = None
     ifsc_code: Optional[str] = None
+    upi_id: Optional[str] = None
     notes: Optional[str] = None
     accessible_employee_ids: Optional[List[str]] = None
 
@@ -95,14 +112,17 @@ class InvoiceRejectRequest(BaseModel):
 
 class InvoiceResponse(BaseModel):
     id: str = Field(alias="_id")
-    invoice_type: str
-    invoice_number: str
+    invoice_type: Optional[str] = "Tax Invoice"
+    invoice_number: Optional[str] = "INV-000"
     client_id: Optional[str] = None
     client_name: Optional[str] = None
     client_address: Optional[str] = None
     client_phone: Optional[str] = None
     client_gstin: Optional[str] = None
     client_department: Optional[str] = None
+    brand: Optional[str] = None
+    departments: Optional[List[str]] = Field(default_factory=list)
+    client_departments: Optional[List[str]] = Field(default_factory=list)
     state_ut: Optional[str] = None
     mode_of_payment: Optional[str] = None
     bank_account_id: Optional[str] = None
@@ -110,7 +130,7 @@ class InvoiceResponse(BaseModel):
     bank_details: Optional[BankDetailsSchema] = None
     issue_date: Optional[str] = None
     due_date: Optional[str] = None
-    status: str = "paid"
+    status: Optional[str] = "paid"
     approval_status: Optional[str] = None # "pending", "approved", "rejected"
     created_by: Optional[Dict[str, Any]] = None
     approved_by: Optional[Dict[str, Any]] = None
@@ -119,27 +139,36 @@ class InvoiceResponse(BaseModel):
     accessible_employees: Optional[List[Dict[str, Any]]] = None
     activity_logs: List[InvoiceLogSchema] = []
     line_items: List[LineItemSchema] = []
-    total_before_tax: float = 0.0
-    tax_option: str = "CGST + SGST"
-    cgst_rate: float = 9.0
-    cgst_amount: float = 0.0
-    sgst_rate: float = 9.0
-    sgst_amount: float = 0.0
-    igst_rate: float = 0.0
-    igst_amount: float = 0.0
-    additional_discount: float = 0.0
-    total_tax_amount: float = 0.0
-    round_off: float = 0.0
-    total_due: float = 0.0
+    total_before_tax: Optional[float] = 0.0
+    tax_option: Optional[str] = "CGST + SGST"
+    cgst_rate: Optional[float] = 9.0
+    cgst_amount: Optional[float] = 0.0
+    sgst_rate: Optional[float] = 9.0
+    sgst_amount: Optional[float] = 0.0
+    igst_rate: Optional[float] = 0.0
+    igst_amount: Optional[float] = 0.0
+    additional_discount: Optional[float] = 0.0
+    total_tax_amount: Optional[float] = 0.0
+    round_off: Optional[float] = 0.0
+    total_due: Optional[float] = 0.0
     bank_name: Optional[str] = None
     account_number: Optional[str] = None
     ifsc_code: Optional[str] = None
+    upi_id: Optional[str] = None
     notes: Optional[str] = None
     pdf_path: Optional[str] = None
     pdf_url: Optional[str] = None
     is_deleted: bool = False
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[Any] = None
+    updated_at: Optional[Any] = None
+
+    @field_serializer("created_at", "updated_at", check_fields=False)
+    def serialize_timestamps(self, v: Any, _info):
+        if isinstance(v, datetime):
+            if v.tzinfo is None:
+                v = v.replace(tzinfo=timezone.utc)
+            return v.isoformat()
+        return v
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -151,6 +180,11 @@ class BrandLedgerItem(BaseModel):
     total_paid: float = 0.0
     total_pending: float = 0.0
     total_overdue: float = 0.0
+    taxable_amount: float = 0.0
+    gst_amount: float = 0.0
+    tax_invoice_count: int = 0
+    proforma_count: int = 0
+    last_invoice_date: Optional[str] = None
 
 class BrandLedgerOverallSummary(BaseModel):
     total_brands_count: int = 0
@@ -164,6 +198,46 @@ class BrandLedgerResponse(BaseModel):
     overall_summary: BrandLedgerOverallSummary
     data: List[BrandLedgerItem] = []
     total_brands: int = 0
+    page: int = 1
+    limit: int = 100
+    total_pages: int = 1
+
+class LedgerEntry(BaseModel):
+    id: str
+    date: Optional[str] = None
+    invoice_number: Optional[str] = None
+    invoice_type: Optional[str] = "Tax Invoice"
+    client_id: Optional[str] = None
+    client_name: Optional[str] = None
+    client_gstin: Optional[str] = None
+    state_ut: Optional[str] = None
+    taxable_amount: float = 0.0
+    cgst_amount: float = 0.0
+    sgst_amount: float = 0.0
+    igst_amount: float = 0.0
+    round_off: float = 0.0
+    total: float = 0.0
+    mode_of_payment: Optional[str] = None
+    bank: Optional[str] = None
+    running_total: float = 0.0
+
+class LedgerSummary(BaseModel):
+    total_received: float = 0.0
+    taxable_amount: float = 0.0
+    cgst_amount: float = 0.0
+    sgst_amount: float = 0.0
+    igst_amount: float = 0.0
+    gst_total: float = 0.0
+    invoices_count: int = 0
+    tax_count: int = 0
+    proforma_count: int = 0
+    tax_received: float = 0.0
+    proforma_received: float = 0.0
+
+class LedgerEntriesResponse(BaseModel):
+    summary: LedgerSummary
+    data: List[LedgerEntry] = []
+    total: int = 0
     page: int = 1
     limit: int = 100
     total_pages: int = 1

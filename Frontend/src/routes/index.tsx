@@ -61,7 +61,7 @@ import { DailyProgress } from "@/components/approvals/DailyProgress";
 import { ApprovalHistory } from "@/components/approvals/ApprovalHistory";
 import { AllInvoices } from "@/components/invoice/AllInvoices";
 import { CreateInvoice } from "@/components/invoice/CreateInvoice";
-import { CreateProforma } from "@/components/invoice/CreateProforma";
+import { AllQuotations } from "@/components/invoice/AllQuotations";
 import { InvoiceLedger } from "@/components/invoice/InvoiceLedger";
 import { InvoiceApprovals } from "@/components/approvals/InvoiceApprovals";
 import { Transactions } from "@/components/finance/Transactions";
@@ -293,10 +293,15 @@ export function Index() {
                   {basePath === "/finance/summary" && <FinancialSummary />}
                   {basePath === "/finance/clients" && <OtherTransactions />}
                   {/* Invoices (5 Sub-Departments) */}
-                  {(basePath === "/invoice" || basePath === "/invoice/all") && <AllInvoices />}
+                  {(basePath === "/invoice" || basePath === "/invoice/all") && <AllInvoices setActive={setActive} />}
                   {basePath === "/invoice/ledger" && <InvoiceLedger />}
-                  {basePath === "/invoice/create" && <CreateInvoice onBack={() => setActive("/invoice/all")} />}
-                  {(basePath === "/invoice/proforma" || basePath === "/invoice/quotation") && <CreateProforma onBack={() => setActive("/invoice/all")} />}
+                  {basePath === "/invoice/create" && <CreateInvoice onBack={() => setActive("/invoice/all")} activeTabPath={active} />}
+                  {(basePath === "/invoice/proforma" ||
+                    basePath === "/invoice/quotation" ||
+                    basePath === "/quotation" ||
+                    basePath === "/quotations") && (
+                    <AllQuotations setActive={setActive} activeTabPath={active} />
+                  )}
 
                   {/* Reports & Analysis sub-department — REMOVED per Audio PDF */}
 

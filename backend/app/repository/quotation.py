@@ -17,25 +17,21 @@ class QuotationRepository:
         collection = await cls.get_collection()
         prefix = "QUO-"
         regex_pattern = f"^{prefix}\\d+"
+        # Deleted quotations free their number, so only live quotations occupy one
         cursor = collection.find(
-            {"quotation_number": {"$regex": regex_pattern, "$options": "i"}},
+            {"quotation_number": {"$regex": regex_pattern, "$options": "i"}, "is_deleted": {"$ne": True}},
             {"quotation_number": 1}
         )
         items = await cursor.to_list(length=None)
-        
-        max_num = 0
-        for item in items:
-            quo_num = item.get("quotation_number", "")
-            match = re.search(rf"^{prefix}(\d+)", quo_num, re.IGNORECASE)
-            if match:
-                try:
-                    num = int(match.group(1))
-                    if num > max_num:
-                        max_num = num
-                except ValueError:
-                    pass
-
-        next_num = max_num + 1
+        used = {
+            int(m.group(1))
+            for item in items
+            if (m := re.search(rf"^{prefix}(\d+)", item.get("quotation_number", ""), re.IGNORECASE))
+        }
+        # Smallest free number, so a deleted quotation's number is reused first
+        next_num = 1
+        while next_num in used:
+            next_num += 1
         return f"{prefix}{next_num:03d}"
 
     @classmethod

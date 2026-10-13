@@ -280,6 +280,35 @@ export const FIXED_DEPARTMENTS = [
   "Sales",
 ] as const;
 
+export const INDIAN_STATES = [
+  "24 - Gujarat",
+  "27 - Maharashtra",
+  "07 - Delhi",
+  "29 - Karnataka",
+  "33 - Tamil Nadu",
+  "06 - Haryana",
+  "09 - Uttar Pradesh",
+  "19 - West Bengal",
+  "36 - Telangana",
+  "32 - Kerala",
+  "08 - Rajasthan",
+  "23 - Madhya Pradesh",
+  "03 - Punjab",
+  "10 - Bihar",
+  "21 - Odisha",
+  "37 - Andhra Pradesh",
+  "30 - Goa",
+  "02 - Himachal Pradesh",
+  "05 - Uttarakhand",
+  "01 - Jammu and Kashmir",
+  "04 - Chandigarh",
+  "26 - Dadra and Nagar Haveli and Daman and Diu",
+  "31 - Lakshadweep",
+  "34 - Puducherry",
+  "35 - Andaman and Nicobar Islands",
+  "38 - Ladakh",
+];
+
 export const CREATIVE_ROLES = [
   { key: "cc_creator", label: "CC Creator (Content Calendar)", icon: "📅", desc: "Plan & Create Content Calendar" },
   { key: "scripting", label: "Scripting", icon: "📝", desc: "Topic & Script Creation" },
@@ -12374,10 +12403,21 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       </div>
                       <div className="space-y-2">
                         <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">State / UT</label>
-                        <input
-                          type="text" value={newClientFormData.state} onChange={(e) => handleClientFormChange('state', e.target.value)} placeholder="e.g. MH"
-                          className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                        />
+                        <select
+                          value={newClientFormData.state || ""}
+                          onChange={(e) => handleClientFormChange('state', e.target.value)}
+                          className="w-full px-3.5 h-[42px] bg-muted/50 border border-border rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
+                        >
+                          <option value="">Select State / UT</option>
+                          {newClientFormData.state && !INDIAN_STATES.includes(newClientFormData.state) && (
+                            <option value={newClientFormData.state}>{newClientFormData.state}</option>
+                          )}
+                          {INDIAN_STATES.map((st) => (
+                            <option key={st} value={st}>
+                              {st}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                       <div className="space-y-2">
                         <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">GSTIN</label>
@@ -12709,10 +12749,21 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         </div>
                         <div className="space-y-2">
                           <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">State / UT</label>
-                          <input
-                            type="text" value={editingClient.state || ''} onChange={(e) => handleClientFormChange('state', e.target.value, true)}
-                            className="w-full px-4 h-[42px] bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                          />
+                          <select
+                            value={editingClient.state || ""}
+                            onChange={(e) => handleClientFormChange('state', e.target.value, true)}
+                            className="w-full px-3.5 h-[42px] bg-muted/50 border border-border rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
+                          >
+                            <option value="">Select State / UT</option>
+                            {editingClient.state && !INDIAN_STATES.includes(editingClient.state) && (
+                              <option value={editingClient.state}>{editingClient.state}</option>
+                            )}
+                            {INDIAN_STATES.map((st) => (
+                              <option key={st} value={st}>
+                                {st}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                         <div className="space-y-2">
                           <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">GSTIN</label>

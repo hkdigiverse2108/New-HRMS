@@ -1,7 +1,15 @@
 import io
 import os
+import logging
+from urllib.parse import urlencode, quote
+try:
+    import qrcode
+except ImportError:
+    qrcode = None
 from typing import Dict, Any, Optional
 from PIL import Image
+
+logger = logging.getLogger("pdf_service")
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.platypus import (
@@ -102,7 +110,13 @@ class GradientTable(Table):
         super().draw()
 
 try:
-    if os.path.exists("C:/Windows/Fonts/segoeui.ttf") and os.path.exists("C:/Windows/Fonts/segoeuib.ttf"):
+    if os.path.exists("C:/Windows/Fonts/arial.ttf") and os.path.exists("C:/Windows/Fonts/arialbd.ttf"):
+        pdfmetrics.registerFont(TTFont("Arial", "C:/Windows/Fonts/arial.ttf"))
+        pdfmetrics.registerFont(TTFont("Arial-Bold", "C:/Windows/Fonts/arialbd.ttf"))
+        MAIN_FONT = "Arial"
+        BOLD_FONT = "Arial-Bold"
+        CURRENCY_SYMBOL = "₹"
+    elif os.path.exists("C:/Windows/Fonts/segoeui.ttf") and os.path.exists("C:/Windows/Fonts/segoeuib.ttf"):
         pdfmetrics.registerFont(TTFont("SegoeUI", "C:/Windows/Fonts/segoeui.ttf"))
         pdfmetrics.registerFont(TTFont("SegoeUI-Bold", "C:/Windows/Fonts/segoeuib.ttf"))
         MAIN_FONT = "SegoeUI"
@@ -187,34 +201,36 @@ class PDFGeneratorService:
         except Exception:
             accent_theme = colors.HexColor("#C08497")
 
-        text_dark = colors.HexColor("#1F2937")           # Main Body Text
-        text_muted = colors.HexColor("#6B7280")          # Muted Gray labels
+        text_dark = colors.HexColor("#000000")           # Pure Solid Jet Black for maximum contrast & crispness
+        text_muted = colors.HexColor("#1E293B")          # High-contrast Dark Charcoal for Secondary Info
+        text_label = colors.HexColor("#0F172A")          # Deep Slate/Black for Section Headers
         gray_bg = colors.HexColor("#F9FAFB")             # Subtle background
         gray_box_bg = colors.HexColor("#F3F4F6")         # Amount in words box
         gray_border = colors.HexColor("#E5E7EB")         # Table / Box borders
 
-        # Enhanced Paragraph Styles with Clean Line Spacing (Leading)
-        company_name_style = ParagraphStyle("CompName", parent=styles["Normal"], fontName=BOLD_FONT, fontSize=14, leading=17, textColor=text_dark, spaceAfter=4)
-        company_addr_style = ParagraphStyle("CompAddr", parent=styles["Normal"], fontName=MAIN_FONT, fontSize=8.5, leading=12.5, textColor=text_muted, spaceAfter=2)
+        # Enhanced Paragraph Styles with High-Contrast Crisp Text
+        company_name_style = ParagraphStyle("CompName", parent=styles["Normal"], fontName=BOLD_FONT, fontSize=15, leading=18, textColor=text_dark, spaceAfter=4)
+        company_addr_style = ParagraphStyle("CompAddr", parent=styles["Normal"], fontName=MAIN_FONT, fontSize=9, leading=13, textColor=colors.HexColor("#0F172A"), spaceAfter=2)
         
-        badge_style = ParagraphStyle("Badge", parent=styles["Normal"], fontName=BOLD_FONT, fontSize=9, textColor=colors.white, alignment=TA_CENTER)
+        badge_style = ParagraphStyle("Badge", parent=styles["Normal"], fontName=BOLD_FONT, fontSize=9.5, leading=12, textColor=colors.white, alignment=TA_CENTER)
         
-        label_muted = ParagraphStyle("LabelMuted", parent=styles["Normal"], fontName=BOLD_FONT, fontSize=8.5, leading=11, textColor=text_muted, spaceAfter=3)
-        client_name_style = ParagraphStyle("ClientName", parent=styles["Normal"], fontName=BOLD_FONT, fontSize=11, leading=14, textColor=text_dark, spaceAfter=3)
-        body_text = ParagraphStyle("BodyText", parent=styles["Normal"], fontName=MAIN_FONT, fontSize=8.5, leading=12.5, textColor=text_dark)
+        label_muted = ParagraphStyle("LabelMuted", parent=styles["Normal"], fontName=BOLD_FONT, fontSize=9, leading=12, textColor=text_label, spaceAfter=3)
+        client_name_style = ParagraphStyle("ClientName", parent=styles["Normal"], fontName=BOLD_FONT, fontSize=11.5, leading=15, textColor=text_dark, spaceAfter=3)
+        body_text = ParagraphStyle("BodyText", parent=styles["Normal"], fontName=MAIN_FONT, fontSize=9, leading=13, textColor=colors.HexColor("#0F172A"))
         
-        meta_label = ParagraphStyle("MetaLabel", parent=styles["Normal"], fontName=MAIN_FONT, fontSize=8.5, leading=12, textColor=text_muted, alignment=TA_RIGHT)
-        meta_val = ParagraphStyle("MetaVal", parent=styles["Normal"], fontName=BOLD_FONT, fontSize=8.5, leading=12, textColor=text_dark, alignment=TA_RIGHT)
+        meta_label = ParagraphStyle("MetaLabel", parent=styles["Normal"], fontName=BOLD_FONT, fontSize=9, leading=12, textColor=colors.HexColor("#334155"), alignment=TA_RIGHT)
+        meta_val = ParagraphStyle("MetaVal", parent=styles["Normal"], fontName=BOLD_FONT, fontSize=9.5, leading=12, textColor=text_dark, alignment=TA_RIGHT)
 
-        th_left = ParagraphStyle("THLeft", parent=styles["Normal"], fontName=BOLD_FONT, fontSize=8.5, leading=11, textColor=colors.white)
-        th_right = ParagraphStyle("THRight", parent=styles["Normal"], fontName=BOLD_FONT, fontSize=8.5, leading=11, textColor=colors.white, alignment=TA_RIGHT)
+        th_left = ParagraphStyle("THLeft", parent=styles["Normal"], fontName=BOLD_FONT, fontSize=9, leading=12, textColor=colors.white)
+        th_right = ParagraphStyle("THRight", parent=styles["Normal"], fontName=BOLD_FONT, fontSize=9, leading=12, textColor=colors.white, alignment=TA_RIGHT)
         
-        tb_left = ParagraphStyle("TBLeft", parent=styles["Normal"], fontName=MAIN_FONT, fontSize=8.5, leading=12, textColor=text_dark)
-        tb_right = ParagraphStyle("TBRight", parent=styles["Normal"], fontName=MAIN_FONT, fontSize=8.5, leading=12, textColor=text_dark, alignment=TA_RIGHT)
-        tb_bold_right = ParagraphStyle("TBBoldRight", parent=styles["Normal"], fontName=BOLD_FONT, fontSize=8.5, leading=12, textColor=text_dark, alignment=TA_RIGHT)
+        tb_left = ParagraphStyle("TBLeft", parent=styles["Normal"], fontName=MAIN_FONT, fontSize=9, leading=12.5, textColor=text_dark)
+        tb_right = ParagraphStyle("TBRight", parent=styles["Normal"], fontName=MAIN_FONT, fontSize=9, leading=12.5, textColor=text_dark, alignment=TA_RIGHT)
+        tb_bold_right = ParagraphStyle("TBBoldRight", parent=styles["Normal"], fontName=BOLD_FONT, fontSize=9, leading=12.5, textColor=text_dark, alignment=TA_RIGHT)
+        tb_bold_left = ParagraphStyle("TBBoldLeft", parent=styles["Normal"], fontName=BOLD_FONT, fontSize=9, leading=12.5, textColor=text_dark)
 
-        total_badge_lbl = ParagraphStyle("TotalBadgeLbl", parent=styles["Normal"], fontName=BOLD_FONT, fontSize=10, textColor=colors.white)
-        total_badge_val = ParagraphStyle("TotalBadgeVal", parent=styles["Normal"], fontName=BOLD_FONT, fontSize=11, textColor=colors.white, alignment=TA_RIGHT)
+        total_badge_lbl = ParagraphStyle("TotalBadgeLbl", parent=styles["Normal"], fontName=BOLD_FONT, fontSize=10.5, leading=13, textColor=colors.white)
+        total_badge_val = ParagraphStyle("TotalBadgeVal", parent=styles["Normal"], fontName=BOLD_FONT, fontSize=11.5, leading=14, textColor=colors.white, alignment=TA_RIGHT)
 
         story = []
 
@@ -263,16 +279,26 @@ class PDFGeneratorService:
             company_left = company_text_block
 
         inv_type = str(data.get("invoice_type") or "TAX INVOICE").upper()
-        badge_table = Table([[Paragraph(f"<b>{inv_type}</b>", badge_style)]], colWidths=[120], rowHeights=[22])
+        raw_status = str(data.get("status") or "").strip().upper()
+        is_cancelled = raw_status in ["CANCELLED", "CANCELED"]
+
+        if is_cancelled:
+            badge_title = f"{inv_type} (CANCELLED)"
+            badge_w = 165
+        else:
+            badge_title = inv_type
+            badge_w = 120
+
+        badge_table = Table([[Paragraph(f"<b>{badge_title}</b>", badge_style)]], colWidths=[badge_w], rowHeights=[22])
         badge_table.setStyle(TableStyle([
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("ALIGN", (0, 0), (-1, -1), "CENTER"),
         ]))
-        badge_gradient = GradientBox(120, 22, start_color, end_color, badge_table, f"badge_{clean_s}_{clean_e}.png")
+        badge_gradient = GradientBox(badge_w, 22, start_color, end_color, badge_table, f"badge_{clean_s}_{clean_e}_{badge_w}.png")
 
         header_right = [badge_gradient]
 
-        header_table = Table([[company_left, header_right]], colWidths=[415, 130])
+        header_table = Table([[company_left, header_right]], colWidths=[545 - badge_w - 10, badge_w + 10])
         header_table.setStyle(TableStyle([
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("ALIGN", (1, 0), (1, 0), "RIGHT"),
@@ -323,6 +349,8 @@ class PDFGeneratorService:
         ]
         if state_ut:
             meta_table_data.append([Paragraph("Place of Supply", meta_label), Paragraph(state_ut, meta_val)])
+        if is_cancelled:
+            meta_table_data.append([Paragraph("Status", meta_label), Paragraph("<font color='#DC2626'><b>CANCELLED</b></font>", meta_val)])
 
         meta_table = Table(meta_table_data, colWidths=[100, 100])
         meta_table.setStyle(TableStyle([
@@ -433,25 +461,33 @@ class PDFGeneratorService:
         # 4. TAX SUMMARY TABLE (Right Aligned Matching Image 2)
         # ---------------------------------------------------------
         tax_before = data.get("total_before_tax") or total_taxable
+        add_disc = float(data.get("additional_discount") or 0.0)
+        taxable_amt = max(0.0, tax_before - add_disc)
         cgst_amt = data.get("cgst_amount", 0.0)
         sgst_amt = data.get("sgst_amount", 0.0)
         igst_amt = data.get("igst_amount", 0.0)
         tot_tax = data.get("total_tax_amount") or (cgst_amt + sgst_amt + igst_amt)
         round_off = data.get("round_off", 0.0)
-        total_after_tax = data.get("total_due") or (tax_before + tot_tax + round_off)
+        total_after_tax = data.get("total_due") or (taxable_amt + tot_tax + round_off)
 
         summary_rows = [
             [Paragraph("Total Before Tax", meta_label), Paragraph(f"{CURRENCY_SYMBOL}{tax_before:,.2f}", meta_val)],
         ]
 
         tax_opt = data.get("tax_option", "CGST + SGST")
+        add_disc = float(data.get("additional_discount") or 0.0)
+        if add_disc > 0:
+            summary_rows.append([Paragraph("Additional Discount", meta_label), Paragraph(f"-{CURRENCY_SYMBOL}{add_disc:,.2f}", meta_val)])
+            summary_rows.append([Paragraph("Total Without GST", meta_label), Paragraph(f"{CURRENCY_SYMBOL}{max(0.0, tax_before - add_disc):,.2f}", meta_val)])
+
         if tax_opt == "CGST + SGST":
             summary_rows.append([Paragraph(f"Add: CGST @ {data.get('cgst_rate', 9.0)}%", meta_label), Paragraph(f"{CURRENCY_SYMBOL}{cgst_amt:,.2f}", meta_val)])
             summary_rows.append([Paragraph(f"Add: SGST @ {data.get('sgst_rate', 9.0)}%", meta_label), Paragraph(f"{CURRENCY_SYMBOL}{sgst_amt:,.2f}", meta_val)])
-        else:
+        elif tax_opt == "IGST":
             summary_rows.append([Paragraph(f"Add: IGST @ {data.get('igst_rate', 18.0)}%", meta_label), Paragraph(f"{CURRENCY_SYMBOL}{igst_amt:,.2f}", meta_val)])
 
-        summary_rows.append([Paragraph("<b>Total Tax Amount</b>", ParagraphStyle("TLabel", parent=meta_label, fontName=BOLD_FONT, textColor=text_dark)), Paragraph(f"<b>{CURRENCY_SYMBOL}{tot_tax:,.2f}</b>", meta_val)])
+        if tax_opt != "No Tax":
+            summary_rows.append([Paragraph("<b>Total Tax Amount</b>", ParagraphStyle("TLabel", parent=meta_label, fontName=BOLD_FONT, textColor=text_dark)), Paragraph(f"<b>{CURRENCY_SYMBOL}{tot_tax:,.2f}</b>", meta_val)])
         summary_rows.append([Paragraph("Round Off", meta_label), Paragraph(f"{CURRENCY_SYMBOL}{round_off:,.2f}", meta_val)])
 
         summary_table = Table(summary_rows, colWidths=[115, 95])
@@ -490,7 +526,7 @@ class PDFGeneratorService:
         # 5. AMOUNT IN WORDS BOX
         # ---------------------------------------------------------
         words_text = number_to_words_indian(total_after_tax)
-        words_paragraph = Paragraph(f"Amount In Words: <b>{words_text}</b>", ParagraphStyle("WordsStyle", parent=styles["Normal"], fontName=MAIN_FONT, fontSize=9, textColor=text_dark))
+        words_paragraph = Paragraph(f"Amount In Words: <b>{words_text}</b>", ParagraphStyle("WordsStyle", parent=styles["Normal"], fontName=MAIN_FONT, fontSize=9.5, leading=13, textColor=text_dark))
         
         words_table = Table([[words_paragraph]], colWidths=[545])
         words_table.setStyle(TableStyle([
@@ -502,37 +538,120 @@ class PDFGeneratorService:
         story.append(Spacer(1, 14))
 
         # ---------------------------------------------------------
-        # 6. BANK DETAILS BOX
+        # 6. BANK DETAILS BOX WITH AUTOMATIC UPI QR CODE
         # ---------------------------------------------------------
+        # Manual-only documents (quotations) show exactly what was entered, no defaults
+        manual_only = bool(data.get("_manual_only"))
         bank_details = data.get("bank_details") or {}
-        bank_name = bank_details.get("bank_name") or data.get("bank_name") or "Axis Bankk"
-        acc_num = bank_details.get("account_number") or data.get("account_number") or "9240200573774150"
-        ifsc = bank_details.get("ifsc_code") or data.get("ifsc_code") or "UTIB00028912"
+        if manual_only:
+            bank_name = bank_details.get("bank_name") or ""
+            acc_num = bank_details.get("account_number") or ""
+            ifsc = bank_details.get("ifsc_code") or ""
+            upi_id = bank_details.get("upi_id")
+        else:
+            bank_name = bank_details.get("bank_name") or data.get("bank_name") or "Axis Bank"
+            acc_num = bank_details.get("account_number") or data.get("account_number") or "9240200573774150"
+            ifsc = bank_details.get("ifsc_code") or data.get("ifsc_code") or "UTIB00028912"
+            upi_id = bank_details.get("upi_id") or data.get("upi_id")
+        show_bank = not manual_only or any([bank_name, acc_num, ifsc, upi_id])
 
-        bank_content = [
-            Paragraph("BANK DETAILS", label_muted),
-            Spacer(1, 3),
-            Paragraph(f"Bank: <b>{bank_name}</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; A/c: <b>{acc_num}</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; IFSC: <b>{ifsc}</b>", body_text)
-        ]
-        bank_table = Table([[bank_content]], colWidths=[545])
-        bank_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), colors.white),
-            ("PADDING", (0, 0), (-1, -1), 9),
-            ("BOX", (0, 0), (-1, -1), 0.5, gray_border),
-        ]))
-        story.append(bank_table)
-        story.append(Spacer(1, 20))
+        qr_flowable = None
+        if upi_id:
+            try:
+                # Account holder name (shown as "Pay to ..." in UPI apps), not the bank's name
+                payee_name = (
+                    bank_details.get("account_name")
+                    or data.get("account_name")
+                    or data.get("company_name")
+                    or data.get("bank_nickname")
+                    or bank_name
+                    or "Payee"
+                )
+                # Encode every value so spaces / & in names don't break the link;
+                # tn (note) carries the invoice number so it shows in the bank statement
+                upi_uri = "upi://pay?" + urlencode(
+                    {
+                        "pa": str(upi_id).strip(),
+                        "pn": str(payee_name).strip(),
+                        "am": f"{total_after_tax:.2f}",
+                        "cu": "INR",
+                        "tn": f"Payment for {inv_num}",
+                    },
+                    quote_via=quote,
+                    safe="@",  # keep UPI IDs like name@okaxis readable for every app
+                )
+                qr = qrcode.QRCode(box_size=4, border=1)
+                qr.add_data(upi_uri)
+                qr.make(fit=True)
+                img = qr.make_image(fill_color="black", back_color="white")
+                buf = io.BytesIO()
+                img.save(buf, format="PNG")
+                buf.seek(0)
+                qr_flowable = RLImage(buf, width=62, height=62)
+            except Exception as e:
+                logger.warning(f"Failed to generate UPI QR code for PDF: {e}")
+
+        if qr_flowable:
+            bank_content = [
+                Paragraph("BANK DETAILS &amp; UPI PAYMENT", label_muted),
+                Spacer(1, 4),
+                Paragraph(f"Bank: <b>{bank_name}</b> &nbsp;&nbsp;&nbsp;&nbsp; A/c: <b>{acc_num}</b> &nbsp;&nbsp;&nbsp;&nbsp; IFSC: <b>{ifsc}</b>", body_text),
+                Spacer(1, 2),
+                Paragraph(f"UPI ID: <b>{upi_id}</b>", body_text)
+            ]
+            qr_column = Table([
+                [qr_flowable],
+                [Paragraph("<font size=7.5 color='#334155'><b>Scan to Pay</b></font>", ParagraphStyle("QRText", parent=styles["Normal"], fontName=BOLD_FONT, alignment=1))]
+            ], colWidths=[70])
+            qr_column.setStyle(TableStyle([
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+            ]))
+
+            bank_table = Table([[bank_content, qr_column]], colWidths=[465, 80])
+            bank_table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("PADDING", (0, 0), (-1, -1), 8),
+                ("BOX", (0, 0), (-1, -1), 0.5, gray_border),
+            ]))
+        else:
+            bank_content = [
+                Paragraph("BANK DETAILS", label_muted),
+                Spacer(1, 3),
+                Paragraph(f"Bank: <b>{bank_name}</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; A/c: <b>{acc_num}</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; IFSC: <b>{ifsc}</b>", body_text)
+            ]
+            bank_table = Table([[bank_content]], colWidths=[545])
+            bank_table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+                ("PADDING", (0, 0), (-1, -1), 9),
+                ("BOX", (0, 0), (-1, -1), 0.5, gray_border),
+            ]))
+
+        if show_bank:
+            story.append(bank_table)
+            story.append(Spacer(1, 18))
 
         # ---------------------------------------------------------
         # 7. TERMS & CONDITIONS AND AUTHORIZED SIGNATURE
         # ---------------------------------------------------------
-        terms_text = data.get("default_terms") or data.get("notes") or "1. Payment is due within 3 days of the invoice date.\n2. Late payments may incur additional charges.\n3. All disputes are subject to Gujarat Jurisdiction."
+        if data.get("_manual_only"):
+            terms_text = (data.get("notes") or "").strip()
+        else:
+            terms_text = data.get("default_terms") or data.get("notes") or "1. Payment is due within 3 days of the invoice date.\n2. Late payments may incur additional charges.\n3. All disputes are subject to Gujarat Jurisdiction."
         
-        terms_content = [
-            Paragraph("TERMS & CONDITIONS", label_muted),
-            Spacer(1, 3),
-            Paragraph(terms_text.replace("\n", "<br/>"), body_text)
-        ]
+        if terms_text:
+            terms_content = [
+                Paragraph("TERMS & CONDITIONS", label_muted),
+                Spacer(1, 3),
+                Paragraph(terms_text.replace("\n", "<br/>"), body_text)
+            ]
+        else:
+            terms_content = [Spacer(1, 1)]
 
         # Signature Handling & Perfect Alignment Container
         sig_path = None
@@ -544,10 +663,10 @@ class PDFGeneratorService:
         if sig_path:
             sig_element = RLImage(sig_path, width=85, height=38)
         else:
-            sig_element = Paragraph("<i>(Authorized Signature)</i>", ParagraphStyle("SignStyle", parent=styles["Normal"], fontName="Helvetica-Oblique", fontSize=9, textColor=colors.HexColor("#4B5563"), alignment=TA_CENTER))
+            sig_element = Paragraph("<i>(Authorized Signature)</i>", ParagraphStyle("SignStyle", parent=styles["Normal"], fontName="Helvetica-Oblique", fontSize=9, textColor=colors.HexColor("#334155"), alignment=TA_CENTER))
 
         sig_divider_line = HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#94A3B8"), spaceBefore=2, spaceAfter=4)
-        sig_label_text = Paragraph(f"<b>{sig_name}</b>", ParagraphStyle("SignLabel", parent=styles["Normal"], fontName=BOLD_FONT, fontSize=8.5, textColor=colors.HexColor("#0F172A"), alignment=TA_CENTER))
+        sig_label_text = Paragraph(f"<b>{sig_name}</b>", ParagraphStyle("SignLabel", parent=styles["Normal"], fontName=BOLD_FONT, fontSize=9, textColor=text_dark, alignment=TA_CENTER))
 
         # 140 pt inner table locks Signature Image, Line, and Text together centered
         sig_inner_table = Table([

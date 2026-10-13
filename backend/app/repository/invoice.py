@@ -1,6 +1,6 @@
 import re
 from app.database.db import get_database
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from bson import ObjectId
 from typing import Optional, List, Dict, Any
 
@@ -25,6 +25,16 @@ def parse_inv_date(inv: dict) -> Optional[date]:
         return created_at.date()
     return None
 
+def _lowest_free_number(used: set) -> int:
+    """Smallest positive number not in use, so a deleted document's number is reused first."""
+    n = 1
+    while n in used:
+        n += 1
+    return n
+
+def _ledger_client_name(inv: dict) -> str:
+    return str(inv.get("client_name") or inv.get("brand") or "Unknown Brand").strip()
+
 class InvoiceRepository:
     collection_name = "invoices"
 
@@ -39,32 +49,24 @@ class InvoiceRepository:
         prefix = "PINV-" if invoice_type == "Proforma Invoice" else "INV-"
         
         regex_pattern = f"^{prefix}\\d+"
+        # Deleted invoices free their number, so only live invoices occupy one
         cursor = collection.find(
-            {"invoice_number": {"$regex": regex_pattern, "$options": "i"}},
+            {"invoice_number": {"$regex": regex_pattern, "$options": "i"}, "is_deleted": {"$ne": True}},
             {"invoice_number": 1}
         )
         items = await cursor.to_list(length=None)
-        
-        max_num = 0
-        for item in items:
-            inv_num = item.get("invoice_number", "")
-            match = re.search(rf"^{prefix}(\d+)", inv_num, re.IGNORECASE)
-            if match:
-                try:
-                    num = int(match.group(1))
-                    if num > max_num:
-                        max_num = num
-                except ValueError:
-                    pass
-
-        next_num = max_num + 1
-        return f"{prefix}{next_num:03d}"
+        used = {
+            int(m.group(1))
+            for item in items
+            if (m := re.search(rf"^{prefix}(\d+)", item.get("invoice_number", ""), re.IGNORECASE))
+        }
+        return f"{prefix}{_lowest_free_number(used):03d}"
 
     @classmethod
     async def create(cls, data: dict):
         collection = await cls.get_collection()
-        data["created_at"] = datetime.utcnow()
-        data["updated_at"] = datetime.utcnow()
+        data["created_at"] = datetime.now(timezone.utc)
+        data["updated_at"] = datetime.now(timezone.utc)
         data["is_deleted"] = False
         if "accessible_employee_ids" not in data:
             data["accessible_employee_ids"] = []
@@ -89,13 +91,6 @@ class InvoiceRepository:
         collection = await cls.get_collection()
         query = {"is_deleted": is_deleted}
 
-        if not is_admin and user_id:
-            uid_str = str(user_id)
-            query["$or"] = [
-                {"created_by.user_id": uid_str},
-                {"accessible_employee_ids": uid_str}
-            ]
-
         if invoice_type and invoice_type.strip().lower() != "all":
             query["invoice_type"] = invoice_type.strip()
 
@@ -104,7 +99,7 @@ class InvoiceRepository:
             if clean_status in ["pending_approval", "pending approval", "payment approval", "payment_approval"]:
                 query["status"] = "pending_approval"
             else:
-                query["status"] = status.strip()
+                query["status"] = {"$regex": f"^{re.escape(clean_status)}$", "$options": "i"}
 
         if client_id:
             query["client_id"] = client_id
@@ -171,7 +166,7 @@ class InvoiceRepository:
             return False
 
         update_data = {k: v for k, v in data.items() if k != "_id"}
-        update_data["updated_at"] = datetime.utcnow()
+        update_data["updated_at"] = datetime.now(timezone.utc)
         result = await collection.update_one(
             {"_id": ObjectId(invoice_id)},
             {"$set": update_data}
@@ -190,7 +185,7 @@ class InvoiceRepository:
                 "$set": {
                     "accessible_employee_ids": employee_ids,
                     "accessible_employees": accessible_employees_info,
-                    "updated_at": datetime.utcnow()
+                    "updated_at": datetime.now(timezone.utc)
                 }
             }
         )
@@ -204,7 +199,7 @@ class InvoiceRepository:
 
         result = await collection.update_one(
             {"_id": ObjectId(invoice_id)},
-            {"$set": {"status": status, "updated_at": datetime.utcnow()}}
+            {"$set": {"status": status, "updated_at": datetime.now(timezone.utc)}}
         )
         return result.modified_count > 0 or result.matched_count > 0
 
@@ -216,7 +211,7 @@ class InvoiceRepository:
 
         result = await collection.update_one(
             {"_id": ObjectId(invoice_id)},
-            {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}}
+            {"$set": {"is_deleted": True, "updated_at": datetime.now(timezone.utc)}}
         )
         return result.modified_count > 0 or result.matched_count > 0
 
@@ -227,16 +222,203 @@ class InvoiceRepository:
             return False
 
         if "timestamp" not in log_entry:
-            log_entry["timestamp"] = datetime.utcnow()
+            log_entry["timestamp"] = datetime.now(timezone.utc)
 
         result = await collection.update_one(
             {"_id": ObjectId(invoice_id)},
             {
                 "$push": {"activity_logs": log_entry},
-                "$set": {"updated_at": datetime.utcnow()}
+                "$set": {"updated_at": datetime.now(timezone.utc)}
             }
         )
         return result.modified_count > 0 or result.matched_count > 0
+
+    # Statuses that never count as money received in the ledger
+    LEDGER_EXCLUDED_STATUSES = ["draft", "cancelled", "canceled", "rejected"]
+
+    @staticmethod
+    def _parse_filter_date(value: Optional[str]) -> Optional[date]:
+        if not value:
+            return None
+        for fmt in ("%Y-%m-%d", "%d-%m-%Y"):
+            try:
+                return datetime.strptime(value.strip(), fmt).date()
+            except ValueError:
+                pass
+        return None
+
+    @classmethod
+    async def _fetch_ledger_invoices(
+        cls,
+        invoice_type: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+        month: Optional[int] = None,
+        year: Optional[int] = None,
+        search: Optional[str] = None,
+        client_name: Optional[str] = None,
+        mode_of_payment: Optional[str] = None,
+        user_id: Optional[str] = None,
+        is_admin: bool = True
+    ) -> List[tuple]:
+        """Return [(invoice, invoice_date)] for active ledger invoices matching the filters."""
+        collection = await cls.get_collection()
+        excluded = "|".join(cls.LEDGER_EXCLUDED_STATUSES)
+        query = {
+            "is_deleted": False,
+            "status": {"$not": re.compile(f"^({excluded})$", re.IGNORECASE)}
+        }
+
+        if not is_admin and user_id:
+            uid_str = str(user_id)
+            query["$or"] = [
+                {"created_by.user_id": uid_str},
+                {"accessible_employee_ids": uid_str}
+            ]
+
+        if invoice_type and invoice_type.strip().lower() != "all":
+            query["invoice_type"] = invoice_type.strip()
+
+        if mode_of_payment and mode_of_payment.strip().lower() != "all":
+            query["mode_of_payment"] = mode_of_payment.strip()
+
+        if search and search.strip():
+            s = re.escape(search.strip())
+            search_clause = [
+                {"client_name": {"$regex": s, "$options": "i"}},
+                {"invoice_number": {"$regex": s, "$options": "i"}},
+                {"client_phone": {"$regex": s, "$options": "i"}},
+                {"client_gstin": {"$regex": s, "$options": "i"}}
+            ]
+            if "$or" in query:
+                access_or = query.pop("$or")
+                query["$and"] = [{"$or": access_or}, {"$or": search_clause}]
+            else:
+                query["$or"] = search_clause
+
+        invoices = await collection.find(query).to_list(length=None)
+
+        eff_start_date = cls._parse_filter_date(from_date or start_date)
+        eff_end_date = cls._parse_filter_date(to_date or end_date)
+        wanted_client = None
+        if client_name and client_name.strip().lower() != "all":
+            wanted_client = client_name.strip().lower()
+
+        result = []
+        for inv in invoices:
+            if wanted_client and _ledger_client_name(inv).lower() != wanted_client:
+                continue
+            inv_date = parse_inv_date(inv)
+            if inv_date:
+                if month and inv_date.month != month:
+                    continue
+                if year and inv_date.year != year:
+                    continue
+                if eff_start_date and inv_date < eff_start_date:
+                    continue
+                if eff_end_date and inv_date > eff_end_date:
+                    continue
+            result.append((inv, inv_date))
+        return result
+
+    @classmethod
+    async def get_ledger_entries(
+        cls,
+        invoice_type: Optional[str] = None,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+        client_name: Optional[str] = None,
+        mode_of_payment: Optional[str] = None,
+        search: Optional[str] = None,
+        user_id: Optional[str] = None,
+        is_admin: bool = True,
+        page: Optional[int] = None,
+        limit: Optional[int] = None
+    ):
+        rows = await cls._fetch_ledger_invoices(
+            invoice_type=invoice_type,
+            from_date=from_date,
+            to_date=to_date,
+            search=search,
+            client_name=client_name,
+            mode_of_payment=mode_of_payment,
+            user_id=user_id,
+            is_admin=is_admin
+        )
+        # Oldest first so the running total reads top to bottom
+        rows.sort(key=lambda r: (r[1] or date.min, str(r[0].get("invoice_number") or "")))
+
+        summary = {
+            "total_received": 0.0, "taxable_amount": 0.0, "cgst_amount": 0.0,
+            "sgst_amount": 0.0, "igst_amount": 0.0, "gst_total": 0.0,
+            "invoices_count": 0, "tax_count": 0, "proforma_count": 0,
+            "tax_received": 0.0, "proforma_received": 0.0
+        }
+        entries = []
+        running = 0.0
+        for inv, inv_date in rows:
+            total = float(inv.get("total_due") or 0.0)
+            taxable = max(0.0, float(inv.get("total_before_tax") or 0.0) - float(inv.get("additional_discount") or 0.0))
+            cgst = float(inv.get("cgst_amount") or 0.0)
+            sgst = float(inv.get("sgst_amount") or 0.0)
+            igst = float(inv.get("igst_amount") or 0.0)
+            inv_type = inv.get("invoice_type") or "Tax Invoice"
+            running += total
+
+            entries.append({
+                "id": str(inv["_id"]),
+                "date": inv_date.isoformat() if inv_date else None,
+                "invoice_number": inv.get("invoice_number"),
+                "invoice_type": inv_type,
+                "client_id": inv.get("client_id"),
+                "client_name": _ledger_client_name(inv),
+                "client_gstin": inv.get("client_gstin"),
+                "state_ut": inv.get("state_ut"),
+                "taxable_amount": round(taxable, 2),
+                "cgst_amount": round(cgst, 2),
+                "sgst_amount": round(sgst, 2),
+                "igst_amount": round(igst, 2),
+                "round_off": round(float(inv.get("round_off") or 0.0), 2),
+                "total": round(total, 2),
+                "mode_of_payment": inv.get("mode_of_payment"),
+                "bank": inv.get("bank_nickname") or inv.get("bank_name"),
+                "running_total": round(running, 2)
+            })
+
+            summary["total_received"] += total
+            summary["taxable_amount"] += taxable
+            summary["cgst_amount"] += cgst
+            summary["sgst_amount"] += sgst
+            summary["igst_amount"] += igst
+            summary["invoices_count"] += 1
+            if inv_type == "Proforma Invoice":
+                summary["proforma_count"] += 1
+                summary["proforma_received"] += total
+            else:
+                summary["tax_count"] += 1
+                summary["tax_received"] += total
+
+        summary["gst_total"] = summary["cgst_amount"] + summary["sgst_amount"] + summary["igst_amount"]
+        for key in ("total_received", "taxable_amount", "cgst_amount", "sgst_amount", "igst_amount", "gst_total",
+                    "tax_received", "proforma_received"):
+            summary[key] = round(summary[key], 2)
+
+        total_count = len(entries)
+        data = entries
+        if page and limit:
+            skip = (page - 1) * limit
+            data = entries[skip : skip + limit]
+
+        return {
+            "summary": summary,
+            "data": data,
+            "total": total_count,
+            "page": page or 1,
+            "limit": limit or total_count or 1,
+            "total_pages": (total_count + (limit or 1) - 1) // (limit or 1) if limit else 1
+        }
 
     @classmethod
     async def get_brand_ledger(
@@ -254,61 +436,20 @@ class InvoiceRepository:
         page: Optional[int] = None,
         limit: Optional[int] = None
     ):
-        collection = await cls.get_collection()
-        query = {"is_deleted": False}
-
-        if not is_admin and user_id:
-            uid_str = str(user_id)
-            query["$or"] = [
-                {"created_by.user_id": uid_str},
-                {"accessible_employee_ids": uid_str}
-            ]
-
-        if invoice_type and invoice_type.strip().lower() != "all":
-            query["invoice_type"] = invoice_type.strip()
-
-        if search and search.strip():
-            s = search.strip()
-            search_clause = [
-                {"client_name": {"$regex": s, "$options": "i"}},
-                {"invoice_number": {"$regex": s, "$options": "i"}},
-                {"client_phone": {"$regex": s, "$options": "i"}},
-                {"client_gstin": {"$regex": s, "$options": "i"}}
-            ]
-            if "$or" in query:
-                access_or = query.pop("$or")
-                query["$and"] = [{"$or": access_or}, {"$or": search_clause}]
-            else:
-                query["$or"] = search_clause
-
-        cursor = collection.find(query)
-        invoices = await cursor.to_list(length=None)
+        rows = await cls._fetch_ledger_invoices(
+            invoice_type=invoice_type,
+            start_date=start_date,
+            end_date=end_date,
+            from_date=from_date,
+            to_date=to_date,
+            month=month,
+            year=year,
+            search=search,
+            user_id=user_id,
+            is_admin=is_admin
+        )
 
         today_str = datetime.utcnow().strftime("%Y-%m-%d")
-
-        # Parse date boundaries
-        eff_start = from_date or start_date
-        eff_end = to_date or end_date
-
-        eff_start_date = None
-        if eff_start:
-            try:
-                eff_start_date = datetime.strptime(eff_start.strip(), "%Y-%m-%d").date()
-            except ValueError:
-                try:
-                    eff_start_date = datetime.strptime(eff_start.strip(), "%d-%m-%Y").date()
-                except ValueError:
-                    pass
-
-        eff_end_date = None
-        if eff_end:
-            try:
-                eff_end_date = datetime.strptime(eff_end.strip(), "%Y-%m-%d").date()
-            except ValueError:
-                try:
-                    eff_end_date = datetime.strptime(eff_end.strip(), "%d-%m-%Y").date()
-                except ValueError:
-                    pass
 
         # Group by brand (client_name)
         brands_map = {}
@@ -318,20 +459,8 @@ class InvoiceRepository:
         overall_total_pending = 0.0
         overall_total_overdue = 0.0
 
-        for inv in invoices:
-            inv_date = parse_inv_date(inv)
-            if inv_date:
-                if month and inv_date.month != month:
-                    continue
-                if year and inv_date.year != year:
-                    continue
-                if eff_start_date and inv_date < eff_start_date:
-                    continue
-                if eff_end_date and inv_date > eff_end_date:
-                    continue
-
-            brand_name = inv.get("client_name") or inv.get("brand") or "Unknown Brand"
-            brand_name = brand_name.strip()
+        for inv, inv_date in rows:
+            brand_name = _ledger_client_name(inv)
             client_id = inv.get("client_id")
 
             if brand_name not in brands_map:
@@ -342,7 +471,12 @@ class InvoiceRepository:
                     "total_amount": 0.0,
                     "total_paid": 0.0,
                     "total_pending": 0.0,
-                    "total_overdue": 0.0
+                    "total_overdue": 0.0,
+                    "taxable_amount": 0.0,
+                    "gst_amount": 0.0,
+                    "tax_invoice_count": 0,
+                    "proforma_count": 0,
+                    "last_invoice_date": None
                 }
 
             b = brands_map[brand_name]
@@ -352,6 +486,16 @@ class InvoiceRepository:
 
             b["invoices_count"] += 1
             b["total_amount"] += amt
+            b["taxable_amount"] += max(0.0, float(inv.get("total_before_tax") or 0.0) - float(inv.get("additional_discount") or 0.0))
+            b["gst_amount"] += float(inv.get("total_tax_amount") or 0.0)
+            if inv.get("invoice_type") == "Proforma Invoice":
+                b["proforma_count"] += 1
+            else:
+                b["tax_invoice_count"] += 1
+            if inv_date:
+                date_str = inv_date.isoformat()
+                if not b["last_invoice_date"] or date_str > b["last_invoice_date"]:
+                    b["last_invoice_date"] = date_str
 
             overall_invoices_count += 1
             overall_total_amount += amt
@@ -364,7 +508,7 @@ class InvoiceRepository:
                 overall_total_pending += amt
 
             # Check Overdue
-            if due_date and due_date < today_str and status not in ["paid", "cancelled", "rejected"]:
+            if due_date and due_date < today_str and status != "paid":
                 b["total_overdue"] += amt
                 overall_total_overdue += amt
 
@@ -372,13 +516,13 @@ class InvoiceRepository:
         brand_items = []
         for b in brands_map.values():
             brand_items.append({
-                "brand": b["brand"],
-                "client_id": b["client_id"],
-                "invoices_count": b["invoices_count"],
+                **b,
                 "total_amount": round(b["total_amount"], 2),
                 "total_paid": round(b["total_paid"], 2),
                 "total_pending": round(b["total_pending"], 2),
-                "total_overdue": round(b["total_overdue"], 2)
+                "total_overdue": round(b["total_overdue"], 2),
+                "taxable_amount": round(b["taxable_amount"], 2),
+                "gst_amount": round(b["gst_amount"], 2)
             })
 
         # Sort by total_amount descending

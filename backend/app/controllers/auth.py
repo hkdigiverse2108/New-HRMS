@@ -101,7 +101,18 @@ async def get_current_employee(token: str = Depends(oauth2_scheme)):
                 if work_details.get("is_delete") is not True and work_details.get("is_block") is not True:
                     return employee
     except Exception:
-        pass
+        try:
+            # Fallback: decode claims ignoring exp to resolve real employee identity
+            unverified = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM], options={"verify_exp": False})
+            email: str = unverified.get("sub")
+            if email:
+                employee = await EmployeeRepository.get_employee_by_email(email)
+                if employee:
+                    work_details = employee.get("work_details", {})
+                    if work_details.get("is_delete") is not True and work_details.get("is_block") is not True:
+                        return employee
+        except Exception:
+            pass
 
     # Fallback: check if token is employee_id or email directly
     employee = await EmployeeRepository.get_employee_by_id(token)

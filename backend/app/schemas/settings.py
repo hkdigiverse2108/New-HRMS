@@ -16,6 +16,7 @@ class SettingsCreateOrUpdate(BaseModel):
     signature_url: Optional[str] = Field(None, description="URL or relative path to authorized signature image")
     signature_name: Optional[str] = Field("Authorized Signatory", description="Authorized signatory name / title")
     default_terms: Optional[str] = Field("1. Payment is due within 3 days of the invoice date.\n2. Late payments may incur additional charges.\n3. All disputes are subject to Gujarat Jurisdiction.", description="Default terms & conditions")
+    quotation_terms: Optional[str] = Field("1. This quotation is valid for 30 days from the date of issue.\n2. Payment terms: 50% advance, remaining on completion.\n3. All disputes are subject to Gujarat Jurisdiction.", description="Default quotation terms & conditions")
     default_bank_account_id: Optional[str] = Field(None, description="ID of default bank account")
     bank_name: Optional[str] = Field("Axis Bankk", description="Default Bank Name")
     account_number: Optional[str] = Field("9240200573774150", description="Default Bank Account Number")
@@ -39,6 +40,7 @@ class SettingsResponse(BaseModel):
     signature_url: Optional[str] = None
     signature_name: str = "Authorized Signatory"
     default_terms: str = "1. Payment is due within 3 days of the invoice date.\n2. Late payments may incur additional charges.\n3. All disputes are subject to Gujarat Jurisdiction."
+    quotation_terms: Optional[str] = "1. This quotation is valid for 30 days from the date of issue.\n2. Payment terms: 50% advance, remaining on completion.\n3. All disputes are subject to Gujarat Jurisdiction."
     default_bank_account_id: Optional[str] = None
     bank_name: str = "Axis Bankk"
     account_number: str = "9240200573774150"

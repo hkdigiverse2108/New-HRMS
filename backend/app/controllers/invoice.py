@@ -7,7 +7,8 @@ from app.schemas.invoice import (
     InvoiceStatusUpdate,
     InvoiceAccessUpdate,
     InvoiceRejectRequest,
-    BrandLedgerResponse
+    BrandLedgerResponse,
+    LedgerEntriesResponse
 )
 from app.schemas.pagination import PaginatedResponse
 from app.services.invoice import InvoiceService
@@ -52,6 +53,30 @@ async def get_brand_invoice_ledger(
         to_date=to_date,
         month=month,
         year=year,
+        search=search,
+        current_user=current_user,
+        page=page,
+        limit=limit
+    )
+
+@router.get("/ledger/entries", response_model=LedgerEntriesResponse, response_model_exclude_none=True)
+async def get_invoice_ledger_entries(
+    invoice_type: Optional[str] = Query(None, description="Filter by 'Tax Invoice' or 'Proforma Invoice' or 'All'"),
+    from_date: Optional[str] = Query(None, description="From date (YYYY-MM-DD)"),
+    to_date: Optional[str] = Query(None, description="To date (YYYY-MM-DD)"),
+    client_name: Optional[str] = Query(None, description="Exact client name (as shown in client-wise ledger)"),
+    mode_of_payment: Optional[str] = Query(None, description="Filter by mode of payment"),
+    search: Optional[str] = Query(None, description="Search invoice number, client name, phone or GSTIN"),
+    page: Optional[int] = Query(None, ge=1),
+    limit: Optional[int] = Query(None, ge=1),
+    current_user: dict = Depends(get_current_employee)
+):
+    return await InvoiceService.get_ledger_entries(
+        invoice_type=invoice_type,
+        from_date=from_date,
+        to_date=to_date,
+        client_name=client_name,
+        mode_of_payment=mode_of_payment,
         search=search,
         current_user=current_user,
         page=page,
@@ -161,8 +186,7 @@ from fastapi.responses import FileResponse
 import os
 
 @router.get("/{invoice_id}/pdf")
-@router.get("/{invoice_id}/download")
-async def download_invoice_pdf(invoice_id: str, current_user: dict = Depends(get_current_employee)):
+async def view_invoice_pdf(invoice_id: str, current_user: dict = Depends(get_current_employee)):
     item = await InvoiceService.get_invoice_by_id(invoice_id)
     if not item or item.get("is_deleted"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
@@ -172,10 +196,7 @@ async def download_invoice_pdf(invoice_id: str, current_user: dict = Depends(get
 
     # Always regenerate with latest settings, logo, signature & template design
     updated_item = await InvoiceService._generate_and_store_invoice_pdf(invoice_id, delete_old=True)
-    if updated_item:
-        pdf_path = updated_item.get("pdf_path")
-    else:
-        pdf_path = item.get("pdf_path")
+    pdf_path = (updated_item or item).get("pdf_path")
 
     if not pdf_path or not os.path.exists(os.path.abspath(pdf_path)):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to locate or generate PDF file")
@@ -187,6 +208,31 @@ async def download_invoice_pdf(invoice_id: str, current_user: dict = Depends(get
         media_type="application/pdf",
         filename=f"{inv_num}.pdf",
         content_disposition_type="inline"
+    )
+
+@router.get("/{invoice_id}/download")
+async def download_invoice_pdf(invoice_id: str, current_user: dict = Depends(get_current_employee)):
+    item = await InvoiceService.get_invoice_by_id(invoice_id)
+    if not item or item.get("is_deleted"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
+
+    if not InvoiceService.check_user_access(item, current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to view this invoice")
+
+    # Always regenerate with latest settings, logo, signature & template design
+    updated_item = await InvoiceService._generate_and_store_invoice_pdf(invoice_id, delete_old=True)
+    pdf_path = (updated_item or item).get("pdf_path")
+
+    if not pdf_path or not os.path.exists(os.path.abspath(pdf_path)):
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to locate or generate PDF file")
+
+    abs_path = os.path.abspath(pdf_path)
+    inv_num = item.get("invoice_number", "invoice")
+    return FileResponse(
+        path=abs_path,
+        media_type="application/pdf",
+        filename=f"{inv_num}.pdf",
+        content_disposition_type="attachment"
     )
 
 @router.get("/{invoice_id}", response_model=InvoiceResponse, response_model_exclude_none=True)

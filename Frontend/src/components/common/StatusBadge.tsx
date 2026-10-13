@@ -44,7 +44,9 @@ export function StatusBadge({ status, className, showIcon = true }: StatusBadgeP
     case "absent":
     case "rejected":
     case "unpaid":
-      style = "bg-rose-50 text-rose-700 border-rose-200/60";
+    case "cancelled":
+    case "canceled":
+      style = "bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-400 border-rose-200/60 dark:border-rose-900/40";
       Icon = XCircle;
       break;
 

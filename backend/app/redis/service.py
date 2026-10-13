@@ -2,7 +2,7 @@ import json
 import logging
 import redis.asyncio as redis
 from typing import Optional, Any
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timezone
 from bson import ObjectId
 from pydantic import BaseModel
 from app.config import settings
@@ -84,7 +84,11 @@ def _mem_set(key: str, val: str, ttl: Optional[int] = None):
 class MongoJSONEncoder(json.JSONEncoder):
     """Encodes MongoDB ObjectId, datetime, date, time and Pydantic models into valid JSON."""
     def default(self, o: Any) -> Any:
-        if isinstance(o, (datetime, date, time)):
+        if isinstance(o, datetime):
+            if o.tzinfo is None:
+                o = o.replace(tzinfo=timezone.utc)
+            return o.isoformat()
+        if isinstance(o, (date, time)):
             return o.isoformat()
         if isinstance(o, ObjectId):
             return str(o)

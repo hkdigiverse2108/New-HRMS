@@ -35,6 +35,7 @@ import {
 import { toast } from "@/lib/toast";
 import { api } from "@/lib/api";
 import { useSales } from "./SalesContext";
+import { INDIAN_STATES } from "@/components/work/Projects";
 import { useEmployeesContext } from "@/components/employees/EmployeeContext";
 import type { Lead } from "./sales-data";
 
@@ -602,12 +603,21 @@ export function ConvertToClientModal({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold">State / UT</Label>
-                  <Input
+                  <select
                     value={stateUt}
                     onChange={(e) => setStateUt(e.target.value)}
-                    placeholder="Gujarat"
-                    className="text-xs"
-                  />
+                    className="w-full px-3 h-9 bg-background border border-input rounded-md text-xs font-medium focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
+                  >
+                    <option value="">Select State / UT</option>
+                    {stateUt && !INDIAN_STATES.includes(stateUt) && (
+                      <option value={stateUt}>{stateUt}</option>
+                    )}
+                    {INDIAN_STATES.map((st) => (
+                      <option key={st} value={st}>
+                        {st}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold">GSTIN (Optional)</Label>

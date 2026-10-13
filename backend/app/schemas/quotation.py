@@ -1,17 +1,29 @@
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_serializer
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from app.schemas.invoice import LineItemSchema
 
 class QuotationCreate(BaseModel):
     quotation_number: Optional[str] = Field(None, description="Auto-generated if empty (QUO-001)")
     client_id: Optional[str] = None
     client_name: str = Field(..., description="Client or company name")
+    client_email: Optional[str] = None
     client_phone: Optional[str] = None
     client_company: Optional[str] = None
+    client_address: Optional[str] = None
+    client_gstin: Optional[str] = None
+    state_ut: Optional[str] = None
+    client_department: Optional[str] = None
+    departments: Optional[List[str]] = None
+    mode_of_payment: Optional[str] = None
+    bank_name: Optional[str] = None
+    account_number: Optional[str] = None
+    ifsc_code: Optional[str] = None
+    upi_id: Optional[str] = None
+    subject: Optional[str] = None
     quotation_date: Optional[str] = None
     valid_until: Optional[str] = None
-    status: Optional[str] = Field("sent", description="draft, sent, accepted, declined, expired, converted")
+    status: Optional[str] = Field("sent", description="draft, sent, accepted, expired, cancelled, converted")
     line_items: List[LineItemSchema] = Field(default_factory=list)
     tax_option: Optional[str] = Field(None, description="'CGST + SGST' or 'IGST'")
     cgst_rate: Optional[float] = None
@@ -24,8 +36,20 @@ class QuotationUpdate(BaseModel):
     quotation_number: Optional[str] = None
     client_id: Optional[str] = None
     client_name: Optional[str] = None
+    client_email: Optional[str] = None
     client_phone: Optional[str] = None
     client_company: Optional[str] = None
+    client_address: Optional[str] = None
+    client_gstin: Optional[str] = None
+    state_ut: Optional[str] = None
+    client_department: Optional[str] = None
+    departments: Optional[List[str]] = None
+    mode_of_payment: Optional[str] = None
+    bank_name: Optional[str] = None
+    account_number: Optional[str] = None
+    ifsc_code: Optional[str] = None
+    upi_id: Optional[str] = None
+    subject: Optional[str] = None
     quotation_date: Optional[str] = None
     valid_until: Optional[str] = None
     status: Optional[str] = None
@@ -38,7 +62,7 @@ class QuotationUpdate(BaseModel):
     notes: Optional[str] = None
 
 class QuotationStatusUpdate(BaseModel):
-    status: str = Field(..., description="draft, sent, accepted, declined, expired, converted")
+    status: str = Field(..., description="draft, sent, accepted, expired, cancelled, converted")
 
 class ConvertToInvoiceRequest(BaseModel):
     invoice_type: str = Field("Tax Invoice", description="'Tax Invoice' or 'Proforma Invoice'")
@@ -65,8 +89,20 @@ class QuotationResponse(BaseModel):
     quotation_number: str
     client_id: Optional[str] = None
     client_name: str
+    client_email: Optional[str] = None
     client_phone: Optional[str] = None
     client_company: Optional[str] = None
+    client_address: Optional[str] = None
+    client_gstin: Optional[str] = None
+    state_ut: Optional[str] = None
+    client_department: Optional[str] = None
+    departments: Optional[List[str]] = None
+    mode_of_payment: Optional[str] = None
+    bank_name: Optional[str] = None
+    account_number: Optional[str] = None
+    ifsc_code: Optional[str] = None
+    upi_id: Optional[str] = None
+    subject: Optional[str] = None
     quotation_date: Optional[str] = None
     valid_until: Optional[str] = None
     status: str = "sent"
@@ -90,8 +126,16 @@ class QuotationResponse(BaseModel):
     pdf_path: Optional[str] = None
     pdf_url: Optional[str] = None
     is_deleted: bool = False
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[Any] = None
+    updated_at: Optional[Any] = None
+
+    @field_serializer("created_at", "updated_at", check_fields=False)
+    def serialize_timestamps(self, v: Any, _info):
+        if isinstance(v, datetime):
+            if v.tzinfo is None:
+                v = v.replace(tzinfo=timezone.utc)
+            return v.isoformat()
+        return v
 
     model_config = ConfigDict(populate_by_name=True)
 
