@@ -211,15 +211,10 @@ async def get_attendance_list(
         user_role = "HR"
     current_id = str(current_employee.get("_id") or current_employee.get("id") or current_employee.get("email") or "")
 
-    from app.controllers.auth import resolve_effective_permissions_for_employee
-    perms = await resolve_effective_permissions_for_employee(current_employee)
     can_view_all_attendance = (
-        user_role in ("Admin", "superadmin") or
+        user_role in ("Admin", "superadmin", "Subadmin") or
         dept.lower() == "hr" or
-        perms.get("/employees/attendance", {}).get("read") or
-        perms.get("/employees/attendance", {}).get("all") or
-        perms.get("/attendance", {}).get("read") or
-        perms.get("/attendance", {}).get("all")
+        user_role == "HR"
     )
 
     cache_key = make_list_key(
@@ -269,15 +264,10 @@ async def get_eom_summary(
         user_role = "HR"
     current_id = str(current_employee.get("_id") or current_employee.get("id") or current_employee.get("email") or "")
 
-    from app.controllers.auth import resolve_effective_permissions_for_employee
-    perms = await resolve_effective_permissions_for_employee(current_employee)
     can_view_all_attendance = (
-        user_role in ("Admin", "superadmin") or
+        user_role in ("Admin", "superadmin", "Subadmin") or
         dept.lower() == "hr" or
-        perms.get("/employees/attendance", {}).get("read") or
-        perms.get("/employees/attendance", {}).get("all") or
-        perms.get("/attendance", {}).get("read") or
-        perms.get("/attendance", {}).get("all")
+        user_role == "HR"
     )
 
     cache_key = f"attendance:eom:{month}:{year}:{employee_id or 'all'}:{'Admin' if can_view_all_attendance else user_role}:{current_id if not can_view_all_attendance else 'all'}"
@@ -313,5 +303,21 @@ async def mark_manual_attendance(
         check_in=payload.check_in,
         check_out=payload.check_out,
         remarks=payload.remarks
+    )
+
+@router.get("/punctuality")
+async def get_punctuality_hall_of_fame(
+    month: Optional[str] = Query(None),
+    year: Optional[int] = Query(None),
+    limit: int = Query(5, ge=1, le=20),
+    current_employee: dict = Depends(get_current_employee)
+):
+    """
+    Returns top punctual employees (hall of fame) based on on-time days this month.
+    """
+    return await AttendanceService.get_punctuality_hall_of_fame(
+        month=month,
+        year=year,
+        limit=limit
     )
 

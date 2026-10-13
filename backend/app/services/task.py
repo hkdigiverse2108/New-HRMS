@@ -8,7 +8,7 @@ from app.redis.service import get_cache, set_cache, delete_cache, clear_pattern,
 
 class TaskService:
     @staticmethod
-    async def _populate_user_details(item: dict, emp_cache: dict):
+    async def _populate_user_details(item: dict, emp_cache: dict, proj_cache: Optional[dict] = None, client_cache: Optional[dict] = None, content_cache: Optional[dict] = None):
         async def get_details(emp_id):
             if not emp_id:
                 return {"employee_name": "Management"}
@@ -63,15 +63,23 @@ class TaskService:
                 perf = act.get("performed_by")
                 act["performed_by_name"] = (await get_details(perf)).get("employee_name", "Management")
                 
-        # Populate Project Details and Client Details for tasks
-        project_id = item.get("project_id")
+        # Populate Project Details and Client Details for tasks with caching
+        project_id = str(item.get("project_id") or "").strip()
         if project_id:
             from app.repository.project import ProjectRepository
             from app.repository.client import ClientRepository
-            proj = await ProjectRepository.get_by_id(project_id)
+            
+            proj = None
+            if proj_cache is not None and project_id in proj_cache:
+                proj = proj_cache[project_id]
+            else:
+                proj = await ProjectRepository.get_by_id(project_id)
+                if proj_cache is not None:
+                    proj_cache[project_id] = proj
+
             if proj:
                 gen = (proj.get("general") or {}) if isinstance(proj.get("general"), dict) else {}
-                client_id = proj.get("client_id")
+                client_id = str(proj.get("client_id") or "").strip()
                 
                 proj_summary = {
                     "_id": str(proj.get("_id") or project_id),
@@ -79,11 +87,18 @@ class TaskService:
                     "project_name": gen.get("project_name", "Development Project"),
                     "category": str(gen.get("category", "Development")),
                     "status": str(gen.get("status", "In Progress")),
-                    "client_id": str(client_id) if client_id else None
+                    "client_id": client_id if client_id else None
                 }
                 
                 if client_id:
-                    client = await ClientRepository.get_by_id(client_id)
+                    client = None
+                    if client_cache is not None and client_id in client_cache:
+                        client = client_cache[client_id]
+                    else:
+                        client = await ClientRepository.get_by_id(client_id)
+                        if client_cache is not None:
+                            client_cache[client_id] = client
+
                     if client:
                         client_summary = {
                             "_id": str(client.get("_id") or client_id),
@@ -96,11 +111,18 @@ class TaskService:
                         
                 item["project_details"] = proj_summary
                 
-        # Populate Content Details for SMM tasks
-        content_item_id = item.get("content_item_id")
+        # Populate Content Details for SMM tasks with caching
+        content_item_id = str(item.get("content_item_id") or "").strip()
         if content_item_id:
             from app.repository.content import ContentRepository
-            content = await ContentRepository.get_by_id(content_item_id)
+            content = None
+            if content_cache is not None and content_item_id in content_cache:
+                content = content_cache[content_item_id]
+            else:
+                content = await ContentRepository.get_by_id(content_item_id)
+                if content_cache is not None:
+                    content_cache[content_item_id] = content
+
             if content:
                 if "_id" in content:
                     content["_id"] = str(content["_id"])
@@ -276,8 +298,6 @@ class TaskService:
         search: Optional[str] = None,
         team_employee_ids: Optional[list[str]] = None
     ):
-        await TaskService.process_recurring_tasks()
-
         cache_key = make_list_key(
             "tasks",
             is_deleted=is_deleted,
@@ -304,6 +324,9 @@ class TaskService:
         if cached is not None:
             return cached
 
+        # Run recurring tasks processing only on cache miss
+        await TaskService.process_recurring_tasks()
+
         result = await TaskRepository.get_all(
             is_deleted, 
             assigned_to, 
@@ -327,8 +350,11 @@ class TaskService:
         )
         
         emp_cache = {}
+        proj_cache = {}
+        client_cache = {}
+        content_cache = {}
         for item in result.get("data", []):
-            await TaskService._populate_user_details(item, emp_cache)
+            await TaskService._populate_user_details(item, emp_cache, proj_cache, client_cache, content_cache)
             
         await set_cache(cache_key, result, ttl=300)
         return result

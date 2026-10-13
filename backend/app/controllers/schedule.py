@@ -18,6 +18,7 @@ from app.repository.schedule import ScheduleRepository
 from app.repository.google_auth import GoogleAuthRepository
 from app.services.google_calendar import GoogleCalendarService
 from app.controllers.auth import get_current_employee
+from app.redis.service import get_cache, set_cache, clear_pattern, make_list_key
 
 router = APIRouter(prefix="/schedule", tags=["Schedule & Calendar"])
 
@@ -33,6 +34,7 @@ async def create_schedule_event(
     user_id = str(current_employee.get("work_details", {}).get("employee_id") or current_employee.get("_id") or current_employee.get("id"))
     data = payload.model_dump()
     created = await ScheduleRepository.create_event(data=data, user_id=user_id)
+    await clear_pattern("schedule:*")
     return created
 
 @router.post("/available-slots", response_model=FreeSlotsResponse)
@@ -58,7 +60,14 @@ async def get_bulk_options(
     """
     Get dynamic dropdown lists for bulk attendee selection: Departments, Designations, and Roles.
     """
+    cache_key = "schedule:bulk_options"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
     options = await ScheduleRepository.get_bulk_options()
+    if options is not None:
+        await set_cache(cache_key, options, ttl=300)
     return options
 
 @router.get("/team-users", response_model=List[Dict[str, Any]])
@@ -72,7 +81,16 @@ async def get_schedule_team_users(
     user_role = (current_employee.get("work_details", {}).get("system_role") or current_employee.get("role") or "Employee")
     if user_role not in ("Admin", "SuperAdmin", "HR", "Sub-Admin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Admin/HR can view the team list.")
-    return await ScheduleRepository.get_team_users(query_str=q)
+
+    cache_key = make_list_key("schedule:team_users", q=q)
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    res = await ScheduleRepository.get_team_users(query_str=q)
+    if res is not None:
+        await set_cache(cache_key, res, ttl=60)
+    return res
 
 @router.get("/feed", response_model=Dict[str, Any])
 @router.get("/calendar", response_model=Dict[str, Any])
@@ -105,6 +123,19 @@ async def get_my_calendar_feed(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Admin/HR can view other users' calendars.")
         targets = [t.strip() for t in employee_ids.split(",") if t.strip()][:50]
 
+    cache_key = make_list_key(
+        "schedule:feed",
+        uid=user_id,
+        ref=str(ref_d),
+        vm=view_mode.lower(),
+        cat=categories,
+        q=q,
+        targets=",".join(targets) if targets else None
+    )
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
     feed = await ScheduleRepository.get_calendar_feed(
         user_id=user_id,
         reference_date=ref_d,
@@ -114,6 +145,8 @@ async def get_my_calendar_feed(
         target_user_ids=targets,
         is_admin_or_hr=is_admin_or_hr
     )
+    if feed is not None:
+        await set_cache(cache_key, feed, ttl=30)
     return feed
 
 @router.get("/employee-events", response_model=Dict[str, Any])
@@ -134,6 +167,17 @@ async def get_other_employee_schedule(
 
     ref_date = reference_date or date.today()
 
+    cache_key = make_list_key(
+        "schedule:emp_view",
+        viewer=viewer_id,
+        target=employee_id,
+        ref=str(ref_date),
+        vm=view_mode.lower()
+    )
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
     view = await ScheduleRepository.get_employee_calendar_view(
         target_employee_id=employee_id,
         viewer_employee_id=viewer_id,
@@ -141,6 +185,8 @@ async def get_other_employee_schedule(
         view_mode=view_mode.lower(),
         is_admin_or_hr=is_admin_or_hr
     )
+    if view is not None:
+        await set_cache(cache_key, view, ttl=30)
     return view
 
 @router.get("/employees/search", response_model=List[Dict[str, Any]])
@@ -155,12 +201,25 @@ async def search_employees_for_schedule(
     Search bar API for employees.
     Supports real-time search by Employee Name, Employee ID, Email, Department, or Designation.
     """
+    cache_key = make_list_key(
+        "schedule:search_emp",
+        q=q,
+        dept=department_id,
+        desig=designation_id,
+        limit=limit
+    )
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
     results = await ScheduleRepository.search_employees(
         query_str=q,
         department_id=department_id,
         designation_id=designation_id,
         limit=limit
     )
+    if results is not None:
+        await set_cache(cache_key, results, ttl=60)
     return results
 
 @router.get("/events/{event_id}", response_model=ScheduleEventResponse)
@@ -173,9 +232,16 @@ async def get_event_by_id(
     NOTE: declared after /employee-events and /employees/search so those
     static routes are matched first (Starlette matches in declaration order).
     """
+    cache_key = f"schedule:event:{event_id}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
     event = await ScheduleRepository.get_event_by_id(event_id)
     if not event:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Schedule event not found")
+
+    await set_cache(cache_key, event, ttl=60)
     return event
 
 @router.put("/events/{event_id}", response_model=Dict[str, str])
@@ -206,6 +272,7 @@ async def update_schedule_event(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Failed to update event or user is unauthorized."
         )
+    await clear_pattern("schedule:*")
     return {"message": "Schedule event updated successfully."}
 
 @router.delete("/events/{event_id}", response_model=Dict[str, str])
@@ -236,6 +303,7 @@ async def delete_schedule_event(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Failed to delete event or user is unauthorized."
         )
+    await clear_pattern("schedule:*")
     return {"message": "Schedule event deleted successfully."}
 
 # ==========================================

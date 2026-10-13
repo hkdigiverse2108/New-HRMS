@@ -33,6 +33,7 @@ export function StatusBadge({ status, className, showIcon = true }: StatusBadgeP
   switch (norm) {
     case "active":
     case "present":
+    case "logged":
     case "approved":
     case "paid":
     case "completed":
@@ -58,6 +59,8 @@ export function StatusBadge({ status, className, showIcon = true }: StatusBadgeP
       break;
 
     case "on leave":
+    case "leave":
+    case "half day":
     case "remote":
       style = "bg-blue-50 text-blue-700 border-blue-200/60";
       Icon = AlertCircle;

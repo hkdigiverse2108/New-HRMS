@@ -8,6 +8,7 @@ from app.schemas.push_subscription import (
 from app.repository.push_subscription import PushSubscriptionRepository
 from app.controllers.auth import get_current_employee
 from app.utils.push_notifications import get_vapid_public_key, send_push_to_user
+from app.redis.service import get_cache, set_cache, clear_pattern
 
 router = APIRouter(prefix="/push", tags=["Push Notifications"])
 
@@ -15,7 +16,14 @@ router = APIRouter(prefix="/push", tags=["Push Notifications"])
 @router.get("/vapid-public-key", response_model=PushSubscriptionPublicKey)
 async def get_vapid_public_key_endpoint():
     """Get the VAPID public key for client-side subscription"""
-    return {"public_key": get_vapid_public_key()}
+    cache_key = "push:vapid_public_key"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    res = {"public_key": get_vapid_public_key()}
+    await set_cache(cache_key, res, ttl=3600)
+    return res
 
 
 @router.post("/subscribe", response_model=PushSubscriptionResponse, status_code=status.HTTP_201_CREATED)
@@ -32,14 +40,23 @@ async def subscribe(
     sub_data["user_id"] = user_id
     sub_data["user_agent"] = user_agent
     
-    return await PushSubscriptionRepository.create_or_update_subscription(sub_data)
+    res = await PushSubscriptionRepository.create_or_update_subscription(sub_data)
+    await clear_pattern(f"push:subs:{user_id}*")
+    return res
 
 
 @router.get("/subscriptions", response_model=List[PushSubscriptionResponse])
 async def get_subscriptions(current_user: dict = Depends(get_current_employee)):
     """Get all active push subscriptions for the current user"""
     user_id = str(current_user.get("_id") or current_user.get("id"))
-    return await PushSubscriptionRepository.get_active_subscriptions(user_id)
+    cache_key = f"push:subs:{user_id}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    res = await PushSubscriptionRepository.get_active_subscriptions(user_id)
+    await set_cache(cache_key, res, ttl=60)
+    return res
 
 
 @router.delete("/subscriptions", status_code=status.HTTP_204_NO_CONTENT)
@@ -51,6 +68,7 @@ async def unsubscribe(
     """Unsubscribe from push notifications"""
     user_id = str(current_user.get("_id") or current_user.get("id"))
     await PushSubscriptionRepository.delete_subscription(subscription_id, user_id)
+    await clear_pattern(f"push:subs:{user_id}*")
     return None
 
 

@@ -94,7 +94,14 @@ class AttendanceRepository:
         elif end_date:
             query["date"] = {"$lte": end_date}
         if status and status != "All":
-            query["status"] = status
+            if status == "Present":
+                query["status"] = {"$in": ["Present", "Logged", "Active", "On Break"]}
+            elif status in ("On Leave", "Leave"):
+                query["status"] = {"$in": ["On Leave", "Leave", "Half Day"]}
+            elif status == "Late":
+                query["$or"] = [{"status": "Late"}, {"is_late": True}]
+            else:
+                query["status"] = status
 
         cursor = collection.find(query).sort("date", -1)
         if limit is not None and limit > 0:

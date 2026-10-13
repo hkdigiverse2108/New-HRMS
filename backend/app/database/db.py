@@ -30,3 +30,14 @@ async def close_mongo_connection():
 
 def get_database():
     return db.db
+
+def serialize_mongo_doc(data):
+    """Recursively converts MongoDB ObjectId instances to strings."""
+    from bson import ObjectId
+    if isinstance(data, ObjectId):
+        return str(data)
+    if isinstance(data, dict):
+        return {k: serialize_mongo_doc(v) for k, v in data.items()}
+    if isinstance(data, list):
+        return [serialize_mongo_doc(item) for item in data]
+    return data

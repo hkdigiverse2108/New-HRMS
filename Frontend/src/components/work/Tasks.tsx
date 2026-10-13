@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { 
-  X, Plus, Filter, LayoutGrid, List as ListIcon, MoreHorizontal, Calendar, Clock, 
-  CheckCircle2, AlertCircle, Hourglass, ArrowRightLeft, RefreshCw, Zap, Trash2, 
-  Search, ShieldAlert, Check, ChevronDown, UserCheck, Flame, Repeat, Info, History, ExternalLink
+import {
+  X, Plus, Filter, LayoutGrid, List as ListIcon, MoreHorizontal, Calendar, Clock,
+  CheckCircle2, AlertCircle, Hourglass, ArrowRightLeft, RefreshCw, Zap, Trash2,
+  Search, ShieldAlert, Check, ChevronDown, UserCheck, Flame, Repeat, Info, History, ExternalLink,
+  ChevronLeft, ChevronRight
 } from "lucide-react";
 import { SearchInput } from "@/components/common/SearchInput";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -281,7 +282,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
             department: e.department || e.work_details?.department || "General",
           }));
           setEmployees(mapped);
-        } catch {}
+        } catch { }
       }
     }
   }, []);
@@ -294,7 +295,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     return fullName || anyUser?.name || anyUser?.username || "Management";
   }, [anyUser]);
 
-  
+
   // Fetch Tasks & Stats
   const fetchTasksData = useCallback(async () => {
     setIsLoading(true);
@@ -356,8 +357,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
             isProjectTask: !!t.project_details || t.task_category === "SMM",
             // K15
             taskCategory: t.task_category || "General",
-            contentItemId: String(t.content_item_id || ""),
-            isAuto: Boolean(t.content_item_id) || t.task_category === "Content Calendar" || t.task_category === "SMM" || Boolean((t as any).is_auto),
+            contentItemId: String(t.content_item_id || t.content_item_details?._id || t.content_item_details?.id || ""),
+            isAuto: Boolean(t.content_item_id || t.content_item_details?._id) || t.task_category === "Content Calendar" || t.task_category === "SMM" || Boolean((t as any).is_auto),
             isTransferred: Boolean(t.transfer_history && t.transfer_history.length > 0) || Boolean(t.transfer_request?.status === "transferred" || t.transfer_request?.status === "accepted"),
             department: t.department || "",
             createdAt: t.created_at || (t as any).createdAt || "",
@@ -443,7 +444,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
             if (isToday(d)) today++;
             if (isBefore(d, todayStart) && t.status !== "Done") overdue++;
             if (isAfter(d, todayStart) && t.status !== "Done") upcoming++;
-          } catch {}
+          } catch { }
         }
       });
       return {
@@ -603,6 +604,31 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   ]);
 
   const { items: sortedTasks, requestSort, sortConfig } = useSortableData(filteredTasks);
+
+  // Pagination & progressive rendering to prevent UI freezes on large datasets
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [columnVisibleCounts, setColumnVisibleCounts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    searchQuery,
+    mainViewMode,
+    scopeFilter,
+    departmentFilter,
+    personFilter,
+    statusFilter,
+    priorityFilter,
+    timeframeFilter,
+    categoryFilter,
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedTasks.length / pageSize));
+  const paginatedTasks = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return sortedTasks.slice(start, start + pageSize);
+  }, [sortedTasks, currentPage, pageSize]);
 
   // Quick Row management
   const addQuickRow = () => {
@@ -873,14 +899,22 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     e?.stopPropagation();
     const projId =
       task.rawBackend?.project_id ||
+      (typeof task.rawBackend?.project_details === "object"
+        ? task.rawBackend.project_details?._id || task.rawBackend.project_details?.id
+        : null) ||
       (typeof task.projectDetails === "object"
         ? task.projectDetails?.id || task.projectDetails?._id
         : task.projectDetails);
     if (projId) {
       localStorage.setItem("hrms_selected_project_id", String(projId));
     }
-    if (task.contentItemId) {
-      localStorage.setItem("hrms_cc_highlight_id", String(task.contentItemId));
+    const cId =
+      task.contentItemId ||
+      task.rawBackend?.content_item_id ||
+      task.rawBackend?.content_item_details?._id ||
+      task.rawBackend?.content_item_details?.id;
+    if (cId) {
+      localStorage.setItem("hrms_cc_highlight_id", String(cId));
     }
     if (setActive) {
       setActive("/work/projects");
@@ -1395,6 +1429,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
           <div className="flex gap-4 h-full min-w-max">
             {columns.map((col) => {
               const colTasks = filteredTasks.filter((t) => t.status === col.status);
+              const visibleLimit = columnVisibleCounts[col.status] || 25;
+              const visibleTasks = colTasks.slice(0, visibleLimit);
               return (
                 <div
                   key={col.status}
@@ -1417,7 +1453,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                   </div>
 
                   <div className="flex-1 p-3 overflow-y-auto space-y-3">
-                    {colTasks.map((task) => {
+                    {visibleTasks.map((task) => {
                       const isPendingTransferToMe =
                         task.transferRequest &&
                         task.transferRequest.status === "pending" &&
@@ -1631,6 +1667,21 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                         Drop tasks here
                       </div>
                     )}
+
+                    {colTasks.length > visibleLimit && (
+                      <div className="pt-2 text-center">
+                        <button
+                          type="button"
+                          onClick={() => setColumnVisibleCounts(prev => ({
+                            ...prev,
+                            [col.status]: (prev[col.status] || 25) + 25
+                          }))}
+                          className="w-full py-2 px-3 text-xs font-bold rounded-xl bg-card hover:bg-muted border border-border/60 text-primary transition-all shadow-2xs cursor-pointer"
+                        >
+                          Load More (+{Math.min(25, colTasks.length - visibleLimit)} of {colTasks.length - visibleLimit} remaining)
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -1654,7 +1705,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/40 text-xs font-medium">
-                {sortedTasks.map((task) => {
+                {paginatedTasks.map((task) => {
                   const isPendingTransferToMe =
                     task.transferRequest &&
                     task.transferRequest.status === "pending" &&
@@ -1911,6 +1962,84 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Controls */}
+          {sortedTasks.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-3.5 border-t border-border/50 bg-muted/20 text-xs">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <span>Showing</span>
+                <span className="font-bold text-foreground">
+                  {Math.min(sortedTasks.length, (currentPage - 1) * pageSize + 1)} - {Math.min(currentPage * pageSize, sortedTasks.length)}
+                </span>
+                <span>of</span>
+                <span className="font-bold text-foreground">{sortedTasks.length}</span>
+                <span>tasks</span>
+                <div className="hidden sm:flex items-center gap-1.5 ml-3 pl-3 border-l border-border/60">
+                  <span>Per page:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="bg-card border border-border/60 rounded-lg px-2 py-1 text-xs font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                  >
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
+              </div>
+
+              {totalPages > 1 && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="p-1.5 rounded-lg border border-border/60 bg-card hover:bg-muted text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                    title="Previous Page"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum = i + 1;
+                      if (totalPages > 5 && currentPage > 3) {
+                        pageNum = Math.min(totalPages - 4, currentPage - 2) + i;
+                      }
+                      return (
+                        <button
+                          key={pageNum}
+                          type="button"
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={cn(
+                            "w-7 h-7 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                            currentPage === pageNum
+                              ? "bg-primary text-primary-foreground shadow-2xs"
+                              : "bg-card hover:bg-muted border border-border/60 text-foreground"
+                          )}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-1.5 rounded-lg border border-border/60 bg-card hover:bg-muted text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                    title="Next Page"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

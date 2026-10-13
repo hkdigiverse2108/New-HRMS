@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional
+from pydantic import BaseModel, Field, ConfigDict, model_validator
+from typing import Optional, Any
 from datetime import datetime
+from app.database.db import serialize_mongo_doc
 
 class ServiceDetails(BaseModel):
     departments: list[str] = Field(default_factory=list, description="List of selected departments")
@@ -37,12 +38,17 @@ class ClientStats(BaseModel):
 
 class ClientResponse(ClientBase):
     id: str = Field(alias="_id")
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     is_deleted: bool = False
     is_archived: bool = False
     
     projects: Optional[list[dict]] = None
     client_stats: Optional[ClientStats] = None
     
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, arbitrary_types_allowed=True)
+
+    @model_validator(mode='before')
+    @classmethod
+    def sanitize_data(cls, data: Any) -> Any:
+        return serialize_mongo_doc(data)

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { X, Download, MoreHorizontal, Clock, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Coffee, Briefcase, Award, FileSpreadsheet, RefreshCw, Search, Check, Users, ChevronDown, RotateCcw } from "lucide-react";
 import { DateRange } from "react-day-picker";
 import { Calendar } from "@/components/ui/calendar";
@@ -135,34 +135,66 @@ export function AttendanceList() {
   const [activeView, setActiveView] = useState<"daily" | "eom">("daily");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<AttendanceStatus | "All">("All");
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: new Date(new Date().setDate(new Date().getDate() - 14)),
-    to: new Date(),
+  const userRole = String(user?.role || (user as any)?.system_role || "").toLowerCase().trim();
+  const userDept = String(user?.department || "").toLowerCase().trim();
+
+  const isAdminOrHR =
+    isUserAdmin(user) ||
+    ["admin", "super admin", "superadmin", "subadmin", "hr"].includes(userRole) ||
+    userDept === "hr";
+
+  const canManageAttendance = isAdminOrHR;
+
+  // Issue 2: Default today for Admin & HR; Default without filter (undefined) for regular employee
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
+    if (isAdminOrHR) {
+      const now = new Date();
+      return { from: now, to: now };
+    }
+    return undefined;
   });
+
+  const isInitialMount = useRef(true);
+  useEffect(() => {
+    if (isInitialMount.current && user) {
+      isInitialMount.current = false;
+      if (isAdminOrHR) {
+        const now = new Date();
+        setDateRange({ from: now, to: now });
+      } else {
+        setDateRange(undefined);
+      }
+    }
+  }, [isAdminOrHR, user]);
+
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(null);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const itemsPerPage = 10;
   const [isRecoverModalOpen, setIsRecoverModalOpen] = useState(false);
+  const [punctualLeaders, setPunctualLeaders] = useState<
+    Array<{ rank: number; name: string; department: string; streak: string; days: number }>
+  >([]);
 
-  const canReadAttendance =
-    isUserAdmin(user) ||
-    ["admin", "super admin", "superadmin", "hr"].includes(String(user?.role || (user as any)?.system_role || "").toLowerCase().trim()) ||
-    String(user?.department || "").toLowerCase().trim() === "hr" ||
-    hasModulePermission(user, "/employees/attendance", "read") ||
-    hasModulePermission(user, "/attendance", "read");
+  // Fetch Punctuality Hall of Fame dynamically
+  const fetchPunctuality = useCallback(async () => {
+    try {
+      const data = await api.get<any[]>("/attendance/punctuality?limit=5", {
+        showLoader: false,
+        showErrorToast: false,
+      });
+      if (Array.isArray(data) && data.length > 0) {
+        setPunctualLeaders(data);
+      }
+    } catch {
+      // Keep empty if network issue
+    }
+  }, []);
 
-  const canManageAttendance =
-    isUserAdmin(user) ||
-    ["admin", "super admin", "superadmin", "hr"].includes(String(user?.role || (user as any)?.system_role || "").toLowerCase().trim()) ||
-    String(user?.department || "").toLowerCase().trim() === "hr" ||
-    hasModulePermission(user, "/employees/attendance", "create") ||
-    hasModulePermission(user, "/employees/attendance", "update") ||
-    hasModulePermission(user, "/attendance", "create") ||
-    hasModulePermission(user, "/attendance", "update");
-
-  const isAdminOrHR = canReadAttendance || canManageAttendance;
+  useEffect(() => {
+    fetchPunctuality();
+  }, [fetchPunctuality]);
 
   // Manual Attendance Modal State (for HR/Admin to mark day attendance / holiday / closed office)
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
@@ -270,6 +302,7 @@ export function AttendanceList() {
       toast.success("Attendance marked successfully");
       setIsManualModalOpen(false);
       fetchAttendance();
+      fetchPunctuality();
     } catch (err: any) {
       toast.error(err?.message || "Failed to mark manual attendance");
     } finally {
@@ -303,113 +336,53 @@ export function AttendanceList() {
         showErrorToast: false,
       });
 
-      if (Array.isArray(data) && data.length > 0) {
-        const mapped: AttendanceRecord[] = data.map((item) => ({
-          id: item.id || `${item.employee_id}-${item.date}`,
-          employeeId: item.employee_id || "",
-          employeeName: item.employee_name || "Employee",
-          role: item.role || "Staff",
-          department: item.department || "General",
-          avatar: item.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.employee_name || "E")}&background=random`,
-          date: item.date || "",
-          status: (item.status as AttendanceStatus) || "Present",
-          checkIn: item.check_in ? formatISTTime(item.check_in) : null,
-          checkOut: item.check_out ? formatISTTime(item.check_out) : null,
-          totalHours: item.total_hours || item.work_hours || item.net_hours || null,
-          breakHours: item.break_hours || null,
-          netWorkSeconds: item.net_work_seconds || 0,
-          breakSeconds: item.break_seconds || 0,
-          remarks: item.remarks ? (Array.isArray(item.remarks) ? item.remarks.join(", ") : String(item.remarks)) : null,
-          logs: buildTimelineLogs(item),
-        }));
+      if (Array.isArray(data)) {
+        const mapped: AttendanceRecord[] = data.map((item) => {
+          let statusText: AttendanceStatus = "Present";
+          const rawStatus = (item.status || "").trim();
+          if (rawStatus === "Logged" || rawStatus === "Active" || rawStatus === "Present") {
+            statusText = "Present";
+          } else if (rawStatus === "Absent") {
+            statusText = "Absent";
+          } else if (rawStatus === "Late" || item.is_late) {
+            statusText = "Late";
+          } else if (rawStatus === "On Leave" || rawStatus === "Leave") {
+            statusText = "On Leave";
+          } else if (rawStatus === "Half Day") {
+            statusText = "Half Day";
+          } else {
+            statusText = (rawStatus as AttendanceStatus) || "Present";
+          }
+
+          return {
+            id: item.id || `${item.employee_id}-${item.date}`,
+            employeeId: item.employee_id || "",
+            employeeName: item.employee_name || "Employee", 
+            role: item.role || "Staff",
+            department: item.department || "General",
+            avatar: item.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.employee_name || "E")}&background=random`,
+            date: item.date || "",
+            status: statusText,
+            checkIn: item.check_in && item.check_in !== "--" ? formatISTTime(item.check_in) : null,
+            checkOut: item.check_out && item.check_out !== "--" ? formatISTTime(item.check_out) : null,
+            totalHours: item.total_hours || item.work_hours || item.net_hours || null,
+            breakHours: item.break_hours || null,
+            netWorkSeconds: item.net_work_seconds || 0,
+            breakSeconds: item.break_seconds || 0,
+            remarks: item.remarks ? (Array.isArray(item.remarks) ? item.remarks.join(", ") : String(item.remarks)) : null,
+            logs: buildTimelineLogs(item),
+          };
+        });
         setRecords(mapped);
       } else {
-        // Fallback realistic data if backend collection is currently fresh/empty
-        generateFallbackData();
+        setRecords([]);
       }
     } catch {
-      generateFallbackData();
+      setRecords([]);
     } finally {
       setIsLoading(false);
     }
   }, [user?.id, user?.role, isAdminOrHR, dateRange, statusFilter]);
-
-  const generateFallbackData = () => {
-    const fallback: AttendanceRecord[] = [];
-    const targetEmployees = !isAdminOrHR && user ? [{ id: user.id, name: user.name, role: user.role, department: user.department || "Operations", avatar: user.avatar || "" }] : employees;
-
-    for (let i = 0; i < 7; i++) {
-      const dateObj = new Date();
-      dateObj.setDate(dateObj.getDate() - i);
-      const dateStr = dateObj.toISOString().split("T")[0] || "";
-      if (dateObj.getDay() === 0 || dateObj.getDay() === 6) continue;
-
-      targetEmployees.forEach((emp) => {
-        const hash = (emp.id || "1").charCodeAt((emp.id || "1").length - 1) + i;
-        let status: AttendanceStatus = "Present";
-        let checkIn: string | null = "09:00 AM";
-        let checkOut: string | null = "05:30 PM";
-        let totalHours: string | null = "8.5h";
-        let breakHours: string | null = "1h";
-        let remarks: string | null = null;
-        let logs: AttendanceLogItem[] = [];
-
-        if (hash % 10 === 0) {
-          status = "Absent";
-          checkIn = null;
-          checkOut = null;
-          totalHours = null;
-          breakHours = null;
-        } else if (hash % 7 === 0) {
-          status = "On Leave";
-          checkIn = null;
-          checkOut = null;
-          totalHours = null;
-          breakHours = null;
-          remarks = "Auto-marked leave - Sick Leave approved";
-        } else if (hash % 5 === 0) {
-          status = "Late";
-          checkIn = "10:15 AM";
-          checkOut = "06:00 PM";
-          totalHours = "7.75h";
-          breakHours = "0.75h";
-          remarks = "Late arrival penalty - 10:15 AM IST";
-          logs = [
-            { action: "Punched In", time: "10:15 AM", type: "punch" },
-            { action: "Break In", time: "01:30 PM", type: "break" },
-            { action: "Break Out", time: "02:15 PM", type: "break" },
-            { action: "Punched Out", time: "06:00 PM", type: "punch" },
-          ];
-        } else {
-          checkIn = "09:12 AM";
-          logs = [
-            { action: "Punched In", time: "09:12 AM", type: "punch" },
-            { action: "Break In", time: "12:30 PM", type: "break" },
-            { action: "Break Out", time: "01:30 PM", type: "break" },
-            { action: "Punched Out", time: "05:30 PM", type: "punch" },
-          ];
-        }
-
-        fallback.push({
-          id: `${emp.id}-${dateStr}`,
-          employeeId: emp.id,
-          employeeName: emp.name,
-          role: emp.role,
-          department: emp.department || "Operations",
-          avatar: emp.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(emp.name)}&background=random`,
-          date: dateStr,
-          status,
-          checkIn,
-          checkOut,
-          totalHours,
-          breakHours,
-          remarks,
-          logs,
-        });
-      });
-    }
-    setRecords(fallback);
-  };
 
   useEffect(() => {
     fetchAttendance();
@@ -432,7 +405,19 @@ export function AttendanceList() {
         record.employeeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         record.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
         record.department.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesStatus = statusFilter === "All" || record.status === statusFilter;
+      
+      let matchesStatus = true;
+      if (statusFilter !== "All") {
+        if (statusFilter === "Present") {
+          matchesStatus = ["Present", "Logged", "Active", "On Break"].includes(record.status);
+        } else if (statusFilter === "On Leave") {
+          matchesStatus = ["On Leave", "Leave", "Half Day"].includes(record.status);
+        } else if (statusFilter === "Late") {
+          matchesStatus = record.status === "Late";
+        } else {
+          matchesStatus = record.status === statusFilter;
+        }
+      }
 
       let matchesDate = true;
       if (dateRange?.from) {
@@ -465,9 +450,9 @@ export function AttendanceList() {
 
   const stats = useMemo(() => {
     return {
-      present: filteredData.filter((r) => r.status === "Present" || r.status === "Late").length,
+      present: filteredData.filter((r) => ["Present", "Logged", "Active", "On Break", "Late"].includes(r.status)).length,
       absent: filteredData.filter((r) => r.status === "Absent").length,
-      onLeave: filteredData.filter((r) => r.status === "On Leave").length,
+      onLeave: filteredData.filter((r) => ["On Leave", "Leave", "Half Day"].includes(r.status)).length,
       late: filteredData.filter((r) => r.status === "Late").length,
     };
   }, [filteredData]);
@@ -479,11 +464,23 @@ export function AttendanceList() {
     let activeDaysCount = 0;
 
     filteredData.forEach((r) => {
-      const workSec = r.netWorkSeconds || 0;
-      const breakSec = r.breakSeconds || 0;
+      let workSec = r.netWorkSeconds || 0;
+      let breakSec = r.breakSeconds || 0;
+
+      // If active today and netWorkSeconds is 0, calculate elapsed time
+      if (workSec === 0 && r.checkIn && r.checkIn !== "--" && (!r.checkOut || r.checkOut === "--")) {
+        const now = new Date();
+        const nowMinutes = now.getHours() * 60 + now.getMinutes();
+        const inMinutes = parseTimeToMinutes(r.checkIn);
+        if (inMinutes !== null && nowMinutes > inMinutes) {
+          const elapsedSec = (nowMinutes - inMinutes) * 60;
+          workSec = Math.max(0, elapsedSec - breakSec);
+        }
+      }
+
       totalWorkSec += workSec;
       totalBreakSec += breakSec;
-      if (r.status === "Present" || r.status === "Late" || (r.checkIn && r.checkIn !== "--")) {
+      if (["Present", "Logged", "Active", "Late"].includes(r.status) || (r.checkIn && r.checkIn !== "--")) {
         activeDaysCount++;
       }
     });
@@ -637,20 +634,22 @@ export function AttendanceList() {
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
             {/* Left Column: KPI Cards */}
             <div className="xl:col-span-2 flex flex-col gap-6">
-              {/* Overall Stats Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                {[
-                  { label: "Total Present", value: stats.present, color: "text-emerald-600", bg: "bg-emerald-50" },
-                  { label: "Total Absent", value: stats.absent, color: "text-rose-600", bg: "bg-rose-50" },
-                  { label: "Late Arrivals", value: stats.late, color: "text-amber-600", bg: "bg-amber-50" },
-                  { label: "On Leave", value: stats.onLeave, color: "text-blue-600", bg: "bg-blue-50" },
-                ].map((stat, i) => (
-                  <div key={i} className="bg-card border border-border rounded-2xl p-5 shadow-sm flex flex-col justify-center">
-                    <p className="text-sm font-bold text-muted-foreground">{stat.label}</p>
-                    <p className={cn("text-3xl font-black mt-2", stat.color)}>{stat.value}</p>
-                  </div>
-                ))}
-              </div>
+              {/* Overall Stats Cards - Only visible to Admin and HR as requested */}
+              {isAdminOrHR && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                  {[
+                    { label: "Total Present", value: stats.present, color: "text-emerald-600", bg: "bg-emerald-50" },
+                    { label: "Total Absent", value: stats.absent, color: "text-rose-600", bg: "bg-rose-50" },
+                    { label: "Late Arrivals", value: stats.late, color: "text-amber-600", bg: "bg-amber-50" },
+                    { label: "On Leave", value: stats.onLeave, color: "text-blue-600", bg: "bg-blue-50" },
+                  ].map((stat, i) => (
+                    <div key={i} className="bg-card border border-border rounded-2xl p-5 shadow-sm flex flex-col justify-center">
+                      <p className="text-sm font-bold text-muted-foreground">{stat.label}</p>
+                      <p className={cn("text-3xl font-black mt-2", stat.color)}>{stat.value}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Personal Stats Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -675,7 +674,7 @@ export function AttendanceList() {
                 })}
               </div>
 
-              {/* Top Punctual Employees / Hall of Fame */}
+              {/* Top Punctual Employees / Hall of Fame - Dynamic from live attendance logs */}
               <div className="bg-card border border-border/60 rounded-3xl shadow-sm p-5 h-auto sm:h-[160px] sm:min-h-[160px] flex flex-col relative overflow-hidden">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
@@ -685,27 +684,27 @@ export function AttendanceList() {
                   <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">This Month</p>
                 </div>
                 <div className="flex-1 overflow-y-auto pr-2">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-                    {[
-                      { name: "Sneha Pillai", dept: "Operations", streak: "14 Days" },
-                      { name: "Rahul Sharma", dept: "Marketing", streak: "12 Days" },
-                      { name: "Meera Kapoor", dept: "Design", streak: "9 Days" },
-                      { name: "Vikram Iyer", dept: "Engineering", streak: "7 Days" },
-                      { name: "Aditi Desai", dept: "Sales", streak: "6 Days" },
-                    ].map((emp, i) => (
-                      <div key={i} className="flex flex-col p-3 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/40 transition-colors">
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center text-[9px] font-black text-emerald-700">
-                            #{i + 1}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+                    {punctualLeaders.length > 0 ? (
+                      punctualLeaders.map((emp, i) => (
+                        <div key={i} className="flex flex-col p-3 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/40 transition-colors">
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center text-[9px] font-black text-emerald-700">
+                              #{emp.rank || i + 1}
+                            </div>
+                            <div className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">{emp.streak}</div>
                           </div>
-                          <div className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">{emp.streak}</div>
+                          <div>
+                            <p className="text-xs font-bold text-foreground line-clamp-1">{emp.name}</p>
+                            <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">{emp.department || "General"}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-xs font-bold text-foreground line-clamp-1">{emp.name}</p>
-                          <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">{emp.dept}</p>
-                        </div>
+                      ))
+                    ) : (
+                      <div className="col-span-full py-4 text-center text-xs text-muted-foreground">
+                        {isLoading ? "Loading punctuality records..." : "No punctuality records found for this month."}
                       </div>
-                    ))}
+                    )}
                   </div>
                 </div>
               </div>
@@ -714,9 +713,30 @@ export function AttendanceList() {
             {/* Right Column: Calendar Preview */}
             <div className="xl:col-span-1 flex flex-col gap-6">
               <div className="bg-card border border-border/60 rounded-3xl shadow-sm p-6 flex flex-col relative overflow-hidden shrink-0 h-full">
-                <h3 className="text-lg font-black text-foreground mb-2">Schedule Preview</h3>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-lg font-black text-foreground">Schedule Preview</h3>
+                  {dateRange && (
+                    <button
+                      onClick={() => setDateRange(isAdminOrHR ? { from: new Date(), to: new Date() } : undefined)}
+                      className="text-xs text-primary font-bold hover:underline"
+                    >
+                      Reset Date
+                    </button>
+                  )}
+                </div>
                 <div className="flex-1 flex items-center justify-center">
-                  <Calendar mode="single" selected={new Date()} className="bg-transparent p-0 [&_.rdp]:bg-transparent" />
+                  <Calendar
+                    mode="single"
+                    selected={dateRange?.from}
+                    onSelect={(selectedDate) => {
+                      if (selectedDate) {
+                        setDateRange({ from: selectedDate, to: selectedDate });
+                      } else {
+                        setDateRange(isAdminOrHR ? { from: new Date(), to: new Date() } : undefined);
+                      }
+                    }}
+                    className="bg-transparent p-0 [&_.rdp]:bg-transparent"
+                  />
                 </div>
               </div>
             </div>

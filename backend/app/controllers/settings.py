@@ -3,6 +3,7 @@ from typing import Optional
 from app.schemas.settings import SettingsCreateOrUpdate, SettingsResponse
 from app.services.settings import SettingsService
 from app.controllers.auth import get_current_employee
+from app.redis.service import get_cache, set_cache, clear_pattern
 import os
 import shutil
 
@@ -17,7 +18,15 @@ def check_admin_role(user: dict):
 
 @router.get("", response_model=SettingsResponse)
 async def get_settings(current_user: dict = Depends(get_current_employee)):
-    return await SettingsService.get_settings()
+    cache_key = "settings:company"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    res = await SettingsService.get_settings()
+    if res is not None:
+        await set_cache(cache_key, res, ttl=300)
+    return res
 
 @router.put("", response_model=SettingsResponse)
 async def update_settings(
@@ -25,7 +34,9 @@ async def update_settings(
     current_user: dict = Depends(get_current_employee)
 ):
     check_admin_role(current_user)
-    return await SettingsService.update_settings(data)
+    res = await SettingsService.update_settings(data)
+    await clear_pattern("settings:*")
+    return res
 
 @router.post("/logo", response_model=SettingsResponse)
 async def upload_company_logo(
@@ -51,7 +62,9 @@ async def upload_company_logo(
     current_settings["logo_url"] = web_url
 
     update_dto = SettingsCreateOrUpdate(**current_settings)
-    return await SettingsService.update_settings(update_dto)
+    res = await SettingsService.update_settings(update_dto)
+    await clear_pattern("settings:*")
+    return res
 
 @router.post("/signature", response_model=SettingsResponse)
 async def upload_authorized_signature(
@@ -77,7 +90,9 @@ async def upload_authorized_signature(
     current_settings["signature_url"] = web_url
 
     update_dto = SettingsCreateOrUpdate(**current_settings)
-    return await SettingsService.update_settings(update_dto)
+    res = await SettingsService.update_settings(update_dto)
+    await clear_pattern("settings:*")
+    return res
 
 @router.post("/letterhead", response_model=SettingsResponse)
 async def upload_company_letterhead(
@@ -103,4 +118,6 @@ async def upload_company_letterhead(
     current_settings["letterhead_url"] = web_url
 
     update_dto = SettingsCreateOrUpdate(**current_settings)
-    return await SettingsService.update_settings(update_dto)
+    res = await SettingsService.update_settings(update_dto)
+    await clear_pattern("settings:*")
+    return res

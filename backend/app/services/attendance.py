@@ -114,8 +114,8 @@ def build_timeline_logs(record: Dict[str, Any]) -> List[Dict[str, Any]]:
     if punches:
         for idx, p in enumerate(punches):
             session_num = idx + 1
-            cin = p.get("check_in")
-            cout = p.get("check_out")
+            cin = p.get("check_in") or p.get("punchIn")
+            cout = p.get("check_out") or p.get("punchOut")
             if cin and cin != "--":
                 logs.append({
                     "action": f"Punched In (Session {session_num})",
@@ -128,22 +128,24 @@ def build_timeline_logs(record: Dict[str, Any]) -> List[Dict[str, Any]]:
                     "time": cout,
                     "type": "punch_out"
                 })
-    elif record.get("check_in") and record.get("check_in") != "--":
+    elif (record.get("check_in") or record.get("checkIn")) and (record.get("check_in") or record.get("checkIn")) != "--":
+        cin = record.get("check_in") or record.get("checkIn")
         logs.append({
             "action": "Punched In (Session 1)",
-            "time": record.get("check_in"),
+            "time": cin,
             "type": "punch_in"
         })
-        if record.get("check_out") and record.get("check_out") != "--":
+        cout = record.get("check_out") or record.get("checkOut")
+        if cout and cout != "--":
             logs.append({
                 "action": "Punched Out (Session 1)",
-                "time": record.get("check_out"),
+                "time": cout,
                 "type": "punch_out"
             })
 
     for b in breaks:
-        b_start = b.get("start_time")
-        b_end = b.get("end_time")
+        b_start = b.get("start_time") or b.get("startTime")
+        b_end = b.get("end_time") or b.get("endTime")
         dur_sec = b.get("duration_seconds", 0)
         dur_str = ""
         if dur_sec:
@@ -1053,4 +1055,74 @@ class AttendanceService:
             "count": updated_count,
             "message": f"Successfully updated attendance for {updated_count} employee(s) on {date_str}."
         }
+
+    @classmethod
+    async def get_punctuality_hall_of_fame(
+        cls,
+        month: Optional[str] = None,
+        year: Optional[int] = None,
+        limit: int = 5
+    ) -> List[Dict[str, Any]]:
+        from collections import defaultdict
+        now = get_now_ist()
+        target_year = year or now.year
+        if month:
+            month_idx = datetime.strptime(month, "%B").month if not month.isdigit() else int(month)
+        else:
+            month_idx = now.month
+
+        _, total_days = calendar.monthrange(target_year, month_idx)
+        start_date_str = f"{target_year:04d}-{month_idx:02d}-01"
+        end_date_str = f"{target_year:04d}-{month_idx:02d}-{total_days:02d}"
+
+        cache_key = f"attendance:punctuality:{target_year}:{month_idx}:{limit}"
+        cached = await get_cache(cache_key)
+        if cached is not None:
+            return cached
+
+        records = await AttendanceRepository.get_records(
+            start_date=start_date_str,
+            end_date=end_date_str
+        )
+
+        on_time_counts = defaultdict(int)
+        emp_meta = {}
+        for r in records:
+            eid = r.get("employee_id")
+            name = r.get("employee_name") or "Employee"
+            status = r.get("status", "")
+            is_late = r.get("is_late", False)
+            dept = r.get("department") or "General"
+
+            # Filter out admins
+            if name.lower().startswith("admin"):
+                continue
+
+            if status in ("Present", "Logged", "Active") and not is_late:
+                on_time_counts[eid] += 1
+                if eid not in emp_meta:
+                    emp_meta[eid] = {
+                        "name": name,
+                        "department": dept,
+                        "avatar": r.get("avatar") or f"https://ui-avatars.com/api/?name={name}&background=random"
+                    }
+
+        sorted_emps = sorted(on_time_counts.items(), key=lambda x: x[1], reverse=True)
+        results = []
+        rank = 1
+        for eid, count in sorted_emps[:limit]:
+            meta = emp_meta.get(eid, {})
+            results.append({
+                "rank": rank,
+                "employee_id": eid,
+                "name": meta.get("name", "Employee"),
+                "department": meta.get("department", "General"),
+                "streak": f"{count} Days",
+                "days": count,
+                "avatar": meta.get("avatar", "")
+            })
+            rank += 1
+
+        await set_cache(cache_key, results, ttl=180)
+        return results
 

@@ -8,6 +8,7 @@ from app.schemas.generated_document import (
 )
 from app.services.document_generator import DocumentGeneratorService
 from app.controllers.auth import get_current_employee
+from app.redis.service import get_cache, set_cache, clear_pattern, make_list_key
 
 router = APIRouter(prefix="/generated-documents", tags=["Generated Documents & PDF Engine"])
 
@@ -37,6 +38,8 @@ async def generate_document(
     created = await DocumentGeneratorService.generate_document(data, current_user)
     if not created:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to generate document")
+
+    await clear_pattern("generated_docs:*")
     return created
 
 @router.get("", response_model=List[GeneratedDocumentResponse])
@@ -46,12 +49,20 @@ async def get_all_generated_documents(
     search: Optional[str] = Query(None, description="Search by template name or employee name"),
     current_user: dict = Depends(get_current_employee)
 ):
-    return await DocumentGeneratorService.get_all_generated_documents(
+    cache_key = make_list_key("generated_docs:list", emp=employee_id, tpl=template_id, s=search)
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    res = await DocumentGeneratorService.get_all_generated_documents(
         is_deleted=False,
         employee_id=employee_id,
         template_id=template_id,
         search=search
     )
+    if res is not None:
+        await set_cache(cache_key, res, ttl=60)
+    return res
 
 @router.get("/{item_id}/pdf")
 async def download_generated_document_pdf(
@@ -80,9 +91,16 @@ async def get_generated_document_by_id(
     item_id: str,
     current_user: dict = Depends(get_current_employee)
 ):
+    cache_key = f"generated_docs:item:{item_id}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
     item = await DocumentGeneratorService.get_by_id(item_id)
     if not item or item.get("is_deleted"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Generated document not found")
+
+    await set_cache(cache_key, item, ttl=120)
     return item
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -98,3 +116,4 @@ async def delete_generated_document(
     success = await DocumentGeneratorService.delete_generated_document(item_id)
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to delete generated document")
+    await clear_pattern("generated_docs:*")

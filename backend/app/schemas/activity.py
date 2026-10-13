@@ -10,8 +10,8 @@ class ActivityAction(str, Enum):
 
 class ActivityLogBase(BaseModel):
     project_id: str = Field(..., description="The ID of the parent project")
-    action: ActivityAction
-    description: str
+    action: str = Field(..., description="Action name or category")
+    description: Optional[str] = ""
     performed_by: str = Field(..., description="Employee ID of the person who performed the action")
     timestamp: str
 

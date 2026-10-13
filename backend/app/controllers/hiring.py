@@ -4,6 +4,7 @@ from app.schemas.hiring import HiringCreate, HiringUpdate, HiringResponse, Hirin
 from app.schemas.pagination import PaginatedResponse
 from app.services.hiring import HiringService
 from app.controllers.auth import get_current_employee
+from app.redis.service import get_cache, set_cache, clear_pattern, make_list_key
 
 router = APIRouter(prefix="/hirings", tags=["Hirings & Recruitment Management"])
 
@@ -14,7 +15,15 @@ async def get_employment_types():
     Contract has been explicitly removed as per system requirements.
     Allowed: ['Full-time', 'Part-time', 'Internship']
     """
-    return await HiringService.get_employment_types()
+    cache_key = "hirings:employment_types"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    res = await HiringService.get_employment_types()
+    if res is not None:
+        await set_cache(cache_key, res, ttl=3600)
+    return res
 
 @router.get("/statuses", response_model=List[str])
 async def get_hiring_statuses():
@@ -31,7 +40,15 @@ async def get_hiring_managers(
     Get dropdown list of all active employees to select as Hiring Manager.
     Returns employee_id, full_name, email, department, designation, profile_picture.
     """
-    return await HiringService.get_hiring_managers(current_user)
+    cache_key = "hirings:managers"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    res = await HiringService.get_hiring_managers(current_user)
+    if res is not None:
+        await set_cache(cache_key, res, ttl=120)
+    return res
 
 @router.get("/dashboard/summary", response_model=HiringDashboardResponse)
 async def get_hiring_dashboard_summary(
@@ -41,7 +58,15 @@ async def get_hiring_dashboard_summary(
     Get the top metrics for the hiring dashboard:
     Active Jobs, Total Applicants, Interviews Scheduled, Offers Extended.
     """
-    return await HiringService.get_dashboard_summary(current_user)
+    cache_key = "hirings:dashboard_summary"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    res = await HiringService.get_dashboard_summary(current_user)
+    if res is not None:
+        await set_cache(cache_key, res, ttl=60)
+    return res
 
 @router.post("", response_model=HiringResponse, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=HiringResponse, status_code=status.HTTP_201_CREATED, include_in_schema=False)
@@ -53,7 +78,9 @@ async def create_hiring(
     Post a new job requirement (Add Hiring).
     Supported Fields: job_title, department, location, employment_type, status, applications_count, posted_date, experience, salary_range, job_description, hiring_manager_id.
     """
-    return await HiringService.create_hiring(data, current_user)
+    created = await HiringService.create_hiring(data, current_user)
+    await clear_pattern("hirings:*")
+    return created
 
 @router.get("", response_model=PaginatedResponse[HiringResponse])
 @router.get("/", response_model=PaginatedResponse[HiringResponse], include_in_schema=False)
@@ -69,7 +96,20 @@ async def get_all_hirings(
     """
     Get list of all job postings with pagination and optional filters.
     """
-    return await HiringService.get_all_hirings(
+    cache_key = make_list_key(
+        "hirings:list",
+        dept=department,
+        et=employment_type,
+        st=status,
+        s=search,
+        page=page,
+        limit=limit
+    )
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    res = await HiringService.get_all_hirings(
         current_user=current_user,
         department=department,
         employment_type=employment_type,
@@ -78,6 +118,9 @@ async def get_all_hirings(
         page=page,
         limit=limit
     )
+    if res is not None:
+        await set_cache(cache_key, res, ttl=60)
+    return res
 
 @router.get("/{hiring_id}", response_model=HiringResponse)
 async def get_hiring_by_id(
@@ -85,7 +128,15 @@ async def get_hiring_by_id(
     current_user: dict = Depends(get_current_employee)
 ):
     """Get single job posting details by ID."""
-    return await HiringService.get_hiring_by_id(hiring_id, current_user)
+    cache_key = f"hirings:item:{hiring_id}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    res = await HiringService.get_hiring_by_id(hiring_id, current_user)
+    if res is not None:
+        await set_cache(cache_key, res, ttl=120)
+    return res
 
 @router.put("/{hiring_id}", response_model=HiringResponse)
 async def update_hiring(
@@ -94,7 +145,9 @@ async def update_hiring(
     current_user: dict = Depends(get_current_employee)
 ):
     """Update job posting details (Update Hiring)."""
-    return await HiringService.update_hiring(hiring_id, data, current_user)
+    res = await HiringService.update_hiring(hiring_id, data, current_user)
+    await clear_pattern("hirings:*")
+    return res
 
 @router.delete("/{hiring_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_hiring(
@@ -105,6 +158,7 @@ async def delete_hiring(
     success = await HiringService.delete_hiring(hiring_id, current_user)
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to delete job posting")
+    await clear_pattern("hirings:*")
 
 # ==================== REFER A FRIEND (JOB REFERRALS) ====================
 
@@ -166,7 +220,9 @@ async def create_referral_for_job(
     Submit a 'Refer a Friend' candidate referral for a specific job posting.
     Auto-increments applications_count on the associated job posting.
     """
-    return await HiringService.create_referral(hiring_id, data, current_user)
+    created = await HiringService.create_referral(hiring_id, data, current_user)
+    await clear_pattern("hirings:*")
+    return created
 
 @router.post("/referrals", response_model=ReferralResponse, status_code=status.HTTP_201_CREATED)
 async def create_referral_direct(
@@ -176,7 +232,9 @@ async def create_referral_direct(
     """
     Submit a 'Refer a Friend' candidate referral passing hiring_id in JSON body.
     """
-    return await HiringService.create_referral(None, data, current_user)
+    created = await HiringService.create_referral(None, data, current_user)
+    await clear_pattern("hirings:*")
+    return created
 
 @router.get("/referrals", response_model=List[ReferralResponse])
 async def get_all_referrals(
@@ -190,12 +248,21 @@ async def get_all_referrals(
     Admin / HR users see ALL referrals across all employees.
     Normal employees see ONLY their own submitted referrals.
     """
-    return await HiringService.get_all_referrals(
+    uid = str(current_user.get("_id", ""))
+    cache_key = make_list_key("hirings:referrals", uid=uid, hid=hiring_id, st=status, s=search)
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    res = await HiringService.get_all_referrals(
         current_user=current_user,
         hiring_id=hiring_id,
         status_val=status,
         search=search
     )
+    if res is not None:
+        await set_cache(cache_key, res, ttl=60)
+    return res
 
 @router.get("/{hiring_id}/referrals", response_model=List[ReferralResponse])
 async def get_job_referrals(
@@ -208,12 +275,21 @@ async def get_job_referrals(
     Get referrals list for a specific job posting ID.
     Admin / HR users see ALL referrals. Normal employees see ONLY their own.
     """
-    return await HiringService.get_all_referrals(
+    uid = str(current_user.get("_id", ""))
+    cache_key = make_list_key("hirings:referrals", uid=uid, hid=hiring_id, st=status, s=search)
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    res = await HiringService.get_all_referrals(
         current_user=current_user,
         hiring_id=hiring_id,
         status_val=status,
         search=search
     )
+    if res is not None:
+        await set_cache(cache_key, res, ttl=60)
+    return res
 
 @router.get("/referrals/{referral_id}", response_model=ReferralResponse)
 async def get_referral_by_id(
@@ -221,7 +297,15 @@ async def get_referral_by_id(
     current_user: dict = Depends(get_current_employee)
 ):
     """Get single referral details by ID."""
-    return await HiringService.get_referral_by_id(referral_id, current_user)
+    cache_key = f"hirings:referral:{referral_id}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    res = await HiringService.get_referral_by_id(referral_id, current_user)
+    if res is not None:
+        await set_cache(cache_key, res, ttl=120)
+    return res
 
 @router.put("/referrals/{referral_id}", response_model=ReferralResponse)
 @router.put("/{hiring_id}/referrals/{referral_id}", response_model=ReferralResponse)
@@ -232,7 +316,9 @@ async def update_referral(
     current_user: dict = Depends(get_current_employee)
 ):
     """Update candidate referral details or status."""
-    return await HiringService.update_referral(referral_id, data, current_user)
+    res = await HiringService.update_referral(referral_id, data, current_user)
+    await clear_pattern("hirings:*")
+    return res
 
 @router.delete("/referrals/{referral_id}", status_code=status.HTTP_204_NO_CONTENT)
 @router.delete("/{hiring_id}/referrals/{referral_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -245,3 +331,4 @@ async def delete_referral(
     success = await HiringService.delete_referral(referral_id, current_user)
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to delete referral")
+    await clear_pattern("hirings:*")

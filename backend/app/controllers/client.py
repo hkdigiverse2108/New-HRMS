@@ -4,12 +4,14 @@ from app.schemas.client import ClientCreate, ClientUpdate, ClientResponse
 from app.schemas.pagination import PaginatedResponse
 from app.services.client import ClientService
 from app.controllers.auth import get_current_employee
+from app.redis.service import get_cache, set_cache, clear_pattern, make_list_key
 
 router = APIRouter(prefix="/clients", tags=["Clients"])
 
 @router.post("", response_model=ClientResponse, response_model_exclude_none=True, status_code=status.HTTP_201_CREATED)
 async def create_client(data: ClientCreate, current_user: dict = Depends(get_current_employee)):
     created = await ClientService.create_client(data)
+    await clear_pattern("clients:*")
     return await ClientService.get_client_by_id(created["_id"])
 
 @router.get("", response_model=PaginatedResponse[ClientResponse], response_model_exclude_none=True)
@@ -21,7 +23,19 @@ async def get_all_clients(
     is_archived: bool = Query(False, description="Set to true to get archived clients, false for active clients"),
     current_user: dict = Depends(get_current_employee)
 ):
-    return await ClientService.get_all_clients(
+    cache_key = make_list_key(
+        "clients",
+        page=page,
+        limit=limit,
+        search=search,
+        project_category=project_category,
+        is_archived=is_archived
+    )
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    result = await ClientService.get_all_clients(
         is_deleted=False, 
         is_archived=is_archived,
         search=search, 
@@ -29,6 +43,8 @@ async def get_all_clients(
         page=page, 
         limit=limit
     )
+    await set_cache(cache_key, result, ttl=60)
+    return result
 
 @router.get("/deleted", response_model=PaginatedResponse[ClientResponse], response_model_exclude_none=True)
 async def get_deleted_clients(
@@ -39,8 +55,15 @@ async def get_deleted_clients(
     role = current_user.get("work_details", {}).get("system_role", "Employee")
     if role not in ["Admin", "Subadmin", "HR"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Admin/HR can view deleted clients")
-        
-    return await ClientService.get_all_clients(is_deleted=True, is_archived=False, page=page, limit=limit)
+
+    cache_key = make_list_key("clients:deleted", page=page, limit=limit)
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    result = await ClientService.get_all_clients(is_deleted=True, is_archived=False, page=page, limit=limit)
+    await set_cache(cache_key, result, ttl=60)
+    return result
 
 
 
@@ -54,6 +77,7 @@ async def update_client(client_id: str, data: ClientUpdate, current_user: dict =
     if not updated:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to update client")
         
+    await clear_pattern("clients:*")
     return await ClientService.get_client_by_id(client_id)
 
 @router.delete("/{client_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -70,16 +94,25 @@ async def delete_client(client_id: str, current_user: dict = Depends(get_current
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to delete client")
 
+    await clear_pattern("clients:*")
+
+@router.patch("/{client_id}/archive", response_model=ClientResponse, response_model_exclude_none=True)
 @router.post("/{client_id}/archive", response_model=ClientResponse, response_model_exclude_none=True)
-async def archive_client(client_id: str, current_user: dict = Depends(get_current_employee)):
+async def archive_client(
+    client_id: str, 
+    status: Optional[bool] = Query(None), 
+    current_user: dict = Depends(get_current_employee)
+):
     item = await ClientService.get_client_by_id(client_id)
     if not item or item.get("is_deleted"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Client not found")
         
-    success = await ClientService.archive_client(client_id, status=True)
+    archive_status = True if status is None else status
+    success = await ClientService.archive_client(client_id, status=archive_status)
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to archive client")
         
+    await clear_pattern("clients:*")
     return await ClientService.get_client_by_id(client_id)
 
 @router.post("/{client_id}/unarchive", response_model=ClientResponse, response_model_exclude_none=True)
@@ -92,4 +125,5 @@ async def unarchive_client(client_id: str, current_user: dict = Depends(get_curr
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to unarchive client")
         
+    await clear_pattern("clients:*")
     return await ClientService.get_client_by_id(client_id)

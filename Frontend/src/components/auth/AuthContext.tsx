@@ -126,11 +126,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           }
         }
-      } catch {
-        // If token expired, clear
-        removeAuthToken();
-        setToken(null);
-        setUser(null);
+      } catch (err: any) {
+        // DO NOT log out on network drops, timeouts, or server blips!
+        // Legitimate 401 Unauthorized responses are dispatched by api.ts as 'hrms:unauthorized'.
+        console.warn("Background refreshProfile transient error (session preserved):", err?.message || err);
       } finally {
         setIsLoading(false);
         inFlightPromiseRef.current = null;

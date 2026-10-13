@@ -10,6 +10,7 @@ from app.schemas.task import (
 from app.schemas.pagination import PaginatedResponse
 from app.services.task import TaskService
 from app.controllers.auth import get_current_employee
+from app.redis.service import get_cache, set_cache, delete_cache, clear_pattern, make_list_key
 
 class RejectReviewPayload(BaseModel):
     reason: Optional[str] = "Needs rework"
@@ -51,19 +52,29 @@ async def get_daily_overview(
     current_user: dict = Depends(get_current_employee)
 ):
     emp_id = employee_id or str(current_user.get("_id") or current_user.get("id"))
-    return await TaskService.get_daily_overview(emp_id)
+    cache_key = f"tasks:daily_overview:{emp_id}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+    result = await TaskService.get_daily_overview(emp_id)
+    await set_cache(cache_key, result, ttl=60)
+    return result
 
 @router.post("/daily-planner", response_model=DailyPlannerResponse)
 async def create_daily_planner(data: DailyPlannerCreate, current_user: dict = Depends(get_current_employee)):
     emp_id = str(current_user.get("_id") or current_user.get("id"))
     from app.services.daily_planner import DailyPlannerService
-    return await DailyPlannerService.create_planner(emp_id, data)
+    result = await DailyPlannerService.create_planner(emp_id, data)
+    await clear_pattern(f"tasks:daily_overview:{emp_id}")
+    return result
 
 @router.put("/daily-planner", response_model=DailyPlannerResponse)
 async def update_daily_planner(data: DailyPlannerUpdate, current_user: dict = Depends(get_current_employee)):
     emp_id = str(current_user.get("_id") or current_user.get("id"))
     from app.services.daily_planner import DailyPlannerService
-    return await DailyPlannerService.update_planner(emp_id, data)
+    result = await DailyPlannerService.update_planner(emp_id, data)
+    await clear_pattern(f"tasks:daily_overview:{emp_id}")
+    return result
 
 @router.get("/daily-planner", response_model=Optional[DailyPlannerResponse])
 async def get_daily_planner(current_user: dict = Depends(get_current_employee)):
@@ -95,6 +106,7 @@ async def create_task(data: TaskCreate, current_user: dict = Depends(get_current
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assigned employee does not exist")
         
     created = await TaskService.create_task(data, assigned_by)
+    await clear_pattern("tasks:*")
     return await TaskService.get_task_by_id(created["_id"])
 
 @router.post("/quick-assign", response_model=list[TaskResponse], status_code=status.HTTP_201_CREATED)
@@ -116,6 +128,7 @@ async def quick_assign_tasks(data: list[TaskQuickAssign], current_user: dict = D
                 
     assigned_by = str(current_user.get("_id") or current_user.get("id"))
     created_items = await TaskService.quick_assign_tasks(data, assigned_by)
+    await clear_pattern("tasks:*")
     return created_items
 
 @router.get("", response_model=PaginatedResponse[TaskResponse])
@@ -140,12 +153,38 @@ async def get_all_tasks(
     role = current_user.get("work_details", {}).get("system_role", "Employee")
     designation = current_user.get("work_details", {}).get("designation", "")
     department = current_user.get("work_details", {}).get("department", "")
+    emp_id = str(current_user.get("_id") or current_user.get("id"))
     
+    # 1. Check Redis Cache
+    cache_key = make_list_key(
+        "tasks",
+        page=page,
+        limit=limit,
+        assigned_to=assigned_to,
+        assigned_by=assigned_by,
+        status=status,
+        priority=priority,
+        history_assigned_to=history_assigned_to,
+        history_assigned_by=history_assigned_by,
+        project_id=project_id,
+        task_category=task_category,
+        timeline_filter=timeline_filter,
+        start_date=start_date,
+        end_date=end_date,
+        search=search,
+        view=view,
+        user_id=emp_id,
+        role=role,
+        department=department
+    )
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
     involved_emp_id = None
     team_employee_ids = None
     
     if role not in ["Admin", "Subadmin", "HR"]:
-        emp_id = str(current_user.get("_id") or current_user.get("id"))
         desig_lower = str(designation or "").lower()
         is_leader = "team leader" in desig_lower or "head" in desig_lower
         
@@ -156,7 +195,7 @@ async def get_all_tasks(
         else:
             involved_emp_id = emp_id
 
-    return await TaskService.get_all_tasks(
+    result = await TaskService.get_all_tasks(
         is_deleted=False, 
         assigned_to=assigned_to, 
         assigned_by=assigned_by, 
@@ -175,6 +214,9 @@ async def get_all_tasks(
         search=search,
         team_employee_ids=team_employee_ids
     )
+    # Store in Redis (60s TTL)
+    await set_cache(cache_key, result, ttl=60)
+    return result
 
 @router.get("/deleted", response_model=PaginatedResponse[TaskResponse])
 async def get_deleted_tasks(
@@ -185,8 +227,15 @@ async def get_deleted_tasks(
     role = current_user.get("work_details", {}).get("system_role", "Employee")
     if role not in ["Admin", "Subadmin", "HR"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Admin/HR can view deleted tasks")
-        
-    return await TaskService.get_all_tasks(is_deleted=True, page=page, limit=limit)
+
+    cache_key = make_list_key("tasks:deleted", page=page, limit=limit)
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    result = await TaskService.get_all_tasks(is_deleted=True, page=page, limit=limit)
+    await set_cache(cache_key, result, ttl=60)
+    return result
 
 @router.get("/stats")
 async def get_task_stats(current_user: dict = Depends(get_current_employee)):
@@ -194,11 +243,25 @@ async def get_task_stats(current_user: dict = Depends(get_current_employee)):
     involved_emp_id = None
     if role not in ["Admin", "Subadmin", "HR"]:
         involved_emp_id = str(current_user.get("_id") or current_user.get("id"))
-    return await TaskService.get_task_stats(involved_emp_id)
+    
+    cache_key = f"tasks:stats:{involved_emp_id or 'all'}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    result = await TaskService.get_task_stats(involved_emp_id)
+    await set_cache(cache_key, result, ttl=60)
+    return result
 
 @router.get("/{task_id}", response_model=TaskResponse)
 async def get_task_by_id(task_id: str, current_user: dict = Depends(get_current_employee)):
-    item = await TaskService.get_task_by_id(task_id)
+    cache_key = f"tasks:item:{task_id}"
+    item = await get_cache(cache_key)
+    if item is None:
+        item = await TaskService.get_task_by_id(task_id)
+        if item and not item.get("is_deleted"):
+            await set_cache(cache_key, item, ttl=120)
+
     if not item or item.get("is_deleted"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
         
@@ -240,6 +303,7 @@ async def update_task(task_id: str, data: TaskUpdate, current_user: dict = Depen
     if not updated:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to update task")
         
+    await clear_pattern("tasks:*")
     return await TaskService.get_task_by_id(task_id)
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -259,6 +323,8 @@ async def delete_task(task_id: str, current_user: dict = Depends(get_current_emp
     success = await TaskService.delete_task(task_id)
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to delete task")
+
+    await clear_pattern("tasks:*")
 
 @router.post("/{task_id}/transfer/request", response_model=TaskResponse)
 async def request_task_transfer(task_id: str, data: TransferRequestPayload, current_user: dict = Depends(get_current_employee)):
@@ -285,11 +351,14 @@ async def request_task_transfer(task_id: str, data: TransferRequestPayload, curr
     if not updated:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to request transfer")
 
+    await clear_pattern("tasks:*")
+
     try:
         from app.repository.notification import NotificationRepository
         task_title = item.get("title", "Task")
         sender_name = current_user.get("personal_info", {}).get("first_name") or current_user.get("name") or "A team member"
         sender_id = str(current_user.get("_id") or current_user.get("id"))
+        reason_text = f" Reason: {data.reason}" if data.reason else ""
         await NotificationRepository.create_notification({
             "recipient_id": str(data.requested_to),
             "title": "Task Transfer Request",
@@ -322,6 +391,8 @@ async def accept_task_transfer(task_id: str, current_user: dict = Depends(get_cu
     updated = await TaskService.accept_transfer(task_id, item)
     if not updated:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to accept transfer")
+
+    await clear_pattern("tasks:*")
 
     try:
         from app.repository.notification import NotificationRepository
@@ -364,6 +435,8 @@ async def reject_task_transfer(task_id: str, current_user: dict = Depends(get_cu
     if not updated:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to reject transfer")
 
+    await clear_pattern("tasks:*")
+
     try:
         from app.repository.notification import NotificationRepository
         task_title = item.get("title", "Task")
@@ -400,6 +473,8 @@ async def approve_task(task_id: str, current_user: dict = Depends(get_current_em
     updated = await TaskService.approve_task(task_id, emp_id)
     if not updated:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to approve task")
+
+    await clear_pattern("tasks:*")
     return await TaskService.get_task_by_id(task_id)
 
 @router.post("/{task_id}/reject-review", response_model=TaskResponse)
@@ -418,4 +493,6 @@ async def reject_review_task(task_id: str, data: Optional[RejectReviewPayload] =
     updated = await TaskService.reject_review(task_id, reason)
     if not updated:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to reject review")
+
+    await clear_pattern("tasks:*")
     return await TaskService.get_task_by_id(task_id)

@@ -6,6 +6,7 @@ from app.schemas.submitted_document import SubmittedDocumentCreate, SubmittedDoc
 from app.services.submitted_document import SubmittedDocumentService
 from app.repository.document_type import DocumentTypeRepository
 from app.controllers.auth import get_current_employee
+from app.redis.service import get_cache, set_cache, clear_pattern, make_list_key
 
 router = APIRouter(prefix="/submitted-documents", tags=["Submitted Employee Documents Portal"])
 
@@ -35,6 +36,8 @@ async def create_submitted_document_json(
     )
     if not created:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to add submitted document. Invalid Employee or Document Type.")
+
+    await clear_pattern("submitted_docs:*")
     return created
 
 @router.post("/upload", response_model=SubmittedDocumentResponse, status_code=status.HTTP_201_CREATED)
@@ -66,6 +69,8 @@ async def upload_submitted_document_file(
     )
     if not created:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to upload submitted document. Invalid Employee or Document Type.")
+
+    await clear_pattern("submitted_docs:*")
     return created
 
 @router.get("/my-documents", response_model=List[SubmittedDocumentResponse])
@@ -79,7 +84,20 @@ async def get_my_submitted_documents(
 ):
     """Employee Portal View: Returns submitted documents for logged in employee with filters."""
     my_employee_id = str(current_user.get("_id", ""))
-    return await SubmittedDocumentService.get_my_submitted_documents(
+    cache_key = make_list_key(
+        "submitted_docs:my",
+        uid=my_employee_id,
+        dt=document_type_id,
+        st=status,
+        s=search,
+        p=page,
+        l=limit
+    )
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    res = await SubmittedDocumentService.get_my_submitted_documents(
         employee_id=my_employee_id,
         document_type_id=document_type_id,
         status=status,
@@ -87,6 +105,9 @@ async def get_my_submitted_documents(
         page=page,
         limit=limit
     )
+    if res is not None:
+        await set_cache(cache_key, res, ttl=60)
+    return res
 
 @router.get("", response_model=List[SubmittedDocumentResponse])
 async def get_all_submitted_documents(
@@ -104,7 +125,20 @@ async def get_all_submitted_documents(
         # Standard employee can only see their own documents
         employee_id = str(current_user.get("_id", ""))
 
-    return await SubmittedDocumentService.get_all_submitted_documents(
+    cache_key = make_list_key(
+        "submitted_docs:all",
+        emp=employee_id,
+        dt=document_type_id,
+        st=status,
+        s=search,
+        p=page,
+        l=limit
+    )
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    res = await SubmittedDocumentService.get_all_submitted_documents(
         is_deleted=False,
         employee_id=employee_id,
         document_type_id=document_type_id,
@@ -113,6 +147,9 @@ async def get_all_submitted_documents(
         page=page,
         limit=limit
     )
+    if res is not None:
+        await set_cache(cache_key, res, ttl=60)
+    return res
 
 @router.get("/{item_id}/download")
 async def download_submitted_document_file(
@@ -152,6 +189,20 @@ async def get_submitted_document_by_id(
     item_id: str,
     current_user: dict = Depends(get_current_employee)
 ):
+    cache_key = f"submitted_docs:item:{item_id}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        is_admin = False
+        try:
+            check_admin_or_hr_role(current_user)
+            is_admin = True
+        except HTTPException:
+            pass
+        my_id = str(current_user.get("_id", ""))
+        if not is_admin and str(cached.get("employee_id", "")) != my_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to view this document")
+        return cached
+
     item = await SubmittedDocumentService.get_by_id(item_id)
     if not item or item.get("is_deleted"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submitted document not found")
@@ -167,6 +218,7 @@ async def get_submitted_document_by_id(
     if not is_admin and str(item.get("employee_id", "")) != my_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to view this document")
 
+    await set_cache(cache_key, item, ttl=120)
     return item
 
 @router.put("/{item_id}", response_model=SubmittedDocumentResponse)
@@ -190,6 +242,7 @@ async def update_submitted_document(
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to update submitted document")
 
+    await clear_pattern("submitted_docs:*")
     return await SubmittedDocumentService.get_by_id(item_id)
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -205,3 +258,4 @@ async def delete_submitted_document(
     success = await SubmittedDocumentService.delete_submitted_document(item_id)
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to delete submitted document")
+    await clear_pattern("submitted_docs:*")

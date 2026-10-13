@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import List, Optional
 from fastapi import APIRouter, UploadFile, File, Form, Query, HTTPException, status
 from app.config import ROOT_DIR
+from app.redis.service import get_cache, set_cache, clear_pattern, make_list_key
 
 # Root images directory (outside frontend and backend)
 IMAGES_DIR = ROOT_DIR / "images"
@@ -57,6 +58,9 @@ async def upload_image(
     finally:
         file.file.close()
 
+    # Invalidate images cache
+    await clear_pattern("images:*")
+
     # POSIX relative url (e.g. /images/employee/employee_12345.png)
     file_url = f"/images/{folder_name}/{unique_filename}"
 
@@ -80,6 +84,11 @@ async def list_images(
     Returns list of all uploaded images, optionally filtered by folder.
     Used for image selection & reuse in frontend.
     """
+    cache_key = make_list_key("images:list", folder=folder)
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
     IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 
     results = []
@@ -111,11 +120,13 @@ async def list_images(
     # Sort newest first
     results.sort(key=lambda x: x["created_at"], reverse=True)
 
-    return {
+    res = {
         "status": "success",
         "total": len(results),
         "data": results
     }
+    await set_cache(cache_key, res, ttl=120)
+    return res
 
 @router.delete("")
 @router.delete("/")
@@ -158,6 +169,7 @@ async def delete_image(
     if file_path.exists() and file_path.is_file():
         try:
             file_path.unlink()
+            await clear_pattern("images:*")
             return {"status": "success", "message": "Image deleted successfully"}
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")

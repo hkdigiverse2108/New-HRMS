@@ -6,6 +6,7 @@ from app.schemas.letter_request import (
 )
 from app.services.letter_request import LetterRequestService
 from app.controllers.auth import get_current_employee
+from app.redis.service import get_cache, set_cache, clear_pattern, make_list_key
 
 router = APIRouter(prefix="/letter-requests", tags=["Letter Requests Workflow"])
 
@@ -28,6 +29,8 @@ async def create_letter_request(
     created = await LetterRequestService.create_request(data, current_user)
     if not created:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to create letter request")
+
+    await clear_pattern("letter_requests:*")
     return created
 
 @router.get("", response_model=List[LetterRequestResponse])
@@ -43,18 +46,40 @@ async def get_all_letter_requests(
     if not is_admin_or_hr(current_user):
         employee_id = emp_id
 
-    return await LetterRequestService.get_all_requests(
+    cache_key = make_list_key(
+        "letter_requests:list",
+        uid=emp_id,
+        emp=employee_id,
+        st=status_filter,
+        s=search
+    )
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    res = await LetterRequestService.get_all_requests(
         is_deleted=False,
         employee_id=employee_id,
         status=status_filter,
         search=search
     )
+    if res is not None:
+        await set_cache(cache_key, res, ttl=60)
+    return res
 
 @router.get("/{item_id}", response_model=LetterRequestResponse)
 async def get_letter_request_by_id(
     item_id: str,
     current_user: dict = Depends(get_current_employee)
 ):
+    cache_key = f"letter_requests:item:{item_id}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        emp_id = str(current_user.get("_id") or current_user.get("id"))
+        if not is_admin_or_hr(current_user) and cached.get("employee_id") != emp_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        return cached
+
     req = await LetterRequestService.get_by_id(item_id)
     if not req or req.get("is_deleted"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Letter request not found")
@@ -63,6 +88,7 @@ async def get_letter_request_by_id(
     if not is_admin_or_hr(current_user) and req.get("employee_id") != emp_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
+    await set_cache(cache_key, req, ttl=120)
     return req
 
 @router.put("/{item_id}", response_model=LetterRequestResponse)
@@ -82,6 +108,8 @@ async def update_letter_request(
     updated = await LetterRequestService.update_request(item_id, data)
     if not updated:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to update letter request")
+
+    await clear_pattern("letter_requests:*")
     return updated
 
 @router.post("/{item_id}/send-document", response_model=LetterRequestResponse)
@@ -96,6 +124,8 @@ async def send_document_for_request(
     updated = await LetterRequestService.send_document(item_id, send_data, current_user)
     if not updated:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to send document for request")
+
+    await clear_pattern("letter_requests:*")
     return updated
 
 @router.post("/{item_id}/approve", response_model=LetterRequestResponse)
@@ -114,6 +144,8 @@ async def approve_letter_request(
     updated = await LetterRequestService.approve_request(item_id, current_user)
     if not updated:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to approve letter request")
+
+    await clear_pattern("letter_requests:*")
     return updated
 
 @router.post("/{item_id}/reject", response_model=LetterRequestResponse)
@@ -134,6 +166,8 @@ async def reject_letter_request(
     updated = await LetterRequestService.reject_request(item_id, reason)
     if not updated:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to reject letter request")
+
+    await clear_pattern("letter_requests:*")
     return updated
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -152,3 +186,4 @@ async def delete_letter_request(
     success = await LetterRequestService.delete_request(item_id)
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to delete letter request")
+    await clear_pattern("letter_requests:*")
