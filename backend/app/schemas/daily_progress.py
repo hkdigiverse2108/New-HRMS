@@ -36,6 +36,8 @@ class DailyProgressResponse(DailyProgressBase):
     employee_id: str
     employee_name: Optional[str] = "Employee"
     department: Optional[str] = "General"
+    designation: Optional[str] = None
+    sub_department: Optional[str] = None
     status: str = "Pending" # PENDING, VERIFIED, REJECTED
     rating: float = 0.0
     remarks: Optional[str] = None

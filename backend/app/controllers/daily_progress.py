@@ -33,9 +33,10 @@ async def get_all_progress(
     to_date: Optional[str] = Query(None, description="End date for custom range (YYYY-MM-DD)"),
     view_type: Optional[str] = Query(None, description="my or team"),
     department: Optional[str] = Query(None, description="Filter by department"),
+    group_filter: Optional[str] = Query(None, description="Filter by group: employees (excludes HR/Head/TL) or leaders_hr (HR, Head, TL)"),
     current_user: dict = Depends(get_current_employee)
 ):
-    return await DailyProgressService.get_all_progress(current_user, search, employee_id, status_filter, date, from_date, to_date, view_type, department)
+    return await DailyProgressService.get_all_progress(current_user, search, employee_id, status_filter, date, from_date, to_date, view_type, department, group_filter)
 
 @router.get("/{progress_id}", response_model=DailyProgressResponse)
 async def get_progress_by_id(progress_id: str, current_user: dict = Depends(get_current_employee)):

@@ -35,13 +35,38 @@ class DailyProgressRepository:
     async def create_progress(cls, data: Dict[str, Any]) -> Dict[str, Any]:
         collection = await cls.get_collection()
         now = datetime.utcnow()
+        sub = data.get("submitted_at")
+        if not sub:
+            sub_dt = now
+        elif isinstance(sub, datetime):
+            sub_dt = sub
+        elif isinstance(sub, str):
+            try:
+                sub_dt = datetime.fromisoformat(sub)
+            except Exception:
+                sub_dt = now
+        else:
+            sub_dt = now
+
+        emp_id = str(data.get("employee_id") or "")
+        # Concurrency safety: check if record already exists for this employee on this date
+        if emp_id:
+            start_day = datetime(sub_dt.year, sub_dt.month, sub_dt.day, 0, 0, 0)
+            end_day = datetime(sub_dt.year, sub_dt.month, sub_dt.day, 23, 59, 59)
+            existing = await collection.find_one({
+                "employee_id": emp_id,
+                "submitted_at": {"$gte": start_day, "$lte": end_day}
+            })
+            if existing:
+                return serialize_mongo(existing)
+
         doc = {
             **data,
             "status": "PENDING",
             "rating": 0,
             "remarks": None,
             "verified_by_id": None,
-            "submitted_at": now,
+            "submitted_at": sub_dt,
             "verified_at": None,
             "activity_logs": [{
                 "action": "AUTO_GENERATED",
