@@ -620,57 +620,6 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
     const empNameStr = selectedEmp ? selectedEmp.name.replace(/[^a-zA-Z0-9_-]/g, "_") : "Document";
     const fileName = `${docName}_${empNameStr}.pdf`;
 
-    let letterheadHTML = "";
-    if (letterhead.enabled) {
-      if (letterhead.headerImageUrl) {
-        letterheadHTML = `
-          <div style="position: relative; width: 100%; overflow: hidden; background: #ffffff; box-sizing: border-box; margin-bottom: 14px;">
-            <img src="${letterhead.headerImageUrl}" style="width: 100%; max-height: 140px; object-fit: cover;" />
-          </div>
-        `;
-      } else {
-        letterheadHTML = `
-          <div style="position: relative; width: 100%; overflow: hidden; background: #ffffff; border-bottom: 2px solid #0f2552; box-sizing: border-box; margin-bottom: 14px;">
-            <div style="display: flex; align-items: center; justify-content: space-between; min-height: 80px; padding: 8px 24px;">
-              <div style="display: flex; align-items: center; gap: 14px; z-index: 10;">
-                ${letterhead.logoUrl
-                  ? `<img src="${letterhead.logoUrl}" style="height: 48px; width: auto; object-fit: contain;" />`
-                  : `<div style="width: 44px; height: 44px; border-radius: 10px; background: #0f2552; color: #ffffff; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 18px;">${letterhead.companyName ? letterhead.companyName.charAt(0) : "HK"}</div>`
-                }
-                <div>
-                  <div style="font-size: 20px; font-weight: 900; color: #0f2552; line-height: 1.1;">${letterhead.companyName || "HariKrushn DigiVerse LLP"}</div>
-                  <div style="font-size: 12px; font-weight: 700; color: #16a34a; margin-top: 3px;"><span style="color: #0f2552;">|</span> ${letterhead.tagline || "Innovate • Transform • Grow"}</div>
-                </div>
-              </div>
-              <div style="position: absolute; right: 0; top: 0; height: 100%; width: 45%; pointer-events: none; overflow: hidden;">
-                <svg viewBox="0 0 350 100" preserveAspectRatio="none" style="height: 100%; width: 100%;">
-                  <path d="M 100,0 C 180,30 250,70 350,100 L 350,0 Z" fill="#0f2552" />
-                  <path d="M 210,100 C 260,75 300,40 350,0 L 350,100 Z" fill="#6bb82d" />
-                </svg>
-              </div>
-            </div>
-          </div>
-        `;
-      }
-    }
-
-    const pagesContent = pageSections.map((sec, idx) => {
-      const cleanSec = sec
-        .replace(/class="bg-primary\/15[^"]*"/g, 'style="font-weight: bold; color: #0284c7;"')
-        .replace(/class="bg-rose-500\/15[^"]*"/g, 'style="font-weight: bold; color: #e11d48;"');
-
-      return `
-        <div class="pdf-page ${idx > 0 ? 'pdf-page-break' : ''}">
-          <div>
-            ${letterheadHTML}
-            <div style="padding: 10px 32px 16px 32px; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 10pt; line-height: 1.4; color: #1e293b; word-wrap: break-word;">
-              ${cleanSec}
-            </div>
-          </div>
-        </div>
-      `;
-    }).join("");
-
     const originalBodyStyle = document.body.style.cssText;
     const originalHtmlStyle = document.documentElement.style.cssText;
     const scrollX = window.scrollX;
@@ -678,39 +627,108 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
 
     let container: HTMLDivElement | null = null;
 
+    // html2canvas can't read modern CSS colors (Tailwind v4 uses oklch). Instead of stripping the
+    // styles (which made the PDF look different from the preview), each such color is converted to rgba.
+    const colorCanvas = document.createElement("canvas");
+    colorCanvas.width = colorCanvas.height = 1;
+    const colorCtx = colorCanvas.getContext("2d", { willReadFrequently: true });
+    const colorCache = new Map<string, string>();
+    const toRgba = (cssColor: string) => {
+      const cached = colorCache.get(cssColor);
+      if (cached) return cached;
+      let out = "rgba(0, 0, 0, 0)";
+      if (colorCtx) {
+        colorCtx.clearRect(0, 0, 1, 1);
+        colorCtx.fillStyle = "rgba(0, 0, 0, 0)";
+        colorCtx.fillStyle = cssColor;
+        colorCtx.fillRect(0, 0, 1, 1);
+        const [r = 0, g = 0, b = 0, a = 0] = colorCtx.getImageData(0, 0, 1, 1).data;
+        out = `rgba(${r}, ${g}, ${b}, ${+(a / 255).toFixed(3)})`;
+      }
+      colorCache.set(cssColor, out);
+      return out;
+    };
+    const UNSUPPORTED_COLOR = /\b(oklch|oklab|lch|lab|color-mix|color)\(/i;
+    // Replace every unsupported color function inside a value (e.g. inside box-shadow or gradients)
+    const convertColors = (value: string) => {
+      let result = "";
+      let i = 0;
+      const re = /\b(oklch|oklab|lch|lab|color-mix|color)\(/gi;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(value))) {
+        let depth = 0;
+        let end = m.index + m[0].length - 1;
+        for (; end < value.length; end++) {
+          if (value[end] === "(") depth++;
+          else if (value[end] === ")" && --depth === 0) break;
+        }
+        result += value.slice(i, m.index) + toRgba(value.slice(m.index, end + 1));
+        i = end + 1;
+        re.lastIndex = i;
+      }
+      return result + value.slice(i);
+    };
+    const COLOR_PROPS = [
+      "color", "background-color", "background-image",
+      "border-top-color", "border-right-color", "border-bottom-color", "border-left-color",
+      "outline-color", "text-decoration-color", "text-shadow", "box-shadow", "-webkit-text-stroke-color",
+    ];
+    const inlineSafeColors = (el: Element, view: Window) => {
+      const cs = view.getComputedStyle(el);
+      const style = (el as HTMLElement).style;
+      if (!style) return;
+      for (const prop of COLOR_PROPS) {
+        const v = cs.getPropertyValue(prop);
+        if (v && UNSUPPORTED_COLOR.test(v)) style.setProperty(prop, convertColors(v), "important");
+      }
+    };
+
+    const waitForImages = (root: HTMLElement) =>
+      Promise.all(
+        Array.from(root.querySelectorAll("img")).map(
+          (img) =>
+            new Promise((resolve) => {
+              if (img.complete && img.naturalHeight !== 0) {
+                resolve(true);
+              } else {
+                img.onload = () => resolve(true);
+                img.onerror = () => resolve(true);
+                setTimeout(() => resolve(true), 1500);
+              }
+            })
+        )
+      );
+
     try {
+      // The exact A4 pages shown in the Live Preview: the PDF is a picture of these
+      const previewPages = Array.from(document.querySelectorAll<HTMLDivElement>(".a4-page-card"));
+      if (previewPages.length === 0) {
+        throw new Error("Preview is not ready yet");
+      }
+
       container = document.createElement("div");
       container.id = "pdf-export-container";
-      container.style.cssText = `
-        width: 210mm;
-        background: #ffffff;
-        color: #0f172a;
-        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        font-size: 10pt;
-        line-height: 1.4;
-        margin: 0 auto;
-      `;
-      container.innerHTML = pagesContent;
+      // Off-screen but laid out with the same app styles as the preview
+      container.style.cssText = "position: fixed; left: -10000px; top: 0; width: 210mm;";
       document.body.appendChild(container);
 
-      // Preload all images in container before html2canvas capture
-      const images = Array.from(container.querySelectorAll("img"));
-      if (images.length > 0) {
-        await Promise.all(
-          images.map(
-            (img) =>
-              new Promise((resolve) => {
-                if (img.complete && img.naturalHeight !== 0) {
-                  resolve(true);
-                } else {
-                  img.onload = () => resolve(true);
-                  img.onerror = () => resolve(true);
-                  setTimeout(() => resolve(true), 1500);
-                }
-              })
-          )
-        );
-      }
+      const pages = previewPages.map((card) => {
+        const page = card.cloneNode(true) as HTMLDivElement;
+        // Paper look only (rounded corners, shadow) is removed; the border stays as transparent so
+        // the content keeps the exact same width as on screen.
+        page.style.setProperty("border-radius", "0", "important");
+        page.style.setProperty("box-shadow", "none", "important");
+        page.style.setProperty("border-color", "transparent", "important");
+        page.style.setProperty("margin", "0", "important");
+        // A hair under A4 (297mm) so html2pdf never spills a sheet onto a second page;
+        // the last 1mm of the preview card is bottom padding only.
+        page.style.setProperty("height", "296mm", "important");
+        page.style.setProperty("min-height", "296mm", "important");
+        page.style.setProperty("max-height", "296mm", "important");
+        container!.appendChild(page);
+        return page;
+      });
+      await waitForImages(container);
 
       const html2pdfModule: any = await import("html2pdf.js");
       const html2pdf = html2pdfModule.default || html2pdfModule;
@@ -726,39 +744,33 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
           allowTaint: true,
           scrollX: 0,
           scrollY: 0,
+          backgroundColor: "#ffffff",
           onclone: (clonedDoc: Document) => {
-            // Strip style and stylesheet links to eliminate Tailwind v4 oklch rules
-            clonedDoc.querySelectorAll("style, link").forEach((el) => el.remove());
-            clonedDoc.documentElement.removeAttribute("style");
-            clonedDoc.body.removeAttribute("style");
-
-            // Inject clean standalone base styles for PDF document elements
-            const baseStyle = clonedDoc.createElement("style");
-            baseStyle.textContent = `
-              * { box-sizing: border-box !important; }
-              html, body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important; color: #1e293b !important; background: #ffffff !important; margin: 0 !important; padding: 0 !important; }
-              .pdf-page { width: 210mm !important; min-height: 295mm !important; background: #ffffff !important; box-sizing: border-box !important; display: flex !important; flex-direction: column !important; justify-content: space-between !important; position: relative !important; overflow: hidden !important; }
-              .pdf-page-break { page-break-before: always !important; break-before: page !important; }
-              p { margin-top: 3px !important; margin-bottom: 6px !important; line-height: 1.4 !important; font-size: 10pt !important; color: #1e293b !important; }
-              p:empty { margin-bottom: 3px !important; min-height: 1.4em !important; }
-              h1 { font-size: 1.3rem !important; font-weight: 800 !important; margin: 12px 0 6px !important; color: #0f172a !important; line-height: 1.3 !important; }
-              h2 { font-size: 1.1rem !important; font-weight: 800 !important; margin: 10px 0 5px !important; color: #0f172a !important; line-height: 1.35 !important; }
-              h3 { font-size: 0.95rem !important; font-weight: 700 !important; margin: 8px 0 4px !important; color: #0f172a !important; line-height: 1.4 !important; }
-              ul, ol { margin: 4px 0 6px !important; padding-left: 20px !important; }
-              li { margin-bottom: 3px !important; font-size: 10pt !important; line-height: 1.4 !important; }
-              table { width: 100% !important; border-collapse: collapse !important; margin: 8px 0 !important; font-size: 9pt !important; }
-              td, th { padding: 4px 8px !important; border: 1px solid #cbd5e1 !important; text-align: left !important; }
-              th { background: #f1f5f9 !important; font-weight: 700 !important; }
-              img { max-width: 100% !important; height: auto !important; }
-            `;
-            clonedDoc.head.appendChild(baseStyle);
+            const view = clonedDoc.defaultView || window;
+            // html2canvas also reads the page background of <html> and <body>
+            clonedDoc.documentElement.style.setProperty("background", "#ffffff", "important");
+            clonedDoc.body.style.setProperty("background", "#ffffff", "important");
+            const targets = clonedDoc.querySelectorAll(".html2pdf__overlay, .html2pdf__overlay *");
+            targets.forEach((el) => inlineSafeColors(el, view));
           },
         },
         jsPDF: { unit: "mm", format: "a4", orientation: "portrait" as const },
-        pagebreak: { mode: ["css", "legacy"], before: ".pdf-page-break" },
       };
 
-      await html2pdf().set(opt).from(container).save();
+      // One preview page = one A4 sheet (no slicing, so nothing is cut or shifted)
+      let worker = html2pdf().set(opt).from(pages[0]).toPdf();
+      for (const page of pages.slice(1)) {
+        worker = worker
+          .get("pdf")
+          .then((pdf: any) => {
+            pdf.addPage();
+          })
+          .from(page)
+          .toContainer()
+          .toCanvas()
+          .toPdf();
+      }
+      await worker.save();
       toast.success(`PDF "${fileName}" downloaded successfully!`);
     } catch (err: any) {
       console.error("PDF export error:", err);
@@ -767,7 +779,7 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
       if (container && container.parentNode) {
         container.parentNode.removeChild(container);
       }
-      document.querySelectorAll(".html2pdf__container").forEach((el) => el.remove());
+      document.querySelectorAll(".html2pdf__container, .html2pdf__overlay").forEach((el) => el.remove());
       document.body.style.cssText = originalBodyStyle;
       document.documentElement.style.cssText = originalHtmlStyle;
       window.scrollTo(scrollX, scrollY);
