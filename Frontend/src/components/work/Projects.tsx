@@ -175,6 +175,7 @@ interface CalendarItem {
     role?: string | undefined;
     author?: string | undefined;
     isClientIssue?: boolean | undefined;
+    taskId?: string | undefined;
   }[] | undefined;
 }
 
@@ -221,7 +222,8 @@ export const mapBackendContentToCalendarItem = (item: any): CalendarItem => {
           timestamp: iss.timestamp || "",
           role: iss.role || "Shoot",
           author: iss.author || "Team",
-          isClientIssue: iss.isClientIssue !== false
+          isClientIssue: iss.isClientIssue !== false,
+          taskId: iss.taskId || iss.task_id || undefined,
         }
     ),
   };
@@ -1005,18 +1007,48 @@ const CalendarIssuesCell = ({
     });
   }, [issuesList, currentUserId, currentUserName]);
 
-  const handleAddIssue = () => {
+  const handleAddIssue = async () => {
     if (!newIssueText.trim()) return;
     const now = new Date();
     const dateStr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const todayYMD = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const cleanText = newIssueText.trim();
+    const issueId = `issue-${Date.now()}`;
+
+    let createdTaskId: string | undefined = undefined;
+
+    // Automatically create a Task in Task Management if Client Issue is checked
+    if (isClientIssue) {
+      try {
+        const ideaTitle = item.topic || "Content Idea";
+        const taskPayload = {
+          title: `[Client Issue] ${ideaTitle}: ${cleanText}`,
+          description: `Client Issue reported from Content Calendar (${project.name || project.title || 'Project'} - ${ideaTitle})\nRole/Phase: ${selectedRole}\nAdded by: ${currentUserName}\nRemark: "${cleanText}"`,
+          priority: "High",
+          status: "Todo",
+          task_category: "Client Issue",
+          due_date: todayYMD,
+          project_id: project.id,
+          content_item_id: item.id,
+          assigned_to: item.brand_person || (Array.isArray(item.assignedTo) && item.assignedTo[0] ? item.assignedTo[0] : currentUserId) || currentUserId,
+        };
+        const res: any = await api.post("/tasks", taskPayload, { showErrorToast: false });
+        if (res?._id || res?.id) {
+          createdTaskId = String(res._id || res.id);
+        }
+      } catch (err) {
+        console.warn("Could not create Client Issue task:", err);
+      }
+    }
 
     const newIssue = {
-      id: `issue-${Date.now()}`,
-      text: newIssueText.trim(),
+      id: issueId,
+      text: cleanText,
       role: selectedRole,
       author: currentUserName,
       authorId: currentUserId,
       isClientIssue: isClientIssue,
+      taskId: createdTaskId,
       timestamp: dateStr
     };
 
@@ -1025,7 +1057,7 @@ const CalendarIssuesCell = ({
       x.id === item.id ? { ...x, issues: updatedIssues } : x
     );
     setProjects(projects.map(p => p.id === project.id ? { ...p, contentCalendar: updatedCalendar } : p));
-    onLogActivity("Logged Issue", `Added ${isClientIssue ? 'Client Issue' : 'Remark'} (${selectedRole}) "${newIssueText.trim()}" on content idea "${item.topic || 'Untitled'}" by ${currentUserName}`);
+    onLogActivity("Logged Issue", `Added ${isClientIssue ? 'Client Issue' : 'Remark'} (${selectedRole}) "${cleanText}" on content idea "${item.topic || 'Untitled'}" by ${currentUserName}`);
     setNewIssueText("");
 
     if (project.id && item.id) {
@@ -1035,9 +1067,41 @@ const CalendarIssuesCell = ({
     }
   };
 
-  const handleToggleClientIssue = (issueId: string) => {
+  const handleToggleClientIssue = async (issueId: string) => {
+    const targetIssue = issuesList.find(i => i.id === issueId);
+    if (!targetIssue) return;
+    const willBeClientIssue = !targetIssue.isClientIssue;
+
+    let newTaskId = targetIssue.taskId;
+    if (willBeClientIssue && !newTaskId) {
+      try {
+        const now = new Date();
+        const todayYMD = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        const ideaTitle = item.topic || "Content Idea";
+        const res: any = await api.post("/tasks", {
+          title: `[Client Issue] ${ideaTitle}: ${targetIssue.text}`,
+          description: `Client Issue reported from Content Calendar (${project.name || project.title || 'Project'} - ${ideaTitle})\nRole/Phase: ${targetIssue.role}\nAdded by: ${currentUserName}\nRemark: "${targetIssue.text}"`,
+          priority: "High",
+          status: "Todo",
+          task_category: "Client Issue",
+          due_date: todayYMD,
+          project_id: project.id,
+          content_item_id: item.id,
+          assigned_to: item.brand_person || (Array.isArray(item.assignedTo) && item.assignedTo[0] ? item.assignedTo[0] : currentUserId) || currentUserId,
+        }, { showErrorToast: false });
+        if (res?._id || res?.id) {
+          newTaskId = String(res._id || res.id);
+        }
+      } catch (err) {
+        console.warn("Could not create Client Issue task on toggle:", err);
+      }
+    } else if (!willBeClientIssue && newTaskId) {
+      api.delete(`/tasks/${newTaskId}`, { showErrorToast: false }).catch(() => {});
+      newTaskId = undefined;
+    }
+
     const updatedIssues = issuesList.map(iss =>
-      iss.id === issueId ? { ...iss, isClientIssue: !iss.isClientIssue } : iss
+      iss.id === issueId ? { ...iss, isClientIssue: willBeClientIssue, taskId: newTaskId } : iss
     );
     const updatedCalendar = projectCalendar.map((x: any) =>
       x.id === item.id ? { ...x, issues: updatedIssues } : x
@@ -1059,6 +1123,9 @@ const CalendarIssuesCell = ({
     setProjects(projects.map(p => p.id === project.id ? { ...p, contentCalendar: updatedCalendar } : p));
     if (issueObj) {
       onLogActivity("Resolved Issue", `Resolved issue "${issueObj.text}" on content idea "${item.topic || 'Untitled'}"`);
+      if (issueObj.taskId) {
+        api.delete(`/tasks/${issueObj.taskId}`, { showErrorToast: false }).catch(() => {});
+      }
     }
 
     if (project.id && item.id) {

@@ -76,6 +76,8 @@ class TaskRepository:
                 "$or": [
                     {"assigned_to": involved_emp_id},
                     {"assigned_by": involved_emp_id},
+                    {"created_by": involved_emp_id},
+                    {"collaborators": involved_emp_id},
                     {"transfer_request.requested_to": involved_emp_id},
                     {"transfer_request.requested_by": involved_emp_id},
                     {"transfer_history.to_employee": involved_emp_id},
@@ -145,10 +147,10 @@ class TaskRepository:
 
         if page and limit:
             skip = (page - 1) * limit
-            cursor = collection.find(query).skip(skip).limit(limit)
+            cursor = collection.find(query).sort([("due_date", -1), ("created_at", -1)]).skip(skip).limit(limit)
             total_pages = (total + limit - 1) // limit
         else:
-            cursor = collection.find(query)
+            cursor = collection.find(query).sort([("due_date", -1), ("created_at", -1)])
             page = 1
             limit = total if total > 0 else 10
             total_pages = 1 if total > 0 else 0

@@ -23,7 +23,7 @@ import { hasModulePermission, isUserAdmin } from "@/lib/permissions";
 type TaskStatus = "Todo" | "In Progress" | "In Review" | "Done";
 type Priority = "High" | "Medium" | "Low";
 type ScopeFilter = "all" | "my_tasks" | "assigned_by_me" | "transfers";
-type TimeframeFilter = "all" | "today" | "overdue" | "upcoming";
+type TimeframeFilter = "all" | "today" | "overdue" | "client_issue" | "upcoming";
 
 interface BackendTask {
   _id: string;
@@ -113,6 +113,37 @@ interface TaskItem {
   rawBackend: BackendTask;
 }
 
+interface TaskFormErrors {
+  title?: string | undefined;
+  dueDate?: string | undefined;
+  assignee?: string | undefined;
+}
+
+const formatDateDMY = (dateVal?: string | Date | null): string => {
+  if (!dateVal) return "";
+  try {
+    if (typeof dateVal === "string") {
+      const trimmed = dateVal.trim();
+      if (!trimmed) return "";
+      if (/^\d{2}-\d{2}-\d{4}$/.test(trimmed)) return trimmed;
+      const match = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (match && match[1] && match[2] && match[3]) {
+        const year = match[1];
+        const month = match[2].padStart(2, "0");
+        const day = match[3].padStart(2, "0");
+        return `${day}-${month}-${year}`;
+      }
+    }
+    const d = new Date(dateVal);
+    if (!isNaN(d.getTime())) {
+      return format(d, "dd-MM-yyyy");
+    }
+    return String(dateVal);
+  } catch {
+    return String(dateVal);
+  }
+};
+
 export function Tasks({ setActive, isNew }: { setActive?: (route: string) => void; isNew?: boolean }) {
   const { user } = useAuth();
   const anyUser = user as any;
@@ -123,10 +154,10 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   const userDesignation = String(anyUser?.work_details?.designation || anyUser?.designation || "").trim().toLowerCase();
 
   // Role checks requested by user:
-  // 1. Team Leader:
-  const isTeamLeader = userDesignation.includes("team leader") || userRole.includes("team leader");
-  // 2. Head: shows the full task view as-is.
-  const isHead = !isTeamLeader && (userDesignation.includes("head") || userRole.includes("head") || isAdminOrHR);
+  // 1. Team Leader (only if not Admin/HR):
+  const isTeamLeader = !isAdminOrHR && (userDesignation.includes("team leader") || userRole.includes("team leader"));
+  // 2. Head / Admin / HR:
+  const isHead = isAdminOrHR || (!isTeamLeader && (userDesignation.includes("head") || userRole.includes("head")));
   // 3. Neither Head nor Team Leader (Other employees):
   const isOther = !isTeamLeader && !isHead;
 
@@ -157,7 +188,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   const [statusFilter, setStatusFilter] = useState<"All" | TaskStatus>("All");
   const [priorityFilter, setPriorityFilter] = useState<"All" | Priority>("All");
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("all");
-  const [timeframeFilter, setTimeframeFilter] = useState<TimeframeFilter>("all");
+  const [timeframeFilter, setTimeframeFilter] = useState<TimeframeFilter>("today");
   // K15: category filter (transcript — category field)
   const [categoryFilter, setCategoryFilter] = useState<string>("All");
 
@@ -182,6 +213,11 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   const [taskFormAssignee, setTaskFormAssignee] = useState("");
   const [taskFormRecurrence, setTaskFormRecurrence] = useState("none");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formErrors, setFormErrors] = useState<TaskFormErrors>({});
+
+  // Delete modal state
+  const [taskToDelete, setTaskToDelete] = useState<TaskItem | null>(null);
+  const [isDeletingTask, setIsDeletingTask] = useState(false);
 
   useEffect(() => {
     if (isNew) {
@@ -189,11 +225,13 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
       setTaskFormTitle("");
       setTaskFormDesc("");
       setTaskFormPriority("Medium");
-      setTaskFormDueDate("");
-      setTaskFormAssignee(employees[0]?.id || "");
+      setTaskFormDueDate(format(new Date(), "yyyy-MM-dd"));
+      setTaskFormAssignee(currentUserId || employees[0]?.id || "");
+      setTaskFormRecurrence("none");
+      setFormErrors({});
       setIsNewTaskOpen(true);
     }
-  }, [isNew, employees]);
+  }, [isNew, employees, currentUserId]);
 
   useEffect(() => {
     const handleOpenNewTask = () => {
@@ -201,13 +239,15 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
       setTaskFormTitle("");
       setTaskFormDesc("");
       setTaskFormPriority("Medium");
-      setTaskFormDueDate("");
-      setTaskFormAssignee(employees[0]?.id || "");
+      setTaskFormDueDate(format(new Date(), "yyyy-MM-dd"));
+      setTaskFormAssignee(currentUserId || employees[0]?.id || "");
+      setTaskFormRecurrence("none");
+      setFormErrors({});
       setIsNewTaskOpen(true);
     };
     window.addEventListener("hrms:open-new-task", handleOpenNewTask);
     return () => window.removeEventListener("hrms:open-new-task", handleOpenNewTask);
-  }, [employees]);
+  }, [employees, currentUserId]);
 
   // Quick Assign state
   const [showQuickAssign, setShowQuickAssign] = useState(false);
@@ -441,9 +481,11 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
         if (t.dueDate) {
           try {
             const d = new Date(t.dueDate);
-            if (isToday(d)) today++;
-            if (isBefore(d, todayStart) && t.status !== "Done") overdue++;
-            if (isAfter(d, todayStart) && t.status !== "Done") upcoming++;
+            const isDueToday = isToday(d);
+            const isOverdue = isBefore(d, todayStart) && t.status !== "Done";
+            if (isDueToday) today++;
+            if (isOverdue) overdue++;
+            if (!isDueToday && !isOverdue && isAfter(d, todayStart) && t.status !== "Done") upcoming++;
           } catch { }
         }
       });
@@ -460,6 +502,16 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     }
     return stats;
   }, [mainViewMode, tasks, currentUserId, stats]);
+
+  const clientIssuesCount = useMemo(() => {
+    return tasks.filter((t) => {
+      const isCI =
+        t.taskCategory === "Client Issue" ||
+        t.title.toLowerCase().startsWith("[client issue]") ||
+        Boolean((t.rawBackend as any)?.is_client_issue);
+      return isCI && t.status !== "Done";
+    }).length;
+  }, [tasks]);
 
   // Filtering Logic
   const filteredTasks = useMemo(() => {
@@ -506,12 +558,15 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
           if (!isPendingToMe && !hasHistoryWithMe) return false;
         }
 
-        // For Team Leader: always scope to Team Leader's department
+        // For Team Leader: always scope to Team Leader's department (unless task was assigned by, created by, or assigned to current user)
         if (isTeamLeader && userDepartment) {
-          const assignee = empMap.get(task.assignedToId);
-          const taskDept = (task.department || task.rawBackend?.department || assignee?.department || "").toLowerCase().trim();
-          if (!taskDept || taskDept !== userDepartment.toLowerCase().trim()) {
-            return false;
+          const isMineOrAssignedByMe = task.assignedToId === currentUserId || task.assignedById === currentUserId || String(task.rawBackend?.created_by || "") === currentUserId;
+          if (!isMineOrAssignedByMe) {
+            const assignee = empMap.get(task.assignedToId);
+            const taskDept = (task.department || task.rawBackend?.department || assignee?.department || "").toLowerCase().trim();
+            if (!taskDept || taskDept !== userDepartment.toLowerCase().trim()) {
+              return false;
+            }
           }
         }
 
@@ -547,28 +602,38 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
         return false;
       }
 
-      // 5. Timeframe Filter
+      // 5. Timeframe / Client Issue Filter
       if (timeframeFilter !== "all") {
-        if (!task.dueDate) return false;
-        try {
-          const taskDate = new Date(task.dueDate);
-          if (timeframeFilter === "today") {
-            const isDueToday = isToday(taskDate);
-            const isOverdue = isBefore(taskDate, todayStart) && task.status !== "Done";
-            if (!isDueToday && !isOverdue) return false;
-          } else if (timeframeFilter === "overdue") {
-            if (!isBefore(taskDate, todayStart) || task.status === "Done") return false;
-          } else if (timeframeFilter === "upcoming") {
-            if (!isAfter(taskDate, todayStart) || task.status === "Done") return false;
+        if (timeframeFilter === "client_issue") {
+          const isCI =
+            task.taskCategory === "Client Issue" ||
+            task.title.toLowerCase().startsWith("[client issue]") ||
+            Boolean((task.rawBackend as any)?.is_client_issue);
+          if (!isCI) return false;
+        } else {
+          if (!task.dueDate) return false;
+          try {
+            const taskDate = new Date(task.dueDate);
+            if (timeframeFilter === "today") {
+              const isDueToday = isToday(taskDate);
+              const isOverdue = isBefore(taskDate, todayStart) && task.status !== "Done";
+              if (!isDueToday && !isOverdue) return false;
+            } else if (timeframeFilter === "overdue") {
+              if (!isBefore(taskDate, todayStart) || task.status === "Done") return false;
+            } else if (timeframeFilter === "upcoming") {
+              const isDueToday = isToday(taskDate);
+              const isOverdue = isBefore(taskDate, todayStart);
+              if (isDueToday || isOverdue || !isAfter(taskDate, todayStart) || task.status === "Done") return false;
+            }
+          } catch {
+            return false;
           }
-        } catch {
-          return false;
         }
       }
 
       return true;
     }).sort((a, b) => {
-      // If Today's Work is selected, always show overdue tasks first at the top
+      // If Today's Work is selected, always show overdue tasks first at the top (as requested by user)
       if (timeframeFilter === "today") {
         const aDate = a.dueDate ? new Date(a.dueDate) : null;
         const bDate = b.dueDate ? new Date(b.dueDate) : null;
@@ -669,21 +734,35 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
   // Bulk Quick Assign Action
   const handleBulkQuickAssign = async () => {
-    const valid = quickTasks.filter((t) => t.title.trim());
-    if (valid.length === 0) {
-      toast.error("Please add at least one task title.");
+    const nonEmptyRows = quickTasks.filter((t) => t.title.trim() || t.assignee || t.dueDate);
+    if (nonEmptyRows.length === 0) {
+      toast.error("Please add at least one task.");
       return;
+    }
+
+    for (const [i, row] of nonEmptyRows.entries()) {
+      if (!row) continue;
+      if (!row.title.trim()) {
+        toast.error(`Row ${i + 1}: Task title is required.`);
+        return;
+      }
+      if (!row.assignee) {
+        toast.error(`Row ${i + 1}: Please select an assignee for "${row.title.trim()}".`);
+        return;
+      }
+      if (!row.dueDate) {
+        toast.error(`Row ${i + 1}: Please select a due date for "${row.title.trim()}".`);
+        return;
+      }
     }
 
     setIsQuickSubmitting(true);
     try {
       const brandPrefix = quickBrand.trim();
-      const payload = valid.map((t) => {
+      const payload = nonEmptyRows.map((t) => {
         let assigneeId = t.assignee;
         const matchedEmp = employees.find((e) => e.name === t.assignee || e.id === t.assignee);
         if (matchedEmp) assigneeId = matchedEmp.id;
-        else if (employees.length > 0 && !assigneeId) assigneeId = employees[0]?.id || "";
-        else if (!assigneeId) assigneeId = currentUserId;
 
         // F9: Brand - work (already prefixed hoy to double nai)
         let title = t.title.trim();
@@ -692,13 +771,13 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
         }
         return {
           title,
-          due_date: t.dueDate || undefined,
+          due_date: t.dueDate,
           assigned_to: [assigneeId],
         };
       });
 
       await api.post("/tasks/quick-assign", payload);
-      toast.success(`${valid.length} task(s) created and assigned successfully!`);
+      toast.success(`${nonEmptyRows.length} task(s) created and assigned successfully!`);
       setShowQuickAssign(false);
       setQuickTasks([{ title: "", assignee: "", dueDate: "" }]);
       fetchTasksData();
@@ -713,14 +792,23 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   // Create or Update Single Task
   const handleCreateOrUpdateTask = async (e: React.FormEvent) => {
     e.preventDefault();
+    const errors: { title?: string; dueDate?: string; assignee?: string } = {};
     if (!taskFormTitle.trim()) {
-      toast.error("Task title is required.");
-      return;
+      errors.title = "Task title is required.";
+    }
+    if (!taskFormDueDate) {
+      errors.dueDate = "Please select a due date.";
     }
     if (!taskFormAssignee) {
-      toast.error("Please select an assignee.");
+      errors.assignee = "Please select an assignee.";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      toast.error("Please fill in all required fields.");
       return;
     }
+    setFormErrors({});
 
     setIsSubmitting(true);
     try {
@@ -728,10 +816,12 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
         title: taskFormTitle.trim(),
         description: taskFormDesc.trim() || undefined,
         priority: taskFormPriority.toLowerCase(),
-        due_date: taskFormDueDate || undefined,
+        due_date: taskFormDueDate,
         assigned_to: taskFormAssignee,
         recurrence: taskFormRecurrence,
       };
+
+      const isSelf = taskFormAssignee === currentUserId;
 
       if (editingTaskId) {
         const existingTask = tasks.find((t) => t.id === editingTaskId);
@@ -745,7 +835,18 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
         toast.success("Task updated successfully!");
       } else {
         await api.post("/tasks", payload);
-        toast.success("New task created successfully!");
+        toast.success(isSelf ? "Task added to your personal list!" : "New task created successfully!");
+        if (isSelf) {
+          setMainViewMode("my_tasks");
+          setScopeFilter("my_tasks");
+        } else {
+          setMainViewMode("all_tasks");
+          setScopeFilter("all");
+        }
+        setTimeframeFilter("all");
+        setStatusFilter("All");
+        setSearchQuery("");
+        setCurrentPage(1);
       }
 
       setIsNewTaskOpen(false);
@@ -756,6 +857,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
       setTaskFormDueDate("");
       setTaskFormAssignee("");
       setTaskFormRecurrence("none");
+      setFormErrors({});
       fetchTasksData();
     } catch (e: any) {
       console.error("Task save failed:", e);
@@ -875,22 +977,30 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     }
   };
 
-  // Delete Task (Task 8: block delete for auto/transferred tasks unless Admin/HR)
-  const handleDeleteTask = async (taskId: string, e?: React.MouseEvent) => {
+  // Delete Task Trigger (Task 8: block delete for auto/transferred tasks unless Admin/HR)
+  const promptDeleteTask = (task: TaskItem, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    const taskToDelete = tasks.find(t => t.id === taskId);
-    if ((taskToDelete?.isAuto || taskToDelete?.isTransferred) && !isAdminOrHR) {
+    if ((task.isAuto || task.isTransferred) && !isAdminOrHR) {
       toast.error("Auto-assigned or transferred tasks cannot be deleted.");
       return;
     }
-    if (!confirm("Are you sure you want to delete this task?")) return;
+    setTaskToDelete(task);
+  };
+
+  // Confirmed Delete execution (Design-wise Dialog confirmation)
+  const confirmDeleteTask = async () => {
+    if (!taskToDelete) return;
+    setIsDeletingTask(true);
     try {
-      await api.delete(`/tasks/${taskId}`);
-      toast.success("Task deleted successfully.");
+      await api.delete(`/tasks/${taskToDelete.id}`);
+      toast.success(`Task "${taskToDelete.title}" deleted successfully.`);
+      setTaskToDelete(null);
       fetchTasksData();
     } catch (e: any) {
       console.error("Delete task error:", e);
       toast.error(e?.message || "Failed to delete task.");
+    } finally {
+      setIsDeletingTask(false);
     }
   };
 
@@ -942,6 +1052,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     setTaskFormDueDate(task.dueDate);
     setTaskFormAssignee(task.assignedToId);
     setTaskFormRecurrence(task.recurrence || "none");
+    setFormErrors({});
     setIsNewTaskOpen(true);
   };
 
@@ -1041,7 +1152,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                 <div className="grid grid-cols-12 gap-3 pb-2 border-b border-border/40 text-[10px] font-black text-muted-foreground uppercase tracking-wider">
                   <div className="col-span-5">Task Title *</div>
                   <div className="col-span-4">Assignee *</div>
-                  <div className="col-span-2">Due Date</div>
+                  <div className="col-span-2">Due Date *</div>
                   <div className="col-span-1 text-center">Remove</div>
                 </div>
 
@@ -1072,6 +1183,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                         value={qt.dueDate}
                         onChange={(val) => updateQuickField(idx, "dueDate", val)}
                         placeholder="Due date"
+                        displayFormat="dd-MM-yyyy"
                         className="h-[36px] text-xs font-bold"
                       />
                     </div>
@@ -1130,9 +1242,10 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
               setTaskFormTitle("");
               setTaskFormDesc("");
               setTaskFormPriority("Medium");
-              setTaskFormDueDate("");
-              setTaskFormAssignee(employees[0]?.id || "");
+              setTaskFormDueDate(format(new Date(), "yyyy-MM-dd"));
+              setTaskFormAssignee(currentUserId || employees[0]?.id || "");
               setTaskFormRecurrence("none");
+              setFormErrors({});
               setIsNewTaskOpen(true);
             }}
             className="h-[38px] px-4 bg-primary hover:bg-primary/95 text-primary-foreground text-xs font-bold rounded-xl flex items-center gap-2 transition-colors shadow-sm shrink-0"
@@ -1194,10 +1307,10 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
           },
           {
             label: "Client Issue",
-            count: displayStats.overdue,
-            isActive: timeframeFilter === "overdue",
+            count: clientIssuesCount,
+            isActive: timeframeFilter === "client_issue",
             onClick: () => {
-              setTimeframeFilter("overdue");
+              setTimeframeFilter("client_issue");
               setStatusFilter("All");
             },
             color: "border-rose-500/20 bg-rose-500/5 text-rose-700 dark:text-rose-400",
@@ -1394,12 +1507,12 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
             )}
           </div>
 
-          {(statusFilter !== "All" || priorityFilter !== "All" || timeframeFilter !== "all" || scopeFilter !== "all" || categoryFilter !== "All" || departmentFilter !== "All" || personFilter !== "All" || mainViewMode !== "all_tasks") && (
+          {(statusFilter !== "All" || priorityFilter !== "All" || timeframeFilter !== "today" || scopeFilter !== "all" || categoryFilter !== "All" || departmentFilter !== "All" || personFilter !== "All" || mainViewMode !== "all_tasks") && (
             <button
               onClick={() => {
                 setStatusFilter("All");
                 setPriorityFilter("All");
-                setTimeframeFilter("all");
+                setTimeframeFilter("today");
                 setScopeFilter("all");
                 setCategoryFilter("All");
                 setDepartmentFilter("All");
@@ -1484,7 +1597,12 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                               <span className={cn("text-[9px] font-black px-2 py-0.5 rounded-md uppercase border", getPriorityColor(task.priority))}>
                                 {task.priority}
                               </span>
-                              {task.isAuto && (
+                              {(task.taskCategory === "Client Issue" || task.title.toLowerCase().startsWith("[client issue]")) && (
+                                <span className="text-[9px] font-black bg-rose-500/10 text-rose-600 border border-rose-500/20 px-1.5 py-0.5 rounded-md">
+                                  Client Issue
+                                </span>
+                              )}
+                              {(task.isAuto || task.contentItemId) && (
                                 <button
                                   type="button"
                                   onClick={(e) => handleOpenCC(task, e)}
@@ -1542,7 +1660,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                                   </button>
                                   {(isAdminOrHR || task.assignedById === currentUserId) && !task.isAuto && !task.isTransferred && (
                                     <button
-                                      onClick={(e) => handleDeleteTask(task.id, e)}
+                                      onClick={(e) => promptDeleteTask(task, e)}
                                       className="w-full text-left px-2.5 py-1.5 text-xs font-bold hover:bg-destructive/10 text-destructive rounded-lg flex items-center gap-1.5"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" /> Delete Task
@@ -1627,11 +1745,12 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                               const taskDate = task.dueDate ? new Date(task.dueDate) : null;
                               const isOverdue = Boolean(taskDate && isBefore(taskDate, startOfDay(new Date())) && task.status !== "Done");
                               const isDueToday = Boolean(taskDate && isToday(taskDate) && task.status !== "Done");
+                              const formattedDate = formatDateDMY(task.dueDate);
                               if (isOverdue) {
                                 return (
                                   <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 font-bold text-[10px]" title="Overdue task!">
                                     <AlertCircle className="w-3 h-3 text-rose-600 dark:text-rose-400 shrink-0" />
-                                    <span>{task.dueDate} (Overdue)</span>
+                                    <span>{formattedDate} (Overdue)</span>
                                   </div>
                                 );
                               }
@@ -1646,7 +1765,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                               return (
                                 <div className="flex items-center gap-1.5 text-muted-foreground font-semibold">
                                   <Calendar className="w-3 h-3" />
-                                  {task.dueDate || "No due date"}
+                                  <span>{formattedDate || "No due date"}</span>
                                 </div>
                               );
                             })()}
@@ -1750,12 +1869,17 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                                 {task.taskCategory === "SMM" ? "SMM 📅" : "Project"}
                               </span>
                             )}
-                            {task.isAuto && (
+                            {(task.taskCategory === "Client Issue" || task.title.toLowerCase().startsWith("[client issue]")) && (
+                              <span className="text-[9px] font-black bg-rose-500/10 text-rose-600 border border-rose-500/20 px-1.5 py-0.5 rounded">
+                                Client Issue
+                              </span>
+                            )}
+                            {(task.isAuto || task.contentItemId) && (
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  openEditModal(task);
+                                  handleOpenCC(task, e);
                                 }}
                                 className="inline-flex items-center gap-1 text-[9px] font-bold bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 rounded hover:bg-primary/20 transition-colors"
                                 title="Auto-assigned from Content Calendar — Click to open in CC"
@@ -1818,11 +1942,12 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                           const taskDate = task.dueDate ? new Date(task.dueDate) : null;
                           const isOverdue = Boolean(taskDate && isBefore(taskDate, startOfDay(new Date())) && task.status !== "Done");
                           const isDueToday = Boolean(taskDate && isToday(taskDate) && task.status !== "Done");
+                          const formattedDate = formatDateDMY(task.dueDate);
                           if (isOverdue) {
                             return (
                               <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 font-bold text-xs shadow-xs" title="Overdue Task!">
                                 <AlertCircle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
-                                <span>{task.dueDate} (Overdue)</span>
+                                <span>{formattedDate} (Overdue)</span>
                               </div>
                             );
                           }
@@ -1837,7 +1962,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                           return (
                             <div className="flex items-center gap-1.5 text-muted-foreground">
                               <Calendar className="w-3.5 h-3.5 opacity-60" />
-                              <span>{task.dueDate || "No due date"}</span>
+                              <span>{formattedDate || "No due date"}</span>
                             </div>
                           );
                         })()}
@@ -1928,7 +2053,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
                           {(isAdminOrHR || task.assignedById === currentUserId) && !task.isAuto && !task.isTransferred && (
                             <button
-                              onClick={(e) => handleDeleteTask(task.id, e)}
+                              onClick={(e) => promptDeleteTask(task, e)}
                               className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
                               title="Delete task"
                             >
@@ -2065,17 +2190,31 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
           <form onSubmit={handleCreateOrUpdateTask} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
-                Task Title *
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-wider block">
+                  Task Title <span className="text-rose-500">*</span>
+                </label>
+              </div>
               <input
                 type="text"
-                required
                 placeholder="e.g. Design Marketing Creatives"
                 value={taskFormTitle}
-                onChange={(e) => setTaskFormTitle(e.target.value)}
-                className="w-full px-3 py-2 bg-muted/40 border border-border/60 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
+                onChange={(e) => {
+                  setTaskFormTitle(e.target.value);
+                  if (formErrors.title) setFormErrors((prev) => ({ ...prev, title: "" }));
+                }}
+                className={cn(
+                  "w-full px-3 py-2 bg-muted/40 border rounded-xl text-xs font-semibold focus:outline-none transition-all",
+                  formErrors.title
+                    ? "border-rose-500 ring-2 ring-rose-500/20 bg-rose-500/5 text-foreground"
+                    : "border-border/60 focus:ring-1 focus:ring-primary"
+                )}
               />
+              {formErrors.title && (
+                <p className="text-[11px] font-bold text-rose-500 flex items-center gap-1 mt-0.5">
+                  <AlertCircle className="w-3 h-3" /> {formErrors.title}
+                </p>
+              )}
             </div>
 
             <div className="space-y-1">
@@ -2109,30 +2248,86 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
-                  Due Date
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black text-muted-foreground uppercase tracking-wider block">
+                    Due Date <span className="text-rose-500">*</span>
+                  </label>
+                </div>
                 <DatePicker
                   value={taskFormDueDate}
-                  onChange={(val) => setTaskFormDueDate(val)}
+                  onChange={(val) => {
+                    setTaskFormDueDate(val);
+                    if (formErrors.dueDate) setFormErrors((prev) => ({ ...prev, dueDate: "" }));
+                  }}
                   placeholder="Select due date"
-                  className="h-[38px] text-xs font-bold"
+                  displayFormat="dd-MM-yyyy"
+                  className={cn(
+                    "h-[38px] text-xs font-bold",
+                    formErrors.dueDate && "border-rose-500 ring-2 ring-rose-500/20"
+                  )}
                 />
+                {formErrors.dueDate && (
+                  <p className="text-[11px] font-bold text-rose-500 flex items-center gap-1 mt-0.5">
+                    <AlertCircle className="w-3 h-3" /> {formErrors.dueDate}
+                  </p>
+                )}
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
-                  Assign To *
-                </label>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-wider block">
+                      Assign To <span className="text-rose-500">*</span>
+                    </label>
+                  </div>
+                  {currentUserId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTaskFormAssignee(currentUserId);
+                        if (formErrors.assignee) setFormErrors((prev) => ({ ...prev, assignee: "" }));
+                      }}
+                      className={cn(
+                        "text-[10px] font-bold px-2 py-0.5 rounded-lg border transition-all flex items-center gap-1",
+                        taskFormAssignee === currentUserId
+                          ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                          : "bg-muted/60 text-primary border-primary/30 hover:bg-primary/10"
+                      )}
+                      title="Assign this task to yourself"
+                    >
+                      <UserCheck className="w-3 h-3" />
+                      <span>{taskFormAssignee === currentUserId ? "Assigned to You" : "Assign to Myself"}</span>
+                    </button>
+                  )}
+                </div>
                 <SearchableSelect
                   value={taskFormAssignee}
-                  onChange={(val) => setTaskFormAssignee(val)}
-                  options={employees.map((e) => ({ label: e.name, value: e.id }))}
+                  onChange={(val) => {
+                    setTaskFormAssignee(val);
+                    if (formErrors.assignee) setFormErrors((prev) => ({ ...prev, assignee: "" }));
+                  }}
+                  options={[
+                    ...(currentUserId ? [{
+                      label: `${currentUserName}`,
+                      value: currentUserId
+                    }] : []),
+                    ...employees
+                      .filter(e => e.id !== currentUserId)
+                      .map((e) => ({ label: e.name, value: e.id }))
+                  ]}
                   placeholder="Select employee"
-                  className="w-full h-[38px] text-xs font-semibold"
+                  className={cn(
+                    "w-full h-[38px] text-xs font-semibold",
+                    formErrors.assignee && "border-rose-500 ring-2 ring-rose-500/20"
+                  )}
                 />
+                {formErrors.assignee && (
+                  <p className="text-[11px] font-bold text-rose-500 flex items-center gap-1 mt-0.5">
+                    <AlertCircle className="w-3 h-3" /> {formErrors.assignee}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1">
@@ -2170,6 +2365,78 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
               </button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Modal (Design-wise Premium Popup) */}
+      <Dialog open={!!taskToDelete} onOpenChange={(open) => !open && !isDeletingTask && setTaskToDelete(null)}>
+        <DialogContent className="w-[calc(100vw-24px)] sm:w-full max-w-md p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] border-rose-500/20 shadow-2xl [&>button]:hidden bg-card">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 bg-rose-500/5">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-600 dark:text-rose-400 shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-black tracking-tight text-foreground">Delete Task</h2>
+                <p className="text-xs text-muted-foreground">Permanent deletion confirmation</p>
+              </div>
+            </div>
+            <DialogClose asChild>
+              <button
+                disabled={isDeletingTask}
+                className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors disabled:opacity-50"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </DialogClose>
+          </div>
+
+          <div className="p-6 space-y-4">
+            <div className="space-y-2">
+              <p className="text-xs text-foreground/80 leading-relaxed">
+                Are you sure you want to permanently delete this task?
+              </p>
+              {taskToDelete && (
+                <div className="p-3 bg-muted/40 border border-border/60 rounded-xl space-y-1">
+                  <div className="font-bold text-xs text-foreground truncate">
+                    {taskToDelete.title}
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                    <span>Assigned to: <strong className="text-foreground">{taskToDelete.assignedToName}</strong></span>
+                    {taskToDelete.dueDate && (
+                      <>
+                        <span>•</span>
+                        <span>Due: <strong className="text-foreground">{formatDateDMY(taskToDelete.dueDate)}</strong></span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+              <p className="text-[11px] text-rose-600 dark:text-rose-400 font-medium">
+                ⚠️ This action cannot be undone and will remove all activity records associated with this task.
+              </p>
+            </div>
+
+            <div className="pt-2 flex items-center justify-end gap-2 border-t border-border/40">
+              <button
+                type="button"
+                disabled={isDeletingTask}
+                onClick={() => setTaskToDelete(null)}
+                className="px-4 py-2 bg-card border border-border text-foreground/80 hover:bg-muted font-bold text-xs rounded-xl transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingTask}
+                onClick={confirmDeleteTask}
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition-colors disabled:opacity-50 flex items-center gap-1.5 shadow-sm shadow-rose-600/20"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>{isDeletingTask ? "Deleting..." : "Yes, Delete Task"}</span>
+              </button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -2353,7 +2620,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
                   <div className="bg-muted/20 p-3 rounded-xl border border-border/40">
                     <span className="text-[10px] text-muted-foreground font-bold uppercase block mb-1">Due Date</span>
-                    <span className="font-bold">{inspectingTask.dueDate || "None"}</span>
+                    <span className="font-bold">{formatDateDMY(inspectingTask.dueDate) || "None"}</span>
                   </div>
 
                   {inspectingTask.approvedByName && (

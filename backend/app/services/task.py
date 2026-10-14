@@ -195,6 +195,9 @@ class TaskService:
         insert_data["assigned_by"] = assigned_by
         insert_data["created_by"] = assigned_by
 
+        if not insert_data.get("status"):
+            insert_data["status"] = "todo"
+
         if not insert_data.get("priority"):
             insert_data["priority"] = "medium"
 

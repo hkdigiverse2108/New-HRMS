@@ -52,7 +52,7 @@ class AttendanceRepository:
     @classmethod
     async def get_by_employee_and_date(cls, employee_id: str, date_str: str) -> Optional[Dict[str, Any]]:
         collection = await cls.get_collection()
-        doc = await collection.find_one({"employee_id": employee_id, "date": date_str})
+        doc = await collection.find_one({"employee_id": employee_id, "date": date_str}, sort=[("_id", -1)])
         return serialize_mongo(doc)
 
     @classmethod

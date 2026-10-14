@@ -21,7 +21,7 @@ type PunchStatus = "Punched Out" | "Punched In" | "On Break";
 export function TimeTrackerWidget() {
   const { user } = useAuth();
   const isAdmin = user?.role === "Admin";
-  const employeeId = user?.id || "EMP-CURRENT";
+  const employeeId = user?.id || user?.employee_id || "EMP-CURRENT";
 
   const [status, setStatus] = useState<PunchStatus>("Punched Out");
   const [workSeconds, setWorkSeconds] = useState(0);
@@ -30,6 +30,11 @@ export function TimeTrackerWidget() {
   const [punchOutTime, setPunchOutTime] = useState<string | null>(null);
   const [breakStartTime, setBreakStartTime] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // References to preserve accurate real-world elapsed time (prevents resetting on login/refresh/background tabs)
+  const baseWorkSecondsRef = useRef(0);
+  const baseBreakSecondsRef = useRef(0);
+  const lastSyncTimestampRef = useRef(Date.now());
 
   // Active Task State
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
@@ -47,7 +52,7 @@ export function TimeTrackerWidget() {
 
   // Check pending punch-out from previous day
   const checkPendingSession = useCallback(async (): Promise<boolean> => {
-    if (isAdmin) return false;
+    if (isAdmin || !employeeId || employeeId === "EMP-CURRENT") return false;
     try {
       const res = await api.get<{ has_pending: boolean; pending_record?: any }>(
         `/attendance/last/${employeeId}`,
@@ -77,19 +82,33 @@ export function TimeTrackerWidget() {
 
   // Sync today's attendance state from backend on load
   const syncTodayStatus = useCallback(async () => {
-    if (isAdmin) return;
+    if (isAdmin || !employeeId || employeeId === "EMP-CURRENT") return;
     try {
-      const todayStr = getTodayDateIST();
-      const records = await api.get<any[]>(
-        `/attendance?employee_id=${employeeId}&start_date=${todayStr}&end_date=${todayStr}`,
-        { showLoader: false, showErrorToast: false }
-      );
+      let todayDoc: any = null;
+      try {
+        const res = await api.get<any>(
+          `/attendance/today/${employeeId}`,
+          { showLoader: false, showErrorToast: false }
+        );
+        if (res && res.has_record) {
+          todayDoc = res;
+        }
+      } catch {}
 
-      if (records && records.length > 0) {
-        const todayDoc = records[0];
+      if (!todayDoc) {
+        const todayStr = getTodayDateIST();
+        const records = await api.get<any[]>(
+          `/attendance?employee_id=${employeeId}&start_date=${todayStr}&end_date=${todayStr}`,
+          { showLoader: false, showErrorToast: false }
+        );
+        if (records && records.length > 0) {
+          todayDoc = records[0];
+        }
+      }
+
+      if (todayDoc) {
         setPunchInTime(todayDoc.check_in && todayDoc.check_in !== "--" ? todayDoc.check_in : null);
         setPunchOutTime(todayDoc.check_out && todayDoc.check_out !== "--" ? todayDoc.check_out : null);
-        setBreakSeconds(todayDoc.break_seconds || 0);
 
         if (todayDoc.current_task_title) {
           setActiveTaskTitle(todayDoc.current_task_title);
@@ -101,45 +120,87 @@ export function TimeTrackerWidget() {
           setActiveTaskType(null);
         }
 
-        if (todayDoc.status === "On Break") {
-          setStatus("On Break");
-          setWorkSeconds(todayDoc.net_work_seconds || 0);
-          const openBreak = todayDoc.breaks?.find((b: any) => !b.end_time);
+        // Determine effective status
+        let effStatus: PunchStatus = "Punched Out";
+        if (todayDoc.effective_status) {
+          effStatus = todayDoc.effective_status as PunchStatus;
+        } else if (todayDoc.status === "On Break") {
+          effStatus = "On Break";
+        } else if (todayDoc.status === "Logged" || (todayDoc.check_out && todayDoc.check_out !== "--")) {
+          effStatus = "Punched Out";
+        } else if (todayDoc.status === "Active" || todayDoc.status === "Late" || todayDoc.status === "Present") {
+          effStatus = "Punched In";
+        }
+        setStatus(effStatus);
+
+        const netSec = typeof todayDoc.net_work_seconds === "number" ? todayDoc.net_work_seconds : 0;
+        const breakSec = typeof todayDoc.break_seconds === "number" ? todayDoc.break_seconds : 0;
+
+        setWorkSeconds(netSec);
+        setBreakSeconds(breakSec);
+        baseWorkSecondsRef.current = netSec;
+        baseBreakSecondsRef.current = breakSec;
+        lastSyncTimestampRef.current = Date.now();
+
+        if (effStatus === "On Break") {
+          const openBreak = todayDoc.breaks?.find((b: any) => !b.end_time || b.end_time === "--");
           if (openBreak) {
             setBreakStartTime(openBreak.start_time);
           }
-        } else if (todayDoc.status === "Logged" || (todayDoc.check_out && todayDoc.check_out !== "--")) {
-          setStatus("Punched Out");
-          setWorkSeconds(todayDoc.net_work_seconds || 0);
-        } else if (todayDoc.status === "Active" || todayDoc.status === "Late" || todayDoc.status === "Present") {
-          setStatus("Punched In");
-          setWorkSeconds(todayDoc.net_work_seconds || 0);
+        } else {
+          setBreakStartTime(null);
         }
+      } else {
+        setStatus("Punched Out");
+        setWorkSeconds(0);
+        setBreakSeconds(0);
+        baseWorkSecondsRef.current = 0;
+        baseBreakSecondsRef.current = 0;
+        lastSyncTimestampRef.current = Date.now();
+        setPunchInTime(null);
+        setPunchOutTime(null);
+        setBreakStartTime(null);
+        setActiveTaskTitle(null);
+        setActiveTaskId(null);
+        setActiveTaskType(null);
       }
     } catch {}
   }, [employeeId, isAdmin]);
 
-  // Initial load check
+  // Initial load check & react to user login / employeeId availability
   useEffect(() => {
-    if (!isAdmin) {
+    if (!isAdmin && employeeId && employeeId !== "EMP-CURRENT") {
       checkPendingSession().then((hasPending) => {
         if (!hasPending) {
           syncTodayStatus();
         }
       });
     }
-  }, [checkPendingSession, syncTodayStatus, isAdmin]);
+  }, [checkPendingSession, syncTodayStatus, isAdmin, employeeId]);
 
-  // Active session stopwatch timer
+  // Real-time synchronization event listener across tabs and actions
+  useEffect(() => {
+    const handleUpdate = () => {
+      syncTodayStatus();
+    };
+    window.addEventListener("attendance_updated", handleUpdate);
+    return () => {
+      window.removeEventListener("attendance_updated", handleUpdate);
+    };
+  }, [syncTodayStatus]);
+
+  // Active session stopwatch timer (resilient against background throttling & tab sleep)
   useEffect(() => {
     let interval: NodeJS.Timeout | undefined;
     if (status === "Punched In") {
       interval = setInterval(() => {
-        setWorkSeconds((prev) => prev + 1);
+        const elapsed = Math.floor((Date.now() - lastSyncTimestampRef.current) / 1000);
+        setWorkSeconds(baseWorkSecondsRef.current + Math.max(0, elapsed));
       }, 1000);
     } else if (status === "On Break") {
       interval = setInterval(() => {
-        setBreakSeconds((prev) => prev + 1);
+        const elapsed = Math.floor((Date.now() - lastSyncTimestampRef.current) / 1000);
+        setBreakSeconds(baseBreakSecondsRef.current + Math.max(0, elapsed));
       }, 1000);
     }
     return () => {
@@ -179,9 +240,12 @@ export function TimeTrackerWidget() {
         setBreakStartTime(null);
         if (res?.break_seconds !== undefined) {
           setBreakSeconds(res.break_seconds);
+          baseBreakSecondsRef.current = res.break_seconds;
         }
+        lastSyncTimestampRef.current = Date.now();
         toast.success(`Break ended! Switched work to: ${selectedTask.taskTitle}`);
         window.dispatchEvent(new Event("attendance_updated"));
+        syncTodayStatus();
       } catch (err: any) {
         toast.error(err?.data?.detail || err?.message || "Failed to resume work with new task");
       } finally {
@@ -201,6 +265,7 @@ export function TimeTrackerWidget() {
         setActiveTaskType(selectedTask.taskType);
         toast.success(res?.message || `Switched task to: ${selectedTask.taskTitle}`);
         window.dispatchEvent(new Event("attendance_updated"));
+        syncTodayStatus();
       } catch (err: any) {
         toast.error(err?.data?.detail || err?.message || "Failed to switch task");
       } finally {
@@ -221,10 +286,16 @@ export function TimeTrackerWidget() {
         setPunchInTime(res?.check_in || formatISTTime(new Date()));
         setPunchOutTime(null);
         setBreakStartTime(null);
-        setBreakSeconds(res?.break_seconds || 0);
-        setWorkSeconds(res?.net_work_seconds || 0);
+        const netSec = res?.net_work_seconds || 0;
+        const breakSec = res?.break_seconds || 0;
+        setBreakSeconds(breakSec);
+        setWorkSeconds(netSec);
+        baseWorkSecondsRef.current = netSec;
+        baseBreakSecondsRef.current = breakSec;
+        lastSyncTimestampRef.current = Date.now();
         toast.success(res?.is_late ? "Punched In (Late Arrival recorded)" : "Punched In successfully!");
         window.dispatchEvent(new Event("attendance_updated"));
+        syncTodayStatus();
       } catch (err: any) {
         const msg = err?.data?.detail || err?.message || "Failed to Punch In";
         toast.error(msg);
@@ -246,9 +317,11 @@ export function TimeTrackerWidget() {
       setPunchOutTime(res?.check_out || formatISTTime(new Date()));
       if (res?.net_work_seconds !== undefined) {
         setWorkSeconds(res.net_work_seconds);
+        baseWorkSecondsRef.current = res.net_work_seconds;
       }
       toast.success(`Punched Out! Total work time: ${res?.work_hours || formatDurationSeconds(workSeconds)}`);
       window.dispatchEvent(new Event("attendance_updated"));
+      syncTodayStatus();
     } catch (err: any) {
       const msg = err?.data?.detail || err?.message || "Failed to Punch Out";
       toast.error(msg);
@@ -265,8 +338,12 @@ export function TimeTrackerWidget() {
       setStatus("On Break");
       const nowTime = formatISTTime(new Date());
       setBreakStartTime(nowTime);
+      baseWorkSecondsRef.current = workSeconds;
+      baseBreakSecondsRef.current = breakSeconds;
+      lastSyncTimestampRef.current = Date.now();
       toast.info(`Break started at ${nowTime}`);
       window.dispatchEvent(new Event("attendance_updated"));
+      syncTodayStatus();
     } catch (err: any) {
       toast.error(err?.data?.detail || "Failed to start break");
     } finally {
@@ -283,9 +360,13 @@ export function TimeTrackerWidget() {
       setBreakStartTime(null);
       if (res?.break_seconds !== undefined) {
         setBreakSeconds(res.break_seconds);
+        baseBreakSecondsRef.current = res.break_seconds;
       }
+      baseWorkSecondsRef.current = workSeconds;
+      lastSyncTimestampRef.current = Date.now();
       toast.success(`Break ended. Continued on: ${activeTaskTitle || "General Work"}`);
       window.dispatchEvent(new Event("attendance_updated"));
+      syncTodayStatus();
     } catch (err: any) {
       toast.error(err?.data?.detail || "Failed to end break");
     } finally {
@@ -307,7 +388,7 @@ export function TimeTrackerWidget() {
   // ADMIN VIEW: Admin does not mark attendance for self
   if (isAdmin) {
     return (
-      <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
+      <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6 mb-12">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0 text-primary">
             <ShieldCheck className="w-7 h-7" />
@@ -326,7 +407,7 @@ export function TimeTrackerWidget() {
 
   return (
     <>
-      <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-6 transition-all">
+      <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-6 transition-all mb-12">
         {/* Status Indicator */}
         <div className="flex items-center gap-5 shrink-0">
           <div className={cn(

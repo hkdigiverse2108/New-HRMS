@@ -37,6 +37,17 @@ async def check_pending_punch_out(
     await set_cache(cache_key, res, ttl=30)
     return res
 
+@router.get("/today/{employee_id}")
+async def get_today_attendance(
+    employee_id: str,
+    current_employee: dict = Depends(get_current_employee)
+):
+    """
+    Returns today's attendance state for an employee in IST.
+    Includes live-calculated work seconds, break seconds, punches, and effective status.
+    """
+    return await AttendanceService.get_today_attendance(employee_id)
+
 @router.post("/resolve-pending-punch-out/{employee_id}")
 async def resolve_pending_punch_out(
     employee_id: str,

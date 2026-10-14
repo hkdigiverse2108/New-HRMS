@@ -85,21 +85,16 @@ async def get_daily_planner(current_user: dict = Depends(get_current_employee)):
 @router.post("", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
 async def create_task(data: TaskCreate, current_user: dict = Depends(get_current_employee)):
     from app.repository.employee import EmployeeRepository
-    from datetime import date
     assigned_by = str(current_user.get("_id") or current_user.get("id"))
     
-    role = current_user.get("work_details", {}).get("system_role", "Employee")
-    designation = str(current_user.get("work_details", {}).get("designation", "")).lower()
-    
-    if not data.assigned_to:
-        data.assigned_to = assigned_by
+    if not data.title or not data.title.strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Task title is required.")
         
-    if role not in ["Admin", "Subadmin", "HR"] and designation not in ["team leader", "head"]:
-        if data.assigned_to != assigned_by:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are only allowed to assign tasks to yourself.")
-            
+    if not data.assigned_to or not str(data.assigned_to).strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assignee is required. Please select an employee.")
+        
     if not data.due_date:
-        data.due_date = date.today()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Due date is required. Please select a valid date.")
         
     emp = await EmployeeRepository.get_employee_by_id(data.assigned_to)
     if not emp:
@@ -113,20 +108,23 @@ async def create_task(data: TaskCreate, current_user: dict = Depends(get_current
 async def quick_assign_tasks(data: list[TaskQuickAssign], current_user: dict = Depends(get_current_employee)):
     from app.repository.employee import EmployeeRepository
     assigned_by = str(current_user.get("_id") or current_user.get("id"))
-    role = current_user.get("work_details", {}).get("system_role", "Employee")
-    designation = str(current_user.get("work_details", {}).get("designation", "")).lower()
     
-    for task in data:
+    if not data:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No tasks provided.")
+
+    for idx, task in enumerate(data, 1):
+        if not task.title or not task.title.strip():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Row {idx}: Task title is required.")
+        if not task.assigned_to or not any(str(a).strip() for a in task.assigned_to):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Row {idx}: Assignee is required.")
+        if not task.due_date:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Row {idx}: Due date is required.")
+
         for assignee in task.assigned_to:
-            if role not in ["Admin", "Subadmin", "HR"] and designation not in ["team leader", "head"]:
-                if assignee != assigned_by:
-                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are only allowed to assign tasks to yourself.")
-                    
             emp = await EmployeeRepository.get_employee_by_id(assignee)
             if not emp:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Assigned employee {assignee} does not exist")
                 
-    assigned_by = str(current_user.get("_id") or current_user.get("id"))
     created_items = await TaskService.quick_assign_tasks(data, assigned_by)
     await clear_pattern("tasks:*")
     return created_items
@@ -184,7 +182,9 @@ async def get_all_tasks(
     involved_emp_id = None
     team_employee_ids = None
     
-    if role not in ["Admin", "Subadmin", "HR"]:
+    is_admin_or_hr = role in ["Admin", "Subadmin", "HR"] or str(department or "").strip().upper() == "HR"
+    
+    if not is_admin_or_hr:
         desig_lower = str(designation or "").lower()
         is_leader = "team leader" in desig_lower or "head" in desig_lower
         

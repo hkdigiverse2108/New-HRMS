@@ -105,6 +105,105 @@ def format_seconds_to_hours(seconds: int) -> str:
         return f"{minutes}m"
     return f"{hours}h {minutes}m"
 
+def calculate_live_work_and_break_seconds(record: Dict[str, Any], now_dt: Optional[datetime] = None) -> Dict[str, Any]:
+    """Calculates live gross work, total break, and net work seconds for today's session."""
+    if not record:
+        return {
+            "gross_seconds": 0,
+            "break_seconds": 0,
+            "net_work_seconds": 0,
+            "work_hours": "0h 0m",
+            "break_hours": "0h 0m"
+        }
+
+    if now_dt is None:
+        now_dt = get_now_ist()
+    t_now = now_dt.time()
+
+    current_status = record.get("status")
+    breaks = record.get("breaks", [])
+    total_break_seconds = 0
+    for b in breaks:
+        b_end = b.get("end_time") or b.get("endTime")
+        b_dur = b.get("duration_seconds", 0)
+        if b_end and b_end != "--":
+            if b_dur:
+                total_break_seconds += b_dur
+            else:
+                t_b_start = parse_time_str(b.get("start_time") or b.get("startTime"))
+                t_b_end = parse_time_str(b_end)
+                if t_b_start and t_b_end:
+                    total_break_seconds += compute_duration_seconds(t_b_start, t_b_end)
+        else:
+            # Currently active open break
+            if current_status == "On Break":
+                start_iso = b.get("start_iso")
+                if start_iso:
+                    try:
+                        s_dt = datetime.fromisoformat(start_iso)
+                        dur = max(0, int((now_dt - s_dt).total_seconds()))
+                        total_break_seconds += dur
+                    except Exception:
+                        t_b_start = parse_time_str(b.get("start_time") or b.get("startTime"))
+                        if t_b_start:
+                            total_break_seconds += compute_duration_seconds(t_b_start, t_now)
+                else:
+                    t_b_start = parse_time_str(b.get("start_time") or b.get("startTime"))
+                    if t_b_start:
+                        total_break_seconds += compute_duration_seconds(t_b_start, t_now)
+
+    # Gross work seconds across punches
+    punches = record.get("punches", [])
+    gross_seconds = 0
+    if punches:
+        for p in punches:
+            p_in = p.get("check_in") or p.get("punchIn")
+            p_out = p.get("check_out") or p.get("punchOut")
+            p_dur = p.get("duration_seconds", 0)
+            if p_out and p_out != "--":
+                if p_dur:
+                    gross_seconds += p_dur
+                else:
+                    t_p_in = parse_time_str(p_in)
+                    t_p_out = parse_time_str(p_out)
+                    if t_p_in and t_p_out:
+                        gross_seconds += compute_duration_seconds(t_p_in, t_p_out)
+            else:
+                # Active open punch session
+                if current_status in ("Active", "Late", "Present", "On Break"):
+                    t_p_in = parse_time_str(p_in)
+                    if t_p_in:
+                        gross_seconds += compute_duration_seconds(t_p_in, t_now)
+    else:
+        # Fallback to record-level check_in
+        rec_in = record.get("check_in")
+        rec_out = record.get("check_out")
+        if rec_in and rec_in != "--":
+            t_rec_in = parse_time_str(rec_in)
+            if rec_out and rec_out != "--":
+                t_rec_out = parse_time_str(rec_out)
+                if t_rec_in and t_rec_out:
+                    gross_seconds = compute_duration_seconds(t_rec_in, t_rec_out)
+            else:
+                if t_rec_in and current_status in ("Active", "Late", "Present", "On Break"):
+                    gross_seconds = compute_duration_seconds(t_rec_in, t_now)
+
+    # If already logged/closed and net_work_seconds exists in DB, preserve it
+    if current_status == "Logged" and record.get("net_work_seconds"):
+        net_seconds = record.get("net_work_seconds", 0)
+        total_break_seconds = record.get("break_seconds", total_break_seconds)
+        gross_seconds = record.get("gross_seconds", gross_seconds)
+    else:
+        net_seconds = max(0, gross_seconds - total_break_seconds)
+
+    return {
+        "gross_seconds": gross_seconds,
+        "break_seconds": total_break_seconds,
+        "net_work_seconds": net_seconds,
+        "work_hours": format_seconds_to_hours(net_seconds),
+        "break_hours": format_seconds_to_hours(total_break_seconds)
+    }
+
 def build_timeline_logs(record: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Builds a sequential, chronological list of punch and break events for timeline display."""
     logs: List[Dict[str, Any]] = []
@@ -209,6 +308,24 @@ class AttendanceService:
             "avatar": "",
             "actively_using_hrms": True
         }
+
+    @classmethod
+    async def get_today_record_robust(cls, employee_id: str, today_str: str) -> Optional[Dict[str, Any]]:
+        """Finds today's attendance record with robust resolution across employee_id, ObjectId, and email."""
+        record = await AttendanceRepository.get_by_employee_and_date(employee_id, today_str)
+        if not record:
+            emp = await EmployeeRepository.get_employee_by_id(employee_id)
+            if not emp:
+                emp = await EmployeeRepository.get_employee_by_email(employee_id)
+            if emp:
+                emp_oid = str(emp.get("_id") or emp.get("id"))
+                if emp_oid != employee_id:
+                    record = await AttendanceRepository.get_by_employee_and_date(emp_oid, today_str)
+                if not record:
+                    emp_code = emp.get("work_details", {}).get("employee_id") or emp.get("employee_id")
+                    if emp_code and emp_code != employee_id and emp_code != emp_oid:
+                        record = await AttendanceRepository.get_by_employee_and_date(str(emp_code), today_str)
+        return record
 
     @classmethod
     async def check_pending_punch_out(cls, employee_id: str) -> Dict[str, Any]:
@@ -357,11 +474,22 @@ class AttendanceService:
                 leave_remark = "On Leave: Half Day"
 
         # Check existing record for today (Resume Session if re-punching in)
-        today_record = await AttendanceRepository.get_by_employee_and_date(employee_id, today_str)
+        today_record = await cls.get_today_record_robust(employee_id, today_str)
 
         if today_record:
             current_status = today_record.get("status")
-            if current_status in ("Active", "On Break", "Late"):
+            punches = today_record.get("punches", [])
+            has_unclosed_punch = False
+            if punches:
+                last_p = punches[-1]
+                if not last_p.get("check_out") or last_p.get("check_out") == "--":
+                    has_unclosed_punch = True
+            elif today_record.get("check_in") and today_record.get("check_in") != "--":
+                if not today_record.get("check_out") or today_record.get("check_out") == "--":
+                    has_unclosed_punch = True
+
+            # If user has an open active session without punch out
+            if has_unclosed_punch and current_status in ("Active", "On Break", "Late"):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="You are already punched in. Please punch out first before punching in again."
@@ -369,6 +497,8 @@ class AttendanceService:
 
             # Resuming today's session
             punches = today_record.get("punches", [])
+            if punches and (not punches[-1].get("check_out") or punches[-1].get("check_out") == "--"):
+                punches[-1]["check_out"] = current_time_str
             punches.append({
                 "check_in": current_time_str,
                 "check_out": None,
@@ -425,8 +555,8 @@ class AttendanceService:
                 "record_id": updated.get("id"),
                 "date": today_str
             }, ttl=86400)
-            await clear_pattern("attendance:list:*")
-            await clear_pattern(f"attendance:summary:{employee_id}:*")
+            await delete_cache(f"attendance:last:{employee_id}")
+            await clear_pattern("attendance:*")
             return updated
 
         # New record for today
@@ -785,7 +915,7 @@ class AttendanceService:
         """Applies punch-out to today's active session, calculating Gross and Net hours."""
         now = get_now_ist()
         today_str = format_date_ist(now)
-        record = await AttendanceRepository.get_by_employee_and_date(employee_id, today_str)
+        record = await cls.get_today_record_robust(employee_id, today_str)
 
         if not record or not record.get("check_in") or record.get("check_in") == "--":
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No active punch-in found for today.")
@@ -829,10 +959,17 @@ class AttendanceService:
                 if t_p_start:
                     last_punch["duration_seconds"] = compute_duration_seconds(t_p_start, t_out)
 
-        # 3. Calculate Gross and Net Work Time
-        # Overall check_in
-        t_first_in = parse_time_str(record.get("check_in")) or t_out
-        gross_seconds = compute_duration_seconds(t_first_in, t_out)
+        # 3. Calculate Gross and Net Work Time across all punches
+        if punches:
+            gross_seconds = sum(
+                p.get("duration_seconds", 0) or 
+                (compute_duration_seconds(parse_time_str(p.get("check_in")), parse_time_str(p.get("check_out"))) if parse_time_str(p.get("check_in")) and parse_time_str(p.get("check_out")) else 0)
+                for p in punches
+            )
+        else:
+            t_first_in = parse_time_str(record.get("check_in")) or t_out
+            gross_seconds = compute_duration_seconds(t_first_in, t_out)
+
         net_seconds = max(0, gross_seconds - total_break_seconds)
 
         work_hours_str = format_seconds_to_hours(net_seconds)
@@ -856,9 +993,67 @@ class AttendanceService:
         emp_id = record.get("employee_id")
         if emp_id:
             await delete_cache(f"attendance:active:{emp_id}")
-            await clear_pattern("attendance:list:*")
-            await clear_pattern(f"attendance:summary:{emp_id}:*")
+            await delete_cache(f"attendance:last:{emp_id}")
+            await clear_pattern("attendance:*")
         return res
+
+    @classmethod
+    async def get_today_attendance(cls, employee_id: str) -> Dict[str, Any]:
+        """
+        Returns today's attendance state for an employee in IST.
+        Includes live-calculated work seconds, break seconds, punches, and effective status.
+        """
+        now = get_now_ist()
+        today_str = format_date_ist(now)
+        record = await cls.get_today_record_robust(employee_id, today_str)
+
+        if not record:
+            return {
+                "has_record": False,
+                "status": "Punched Out",
+                "effective_status": "Punched Out",
+                "check_in": "--",
+                "check_out": "--",
+                "net_work_seconds": 0,
+                "break_seconds": 0,
+                "gross_seconds": 0,
+                "work_hours": "0h 0m",
+                "break_hours": "0h 0m",
+                "current_task_id": None,
+                "current_task_title": None,
+                "current_task_type": None,
+                "breaks": [],
+                "punches": []
+            }
+
+        # Calculate live seconds
+        live_times = calculate_live_work_and_break_seconds(record, now)
+        record.update(live_times)
+        record["has_record"] = True
+
+        # Determine effective status
+        punches = record.get("punches", [])
+        has_open_punch = False
+        if punches:
+            last_p = punches[-1]
+            if not last_p.get("check_out") or last_p.get("check_out") == "--":
+                has_open_punch = True
+        elif record.get("check_in") and record.get("check_in") != "--":
+            if not record.get("check_out") or record.get("check_out") == "--":
+                has_open_punch = True
+
+        db_status = record.get("status")
+        if db_status == "On Break":
+            effective_status = "On Break"
+        elif has_open_punch or (db_status in ("Active", "Late") and (not record.get("check_out") or record.get("check_out") == "--")):
+            effective_status = "Punched In"
+        elif db_status == "Logged" or (record.get("check_out") and record.get("check_out") != "--"):
+            effective_status = "Punched Out"
+        else:
+            effective_status = "Punched Out"
+
+        record["effective_status"] = effective_status
+        return record
 
     @classmethod
     async def get_attendance_list(
@@ -903,8 +1098,12 @@ class AttendanceService:
             page=page,
             limit=limit
         )
+        today_str = format_date_ist(get_now_ist())
         for r in records:
             r["logs"] = build_timeline_logs(r)
+            if r.get("date") == today_str and r.get("status") in ("Active", "Late", "On Break"):
+                live_times = calculate_live_work_and_break_seconds(r)
+                r.update(live_times)
 
         await set_cache(cache_key, records, ttl=300)
         return records

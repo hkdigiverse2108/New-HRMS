@@ -223,6 +223,37 @@ export function parseTimeToMinutes(timeStr: string): number | null {
 }
 
 /**
+ * Helper to parse time string like "09:30 AM", "09:30:15 PM", "18:30:00" to seconds from midnight.
+ */
+export function parseTimeToSeconds(timeStr: string): number | null {
+  if (!timeStr || timeStr === "--") return null;
+  const trimmed = timeStr.trim();
+
+  // 12-hour format with optional seconds e.g. "09:30 AM" or "09:30:15 PM"
+  const match12 = trimmed.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)$/i);
+  if (match12 && match12[1] && match12[2] && match12[4]) {
+    let hours = parseInt(match12[1], 10);
+    const minutes = parseInt(match12[2], 10);
+    const seconds = match12[3] ? parseInt(match12[3], 10) : 0;
+    const ampm = match12[4].toUpperCase();
+    if (ampm === "PM" && hours < 12) hours += 12;
+    if (ampm === "AM" && hours === 12) hours = 0;
+    return hours * 3600 + minutes * 60 + seconds;
+  }
+
+  // 24-hour format e.g. "18:30" or "09:30:15"
+  const match24 = trimmed.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (match24 && match24[1] && match24[2]) {
+    const hours = parseInt(match24[1], 10);
+    const minutes = parseInt(match24[2], 10);
+    const seconds = match24[3] ? parseInt(match24[3], 10) : 0;
+    return hours * 3600 + minutes * 60 + seconds;
+  }
+
+  return null;
+}
+
+/**
  * Validates if timeStrA is strictly after timeStrB within the same day.
  */
 export function isTimeStrictlyAfter(timeStrA: string, timeStrB: string): boolean {

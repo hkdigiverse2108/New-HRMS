@@ -47,6 +47,13 @@ class TaskBase(BaseModel):
     priority: Optional[TaskPriority] = Field(default=TaskPriority.MEDIUM)
     due_date: Optional[date] = None
     assigned_to: Optional[str] = Field(None, description="Employee ID this task is assigned to")
+
+    @field_validator('title', mode='before')
+    @classmethod
+    def validate_title(cls, v):
+        if not v or not str(v).strip():
+            raise ValueError("Task title is required and cannot be empty.")
+        return str(v).strip()
     
     # Optional fields
     task_category: Optional[str] = Field(default="General", description="Category of the task (e.g. General, SMM, Development)")
