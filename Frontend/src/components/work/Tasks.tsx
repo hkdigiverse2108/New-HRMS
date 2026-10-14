@@ -964,7 +964,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   ];
 
   return (
-    <div className="space-y-5 min-h-[calc(100vh-4rem)] flex flex-col pb-12 animate-in fade-in duration-300">
+    <div className="relative space-y-5 min-h-[calc(100vh-4rem)] flex flex-col pb-12 animate-in fade-in duration-300">
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0">
         <div>
@@ -986,14 +986,6 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
             onChange={setSearchQuery}
             containerClassName="w-full sm:w-60 md:w-64 shrink-0"
           />
-
-          <button
-            onClick={() => fetchTasksData()}
-            className="h-[38px] w-[38px] flex items-center justify-center bg-muted/40 border border-border/60 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0 shadow-sm"
-            title="Refresh tasks from Redis/DB"
-          >
-            <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin text-primary")} />
-          </button>
 
           {/* Quick Assign Button */}
           <Dialog
@@ -1422,6 +1414,17 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
           )}
         </div>
       </div>
+
+      {/* Centered loading overlay */}
+      {isLoading && (
+        <div className="absolute inset-0 z-40 bg-background/40 backdrop-blur-sm !mt-0">
+          <div className="sticky top-0 h-[calc(100vh-4rem)] flex items-center justify-center">
+            <div className="h-12 w-12 flex items-center justify-center bg-card border border-border/60 rounded-xl shadow-md">
+              <RefreshCw className="w-5 h-5 animate-spin text-primary" />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main View: Board (Kanban) or List (Table) */}
       {view === "board" ? (
