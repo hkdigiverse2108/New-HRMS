@@ -1,4 +1,5 @@
 import calendar
+import re
 from datetime import datetime, time, timedelta
 from typing import Optional, List, Dict, Any
 from fastapi import HTTPException, status
@@ -310,6 +311,37 @@ class AttendanceService:
         }
 
     @classmethod
+    async def get_late_cutoff(cls, employee_id: str) -> time:
+        """Latest punch-in time not counted as late: the employee's start time
+        (Employee List) plus the late coming grace from Payroll Settings."""
+        start = time(9, 30)
+        try:
+            emp = await EmployeeRepository.get_employee_by_id(employee_id)
+            if not emp:
+                emp = await EmployeeRepository.get_employee_by_email(employee_id)
+            emp_start = parse_time_str(str((emp or {}).get("work_details", {}).get("start_time") or ""))
+            if emp_start:
+                start = emp_start
+        except Exception:
+            pass
+
+        grace_minutes = 10
+        try:
+            settings = await PayrollRepository.get_settings()
+            raw_grace = settings.get("lateGrace")
+            if raw_grace not in (None, ""):
+                match = re.search(r"\d+", str(raw_grace))
+                if match:
+                    grace_minutes = int(match.group())
+        except Exception:
+            pass
+
+        cutoff = datetime.combine(datetime.today(), start) + timedelta(minutes=grace_minutes)
+        if cutoff.date() != datetime.today().date():
+            return time(23, 59, 59)
+        return cutoff.time()
+
+    @classmethod
     async def get_today_record_robust(cls, employee_id: str, today_str: str) -> Optional[Dict[str, Any]]:
         """Finds today's attendance record with robust resolution across employee_id, ObjectId, and email."""
         record = await AttendanceRepository.get_by_employee_and_date(employee_id, today_str)
@@ -438,7 +470,7 @@ class AttendanceService:
         """
         Handles Punch-In with Task Association.
         1. Checks for pending punch-out from past dates.
-        2. Applies Late Detection against 09:30 AM + 10m buffer (09:40 AM).
+        2. Applies Late Detection against the employee's start time + Payroll Settings late grace.
         3. Checks for approved half-day leave for today.
         4. Resumes session if already punched out today.
         5. Associates current task and records task history.
@@ -456,8 +488,8 @@ class AttendanceService:
         today_str = format_date_ist(now)
         current_time_str = format_time_ist(now)
 
-        # Step 2: Late detection (Office Start: 09:30 AM + 10 mins = 09:40 AM)
-        office_start_buffer = time(9, 40)
+        # Step 2: Late detection (employee start time + Payroll Settings late grace)
+        office_start_buffer = await cls.get_late_cutoff(employee_id)
         is_late = now.time() > office_start_buffer
         late_remark = "Late Punch-in Penalty Remark" if is_late else None
 

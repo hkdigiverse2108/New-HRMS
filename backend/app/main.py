@@ -31,6 +31,10 @@ from app.controllers.invoice import router as invoice_router
 from app.controllers.bank_account import router as bank_account_router
 from app.controllers.quotation import router as quotation_router
 from app.controllers.settings import router as settings_router
+from app.controllers.payroll import router as payroll_router
+from app.controllers.salary import router as salary_router
+from app.controllers.bonus_deduction import router as bonus_deduction_router
+from app.controllers.overtime import router as overtime_router
 from app.controllers.sales import router as sales_router
 from app.controllers.document_type import router as document_type_router
 from app.controllers.document_template import router as document_template_router
@@ -155,6 +159,10 @@ app.include_router(invoice_router)
 app.include_router(bank_account_router)
 app.include_router(quotation_router)
 app.include_router(settings_router)
+app.include_router(payroll_router)
+app.include_router(salary_router)
+app.include_router(bonus_deduction_router)
+app.include_router(overtime_router)
 app.include_router(sales_router)
 app.include_router(document_type_router)
 app.include_router(document_template_router)

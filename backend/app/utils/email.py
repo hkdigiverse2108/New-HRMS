@@ -130,3 +130,22 @@ HK DigiVerse HRMS Team
             server.send_message(msg)
     except Exception as e:
         print(f"Failed to send email to {to_email}: {str(e)}")
+
+
+def send_email_with_attachment(to_email: str, subject: str, text: str, html: str,
+                               attachment: bytes, filename: str, mime: str = "application/pdf") -> None:
+    """Send an email with one attachment. Raises if SMTP is not configured or sending fails."""
+    if not settings.SMTP_USER or not settings.SMTP_PASS:
+        raise RuntimeError("Email is not configured on the server (SMTP)")
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = settings.SENDER_EMAIL or settings.SMTP_USER
+    msg["To"] = to_email
+    msg.set_content(text)
+    msg.add_alternative(html, subtype="html")
+    maintype, subtype = mime.split("/", 1)
+    msg.add_attachment(attachment, maintype=maintype, subtype=subtype, filename=filename)
+    with smtplib.SMTP(settings.SMTP_SERVER, settings.SMTP_PORT) as server:
+        server.starttls()
+        server.login(settings.SMTP_USER, settings.SMTP_PASS)
+        server.send_message(msg)

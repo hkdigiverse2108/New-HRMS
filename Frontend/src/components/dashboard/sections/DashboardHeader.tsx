@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { UserPlus, CheckSquare, Briefcase, Receipt, Clock, Settings, X, Plus, Search, BellRing } from "lucide-react";
+import { UserPlus, CheckSquare, Briefcase, Receipt, Clock, Settings, X, Plus, Search, BellRing, Timer } from "lucide-react";
 import { formatDate, cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog";
 import { useAuth } from "@/components/auth/AuthContext";
@@ -79,6 +79,8 @@ export function DashboardHeader({ setActive, onAction }: { setActive?: ((url: st
   const passedWorkdays = Array.from({ length: istNow.getDate() }, (_, i) => i + 1).filter(isWorkday).length;
   const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
   const [isSummonOpen, setIsSummonOpen] = useState(false);
+
+
   const [searchQuery, setSearchQuery] = useState("");
   const isLeaderOrAdmin = Boolean(
     isUserAdmin(user) || 
@@ -128,6 +130,15 @@ export function DashboardHeader({ setActive, onAction }: { setActive?: ((url: st
               <span>Urgent Summon</span>
             </button>
           )}
+          {/* Overtime page (not in the sidebar): request overtime, own requests, and approvals for Admin / HR */}
+          <button
+            type="button"
+            onClick={() => setActive?.("/employees/overtime")}
+            className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full text-[12px] font-bold shadow-md shadow-emerald-200 transition-colors cursor-pointer"
+            title="Request overtime and see overtime requests"
+          >
+            <Timer className="h-3.5 w-3.5" /> Overtime
+          </button>
           {activeActions.map(action => (
             <button key={action.id} onClick={() => setActive?.(action.url)} className="flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-white border border-border/80 rounded-full text-[12px] font-bold text-foreground/80 shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:bg-muted/50 transition-colors cursor-pointer group">
               <action.icon className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors" /> {action.title}
@@ -230,6 +241,7 @@ export function DashboardHeader({ setActive, onAction }: { setActive?: ((url: st
         isOpen={isSummonOpen}
         onClose={() => setIsSummonOpen(false)}
       />
+
     </>
   );
 }

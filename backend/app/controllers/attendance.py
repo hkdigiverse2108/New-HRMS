@@ -107,13 +107,15 @@ async def punch_in(
     if result and result.get("is_late"):
         try:
             from app.repository.notification import NotificationRepository
-            in_time = result.get("in_time") or "now"
+            in_time = result.get("in_time") or result.get("check_in") or "now"
             emp_name = result.get("employee_name") or "Employee"
+            from app.services.attendance import AttendanceService
+            cutoff = (await AttendanceService.get_late_cutoff(str(employee_id))).strftime("%I:%M %p")
             # 1. Notify the employee
             await NotificationRepository.create_notification({
                 "recipient_id": str(employee_id),
                 "title": "⚠️ Late Punch-in Recorded",
-                "message": f"Your check-in at {in_time} was registered past the 09:40 AM buffer.",
+                "message": f"Your check-in at {in_time} was registered past the {cutoff} grace time.",
                 "type": "attendance",
                 "action_url": "/employees/attendance",
                 "is_read": False

@@ -1,8 +1,8 @@
 // @ts-nocheck
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { X, Plus, Trash2, Calendar } from "lucide-react";
-import { format } from "date-fns";
+import { X, Plus, Trash2, Calendar, Save, Loader2 } from "lucide-react";
+import { format, parseISO, getDaysInMonth, isSameMonth } from "date-fns";
 import { useSettingsContext } from "./SettingsContext";
 import { SearchableSelect } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -13,14 +13,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
-
-const TABS = [
-  "General",
-  "Leave & Holidays",
-  "Attendance & OT",
-  "Benefits",
-  "Lock & Approval"
-];
+import { Calendar as DayCalendar } from "@/components/ui/calendar";
+import { api } from "@/lib/api";
+import { toast } from "@/lib/toast";
 
 // Helper Toggle Component for reusability
 function Switch({ checked, onChange }: { checked?: boolean; onChange?: () => void }) {
@@ -42,50 +37,90 @@ function Switch({ checked, onChange }: { checked?: boolean; onChange?: () => voi
   );
 }
 
+// Pay multiplier for overtime on holidays / Sundays (stored as e.g. "1.5x"; payroll reads the number)
+const HOLIDAY_OT_OPTIONS = [
+  { label: "1x", value: "1x" },
+  { label: "1.5x", value: "1.5x" },
+  { label: "2x", value: "2x" },
+];
+
+/** Typed multiplier like "1.8", "1.8x" or "1.8 x" -> "1.8x" (between 0.5x and 10x), otherwise null. */
+const toMultiplier = (input: string): string | null => {
+  const match = input.trim().toLowerCase().match(/^(\d+(?:\.\d+)?)\s*x?$/);
+  const n = match ? Number(match[1]) : NaN;
+  if (!Number.isFinite(n) || n < 0.5 || n > 10) {
+    toast.error("Enter a multiplier between 0.5 and 10, e.g. 1.8x");
+    return null;
+  }
+  return `${+n.toFixed(2)}x`;
+};
+
+/** Preset multipliers plus a saved custom one, in order. */
+const holidayOtOptions = (current?: string) => {
+  const options = [...HOLIDAY_OT_OPTIONS];
+  if (current && !options.some(o => o.value === current)) options.push({ label: current, value: current });
+  return options.sort((a, b) => parseFloat(a.value) - parseFloat(b.value));
+};
+
 export function PayrollSettings() {
-  const [activeTab, setActiveTab] = useState("General");
   const { leaveTypes, addLeaveType, removeLeaveType } = useSettingsContext();
   const [newLeaveTypeInput, setNewLeaveTypeInput] = useState("");
   
   // Settings State
-  const [workingDays, setWorkingDays] = useState("26");
-  const [calcMethod, setCalcMethod] = useState("Working Days");
-  const [selectedOffs, setSelectedOffs] = useState<string[]>(["Sunday", "Alternate Saturday"]);
-  const [customOffText, setCustomOffText] = useState("");
+  const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
 
   // Advanced Settings State
   const [settings, setSettings] = useState({
-    paidLeave: "18",
-    unpaidLeaveCap: "6",
+    paidLeave: "1.5",
+    unpaidLeaveCap: "2",
     halfDayRule: "4 hours",
     carryForward: true,
     maxCarryForward: "12",
-    encashment: true,
     lateGrace: "15",
-    latePenalty: "₹300 per instance",
-    absentRule: "No punch = Absent",
-    missingPunch: "Regularize within 3 days",
     enableOT: true,
+    standardHours: "9",
     otRate: "₹250",
     doubleOTAfter: "4 hrs",
     holidayOT: "2x",
-    healthIns: true,
-    healthCoCont: "1200",
-    healthEmpCont: "650",
-    maternity: true,
-    paternity: true,
-    medical: true,
-    travelReimburse: true,
-    mealBenefit: true,
-    internetReimburse: true,
-    mobileAllowance: false,
-    bonusEligible: true,
-    lockPayroll: true
+    nextSalaryDate: ""
   });
 
   // Holiday management state
   const [holidays, setHolidays] = useState<Array<{id: string; name: string; date: string; type: "company" | "national" | "festival" | "optional"; isCompanyLeave: boolean}>>([]);
   const [isAddHolidayOpen, setIsAddHolidayOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Load saved payroll settings
+  useEffect(() => {
+    api.get<any>("/payroll/settings", { showLoader: false, showErrorToast: false })
+      .then(res => {
+        if (!res) return;
+        const { holidays: savedHolidays, _id, created_at, updated_at, ...rest } = res;
+        setSettings(prev => {
+          const next = { ...prev };
+          Object.keys(prev).forEach(key => {
+            if (rest[key] !== undefined && rest[key] !== null) next[key] = rest[key];
+          });
+          return next;
+        });
+        if (Array.isArray(savedHolidays)) {
+          setHolidays([...savedHolidays].sort((a, b) => String(a.date).localeCompare(String(b.date))));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await api.put("/payroll/settings", { ...settings, holidays }, { showLoader: false });
+      toast.success("Payroll settings saved");
+    } catch {
+      // error toast shown by api
+    } finally {
+      setIsSaving(false);
+    }
+  };
   const [newHolidayName, setNewHolidayName] = useState("");
   const [newHolidayDate, setNewHolidayDate] = useState("");
   const [newHolidayType, setNewHolidayType] = useState<"company" | "national" | "festival" | "optional">("company");
@@ -93,13 +128,13 @@ export function PayrollSettings() {
 
   const addHoliday = () => {
     if (!newHolidayName.trim() || !newHolidayDate) return;
-    setHolidays(prev => [...prev, {
+    setHolidays(prev => [...prev.filter(h => h.date !== newHolidayDate), {
       id: `hol-${Date.now()}`,
       name: newHolidayName.trim(),
       date: newHolidayDate,
       type: newHolidayType,
       isCompanyLeave: newHolidayIsCompanyLeave
-    }]);
+    }].sort((a, b) => a.date.localeCompare(b.date)));
     setNewHolidayName("");
     setNewHolidayDate("");
     setNewHolidayType("company");
@@ -107,29 +142,42 @@ export function PayrollSettings() {
     setIsAddHolidayOpen(false);
   };
 
-  const removeHoliday = (id: string) => {
-    setHolidays(prev => prev.filter(h => h.id !== id));
+  const toDateKey = (d: Date) => format(d, "yyyy-MM-dd");
+
+  // Calendar selection: each selected day becomes a holiday entry, unselecting removes it
+  const handleCalendarSelect = (dates?: Date[]) => {
+    const selectedKeys = new Set((dates || []).map(toDateKey));
+    setHolidays(prev => {
+      const kept = prev.filter(h => selectedKeys.has(h.date));
+      const existing = new Set(kept.map(h => h.date));
+      const added = [...selectedKeys]
+        .filter(key => !existing.has(key))
+        .map(key => ({
+          id: `hol-${key}-${Date.now()}`,
+          name: "Leave",
+          date: key,
+          type: "company" as const,
+          isCompanyLeave: true
+        }));
+      return [...kept, ...added].sort((a, b) => a.date.localeCompare(b.date));
+    });
   };
 
-  const toggleCompanyLeave = (id: string) => {
-    setHolidays(prev => prev.map(h => h.id === id ? { ...h, isCompanyLeave: !h.isCompanyLeave } : h));
+  const updateHolidayName = (id: string, name: string) => {
+    setHolidays(prev => prev.map(h => h.id === id ? { ...h, name } : h));
+  };
+
+  const removeHoliday = (id: string) => {
+    setHolidays(prev => prev.filter(h => h.id !== id));
   };
 
   const companyLeaveCount = holidays.filter(h => h.isCompanyLeave).length;
   const totalHolidays = holidays.length;
 
-  const toggleOff = (day: string) => {
-    setSelectedOffs(prev => 
-      prev.includes(day) 
-        ? prev.filter(d => d !== day)
-        : [...prev, day]
-    );
-  };
-
-  const getSelectedText = () => {
-    if (selectedOffs.length === 0) return "None";
-    return selectedOffs.map(d => d === "Custom" && customOffText ? `${customOffText} (Custom)` : d).join(" + ");
-  };
+  const holidayDates = holidays.map(h => parseISO(h.date));
+  const daysInMonth = getDaysInMonth(calendarMonth);
+  const monthOffDays = holidayDates.filter(d => isSameMonth(d, calendarMonth)).length;
+  const monthWorkingDays = daysInMonth - monthOffDays;
 
   // Add Holiday Modal
   const AddHolidayModal = () => (
@@ -178,191 +226,214 @@ export function PayrollSettings() {
       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-[1400px]">
       
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Payroll Settings</h1>
-        <p className="mt-1.5 text-[13px] text-muted-foreground/80">Company-wide payroll rules applied to every processing cycle</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Payroll Settings</h1>
+          <p className="mt-1.5 text-[13px] text-muted-foreground/80">Company-wide payroll rules applied to every processing cycle</p>
+        </div>
+        <button
+          onClick={handleSave}
+          disabled={isSaving}
+          className="flex items-center justify-center gap-2 px-5 h-[40px] bg-primary text-primary-foreground text-[13px] font-semibold rounded-xl shadow-sm hover:bg-primary/90 transition-colors disabled:opacity-60 shrink-0"
+        >
+          {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          {isSaving ? "Saving..." : "Save Settings"}
+        </button>
       </div>
 
-      {/* Tabs Bar */}
-      <div className="flex items-center gap-1.5 bg-[#F6F8F7] p-1.5 rounded-xl w-full max-w-full overflow-x-auto border-b border-border/50">
-        {TABS.map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={cn(
-              "px-5 py-2 min-h-[44px] sm:min-h-0 whitespace-nowrap shrink-0 text-[13px] font-semibold rounded-lg transition-all",
-              activeTab === tab
-                ? "bg-white text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground/80"
-            )}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
-
-      {/* Tab Content */}
-      <div className="pt-8">
-        <>
-        {activeTab === "General" && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-            
-            {/* Card 1: Working Days */}
-            <div className="rounded-[16px] border border-border/60 bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-              <div className="mb-5">
-                <h2 className="text-[15px] font-bold text-foreground">Working Days Per Month</h2>
-                <p className="text-[13px] text-muted-foreground/80 mt-1">Base divisor used for per-day salary calculation</p>
-              </div>
-              <div className="h-px w-full bg-border/40 mb-6" />
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+      {/* Salary & Attendance */}
+      <section className="mt-8">
+        <div className="mb-4">
+          <h2 className="text-[13px] font-bold uppercase tracking-wider text-muted-foreground">Salary & Attendance</h2>
+          <p className="text-[12px] text-muted-foreground/80 mt-0.5">Working days, holidays, late arrival grace and overtime pay</p>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Card 1: Working Days & Holidays */}
+            <div className="rounded-[16px] border border-border/60 bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)] lg:col-span-2">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Working Days Per Month */}
                 <div>
-                  <label className="text-[12px] font-semibold text-muted-foreground mb-2 block">Working days</label>
-                  <SearchableSelect 
-                    value={workingDays}
-                    onChange={setWorkingDays}
-                    options={[
-                      { label: "26", value: "26" },
-                      { label: "28", value: "28" },
-                      { label: "30", value: "30" },
-                      { label: "Actual days", value: "actual" }
-                    ]}
-                    className="w-full h-[42px] rounded-[10px] border border-border/80 p-2.5 text-[13px] font-medium text-foreground/80 outline-none focus:border-emerald-500 bg-white shadow-sm"
-                  />
-                </div>
-                <div>
-                  <label className="text-[12px] font-semibold text-muted-foreground mb-2 block">Salary calculation method</label>
-                  <SearchableSelect 
-                    value={calcMethod}
-                    onChange={setCalcMethod}
-                    options={[
-                      { label: "Working Days", value: "Working Days" },
-                      { label: "Calendar Days", value: "Calendar Days" }
-                    ]}
-                    className="w-full h-[42px] rounded-[10px] border border-border/80 p-2.5 text-[13px] font-medium text-foreground/80 outline-none focus:border-emerald-500 bg-white shadow-sm"
-                  />
-                </div>
-              </div>
-            </div>
+                  <h3 className="text-[13px] font-semibold text-foreground">Working Days Per Month</h3>
+                  <p className="text-[12px] text-muted-foreground/80 mt-0.5 mb-4">Select leave / off days on the calendar — they are added to the holiday list</p>
 
-            {/* Card 2: Weekly Off */}
-            <div className="rounded-[16px] border border-border/60 bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-              <div className="mb-5">
-                <h2 className="text-[15px] font-bold text-foreground">Weekly Off</h2>
-                <p className="text-[13px] text-muted-foreground/80 mt-1">Non-working days excluded from attendance loss</p>
-              </div>
-              <div className="h-px w-full bg-border/40 mb-6" />
-              
-              <div className="flex flex-wrap gap-2.5 mb-5">
-                {["Sunday", "Saturday", "Alternate Saturday", "Custom"].map(day => {
-                  const isSelected = selectedOffs.includes(day);
-                  return (
-                    <button
-                      key={day}
-                      onClick={() => toggleOff(day)}
-                      className={cn(
-                        "px-4 py-1.5 rounded-full text-[13px] font-semibold transition-colors",
-                        isSelected 
-                          ? "bg-primary text-primary-foreground border border-primary" 
-                          : "bg-white border border-border/80 text-foreground/80 hover:bg-muted/50"
-                      )}
-                    >
-                      {day}
-                    </button>
-                  );
-                })}
-              </div>
-              {selectedOffs.includes("Custom") && (
-                <div className="mb-5 animate-in fade-in slide-in-from-top-1 duration-200">
-                  <label className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider mb-2 block">Define Custom Off Days</label>
-                  <input 
-                    type="text" 
-                    value={customOffText}
-                    onChange={(e) => setCustomOffText(e.target.value)}
-                    placeholder="e.g., Every 3rd Saturday, Last Friday..."
-                    className="w-full h-[40px] rounded-[10px] border border-border/80 px-3 text-[13px] font-medium text-foreground/80 outline-none focus:border-emerald-500 bg-white shadow-sm"
-                  />
-                </div>
-              )}
-              <p className="text-[13px] text-muted-foreground">Selected: <span className="text-foreground/80">{getSelectedText()}</span></p>
-            </div>
+                  <div className="flex flex-col sm:flex-row gap-5 items-start">
+                    <DayCalendar
+                      mode="multiple"
+                      selected={holidayDates}
+                      onSelect={handleCalendarSelect}
+                      month={calendarMonth}
+                      onMonthChange={setCalendarMonth}
+                      showOutsideDays={false}
+                      className="rounded-xl border border-border/80 bg-white shadow-sm"
+                    />
 
-          </div>
-        )}
-
-        {/* Leave & Holidays Tab */}
-        {activeTab === "Leave & Holidays" && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-            <div className="rounded-[16px] border border-border/60 bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-              <div className="flex items-center justify-between mb-5">
-                <div>
-                  <h2 className="text-[15px] font-bold text-foreground">Holiday Calendar</h2>
-                  <p className="text-[13px] text-muted-foreground/80 mt-1">Holidays treated as paid non-working days</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="px-3 py-1 bg-[#E8F5F1] text-primary text-[12px] font-bold rounded-full">Total: {totalHolidays}</span>
-                  <button 
-                    onClick={() => setIsAddHolidayOpen(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground text-xs font-semibold rounded-lg hover:bg-primary/90 transition-colors"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Add
-                  </button>
-                </div>
-              </div>
-              <div className="h-px w-full bg-border/40 mb-6" />
-              <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
-                {holidays.length === 0 ? (
-                  <p className="text-[13px] text-muted-foreground/60 text-center py-8 border border-dashed border-border/40 rounded-xl">No holidays added yet. Click "Add" to create one.</p>
-                ) : (
-                  holidays.map(h => (
-                    <div key={h.id} className="flex items-center justify-between p-3.5 border border-border/80 rounded-xl bg-white">
-                      <div className="flex items-center gap-3">
-                        <div className="flex flex-col">
-                          <span className="text-[14px] font-semibold text-foreground">{h.name}</span>
-                          <span className="text-[12px] text-muted-foreground">{format(new Date(h.date), "MMM dd, yyyy")} • {h.type}</span>
+                    <div className="flex-1 w-full space-y-3">
+                      <div className="rounded-xl border border-primary/30 bg-[#E8F5F1] p-4">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-primary">Working days · {format(calendarMonth, "MMMM yyyy")}</p>
+                        <p className="text-3xl font-bold text-primary mt-1">{monthWorkingDays}</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="rounded-xl border border-border/80 p-3">
+                          <p className="text-[11px] font-semibold text-muted-foreground">Total days</p>
+                          <p className="text-lg font-bold text-foreground">{daysInMonth}</p>
+                        </div>
+                        <div className="rounded-xl border border-border/80 p-3">
+                          <p className="text-[11px] font-semibold text-muted-foreground">Leave / off days</p>
+                          <p className="text-lg font-bold text-rose-500">{monthOffDays}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={h.isCompanyLeave}
-                            onChange={() => toggleCompanyLeave(h.id)}
-                            className="w-4 h-4 rounded border-border text-primary focus:ring-primary/20"
-                          />
-                          <span className="text-[12px] font-medium text-muted-foreground">Company Leave</span>
-                        </label>
-                        <button
-                          onClick={() => removeHoliday(h.id)}
-                          className="p-1 text-muted-foreground hover:text-rose-500 rounded-lg hover:bg-rose-50 transition-colors"
-                          title="Delete holiday"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                      <div>
+                        <label className="text-[12px] font-semibold text-muted-foreground mb-2 block">Next salary date</label>
+                        <DatePicker
+                          value={settings.nextSalaryDate}
+                          onChange={(val) => setSettings({...settings, nextSalaryDate: val})}
+                          placeholder="Select salary date"
+                          className="w-full"
+                        />
                       </div>
                     </div>
-                  ))
-                )}
-              </div>
-              <div className="mt-4 pt-4 border-t border-border/40 flex items-center justify-between">
-                <span className="text-[13px] font-medium text-muted-foreground">Company Leave Days: {companyLeaveCount}</span>
+                  </div>
+                </div>
+
+                {/* Holiday Calendar */}
+                <div className="border-t border-border/40 pt-6 lg:border-t-0 lg:pt-0 lg:border-l lg:pl-8">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-[13px] font-semibold text-foreground">Holiday Calendar</h3>
+                      <p className="text-[12px] text-muted-foreground/80 mt-0.5">Holidays treated as paid non-working days</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-3 py-1 bg-[#E8F5F1] text-primary text-[12px] font-bold rounded-full">Total: {totalHolidays}</span>
+                      <button 
+                        onClick={() => setIsAddHolidayOpen(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground text-xs font-semibold rounded-lg hover:bg-primary/90 transition-colors"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Add
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                    {holidays.length === 0 ? (
+                      <p className="text-[13px] text-muted-foreground/60 text-center py-8 border border-dashed border-border/40 rounded-xl">No holidays added yet. Click "Add" to create one.</p>
+                    ) : (
+                      holidays.map(h => (
+                        <div key={h.id} className="flex items-center justify-between gap-3 p-3.5 border border-border/80 rounded-xl bg-white">
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className="flex flex-col flex-1 min-w-0">
+                              <input
+                                type="text"
+                                value={h.name}
+                                onChange={(e) => updateHolidayName(h.id, e.target.value)}
+                                placeholder="Enter reason"
+                                title="Click to edit reason"
+                                className="w-full text-[14px] font-semibold text-foreground bg-transparent rounded-md px-1 -mx-1 border border-transparent hover:border-border/80 focus:border-emerald-500 outline-none"
+                              />
+                              <span className="text-[12px] text-muted-foreground">{format(parseISO(h.date), "MMM dd, yyyy")} • {h.type}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => removeHoliday(h.id)}
+                              className="p-1 text-muted-foreground hover:text-rose-500 rounded-lg hover:bg-rose-50 transition-colors"
+                              title="Delete holiday"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div className="mt-4 pt-4 border-t border-border/40 flex items-center justify-between">
+                    <span className="text-[13px] font-medium text-muted-foreground">Company Leave Days: {companyLeaveCount}</span>
+                  </div>
+                </div>
               </div>
             </div>
 
+            {/* Card 2: Late Coming */}
+            <div className="rounded-[16px] border border-border/60 bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+              <div className="mb-5">
+                <h2 className="text-[15px] font-bold text-foreground">Late Coming</h2>
+                <p className="text-[13px] text-muted-foreground/80 mt-1">Grace period before an arrival is marked late</p>
+              </div>
+              <div className="h-px w-full bg-border/40 mb-6" />
+
+              <div className="grid grid-cols-1 gap-5">
+                <div>
+                  <label className="text-[12px] font-semibold text-muted-foreground mb-2 block">Late coming grace (minutes)</label>
+                  <input type="text" value={settings.lateGrace} onChange={(e) => setSettings({...settings, lateGrace: e.target.value})} className="w-full rounded-[10px] border border-border/80 p-2.5 text-[13px] font-medium text-foreground/80 outline-none focus:border-emerald-500 bg-white shadow-sm" />
+                </div>
+              </div>
+            </div>
+
+            {/* Card 3: Overtime */}
+            <div className="rounded-[16px] border border-border/60 bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+              <div className="mb-5">
+                <h2 className="text-[15px] font-bold text-foreground">Overtime</h2>
+                <p className="text-[13px] text-muted-foreground/80 mt-1">Hours worked beyond the standard day are paid as OT</p>
+              </div>
+              <div className="h-px w-full bg-border/40 mb-6" />
+
+              <div className="flex items-center justify-between p-4 border border-border/80 rounded-xl mb-6">
+                <div>
+                  <p className="text-[14px] font-semibold text-foreground">Enable Overtime</p>
+                  <p className="text-[12px] text-muted-foreground mt-0.5">OT paid with monthly payroll</p>
+                </div>
+                <Switch checked={settings.enableOT} onChange={() => setSettings({...settings, enableOT: !settings.enableOT})} />
+              </div>
+            
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[12px] font-semibold text-muted-foreground mb-2 block">Standard work hours / day</label>
+                  <input type="text" value={settings.standardHours} onChange={(e) => setSettings({...settings, standardHours: e.target.value})} className="w-full rounded-[10px] border border-border/80 p-2.5 text-[13px] font-medium text-foreground/80 outline-none focus:border-emerald-500 bg-white shadow-sm" />
+                </div>
+                <div>
+                  <label className="text-[12px] font-semibold text-muted-foreground mb-2 block">OT rate / hour</label>
+                  <input type="text" value={settings.otRate} onChange={(e) => setSettings({...settings, otRate: e.target.value})} className="w-full rounded-[10px] border border-border/80 p-2.5 text-[13px] font-medium text-foreground/80 outline-none focus:border-emerald-500 bg-white shadow-sm" />
+                </div>
+                <div>
+                  <label className="text-[12px] font-semibold text-muted-foreground mb-2 block">Double OT after</label>
+                  <input type="text" value={settings.doubleOTAfter} onChange={(e) => setSettings({...settings, doubleOTAfter: e.target.value})} className="w-full rounded-[10px] border border-border/80 p-2.5 text-[13px] font-medium text-foreground/80 outline-none focus:border-emerald-500 bg-white shadow-sm" />
+                </div>
+                <div>
+                  <label className="text-[12px] font-semibold text-muted-foreground mb-2 block">Holiday OT multiplier</label>
+                  <SearchableSelect
+                    value={settings.holidayOT}
+                    onChange={(val) => setSettings({...settings, holidayOT: val})}
+                    options={holidayOtOptions(settings.holidayOT)}
+                    onCreate={toMultiplier}
+                    placeholder="Select or type"
+                    className="w-full h-[42px] rounded-[10px] border border-border/80 p-2.5 text-[13px] font-medium text-foreground/80 outline-none focus:border-emerald-500 bg-white shadow-sm"
+                  />
+                </div>
+              </div>
+            </div>
+        </div>
+      </section>
+
+      {/* Leave */}
+      <section className="mt-8">
+        <div className="mb-4">
+          <h2 className="text-[13px] font-bold uppercase tracking-wider text-muted-foreground">Leave</h2>
+          <p className="text-[12px] text-muted-foreground/80 mt-0.5">Leave entitlements and leave types</p>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Card 4: Leave Policy */}
             <div className="rounded-[16px] border border-border/60 bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
               <div className="mb-5">
                 <h2 className="text-[15px] font-bold text-foreground">Leave Policy</h2>
-                <p className="text-[13px] text-muted-foreground/80 mt-1">Paid, unpaid, half-day, carry forward and encashment</p>
+                <p className="text-[13px] text-muted-foreground/80 mt-1">Monthly paid, unpaid, half-day, and carry forward rules</p>
               </div>
               <div className="h-px w-full bg-border/40 mb-6" />
               
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                 <div>
-                  <label className="text-[12px] font-semibold text-muted-foreground mb-2 block">Paid leave / year</label>
+                  <label className="text-[12px] font-semibold text-muted-foreground mb-2 block">Paid leave / month</label>
                   <input type="text" value={settings.paidLeave} onChange={(e) => setSettings({...settings, paidLeave: e.target.value})} className="w-full rounded-[10px] border border-border/80 p-2.5 text-[13px] font-medium text-foreground/80 outline-none focus:border-emerald-500 bg-white shadow-sm" />
                 </div>
                 <div>
-                  <label className="text-[12px] font-semibold text-muted-foreground mb-2 block">Unpaid leave cap</label>
+                  <label className="text-[12px] font-semibold text-muted-foreground mb-2 block">Unpaid leave cap / month</label>
                   <input type="text" value={settings.unpaidLeaveCap} onChange={(e) => setSettings({...settings, unpaidLeaveCap: e.target.value})} className="w-full rounded-[10px] border border-border/80 p-2.5 text-[13px] font-medium text-foreground/80 outline-none focus:border-emerald-500 bg-white shadow-sm" />
                 </div>
                 <div>
@@ -376,30 +447,24 @@ export function PayrollSettings() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between p-4 border border-border/80 rounded-xl mb-4">
+              <div className={`flex items-center justify-between p-4 border border-border/80 rounded-xl ${settings.carryForward ? "mb-4" : ""}`}>
                 <div>
                   <p className="text-[14px] font-semibold text-foreground">Carry Forward Leave</p>
-                  <p className="text-[12px] text-muted-foreground mt-0.5">Unused paid leaves move to next year</p>
+                  <p className="text-[12px] text-muted-foreground mt-0.5">Unused paid leaves move to next month</p>
                 </div>
                 <Switch checked={settings.carryForward} onChange={() => setSettings({...settings, carryForward: !settings.carryForward})} />
               </div>
 
-              <div className="mb-6">
-                <label className="text-[12px] font-semibold text-muted-foreground mb-2 block">Maximum carry forward days</label>
-                <input type="text" value={settings.maxCarryForward} onChange={(e) => setSettings({...settings, maxCarryForward: e.target.value})} className="w-full rounded-[10px] border border-border/80 p-2.5 text-[13px] font-medium text-foreground/80 outline-none focus:border-emerald-500 bg-white shadow-sm" />
-              </div>
-
-              <div className="flex items-center justify-between p-4 border border-border/80 rounded-xl">
+              {settings.carryForward && (
                 <div>
-                  <p className="text-[14px] font-semibold text-foreground">Leave Encashment</p>
-                  <p className="text-[12px] text-muted-foreground mt-0.5">Encash unused leave at year end</p>
+                  <label className="text-[12px] font-semibold text-muted-foreground mb-2 block">Maximum carry forward days</label>
+                  <input type="text" value={settings.maxCarryForward} onChange={(e) => setSettings({...settings, maxCarryForward: e.target.value})} className="w-full rounded-[10px] border border-border/80 p-2.5 text-[13px] font-medium text-foreground/80 outline-none focus:border-emerald-500 bg-white shadow-sm" />
                 </div>
-                <Switch checked={settings.encashment} onChange={() => setSettings({...settings, encashment: !settings.encashment})} />
-              </div>
+              )}
             </div>
 
-            {/* Leave Types Configuration */}
-            <div className="rounded-[16px] border border-border/60 bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)] mt-6 col-span-1 lg:col-span-2">
+            {/* Card 5: Leave Types */}
+            <div className="rounded-[16px] border border-border/60 bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
               <div className="mb-5">
                 <h2 className="text-[15px] font-bold text-foreground">Leave Types</h2>
                 <p className="text-[13px] text-muted-foreground/80 mt-1">Configure available leave types for employees</p>
@@ -441,265 +506,14 @@ export function PayrollSettings() {
                       setNewLeaveTypeInput("");
                     }
                   }}
-                  className="px-4 py-2.5 bg-card hover:bg-primary text-primary-foreground rounded-[10px] text-[13px] font-bold shadow-sm flex items-center gap-2 transition-colors"
+                  className="px-4 py-2.5 bg-primary hover:bg-[#00925e] text-primary-foreground rounded-[10px] text-[13px] font-bold shadow-sm flex items-center gap-2 transition-colors"
                 >
                   <Plus className="w-4 h-4" /> Add
                 </button>
               </div>
             </div>
-          </div>
-        )}
-
-        {/* Attendance & OT Tab */}
-        {activeTab === "Attendance & OT" && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-            <div className="rounded-[16px] border border-border/60 bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-              <div className="mb-5">
-                <h2 className="text-[15px] font-bold text-foreground">Attendance Rules</h2>
-                <p className="text-[13px] text-muted-foreground/80 mt-1">Grace, penalty and punch rules affecting payable days</p>
-              </div>
-              <div className="h-px w-full bg-border/40 mb-6" />
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
-                <div>
-                  <label className="text-[12px] font-semibold text-muted-foreground mb-2 block">Late coming grace (minutes)</label>
-                  <input type="text" value={settings.lateGrace} onChange={(e) => setSettings({...settings, lateGrace: e.target.value})} className="w-full rounded-[10px] border border-border/80 p-2.5 text-[13px] font-medium text-foreground/80 outline-none focus:border-emerald-500 bg-white shadow-sm" />
-                </div>
-                <div>
-                  <label className="text-[12px] font-semibold text-muted-foreground mb-2 block">Late penalty</label>
-                  <SearchableSelect
-                    value={settings.latePenalty}
-                    onChange={(val) => setSettings({...settings, latePenalty: val})}
-                    options={[{ label: "₹300 per instance", value: "₹300 per instance" }]}
-                    className="w-full h-[42px] rounded-[10px] border border-border/80 p-2.5 text-[13px] font-medium text-foreground/80 outline-none focus:border-emerald-500 bg-white shadow-sm"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
-                <div>
-                  <label className="text-[12px] font-semibold text-muted-foreground mb-2 block">Half day rule</label>
-                  <SearchableSelect
-                    value={settings.halfDayRule}
-                    onChange={(val) => setSettings({...settings, halfDayRule: val})}
-                    options={[{ label: "Below 4 hrs", value: "Below 4 hrs" }]}
-                    className="w-full h-[42px] rounded-[10px] border border-border/80 p-2.5 text-[13px] font-medium text-foreground/80 outline-none focus:border-emerald-500 bg-white shadow-sm"
-                  />
-                </div>
-                <div>
-                  <label className="text-[12px] font-semibold text-muted-foreground mb-2 block">Absent rule</label>
-                  <SearchableSelect
-                    value={settings.absentRule}
-                    onChange={(val) => setSettings({...settings, absentRule: val})}
-                    options={[{ label: "No punch = Absent", value: "No punch = Absent" }]}
-                    className="w-full h-[42px] rounded-[10px] border border-border/80 p-2.5 text-[13px] font-medium text-foreground/80 outline-none focus:border-emerald-500 bg-white shadow-sm"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-5">
-                <div>
-                  <label className="text-[12px] font-semibold text-muted-foreground mb-2 block">Missing punch rule</label>
-                  <SearchableSelect
-                    value={settings.missingPunch}
-                    onChange={(val) => setSettings({...settings, missingPunch: val})}
-                    options={[{ label: "Regularize within 3 days", value: "Regularize within 3 days" }]}
-                    className="w-full h-[42px] rounded-[10px] border border-border/80 p-2.5 text-[13px] font-medium text-foreground/80 outline-none focus:border-emerald-500 bg-white shadow-sm"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-[16px] border border-border/60 bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-              <div className="mb-5">
-                <h2 className="text-[15px] font-bold text-foreground">Overtime</h2>
-                <p className="text-[13px] text-muted-foreground/80 mt-1">OT computed from approved attendance only</p>
-              </div>
-              <div className="h-px w-full bg-border/40 mb-6" />
-
-              <div className="flex items-center justify-between p-4 border border-border/80 rounded-xl mb-6">
-                <div>
-                  <p className="text-[14px] font-semibold text-foreground">Enable Overtime</p>
-                  <p className="text-[12px] text-muted-foreground mt-0.5">OT paid with monthly payroll</p>
-                </div>
-                <Switch checked={settings.enableOT} onChange={() => setSettings({...settings, enableOT: !settings.enableOT})} />
-              </div>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="text-[12px] font-semibold text-muted-foreground mb-2 block">OT rate / hour</label>
-                  <input type="text" value={settings.otRate} onChange={(e) => setSettings({...settings, otRate: e.target.value})} className="w-full rounded-[10px] border border-border/80 p-2.5 text-[13px] font-medium text-foreground/80 outline-none focus:border-emerald-500 bg-white shadow-sm" />
-                </div>
-                <div>
-                  <label className="text-[12px] font-semibold text-muted-foreground mb-2 block">Double OT after</label>
-                  <input type="text" value={settings.doubleOTAfter} onChange={(e) => setSettings({...settings, doubleOTAfter: e.target.value})} className="w-full rounded-[10px] border border-border/80 p-2.5 text-[13px] font-medium text-foreground/80 outline-none focus:border-emerald-500 bg-white shadow-sm" />
-                </div>
-                <div>
-                  <label className="text-[12px] font-semibold text-muted-foreground mb-2 block">Holiday OT multiplier</label>
-                  <SearchableSelect
-                    value={settings.holidayOT}
-                    onChange={(val) => setSettings({...settings, holidayOT: val})}
-                    options={[{ label: "2x", value: "2x" }]}
-                    className="w-full h-[42px] rounded-[10px] border border-border/80 p-2.5 text-[13px] font-medium text-foreground/80 outline-none focus:border-emerald-500 bg-white shadow-sm"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Benefits Tab */}
-        {activeTab === "Benefits" && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-            <div className="rounded-[16px] border border-border/60 bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-              <div className="mb-5">
-                <h2 className="text-[15px] font-bold text-foreground">Health & Statutory Benefits</h2>
-                <p className="text-[13px] text-muted-foreground/80 mt-1">Company and employee contributions</p>
-              </div>
-              <div className="h-px w-full bg-border/40 mb-6" />
-
-              <div className="space-y-4">
-                <div className="border border-border/80 rounded-xl overflow-hidden">
-                  <div className="flex items-center justify-between p-4">
-                    <div>
-                      <p className="text-[14px] font-semibold text-foreground">Health Insurance</p>
-                      <p className="text-[12px] text-muted-foreground mt-0.5">Company ₹1,200 · Employee ₹650</p>
-                    </div>
-                    <Switch checked={settings.healthIns} onChange={() => setSettings({...settings, healthIns: !settings.healthIns})} />
-                  </div>
-                  <div className="px-4 pb-4 grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-[11px] font-semibold text-muted-foreground mb-1.5 block">Company contribution</label>
-                      <input type="text" value={settings.healthCoCont} onChange={(e) => setSettings({...settings, healthCoCont: e.target.value})} className="w-full rounded-[8px] border border-border/80 p-2 text-[13px] font-medium text-foreground/80 outline-none focus:border-emerald-500 bg-white" />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-semibold text-muted-foreground mb-1.5 block">Employee contribution</label>
-                      <input type="text" value={settings.healthEmpCont} onChange={(e) => setSettings({...settings, healthEmpCont: e.target.value})} className="w-full rounded-[8px] border border-border/80 p-2 text-[13px] font-medium text-foreground/80 outline-none focus:border-emerald-500 bg-white" />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between p-4 border border-border/80 rounded-xl">
-                  <div>
-                    <p className="text-[14px] font-semibold text-foreground">Maternity Leave</p>
-                    <p className="text-[12px] text-muted-foreground mt-0.5">Days allowed: 182</p>
-                  </div>
-                  <Switch checked={settings.maternity} onChange={() => setSettings({...settings, maternity: !settings.maternity})} />
-                </div>
-
-                <div className="flex items-center justify-between p-4 border border-border/80 rounded-xl">
-                  <div>
-                    <p className="text-[14px] font-semibold text-foreground">Paternity Leave</p>
-                    <p className="text-[12px] text-muted-foreground mt-0.5">Days allowed: 15</p>
-                  </div>
-                  <Switch checked={settings.paternity} onChange={() => setSettings({...settings, paternity: !settings.paternity})} />
-                </div>
-
-                <div className="flex items-center justify-between p-4 border border-border/80 rounded-xl">
-                  <div>
-                    <p className="text-[14px] font-semibold text-foreground">Medical Benefit</p>
-                  </div>
-                  <Switch checked={settings.medical} onChange={() => setSettings({...settings, medical: !settings.medical})} />
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-[16px] border border-border/60 bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-              <div className="mb-5">
-                <h2 className="text-[15px] font-bold text-foreground">Reimbursements & Perks</h2>
-                <p className="text-[13px] text-muted-foreground/80 mt-1">Applied as monthly allowances in payslips</p>
-              </div>
-              <div className="h-px w-full bg-border/40 mb-6" />
-
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 border border-border/80 rounded-xl">
-                  <p className="text-[14px] font-semibold text-foreground">Travel Reimbursement</p>
-                  <Switch checked={settings.travelReimburse} onChange={() => setSettings({...settings, travelReimburse: !settings.travelReimburse})} />
-                </div>
-                <div className="flex items-center justify-between p-4 border border-border/80 rounded-xl">
-                  <p className="text-[14px] font-semibold text-foreground">Meal Benefit</p>
-                  <Switch checked={settings.mealBenefit} onChange={() => setSettings({...settings, mealBenefit: !settings.mealBenefit})} />
-                </div>
-                <div className="flex items-center justify-between p-4 border border-border/80 rounded-xl">
-                  <p className="text-[14px] font-semibold text-foreground">Internet Reimbursement</p>
-                  <Switch checked={settings.internetReimburse} onChange={() => setSettings({...settings, internetReimburse: !settings.internetReimburse})} />
-                </div>
-                <div className="flex items-center justify-between p-4 border border-border/80 rounded-xl bg-muted/50/30">
-                  <p className={cn("text-[14px] font-semibold", settings.mobileAllowance ? "text-foreground" : "text-muted-foreground")}>Mobile Allowance</p>
-                  <Switch checked={settings.mobileAllowance} onChange={() => setSettings({...settings, mobileAllowance: !settings.mobileAllowance})} />
-                </div>
-                <div className="flex items-center justify-between p-4 border border-border/80 rounded-xl">
-                  <div>
-                    <p className="text-[14px] font-semibold text-foreground">Bonus Eligibility</p>
-                    <p className="text-[12px] text-muted-foreground mt-0.5">After 6 months of service</p>
-                  </div>
-                  <Switch checked={settings.bonusEligible} onChange={() => setSettings({...settings, bonusEligible: !settings.bonusEligible})} />
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Lock & Approval Tab */}
-        {activeTab === "Lock & Approval" && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-            <div className="rounded-[16px] border border-border/60 bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-              <div className="mb-5">
-                <h2 className="text-[15px] font-bold text-foreground">Payroll Lock</h2>
-                <p className="text-[13px] text-muted-foreground/80 mt-1">Prevent edits once payroll is approved</p>
-              </div>
-              <div className="h-px w-full bg-border/40 mb-6" />
-
-              <div className="flex items-center justify-between p-4 border border-border/80 rounded-xl mb-4">
-                <div>
-                  <p className="text-[14px] font-semibold text-foreground">Lock payroll after approval</p>
-                  <p className="text-[12px] text-muted-foreground mt-0.5">Approved payroll becomes read-only forever</p>
-                </div>
-                <Switch checked={settings.lockPayroll} onChange={() => setSettings({...settings, lockPayroll: !settings.lockPayroll})} />
-              </div>
-              
-              <p className="text-[13px] text-muted-foreground leading-relaxed">
-                Payroll records can never be deleted — corrections are posted as adjustments in the next cycle.
-              </p>
-            </div>
-
-            <div className="rounded-[16px] border border-border/60 bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-              <div className="mb-5">
-                <h2 className="text-[15px] font-bold text-foreground">Approval Workflow</h2>
-                <p className="text-[13px] text-muted-foreground/80 mt-1">Sequential approvals required before disbursement</p>
-              </div>
-              <div className="h-px w-full bg-border/40 mb-6" />
-
-              <div className="space-y-4 relative before:absolute before:inset-y-0 before:left-[19px] before:w-px before:bg-border/60">
-                <div className="flex items-center gap-4 p-4 border border-border/80 rounded-xl bg-white relative z-10">
-                  <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[14px] font-bold shrink-0">1</div>
-                  <div>
-                    <p className="text-[14px] font-bold text-foreground">HR</p>
-                    <p className="text-[12px] text-muted-foreground mt-0.5">Verifies attendance, leave and salary revisions</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4 p-4 border border-border/80 rounded-xl bg-white relative z-10">
-                  <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[14px] font-bold shrink-0">2</div>
-                  <div>
-                    <p className="text-[14px] font-bold text-foreground">Accounts</p>
-                    <p className="text-[12px] text-muted-foreground mt-0.5">Validates deductions, recoveries and tax</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4 p-4 border border-border/80 rounded-xl bg-white relative z-10">
-                  <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[14px] font-bold shrink-0">3</div>
-                  <div>
-                    <p className="text-[14px] font-bold text-foreground">CEO</p>
-                    <p className="text-[12px] text-muted-foreground mt-0.5">Final approval — locks payroll</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-        </>
-      </div>
+        </div>
+      </section>
       </div>
 
       <AddHolidayModal />

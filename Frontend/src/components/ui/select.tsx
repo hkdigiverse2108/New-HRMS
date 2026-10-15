@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import * as SelectPrimitive from "@radix-ui/react-select";
-import { Check, ChevronDown, ChevronUp } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Plus } from "lucide-react";
 import {
   Command,
   CommandEmpty,
@@ -181,6 +181,8 @@ export interface SearchableSelectProps {
   emptyMessage?: string;
   className?: string;
   disabled?: boolean;
+  /** Lets the user add a value that is not in the list: return the value to select, or null to reject it. */
+  onCreate?: (input: string) => string | null;
 }
 
 export function SearchableSelect({
@@ -191,11 +193,15 @@ export function SearchableSelect({
   emptyMessage = "No option found.",
   className,
   disabled = false,
+  onCreate,
 }: SearchableSelectProps) {
   const [open, setOpen] = React.useState(false);
+  const [search, setSearch] = React.useState("");
+  const typed = search.trim();
+  const canCreate = Boolean(onCreate && typed && !options.some(o => o.label.toLowerCase() === typed.toLowerCase() || o.value.toLowerCase() === typed.toLowerCase()));
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={o => { setOpen(o); if (!o) setSearch(""); }}>
       <PopoverTrigger asChild>
         <button
           role="combobox"
@@ -223,7 +229,7 @@ export function SearchableSelect({
         onWheel={(e) => e.stopPropagation()}
       >
         <Command>
-          <CommandInput placeholder={`Search ${placeholder.toLowerCase()}...`} />
+          <CommandInput placeholder={`Search ${placeholder.toLowerCase()}...`} value={search} onValueChange={setSearch} />
           <CommandList onWheel={(e) => { e.currentTarget.scrollTop += e.deltaY; e.stopPropagation(); }}>
             <CommandEmpty>{emptyMessage}</CommandEmpty>
             <CommandGroup>
@@ -245,6 +251,23 @@ export function SearchableSelect({
                   {option.label}
                 </CommandItem>
               ))}
+              {canCreate && (
+                <CommandItem
+                  value={`Add ${typed}`}
+                  onSelect={() => {
+                    const created = onCreate?.(typed);
+                    if (created) {
+                      onChange(created);
+                      setOpen(false);
+                      setSearch("");
+                    }
+                  }}
+                  className="text-emerald-700 font-semibold"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add “{typed}”
+                </CommandItem>
+              )}
             </CommandGroup>
           </CommandList>
         </Command>
