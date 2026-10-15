@@ -27,8 +27,9 @@ class FieldChangeDetail(BaseModel):
     new_value: Optional[str] = Field(default=None, description="New value after change")
 
 class ResearchHistoryLog(BaseModel):
+    log_id: Optional[str] = None
     action: str = Field(..., description="Action type: created, updated, deleted")
-    employee_id: str = Field(..., description="ID of employee who performed change")
+    employee_id: Optional[str] = Field(default=None, description="ID of employee who performed change")
     employee_details: Optional[dict] = Field(default=None, description="Populated employee details")
     timestamp: datetime = Field(..., description="Date and time of change")
     changes_summary: Optional[str] = Field(default=None, description="Summary of changes")

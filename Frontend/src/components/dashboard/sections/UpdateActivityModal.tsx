@@ -167,28 +167,19 @@ export function UpdateActivityModal({
         // 2. Fetch Research items
         const researchList: TaskItem[] = [];
         try {
-          const resRes = await api.get<any>("/work/research", { showErrorToast: false });
-          const resItems = resRes?.data || resRes || [];
-          if (Array.isArray(resItems)) {
-            resItems.forEach((r: any) => {
-              researchList.push({
-                id: String(r.id || r._id),
-                title: r.title || r.topic || "Research Topic",
-                dueDate: todayDateStr,
-                badge: "Research",
-                category: "Research",
-              });
+          // Same source as the Research page: own research + research shared with this employee
+          const resRes = await api.get<any>("/research", { showLoader: false, showErrorToast: false });
+          const resItems = Array.isArray(resRes) ? resRes : resRes?.data || [];
+          resItems.forEach((r: any) => {
+            researchList.push({
+              id: String(r.id || r._id),
+              title: r.title || "Research Topic",
+              dueDate: todayDateStr,
+              badge: r.project_details?.project_name || "Research",
+              category: "Research",
             });
-          }
+          });
         } catch {}
-
-        // Default research items if empty
-        if (researchList.length === 0) {
-          researchList.push(
-            { id: "res-1", title: "Product Feature & Architecture Research", dueDate: todayDateStr, badge: "Research", category: "Research" },
-            { id: "res-2", title: "API Performance & Redis Optimization", dueDate: todayDateStr, badge: "Research", category: "Research" }
-          );
-        }
 
         // 3. Fetch Activity items (Updated per transcript)
         const activityList: TaskItem[] = [
@@ -222,7 +213,6 @@ export function UpdateActivityModal({
                 };
                 if (item.category === "Today's Work") todayList.unshift(customItem);
                 else if (item.category === "Upcoming Work") upcomingList.unshift(customItem);
-                else if (item.category === "Research") researchList.unshift(customItem);
                 else if (item.category === "Activity") activityList.unshift(customItem);
                 else if (item.category === "Meeting") meetingList.unshift(customItem);
               });
@@ -286,7 +276,7 @@ export function UpdateActivityModal({
   };
 
   // Add custom task locally - ONLY sync to backend when final Save is clicked!
-  const handleAddCustom = () => {
+  const handleAddCustom = async () => {
     if (!customTaskTitle.trim()) {
       toast.error("Please enter a custom task title");
       return;
@@ -294,6 +284,40 @@ export function UpdateActivityModal({
     const cleanTitle = customTaskTitle.trim();
     const createdTaskId = `custom-${Date.now()}`;
     const todayStr = new Date().toISOString().split("T")[0];
+
+    // Research is created right away so it appears on the Research page even if punch-in is cancelled
+    if (activeTab === "Research") {
+      try {
+        const res = await api.post<any>("/research", {
+          title: cleanTitle,
+          description: "Added during Punch-In activity tracking",
+        }, { showErrorToast: false });
+        const researchId = String(res?._id || res?.id || "");
+        if (!researchId) throw new Error("No id returned");
+        const researchItem: TaskItem = {
+          id: researchId,
+          title: cleanTitle,
+          dueDate: todayStr,
+          badge: "Research",
+          category: "Research",
+        };
+        setTasks(prev => ({ ...prev, Research: [researchItem, ...(prev.Research || [])] }));
+        setSelectedTask({
+          taskId: researchId,
+          taskTitle: cleanTitle,
+          taskType: "Research",
+          dueDate: todayStr,
+          badge: "Research",
+        });
+        setIsAddingCustom(false);
+        setCustomTaskTitle("");
+        toast.success("Research added and selected!");
+      } catch (err) {
+        console.warn("Could not save custom research:", err);
+        toast.error("Could not save research. Please try again.");
+      }
+      return;
+    }
 
     const newCustomItem: TaskItem = {
       id: createdTaskId,
@@ -354,8 +378,24 @@ export function UpdateActivityModal({
 
     const taskToSave = { ...selectedTask };
 
+    // Custom research is saved to the Research module so it shows on the Research page
+    if (taskToSave.isCustom && taskToSave.taskType === "Research") {
+      try {
+        const res = await api.post<any>("/research", {
+          title: taskToSave.taskTitle,
+          description: "Added during Punch-In activity tracking",
+        }, { showErrorToast: false });
+        if (res?._id || res?.id) {
+          taskToSave.taskId = String(res._id || res.id);
+          taskToSave.isCustom = false;
+        }
+      } catch (err) {
+        console.warn("Could not save custom research:", err);
+        toast.error("Could not save research. Please try again.");
+        return;
+      }
+    } else if (taskToSave.isCustom) {
     // If custom task, sync to backend tasks collection now (only for the 1 selected task!)
-    if (taskToSave.isCustom) {
       try {
         const todayStr = new Date().toISOString().split("T")[0];
         const res = await api.post<any>("/tasks", {
