@@ -72,6 +72,10 @@ async def lifespan(app: FastAPI):
             await db.db["tasks"].create_index([("assigned_to", 1), ("is_deleted", 1)])
             await db.db["projects"].create_index([("is_deleted", 1)])
             await db.db["projects"].create_index([("general.status", 1)])
+            await db.db["content_items"].create_index([("project_id", 1), ("is_deleted", 1), ("schedule_date", 1)])
+            await db.db["content_items"].create_index([("project_id", 1), ("schedule_date", 1)])
+            await db.db["content_items"].create_index([("project_id", 1), ("content_type", 1)])
+            await db.db["content_settings"].create_index([("project_id", 1)], unique=True)
             await db.db["notifications"].create_index([("recipient_id", 1), ("is_read", 1), ("created_at", -1)])
             await db.db["remarks"].create_index([("submitted_by_id", 1)])
         except Exception as ie:

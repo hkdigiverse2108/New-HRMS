@@ -1,7 +1,7 @@
 from app.database.db import get_database
 from bson import ObjectId
 from typing import Optional
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
 class TaskRepository:
     collection_name = "tasks"
@@ -63,6 +63,7 @@ class TaskRepository:
         creative_role: Optional[str] = None,
         task_category: Optional[str] = None,
         timeline_filter: Optional[str] = None,
+        target_date: Optional[str] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         search: Optional[str] = None,
@@ -92,65 +93,103 @@ class TaskRepository:
             and_conditions.append({"assigned_to": assigned_to})
         if assigned_by:
             and_conditions.append({"assigned_by": assigned_by})
-        if status:
-            and_conditions.append({"status": status})
-        if priority:
-            and_conditions.append({"priority": priority})
+        if status and status != "All":
+            norm_status = status.lower().replace(" ", "").replace("_", "")
+            if norm_status in ["done", "completed"]:
+                and_conditions.append({"status": {"$in": ["completed", "done"]}})
+            elif norm_status in ["inprogress"]:
+                and_conditions.append({"status": "inprogress"})
+            elif norm_status in ["inreview", "review"]:
+                and_conditions.append({"status": {"$in": ["inreview", "review"]}})
+            elif norm_status in ["todo"]:
+                and_conditions.append({"status": "todo"})
+            else:
+                and_conditions.append({"status": status.lower()})
+        if priority and priority != "All":
+            and_conditions.append({"priority": priority.lower()})
         if history_assigned_to:
             and_conditions.append({"transfer_history.to_employee": history_assigned_to})
         if history_assigned_by:
             and_conditions.append({"transfer_history.from_employee": history_assigned_by})
-            
-        query = {"$and": and_conditions} if len(and_conditions) > 1 else and_conditions[0]
-            
-        
         if content_item_id:
-            query["content_item_id"] = content_item_id
+            and_conditions.append({"content_item_id": content_item_id})
         if project_id:
-            query["project_id"] = project_id
+            and_conditions.append({"project_id": project_id})
         if creative_role:
-            query["creative_role"] = creative_role
-        if task_category:
-            query["task_category"] = task_category
+            and_conditions.append({"creative_role": creative_role})
+        if task_category and task_category != "All":
+            and_conditions.append({"task_category": task_category})
             
-        if search:
-            query["title"] = {"$regex": search, "$options": "i"}
+        if search and search.strip():
+            and_conditions.append({"title": {"$regex": search.strip(), "$options": "i"}})
             
+        if target_date:
+            try:
+                ref_date = datetime.strptime(target_date.strip(), "%Y-%m-%d")
+            except Exception:
+                ref_date = datetime.utcnow() + timedelta(hours=5, minutes=30)
+        else:
+            ref_date = datetime.utcnow() + timedelta(hours=5, minutes=30)
+
+        start_of_today = datetime(ref_date.year, ref_date.month, ref_date.day)
+        end_of_today = datetime(ref_date.year, ref_date.month, ref_date.day, 23, 59, 59, 999999)
+
         if timeline_filter:
-            now = datetime.utcnow()
-            start_of_today = datetime(now.year, now.month, now.day)
-            end_of_today = datetime(now.year, now.month, now.day, 23, 59, 59, 999999)
-            
-            if timeline_filter == "today":
-                query["due_date"] = {"$gte": start_of_today, "$lte": end_of_today}
-            elif timeline_filter == "pending":
-                query["due_date"] = {"$lt": start_of_today}
-                if "status" not in query:
-                    query["status"] = {"$ne": "completed"}
-            elif timeline_filter == "upcoming":
-                query["due_date"] = {"$gt": end_of_today}
-                if "status" not in query:
-                    query["status"] = {"$ne": "completed"}
-                    
+            tf = timeline_filter.lower().strip()
+            if tf == "today":
+                # Today's Work: Due today OR overdue (incomplete tasks with due_date before today)
+                and_conditions.append({
+                    "$or": [
+                        {"due_date": {"$gte": start_of_today, "$lte": end_of_today}},
+                        {
+                            "due_date": {"$lt": start_of_today},
+                            "status": {"$nin": ["completed", "done"]}
+                        }
+                    ]
+                })
+            elif tf in ["overdue", "pending"]:
+                and_conditions.append({
+                    "due_date": {"$lt": start_of_today},
+                    "status": {"$nin": ["completed", "done"]}
+                })
+            elif tf == "upcoming":
+                and_conditions.append({
+                    "due_date": {"$gt": end_of_today},
+                    "status": {"$nin": ["completed", "done"]}
+                })
+            elif tf == "client_issue":
+                and_conditions.append({
+                    "$or": [
+                        {"task_category": "Client Issue"},
+                        {"title": {"$regex": "^\\[client issue\\]", "$options": "i"}},
+                        {"is_client_issue": True}
+                    ]
+                })
+
         if start_date or end_date:
             date_query = {}
             if start_date:
                 date_query["$gte"] = datetime.combine(start_date, datetime.min.time())
             if end_date:
                 date_query["$lte"] = datetime.combine(end_date, datetime.max.time())
-            if "due_date" in query and isinstance(query["due_date"], dict):
-                query["due_date"].update(date_query)
-            else:
-                query["due_date"] = date_query
-            
+            and_conditions.append({"due_date": date_query})
+
+        query = {"$and": and_conditions} if len(and_conditions) > 1 else and_conditions[0]
+
         total = await collection.count_documents(query)
+
+        # In Today's Work view, prioritize overdue tasks at the top by sorting due_date ascending
+        if timeline_filter and timeline_filter.lower().strip() == "today":
+            sort_criteria = [("due_date", 1), ("created_at", -1)]
+        else:
+            sort_criteria = [("due_date", -1), ("created_at", -1)]
 
         if page and limit:
             skip = (page - 1) * limit
-            cursor = collection.find(query).sort([("due_date", -1), ("created_at", -1)]).skip(skip).limit(limit)
+            cursor = collection.find(query).sort(sort_criteria).skip(skip).limit(limit)
             total_pages = (total + limit - 1) // limit
         else:
-            cursor = collection.find(query).sort([("due_date", -1), ("created_at", -1)])
+            cursor = collection.find(query).sort(sort_criteria)
             page = 1
             limit = total if total > 0 else 10
             total_pages = 1 if total > 0 else 0
@@ -204,7 +243,7 @@ class TaskRepository:
             return False
 
     @classmethod
-    async def get_stats(cls, involved_emp_id: Optional[str] = None):
+    async def get_stats(cls, involved_emp_id: Optional[str] = None, target_date: Optional[str] = None):
         collection = await cls.get_collection()
         base_query = {"is_deleted": False}
         if involved_emp_id:
@@ -217,9 +256,16 @@ class TaskRepository:
                 {"transfer_history.from_employee": involved_emp_id},
             ]
         
-        now = datetime.utcnow()
-        start_of_today = datetime(now.year, now.month, now.day)
-        end_of_today = datetime(now.year, now.month, now.day, 23, 59, 59, 999999)
+        if target_date:
+            try:
+                ref_date = datetime.strptime(target_date.strip(), "%Y-%m-%d")
+            except Exception:
+                ref_date = datetime.utcnow() + timedelta(hours=5, minutes=30)
+        else:
+            ref_date = datetime.utcnow() + timedelta(hours=5, minutes=30)
+
+        start_of_today = datetime(ref_date.year, ref_date.month, ref_date.day)
+        end_of_today = datetime(ref_date.year, ref_date.month, ref_date.day, 23, 59, 59, 999999)
 
         # Single round-trip facet (was 8 sequential counts ~900ms cold)
         facet_res = await collection.aggregate([
@@ -228,11 +274,12 @@ class TaskRepository:
                 "total": [{"$count": "n"}],
                 "todo": [{"$match": {"status": "todo"}}, {"$count": "n"}],
                 "inprogress": [{"$match": {"status": "inprogress"}}, {"$count": "n"}],
-                "inreview": [{"$match": {"status": "inreview"}}, {"$count": "n"}],
-                "completed": [{"$match": {"status": "completed"}}, {"$count": "n"}],
+                "inreview": [{"$match": {"status": {"$in": ["inreview", "review"]}}}, {"$count": "n"}],
+                "completed": [{"$match": {"status": {"$in": ["completed", "done"]}}}, {"$count": "n"}],
                 "today": [{"$match": {"due_date": {"$gte": start_of_today, "$lte": end_of_today}}}, {"$count": "n"}],
-                "overdue": [{"$match": {"due_date": {"$lt": start_of_today}, "status": {"$ne": "completed"}}}, {"$count": "n"}],
-                "upcoming": [{"$match": {"due_date": {"$gt": end_of_today}, "status": {"$ne": "completed"}}}, {"$count": "n"}],
+                "overdue": [{"$match": {"due_date": {"$lt": start_of_today}, "status": {"$nin": ["completed", "done"]}}}, {"$count": "n"}],
+                "upcoming": [{"$match": {"due_date": {"$gt": end_of_today}, "status": {"$nin": ["completed", "done"]}}}, {"$count": "n"}],
+                "client_issue": [{"$match": {"$or": [{"task_category": "Client Issue"}, {"title": {"$regex": "^\\[client issue\\]", "$options": "i"}}, {"is_client_issue": True}]}}, {"$count": "n"}]
             }},
         ]).to_list(length=1)
 
@@ -251,7 +298,8 @@ class TaskRepository:
             "completed": _n("completed"),
             "today": _n("today"),
             "overdue": _n("overdue"),
-            "upcoming": _n("upcoming")
+            "upcoming": _n("upcoming"),
+            "client_issue": _n("client_issue")
         }
         
     @classmethod

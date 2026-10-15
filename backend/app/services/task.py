@@ -296,6 +296,7 @@ class TaskService:
         creative_role: Optional[str] = None,
         task_category: Optional[str] = None,
         timeline_filter: Optional[str] = None,
+        target_date: Optional[str] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         search: Optional[str] = None,
@@ -318,6 +319,7 @@ class TaskService:
             creative_role=creative_role,
             task_category=task_category,
             timeline_filter=timeline_filter,
+            target_date=target_date,
             start_date=start_date.isoformat() if start_date else None,
             end_date=end_date.isoformat() if end_date else None,
             search=search,
@@ -346,6 +348,7 @@ class TaskService:
             creative_role,
             task_category,
             timeline_filter,
+            target_date,
             start_date,
             end_date,
             search,
@@ -648,8 +651,8 @@ class TaskService:
         return res
 
     @staticmethod
-    async def get_task_stats(involved_emp_id: Optional[str] = None):
-        cache_key = f"tasks:stats:{involved_emp_id or 'all'}"
+    async def get_task_stats(involved_emp_id: Optional[str] = None, target_date: Optional[str] = None):
+        cache_key = f"tasks:stats:{involved_emp_id or 'all'}:{target_date or 'today'}"
         cached = await get_cache(cache_key)
         if cached is not None:
             return cached
@@ -657,8 +660,8 @@ class TaskService:
         # Heavy recurring generation only on cache miss (was running on every call)
         await TaskService.process_recurring_tasks()
 
-        stats = await TaskRepository.get_stats(involved_emp_id)
-        await set_cache(cache_key, stats, ttl=300)
+        stats = await TaskRepository.get_stats(involved_emp_id, target_date)
+        await set_cache(cache_key, stats, ttl=60)
         return stats
 
     @staticmethod

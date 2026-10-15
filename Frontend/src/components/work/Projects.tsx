@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, Fragment } from "react";
 import { X, Search, Plus, Filter, Check, MoreHorizontal, LayoutGrid, List, Briefcase, Calendar, Clock, Star, Circle, Trash2, Edit2, Archive, ArchiveRestore, ArrowLeft, Users, IndianRupee, FolderGit2, CheckCircle2, Settings2, TrendingUp, MousePointerClick, Target, BarChart3, ChevronDown, User, Building2, CreditCard, FileText, ChevronRight, Video, Instagram, Layers, MessageSquare, Key, Copy, Eye, EyeOff, ExternalLink, Phone, ShieldCheck, Sparkles, Share2, AlertCircle, Sliders, Loader2, UserPlus, UserX, ChevronLeft, Download, Printer } from "lucide-react";
 import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
@@ -2149,7 +2149,6 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       if (state && typeof state === "object") {
         if ("projectId" in state && state.projectId) {
           setSelectedProjectId(state.projectId);
-          if ("clientId" in state) setSelectedClientId(state.clientId);
           return;
         }
         if ("clientId" in state && state.clientId) {
@@ -3978,8 +3977,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         return p;
       }));
 
-      // 2. Ensure client is selected if applicable
-      if (updatedClientId && !selectedClientId) {
+      // 2. Ensure client is selected if applicable (only if already in client view)
+      if (updatedClientId && selectedClientId) {
         setSelectedClientId(updatedClientId);
       }
 
@@ -4048,6 +4047,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           await loadLiveData();
           if (selectedProjectId === project.id) {
             setSelectedProjectId(null);
+            setSelectedClientId(null);
           }
           toast.success(`Project "${project.name}" deleted.`);
         } catch (err: any) {
@@ -4248,24 +4248,39 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         if (!hasMatchingCat) return;
       }
 
-      const primaryProject = (clientFilterCategories.length > 0
-        ? subProjects.find(p => clientFilterCategories.includes(p.category))
-        : null) || subProjects.find(p => p.status !== "Completed") || subProjects[0];
-
-      if (!primaryProject) return;
-
-      const projClient = clients.find(c => c.id === primaryProject.clientId) || clients.find(c => subProjects.some(p => p.clientId === c.id));
+      const projClient = clients.find(c => subProjects.some(p => p.clientId === c.id));
 
       let displayName = "";
       if (projClient?.companyName && projClient.companyName.trim()) {
         displayName = projClient.companyName.trim();
       } else {
-        const cleanBase = primaryProject.name.replace(/\s*-\s*(Creative|Digital Marketing|Development|Sales).*$/i, '').trim();
-        displayName = cleanBase || primaryProject.name;
+        const cleanBase = subProjects[0]?.name.replace(/\s*-\s*(Creative|Digital Marketing|Development|Sales).*$/i, '').trim();
+        displayName = cleanBase || subProjects[0]?.name || "Project";
       }
-      if (subProjects.length === 1 && !projClient?.companyName) {
-        displayName = primaryProject.name;
+      if (subProjects.length === 1 && !projClient?.companyName && subProjects[0]) {
+        displayName = subProjects[0].name;
       }
+
+      // Prioritize subproject that matches the client name / display name exactly (Fix for HariKrushn Digiverse LLP)
+      const exactNameMatch = subProjects.find(p => {
+        const pName = p.name.trim().toLowerCase();
+        const dName = displayName.trim().toLowerCase();
+        const cName = (projClient?.companyName || "").trim().toLowerCase();
+        const cpName = (projClient?.name || "").trim().toLowerCase();
+        return pName === dName || (cName && pName === cName) || (cpName && pName === cpName);
+      });
+
+      const prefixNameMatch = subProjects.find(p => {
+        const pName = p.name.trim().toLowerCase();
+        const dName = displayName.trim().toLowerCase();
+        return pName.startsWith(dName) || dName.startsWith(pName);
+      });
+
+      const primaryProject = (clientFilterCategories.length > 0
+        ? subProjects.find(p => clientFilterCategories.includes(p.category))
+        : null) || exactNameMatch || prefixNameMatch || subProjects.find(p => p.status !== "Completed") || subProjects[0];
+
+      if (!primaryProject) return;
 
       let overallStatus: ProjectStatus = "Completed";
       if (subProjects.some(p => p.status === "In Progress")) overallStatus = "In Progress";
@@ -4839,7 +4854,6 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                               type="button"
                               onClick={() => {
                                 setIsPendingBrandsModalOpen(false);
-                                setSelectedClientId(projClient.id);
                                 setSelectedProjectId(proj.id);
                               }}
                               className="px-3 py-2 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-xl transition-all cursor-pointer"
@@ -5322,8 +5336,12 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div className="flex items-center gap-4">
                 <button
-                  onClick={() => setSelectedProjectId(null)}
+                  onClick={() => {
+                    setSelectedProjectId(null);
+                    setSelectedClientId(null);
+                  }}
                   className="p-2.5 bg-card border border-border/60 rounded-xl hover:bg-muted/80 hover:text-primary transition-colors shadow-sm group"
+                  title="Back to Projects"
                 >
                   <ArrowLeft className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
                 </button>
@@ -5764,16 +5782,42 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   const isAssigned = !!assignedId || !!detail?.employee_name;
 
                   return (
-                    <div key={role.key} className={cn("p-2.5 rounded-xl border text-left transition-all", isAssigned ? "bg-muted/30 border-border/60" : "bg-muted/10 border-dashed border-border/40 opacity-70")}>
-                      <div className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground mb-1 truncate">
-                        <span>{role.icon}</span>
-                        <span className="truncate">{role.label}</span>
+                    <div
+                      key={role.key}
+                      onClick={() => {
+                        setAssigningProject(project);
+                        setCreativeTeamForm({
+                          cc_creator: project.creativeTeam?.["cc_creator"] || "",
+                          scripting: project.creativeTeam?.["scripting"] || "",
+                          shoot_videography: project.creativeTeam?.["shoot_videography"] || "",
+                          reel_editing: project.creativeTeam?.["reel_editing"] || "",
+                          post_graphics: project.creativeTeam?.["post_graphics"] || "",
+                          thumbnail: project.creativeTeam?.["thumbnail"] || "",
+                          approval_qc: project.creativeTeam?.["approval_qc"] || "",
+                          caption: project.creativeTeam?.["caption"] || "",
+                          posting_publisher: project.creativeTeam?.["posting_publisher"] || "",
+                        });
+                        setOpenRoleId(role.key);
+                        setIsAssignCreativeTeamModalOpen(true);
+                      }}
+                      className={cn(
+                        "p-2.5 rounded-xl border text-left transition-all cursor-pointer group hover:border-primary/60 hover:shadow-md hover:scale-[1.02]",
+                        isAssigned ? "bg-muted/30 border-border/60 hover:bg-muted/50" : "bg-muted/10 border-dashed border-border/40 opacity-70 hover:opacity-100 hover:bg-muted/30"
+                      )}
+                      title={`Click to assign or edit ${role.label}`}
+                    >
+                      <div className="flex items-center justify-between text-[10px] font-bold text-muted-foreground mb-1 truncate">
+                        <div className="flex items-center gap-1 truncate">
+                          <span>{role.icon}</span>
+                          <span className="truncate">{role.label}</span>
+                        </div>
+                        <Edit2 className="w-2.5 h-2.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-1" />
                       </div>
                       <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
                         {isAssigned && (
                           <UserAvatar name={memberName} avatar={emp?.avatar} size="w-5 h-5" />
                         )}
-                        <span className={cn("text-xs font-black truncate min-w-0", isAssigned ? "text-foreground" : "text-muted-foreground/60 italic text-[11px]")}>
+                        <span className={cn("text-xs font-black truncate min-w-0", isAssigned ? "text-foreground group-hover:text-primary transition-colors" : "text-muted-foreground/60 italic text-[11px]")}>
                           {memberName}
                         </span>
                       </div>
@@ -5858,9 +5902,39 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {(isSocialMediaCategory(project.category) && (!isMarketingCategory(project.category) || dmWorkspaceView === "social")) ? (() => {
                   const projectCalendar: CalendarItem[] = project.contentCalendar || [];
+                  const now = new Date();
+                  const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+                  // Compute dynamic months from project dates + calendar items
+                  const dynamicMonthsMap = new Map<string, string>();
+                  getProjectMonths(project.startDate, project.endDate, now).months.forEach(m => {
+                    dynamicMonthsMap.set(m.value, m.label);
+                  });
+                  projectCalendar.forEach(item => {
+                    if (item.postingDate && /^\d{4}-\d{2}/.test(item.postingDate)) {
+                      const ym = item.postingDate.slice(0, 7);
+                      if (!dynamicMonthsMap.has(ym)) {
+                        try {
+                          const d = new Date(`${ym}-01`);
+                          dynamicMonthsMap.set(ym, d.toLocaleString("en-US", { month: "short", year: "numeric" }));
+                        } catch {
+                          dynamicMonthsMap.set(ym, ym);
+                        }
+                      }
+                    }
+                  });
+                  const dynamicMonthsList = Array.from(dynamicMonthsMap.entries())
+                    .sort((a, b) => a[0].localeCompare(b[0]))
+                    .map(([value, label]) => ({ value, label }));
+
                   const filteredCalendar = projectCalendar.filter(item => {
                     if (calendarTypeFilter !== "All" && item.type !== calendarTypeFilter) return false;
                     if (calendarStatusFilter !== "All" && item.status !== calendarStatusFilter) return false;
+                    if (calendarMonthFilter === "Current") {
+                      if (!item.postingDate || !item.postingDate.startsWith(currentYearMonth)) return false;
+                    } else if (calendarMonthFilter !== "All") {
+                      if (!item.postingDate || !item.postingDate.startsWith(calendarMonthFilter)) return false;
+                    }
                     return true;
                   });
 
@@ -6342,6 +6416,64 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                             const hasApprovalQcAssigned = Boolean(project?.creativeTeam?.["approval_qc"] || project?.creativeTeam?.approval_qc);
                             return (
                               <div className="bg-card/40 border border-border/40 rounded-[2rem] shadow-xl overflow-hidden backdrop-blur-md">
+                                {/* Month Tabs Strip */}
+                                <div className="flex items-center gap-2 px-5 py-3 border-b border-border/40 bg-muted/20 overflow-x-auto no-scrollbar">
+                                  <span className="text-[11px] font-black uppercase text-muted-foreground tracking-wider shrink-0 flex items-center gap-1.5 mr-1">
+                                    <Calendar className="w-3.5 h-3.5 text-primary" /> Month:
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setCalendarMonthFilter("All")}
+                                    className={cn(
+                                      "px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5",
+                                      calendarMonthFilter === "All"
+                                        ? "bg-primary text-primary-foreground shadow-sm"
+                                        : "bg-background/80 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/50"
+                                    )}
+                                  >
+                                    <span>All Months</span>
+                                    <span className={cn("px-1.5 py-0.2 rounded-full text-[10px]", calendarMonthFilter === "All" ? "bg-white/20 text-white" : "bg-muted text-foreground/70")}>
+                                      {projectCalendar.length}
+                                    </span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setCalendarMonthFilter("Current")}
+                                    className={cn(
+                                      "px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5",
+                                      calendarMonthFilter === "Current"
+                                        ? "bg-primary text-primary-foreground shadow-sm"
+                                        : "bg-background/80 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/50"
+                                    )}
+                                  >
+                                    <span>Current Month</span>
+                                    <span className={cn("px-1.5 py-0.2 rounded-full text-[10px]", calendarMonthFilter === "Current" ? "bg-white/20 text-white" : "bg-muted text-foreground/70")}>
+                                      {projectCalendar.filter(i => i.postingDate && i.postingDate.startsWith(currentYearMonth)).length}
+                                    </span>
+                                  </button>
+                                  {dynamicMonthsList.map(m => {
+                                    const count = projectCalendar.filter(i => i.postingDate && i.postingDate.startsWith(m.value)).length;
+                                    const isSelected = calendarMonthFilter === m.value;
+                                    return (
+                                      <button
+                                        key={m.value}
+                                        type="button"
+                                        onClick={() => setCalendarMonthFilter(m.value)}
+                                        className={cn(
+                                          "px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5",
+                                          isSelected
+                                            ? "bg-primary text-primary-foreground shadow-sm"
+                                            : "bg-background/80 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/50"
+                                        )}
+                                      >
+                                        <span>{m.label}</span>
+                                        <span className={cn("px-1.5 py-0.2 rounded-full text-[10px]", isSelected ? "bg-white/20 text-white" : "bg-muted text-foreground/70")}>
+                                          {count}
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
                                 {filteredCalendar.length === 0 ? (
                                   <div className="text-center py-16 text-sm text-muted-foreground font-medium">
                                     No calendar items found matching the filters.
@@ -6367,7 +6499,12 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                         </tr>
                                       </thead>
                                       <tbody className="divide-y divide-border/20">
-                                        {filteredCalendar.map((item) => {
+                                        {filteredCalendar.map((item, idx) => {
+                                          const itemMonth = item.postingDate && /^\d{4}-\d{2}/.test(item.postingDate) ? item.postingDate.slice(0, 7) : "No Date";
+                                          const prevMonth = idx > 0 && filteredCalendar[idx - 1]?.postingDate && /^\d{4}-\d{2}/.test(filteredCalendar[idx - 1]!.postingDate!) ? filteredCalendar[idx - 1]!.postingDate!.slice(0, 7) : null;
+                                          const isNewMonth = calendarMonthFilter === "All" && (idx === 0 || itemMonth !== prevMonth);
+                                          const monthLabel = dynamicMonthsMap.get(itemMonth) || (itemMonth === "No Date" ? "Unscheduled Deliverables" : itemMonth);
+                                          const monthItemsCount = filteredCalendar.filter(i => (i.postingDate && /^\d{4}-\d{2}/.test(i.postingDate) ? i.postingDate.slice(0, 7) : "No Date") === itemMonth).length;
                                           const isExpanded = expandedRowId === item.id;
 
                                           const saveInlineEdit = async (field: string, value: string) => {
@@ -6458,8 +6595,23 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                             );
 
                                           return (
-                                            <tr
-                                              key={item.id}
+                                            <Fragment key={item.id}>
+                                              {isNewMonth && (
+                                                <tr className="bg-primary/10 border-y-2 border-primary/25 sticky top-0 z-10 backdrop-blur-md">
+                                                  <td colSpan={13} className="py-2.5 px-6 text-left">
+                                                    <div className="flex items-center justify-between">
+                                                      <span className="font-black text-xs text-primary uppercase tracking-wider flex items-center gap-1.5">
+                                                        📅 {monthLabel}
+                                                      </span>
+                                                      <span className="text-[11px] font-bold text-muted-foreground bg-background/80 px-2.5 py-0.5 rounded-full border border-border/40">
+                                                        {monthItemsCount} Deliverable{monthItemsCount === 1 ? '' : 's'}
+                                                      </span>
+                                                    </div>
+                                                  </td>
+                                                </tr>
+                                              )}
+                                              <tr
+                                                key={item.id}
                                               id={`cc-item-${item.id}`}
                                               data-cc-id={item.id}
                                               onClick={() => {
@@ -6721,6 +6873,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                                 </div>
                                               </td>
                                             </tr>
+                                            </Fragment>
                                           );
                                         })}
                                       </tbody>
@@ -12487,7 +12640,6 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                           <button
                             type="button"
                             onClick={() => {
-                              setSelectedClientId(project.clientId);
                               setSelectedProjectId(project.id);
                             }}
                             className="px-2.5 py-1 bg-primary text-primary-foreground font-bold text-[10px] rounded-lg shadow-sm hover:bg-primary/90 transition-all flex items-center gap-1 shrink-0"
@@ -12514,7 +12666,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         </div>
       ) : PROJECT_TABS.includes(activeTab) ? (
         /* K1: Projects Grid (Active / Archived) - Merged by client/brand in UI (Issue 6) */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2 items-start">
           {groupedProjects.map((group) => {
             const dp = getDateProgress(group.startDate, group.endDate);
             return (
@@ -12525,7 +12677,6 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   if (target.closest('button') || target.closest('[role="menuitem"]') || target.closest('a')) {
                     return;
                   }
-                  if (group.client) setSelectedClientId(group.client.id);
                   setSelectedProjectId(group.primaryProject.id);
                 }}
                 className="group bg-white border border-border/40 rounded-[2rem] p-6 shadow-sm hover:shadow-2xl hover:shadow-primary/5 hover:-translate-y-1 hover:border-primary/30 transition-all duration-300 relative flex flex-col cursor-pointer"
@@ -12541,7 +12692,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   </span>
                 </div>
 
-                <div className="relative z-10 mb-4 flex-grow">
+                <div className="relative z-10 mb-4">
                   <h3 className="text-xl font-black tracking-tight text-foreground line-clamp-2 leading-tight group-hover:text-primary transition-colors">
                     {group.displayName}
                   </h3>
@@ -12550,15 +12701,17 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       <Briefcase className="w-3.5 h-3.5" /> {group.clientPersonName}
                     </span>
                     {group.categories.map((cat) => {
-                      const matchingSub = group.subProjects.find(p => p.category === cat);
+                      const matchingSubs = group.subProjects.filter(p => p.category === cat);
+                      const targetSub = matchingSubs.find(p => p.id === group.primaryProject.id) ||
+                                       matchingSubs.find(p => p.name.trim().toLowerCase() === group.displayName.toLowerCase()) ||
+                                       matchingSubs[0];
                       return (
                         <button
                           key={cat}
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (group.client) setSelectedClientId(group.client.id);
-                            if (matchingSub) setSelectedProjectId(matchingSub.id);
+                            if (targetSub) setSelectedProjectId(targetSub.id);
                             else setSelectedProjectId(group.primaryProject.id);
                           }}
                           className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-1 bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground rounded-md transition-colors cursor-pointer"
@@ -12632,11 +12785,15 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 </p>
 
                 {/* Sub-projects list styled like Brand Division with Open Project */}
-                <div className="space-y-2 mt-4 pt-3 border-t border-border/40 relative z-10">
+                <div className="space-y-2 mt-4 pt-3 border-t border-border/40 relative z-10 max-h-[380px] overflow-y-auto pr-1">
                   {group.subProjects.map((sp) => (
                     <div
                       key={sp.id}
-                      className="p-3 rounded-2xl border border-border/50 bg-muted/20 hover:bg-muted/40 transition-colors space-y-2"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedProjectId(sp.id);
+                      }}
+                      className="p-3 rounded-2xl border border-border/50 bg-muted/20 hover:bg-muted/40 hover:border-primary/40 transition-colors space-y-2 cursor-pointer"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2.5 min-w-0">
@@ -12687,7 +12844,6 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (group.client) setSelectedClientId(group.client.id);
                             setSelectedProjectId(sp.id);
                           }}
                           className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded-lg shadow-sm hover:shadow transition-all flex items-center gap-1 shrink-0 cursor-pointer"

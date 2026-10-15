@@ -165,6 +165,7 @@ class CampaignStatus(str, Enum):
     INACTIVE = "Inactive"
 
 class CreativeTeam(BaseModel):
+    cc_creator: Optional[str] = None
     scripting: Optional[str] = None
     reel_editing: Optional[str] = None
     post_graphics: Optional[str] = None
@@ -173,6 +174,7 @@ class CreativeTeam(BaseModel):
     posting_publisher: Optional[str] = None
     caption: Optional[str] = None
     thumbnail: Optional[str] = None
+    model_config = ConfigDict(extra="allow")
 
 class SocialMediaCredential(BaseModel):
     id: Optional[str] = None

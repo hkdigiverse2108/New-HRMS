@@ -101,19 +101,26 @@ class MongoJSONEncoder(json.JSONEncoder):
 # ==============================================================================
 
 async def get_cache(key: str) -> Optional[Any]:
-    """Fetch cached data (Redis primary, in-memory fallback). Returns None on miss."""
+    """Fetch cached data (L1 in-memory fast cache, L2 Redis). Returns None on miss."""
+    # L1: fast in-memory check
+    mem_val = _mem_get(key)
+    if mem_val is not None:
+        return mem_val
+
+    # L2: Redis
     if _redis_available():
         try:
             data = await redis_client.get(key)
             _redis_ok()
             if data:
-                return json.loads(data)
+                parsed = json.loads(data)
+                _mem_set(key, data, ttl=300)
+                return parsed
         except Exception as e:
             logger.warning(f"Redis get_cache error for key '{key}': {e}")
             _redis_failed()
-            return _mem_get(key)
-        return None
-    return _mem_get(key)
+            return None
+    return None
 
 async def set_cache(key: str, data: Any, ttl: Optional[int] = None):
     """

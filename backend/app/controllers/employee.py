@@ -183,9 +183,22 @@ async def get_all_employees(
         shaped = []
         for emp in items:
             if can_view_all or (requester_id and requester_id == str(emp.get("_id") or emp.get("id") or "")):
-                shaped.append(_inject_password(emp))
+                emp_obj = _inject_password(emp)
             else:
-                shaped.append({**emp, "personal_info": _strip_password_hash(emp.get("personal_info"))})
+                emp_obj = {**emp, "personal_info": _strip_password_hash(emp.get("personal_info"))}
+
+            # Ensure system_role is strictly Admin or Employee; preserve title in designation if needed
+            work = emp_obj.get("work_details")
+            if isinstance(work, dict):
+                raw_role = str(work.get("system_role") or "Employee").strip()
+                if raw_role.lower() == "admin":
+                    work["system_role"] = "Admin"
+                else:
+                    if raw_role.lower() != "employee" and not work.get("designation"):
+                        work["designation"] = raw_role
+                    work["system_role"] = "Employee"
+
+            shaped.append(emp_obj)
         response_data = {**(response_data or {}), "data": shaped}
     except Exception:
         pass
@@ -230,8 +243,12 @@ async def get_employee(employee_id: str, current_user: dict = Depends(DynamicPer
 @router.put("/{employee_id}", response_model=EmployeeOut)
 async def update_employee(employee_id: str, employee: EmployeeUpdate, request: Request, current_user: dict = Depends(get_current_employee)):
     requester_id = str(current_user.get("_id") or current_user.get("id") or "")
-    role = (current_user.get("work_details") or {}).get("system_role", "Employee")
-    requester_emp_id = str((current_user.get("work_details") or {}).get("employee_id") or "")
+    work_info = current_user.get("work_details") or {}
+    role = work_info.get("system_role", "Employee")
+    dept = str(work_info.get("department") or "").strip().lower()
+    desig = str(work_info.get("designation") or "").strip().lower()
+    is_hr = dept == "hr" or "hr" in desig
+    requester_emp_id = str(work_info.get("employee_id") or "")
     is_self = (bool(requester_id) and requester_id == str(employee_id)) or (bool(requester_emp_id) and requester_emp_id == str(employee_id))
 
     if is_self and role != "Admin":
@@ -252,7 +269,7 @@ async def update_employee(employee_id: str, employee: EmployeeUpdate, request: R
         if employee.signature_url is not None:
             kwargs["signature_url"] = employee.signature_url
         employee = EmployeeUpdate(**kwargs)
-    elif role not in ("Admin", "HR"):
+    elif role != "Admin" and not is_hr:
         await DynamicPermissionChecker()(request, current_user)
 
     updated_emp = await EmployeeService.update_employee(employee_id, employee)

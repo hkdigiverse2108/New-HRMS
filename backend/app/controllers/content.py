@@ -166,7 +166,7 @@ async def get_all_content_items(
         page=page,
         limit=limit
     )
-    await set_cache(cache_key, result, ttl=60)
+    await set_cache(cache_key, result, ttl=1800)
     return result
 
 @router.get("/{project_id}/content/approval", response_model=Optional[ContentCalendarApproval])
