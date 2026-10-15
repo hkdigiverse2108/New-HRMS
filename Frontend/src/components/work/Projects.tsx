@@ -2149,7 +2149,6 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       if (state && typeof state === "object") {
         if ("projectId" in state && state.projectId) {
           setSelectedProjectId(state.projectId);
-          if ("clientId" in state) setSelectedClientId(state.clientId);
           return;
         }
         if ("clientId" in state && state.clientId) {
@@ -3978,8 +3977,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         return p;
       }));
 
-      // 2. Ensure client is selected if applicable
-      if (updatedClientId && !selectedClientId) {
+      // 2. Ensure client is selected if applicable (only if already in client view)
+      if (updatedClientId && selectedClientId) {
         setSelectedClientId(updatedClientId);
       }
 
@@ -4048,6 +4047,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           await loadLiveData();
           if (selectedProjectId === project.id) {
             setSelectedProjectId(null);
+            setSelectedClientId(null);
           }
           toast.success(`Project "${project.name}" deleted.`);
         } catch (err: any) {
@@ -4854,7 +4854,6 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                               type="button"
                               onClick={() => {
                                 setIsPendingBrandsModalOpen(false);
-                                setSelectedClientId(projClient.id);
                                 setSelectedProjectId(proj.id);
                               }}
                               className="px-3 py-2 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-xl transition-all cursor-pointer"
@@ -5337,8 +5336,12 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div className="flex items-center gap-4">
                 <button
-                  onClick={() => setSelectedProjectId(null)}
+                  onClick={() => {
+                    setSelectedProjectId(null);
+                    setSelectedClientId(null);
+                  }}
                   className="p-2.5 bg-card border border-border/60 rounded-xl hover:bg-muted/80 hover:text-primary transition-colors shadow-sm group"
+                  title="Back to Projects"
                 >
                   <ArrowLeft className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
                 </button>
@@ -12637,7 +12640,6 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                           <button
                             type="button"
                             onClick={() => {
-                              setSelectedClientId(project.clientId);
                               setSelectedProjectId(project.id);
                             }}
                             className="px-2.5 py-1 bg-primary text-primary-foreground font-bold text-[10px] rounded-lg shadow-sm hover:bg-primary/90 transition-all flex items-center gap-1 shrink-0"
@@ -12675,7 +12677,6 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   if (target.closest('button') || target.closest('[role="menuitem"]') || target.closest('a')) {
                     return;
                   }
-                  if (group.client) setSelectedClientId(group.client.id);
                   setSelectedProjectId(group.primaryProject.id);
                 }}
                 className="group bg-white border border-border/40 rounded-[2rem] p-6 shadow-sm hover:shadow-2xl hover:shadow-primary/5 hover:-translate-y-1 hover:border-primary/30 transition-all duration-300 relative flex flex-col cursor-pointer"
@@ -12710,7 +12711,6 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (group.client) setSelectedClientId(group.client.id);
                             if (targetSub) setSelectedProjectId(targetSub.id);
                             else setSelectedProjectId(group.primaryProject.id);
                           }}
@@ -12791,7 +12791,6 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       key={sp.id}
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (group.client) setSelectedClientId(group.client.id);
                         setSelectedProjectId(sp.id);
                       }}
                       className="p-3 rounded-2xl border border-border/50 bg-muted/20 hover:bg-muted/40 hover:border-primary/40 transition-colors space-y-2 cursor-pointer"
@@ -12845,7 +12844,6 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (group.client) setSelectedClientId(group.client.id);
                             setSelectedProjectId(sp.id);
                           }}
                           className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded-lg shadow-sm hover:shadow transition-all flex items-center gap-1 shrink-0 cursor-pointer"
