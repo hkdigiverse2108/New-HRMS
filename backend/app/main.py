@@ -35,6 +35,7 @@ from app.controllers.payroll import router as payroll_router
 from app.controllers.salary import router as salary_router
 from app.controllers.bonus_deduction import router as bonus_deduction_router
 from app.controllers.overtime import router as overtime_router
+from app.controllers.work_timeline import router as work_timeline_router
 from app.controllers.sales import router as sales_router
 from app.controllers.document_type import router as document_type_router
 from app.controllers.document_template import router as document_template_router
@@ -167,6 +168,7 @@ app.include_router(payroll_router)
 app.include_router(salary_router)
 app.include_router(bonus_deduction_router)
 app.include_router(overtime_router)
+app.include_router(work_timeline_router)
 app.include_router(sales_router)
 app.include_router(document_type_router)
 app.include_router(document_template_router)
