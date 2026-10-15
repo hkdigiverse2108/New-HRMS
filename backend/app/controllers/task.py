@@ -141,16 +141,18 @@ async def get_all_tasks(
     history_assigned_by: Optional[str] = Query(None, description="Filter by employee ID in transfer history as sender"),
     project_id: Optional[str] = Query(None, description="Filter by project ID"),
     task_category: Optional[str] = Query(None, description="Filter by task category (e.g. Development)"),
-    timeline_filter: Optional[str] = Query(None, description="Filter by timeline: today, pending, upcoming"),
+    timeline_filter: Optional[str] = Query(None, description="Filter by timeline: today, pending, upcoming, overdue, client_issue"),
+    target_date: Optional[str] = Query(None, description="Target reference date (YYYY-MM-DD) for timeline calculations"),
+    department: Optional[str] = Query(None, description="Filter by department"),
     start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
     search: Optional[str] = Query(None, description="Search by task title"),
-    view: Optional[str] = Query("me", description="View scope: 'me' (My Tasks) or 'team' (Team Tasks)"),
+    view: Optional[str] = Query("all", description="View scope: 'me' (My Tasks), 'team' (Team Tasks), or 'all'"),
     current_user: dict = Depends(get_current_employee)
 ):
     role = current_user.get("work_details", {}).get("system_role", "Employee")
     designation = current_user.get("work_details", {}).get("designation", "")
-    department = current_user.get("work_details", {}).get("department", "")
+    user_dept = current_user.get("work_details", {}).get("department", "")
     emp_id = str(current_user.get("_id") or current_user.get("id"))
     
     # 1. Check Redis Cache
@@ -167,13 +169,15 @@ async def get_all_tasks(
         project_id=project_id,
         task_category=task_category,
         timeline_filter=timeline_filter,
+        target_date=target_date,
+        department=department,
         start_date=start_date,
         end_date=end_date,
         search=search,
         view=view,
         user_id=emp_id,
         role=role,
-        department=department
+        user_dept=user_dept
     )
     cached = await get_cache(cache_key)
     if cached is not None:
@@ -182,7 +186,7 @@ async def get_all_tasks(
     involved_emp_id = None
     team_employee_ids = None
     
-    is_admin_or_hr = role in ["Admin", "Subadmin", "HR"] or str(department or "").strip().upper() == "HR"
+    is_admin_or_hr = role in ["Admin", "Subadmin", "HR"] or str(user_dept or "").strip().upper() == "HR"
     
     if not is_admin_or_hr:
         desig_lower = str(designation or "").lower()
@@ -190,10 +194,26 @@ async def get_all_tasks(
         
         if is_leader and view == "team":
             from app.repository.employee import EmployeeRepository
-            dept_emps = await EmployeeRepository.get_all_employees(department=department, limit=1000)
+            dept_emps = await EmployeeRepository.get_all_employees(department=user_dept, limit=1000)
+            team_employee_ids = [str(e["_id"]) for e in dept_emps.get("data", [])]
+        elif view == "all" and is_leader:
+            from app.repository.employee import EmployeeRepository
+            dept_emps = await EmployeeRepository.get_all_employees(department=user_dept, limit=1000)
             team_employee_ids = [str(e["_id"]) for e in dept_emps.get("data", [])]
         else:
             involved_emp_id = emp_id
+    elif view == "me":
+        involved_emp_id = emp_id
+
+    # If department filter is explicitly requested
+    if department and department != "All":
+        from app.repository.employee import EmployeeRepository
+        dept_emps = await EmployeeRepository.get_all_employees(department=department, limit=1000)
+        dept_emp_ids = [str(e["_id"]) for e in dept_emps.get("data", [])]
+        if team_employee_ids is not None:
+            team_employee_ids = list(set(team_employee_ids).intersection(set(dept_emp_ids)))
+        else:
+            team_employee_ids = dept_emp_ids
 
     result = await TaskService.get_all_tasks(
         is_deleted=False, 
@@ -202,13 +222,14 @@ async def get_all_tasks(
         status=status, 
         priority=priority, 
         page=page, 
-        limit=limit,
+        limit=limit, 
         involved_emp_id=involved_emp_id,
         history_assigned_to=history_assigned_to,
         history_assigned_by=history_assigned_by,
         project_id=project_id,
         task_category=task_category,
         timeline_filter=timeline_filter,
+        target_date=target_date,
         start_date=start_date,
         end_date=end_date,
         search=search,
@@ -238,18 +259,21 @@ async def get_deleted_tasks(
     return result
 
 @router.get("/stats")
-async def get_task_stats(current_user: dict = Depends(get_current_employee)):
+async def get_task_stats(
+    target_date: Optional[str] = Query(None, description="Target reference date (YYYY-MM-DD)"),
+    current_user: dict = Depends(get_current_employee)
+):
     role = current_user.get("work_details", {}).get("system_role", "Employee")
     involved_emp_id = None
     if role not in ["Admin", "Subadmin", "HR"]:
         involved_emp_id = str(current_user.get("_id") or current_user.get("id"))
     
-    cache_key = f"tasks:stats:{involved_emp_id or 'all'}"
+    cache_key = f"tasks:stats:{involved_emp_id or 'all'}:{target_date or 'today'}"
     cached = await get_cache(cache_key)
     if cached is not None:
         return cached
 
-    result = await TaskService.get_task_stats(involved_emp_id)
+    result = await TaskService.get_task_stats(involved_emp_id, target_date)
     await set_cache(cache_key, result, ttl=60)
     return result
 

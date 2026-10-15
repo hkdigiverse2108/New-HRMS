@@ -9,9 +9,8 @@ import { SearchInput } from "@/components/common/SearchInput";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DatePicker } from "@/components/ui/date-picker";
 import { cn } from "@/lib/utils";
-import { DialogClose, Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { DialogClose, Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/select";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "@/lib/toast";
 import { format, isToday, isBefore, isAfter, startOfDay } from "date-fns";
 import { useSortableData } from "@/hooks/useSortableData";
@@ -171,9 +170,16 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     today: 0,
     overdue: 0,
     upcoming: 0,
+    client_issue: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [employees, setEmployees] = useState<Array<{ id: string; name: string; avatar: string; role?: string; department?: string }>>([]);
+
+  // Server-side pagination & filter state (25 items per page by default)
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [totalServerTasks, setTotalServerTasks] = useState(0);
+  const [columnVisibleCounts, setColumnVisibleCounts] = useState<Record<string, number>>({});
 
   // Employees filtered for Team Leader (only employees in Team Leader's department):
   const teamLeaderEmployees = useMemo(() => {
@@ -185,6 +191,15 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
   const [view, setView] = useState<"board" | "list">("list");
   const [searchQuery, setSearchQuery] = useState("");
+  // Debounced search query to prevent frequent API queries while typing
+  const [debouncedSearch, setDebouncedSearch] = useState(searchQuery);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   const [statusFilter, setStatusFilter] = useState<"All" | TaskStatus>("All");
   const [priorityFilter, setPriorityFilter] = useState<"All" | Priority>("All");
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("all");
@@ -197,10 +212,26 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   const [departmentFilter, setDepartmentFilter] = useState<string>("All");
   const [personFilter, setPersonFilter] = useState<string>("All");
 
+  // Reset page to 1 whenever any filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    debouncedSearch,
+    mainViewMode,
+    scopeFilter,
+    departmentFilter,
+    personFilter,
+    statusFilter,
+    priorityFilter,
+    timeframeFilter,
+    categoryFilter,
+  ]);
+
   const taskCategories = useMemo(() => {
-    const s = new Set<string>();
+    const defaultCategories = ["All", "General", "Development", "Design", "Marketing", "SMM", "Content Calendar", "Client Issue", "Sales", "Operations"];
+    const s = new Set<string>(defaultCategories);
     tasks.forEach(t => { if (t.taskCategory) s.add(t.taskCategory); });
-    return ["All", ...Array.from(s).sort()];
+    return Array.from(s);
   }, [tasks]);
 
   // Create/Edit modal state
@@ -336,17 +367,62 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   }, [anyUser]);
 
 
-  // Fetch Tasks & Stats
+  // Fetch Tasks & Stats dynamically with target_date and server pagination (25 per page)
   const fetchTasksData = useCallback(async () => {
     setIsLoading(true);
     try {
+      const todayDateStr = format(new Date(), "yyyy-MM-dd");
+      const params = new URLSearchParams();
+      params.append("page", String(currentPage));
+      params.append("limit", String(pageSize));
+      params.append("target_date", todayDateStr);
+
+      if (timeframeFilter && timeframeFilter !== "all") {
+        params.append("timeline_filter", timeframeFilter);
+      }
+
+      if (statusFilter && statusFilter !== "All") {
+        params.append("status", statusFilter);
+      }
+
+      if (priorityFilter && priorityFilter !== "All") {
+        params.append("priority", priorityFilter.toLowerCase());
+      }
+
+      if (categoryFilter && categoryFilter !== "All") {
+        params.append("task_category", categoryFilter);
+      }
+
+      if (departmentFilter && departmentFilter !== "All") {
+        params.append("department", departmentFilter);
+      }
+
+      if (personFilter && personFilter !== "All") {
+        params.append("assigned_to", personFilter);
+      }
+
+      if (debouncedSearch.trim()) {
+        params.append("search", debouncedSearch.trim());
+      }
+
+      if (mainViewMode === "my_tasks" || scopeFilter === "my_tasks") {
+        params.append("view", "me");
+      } else if (scopeFilter === "assigned_by_me") {
+        params.append("assigned_by", currentUserId || "");
+      } else {
+        params.append("view", "all");
+      }
+
+      const queryString = params.toString();
+
       const [tasksRes, statsRes] = await Promise.allSettled([
-        api.get<{ data?: BackendTask[]; total?: number }>("/tasks", { showLoader: false }),
-        api.get<any>("/tasks/stats", { showLoader: false }),
+        api.get<{ data?: BackendTask[]; total?: number }>(`/tasks?${queryString}`, { showLoader: false }),
+        api.get<any>(`/tasks/stats?target_date=${todayDateStr}`, { showLoader: false }),
       ]);
 
       if (tasksRes.status === "fulfilled" && tasksRes.value) {
         const rawTasks: BackendTask[] = tasksRes.value.data || (Array.isArray(tasksRes.value) ? tasksRes.value : []);
+        setTotalServerTasks(tasksRes.value.total ?? rawTasks.length);
         const mapped: TaskItem[] = rawTasks.map((t) => {
           let statusMapped: TaskStatus = "Todo";
           const rawStatus = (t.status || "").toLowerCase().replace(/[\s_]/g, "");
@@ -418,6 +494,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
           today: statsRes.value.today || 0,
           overdue: statsRes.value.overdue || 0,
           upcoming: statsRes.value.upcoming || 0,
+          client_issue: statsRes.value.client_issue || 0,
         });
       }
     } catch (e) {
@@ -426,12 +503,28 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [
+    currentPage,
+    pageSize,
+    timeframeFilter,
+    statusFilter,
+    priorityFilter,
+    categoryFilter,
+    departmentFilter,
+    personFilter,
+    debouncedSearch,
+    mainViewMode,
+    scopeFilter,
+    currentUserId,
+  ]);
 
   useEffect(() => {
     fetchEmployees();
+  }, [fetchEmployees]);
+
+  useEffect(() => {
     fetchTasksData();
-  }, [fetchEmployees, fetchTasksData]);
+  }, [fetchTasksData]);
 
   // Employee Map by ID
   const empMap = useMemo(() => {
@@ -466,234 +559,16 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     ).length;
   }, [tasks, currentUserId]);
 
-  // Dynamically compute stats for "My Tasks" mode vs overall team stats
-  const displayStats = useMemo(() => {
-    if (mainViewMode === "my_tasks") {
-      const myTasks = tasks.filter((t) => t.assignedToId === currentUserId);
-      const todayStart = startOfDay(new Date());
-      let todo = 0, inprogress = 0, inreview = 0, completed = 0, today = 0, overdue = 0, upcoming = 0;
-      myTasks.forEach((t) => {
-        if (t.status === "Todo") todo++;
-        else if (t.status === "In Progress") inprogress++;
-        else if (t.status === "In Review") inreview++;
-        else if (t.status === "Done") completed++;
+  // Dynamically compute stats directly from backend
+  const displayStats = stats;
+  const clientIssuesCount = stats.client_issue || 0;
 
-        if (t.dueDate) {
-          try {
-            const d = new Date(t.dueDate);
-            const isDueToday = isToday(d);
-            const isOverdue = isBefore(d, todayStart) && t.status !== "Done";
-            if (isDueToday) today++;
-            if (isOverdue) overdue++;
-            if (!isDueToday && !isOverdue && isAfter(d, todayStart) && t.status !== "Done") upcoming++;
-          } catch { }
-        }
-      });
-      return {
-        total: myTasks.length,
-        todo,
-        inprogress,
-        inreview,
-        completed,
-        today,
-        overdue,
-        upcoming,
-      };
-    }
-    return stats;
-  }, [mainViewMode, tasks, currentUserId, stats]);
-
-  const clientIssuesCount = useMemo(() => {
-    return tasks.filter((t) => {
-      const isCI =
-        t.taskCategory === "Client Issue" ||
-        t.title.toLowerCase().startsWith("[client issue]") ||
-        Boolean((t.rawBackend as any)?.is_client_issue);
-      return isCI && t.status !== "Done";
-    }).length;
-  }, [tasks]);
-
-  // Filtering Logic
-  const filteredTasks = useMemo(() => {
-    const todayStart = startOfDay(new Date());
-
-    return tasks.filter((task) => {
-      // 1. Search Query
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const matchTitle = task.title.toLowerCase().includes(q);
-        const matchDesc = task.description.toLowerCase().includes(q);
-        const matchAssignee = task.assignedToName.toLowerCase().includes(q);
-        const matchAssigner = task.assignedByName.toLowerCase().includes(q);
-        if (!matchTitle && !matchDesc && !matchAssignee && !matchAssigner) return false;
-      }
-
-      // 2. Main View Mode & Scope Filter
-      if (mainViewMode === "my_tasks") {
-        const isMine = task.assignedToId === currentUserId;
-        const isPendingTransferToMe =
-          task.transferRequest &&
-          task.transferRequest.status === "pending" &&
-          String(task.transferRequest.requested_to) === currentUserId;
-        if (!isMine && !isPendingTransferToMe) return false;
-      } else {
-        // All Tasks Mode
-        if (scopeFilter === "my_tasks") {
-          const isMine = task.assignedToId === currentUserId;
-          const isPendingTransferToMe =
-            task.transferRequest &&
-            task.transferRequest.status === "pending" &&
-            String(task.transferRequest.requested_to) === currentUserId;
-          if (!isMine && !isPendingTransferToMe) return false;
-        } else if (scopeFilter === "assigned_by_me") {
-          if (task.assignedById !== currentUserId) return false;
-        } else if (scopeFilter === "transfers") {
-          const isPendingToMe =
-            task.transferRequest &&
-            task.transferRequest.status === "pending" &&
-            String(task.transferRequest.requested_to) === currentUserId;
-          const hasHistoryWithMe = task.transferHistory?.some(
-            (h) => String(h.to_employee) === currentUserId || String(h.from_employee) === currentUserId
-          );
-          if (!isPendingToMe && !hasHistoryWithMe) return false;
-        }
-
-        // For Team Leader: always scope to Team Leader's department (unless task was assigned by, created by, or assigned to current user)
-        if (isTeamLeader && userDepartment) {
-          const isMineOrAssignedByMe = task.assignedToId === currentUserId || task.assignedById === currentUserId || String(task.rawBackend?.created_by || "") === currentUserId;
-          if (!isMineOrAssignedByMe) {
-            const assignee = empMap.get(task.assignedToId);
-            const taskDept = (task.department || task.rawBackend?.department || assignee?.department || "").toLowerCase().trim();
-            if (!taskDept || taskDept !== userDepartment.toLowerCase().trim()) {
-              return false;
-            }
-          }
-        }
-
-        // Department Filter (for Head / Admin)
-        if (isHead && departmentFilter !== "All") {
-          const assignee = empMap.get(task.assignedToId);
-          const taskDept = (task.department || task.rawBackend?.department || assignee?.department || "").toLowerCase().trim();
-          if (!taskDept || taskDept !== departmentFilter.toLowerCase().trim()) {
-            return false;
-          }
-        }
-
-        // Person Filter (for Head or Team Leader)
-        if ((isHead || isTeamLeader) && personFilter !== "All") {
-          if (task.assignedToId !== personFilter) {
-            return false;
-          }
-        }
-      }
-
-      // 3. Status Filter
-      if (statusFilter !== "All" && task.status !== statusFilter) {
-        return false;
-      }
-
-      // 4. Priority Filter
-      if (priorityFilter !== "All" && task.priority !== priorityFilter) {
-        return false;
-      }
-
-      // K15. Category Filter
-      if (categoryFilter !== "All" && task.taskCategory !== categoryFilter) {
-        return false;
-      }
-
-      // 5. Timeframe / Client Issue Filter
-      if (timeframeFilter !== "all") {
-        if (timeframeFilter === "client_issue") {
-          const isCI =
-            task.taskCategory === "Client Issue" ||
-            task.title.toLowerCase().startsWith("[client issue]") ||
-            Boolean((task.rawBackend as any)?.is_client_issue);
-          if (!isCI) return false;
-        } else {
-          if (!task.dueDate) return false;
-          try {
-            const taskDate = new Date(task.dueDate);
-            if (timeframeFilter === "today") {
-              const isDueToday = isToday(taskDate);
-              const isOverdue = isBefore(taskDate, todayStart) && task.status !== "Done";
-              if (!isDueToday && !isOverdue) return false;
-            } else if (timeframeFilter === "overdue") {
-              if (!isBefore(taskDate, todayStart) || task.status === "Done") return false;
-            } else if (timeframeFilter === "upcoming") {
-              const isDueToday = isToday(taskDate);
-              const isOverdue = isBefore(taskDate, todayStart);
-              if (isDueToday || isOverdue || !isAfter(taskDate, todayStart) || task.status === "Done") return false;
-            }
-          } catch {
-            return false;
-          }
-        }
-      }
-
-      return true;
-    }).sort((a, b) => {
-      // If Today's Work is selected, always show overdue tasks first at the top (as requested by user)
-      if (timeframeFilter === "today") {
-        const aDate = a.dueDate ? new Date(a.dueDate) : null;
-        const bDate = b.dueDate ? new Date(b.dueDate) : null;
-        const aOverdue = aDate && isBefore(aDate, todayStart) && a.status !== "Done" ? 1 : 0;
-        const bOverdue = bDate && isBefore(bDate, todayStart) && b.status !== "Done" ? 1 : 0;
-        if (aOverdue !== bOverdue) return bOverdue - aOverdue;
-      }
-
-      // Latest tasks on top (by createdAt descending or id descending)
-      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      if (timeA && timeB && timeA !== timeB) {
-        return timeB - timeA;
-      }
-      return b.id.localeCompare(a.id);
-    });
-  }, [
-    tasks,
-    searchQuery,
-    mainViewMode,
-    scopeFilter,
-    departmentFilter,
-    personFilter,
-    statusFilter,
-    priorityFilter,
-    timeframeFilter,
-    categoryFilter,
-    currentUserId,
-    empMap,
-    isTeamLeader,
-    userDepartment,
-    isHead,
-  ]);
-
+  // Tasks are dynamically queried, filtered, and paginated (25 per page) from the backend directly
+  const filteredTasks = tasks;
   const { items: sortedTasks, requestSort, sortConfig } = useSortableData(filteredTasks);
 
-  // Pagination & progressive rendering to prevent UI freezes on large datasets
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
-  const [columnVisibleCounts, setColumnVisibleCounts] = useState<Record<string, number>>({});
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [
-    searchQuery,
-    mainViewMode,
-    scopeFilter,
-    departmentFilter,
-    personFilter,
-    statusFilter,
-    priorityFilter,
-    timeframeFilter,
-    categoryFilter,
-  ]);
-
-  const totalPages = Math.max(1, Math.ceil(sortedTasks.length / pageSize));
-  const paginatedTasks = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return sortedTasks.slice(start, start + pageSize);
-  }, [sortedTasks, currentPage, pageSize]);
+  const totalPages = Math.max(1, Math.ceil(totalServerTasks / pageSize));
+  const paginatedTasks = sortedTasks;
 
   // Quick Row management
   const addQuickRow = () => {
@@ -2092,15 +1967,15 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
           </div>
 
           {/* Pagination Controls */}
-          {sortedTasks.length > 0 && (
+          {totalServerTasks > 0 && (
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-3.5 border-t border-border/50 bg-muted/20 text-xs">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <span>Showing</span>
                 <span className="font-bold text-foreground">
-                  {Math.min(sortedTasks.length, (currentPage - 1) * pageSize + 1)} - {Math.min(currentPage * pageSize, sortedTasks.length)}
+                  {totalServerTasks === 0 ? 0 : (currentPage - 1) * pageSize + 1} - {Math.min(currentPage * pageSize, totalServerTasks)}
                 </span>
                 <span>of</span>
-                <span className="font-bold text-foreground">{sortedTasks.length}</span>
+                <span className="font-bold text-foreground">{totalServerTasks}</span>
                 <span>tasks</span>
                 <div className="hidden sm:flex items-center gap-1.5 ml-3 pl-3 border-l border-border/60">
                   <span>Per page:</span>

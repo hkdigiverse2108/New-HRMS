@@ -7,6 +7,32 @@ from app.schemas.content import ContentItemCreate, ContentItemUpdate, ContentTim
 
 class ContentService:
     @staticmethod
+    async def _preload_employee_cache(items: list, emp_cache: dict):
+        ids_to_fetch = set()
+        for item in items:
+            ap = item.get("approved_by")
+            if ap and str(ap) not in emp_cache:
+                ids_to_fetch.add(str(ap))
+            bp = item.get("brand_person")
+            if bp and len(str(bp)) == 24 and str(bp) not in emp_cache:
+                ids_to_fetch.add(str(bp))
+                
+        if ids_to_fetch:
+            from app.repository.employee import EmployeeRepository
+            from bson import ObjectId
+            valid_obj_ids = [ObjectId(x) for x in ids_to_fetch if ObjectId.is_valid(x)]
+            if valid_obj_ids:
+                collection = await EmployeeRepository.get_collection()
+                async for emp in collection.find({"_id": {"$in": valid_obj_ids}}):
+                    e_id = str(emp["_id"])
+                    personal = emp.get("personal_info", {})
+                    name = f"{personal.get('first_name', '')} {personal.get('last_name', '')}".strip() or "Employee"
+                    emp_cache[e_id] = {"employee_name": name}
+            for x in ids_to_fetch:
+                if x not in emp_cache:
+                    emp_cache[x] = {"employee_name": x}
+
+    @staticmethod
     async def _populate_details(item: dict, emp_cache: dict):
         async def get_details(emp_id):
             if not emp_id:
@@ -196,7 +222,9 @@ class ContentService:
         result = await ContentRepository.get_all(project_id, content_type, status, month, year, start_date, end_date, page, limit)
         
         emp_cache = {}
-        for item in result.get("data", []):
+        items = result.get("data", [])
+        await ContentService._preload_employee_cache(items, emp_cache)
+        for item in items:
             await ContentService._populate_details(item, emp_cache)
             
         # Calculate start_date and end_date directly from content collection

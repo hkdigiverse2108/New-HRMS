@@ -30,6 +30,8 @@ class ProjectService:
             item["creative_team_details"] = None
             return
             
+        team_dict = team if isinstance(team, dict) else (team.model_dump() if hasattr(team, 'model_dump') else dict(team))
+            
         async def get_emp_name(emp_id):
             if not emp_id: return None
             emp_id_str = str(emp_id)
@@ -45,8 +47,9 @@ class ProjectService:
             return {"employee_name": emp_cache[emp_id_str]}
             
         details = {}
-        for role, emp_id in team.items():
-            details[role] = await get_emp_name(emp_id)
+        for role, emp_id in team_dict.items():
+            if emp_id:
+                details[role] = await get_emp_name(emp_id)
             
         item["creative_team_details"] = details
 
