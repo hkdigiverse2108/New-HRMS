@@ -50,6 +50,27 @@ class EmployeeRepository:
         return employee_data
 
     @classmethod
+    def _clean_employee_doc(cls, emp: dict) -> dict:
+        if not emp:
+            return emp
+        emp["_id"] = str(emp.get("_id", ""))
+        work = emp.get("work_details")
+        if isinstance(work, dict):
+            raw_role = work.get("system_role")
+            if raw_role is not None:
+                role_str = str(raw_role).strip()
+                if role_str.lower() == "admin":
+                    work["system_role"] = "Admin"
+                else:
+                    # Role is strictly Admin or Employee. Department/designation hold specific titles (HR, Manager, etc.)
+                    if role_str.lower() != "employee" and not work.get("designation"):
+                        work["designation"] = role_str
+                    work["system_role"] = "Employee"
+            else:
+                work["system_role"] = "Employee"
+        return emp
+
+    @classmethod
     async def get_all_employees(
         cls, 
         page: Optional[int] = None, 
@@ -98,8 +119,7 @@ class EmployeeRepository:
         employees = []
         if limit is None or limit <= 0 or page is None:
             async for emp in collection.find(query):
-                emp["_id"] = str(emp["_id"])
-                employees.append(emp)
+                employees.append(cls._clean_employee_doc(emp))
             return {
                 "data": employees,
                 "total": total,
@@ -111,8 +131,7 @@ class EmployeeRepository:
             p = page
             skip = (p - 1) * limit
             async for emp in collection.find(query).skip(skip).limit(limit):
-                emp["_id"] = str(emp["_id"])
-                employees.append(emp)
+                employees.append(cls._clean_employee_doc(emp))
             return {
                 "data": employees,
                 "total": total,
@@ -128,8 +147,7 @@ class EmployeeRepository:
             if ObjectId.is_valid(str(employee_id)):
                 employee = await collection.find_one({"_id": ObjectId(str(employee_id))})
                 if employee:
-                    employee["_id"] = str(employee["_id"])
-                    return employee
+                    return cls._clean_employee_doc(employee)
             employee = await collection.find_one({
                 "$or": [
                     {"work_details.employee_id": str(employee_id)},
@@ -137,8 +155,8 @@ class EmployeeRepository:
                 ]
             })
             if employee:
-                employee["_id"] = str(employee["_id"])
-            return employee
+                return cls._clean_employee_doc(employee)
+            return None
         except Exception:
             return None
 

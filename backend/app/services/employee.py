@@ -161,6 +161,17 @@ class EmployeeService:
                 if old_pi.get("password_enc"):
                     update_data["personal_info"]["password_enc"] = old_pi["password_enc"]
             
+        if "work_details" in update_data and isinstance(update_data["work_details"], dict):
+            raw_role = update_data["work_details"].get("system_role")
+            if raw_role is not None:
+                role_str = str(raw_role).strip()
+                if role_str.lower() == "admin":
+                    update_data["work_details"]["system_role"] = "Admin"
+                else:
+                    if role_str.lower() != "employee" and not update_data["work_details"].get("designation"):
+                        update_data["work_details"]["designation"] = role_str
+                    update_data["work_details"]["system_role"] = "Employee"
+
         new_role = update_data.get("work_details", {}).get("system_role")
         if new_role == "Admin":
             update_data["employee_id"] = None

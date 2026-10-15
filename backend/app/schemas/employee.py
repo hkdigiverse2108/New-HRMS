@@ -1,5 +1,5 @@
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
-from typing import Optional
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, model_validator
+from typing import Optional, Any
 from datetime import date, time
 from app.schemas.enums import SystemRole, GenderEnum, RelationEnum, WorkModeEnum
 
@@ -37,6 +37,27 @@ class WorkDetails(BaseModel):
     last_working_date: Optional[date] = None
     start_time: Optional[time] = None
     end_time: Optional[time] = None
+
+    model_config = ConfigDict(extra="allow")
+
+    @model_validator(mode="before")
+    @classmethod
+    def sanitize_work_details(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            raw_role = data.get("system_role")
+            if raw_role is not None:
+                role_str = str(raw_role).strip()
+                if role_str.lower() == "admin":
+                    data["system_role"] = SystemRole.ADMIN
+                else:
+                    # System role is strictly only "Admin" or "Employee".
+                    # Department and designation hold specific titles (HR, Manager, Sub-Admin, Team Leader, etc.)
+                    if role_str.lower() != "employee" and not data.get("designation"):
+                        data["designation"] = role_str
+                    data["system_role"] = SystemRole.EMPLOYEE
+            else:
+                data["system_role"] = SystemRole.EMPLOYEE
+        return data
 
 class BankAndDocs(BaseModel):
     monthly_salary: Optional[float] = None
