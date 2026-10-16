@@ -27,6 +27,7 @@ import { OrgStructure } from "@/components/employees/OrgStructure";
 import { DepartmentDesignationManager } from "@/components/employees/DepartmentDesignationManager";
 import { AttendanceList } from "@/components/employees/AttendanceList";
 import { LeaveRequests } from "@/components/employees/LeaveRequests";
+import { Overtime } from "@/components/overtime/Overtime";
 import { toast } from "@/lib/toast";
 import { DepartmentProvider } from "@/components/employees/DepartmentContext";
 import { EmployeeProvider } from "@/components/employees/EmployeeContext";
@@ -263,6 +264,7 @@ export function Index() {
                   {basePath === "/payroll/processing" && <PayrollProcessing />}
                   {basePath === "/payroll/bonuses" && <BonusDeductions />}
                   {basePath === "/payroll/payslips" && <Payslips />}
+                  {basePath === "/employees/overtime" && <Overtime />}
 
                   {/* Render Employee pages */}
                   {(basePath === "/employees" || basePath === "/employees/list") && <EmployeeList isNew={isNew} />}

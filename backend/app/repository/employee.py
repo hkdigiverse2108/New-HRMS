@@ -140,6 +140,22 @@ class EmployeeRepository:
                 "total_pages": (total + limit - 1) // limit if limit > 0 else 1
             }
 
+    # Only what payroll needs — full employee documents carry signature images (~150 KB each)
+    PAYROLL_FIELDS = {
+        "personal_info.first_name": 1, "personal_info.last_name": 1, "name": 1, "employee_id": 1,
+        "work_details": 1, "bank_and_docs": 1,
+    }
+
+    @classmethod
+    async def get_payroll_employees(cls) -> list:
+        """Active (not deleted) employees with just the payroll fields — much lighter than get_all_employees."""
+        collection = await cls.get_collection()
+        employees = []
+        async for emp in collection.find({"work_details.is_delete": False}, cls.PAYROLL_FIELDS):
+            emp["_id"] = str(emp["_id"])
+            employees.append(emp)
+        return employees
+
     @classmethod
     async def get_employee_by_id(cls, employee_id: str):
         collection = await cls.get_collection()

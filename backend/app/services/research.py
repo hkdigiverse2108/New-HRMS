@@ -96,11 +96,10 @@ class ResearchService:
             if proj_id_str not in proj_cache:
                 proj = await ProjectRepository.get_by_id(proj_id_str)
                 if proj:
-                    if "_id" in proj:
-                        proj["_id"] = str(proj["_id"])
-                    proj_cache[proj_id_str] = proj
+                    proj_name = (proj.get("general") or {}).get("project_name") or proj.get("project_name") or "Untitled Project"
+                    proj_cache[proj_id_str] = {"_id": str(proj.get("_id") or proj_id_str), "project_name": proj_name}
                 else:
-                    proj_cache[proj_id_str] = {"_id": proj_id_str, "project_name": "Unknown Project"}
+                    proj_cache[proj_id_str] = None
             item["project_details"] = proj_cache[proj_id_str]
         else:
             item["project_details"] = None
@@ -262,8 +261,7 @@ class ResearchService:
                         if isinstance(c, dict):
                             result.append({
                                 "concept_name": c.get("concept_name"),
-                                "details": c.get("details"),
-                                "reference_links": [str(l) for l in c.get("reference_links", [])]
+                                "link": c.get("link")
                             })
                         else:
                             result.append(str(c))

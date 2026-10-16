@@ -95,6 +95,17 @@ export function hasModulePermission(
     return true;
   }
 
+  // Overtime page (opened from the Dashboard, not in the sidebar): employees see their own requests,
+  // Admin / HR the approvals — the server decides what each one gets
+  if (cleanUrl === "/employees/overtime" && (action === "read" || action === "create")) {
+    return true;
+  }
+
+  // Every employee can open Payslips — the API returns only their own unless they are Admin / HR
+  if (cleanUrl === "/payroll/payslips" && (action === "read" || action === "all")) {
+    return true;
+  }
+
   // Hirings & Recruitment read is accessible for ALL authenticated users (all users can view jobs, interviews, and refer candidates)
   if (
     (cleanUrl === "/recruitment/hirings" ||
