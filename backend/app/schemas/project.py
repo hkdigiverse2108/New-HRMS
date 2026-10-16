@@ -186,34 +186,66 @@ class SocialMediaCredential(BaseModel):
 class DailyMarketingStatCreate(BaseModel):
     date: date
     campaign_name: str
+    category: Optional[str] = "META"
+    sub_type: Optional[str] = None
     reach: int = 0
     impressions: int = 0
+    clicks: int = 0
     leads: int = 0
+    results: int = 0
+    result_label: Optional[str] = None
     followers: int = 0
     revenue: float = 0.0
     spend: float = 0.0
     cost_metric: Optional[float] = None
+    cpl: Optional[float] = None
+    roas: Optional[float] = None
+    seo_keywords_top3: int = 0
+    seo_keywords_top10: int = 0
+    notes: Optional[str] = None
+    currency: Optional[str] = "INR"
 
 class DailyMarketingStatUpdate(BaseModel):
     date: Optional[date] = None
     campaign_name: Optional[str] = None
+    category: Optional[str] = None
+    sub_type: Optional[str] = None
     reach: Optional[int] = None
     impressions: Optional[int] = None
+    clicks: Optional[int] = None
     leads: Optional[int] = None
+    results: Optional[int] = None
+    result_label: Optional[str] = None
     followers: Optional[int] = None
     revenue: Optional[float] = None
     spend: Optional[float] = None
     cost_metric: Optional[float] = None
+    cpl: Optional[float] = None
+    roas: Optional[float] = None
+    seo_keywords_top3: Optional[int] = None
+    seo_keywords_top10: Optional[int] = None
+    notes: Optional[str] = None
+    currency: Optional[str] = None
 
 class BulkItem(BaseModel):
     campaign_name: str
+    category: Optional[str] = "META"
+    sub_type: Optional[str] = None
     reach: int = 0
     impressions: int = 0
+    clicks: int = 0
     leads: int = 0
+    results: int = 0
+    result_label: Optional[str] = None
     followers: int = 0
     revenue: float = 0.0
     spend: float = 0.0
     cost_metric: Optional[float] = None
+    cpl: Optional[float] = None
+    roas: Optional[float] = None
+    seo_keywords_top3: int = 0
+    seo_keywords_top10: int = 0
+    notes: Optional[str] = None
 
 class DailyMarketingStatBulkCreate(BaseModel):
     date: date
@@ -224,13 +256,24 @@ class DailyMarketingStat(BaseModel):
     sn: Optional[int] = None
     date: date
     campaign_name: str
+    category: Optional[str] = "META"
+    sub_type: Optional[str] = None
     reach: int = 0
     impressions: int = 0
+    clicks: int = 0
     leads: int = 0
+    results: int = 0
+    result_label: Optional[str] = None
     followers: int = 0
     revenue: float = 0.0
     spend: float = 0.0
     cost_metric: float = 0.0
+    cpl: float = 0.0
+    roas: float = 0.0
+    seo_keywords_top3: int = 0
+    seo_keywords_top10: int = 0
+    notes: Optional[str] = None
+    currency: Optional[str] = "INR"
     created_at: datetime
     updated_at: datetime
     created_by: Optional[str] = None
@@ -342,6 +385,9 @@ class ProjectBase(BaseModel):
     marketing_campaigns: Optional[list[str]] = []
     daily_revenues: Optional[list[DailyRevenue]] = []
     renewal_history: Optional[list[ProjectRenewal]] = []
+    is_archived: bool = False
+    marketing_assignees: Optional[list[str]] = []
+    currency: Optional[str] = "INR"
 
 class ProjectCreate(ProjectBase):
     pass
@@ -435,12 +481,19 @@ class ProjectUpdate(BaseModel):
     marketing_campaigns: Optional[list[str]] = None
     daily_revenues: Optional[list[DailyRevenue]] = None
     date_ranges: Optional[list[DateRangeEntry]] = None
+    is_archived: Optional[bool] = None
+    marketing_assignees: Optional[list[str]] = None
+    currency: Optional[str] = None
 
 class ProjectResponse(ProjectBase):
     id: str = Field(alias="_id")
     created_at: datetime
     updated_at: datetime
     is_deleted: bool = False
+    is_archived: bool = False
+    marketing_assignees: Optional[list[str]] = []
+    marketing_assignees_details: Optional[list[dict]] = None
+    currency: Optional[str] = "INR"
     
     client: Optional[dict] = None
     creative_team_details: Optional[dict] = None

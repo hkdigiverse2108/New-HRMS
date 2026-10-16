@@ -53,6 +53,16 @@ class ProjectService:
             
         item["creative_team_details"] = details
 
+        # Populate Marketing Assignees details
+        m_assignees = item.get("marketing_assignees") or []
+        m_details = []
+        for a_id in m_assignees:
+            if a_id:
+                info = await get_emp_name(a_id)
+                if info:
+                    m_details.append({"id": str(a_id), "employee_name": info.get("employee_name")})
+        item["marketing_assignees_details"] = m_details
+
     @staticmethod
     def _calculate_next_schedule_date(config: dict, default_start_date, prefix: str) -> Optional['date']:
         if not config: return None
@@ -149,6 +159,7 @@ class ProjectService:
         followup_due: Optional[bool] = None,
         feedback_due: Optional[bool] = None,
         cc_status: Optional[str] = None,
+        is_archived: Optional[bool] = None,
         page: Optional[int] = None, 
         limit: Optional[int] = None
     ):
@@ -167,6 +178,7 @@ class ProjectService:
             followup_due=followup_due,
             feedback_due=feedback_due,
             cc_status=cc_status,
+            is_archived=is_archived,
             page=page,
             limit=limit
         )
@@ -174,7 +186,7 @@ class ProjectService:
         if cached is not None:
             return cached
 
-        result = await ProjectRepository.get_all(is_deleted, client_id, category, priority, status, search, whatsapp_status, festival_posts, has_content_calendar, is_onhold, followup_due, feedback_due, cc_status, page, limit)
+        result = await ProjectRepository.get_all(is_deleted, client_id, category, priority, status, search, whatsapp_status, festival_posts, has_content_calendar, is_onhold, followup_due, feedback_due, cc_status, is_archived, page, limit)
         client_cache = {}
         emp_cache = {}
         for item in result.get("data", []):
@@ -572,13 +584,24 @@ class ProjectService:
                 "id": uuid.uuid4().hex[:12],
                 "date": target_date,
                 "campaign_name": camp_clean,
+                "category": data.category or "META",
+                "sub_type": data.sub_type,
                 "reach": data.reach,
                 "impressions": data.impressions,
+                "clicks": data.clicks,
                 "leads": data.leads,
+                "results": data.results or data.leads or 0,
+                "result_label": data.result_label,
                 "followers": data.followers or 0,
                 "revenue": auto_revenue,
                 "spend": data.spend,
                 "cost_metric": cost_metric,
+                "cpl": data.cpl if data.cpl is not None else (cost_metric or 0.0),
+                "roas": data.roas if data.roas is not None else (round(auto_revenue / data.spend, 2) if data.spend > 0 else 0.0),
+                "seo_keywords_top3": data.seo_keywords_top3,
+                "seo_keywords_top10": data.seo_keywords_top10,
+                "notes": data.notes,
+                "currency": data.currency or "INR",
                 "created_at": now,
                 "updated_at": now,
                 "created_by": current_user_id
@@ -1259,4 +1282,25 @@ class ProjectService:
             await delete_cache(f"project:{project_id}")
             return True
         return False
+
+    @staticmethod
+    async def archive_project(project_id: str, status: bool = True):
+        res = await ProjectRepository.archive(project_id, status)
+        if res:
+            await clear_pattern("projects:*")
+            await delete_cache(f"project:{project_id}")
+        return res
+
+    @staticmethod
+    async def delete_marketing_campaign(project_id: str, campaign_name: str):
+        project = await ProjectRepository.get_by_id(project_id)
+        if not project:
+            return None
+        campaigns = project.get("marketing_campaigns", []) or []
+        updated = [c for c in campaigns if c.strip().lower() != campaign_name.strip().lower()]
+        await ProjectRepository.update(project_id, {"marketing_campaigns": updated})
+        await clear_pattern(f"projects:{project_id}:*")
+        await clear_pattern("projects:list:*")
+        await delete_cache(f"project:{project_id}")
+        return updated
 
