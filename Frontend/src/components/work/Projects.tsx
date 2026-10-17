@@ -16,7 +16,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { useEmployeesContext } from "@/components/employees/EmployeeContext";
 import { useAuth } from "@/components/auth/AuthContext";
 import { DigitalMarketingOperations, MarketingRecord } from "./DigitalMarketingOperations";
-import { ExecutivePerformanceReportModal } from "./ExecutivePerformanceReportModal";
+
 import { ClientFinanceModal } from "./ClientFinanceModal";
 import { ClientFollowupModal, FollowupLogEntry } from "./ClientFollowupModal";
 
@@ -1866,6 +1866,41 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
   const { user } = useAuth();
   const { employees } = useEmployeesContext();
+
+  // Admin & HR Access Check:
+  // Detects admin via user.role / system_role and HR via work_details.department, system_role, or designation
+  const isAdminOrHr = useMemo(() => {
+    const uRole = String(user?.role || (user as any)?.system_role || (user as any)?.work_details?.system_role || "").toLowerCase().trim();
+    const uDept = String(user?.department || (user as any)?.work_details?.department || "").toLowerCase().trim();
+    const uDesig = String(user?.designation || (user as any)?.work_details?.designation || "").toLowerCase().trim();
+
+    if (uRole === "admin" || uRole === "superadmin" || uRole === "hr" || uDept === "hr" || uDesig.includes("hr")) {
+      return true;
+    }
+
+    const currentId = String(user?.id || (user as any)?._id || (user as any)?.employee_id || (user as any)?.employeeId || "");
+    const currentEmail = String(user?.email || "").toLowerCase().trim();
+    const currentName = String(user?.name || "").toLowerCase().trim();
+
+    const emp = employees.find(e => {
+      if (currentId && (String(e.id) === currentId || String((e as any)._id) === currentId || String(e.employeeId) === currentId)) return true;
+      if (currentEmail && e.email && e.email.toLowerCase() === currentEmail) return true;
+      if (currentName && e.name && e.name.toLowerCase() === currentName) return true;
+      return false;
+    });
+
+    if (emp) {
+      const eRole = String(emp.role || (emp as any).system_role || (emp as any).work_details?.system_role || "").toLowerCase().trim();
+      const eDept = String(emp.department || (emp as any).work_details?.department || "").toLowerCase().trim();
+      const eDesig = String(emp.designation || (emp as any).work_details?.designation || "").toLowerCase().trim();
+
+      if (eRole === "admin" || eRole === "superadmin" || eRole === "hr" || eDept === "hr" || eDesig.includes("hr")) {
+        return true;
+      }
+    }
+
+    return false;
+  }, [user, employees]);
 
   // K10 / Transcript [27:01]: Dynamic Finance Access
   // Admin has full access; employees only if assigned to Finance role in the project
@@ -5644,15 +5679,6 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             </div>
           </div>
         )}
-
-        {/* Executive Client Performance Report Modal */}
-        <ExecutivePerformanceReportModal
-          isOpen={isExecutiveReportOpen}
-          onClose={() => setIsExecutiveReportOpen(false)}
-          clientName={reportClient?.name || activeProj?.name || "Client"}
-          companyName={reportClient?.companyName}
-          records={[]}
-        />
       </>
     );
   };
@@ -5761,16 +5787,18 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   </button>
                 )}
 
-                {/* Team Assignment button (Creative Team or Marketing & Finance Team) */}
-                <button
-                  type="button"
-                  onClick={() => openAssignTeamModal(project)}
-                  className="flex items-center gap-2 px-3.5 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 font-bold text-xs rounded-xl transition-all shadow-sm cursor-pointer"
-                  title={isMarketingCategory(project.category) ? "Assign Marketing & Finance Team" : "Assign Creative Team Roles"}
-                >
-                  <Users className="w-3.5 h-3.5" />
-                  <span>{isMarketingCategory(project.category) ? "Marketing Team" : "Creative Team"}</span>
-                </button>
+                {/* Team Assignment button (Creative Team or Marketing Team - restricted to Admin & HR for Marketing) */}
+                {(!isMarketingCategory(project.category) || isAdminOrHr) && (
+                  <button
+                    type="button"
+                    onClick={() => openAssignTeamModal(project)}
+                    className="flex items-center gap-2 px-3.5 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 font-bold text-xs rounded-xl transition-all shadow-sm cursor-pointer"
+                    title={isMarketingCategory(project.category) ? "Assign Marketing & Finance Team" : "Assign Creative Team Roles"}
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    <span>{isMarketingCategory(project.category) ? "Marketing Team" : "Creative Team"}</span>
+                  </button>
+                )}
 
                 {/* Executive Report Button for Digital Marketing */}
                 {isMarketingCategory(project.category) && (
@@ -5843,14 +5871,16 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     <MessageSquare className="w-3.5 h-3.5" /> Set WhatsApp
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => document.getElementById("finance-section")?.scrollIntoView({ behavior: "smooth", block: "start" })}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-full transition-colors shadow-sm"
-                  title="Go to Finance & follow-ups"
-                >
-                  ➦ Followups
-                </button>
+                {!isMarketingCategory(project.category) && (
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById("finance-section")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-full transition-colors shadow-sm"
+                    title="Go to Finance & follow-ups"
+                  >
+                    ➦ Followups
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => { setProjectSubTab("logs"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
@@ -5950,7 +5980,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             )}
 
             {/* K10: Finance & Payments — date, amount, work period, next reminder + followups (Dynamic permission) */}
-            {canUserAccessFinance(project) && (
+            {!isMarketingCategory(project.category) && canUserAccessFinance(project) && (
               <div id="finance-section" className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm scroll-mt-4">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
@@ -6262,6 +6292,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   clientId={project.clientId}
                   clientName={client?.name || project.name}
                   companyName={client?.companyName}
+                  isReportOpen={isExecutiveReportOpen}
+                  onCloseReport={() => setIsExecutiveReportOpen(false)}
                   onOpenReportModal={() => setIsExecutiveReportOpen(true)}
                 />
               </div>
