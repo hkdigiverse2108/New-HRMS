@@ -48,6 +48,8 @@ import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ExecutivePerformanceReportModal } from "./ExecutivePerformanceReportModal";
+
 import {
   Select,
   SelectContent,
@@ -101,13 +103,15 @@ export const CAMPAIGN_SUB_TYPES: Record<string, { id: string; label: string }[]>
   ],
 };
 
-interface DigitalMarketingOperationsProps {
+export interface DigitalMarketingOperationsProps {
   projectId: string;
   clientId: string;
   clientName: string;
   companyName?: string | undefined;
   initialRecords?: MarketingRecord[] | undefined;
   onOpenReportModal?: (() => void) | undefined;
+  isReportOpen?: boolean | undefined;
+  onCloseReport?: (() => void) | undefined;
 }
 
 export const DigitalMarketingOperations: React.FC<DigitalMarketingOperationsProps> = ({
@@ -117,7 +121,11 @@ export const DigitalMarketingOperations: React.FC<DigitalMarketingOperationsProp
   companyName,
   initialRecords,
   onOpenReportModal,
+  isReportOpen,
+  onCloseReport,
 }) => {
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+
   // Currency state (INR / USD)
   const [currency, setCurrency] = useState<"INR" | "USD">("INR");
   const USD_RATE = 0.012; // 1 INR ~ 0.012 USD
@@ -593,16 +601,19 @@ export const DigitalMarketingOperations: React.FC<DigitalMarketingOperationsProp
           </button>
 
           {/* Export Data / Executive Report Trigger */}
-          {onOpenReportModal && (
-            <button
-              type="button"
-              onClick={onOpenReportModal}
-              className="px-4 py-2 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-sm flex items-center gap-1.5"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span>Executive Report</span>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => {
+              setIsReportModalOpen(true);
+              onOpenReportModal?.();
+            }}
+            className="px-4 py-2 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+            title="Open Executive Client Performance Intelligence Report"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Executive Report</span>
+          </button>
+
 
           {/* Add Record Trigger */}
           <button
@@ -1447,6 +1458,18 @@ export const DigitalMarketingOperations: React.FC<DigitalMarketingOperationsProp
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Executive Client Performance Intelligence Report Modal with Live Records */}
+      <ExecutivePerformanceReportModal
+        isOpen={isReportModalOpen || !!isReportOpen}
+        onClose={() => {
+          setIsReportModalOpen(false);
+          onCloseReport?.();
+        }}
+        clientName={clientName}
+        companyName={companyName}
+        records={records}
+      />
     </div>
   );
 };
