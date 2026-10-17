@@ -991,7 +991,7 @@ export function SalesReports({ onAction }: { onAction?: (action: string) => void
               type="button"
               onClick={handleGenerate}
               disabled={isLoading}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-sm font-bold text-white shadow-md transition-all hover:bg-emerald-700 hover:shadow-lg disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-bold text-primary-foreground shadow-md transition-all hover:bg-primary/90 hover:shadow-lg disabled:opacity-50"
             >
               {format === "PDF" ? <Printer className="h-4 w-4" /> : <Download className="h-4 w-4" />}
               Generate {format} Report

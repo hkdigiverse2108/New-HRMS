@@ -117,7 +117,7 @@ export function Recognitions() {
             <Copy className="w-3.5 h-3.5" />
             Copy Last Month
           </button>
-          <button className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all">
+          <button className="flex items-center gap-1.5 px-4 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold rounded-lg shadow-sm transition-all">
             <Check className="w-3.5 h-3.5" />
             Save Month
           </button>

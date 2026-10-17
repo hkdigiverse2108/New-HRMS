@@ -278,8 +278,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         ? `linear-gradient(${gradientDirection}, var(--primary), ${parsedColors.join(", ")})`
         : `radial-gradient(circle, var(--primary), ${parsedColors.join(", ")})`;
       
+      // Solid brand fills, including ones that only appear on hover/focus/active or a state
       styleEl.innerHTML = `
-        .bg-primary, .bg-sidebar-primary {
+        .bg-primary, .bg-sidebar-primary,
+        .hover\\:bg-primary:hover, .hover\\:bg-sidebar-primary:hover,
+        .focus\\:bg-primary:focus, .active\\:bg-primary:active,
+        .group:hover .group-hover\\:bg-primary,
+        [data-state="active"].data-\\[state\\=active\\]\\:bg-primary,
+        [data-state="checked"].data-\\[state\\=checked\\]\\:bg-primary,
+        [aria-selected="true"].aria-selected\\:bg-primary {
           background-image: ${bgImage} !important;
         }
       `;

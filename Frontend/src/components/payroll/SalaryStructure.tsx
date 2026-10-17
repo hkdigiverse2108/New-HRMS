@@ -500,7 +500,7 @@ export function SalaryStructure() {
                           <button
                             onClick={handleApprove}
                             disabled={isActing}
-                            className="flex-1 flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2 rounded-lg disabled:opacity-60"
+                            className="flex-1 flex items-center justify-center gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold py-2 rounded-lg disabled:opacity-60"
                           >
                             {isActing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Approve
                           </button>
@@ -626,7 +626,7 @@ export function SalaryStructure() {
                         <button
                           onClick={handleSaveRevision}
                           disabled={isSaving}
-                          className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition-colors mt-2 disabled:opacity-60"
+                          className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-2.5 rounded-lg transition-colors mt-2 disabled:opacity-60"
                         >
                           {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
                           Submit for Approval

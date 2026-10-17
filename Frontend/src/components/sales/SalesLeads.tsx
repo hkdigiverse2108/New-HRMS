@@ -1255,7 +1255,7 @@ export function SalesLeads({
           <Button
             size="sm"
             onClick={() => onAction?.("Add Lead")}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs font-bold min-h-[44px] sm:min-h-0 sm:h-9 shadow-sm"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 text-xs font-bold min-h-[44px] sm:min-h-0 sm:h-9 shadow-sm"
           >
             <Plus className="w-4 h-4" /> Add Lead
           </Button>
@@ -1340,7 +1340,7 @@ export function SalesLeads({
           <Button
             type="submit"
             disabled={isQuickAdding || !quickAddPhone.trim()}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 w-full sm:w-auto justify-center min-h-[44px] sm:min-h-0 sm:h-9 rounded-xl gap-1.5 transition-all shadow-xs"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold px-4 w-full sm:w-auto justify-center min-h-[44px] sm:min-h-0 sm:h-9 rounded-xl gap-1.5 transition-all shadow-xs"
           >
             <Plus className="w-3.5 h-3.5" />
             {isQuickAdding ? "Adding..." : "Quick Add"}
@@ -1361,7 +1361,7 @@ export function SalesLeads({
             <Button
               size="sm"
               onClick={() => setIsBulkAssignOpen(true)}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold h-8"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold h-8"
             >
               <Users className="w-3.5 h-3.5 mr-1" /> Bulk Assign
             </Button>
@@ -1436,7 +1436,7 @@ export function SalesLeads({
                 className={cn(
                   "h-9 text-xs font-bold gap-1.5 px-3 rounded-xl transition-all",
                   dateFilter === "today"
-                    ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+                    ? "bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs"
                     : "border-border text-foreground hover:bg-muted"
                 )}
                 title="1-Click: Filter leads added or follow-up due today"
@@ -1692,7 +1692,7 @@ export function SalesLeads({
                   <Button
                     type="submit"
                     disabled={isTargetSubmitting}
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-9 text-xs"
+                    className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold h-9 text-xs"
                   >
                     {isTargetSubmitting ? "Saving..." : "Set Target"}
                   </Button>
@@ -1981,7 +1981,7 @@ export function SalesLeads({
                       setConvertingLead(selectedLeadDrawer);
                       setSelectedLeadDrawer(null);
                     }}
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold h-9"
+                    className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold h-9"
                   >
                     Convert to Official Client 🏆
                   </Button>

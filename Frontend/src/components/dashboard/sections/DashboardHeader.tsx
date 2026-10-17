@@ -134,7 +134,7 @@ export function DashboardHeader({ setActive, onAction }: { setActive?: ((url: st
           <button
             type="button"
             onClick={() => setActive?.("/employees/overtime")}
-            className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full text-[12px] font-bold shadow-md shadow-emerald-200 transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-full text-[12px] font-bold shadow-md shadow-primary/20 transition-colors cursor-pointer"
             title="Request overtime and see overtime requests"
           >
             <Timer className="h-3.5 w-3.5" /> Overtime

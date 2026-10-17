@@ -281,7 +281,7 @@ export function SalesDashboard({ setActive, onAction }: { setActive?: (path: str
           <div className="relative z-50">
             <button
               onClick={() => setIsQuickActionsOpen(!isQuickActionsOpen)}
-              className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 min-h-[44px] sm:min-h-0 text-sm font-semibold text-white transition-colors hover:bg-emerald-700"
+              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 min-h-[44px] sm:min-h-0 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
             >
               <Zap className="h-4 w-4" /> Quick Actions <ChevronDown className="h-3 w-3" />
             </button>

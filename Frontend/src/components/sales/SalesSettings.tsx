@@ -673,7 +673,7 @@ export function SalesSettings() {
               />
               <button
                 onClick={handleAddStage}
-                className="flex w-full sm:w-auto items-center justify-center gap-1.5 rounded-xl bg-emerald-700 px-5 py-2.5 text-xs font-bold text-white transition-all hover:bg-emerald-800 shadow-sm"
+                className="flex w-full sm:w-auto items-center justify-center gap-1.5 rounded-xl bg-primary px-5 py-2.5 text-xs font-bold text-primary-foreground transition-all hover:bg-primary/90 shadow-sm"
               >
                 <Plus className="h-4 w-4" /> Add Stage
               </button>
@@ -828,7 +828,7 @@ export function SalesSettings() {
               </div>
               <button
                 onClick={handleAddCategory}
-                className="flex w-full sm:w-auto items-center justify-center gap-2 rounded-full bg-emerald-700 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-800"
+                className="flex w-full sm:w-auto items-center justify-center gap-2 rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
               >
                 <Plus className="h-4 w-4" /> Add Category
               </button>
@@ -927,7 +927,7 @@ export function SalesSettings() {
               />
               <button
                 onClick={handleAddSource}
-                className="flex w-full sm:w-auto items-center justify-center gap-2 rounded-full bg-emerald-700 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-800"
+                className="flex w-full sm:w-auto items-center justify-center gap-2 rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
               >
                 <Plus className="h-4 w-4" /> Add Source
               </button>
@@ -1074,7 +1074,7 @@ export function SalesSettings() {
                 onKeyDown={(e) => e.key === 'Enter' && handleAddFollowUpType()}
                 className="w-full sm:w-80 rounded-xl border border-border bg-white px-4 py-2.5 text-xs outline-none focus:ring-2 focus:ring-emerald-500/20 font-semibold"
               />
-              <button onClick={handleAddFollowUpType} className="flex items-center gap-1.5 rounded-xl bg-emerald-700 px-5 py-2.5 text-xs font-bold text-white hover:bg-emerald-800">
+              <button onClick={handleAddFollowUpType} className="flex items-center gap-1.5 rounded-xl bg-primary px-5 py-2.5 text-xs font-bold text-primary-foreground hover:bg-primary/90">
                 <Plus className="h-4 w-4" /> Add Button
               </button>
             </div>
@@ -1349,7 +1349,7 @@ export function SalesSettings() {
             </button>
             <button
               onClick={handleSavePermissions}
-              className="flex-1 rounded-xl bg-emerald-600 py-2.5 min-h-[44px] text-sm font-semibold text-white hover:bg-emerald-700 transition-colors"
+              className="flex-1 rounded-xl bg-primary py-2.5 min-h-[44px] text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
             >
               Save Changes
             </button>

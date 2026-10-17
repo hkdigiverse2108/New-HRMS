@@ -498,7 +498,7 @@ export function QuickActionModals({ activeAction, onClose }: { activeAction: str
                 {isSubmitting ? "Saving..." : "Save & New"}
               </Button>
             )}
-            <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700" disabled={isSubmitting}>
+            <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={isSubmitting}>
               {isSubmitting ? "Processing..." : activeAction.includes("Upload") || activeAction.includes("Import") ? "Upload Data" : activeAction === "Add Lead" ? "Save Lead" : "Save Changes"}
             </Button>
           </div>

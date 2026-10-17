@@ -330,7 +330,7 @@ export function EmployeeSignatures() {
                                   signatureUrl: sigUrl,
                                 })
                               }
-                              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors flex items-center gap-1.5 shadow-xs"
+                              className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs rounded-xl transition-colors flex items-center gap-1.5 shadow-xs"
                               title="View Full Signature"
                             >
                               <Eye className="w-3.5 h-3.5" /> View Signature

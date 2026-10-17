@@ -556,7 +556,7 @@ export const LoginPage: React.FC = () => {
 
             <button
               onClick={() => setShowForgotModal(false)}
-              className="w-full mt-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-colors"
+              className="w-full mt-5 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl text-xs transition-colors"
             >
               Got it, close
             </button>

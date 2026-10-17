@@ -324,7 +324,7 @@ export function AdminSettings() {
             Select the primary brand color. The platform will automatically generate matching backgrounds, sidebars, and chart palettes.
           </p>
           
-          <div className="flex flex-col gap-4 mt-auto">
+          <div className="flex flex-col gap-4">
             {/* Gradient Toggle */}
             <div className="flex items-center justify-between p-3 border border-border rounded-xl bg-muted/20">
               <span className="text-sm font-bold text-foreground">Enable Gradient</span>
@@ -535,7 +535,7 @@ export function AdminSettings() {
             Configure global platform behavior such as date formats and timezone defaults.
           </p>
           
-          <div className="flex flex-col gap-4 mt-auto">
+          <div className="flex flex-col gap-4">
             <div>
               <label className="block text-xs font-bold text-muted-foreground mb-1.5 uppercase tracking-wide">Date Format</label>
               <SearchableSelect 
@@ -581,7 +581,7 @@ export function AdminSettings() {
             Update the company name, upload a custom logo for the sidebar and a favicon for the browser tab.
           </p>
           
-          <div className="flex flex-col gap-4 mt-auto">
+          <div className="flex flex-col gap-4">
             <div>
               <label className="block text-xs font-bold text-muted-foreground mb-1.5 uppercase tracking-wide">Company Name</label>
               <input 
@@ -659,7 +659,7 @@ export function AdminSettings() {
             Adjust the shape of UI elements and select a global font family.
           </p>
           
-          <div className="flex flex-col gap-6 mt-auto">
+          <div className="flex flex-col gap-6">
             <div>
               <div className="flex justify-between items-center mb-1.5">
                 <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wide">Border Radius</label>

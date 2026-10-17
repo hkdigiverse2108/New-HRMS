@@ -349,7 +349,7 @@ export function ChangeSignatureModal({
               type="button"
               onClick={handleSaveSignature}
               disabled={isSaving || !signatureData}
-              className="px-6 py-2.5 bg-emerald-600 text-white hover:bg-emerald-700 font-bold text-sm rounded-xl transition-colors disabled:opacity-50 shadow-md flex items-center gap-2"
+              className="px-6 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm rounded-xl transition-colors disabled:opacity-50 shadow-md flex items-center gap-2"
             >
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
               {isSaving ? "Saving..." : "Save Signature"}

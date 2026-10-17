@@ -561,7 +561,7 @@ export function OtherTransactions() {
                     setNewBankBalance("");
                   }
                 }}
-                className="w-full md:w-auto px-4 py-2 bg-emerald-600 text-white font-bold text-sm rounded-lg hover:bg-emerald-700 transition-colors shadow-sm"
+                className="w-full md:w-auto px-4 py-2 bg-primary text-primary-foreground font-bold text-sm rounded-lg hover:bg-primary/90 transition-colors shadow-sm"
               >
                 Add Bank Account
               </button>

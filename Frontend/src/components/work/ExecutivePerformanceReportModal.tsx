@@ -241,7 +241,7 @@ export const ExecutivePerformanceReportModal: React.FC<ExecutivePerformanceRepor
             <button
               type="button"
               onClick={handlePrint}
-              className="px-4 py-1.5 font-bold rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white transition flex items-center gap-1.5 shadow-md shadow-emerald-600/20"
+              className="px-4 py-1.5 font-bold rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground transition flex items-center gap-1.5 shadow-md shadow-primary/20"
             >
               <Printer className="w-3.5 h-3.5" />
               <span>Save PDF / Print</span>

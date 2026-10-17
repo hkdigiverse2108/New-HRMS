@@ -149,7 +149,7 @@ export function StatusChangeModal({
               className={
                 newStatus === "Client Lost"
                   ? "bg-rose-600 hover:bg-rose-700 text-white font-bold"
-                  : "bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                  : "bg-primary hover:bg-primary/90 text-primary-foreground font-bold"
               }
               disabled={isSubmitting}
             >
