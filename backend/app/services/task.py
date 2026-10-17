@@ -201,6 +201,34 @@ class TaskService:
         if not insert_data.get("priority"):
             insert_data["priority"] = "medium"
 
+        # Deduplication: Prevent duplicate active tasks for the same employee
+        assigned_to = insert_data.get("assigned_to")
+        title = (insert_data.get("title") or "").strip()
+        due_date = insert_data.get("due_date")
+        desc = insert_data.get("description") or ""
+        is_punch_in_task = "Created during Punch-In activity tracking" in desc
+
+        if assigned_to and title:
+            import re
+            collection = await TaskRepository.get_collection()
+            dup_query = {
+                "assigned_to": str(assigned_to),
+                "is_deleted": False,
+                "status": {"$in": ["todo", "inprogress", "inreview", "bugs"]},
+                "title": {"$regex": f"^{re.escape(title)}$", "$options": "i"}
+            }
+            if not is_punch_in_task and due_date:
+                d_val = due_date.date() if hasattr(due_date, 'date') else due_date
+                if isinstance(d_val, date):
+                    d_start = datetime.combine(d_val, datetime.min.time())
+                    d_end = datetime.combine(d_val, datetime.max.time())
+                    dup_query["due_date"] = {"$gte": d_start, "$lte": d_end}
+
+            existing_task = await collection.find_one(dup_query)
+            if existing_task:
+                existing_task["_id"] = str(existing_task["_id"])
+                return existing_task
+
         if insert_data.get("project_id") and (not insert_data.get("task_category") or insert_data.get("task_category") == "General"):
             from app.repository.project import ProjectRepository
             proj = await ProjectRepository.get_by_id(insert_data["project_id"])

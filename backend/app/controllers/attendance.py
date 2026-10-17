@@ -16,6 +16,7 @@ from app.schemas.attendance import (
 from app.services.attendance import AttendanceService
 from app.controllers.auth import get_current_employee, RoleChecker
 from app.redis.service import get_cache, set_cache, delete_cache, clear_pattern, make_list_key
+from app.repository.notification import NotificationRepository
 
 router = APIRouter(prefix="/attendance", tags=["Attendance"])
 
@@ -106,10 +107,8 @@ async def punch_in(
 
     if result and result.get("is_late"):
         try:
-            from app.repository.notification import NotificationRepository
             in_time = result.get("in_time") or result.get("check_in") or "now"
             emp_name = result.get("employee_name") or "Employee"
-            from app.services.attendance import AttendanceService
             cutoff = (await AttendanceService.get_late_cutoff(str(employee_id))).strftime("%I:%M %p")
             # 1. Notify the employee
             await NotificationRepository.create_notification({
