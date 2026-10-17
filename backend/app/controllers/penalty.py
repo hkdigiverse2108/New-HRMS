@@ -62,6 +62,7 @@ async def delete_penalty_type(item_id: str, current_user: dict = Depends(admin_h
     result = await PenaltyService.delete_penalty_type(item_id)
     await delete_cache(PENALTY_TYPES_CACHE_KEY)
     await delete_cache(f"penalty_type:{item_id}")
+    await invalidate_penalty_caches()
     return result
 
 # --- Employee Penalties ---

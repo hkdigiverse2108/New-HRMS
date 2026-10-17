@@ -20,6 +20,7 @@ class PenaltyTypeUpdate(BaseModel):
 
 class PenaltyTypeResponse(PenaltyTypeBase):
     id: str = Field(alias="_id")
+    system_key: Optional[str] = Field(None, description="Set on built-in types (e.g. 'late_punch_in'); not user-editable")
     
 # --- Employee Penalty Schemas ---
 class EmployeePenaltyBase(BaseModel):

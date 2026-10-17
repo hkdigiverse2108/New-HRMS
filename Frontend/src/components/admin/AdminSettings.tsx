@@ -1,10 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { Settings, Image as ImageIcon, Layout, Type, Palette, Shield, CreditCard, ChevronDown, CheckCircle2, Search, X, Plus, GripVertical, Settings2, Save, Paintbrush, Square, Briefcase, Trash2, Pencil, Loader2, MessageSquare, ShieldAlert, FileText, Upload, Eye } from "lucide-react";
+import { Settings, Image as ImageIcon, Layout, Type, Palette, Shield, CreditCard, ChevronDown, CheckCircle2, Search, X, Plus, GripVertical, Settings2, Save, Paintbrush, Square, Briefcase, MessageSquare, FileText, Upload, Eye } from "lucide-react";
 import { toast } from "@/lib/toast";
-import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { useTheme } from "../ThemeProvider";
-import { api } from "@/lib/api";
 import { SearchableSelect } from "@/components/ui/select";
 import { NotificationSettingsCard } from "@/components/notifications/NotificationSettingsCard";
 import { InvoiceSettingsCard } from "./settings/InvoiceSettingsCard";
@@ -104,14 +102,6 @@ function FontSelector({ value, onChange }: { value: string; onChange: (v: string
   );
 }
 
-interface PenaltyTypeItem {
-  id: string;
-  name: string;
-  default_price: number;
-  warning_limit: number;
-  description: string;
-}
-
 export function AdminSettings() {
   const { 
     color, setColor, 
@@ -122,6 +112,7 @@ export function AdminSettings() {
     radius, setRadius, 
     fontFamily, setFontFamily, 
     logoUrl, setLogoUrl, 
+    faviconUrl, setFaviconUrl,
     companyName, setCompanyName 
   } = useTheme();
 
@@ -171,105 +162,6 @@ export function AdminSettings() {
     localStorage.setItem('hrms_name_format', newFormat);
     setTimeout(() => window.location.reload(), 100);
   };
-  // Penalty types are stored in the backend and used by the Penalties page dropdown
-  const emptyTypeForm = { name: "", default_price: "", warning_limit: "", description: "" };
-  const [penaltyTypes, setPenaltyTypes] = useState<PenaltyTypeItem[]>([]);
-  const [penaltyTypesLoading, setPenaltyTypesLoading] = useState(true);
-  const [typeForm, setTypeForm] = useState(emptyTypeForm);
-  const [editingTypeId, setEditingTypeId] = useState<string | null>(null);
-  const [savingType, setSavingType] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState<{isOpen: boolean, id: string | null, label: string}>({isOpen: false, id: null, label: ""});
-  const isSystemType = (name?: string) => (name || "").toLowerCase() === "late punch-in";
-
-  const fetchPenaltyTypes = async () => {
-    try {
-      const res = await api.get<any[]>("/penalties/types", { showLoader: false, showErrorToast: false });
-      setPenaltyTypes((Array.isArray(res) ? res : []).map((t: any) => ({
-        id: String(t.id || t._id),
-        name: t.name,
-        default_price: Number(t.default_price) || 0,
-        warning_limit: Number(t.warning_limit) || 0,
-        description: t.description || "",
-      })));
-    } catch {
-      toast.error("Failed to load penalty types");
-    } finally {
-      setPenaltyTypesLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchPenaltyTypes();
-  }, []);
-
-  const resetTypeForm = () => {
-    setTypeForm(emptyTypeForm);
-    setEditingTypeId(null);
-  };
-
-  const startEditType = (t: PenaltyTypeItem) => {
-    setEditingTypeId(t.id);
-    setTypeForm({
-      name: t.name,
-      default_price: String(t.default_price),
-      warning_limit: String(t.warning_limit),
-      description: t.description,
-    });
-  };
-
-  const handleSaveType = async () => {
-    if (!typeForm.name.trim()) {
-      toast.error("Penalty type name is required");
-      return;
-    }
-    const price = Number(typeForm.default_price || 0);
-    const limit = Number(typeForm.warning_limit || 0);
-    if (Number.isNaN(price) || price < 0) {
-      toast.error("Default amount must be 0 or more");
-      return;
-    }
-    if (!Number.isInteger(limit) || limit < 0) {
-      toast.error("Warning limit must be a whole number (0 or more)");
-      return;
-    }
-    const payload = {
-      name: typeForm.name.trim(),
-      default_price: price,
-      warning_limit: limit,
-      description: typeForm.description.trim(),
-    };
-    setSavingType(true);
-    try {
-      if (editingTypeId) {
-        await api.put(`/penalties/types/${editingTypeId}`, payload);
-        toast.success("Penalty type updated");
-      } else {
-        await api.post("/penalties/types", payload);
-        toast.success("Penalty type added");
-      }
-      resetTypeForm();
-      fetchPenaltyTypes();
-    } catch {
-      // api layer shows the backend message (e.g. duplicate name)
-    } finally {
-      setSavingType(false);
-    }
-  };
-
-  const confirmRemoveTemplate = async () => {
-    const id = deleteConfirm.id;
-    setDeleteConfirm({ isOpen: false, id: null, label: "" });
-    if (!id) return;
-    try {
-      await api.delete(`/penalties/types/${id}`);
-      toast.success("Penalty type removed");
-      if (editingTypeId === id) resetTypeForm();
-      setPenaltyTypes(prev => prev.filter(t => t.id !== id));
-    } catch {
-      // api layer shows the backend message (e.g. type is in use)
-    }
-  };
-
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -279,6 +171,20 @@ export function AdminSettings() {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleFaviconUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Stored in the browser, so keep it small like a real favicon
+    if (file.size > 512 * 1024) {
+      toast.error("Favicon must be smaller than 512 KB");
+      e.target.value = "";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => setFaviconUrl(reader.result as string);
+    reader.readAsDataURL(file);
   };
 
   return (
@@ -538,7 +444,7 @@ export function AdminSettings() {
             <h3 className="text-lg font-black">Company Identity</h3>
           </div>
           <p className="text-sm text-muted-foreground mb-6">
-            Update the company name and upload a custom logo for the sidebar.
+            Update the company name, upload a custom logo for the sidebar and a favicon for the browser tab.
           </p>
           
           <div className="flex flex-col gap-4 mt-auto">
@@ -577,6 +483,34 @@ export function AdminSettings() {
                   </div>
                 )}
               </div>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-muted-foreground mb-1.5 uppercase tracking-wide">Favicon</label>
+              <div className="flex items-center gap-4">
+                <div className="relative flex-1">
+                  <input
+                    type="file"
+                    accept="image/png,image/x-icon,image/vnd.microsoft.icon,image/svg+xml,image/jpeg,image/webp"
+                    onChange={handleFaviconUpload}
+                    className="w-full text-sm text-foreground file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-colors border border-border rounded-xl bg-background cursor-pointer pr-10 overflow-hidden"
+                  />
+                  {faviconUrl && (
+                    <button
+                      onClick={() => setFaviconUrl("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 bg-destructive/10 text-destructive rounded-full hover:bg-destructive hover:text-white transition-colors"
+                      title="Remove Favicon"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+                {faviconUrl && (
+                  <div className="w-10 h-10 shrink-0 rounded-lg border border-border bg-white flex items-center justify-center overflow-hidden p-2 shadow-sm">
+                    <img src={faviconUrl} alt="Favicon" className="max-w-full max-h-full object-contain" />
+                  </div>
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1.5">Shown in the browser tab. A square image (e.g. 64×64 PNG) works best.</p>
             </div>
           </div>
         </div>
@@ -662,150 +596,6 @@ export function AdminSettings() {
         </div>
       </div>
 
-      {/* Disciplinary Settings */}
-      <div className="bg-card border border-border/50 rounded-3xl p-6 shadow-sm flex flex-col md:col-span-2 xl:col-span-3">
-        <div className="flex items-center gap-2 mb-4">
-          <ShieldAlert className="w-5 h-5 text-primary" />
-          <h3 className="text-lg font-black">Penalty Types</h3>
-        </div>
-        <p className="text-sm text-muted-foreground mb-6">
-          Manage the penalty types used when adding penalties. Warning limit is how many times an employee only gets a warning before it becomes a paid penalty.
-        </p>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-3 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
-            {penaltyTypesLoading ? (
-              <div className="flex items-center justify-center p-8 text-muted-foreground">
-                <Loader2 className="w-5 h-5 animate-spin" />
-              </div>
-            ) : penaltyTypes.length === 0 ? (
-              <div className="text-center p-8 text-muted-foreground text-sm border border-dashed border-border rounded-xl">
-                No penalty types yet. Add one using the form.
-              </div>
-            ) : penaltyTypes.map(t => (
-              <div
-                key={t.id}
-                className={cn(
-                  "flex items-start justify-between gap-3 p-4 rounded-xl border bg-background/50 hover:bg-muted/30 transition-colors",
-                  editingTypeId === t.id ? "border-primary/50 ring-2 ring-primary/10" : "border-border/50"
-                )}
-              >
-                <div className="min-w-0">
-                  <h4 className="font-bold text-foreground text-sm">{t.name}</h4>
-                  {t.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{t.description}</p>}
-                  <div className="flex flex-wrap items-center gap-2 mt-2">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-destructive/10 text-destructive">
-                      ₹{t.default_price}
-                    </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-700">
-                      {t.warning_limit > 0 ? `${t.warning_limit} warning${t.warning_limit > 1 ? "s" : ""} before penalty` : "No warnings"}
-                    </span>
-                    {isSystemType(t.name) && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-muted text-foreground/70">Automatic</span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    onClick={() => startEditType(t)}
-                    title="Edit"
-                    className="p-2 hover:bg-primary/10 text-muted-foreground hover:text-primary rounded-lg transition-colors"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                  {!isSystemType(t.name) && (
-                    <button
-                      onClick={() => setDeleteConfirm({ isOpen: true, id: t.id, label: t.name })}
-                      title="Delete"
-                      className="p-2 hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-lg transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="bg-muted/30 border border-border rounded-2xl p-5 space-y-4 h-fit">
-            <h4 className="font-bold text-sm text-foreground">{editingTypeId ? "Edit Penalty Type" : "Add Penalty Type"}</h4>
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-muted-foreground">Name *</label>
-              <input
-                type="text"
-                placeholder="e.g. Dress Code Violation"
-                value={typeForm.name}
-                disabled={isSystemType(penaltyTypes.find(t => t.id === editingTypeId)?.name)}
-                onChange={e => setTypeForm(f => ({ ...f, name: e.target.value }))}
-                className="w-full px-3 py-2 rounded-xl border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-background disabled:opacity-60"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-muted-foreground">Default Amount (₹)</label>
-                <input
-                  type="number"
-                  min={0}
-                  placeholder="0"
-                  value={typeForm.default_price}
-                  onChange={e => setTypeForm(f => ({ ...f, default_price: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-xl border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-background"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-muted-foreground">Warning Limit</label>
-                <input
-                  type="number"
-                  min={0}
-                  step={1}
-                  placeholder="0"
-                  value={typeForm.warning_limit}
-                  onChange={e => setTypeForm(f => ({ ...f, warning_limit: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-xl border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-background"
-                />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-muted-foreground">Description</label>
-              <textarea
-                placeholder="When should this penalty be applied?"
-                value={typeForm.description}
-                onChange={e => setTypeForm(f => ({ ...f, description: e.target.value }))}
-                rows={3}
-                className="w-full px-3 py-2 rounded-xl border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none bg-background"
-              />
-            </div>
-            <div className="flex gap-2">
-              {editingTypeId && (
-                <button
-                  onClick={resetTypeForm}
-                  disabled={savingType}
-                  className="flex-1 py-2 rounded-xl border border-border bg-background text-sm font-bold hover:bg-muted/50 transition-colors"
-                >
-                  Cancel
-                </button>
-              )}
-              <button
-                onClick={handleSaveType}
-                disabled={savingType}
-                className="flex-1 flex items-center justify-center gap-2 bg-primary text-primary-foreground font-bold text-sm py-2 rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-60"
-              >
-                {savingType ? <Loader2 className="w-4 h-4 animate-spin" /> : editingTypeId ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                {editingTypeId ? "Save Changes" : "Add Penalty Type"}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <ConfirmModal 
-        isOpen={deleteConfirm.isOpen}
-        onClose={() => setDeleteConfirm({ isOpen: false, id: null, label: "" })}
-        onConfirm={confirmRemoveTemplate}
-        title="Remove Penalty Type"
-        description={`Are you sure you want to remove the penalty type "${deleteConfirm.label}"? Types already used in penalty records cannot be removed.`}
-        itemName={deleteConfirm.label}
-      />
     </div>
   );
 }

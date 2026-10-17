@@ -99,6 +99,19 @@ class EmployeePenaltyRepository:
         return await collection.count_documents({"penalty_type_id": {"$in": ids}})
 
     @classmethod
+    async def snapshot_type_name(cls, penalty_type_id: str, name: str) -> None:
+        """Save the type name on older records that don't carry one yet, before the
+        type is deleted, so they still show a name afterwards."""
+        collection = await cls.get_collection()
+        ids = [penalty_type_id]
+        if ObjectId.is_valid(penalty_type_id):
+            ids.append(ObjectId(penalty_type_id))
+        await collection.update_many(
+            {"penalty_type_id": {"$in": ids}, "penalty_type_name": {"$in": [None, ""]}},
+            {"$set": {"penalty_type_name": name}},
+        )
+
+    @classmethod
     async def create(cls, data: dict):
         collection = await cls.get_collection()
         data["created_at"] = datetime.utcnow()
@@ -211,7 +224,8 @@ class EmployeePenaltyRepository:
                 "price": 1, "is_warning": 1, "status": 1, "resolution_reason": 1,
                 "impact_payroll": 1, "is_deleted": 1, "created_at": 1,
                 "emp": {"$first": "$emp"},
-                "penalty_type_name": {"$first": "$ptype.name"},
+                # Live type name (renames apply to old records); saved name once the type is deleted
+                "penalty_type_name": {"$ifNull": [{"$first": "$ptype.name"}, "$penalty_type_name"]},
             }},
         ]
 

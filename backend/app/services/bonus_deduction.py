@@ -98,7 +98,8 @@ class BonusDeductionService:
         rows = []
         for p in res.get("data", []):
             amount = float(p.get("price") or 0)
-            if amount <= 0:
+            # Warnings never touch payroll, so they stay off this page
+            if p.get("is_warning") or amount <= 0:
                 continue
             status_ = p.get("status") or "Active"
             # Waived and Resolved penalties are never deducted, so keep them out of the list
@@ -111,7 +112,7 @@ class BonusDeductionService:
                 ref=f"PN-{p['_id'][-5:].upper()}",
                 source="penalty",
                 type="Deduction",
-                typeLabel=type_names.get(p.get("penalty_type_id")) or "Penalty",
+                typeLabel=type_names.get(p.get("penalty_type_id")) or p.get("penalty_type_name") or "Penalty",
                 appliedTo=_employee_name(emp) if emp else "Unknown employee",
                 appliedToSub=f"Penalty · {_department(emp)}" if emp and _department(emp) else "Penalty",
                 reason=p.get("reason") or "",
@@ -209,6 +210,8 @@ class BonusDeductionService:
         penalty = await EmployeePenaltyRepository.get_by_id(penalty_id)
         if not penalty or penalty.get("is_deleted"):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Penalty not found")
+        if penalty.get("is_warning"):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Warnings cannot be applied to payroll")
         if not penalty_pending(penalty):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only pending penalties can be applied")
         return await EmployeePenaltyRepository.update(penalty_id, {

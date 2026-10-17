@@ -106,9 +106,8 @@ head: () => ({
           rel: "stylesheet",
           href: appCss,
         },
-        { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+        // Tab icon is rendered in RootShell from the favicon saved in Admin Settings
         { rel: "manifest", href: "/manifest.json" },
-        { rel: "apple-touch-icon", href: "/favicon.ico" },
       ],
       scripts: [
         {
@@ -144,6 +143,15 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="en" suppressHydrationWarning>
       <head>
         <script src="/env-config.js" />
+        {/* Empty "data:," stops the browser from falling back to /favicon.ico */}
+        <link id="app-favicon" rel="icon" href="data:," suppressHydrationWarning />
+        <link id="app-apple-touch-icon" rel="apple-touch-icon" href="data:," suppressHydrationWarning />
+        <script
+          // Runs before first paint so a refresh shows the saved favicon straight away
+          dangerouslySetInnerHTML={{
+            __html: `try{var f=localStorage.getItem("app-theme-favicon");if(f){document.getElementById("app-favicon").href=f;document.getElementById("app-apple-touch-icon").href=f;}}catch(e){}`,
+          }}
+        />
         <HeadContent />
       </head>
       <body suppressHydrationWarning>

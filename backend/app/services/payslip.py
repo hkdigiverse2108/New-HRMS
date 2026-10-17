@@ -93,15 +93,18 @@ async def _penalties_split(start: str, end: str) -> dict:
     from app.services.bonus_deduction import penalty_applies
 
     late_ids = set()
-    async for t in get_database()["penalty_types"].find({}, {"name": 1}):
-        if "late" in str(t.get("name", "")).lower():
+    async for t in get_database()["penalty_types"].find({}, {"name": 1, "system_key": 1}):
+        # The automatic late type can be renamed, so match it by system_key too
+        if t.get("system_key") == "late_punch_in" or "late" in str(t.get("name", "")).lower():
             late_ids.add(str(t["_id"]))
     res = await EmployeePenaltyRepository.get_all(is_deleted=False, type_filter="penalty", start_date=start, end_date=end)
     totals = defaultdict(lambda: {"late": 0.0, "other": 0.0})
     for p in res.get("data", []):
         if not penalty_applies(p):
             continue
-        kind = "late" if str(p.get("penalty_type_id")) in late_ids else "other"
+        # Records of a deleted type only have the saved name left to go by
+        is_late = str(p.get("penalty_type_id")) in late_ids or "late" in str(p.get("penalty_type_name") or "").lower()
+        kind = "late" if is_late else "other"
         totals[str(p.get("employee_id"))][kind] += float(p.get("price") or 0)
     return totals
 
