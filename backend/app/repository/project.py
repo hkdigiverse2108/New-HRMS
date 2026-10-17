@@ -49,11 +49,18 @@ class ProjectRepository:
         followup_due: Optional[bool] = None,
         feedback_due: Optional[bool] = None,
         cc_status: Optional[str] = None,
+        is_archived: Optional[bool] = None,
         page: Optional[int] = None, 
         limit: Optional[int] = None
     ):
         collection = await cls.get_collection()
         query = {"is_deleted": is_deleted}
+
+        if is_archived is not None:
+            if is_archived:
+                query["is_archived"] = True
+            else:
+                query["is_archived"] = {"$ne": True}
         
         if client_id:
             query["client_id"] = client_id
@@ -173,3 +180,14 @@ class ProjectRepository:
             {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}}
         )
         return result.modified_count > 0
+
+    @classmethod
+    async def archive(cls, project_id: str, status: bool = True):
+        collection = await cls.get_collection()
+        if not ObjectId.is_valid(project_id):
+            return False
+        result = await collection.update_one(
+            {"_id": ObjectId(project_id)},
+            {"$set": {"is_archived": status, "updated_at": datetime.utcnow()}}
+        )
+        return result.modified_count > 0 or result.matched_count > 0

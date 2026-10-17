@@ -49,6 +49,7 @@ async def get_all_projects(
     followup_due: Optional[bool] = Query(None, description="Filter for projects where follow-up is currently due"),
     feedback_due: Optional[bool] = Query(None, description="Filter for projects where feedback is currently due"),
     cc_status: Optional[str] = Query(None, description="Filter by content calendar approval status (pending, approved_by_client, changes_requested, rejected)"),
+    is_archived: Optional[bool] = Query(None, description="Filter by archived status"),
     current_user: dict = Depends(get_current_employee)
 ):
     work_details = current_user.get("work_details", {}) or {}
@@ -75,6 +76,7 @@ async def get_all_projects(
         followup_due=followup_due,
         feedback_due=feedback_due,
         cc_status=cc_status,
+        is_archived=is_archived,
         role=user_role,
         dept=user_dept
     )
@@ -96,6 +98,7 @@ async def get_all_projects(
         followup_due=followup_due,
         feedback_due=feedback_due,
         cc_status=cc_status,
+        is_archived=is_archived,
         page=page, 
         limit=limit
     )
@@ -182,6 +185,29 @@ async def delete_project(project_id: str, current_user: dict = Depends(get_curre
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to delete project")
     await clear_pattern("projects:*")
+
+@router.post("/{project_id}/archive", response_model=ProjectResponse, response_model_exclude_none=True)
+async def archive_project(project_id: str, status: Optional[bool] = Query(None), current_user: dict = Depends(get_current_employee)):
+    item = await ProjectService.get_project_by_id(project_id)
+    if not item or item.get("is_deleted"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    archive_status = True if status is None else status
+    success = await ProjectService.archive_project(project_id, status=archive_status)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to archive project")
+    await clear_pattern("projects:*")
+    return await ProjectService.get_project_by_id(project_id)
+
+@router.post("/{project_id}/unarchive", response_model=ProjectResponse, response_model_exclude_none=True)
+async def unarchive_project(project_id: str, current_user: dict = Depends(get_current_employee)):
+    item = await ProjectService.get_project_by_id(project_id)
+    if not item or item.get("is_deleted"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    success = await ProjectService.archive_project(project_id, status=False)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to unarchive project")
+    await clear_pattern("projects:*")
+    return await ProjectService.get_project_by_id(project_id)
 
 @router.post("/{project_id}/marketing-stats", response_model=DailyMarketingStat, status_code=status.HTTP_201_CREATED)
 async def add_daily_marketing_stat(project_id: str, data: DailyMarketingStatCreate, current_user: dict = Depends(get_current_employee)):
@@ -287,6 +313,14 @@ async def add_marketing_campaign(project_id: str, data: MarketingCampaignCreate,
     campaigns = await ProjectService.add_marketing_campaign(project_id, data.name)
     if campaigns is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to add campaign or project not found")
+    await clear_pattern(f"projects:{project_id}:*")
+    return campaigns
+
+@router.delete("/{project_id}/marketing-campaigns/{campaign_name}", response_model=List[str])
+async def delete_marketing_campaign(project_id: str, campaign_name: str, current_user: dict = Depends(get_current_employee)):
+    campaigns = await ProjectService.delete_marketing_campaign(project_id, campaign_name)
+    if campaigns is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to delete campaign or project not found")
     await clear_pattern(f"projects:{project_id}:*")
     return campaigns
 

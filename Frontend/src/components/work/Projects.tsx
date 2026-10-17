@@ -15,6 +15,10 @@ import { api } from "@/lib/api";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useEmployeesContext } from "@/components/employees/EmployeeContext";
 import { useAuth } from "@/components/auth/AuthContext";
+import { DigitalMarketingOperations, MarketingRecord } from "./DigitalMarketingOperations";
+import { ExecutivePerformanceReportModal } from "./ExecutivePerformanceReportModal";
+import { ClientFinanceModal } from "./ClientFinanceModal";
+import { ClientFollowupModal, FollowupLogEntry } from "./ClientFollowupModal";
 
 type ProjectStatus = "In Progress" | "In Review" | "Completed" | "On Hold";
 type ClientStatus = "Active" | "Archived";
@@ -53,6 +57,7 @@ export interface CreativeTeamRoles {
   approval_qc?: string;
   caption?: string;
   posting_publisher?: string;
+  finance?: string;
   [key: string]: string | undefined;
 }
 
@@ -136,6 +141,11 @@ interface Project {
       phase?: string | undefined;
     }[];
   }[] | undefined;
+  is_archived?: boolean | undefined;
+  marketing_assignees?: string[] | undefined;
+  marketing_assignees_details?: any[] | undefined;
+  finance_assignees?: string[] | undefined;
+  currency?: string | undefined;
 }
 
 interface CalendarItem {
@@ -321,6 +331,7 @@ export const CREATIVE_ROLES = [
   { key: "approval_qc", label: "Approval & QC", icon: "✅", desc: "Het / Client Content Approval" },
   { key: "caption", label: "Caption & Copy", icon: "✍️", desc: "Copywriting & Hashtags" },
   { key: "posting_publisher", label: "Posting / Publisher", icon: "📢", desc: "Social Media Live Posting" },
+  { key: "finance", label: "Finance & Accounts", icon: "💰", desc: "Client Invoicing, Payment Tracking & Follow-ups" },
 ] as const;
 
 export type FixedDepartment = typeof FIXED_DEPARTMENTS[number];
@@ -1621,7 +1632,11 @@ const mapBackendProject = (bp: any): Project => {
     nextFollowupDate: (bp as any).next_followup_date ? (String((bp as any).next_followup_date).split("T")[0] ?? "") : "",
     creativeTeam: bp.creative_team || {},
     creativeTeamDetails: bp.creative_team_details || {},
-    credentials: bp.social_media_credentials || []
+    credentials: bp.social_media_credentials || [],
+    is_archived: Boolean(bp.is_archived),
+    marketing_assignees: bp.marketing_assignees || [],
+    marketing_assignees_details: bp.marketing_assignees_details || [],
+    currency: bp.currency || "INR",
   };
 };
 
@@ -1849,9 +1864,71 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   const [projectFilterStatuses, setProjectFilterStatuses] = useState<ProjectStatus[]>([]);
   const [projectFilterCategories, setProjectFilterCategories] = useState<string[]>([]);
 
+  const { user } = useAuth();
   const { employees } = useEmployeesContext();
 
-  // Feature 1: Creative Team Assignment
+  // K10 / Transcript [27:01]: Dynamic Finance Access
+  // Admin has full access; employees only if assigned to Finance role in the project
+  const canUserAccessFinance = useCallback((projOrGroupOrClient?: any): boolean => {
+    const roleLower = String(user?.role || (user as any)?.system_role || (user as any)?.work_details?.system_role || "").toLowerCase().trim();
+    if (roleLower === "admin" || roleLower === "superadmin") return true;
+
+    const currentId = String((user as any)?._id || (user as any)?.id || "");
+    const currentName = String(user?.name || "").trim().toLowerCase();
+    if (!currentId && !currentName) return false;
+
+    const checkList = (list: any): boolean => {
+      if (!list) return false;
+      const arr = Array.isArray(list) ? list : (typeof list === "string" ? list.split(",").map(x => x.trim()).filter(Boolean) : []);
+      return arr.some((x: string) => {
+        const val = String(x).trim();
+        if (currentId && val === currentId) return true;
+        if (currentName && val.toLowerCase() === currentName) return true;
+        const emp = employees.find(e => String(e.id) === val || String((e as any)._id) === val || e.name.toLowerCase() === val.toLowerCase());
+        if (emp) {
+          if (currentId && (String(emp.id) === currentId || String((emp as any)._id) === currentId)) return true;
+          if (currentName && emp.name.toLowerCase() === currentName) return true;
+        }
+        return false;
+      });
+    };
+
+    const checkProj = (p: any): boolean => {
+      if (!p) return false;
+      if (checkList(p.finance_assignees)) return true;
+      if (checkList(p.creativeTeam?.finance)) return true;
+      if (checkList(p.creative_team?.finance)) return true;
+      return false;
+    };
+
+    if (projOrGroupOrClient) {
+      // 1. Group with subProjects
+      if (projOrGroupOrClient.subProjects && Array.isArray(projOrGroupOrClient.subProjects)) {
+        return projOrGroupOrClient.subProjects.some((p: any) => checkProj(p));
+      }
+      // 2. Client object (has id, may match clientId or project name)
+      if (projOrGroupOrClient.id && !projOrGroupOrClient.category) {
+        const clientProjs = projects.filter(p => p.clientId === projOrGroupOrClient.id || p.id === projOrGroupOrClient.id || (projOrGroupOrClient.name && p.name.trim().toLowerCase() === String(projOrGroupOrClient.name).trim().toLowerCase()));
+        if (clientProjs.length > 0) {
+          return clientProjs.some(p => checkProj(p));
+        }
+      }
+      // 3. Single project
+      if (checkProj(projOrGroupOrClient)) return true;
+    }
+
+    return false;
+  }, [user, employees, projects]);
+
+  // Transcript: In assignment list, admin sees all employees, but admin themselves are excluded so only workers are assigned
+  const assignableEmployees = useMemo(() => {
+    return employees.filter(emp => {
+      const roleLower = String(emp.role || (emp as any)?.work_details?.system_role || "").toLowerCase().trim();
+      return roleLower !== "admin" && roleLower !== "superadmin";
+    });
+  }, [employees]);
+
+  // Feature 1: Creative & Marketing Team Assignment
   const [isAssignCreativeTeamModalOpen, setIsAssignCreativeTeamModalOpen] = useState(false);
   const [isSavingCreativeTeam, setIsSavingCreativeTeam] = useState(false);
   const [assigningProject, setAssigningProject] = useState<Project | null>(null);
@@ -1865,9 +1942,32 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     approval_qc: "",
     caption: "",
     posting_publisher: "",
+    finance: "",
   });
+  const [assigningMarketingAssignees, setAssigningMarketingAssignees] = useState<string[]>([]);
+  const [assigningFinanceAssignees, setAssigningFinanceAssignees] = useState<string[]>([]);
   const [openRoleId, setOpenRoleId] = useState<string | null>(null);
   const [roleSearchQuery, setRoleSearchQuery] = useState<string>("");
+
+  const openAssignTeamModal = (proj: Project) => {
+    setAssigningProject(proj);
+    setCreativeTeamForm({
+      cc_creator: proj.creativeTeam?.["cc_creator"] || "",
+      scripting: proj.creativeTeam?.["scripting"] || "",
+      shoot_videography: proj.creativeTeam?.["shoot_videography"] || "",
+      reel_editing: proj.creativeTeam?.["reel_editing"] || "",
+      post_graphics: proj.creativeTeam?.["post_graphics"] || "",
+      thumbnail: proj.creativeTeam?.["thumbnail"] || "",
+      approval_qc: proj.creativeTeam?.["approval_qc"] || "",
+      caption: proj.creativeTeam?.["caption"] || "",
+      posting_publisher: proj.creativeTeam?.["posting_publisher"] || "",
+      finance: proj.creativeTeam?.["finance"] || "",
+    });
+    setAssigningMarketingAssignees(proj.marketing_assignees || []);
+    const existingFin = (proj as any).finance_assignees || (proj.creativeTeam?.finance ? proj.creativeTeam.finance.split(",").map((x: string) => x.trim()).filter(Boolean) : []);
+    setAssigningFinanceAssignees(existingFin);
+    setIsAssignCreativeTeamModalOpen(true);
+  };
 
   // Feature 2: Brand Division Filters
   const [brandDivisionCategory, setBrandDivisionCategory] = useState<string>("All");
@@ -1926,13 +2026,25 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   });
   const [showPasswordMap, setShowPasswordMap] = useState<Record<number, boolean>>({});
 
-  // Handler: Save Creative Team
-  const handleSaveCreativeTeam = async (projId: string, teamData: Record<string, string>) => {
+  // Handler: Save Creative & Marketing Team
+  const handleSaveCreativeTeam = async (
+    projId: string,
+    teamData: Record<string, string>,
+    marketingAssignees?: string[],
+    financeAssignees?: string[]
+  ) => {
     setIsSavingCreativeTeam(true);
     try {
-      const res = await api.put<any>(`/projects/${projId}`, {
+      const payload: any = {
         creative_team: teamData
-      });
+      };
+      if (marketingAssignees !== undefined) {
+        payload.marketing_assignees = marketingAssignees;
+      }
+      if (financeAssignees !== undefined) {
+        payload.finance_assignees = financeAssignees;
+      }
+      const res = await api.put<any>(`/projects/${projId}`, payload);
       const details: Record<string, any> = {};
       const updatedTeamList: { name: string; avatar: string }[] = [];
       Object.entries(teamData).forEach(([role, empId]) => {
@@ -1943,20 +2055,31 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         }
       });
 
+      if (marketingAssignees && marketingAssignees.length > 0) {
+        marketingAssignees.forEach(mId => {
+          const emp = employees.find(e => String(e.id) === String(mId) || String((e as any)._id) === String(mId));
+          if (emp && !updatedTeamList.some(t => t.name.startsWith(emp.name))) {
+            updatedTeamList.push({ name: `${emp.name} (Marketing)`, avatar: emp.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(emp.name)}` });
+          }
+        });
+      }
+
       const finalDetails = (res && res.creative_team_details) ? { ...res.creative_team_details, ...details } : details;
 
       setProjects(prev => prev.map(p => p.id === projId ? {
         ...p,
         creativeTeam: teamData,
         creativeTeamDetails: finalDetails,
+        marketing_assignees: marketingAssignees ?? p.marketing_assignees,
+        finance_assignees: financeAssignees ?? (p as any).finance_assignees,
         team: updatedTeamList.length > 0 ? updatedTeamList : p.team
       } : p));
 
-      toast.success("Creative team assigned successfully!");
+      toast.success("Team assigned successfully!");
       setIsAssignCreativeTeamModalOpen(false);
       setAssigningProject(null);
     } catch (err: any) {
-      toast.error(err.message || "Failed to update creative team");
+      toast.error(err.message || "Failed to update team");
     } finally {
       setIsSavingCreativeTeam(false);
     }
@@ -2019,9 +2142,9 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     });
   }, [projects]);
 
-  // Brand division member-wise data
+  // Brand division member-wise data (Excluding Admin accounts from operational member cards)
   const brandDivisionData = useMemo(() => {
-    return employees.map(emp => {
+    return assignableEmployees.map(emp => {
       const empId = String(emp.id || (emp as any)._id);
       const empName = emp.name.toLowerCase();
 
@@ -2837,6 +2960,13 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   // K9: landing standalone New Project (client picker — client pela, pachhi project)
   const [isLandingProjectOpen, setIsLandingProjectOpen] = useState(false);
   const [landingProjectClientId, setLandingProjectClientId] = useState("");
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const [quickFinanceClient, setQuickFinanceClient] = useState<Client | null>(null);
+  const [quickFollowupClient, setQuickFollowupClient] = useState<Client | null>(null);
+  const [quickFollowupLogs, setQuickFollowupLogs] = useState<FollowupLogEntry[]>([]);
+  const [isExecutiveReportOpen, setIsExecutiveReportOpen] = useState(false);
+  const [newProjectMarketingAssignees, setNewProjectMarketingAssignees] = useState<string[]>([]);
+  const [newProjectFinanceAssignees, setNewProjectFinanceAssignees] = useState<string[]>([]);
   const [isEditClientModalOpen, setIsEditClientModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [showEditClientErrors, setShowEditClientErrors] = useState(false);
@@ -3763,6 +3893,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   };
 
   const handleCreateProject = async () => {
+    if (isCreatingProject) return;
     setShowNewProjectErrors(true);
     // K9: landing context ma selectedClientId null hoy → landing picker vapro
     const effClientId = selectedClientId || landingProjectClientId;
@@ -3772,6 +3903,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       return;
     }
 
+    setIsCreatingProject(true);
     try {
       const numBudget = parseFloat(String(newProjectBudget || "").replace(/[^0-9.]/g, "")) || 0;
       const numReceived = parseFloat(String(newProjectAmountReceived || "").replace(/[^0-9.]/g, "")) || 0;
@@ -3806,6 +3938,9 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             cpl: numCpl,
           },
         },
+        marketing_assignees: newProjectCategory === "Digital Marketing" ? newProjectMarketingAssignees : [],
+        finance_assignees: newProjectCategory === "Digital Marketing" ? newProjectFinanceAssignees : [],
+        creative_team: newProjectCategory === "Digital Marketing" && newProjectFinanceAssignees.length > 0 ? { finance: newProjectFinanceAssignees.join(",") } : undefined,
         finance: {
           project_budget: numBudget,
           amount_received: numReceived,
@@ -3835,6 +3970,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       setNewProjectReach("");
       setNewProjectLeads("");
       setNewProjectCpl("");
+      setNewProjectMarketingAssignees([]);
+      setNewProjectFinanceAssignees([]);
       setActiveProjectTab('general');
       setShowNewProjectErrors(false);
       setIsNewProjectModalOpen(false);
@@ -3843,6 +3980,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       toast.success("Project created successfully!");
     } catch (err: any) {
       toast.error(err?.message || "Failed to create project");
+    } finally {
+      setIsCreatingProject(false);
     }
   };
 
@@ -3944,6 +4083,11 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             note: p.note || undefined,
           })),
         },
+        marketing_assignees: editingProject.marketing_assignees || [],
+        finance_assignees: (editingProject.finance_assignees && Array.isArray(editingProject.finance_assignees))
+          ? editingProject.finance_assignees
+          : (editingProject.creativeTeam?.finance ? editingProject.creativeTeam.finance.split(",").map((x: string) => x.trim()).filter(Boolean) : []),
+        ...(editingProject.creativeTeam ? { creative_team: editingProject.creativeTeam } : {}),
       };
 
       const updatedProjectId = editingProject.id;
@@ -3964,6 +4108,11 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             progress: editingProject.progress,
             startDate: editingProject.startDate,
             endDate: editingProject.endDate,
+            marketing_assignees: editingProject.marketing_assignees || [],
+            finance_assignees: (editingProject.finance_assignees && Array.isArray(editingProject.finance_assignees))
+              ? editingProject.finance_assignees
+              : (editingProject.creativeTeam?.finance ? editingProject.creativeTeam.finance.split(",").map((x: string) => x.trim()).filter(Boolean) : []),
+            creativeTeam: editingProject.creativeTeam || p.creativeTeam,
             reach: editingProject.reach,
             leads: editingProject.leads,
             cpl: editingProject.cpl,
@@ -4133,21 +4282,58 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     }
   };
 
-  const categoryStats = useMemo(() => {
-    const stats: Record<string, Set<string>> = {};
-    categories.forEach(cat => {
-      stats[cat] = new Set();
-    });
-    projects.forEach(p => {
-      if (stats[p.category]) {
-        stats[p.category]?.add(p.clientId);
+  const handleArchiveProject = async (project: Project, archive: boolean) => {
+    try {
+      if (archive) {
+        await api.post(`/projects/${project.id}/archive`);
+        toast.success(`Project "${project.name}" archived successfully.`);
+      } else {
+        await api.post(`/projects/${project.id}/unarchive`);
+        toast.success(`Project "${project.name}" restored to Active.`);
       }
-    });
-    return categories.map(cat => ({
-      category: cat,
-      clientCount: stats[cat]?.size || 0
-    })).sort((a, b) => b.clientCount - a.clientCount);
-  }, [projects, categories]);
+      await loadLiveData();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update project archive status");
+    }
+  };
+
+  const isProjectTabActive = PROJECT_TABS.includes(activeTab);
+
+  const categoryStats = useMemo(() => {
+    const activeCategories = categories.filter(c => c.toLowerCase() !== "sales");
+
+    if (isProjectTabActive) {
+      const activeProjList = projects.filter(p => !p.is_archived);
+      const catCounts = activeCategories.map(cat => ({
+        category: cat,
+        count: activeProjList.filter(p => p.category === cat).length,
+        unitLabel: "Projects"
+      }));
+      return [
+        { category: "Total Projects", count: activeProjList.length, unitLabel: "Projects" },
+        ...catCounts
+      ];
+    } else {
+      const targetClients = clients.filter(c => activeTab === "Archived Clients" ? c.status === "Archived" : c.status === "Active");
+      const clientIds = new Set(targetClients.map(c => c.id));
+      const stats: Record<string, Set<string>> = {};
+      activeCategories.forEach(cat => { stats[cat] = new Set(); });
+      projects.forEach(p => {
+        if (clientIds.has(p.clientId) && stats[p.category]) {
+          stats[p.category]?.add(p.clientId);
+        }
+      });
+      const catCounts = activeCategories.map(cat => ({
+        category: cat,
+        count: stats[cat]?.size || 0,
+        unitLabel: "Clients"
+      }));
+      return [
+        { category: "Total Clients", count: targetClients.length, unitLabel: "Clients" },
+        ...catCounts
+      ];
+    }
+  }, [projects, clients, categories, activeTab, isProjectTabActive]);
 
   const filteredClients = clients.filter(client => {
     if (activeTab === "Active Clients" && client.status !== "Active") return false;
@@ -4170,11 +4356,11 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     return a.name.localeCompare(b.name);
   });
 
-  // K1: Projects landing lists. Active = anything not Completed; Archived = Completed.
-  // K14: On Hold default neeche (sort last).
+  // Projects landing lists backed by is_archived flag (Completed projects stay in active view if not archived)
+  // On Hold sorted last
   const filteredProjects = projects.filter(project => {
-    if (activeTab === "Active Projects" && project.status === "Completed") return false;
-    if (activeTab === "Archived Projects" && project.status !== "Completed") return false;
+    if (activeTab === "Active Projects" && project.is_archived) return false;
+    if (activeTab === "Archived Projects" && !project.is_archived) return false;
     if (searchQuery && !`${project.name} ${clients.find(c => c.id === project.clientId)?.name || ""}`.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     if (clientFilterCategories.length > 0 && !clientFilterCategories.includes(project.category)) return false;
     return true;
@@ -4188,8 +4374,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   // Consolidate duplicate projects under the same client/brand in the UI landing grid (Issue 6)
   const groupedProjects = useMemo(() => {
     const matchedProjects = projects.filter(project => {
-      if (activeTab === "Active Projects" && project.status === "Completed") return false;
-      if (activeTab === "Archived Projects" && project.status !== "Completed") return false;
+      if (activeTab === "Active Projects" && project.is_archived) return false;
+      if (activeTab === "Archived Projects" && !project.is_archived) return false;
       const projClient = clients.find(c => c.id === project.clientId);
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
@@ -4438,6 +4624,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
   const renderSmmModals = () => {
     const activeProj = assigningProject || currentProject;
+    const reportClient = activeProj ? clients.find(c => c.id === activeProj.clientId) : (selectedClientId ? clients.find(c => c.id === selectedClientId) : null);
 
     return (
       <>
@@ -4458,253 +4645,376 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               onClick={(e) => e.stopPropagation()}
             >
               {/* Modal Header */}
-              <div className="flex items-center justify-between px-5 sm:px-7 md:px-8 py-4 sm:py-5 border-b border-border/50 bg-muted/30 shrink-0">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0 shadow-2xs">
-                    <Users className="w-5 h-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h2 className="text-base sm:text-lg md:text-xl font-black tracking-tight text-foreground truncate">
-                        Assign Creative Team
-                      </h2>
-                      <span className="inline-flex px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-primary/10 text-primary border border-primary/20 shrink-0">
-                        {Object.values(creativeTeamForm).filter(Boolean).length} / {CREATIVE_ROLES.length} Assigned
-                      </span>
+              {(() => {
+                const isDM = !!(activeProj && isMarketingCategory(activeProj.category));
+                return (
+                  <div className="flex items-center justify-between px-5 sm:px-7 md:px-8 py-4 sm:py-5 border-b border-border/50 bg-muted/30 shrink-0">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0 shadow-2xs">
+                        <Users className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h2 className="text-base sm:text-lg md:text-xl font-black tracking-tight text-foreground truncate">
+                            {isDM ? "Assign Marketing & Finance Team" : "Assign Creative Team"}
+                          </h2>
+                          <span className="inline-flex px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-primary/10 text-primary border border-primary/20 shrink-0">
+                            {isDM
+                              ? `${assigningMarketingAssignees.length + assigningFinanceAssignees.length} Assigned`
+                              : `${Object.values(creativeTeamForm).filter(Boolean).length} / ${CREATIVE_ROLES.length} Assigned`}
+                          </span>
+                        </div>
+                        <p className="text-[11px] sm:text-xs text-muted-foreground truncate mt-0.5">
+                          {activeProj ? `${activeProj.name} • ` : ""}
+                          {isDM
+                            ? "Multi-assign marketing specialists and finance managers"
+                            : "Pipeline workflow (Scripting → Shoot → Editing → Post → Thumbnail → Approval → Caption → Posting → Finance)"}
+                        </p>
+                      </div>
                     </div>
-                    <p className="text-[11px] sm:text-xs text-muted-foreground truncate mt-0.5">
-                      {activeProj ? `${activeProj.name} • ` : ""}Pipeline workflow (Scripting → Shoot → Editing → Post → Thumbnail → Approval → Caption → Posting)
-                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAssignCreativeTeamModalOpen(false);
+                        setAssigningProject(null);
+                        setOpenRoleId(null);
+                        setRoleSearchQuery("");
+                      }}
+                      className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors cursor-pointer shrink-0 ml-2"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
                   </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAssignCreativeTeamModalOpen(false);
-                    setAssigningProject(null);
-                    setOpenRoleId(null);
-                    setRoleSearchQuery("");
-                  }}
-                  className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors cursor-pointer shrink-0 ml-2"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
+                );
+              })()}
 
               {/* Roles Grid Body */}
               <div className="p-4 sm:p-6 md:p-8 space-y-4 overflow-y-auto">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-                  {CREATIVE_ROLES.map(role => {
-                    const selectedEmpId = creativeTeamForm[role.key] || "";
-                    const selectedEmp = employees.find(e => String(e.id) === String(selectedEmpId) || String((e as any)._id) === String(selectedEmpId));
-                    const isAssigned = !!selectedEmp;
-
-                    return (
-                      <div
-                        key={role.key}
-                        className={cn(
-                          "p-3.5 sm:p-4 rounded-2xl border transition-all duration-200 flex flex-col justify-between gap-3 min-w-0",
-                          isAssigned
-                            ? "bg-card border-primary/30 shadow-xs ring-1 ring-primary/10"
-                            : "bg-muted/20 border-border/60 hover:bg-muted/30"
-                        )}
-                      >
-                        {/* Role Details */}
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="w-8 h-8 rounded-xl bg-primary/10 text-base flex items-center justify-center shrink-0 shadow-2xs">
-                            {role.icon}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs sm:text-sm font-bold text-foreground block truncate">{role.label}</span>
-                              {isAssigned && (
-                                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Role Assigned" />
-                              )}
-                            </div>
-                            <span className="text-[10px] sm:text-[11px] text-muted-foreground block truncate">{role.desc}</span>
+                {activeProj && isMarketingCategory(activeProj.category) ? (
+                  <div className="space-y-6">
+                    {/* 1. Marketing Team Assignees (Multi-Select) */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-base">📈</span>
+                          <div>
+                            <h3 className="text-sm font-black text-foreground">Digital Marketing Operations (Multi-Select)</h3>
+                            <p className="text-[11px] text-muted-foreground">Select one or more marketing specialists who manage campaigns & leads</p>
                           </div>
                         </div>
+                        <span className="text-xs font-bold text-primary px-2.5 py-0.5 rounded-full bg-primary/10 border border-primary/20">
+                          {assigningMarketingAssignees.length} Selected
+                        </span>
+                      </div>
 
-                        {/* Modern Styled Dropdown Selector */}
-                        <div className="w-full min-w-0">
-                          <Popover
-                            open={openRoleId === role.key}
-                            onOpenChange={(isOpen) => {
-                              setOpenRoleId(isOpen ? role.key : null);
-                              if (!isOpen) setRoleSearchQuery("");
-                            }}
-                          >
-                            <PopoverTrigger asChild>
-                              <button
-                                type="button"
-                                className={cn(
-                                  "w-full h-10 px-2.5 sm:px-3 rounded-xl border text-xs font-medium transition-all flex items-center justify-between gap-2 outline-none cursor-pointer min-w-0",
-                                  isAssigned
-                                    ? "bg-background border-border hover:border-primary/50 text-foreground shadow-2xs"
-                                    : "bg-muted/40 border-dashed border-border/80 hover:border-border text-muted-foreground hover:bg-muted/60"
-                                )}
-                              >
-                                {selectedEmp ? (
-                                  <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
-                                    <UserAvatar name={selectedEmp.name} avatar={selectedEmp.avatar} size="w-6 h-6" />
-                                    <span className="font-bold text-foreground text-xs truncate min-w-0 text-left">
-                                      {selectedEmp.name}
-                                    </span>
-                                    {selectedEmp.department && (
-                                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground shrink-0 hidden sm:inline-block max-w-[90px] truncate">
-                                        {selectedEmp.department}
-                                      </span>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center gap-2 min-w-0 flex-1 text-muted-foreground">
-                                    <div className="w-6 h-6 rounded-full bg-muted border border-dashed border-border/80 flex items-center justify-center shrink-0">
-                                      <User className="w-3 h-3 text-muted-foreground/60" />
-                                    </div>
-                                    <span className="text-xs truncate">-- Unassigned --</span>
-                                  </div>
-                                )}
-
-                                <div className="flex items-center gap-1 shrink-0 ml-1">
-                                  {isAssigned && (
-                                    <span
-                                      role="button"
-                                      tabIndex={0}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setCreativeTeamForm(prev => ({ ...prev, [role.key]: "" }));
-                                      }}
-                                      className="p-1 rounded-md text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors"
-                                      title="Unassign"
-                                    >
-                                      <X className="w-3 h-3" />
-                                    </span>
-                                  )}
-                                  <ChevronDown className={cn(
-                                    "w-3.5 h-3.5 text-muted-foreground transition-transform duration-200",
-                                    openRoleId === role.key && "rotate-180 text-foreground"
-                                  )} />
-                                </div>
-                              </button>
-                            </PopoverTrigger>
-
-                            <PopoverContent
-                              align="start"
-                              sideOffset={4}
-                              collisionPadding={10}
-                              className="w-[var(--radix-popover-trigger-width)] min-w-[280px] sm:min-w-[320px] max-w-[360px] p-0 z-[300] rounded-2xl border border-border/80 shadow-2xl bg-popover/98 backdrop-blur-xl overflow-hidden"
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 p-3 bg-muted/20 border border-border/50 rounded-2xl max-h-56 overflow-y-auto">
+                        {assignableEmployees.map(emp => {
+                          const idStr = String(emp.id || (emp as any)._id);
+                          const isSelected = assigningMarketingAssignees.includes(idStr);
+                          return (
+                            <button
+                              key={idStr}
+                              type="button"
+                              onClick={() => {
+                                setAssigningMarketingAssignees(prev =>
+                                  isSelected ? prev.filter(x => x !== idStr) : [...prev, idStr]
+                                );
+                              }}
+                              className={cn(
+                                "p-2.5 rounded-xl border text-left text-xs font-semibold flex items-center justify-between gap-2 transition-all cursor-pointer",
+                                isSelected
+                                  ? "bg-primary text-primary-foreground border-primary shadow-xs font-bold"
+                                  : "bg-card text-foreground border-border/60 hover:bg-muted/80"
+                              )}
                             >
-                              <div className="p-2 border-b border-border/50 bg-muted/20">
-                                <div className="relative">
-                                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                                  <input
-                                    type="text"
-                                    placeholder="Search team member..."
-                                    value={roleSearchQuery}
-                                    onChange={(e) => setRoleSearchQuery(e.target.value)}
-                                    className="w-full pl-8 pr-7 py-1.5 bg-background border border-border/60 rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary text-foreground placeholder:text-muted-foreground"
-                                    autoFocus
-                                  />
-                                  {roleSearchQuery && (
-                                    <button
-                                      type="button"
-                                      onClick={() => setRoleSearchQuery("")}
-                                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
-                                    >
-                                      <X className="w-3 h-3" />
-                                    </button>
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <UserAvatar name={emp.name} avatar={emp.avatar} size="w-6 h-6" />
+                                <div className="min-w-0 flex-1">
+                                  <span className="block truncate text-xs">{emp.name}</span>
+                                  {emp.department && (
+                                    <span className={cn("text-[9px] block truncate", isSelected ? "text-primary-foreground/80" : "text-muted-foreground")}>
+                                      {emp.department}
+                                    </span>
                                   )}
                                 </div>
                               </div>
+                              {isSelected && <Check className="w-3.5 h-3.5 shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
 
-                              <div className="max-h-56 overflow-y-auto p-1.5 space-y-0.5">
-                                {/* Option: Unassign */}
+                    {/* 2. Finance Manager Roles (Multi-Select) */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-base">💰</span>
+                          <div>
+                            <h3 className="text-sm font-black text-foreground">Finance & Payment Management (Multi-Select)</h3>
+                            <p className="text-[11px] text-muted-foreground">Select team members who have permission to view & manage finance logs</p>
+                          </div>
+                        </div>
+                        <span className="text-xs font-bold text-emerald-600 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                          {assigningFinanceAssignees.length} Selected
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 p-3 bg-muted/20 border border-border/50 rounded-2xl max-h-56 overflow-y-auto">
+                        {assignableEmployees.map(emp => {
+                          const idStr = String(emp.id || (emp as any)._id);
+                          const isSelected = assigningFinanceAssignees.includes(idStr);
+                          return (
+                            <button
+                              key={idStr}
+                              type="button"
+                              onClick={() => {
+                                const updated = isSelected ? assigningFinanceAssignees.filter(x => x !== idStr) : [...assigningFinanceAssignees, idStr];
+                                setAssigningFinanceAssignees(updated);
+                                setCreativeTeamForm(prev => ({
+                                  ...prev,
+                                  finance: updated.join(",")
+                                }));
+                              }}
+                              className={cn(
+                                "p-2.5 rounded-xl border text-left text-xs font-semibold flex items-center justify-between gap-2 transition-all cursor-pointer",
+                                isSelected
+                                  ? "bg-emerald-600 text-white border-emerald-600 shadow-xs font-bold"
+                                  : "bg-card text-foreground border-border/60 hover:bg-muted/80"
+                              )}
+                            >
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <UserAvatar name={emp.name} avatar={emp.avatar} size="w-6 h-6" />
+                                <div className="min-w-0 flex-1">
+                                  <span className="block truncate text-xs">{emp.name}</span>
+                                  {emp.department && (
+                                    <span className={cn("text-[9px] block truncate", isSelected ? "text-emerald-100" : "text-muted-foreground")}>
+                                      {emp.department}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              {isSelected && <Check className="w-3.5 h-3.5 shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+                    {CREATIVE_ROLES.map(role => {
+                      const selectedEmpId = creativeTeamForm[role.key] || "";
+                      const selectedEmp = employees.find(e => String(e.id) === String(selectedEmpId) || String((e as any)._id) === String(selectedEmpId));
+                      const isAssigned = !!selectedEmp;
+
+                      return (
+                        <div
+                          key={role.key}
+                          className={cn(
+                            "p-3.5 sm:p-4 rounded-2xl border transition-all duration-200 flex flex-col justify-between gap-3 min-w-0",
+                            isAssigned
+                              ? "bg-card border-primary/30 shadow-xs ring-1 ring-primary/10"
+                              : "bg-muted/20 border-border/60 hover:bg-muted/30"
+                          )}
+                        >
+                          {/* Role Details */}
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-8 h-8 rounded-xl bg-primary/10 text-base flex items-center justify-center shrink-0 shadow-2xs">
+                              {role.icon}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs sm:text-sm font-bold text-foreground block truncate">{role.label}</span>
+                                {isAssigned && (
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Role Assigned" />
+                                )}
+                              </div>
+                              <span className="text-[10px] sm:text-[11px] text-muted-foreground block truncate">{role.desc}</span>
+                            </div>
+                          </div>
+
+                          {/* Modern Styled Dropdown Selector */}
+                          <div className="w-full min-w-0">
+                            <Popover
+                              open={openRoleId === role.key}
+                              onOpenChange={(isOpen) => {
+                                setOpenRoleId(isOpen ? role.key : null);
+                                if (!isOpen) setRoleSearchQuery("");
+                              }}
+                            >
+                              <PopoverTrigger asChild>
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    setCreativeTeamForm(prev => ({ ...prev, [role.key]: "" }));
-                                    setOpenRoleId(null);
-                                    setRoleSearchQuery("");
-                                  }}
                                   className={cn(
-                                    "w-full px-2.5 py-2 rounded-xl text-left text-xs font-semibold flex items-center justify-between gap-2 transition-all cursor-pointer",
-                                    !selectedEmpId
-                                      ? "bg-primary/10 text-primary"
-                                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                    "w-full h-10 px-2.5 sm:px-3 rounded-xl border text-xs font-medium transition-all flex items-center justify-between gap-2 outline-none cursor-pointer min-w-0",
+                                    isAssigned
+                                      ? "bg-background border-border hover:border-primary/50 text-foreground shadow-2xs"
+                                      : "bg-muted/40 border-dashed border-border/80 hover:border-border text-muted-foreground hover:bg-muted/60"
                                   )}
                                 >
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <div className="w-6 h-6 rounded-full bg-muted/60 border border-dashed border-border flex items-center justify-center shrink-0">
-                                      <X className="w-3 h-3 text-muted-foreground" />
+                                  {selectedEmp ? (
+                                    <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
+                                      <UserAvatar name={selectedEmp.name} avatar={selectedEmp.avatar} size="w-6 h-6" />
+                                      <span className="font-bold text-foreground text-xs truncate min-w-0 text-left">
+                                        {selectedEmp.name}
+                                      </span>
+                                      {selectedEmp.department && (
+                                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground shrink-0 hidden sm:inline-block max-w-[90px] truncate">
+                                          {selectedEmp.department}
+                                        </span>
+                                      )}
                                     </div>
-                                    <span>-- Unassigned --</span>
-                                  </div>
-                                  {!selectedEmpId && <Check className="w-3.5 h-3.5 text-primary shrink-0" />}
-                                </button>
+                                  ) : (
+                                    <div className="flex items-center gap-2 min-w-0 flex-1 text-muted-foreground">
+                                      <div className="w-6 h-6 rounded-full bg-muted border border-dashed border-border/80 flex items-center justify-center shrink-0">
+                                        <User className="w-3 h-3 text-muted-foreground/60" />
+                                      </div>
+                                      <span className="text-xs truncate">-- Unassigned --</span>
+                                    </div>
+                                  )}
 
-                                {/* Filtered Employees */}
-                                {employees
-                                  .filter(emp => {
-                                    if (!roleSearchQuery.trim()) return true;
-                                    const q = roleSearchQuery.toLowerCase();
-                                    return (
-                                      emp.name.toLowerCase().includes(q) ||
-                                      (emp.department && emp.department.toLowerCase().includes(q)) ||
-                                      (emp.role && emp.role.toLowerCase().includes(q))
-                                    );
-                                  })
-                                  .map(emp => {
-                                    const isSelected = String(emp.id) === String(selectedEmpId) || String((emp as any)._id) === String(selectedEmpId);
-                                    return (
-                                      <button
-                                        key={emp.id}
-                                        type="button"
-                                        onClick={() => {
-                                          setCreativeTeamForm(prev => ({ ...prev, [role.key]: emp.id }));
-                                          setOpenRoleId(null);
-                                          setRoleSearchQuery("");
+                                  <div className="flex items-center gap-1 shrink-0 ml-1">
+                                    {isAssigned && (
+                                      <span
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setCreativeTeamForm(prev => ({ ...prev, [role.key]: "" }));
                                         }}
-                                        className={cn(
-                                          "w-full px-2.5 py-2 rounded-xl text-left text-xs font-semibold flex items-center justify-between gap-2 transition-all cursor-pointer",
-                                          isSelected
-                                            ? "bg-primary/10 text-primary font-bold"
-                                            : "text-foreground hover:bg-muted/80"
-                                        )}
+                                        className="p-1 rounded-md text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                        title="Unassign"
                                       >
-                                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                          <UserAvatar name={emp.name} avatar={emp.avatar} size="w-6 h-6" />
-                                          <div className="min-w-0 flex-1">
-                                            <span className="block truncate font-bold text-xs">{emp.name}</span>
-                                            <div className="flex items-center gap-1.5 mt-0.5">
-                                              {emp.department && (
-                                                <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-muted text-muted-foreground">
-                                                  {emp.department}
-                                                </span>
-                                              )}
-                                              {emp.role && (
-                                                <span className="text-[9px] text-muted-foreground/70 truncate">
-                                                  {emp.role}
-                                                </span>
-                                              )}
+                                        <X className="w-3 h-3" />
+                                      </span>
+                                    )}
+                                    <ChevronDown className={cn(
+                                      "w-3.5 h-3.5 text-muted-foreground transition-transform duration-200",
+                                      openRoleId === role.key && "rotate-180 text-foreground"
+                                    )} />
+                                  </div>
+                                </button>
+                              </PopoverTrigger>
+
+                              <PopoverContent
+                                align="start"
+                                sideOffset={4}
+                                collisionPadding={10}
+                                className="w-[var(--radix-popover-trigger-width)] min-w-[280px] sm:min-w-[320px] max-w-[360px] p-0 z-[300] rounded-2xl border border-border/80 shadow-2xl bg-popover/98 backdrop-blur-xl overflow-hidden"
+                              >
+                                <div className="p-2 border-b border-border/50 bg-muted/20">
+                                  <div className="relative">
+                                    <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                                    <input
+                                      type="text"
+                                      placeholder="Search team member..."
+                                      value={roleSearchQuery}
+                                      onChange={(e) => setRoleSearchQuery(e.target.value)}
+                                      className="w-full pl-8 pr-7 py-1.5 bg-background border border-border/60 rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary text-foreground placeholder:text-muted-foreground"
+                                      autoFocus
+                                    />
+                                    {roleSearchQuery && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setRoleSearchQuery("")}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="max-h-56 overflow-y-auto p-1.5 space-y-0.5">
+                                  {/* Option: Unassign */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setCreativeTeamForm(prev => ({ ...prev, [role.key]: "" }));
+                                      setOpenRoleId(null);
+                                      setRoleSearchQuery("");
+                                    }}
+                                    className={cn(
+                                      "w-full px-2.5 py-2 rounded-xl text-left text-xs font-semibold flex items-center justify-between gap-2 transition-all cursor-pointer",
+                                      !selectedEmpId
+                                        ? "bg-primary/10 text-primary"
+                                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                    )}
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <div className="w-6 h-6 rounded-full bg-muted/60 border border-dashed border-border flex items-center justify-center shrink-0">
+                                        <X className="w-3 h-3 text-muted-foreground" />
+                                      </div>
+                                      <span>-- Unassigned --</span>
+                                    </div>
+                                    {!selectedEmpId && <Check className="w-3.5 h-3.5 text-primary shrink-0" />}
+                                  </button>
+
+                                  {/* Filtered Employees (Excluding Admin users from workers list) */}
+                                  {assignableEmployees
+                                    .filter(emp => {
+                                      if (!roleSearchQuery.trim()) return true;
+                                      const q = roleSearchQuery.toLowerCase();
+                                      return (
+                                        emp.name.toLowerCase().includes(q) ||
+                                        (emp.department && emp.department.toLowerCase().includes(q)) ||
+                                        (emp.role && emp.role.toLowerCase().includes(q))
+                                      );
+                                    })
+                                    .map(emp => {
+                                      const isSelected = String(emp.id) === String(selectedEmpId) || String((emp as any)._id) === String(selectedEmpId);
+                                      return (
+                                        <button
+                                          key={emp.id}
+                                          type="button"
+                                          onClick={() => {
+                                            setCreativeTeamForm(prev => ({ ...prev, [role.key]: emp.id }));
+                                            setOpenRoleId(null);
+                                            setRoleSearchQuery("");
+                                          }}
+                                          className={cn(
+                                            "w-full px-2.5 py-2 rounded-xl text-left text-xs font-semibold flex items-center justify-between gap-2 transition-all cursor-pointer",
+                                            isSelected
+                                              ? "bg-primary/10 text-primary font-bold"
+                                              : "text-foreground hover:bg-muted/80"
+                                          )}
+                                        >
+                                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                            <UserAvatar name={emp.name} avatar={emp.avatar} size="w-6 h-6" />
+                                            <div className="min-w-0 flex-1">
+                                              <span className="block truncate font-bold text-xs">{emp.name}</span>
+                                              <div className="flex items-center gap-1.5 mt-0.5">
+                                                {emp.department && (
+                                                  <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-muted text-muted-foreground">
+                                                    {emp.department}
+                                                  </span>
+                                                )}
+                                                {emp.role && (
+                                                  <span className="text-[9px] text-muted-foreground/70 truncate">
+                                                    {emp.role}
+                                                  </span>
+                                                )}
+                                              </div>
                                             </div>
                                           </div>
-                                        </div>
-                                        {isSelected && (
-                                          <div className="w-4 h-4 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0">
-                                            <Check className="w-2.5 h-2.5 stroke-[3]" />
-                                          </div>
-                                        )}
-                                      </button>
-                                    );
-                                  })}
-                              </div>
-                            </PopoverContent>
-                          </Popover>
+                                          {isSelected && (
+                                            <div className="w-4 h-4 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0">
+                                              <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                            </div>
+                                          )}
+                                        </button>
+                                      );
+                                    })}
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Modal Footer */}
@@ -4712,16 +5022,25 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 <button
                   type="button"
                   onClick={() => {
-                    setCreativeTeamForm({
-                      scripting: "",
-                      shoot_videography: "",
-                      reel_editing: "",
-                      post_graphics: "",
-                      thumbnail: "",
-                      approval_qc: "",
-                      caption: "",
-                      posting_publisher: "",
-                    });
+                    const isDM = !!(activeProj && isMarketingCategory(activeProj.category));
+                    if (isDM) {
+                      setAssigningMarketingAssignees([]);
+                      setAssigningFinanceAssignees([]);
+                      setCreativeTeamForm(prev => ({ ...prev, finance: "" }));
+                    } else {
+                      setCreativeTeamForm({
+                        cc_creator: "",
+                        scripting: "",
+                        shoot_videography: "",
+                        reel_editing: "",
+                        post_graphics: "",
+                        thumbnail: "",
+                        approval_qc: "",
+                        caption: "",
+                        posting_publisher: "",
+                        finance: "",
+                      });
+                    }
                   }}
                   className="text-xs font-semibold text-muted-foreground hover:text-destructive transition-colors cursor-pointer flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-destructive/10"
                 >
@@ -4748,7 +5067,13 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     onClick={() => {
                       const targetProjId = activeProj?.id;
                       if (targetProjId) {
-                        handleSaveCreativeTeam(targetProjId, creativeTeamForm);
+                        const isDM = !!(activeProj && isMarketingCategory(activeProj.category));
+                        handleSaveCreativeTeam(
+                          targetProjId,
+                          creativeTeamForm,
+                          isDM ? assigningMarketingAssignees : undefined,
+                          assigningFinanceAssignees
+                        );
                       }
                     }}
                     className="px-5 sm:px-6 py-2 sm:py-2.5 bg-primary text-primary-foreground font-bold text-xs rounded-xl shadow-md hover:bg-primary/90 transition-all flex items-center gap-1.5 disabled:opacity-60 cursor-pointer"
@@ -5319,6 +5644,15 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             </div>
           </div>
         )}
+
+        {/* Executive Client Performance Report Modal */}
+        <ExecutivePerformanceReportModal
+          isOpen={isExecutiveReportOpen}
+          onClose={() => setIsExecutiveReportOpen(false)}
+          clientName={reportClient?.name || activeProj?.name || "Client"}
+          companyName={reportClient?.companyName}
+          records={[]}
+        />
       </>
     );
   };
@@ -5348,7 +5682,9 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 {/* K5: highlighted client logo — project ni odakh logo uparthi */}
                 <BrandLogo src={client.logo} alt={client.name} size="w-20 h-20" />
                 <div>
-                  <h1 className="text-3xl font-black tracking-tight text-foreground leading-tight">{project.name}</h1>
+                  <h1 className="text-3xl font-black tracking-tight text-foreground leading-tight">
+                    {project.name}{client?.companyName && client.companyName !== project.name ? ` (${client.companyName})` : ""}
+                  </h1>
                   <div className="flex items-center gap-2 mt-2">
                     <span className={cn("px-2 py-0.5 inline-flex text-[10px] font-bold uppercase tracking-widest rounded-lg items-center gap-1.5", getStatusColor(project.status))}>
                       <Circle className="w-1.5 h-1.5 fill-current" />
@@ -5412,7 +5748,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 </button>
 
                 {/* K6: dept arrows — click = auto dept view + scroll */}
-                {isSocialMediaCategory(project.category) && (
+                {!isMarketingCategory(project.category) && isSocialMediaCategory(project.category) && (
                   <button
                     type="button"
                     onClick={() => jumpToDept("smm")}
@@ -5424,43 +5760,30 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
                   </button>
                 )}
+
+                {/* Team Assignment button (Creative Team or Marketing & Finance Team) */}
+                <button
+                  type="button"
+                  onClick={() => openAssignTeamModal(project)}
+                  className="flex items-center gap-2 px-3.5 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 font-bold text-xs rounded-xl transition-all shadow-sm cursor-pointer"
+                  title={isMarketingCategory(project.category) ? "Assign Marketing & Finance Team" : "Assign Creative Team Roles"}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>{isMarketingCategory(project.category) ? "Marketing Team" : "Creative Team"}</span>
+                </button>
+
+                {/* Executive Report Button for Digital Marketing */}
                 {isMarketingCategory(project.category) && (
                   <button
                     type="button"
-                    onClick={() => jumpToDept("dm")}
-                    className="flex items-center gap-2 px-3.5 py-2 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-xl transition-all shadow-sm"
-                    title="Go to Digital Marketing section"
+                    onClick={() => setIsExecutiveReportOpen(true)}
+                    className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary text-primary-foreground font-bold text-xs rounded-xl transition-all shadow-md"
+                    title="Open Executive Client Performance Intelligence Report"
                   >
-                    <span>📈</span>
-                    <span>DM</span>
-                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Executive Report</span>
                   </button>
                 )}
-
-                {/* Assign Creative Team */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAssigningProject(project);
-                    setCreativeTeamForm({
-                      cc_creator: project.creativeTeam?.["cc_creator"] || "",
-                      scripting: project.creativeTeam?.["scripting"] || "",
-                      shoot_videography: project.creativeTeam?.["shoot_videography"] || "",
-                      reel_editing: project.creativeTeam?.["reel_editing"] || "",
-                      post_graphics: project.creativeTeam?.["post_graphics"] || "",
-                      thumbnail: project.creativeTeam?.["thumbnail"] || "",
-                      approval_qc: project.creativeTeam?.["approval_qc"] || "",
-                      caption: project.creativeTeam?.["caption"] || "",
-                      posting_publisher: project.creativeTeam?.["posting_publisher"] || "",
-                    });
-                    setIsAssignCreativeTeamModalOpen(true);
-                  }}
-                  className="flex items-center gap-2 px-3.5 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 font-bold text-xs rounded-xl transition-all shadow-sm"
-                  title="Assign Creative Team Roles"
-                >
-                  <Users className="w-3.5 h-3.5" />
-                  <span>Creative Team</span>
-                </button>
 
                 <button
                   type="button"
@@ -5470,390 +5793,424 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   <Edit2 className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Edit</span>
                 </button>
-              </div>
-            </div>
 
-            {/* K13: Quick Links — brand na badha shortcuts ek j jagyae (go-to) */}
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[11px] font-black text-muted-foreground uppercase tracking-widest mr-1">Quick Links:</span>
-              {project.whatsapp_group_link ? (
                 <button
                   type="button"
-                  onClick={() => window.open(project.whatsapp_group_link, "_blank")}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-emerald-700 font-bold text-xs rounded-full transition-colors"
-                  title="WhatsApp group kholo"
-                >
-                  <MessageSquare className="w-3.5 h-3.5" /> WhatsApp Group <ExternalLink className="w-3 h-3" />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => { setWhatsappLinkInput(""); setIsWhatsappModalOpen(true); }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-muted hover:bg-muted/70 border border-border/50 text-muted-foreground font-bold text-xs rounded-full transition-colors"
-                  title="Set WhatsApp group link"
-                >
-                  <MessageSquare className="w-3.5 h-3.5" /> Set WhatsApp
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => document.getElementById("finance-section")?.scrollIntoView({ behavior: "smooth", block: "start" })}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-full transition-colors shadow-sm"
-                title="Go to Finance & follow-ups"
-              >
-                ➦ Followups
-              </button>
-              <button
-                type="button"
-                onClick={() => { setProjectSubTab("logs"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-full transition-colors shadow-sm"
-                title="View activity logs"
-              >
-                📋 Logs
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsCredentialsModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-full transition-colors shadow-sm"
-                title="Credentials kholo"
-              >
-                <Key className="w-3.5 h-3.5 text-amber-500" /> Credentials
-                {((project.credentials || []).length > 0) && (
-                  <span className="px-1.5 py-0.5 bg-amber-500/10 text-amber-600 rounded-full text-[10px] font-black">{(project.credentials || []).length}</span>
-                )}
-              </button>
-            </div>
-
-            {/* Top Summary */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm">
-                {(() => {
-                  const wp = getWorkProgress(project);
-                  const dp = getDateProgress(project.startDate, project.endDate);
-                  const pct = wp.pct;
-                  return (
-                    <>
-                      <div className="flex justify-between items-end mb-2">
-                        <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
-                          Task Progress
-                        </span>
-                        <span className="text-3xl font-black text-foreground font-mono">{pct}%</span>
-                      </div>
-                      <p className="text-[11px] font-bold text-emerald-600">
-                        {wp.total > 0 ? `${wp.completed} / ${wp.total} tasks completed` : "No tasks added yet"}
-                        {dp && <span className="text-muted-foreground font-normal ml-1">({dp.elapsed}/{dp.total} days elapsed)</span>}
-                      </p>
-                      <div className="h-2 w-full bg-muted/60 rounded-full overflow-hidden mt-4">
-                        <div
-                          className={cn("h-full rounded-full transition-all duration-1000 ease-out", getProgressColor(project.status))}
-                          style={{ width: `${pct}%` }}
-                        ></div>
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-
-              {/* F3: Revenue total instead of Budget (transcript: budget is not needed) */}
-              <div className="bg-card border border-border/60 rounded-3xl p-6 flex items-center gap-5 shadow-sm">
-                <button
-                  type="button"
-                  onClick={() => { setRevenueForm({ date: "", revenue: "", editId: "" }); setIsRevenueOpen(true); }}
-                  className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0 hover:bg-emerald-500/20 transition-colors"
-                  title="Revenue log kholo"
-                >
-                  <IndianRupee className="w-6 h-6" />
-                </button>
-                <div className="min-w-0">
-                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Total Revenue</p>
-                  <h3 className="text-3xl font-black text-emerald-600 font-mono">₹{revenueTotal.toLocaleString("en-IN")}</h3>
-                </div>
-              </div>
-
-              <div className="bg-card border border-border/60 rounded-3xl p-6 flex items-center gap-5 shadow-sm">
-                <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center shrink-0">
-                  <Calendar className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Timeline</p>
-                  <h3 className="text-sm font-black text-foreground">{safeFormat(project.startDate, "dd/MM/yyyy")} - {safeFormat(project.endDate, "dd/MM/yyyy")}</h3>
-                  {(() => {
-                    const dp = getDateProgress(project.startDate, project.endDate);
-                    return dp ? (
-                      <p className="text-[11px] font-bold text-primary mt-1">{dp.total} days • {dp.elapsed} elapsed</p>
-                    ) : null;
-                  })()}
-                  {/* Renewals: month-wise periods (reporting mate) */}
-                  {(project.dateRanges || []).length > 1 && (
-                    <div className="mt-2 space-y-1 border-t border-border/40 pt-2">
-                      {project.dateRanges!.map((r, i) => (
-                        <p key={i} className="text-[10px] font-bold text-muted-foreground font-mono">
-                          #{i + 1} {safeFormat(r.start_date, "dd/MM/yyyy")} → {safeFormat(r.end_date, "dd/MM/yyyy")}
-                          {i === project.dateRanges!.length - 1 && <span className="text-emerald-600 ml-1">• current</span>}
-                        </p>
-                      ))}
-                    </div>
+                  onClick={() => handleArchiveProject(project, !project.is_archived)}
+                  className={cn(
+                    "flex items-center gap-2 px-3.5 py-2 font-bold text-xs rounded-xl transition-all shadow-sm border",
+                    project.is_archived
+                      ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-emerald-500/20"
+                      : "bg-muted text-muted-foreground border-border/50 hover:bg-amber-500/10 hover:text-amber-600 hover:border-amber-500/20"
                   )}
-                </div>
+                  title={project.is_archived ? "Restore project to Active" : "Archive project"}
+                >
+                  {project.is_archived ? (
+                    <>
+                      <ArchiveRestore className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Unarchive</span>
+                    </>
+                  ) : (
+                    <>
+                      <Archive className="w-3.5 h-3.5" />
+                      <span>Archive</span>
+                    </>
+                  )}
+                </button>
               </div>
             </div>
 
-            {/* K10: Finance & Payments — date, amount, work period, next reminder + followups */}
-            <div id="finance-section" className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm scroll-mt-4">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
-                    <IndianRupee className="w-5 h-5" />
+            {/* K13: Quick Links — brand na badha shortcuts ek j jagyae (go-to) (Hidden for Digital Marketing) */}
+            {!isMarketingCategory(project.category) && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-black text-muted-foreground uppercase tracking-widest mr-1">Quick Links:</span>
+                {project.whatsapp_group_link ? (
+                  <button
+                    type="button"
+                    onClick={() => window.open(project.whatsapp_group_link, "_blank")}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-emerald-700 font-bold text-xs rounded-full transition-colors"
+                    title="WhatsApp group kholo"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" /> WhatsApp Group <ExternalLink className="w-3 h-3" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { setWhatsappLinkInput(""); setIsWhatsappModalOpen(true); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-muted hover:bg-muted/70 border border-border/50 text-muted-foreground font-bold text-xs rounded-full transition-colors"
+                    title="Set WhatsApp group link"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" /> Set WhatsApp
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => document.getElementById("finance-section")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-full transition-colors shadow-sm"
+                  title="Go to Finance & follow-ups"
+                >
+                  ➦ Followups
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setProjectSubTab("logs"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-full transition-colors shadow-sm"
+                  title="View activity logs"
+                >
+                  📋 Logs
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsCredentialsModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-full transition-colors shadow-sm"
+                  title="Credentials kholo"
+                >
+                  <Key className="w-3.5 h-3.5 text-amber-500" /> Credentials
+                  {((project.credentials || []).length > 0) && (
+                    <span className="px-1.5 py-0.5 bg-amber-500/10 text-amber-600 rounded-full text-[10px] font-black">{(project.credentials || []).length}</span>
+                  )}
+                </button>
+              </div>
+            )}
+
+            {/* Top Summary (Hidden for Digital Marketing) */}
+            {!isMarketingCategory(project.category) && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm">
+                  {(() => {
+                    const wp = getWorkProgress(project);
+                    const dp = getDateProgress(project.startDate, project.endDate);
+                    const pct = wp.pct;
+                    return (
+                      <>
+                        <div className="flex justify-between items-end mb-2">
+                          <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
+                            Task Progress
+                          </span>
+                          <span className="text-3xl font-black text-foreground font-mono">{pct}%</span>
+                        </div>
+                        <p className="text-[11px] font-bold text-emerald-600">
+                          {wp.total > 0 ? `${wp.completed} / ${wp.total} tasks completed` : "No tasks added yet"}
+                          {dp && <span className="text-muted-foreground font-normal ml-1">({dp.elapsed}/{dp.total} days elapsed)</span>}
+                        </p>
+                        <div className="h-2 w-full bg-muted/60 rounded-full overflow-hidden mt-4">
+                          <div
+                            className={cn("h-full rounded-full transition-all duration-1000 ease-out", getProgressColor(project.status))}
+                            style={{ width: `${pct}%` }}
+                          ></div>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+
+                {/* F3: Revenue total instead of Budget (transcript: budget is not needed) */}
+                <div className="bg-card border border-border/60 rounded-3xl p-6 flex items-center gap-5 shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => { setRevenueForm({ date: "", revenue: "", editId: "" }); setIsRevenueOpen(true); }}
+                    className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0 hover:bg-emerald-500/20 transition-colors"
+                    title="Revenue log kholo"
+                  >
+                    <IndianRupee className="w-6 h-6" />
+                  </button>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Total Revenue</p>
+                    <h3 className="text-3xl font-black text-emerald-600 font-mono">₹{revenueTotal.toLocaleString("en-IN")}</h3>
+                  </div>
+                </div>
+
+                <div className="bg-card border border-border/60 rounded-3xl p-6 flex items-center gap-5 shadow-sm">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center shrink-0">
+                    <Calendar className="w-6 h-6" />
                   </div>
                   <div>
-                    <h3 className="text-base font-black text-foreground">Finance & Payments</h3>
-                    <p className="text-[11px] text-muted-foreground font-medium">
-                      Total received: ₹{((project.payments || []).reduce((s, e) => s + (Number(e.amount) || 0), 0)).toLocaleString("en-IN")} • {(project.payments || []).length} entries
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsPayFormOpen(v => !v)}
-                  className="px-4 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/90 transition-all shadow-sm"
-                >
-                  {isPayFormOpen ? "Close" : "+ Add Payment"}
-                </button>
-              </div>
-
-              {/* Payment entries */}
-              <div className="space-y-2 mb-4">
-                {(project.payments || []).length === 0 && (
-                  <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">No payment entries yet.</p>
-                )}
-                {(project.payments || []).map(e => (
-                  <div key={e.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 rounded-2xl border border-border/40 bg-muted/20 text-xs">
-                    <span className="font-mono font-bold text-foreground">{e.date || "—"}</span>
-                    <span className="font-black text-emerald-600 font-mono">₹{(Number(e.amount) || 0).toLocaleString("en-IN")}</span>
-                    {(e.work_from || e.work_to) && (
-                      <span className="font-semibold text-muted-foreground">Work: {e.work_from || ""}{e.work_from && e.work_to ? " → " : ""}{e.work_to || ""}</span>
-                    )}
-                    {e.next_reminder && (
-                      <span className="font-bold text-amber-600">Next: {e.next_reminder}</span>
-                    )}
-                    {e.note && <span className="text-muted-foreground truncate max-w-[220px]" title={e.note}>{e.note}</span>}
-                    <button type="button" onClick={() => handleDeletePayment(project, e.id)} className="ml-auto p-1 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors" title="Delete entry">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              {/* Add payment form */}
-              {isPayFormOpen && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 rounded-2xl bg-muted/30 border border-border/40 mb-4">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Date *</label>
-                    <DatePicker value={payForm.date} onChange={(val) => setPayForm({ ...payForm, date: val })} placeholder="Select date" className="w-full h-10 bg-background border-border rounded-xl text-xs" />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Amount *</label>
-                    <input type="number" min="0" value={payForm.amount} onChange={e => setPayForm({ ...payForm, amount: e.target.value })} placeholder="e.g. 50000" className="w-full px-3 h-10 bg-background border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20" />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Work From</label>
-                    <DatePicker value={payForm.work_from} onChange={(val) => setPayForm({ ...payForm, work_from: val })} placeholder="Select date" className="w-full h-10 bg-background border-border rounded-xl text-xs" />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Work To</label>
-                    <DatePicker value={payForm.work_to} onChange={(val) => setPayForm({ ...payForm, work_to: val })} placeholder="Select date" className="w-full h-10 bg-background border-border rounded-xl text-xs" />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Next Reminder</label>
-                    <DatePicker value={payForm.next_reminder} onChange={(val) => setPayForm({ ...payForm, next_reminder: val })} placeholder="Select date" className="w-full h-10 bg-background border-border rounded-xl text-xs" />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Responsibility (auto-task)</label>
-                    <Select
-                      value={payForm.ownerId || "none"}
-                      onValueChange={(val) => setPayForm({ ...payForm, ownerId: val === "none" ? "" : val })}
-                    >
-                      <SelectTrigger className="w-full h-10 px-3 bg-background border border-border rounded-xl text-xs font-medium shadow-xs">
-                        <SelectValue placeholder="Select Responsibility..." />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300] max-h-56">
-                        <SelectItem value="none" className="text-xs font-semibold text-muted-foreground rounded-lg cursor-pointer">
-                          Select...
-                        </SelectItem>
-                        {(employees || []).map(emp => (
-                          <SelectItem key={emp.id} value={emp.id} className="text-xs font-semibold rounded-lg cursor-pointer">
-                            {emp.name}
-                          </SelectItem>
+                    <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Timeline</p>
+                    <h3 className="text-sm font-black text-foreground">{safeFormat(project.startDate, "dd/MM/yyyy")} - {safeFormat(project.endDate, "dd/MM/yyyy")}</h3>
+                    {(() => {
+                      const dp = getDateProgress(project.startDate, project.endDate);
+                      return dp ? (
+                        <p className="text-[11px] font-bold text-primary mt-1">{dp.total} days • {dp.elapsed} elapsed</p>
+                      ) : null;
+                    })()}
+                    {/* Renewals: month-wise periods (reporting mate) */}
+                    {(project.dateRanges || []).length > 1 && (
+                      <div className="mt-2 space-y-1 border-t border-border/40 pt-2">
+                        {project.dateRanges!.map((r, i) => (
+                          <p key={i} className="text-[10px] font-bold text-muted-foreground font-mono">
+                            #{i + 1} {safeFormat(r.start_date, "dd/MM/yyyy")} → {safeFormat(r.end_date, "dd/MM/yyyy")}
+                            {i === project.dateRanges!.length - 1 && <span className="text-emerald-600 ml-1">• current</span>}
+                          </p>
                         ))}
-                      </SelectContent>
-                    </Select>
+                      </div>
+                    )}
                   </div>
-                  <div className="space-y-1 col-span-2 md:col-span-1">
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Note</label>
-                    <input type="text" value={payForm.note} onChange={e => setPayForm({ ...payForm, note: e.target.value })} placeholder="Optional" className="w-full px-3 h-10 bg-background border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                </div>
+              </div>
+            )}
+
+            {/* K10: Finance & Payments — date, amount, work period, next reminder + followups (Dynamic permission) */}
+            {canUserAccessFinance(project) && (
+              <div id="finance-section" className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm scroll-mt-4">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
+                      <IndianRupee className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-foreground">Finance & Payments</h3>
+                      <p className="text-[11px] text-muted-foreground font-medium">
+                        Total received: ₹{((project.payments || []).reduce((s, e) => s + (Number(e.amount) || 0), 0)).toLocaleString("en-IN")} • {(project.payments || []).length} entries
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex items-end col-span-2 md:col-span-1">
-                    <button type="button" onClick={() => handleSavePayment(project, client.name)} className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors shadow-sm">
-                      Save Payment
+                  <button
+                    type="button"
+                    onClick={() => setIsPayFormOpen(v => !v)}
+                    className="px-4 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/90 transition-all shadow-sm"
+                  >
+                    {isPayFormOpen ? "Close" : "+ Add Payment"}
+                  </button>
+                </div>
+
+                {/* Payment entries */}
+                <div className="space-y-2 mb-4">
+                  {(project.payments || []).length === 0 && (
+                    <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">No payment entries yet.</p>
+                  )}
+                  {(project.payments || []).map(e => (
+                    <div key={e.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 rounded-2xl border border-border/40 bg-muted/20 text-xs">
+                      <span className="font-mono font-bold text-foreground">{e.date || "—"}</span>
+                      <span className="font-black text-emerald-600 font-mono">₹{(Number(e.amount) || 0).toLocaleString("en-IN")}</span>
+                      {(e.work_from || e.work_to) && (
+                        <span className="font-semibold text-muted-foreground">Work: {e.work_from || ""}{e.work_from && e.work_to ? " → " : ""}{e.work_to || ""}</span>
+                      )}
+                      {e.next_reminder && (
+                        <span className="font-bold text-amber-600">Next: {e.next_reminder}</span>
+                      )}
+                      {e.note && <span className="text-muted-foreground truncate max-w-[220px]" title={e.note}>{e.note}</span>}
+                      <button type="button" onClick={() => handleDeletePayment(project, e.id)} className="ml-auto p-1 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors" title="Delete entry">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Add payment form */}
+                {isPayFormOpen && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 rounded-2xl bg-muted/30 border border-border/40 mb-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase">Date *</label>
+                      <DatePicker value={payForm.date} onChange={(val) => setPayForm({ ...payForm, date: val })} placeholder="Select date" className="w-full h-10 bg-background border-border rounded-xl text-xs" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase">Amount *</label>
+                      <input type="number" min="0" value={payForm.amount} onChange={e => setPayForm({ ...payForm, amount: e.target.value })} placeholder="e.g. 50000" className="w-full px-3 h-10 bg-background border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase">Work From</label>
+                      <DatePicker value={payForm.work_from} onChange={(val) => setPayForm({ ...payForm, work_from: val })} placeholder="Select date" className="w-full h-10 bg-background border-border rounded-xl text-xs" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase">Work To</label>
+                      <DatePicker value={payForm.work_to} onChange={(val) => setPayForm({ ...payForm, work_to: val })} placeholder="Select date" className="w-full h-10 bg-background border-border rounded-xl text-xs" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase">Next Reminder</label>
+                      <DatePicker value={payForm.next_reminder} onChange={(val) => setPayForm({ ...payForm, next_reminder: val })} placeholder="Select date" className="w-full h-10 bg-background border-border rounded-xl text-xs" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase">Responsibility (auto-task)</label>
+                      <Select
+                        value={payForm.ownerId || "none"}
+                        onValueChange={(val) => setPayForm({ ...payForm, ownerId: val === "none" ? "" : val })}
+                      >
+                        <SelectTrigger className="w-full h-10 px-3 bg-background border border-border rounded-xl text-xs font-medium shadow-xs">
+                          <SelectValue placeholder="Select Responsibility..." />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300] max-h-56">
+                          <SelectItem value="none" className="text-xs font-semibold text-muted-foreground rounded-lg cursor-pointer">
+                            Select...
+                          </SelectItem>
+                          {(assignableEmployees || []).map(emp => (
+                            <SelectItem key={emp.id} value={emp.id} className="text-xs font-semibold rounded-lg cursor-pointer">
+                              {emp.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1 col-span-2 md:col-span-1">
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase">Note</label>
+                      <input type="text" value={payForm.note} onChange={e => setPayForm({ ...payForm, note: e.target.value })} placeholder="Optional" className="w-full px-3 h-10 bg-background border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                    </div>
+                    <div className="flex items-end col-span-2 md:col-span-1">
+                      <button type="button" onClick={() => handleSavePayment(project, client.name)} className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors shadow-sm">
+                        Save Payment
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Followups: recent + quick add (text + next date) */}
+                <div className="border-t border-border/40 pt-4">
+                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Followups {projectFollowups.length > 0 && `(${projectFollowups.length})`}</p>
+                  <div className="space-y-1.5 mb-3 max-h-32 overflow-y-auto pr-1">
+                    {projectFollowups.length === 0 && (
+                      <p className="text-[11px] text-muted-foreground/60 font-medium">No follow-ups yet.</p>
+                    )}
+                    {projectFollowups.slice(0, 5).map((f: any, i: number) => {
+                      const rawDate = f.created_at ? String(f.created_at).split("T")[0] : "";
+                      const formattedDate = rawDate ? rawDate.split("-").reverse().join("/") : "";
+                      return (
+                        <p key={f.id || i} className="text-xs text-foreground bg-muted/30 border border-border/30 rounded-xl px-3 py-1.5 flex items-center justify-between">
+                          <span className="font-bold">{f.text}</span>
+                          {formattedDate && <span className="text-muted-foreground font-mono text-[10px] ml-2 shrink-0">{formattedDate}</span>}
+                        </p>
+                      );
+                    })}
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={followupText}
+                      onChange={e => setFollowupText(e.target.value)}
+                      placeholder="Enter follow-up text..."
+                      className="flex-1 px-3 h-10 bg-background border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                    <DatePicker
+                      value={followupNextDate}
+                      onChange={(val) => setFollowupNextDate(val)}
+                      placeholder="Next date"
+                      className="h-10 bg-background border-border rounded-xl text-xs font-medium sm:w-[160px]"
+                    />
+                    <button type="button" onClick={() => handleAddFollowup(project)} className="px-4 h-10 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/90 transition-colors shrink-0">
+                      + Followup
                     </button>
                   </div>
                 </div>
-              )}
+              </div>
+            )}
 
-              {/* Followups: recent + quick add (text + next date) */}
-              <div className="border-t border-border/40 pt-4">
-                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Followups {projectFollowups.length > 0 && `(${projectFollowups.length})`}</p>
-                <div className="space-y-1.5 mb-3 max-h-32 overflow-y-auto pr-1">
-                  {projectFollowups.length === 0 && (
-                    <p className="text-[11px] text-muted-foreground/60 font-medium">No follow-ups yet.</p>
-                  )}
-                  {projectFollowups.slice(0, 5).map((f: any, i: number) => {
-                    const rawDate = f.created_at ? String(f.created_at).split("T")[0] : "";
-                    const formattedDate = rawDate ? rawDate.split("-").reverse().join("/") : "";
+            {/* Creative Team Allocation Strip (only for Creative/Social projects) */}
+            {!isMarketingCategory(project.category) && (
+              <div className="bg-card/70 border border-border/50 rounded-2xl p-4 shadow-sm backdrop-blur-md">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 pb-2 border-b border-border/40">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-black text-foreground uppercase tracking-wider">Creative Team Allocation</h3>
+                      <p className="text-[10px] text-muted-foreground">Pipeline roles assigned to brand members</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAssigningProject(project);
+                      setCreativeTeamForm({
+                        cc_creator: project.creativeTeam?.["cc_creator"] || "",
+                        scripting: project.creativeTeam?.["scripting"] || "",
+                        shoot_videography: project.creativeTeam?.["shoot_videography"] || "",
+                        reel_editing: project.creativeTeam?.["reel_editing"] || "",
+                        post_graphics: project.creativeTeam?.["post_graphics"] || "",
+                        thumbnail: project.creativeTeam?.["thumbnail"] || "",
+                        approval_qc: project.creativeTeam?.["approval_qc"] || "",
+                        caption: project.creativeTeam?.["caption"] || "",
+                        posting_publisher: project.creativeTeam?.["posting_publisher"] || "",
+                      });
+                      setIsAssignCreativeTeamModalOpen(true);
+                    }}
+                    className="text-xs font-bold text-primary hover:underline flex items-center gap-1.5 self-start sm:self-auto"
+                  >
+                    <Edit2 className="w-3 h-3" /> Reassign Roles
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
+                  {CREATIVE_ROLES.map(role => {
+                    const assignedId = project.creativeTeam?.[role.key];
+                    const detail = project.creativeTeamDetails?.[role.key];
+                    const emp = assignedId ? employees.find(e => String(e.id) === String(assignedId) || String((e as any)._id) === String(assignedId)) : null;
+                    const memberName = emp?.name || detail?.employee_name || (assignedId ? "Assigned" : "Unassigned");
+                    const isAssigned = !!assignedId || !!detail?.employee_name;
+
                     return (
-                      <p key={f.id || i} className="text-xs text-foreground bg-muted/30 border border-border/30 rounded-xl px-3 py-1.5 flex items-center justify-between">
-                        <span className="font-bold">{f.text}</span>
-                        {formattedDate && <span className="text-muted-foreground font-mono text-[10px] ml-2 shrink-0">{formattedDate}</span>}
-                      </p>
+                      <div
+                        key={role.key}
+                        onClick={() => {
+                          setAssigningProject(project);
+                          setCreativeTeamForm({
+                            cc_creator: project.creativeTeam?.["cc_creator"] || "",
+                            scripting: project.creativeTeam?.["scripting"] || "",
+                            shoot_videography: project.creativeTeam?.["shoot_videography"] || "",
+                            reel_editing: project.creativeTeam?.["reel_editing"] || "",
+                            post_graphics: project.creativeTeam?.["post_graphics"] || "",
+                            thumbnail: project.creativeTeam?.["thumbnail"] || "",
+                            approval_qc: project.creativeTeam?.["approval_qc"] || "",
+                            caption: project.creativeTeam?.["caption"] || "",
+                            posting_publisher: project.creativeTeam?.["posting_publisher"] || "",
+                          });
+                          setOpenRoleId(role.key);
+                          setIsAssignCreativeTeamModalOpen(true);
+                        }}
+                        className={cn(
+                          "p-2.5 rounded-xl border text-left transition-all cursor-pointer group hover:border-primary/60 hover:shadow-md hover:scale-[1.02]",
+                          isAssigned ? "bg-muted/30 border-border/60 hover:bg-muted/50" : "bg-muted/10 border-dashed border-border/40 opacity-70 hover:opacity-100 hover:bg-muted/30"
+                        )}
+                        title={`Click to assign or edit ${role.label}`}
+                      >
+                        <div className="flex items-center justify-between text-[10px] font-bold text-muted-foreground mb-1 truncate">
+                          <div className="flex items-center gap-1 truncate">
+                            <span>{role.icon}</span>
+                            <span className="truncate">{role.label}</span>
+                          </div>
+                          <Edit2 className="w-2.5 h-2.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-1" />
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+                          {isAssigned && (
+                            <UserAvatar name={memberName} avatar={emp?.avatar} size="w-5 h-5" />
+                          )}
+                          <span className={cn("text-xs font-black truncate min-w-0", isAssigned ? "text-foreground group-hover:text-primary transition-colors" : "text-muted-foreground/60 italic text-[11px]")}>
+                            {memberName}
+                          </span>
+                        </div>
+                      </div>
                     );
                   })}
                 </div>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    type="text"
-                    value={followupText}
-                    onChange={e => setFollowupText(e.target.value)}
-                    placeholder="Enter follow-up text..."
-                    className="flex-1 px-3 h-10 bg-background border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  />
-                  <DatePicker
-                    value={followupNextDate}
-                    onChange={(val) => setFollowupNextDate(val)}
-                    placeholder="Next date"
-                    className="h-10 bg-background border-border rounded-xl text-xs font-medium sm:w-[160px]"
-                  />
-                  <button type="button" onClick={() => handleAddFollowup(project)} className="px-4 h-10 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/90 transition-colors shrink-0">
-                    + Followup
-                  </button>
-                </div>
               </div>
-            </div>
+            )}
 
-            {/* Creative Team Allocation Strip */}
-            <div className="bg-card/70 border border-border/50 rounded-2xl p-4 shadow-sm backdrop-blur-md">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 pb-2 border-b border-border/40">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-                    <Sparkles className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-black text-foreground uppercase tracking-wider">Creative Team Allocation</h3>
-                    <p className="text-[10px] text-muted-foreground">Pipeline roles assigned to brand members</p>
-                  </div>
-                </div>
+            {/* Sub-tab Bar (Hidden for Digital Marketing) */}
+            {!isMarketingCategory(project.category) && (
+              <div className="flex gap-2 border-b border-border/40 pb-2 overflow-x-auto hide-scrollbar">
                 <button
-                  type="button"
-                  onClick={() => {
-                    setAssigningProject(project);
-                    setCreativeTeamForm({
-                      cc_creator: project.creativeTeam?.["cc_creator"] || "",
-                      scripting: project.creativeTeam?.["scripting"] || "",
-                      shoot_videography: project.creativeTeam?.["shoot_videography"] || "",
-                      reel_editing: project.creativeTeam?.["reel_editing"] || "",
-                      post_graphics: project.creativeTeam?.["post_graphics"] || "",
-                      thumbnail: project.creativeTeam?.["thumbnail"] || "",
-                      approval_qc: project.creativeTeam?.["approval_qc"] || "",
-                      caption: project.creativeTeam?.["caption"] || "",
-                      posting_publisher: project.creativeTeam?.["posting_publisher"] || "",
-                    });
-                    setIsAssignCreativeTeamModalOpen(true);
-                  }}
-                  className="text-xs font-bold text-primary hover:underline flex items-center gap-1.5 self-start sm:self-auto"
+                  onClick={() => setProjectSubTab("workspace")}
+                  className={cn(
+                    "px-5 py-2 rounded-full text-xs font-black uppercase tracking-wider transition-all duration-300",
+                    projectSubTab === "workspace"
+                      ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
+                      : "bg-card text-foreground/70 hover:bg-muted/80 border border-border/40"
+                  )}
                 >
-                  <Edit2 className="w-3 h-3" /> Reassign Roles
+                  💼 Workspace
+                </button>
+                <button
+                  onClick={() => setProjectSubTab("logs")}
+                  className={cn(
+                    "px-5 py-2 rounded-full text-xs font-black uppercase tracking-wider transition-all duration-300",
+                    projectSubTab === "logs"
+                      ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
+                      : "bg-card text-foreground/70 hover:bg-muted/80 border border-border/40"
+                  )}
+                >
+                  📋 Activity Logs
                 </button>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
-                {CREATIVE_ROLES.map(role => {
-                  const assignedId = project.creativeTeam?.[role.key];
-                  const detail = project.creativeTeamDetails?.[role.key];
-                  const emp = assignedId ? employees.find(e => String(e.id) === String(assignedId) || String((e as any)._id) === String(assignedId)) : null;
-                  const memberName = emp?.name || detail?.employee_name || (assignedId ? "Assigned" : "Unassigned");
-                  const isAssigned = !!assignedId || !!detail?.employee_name;
+            )}
 
-                  return (
-                    <div
-                      key={role.key}
-                      onClick={() => {
-                        setAssigningProject(project);
-                        setCreativeTeamForm({
-                          cc_creator: project.creativeTeam?.["cc_creator"] || "",
-                          scripting: project.creativeTeam?.["scripting"] || "",
-                          shoot_videography: project.creativeTeam?.["shoot_videography"] || "",
-                          reel_editing: project.creativeTeam?.["reel_editing"] || "",
-                          post_graphics: project.creativeTeam?.["post_graphics"] || "",
-                          thumbnail: project.creativeTeam?.["thumbnail"] || "",
-                          approval_qc: project.creativeTeam?.["approval_qc"] || "",
-                          caption: project.creativeTeam?.["caption"] || "",
-                          posting_publisher: project.creativeTeam?.["posting_publisher"] || "",
-                        });
-                        setOpenRoleId(role.key);
-                        setIsAssignCreativeTeamModalOpen(true);
-                      }}
-                      className={cn(
-                        "p-2.5 rounded-xl border text-left transition-all cursor-pointer group hover:border-primary/60 hover:shadow-md hover:scale-[1.02]",
-                        isAssigned ? "bg-muted/30 border-border/60 hover:bg-muted/50" : "bg-muted/10 border-dashed border-border/40 opacity-70 hover:opacity-100 hover:bg-muted/30"
-                      )}
-                      title={`Click to assign or edit ${role.label}`}
-                    >
-                      <div className="flex items-center justify-between text-[10px] font-bold text-muted-foreground mb-1 truncate">
-                        <div className="flex items-center gap-1 truncate">
-                          <span>{role.icon}</span>
-                          <span className="truncate">{role.label}</span>
-                        </div>
-                        <Edit2 className="w-2.5 h-2.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-1" />
-                      </div>
-                      <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
-                        {isAssigned && (
-                          <UserAvatar name={memberName} avatar={emp?.avatar} size="w-5 h-5" />
-                        )}
-                        <span className={cn("text-xs font-black truncate min-w-0", isAssigned ? "text-foreground group-hover:text-primary transition-colors" : "text-muted-foreground/60 italic text-[11px]")}>
-                          {memberName}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Sub-tab Bar */}
-            <div className="flex gap-2 border-b border-border/40 pb-2 overflow-x-auto hide-scrollbar">
-              <button
-                onClick={() => setProjectSubTab("workspace")}
-                className={cn(
-                  "px-5 py-2 rounded-full text-xs font-black uppercase tracking-wider transition-all duration-300",
-                  projectSubTab === "workspace"
-                    ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
-                    : "bg-card text-foreground/70 hover:bg-muted/80 border border-border/40"
-                )}
-              >
-                💼 Workspace
-              </button>
-              <button
-                onClick={() => setProjectSubTab("logs")}
-                className={cn(
-                  "px-5 py-2 rounded-full text-xs font-black uppercase tracking-wider transition-all duration-300",
-                  projectSubTab === "logs"
-                    ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
-                    : "bg-card text-foreground/70 hover:bg-muted/80 border border-border/40"
-                )}
-              >
-                📋 Activity Logs
-              </button>
-            </div>
-
-            {projectSubTab === "logs" ? (
+            {projectSubTab === "logs" && !isMarketingCategory(project.category) ? (
               <div className="bg-card border border-border/60 rounded-[2.5rem] p-6 md:p-8 shadow-sm space-y-6">
                 <div className="flex justify-between items-center border-b border-border/40 pb-4">
                   <div>
@@ -5897,6 +6254,16 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     ));
                   })()}
                 </div>
+              </div>
+            ) : isMarketingCategory(project.category) ? (
+              <div className="space-y-6">
+                <DigitalMarketingOperations
+                  projectId={project.id}
+                  clientId={project.clientId}
+                  clientName={client?.name || project.name}
+                  companyName={client?.companyName}
+                  onOpenReportModal={() => setIsExecutiveReportOpen(true)}
+                />
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -6273,7 +6640,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                     <SelectItem value="none" className="text-xs font-semibold text-muted-foreground rounded-lg cursor-pointer">
                                       Select CC Creator...
                                     </SelectItem>
-                                    {employees.map(emp => (
+                                    {assignableEmployees.map(emp => (
                                       <SelectItem key={emp.id} value={emp.id} className="text-xs font-semibold rounded-lg cursor-pointer">
                                         {emp.name}
                                       </SelectItem>
@@ -11644,6 +12011,66 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                               />
                             </div>
                           </div>
+                          <div className="space-y-2 mt-3">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Marketing Team Assignees (Multi-Select)</label>
+                            <div className="flex flex-wrap gap-1.5 p-2 bg-muted/40 rounded-xl border border-border/50 max-h-32 overflow-y-auto">
+                              {assignableEmployees.map(emp => {
+                                const idStr = String(emp.id || (emp as any)._id);
+                                const isSelected = newProjectMarketingAssignees.includes(idStr);
+                                return (
+                                  <button
+                                    key={idStr}
+                                    type="button"
+                                    onClick={() => {
+                                      setNewProjectMarketingAssignees(prev =>
+                                        isSelected ? prev.filter(x => x !== idStr) : [...prev, idStr]
+                                      );
+                                    }}
+                                    className={cn(
+                                      "px-2.5 py-1 text-xs rounded-lg font-bold border transition-all flex items-center gap-1.5",
+                                      isSelected
+                                        ? "bg-primary text-primary-foreground border-primary"
+                                        : "bg-background text-foreground/70 border-border/50 hover:bg-muted"
+                                    )}
+                                  >
+                                    <User className="w-3 h-3" />
+                                    <span>{emp.name}</span>
+                                    {isSelected && <Check className="w-3 h-3" />}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                          <div className="space-y-2 mt-3">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Finance Team Assignees (Multi-Select)</label>
+                            <div className="flex flex-wrap gap-1.5 p-2 bg-muted/40 rounded-xl border border-border/50 max-h-32 overflow-y-auto">
+                              {assignableEmployees.map(emp => {
+                                const idStr = String(emp.id || (emp as any)._id);
+                                const isSelected = newProjectFinanceAssignees.includes(idStr);
+                                return (
+                                  <button
+                                    key={idStr}
+                                    type="button"
+                                    onClick={() => {
+                                      setNewProjectFinanceAssignees(prev =>
+                                        isSelected ? prev.filter(x => x !== idStr) : [...prev, idStr]
+                                      );
+                                    }}
+                                    className={cn(
+                                      "px-2.5 py-1 text-xs rounded-lg font-bold border transition-all flex items-center gap-1.5",
+                                      isSelected
+                                        ? "bg-emerald-600 text-white border-emerald-600"
+                                        : "bg-background text-foreground/70 border-border/50 hover:bg-muted"
+                                    )}
+                                  >
+                                    <IndianRupee className="w-3 h-3" />
+                                    <span>{emp.name}</span>
+                                    {isSelected && <Check className="w-3 h-3" />}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
                         </div>
                       )}
                     </>
@@ -11676,8 +12103,19 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 <button onClick={() => { setIsNewProjectModalOpen(false); setActiveProjectTab('general'); setShowNewProjectErrors(false); }} className="px-5 py-2.5 rounded-xl font-bold text-muted-foreground hover:bg-muted transition-colors">
                   Cancel
                 </button>
-                <button onClick={handleCreateProject} className="px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all">
-                  Create Project
+                <button
+                  onClick={handleCreateProject}
+                  disabled={isCreatingProject}
+                  className="px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isCreatingProject ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Creating...</span>
+                    </>
+                  ) : (
+                    "Create Project"
+                  )}
                 </button>
               </div>
 
@@ -11788,7 +12226,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   <div className="w-44 shrink-0 border-r border-border/50 bg-muted/20 p-3 flex flex-col gap-1 overflow-y-auto">
                     {([
                       { id: 'general', label: 'General', icon: <FolderGit2 className="w-4 h-4" /> },
-                      { id: 'finance', label: 'Finance', icon: <IndianRupee className="w-4 h-4" /> },
+                      ...(canUserAccessFinance(editingProject) ? [{ id: 'finance' as const, label: 'Finance', icon: <IndianRupee className="w-4 h-4" /> }] : []),
                       ...(editingProject.category === "Digital Marketing" ? [{ id: 'campaigns' as const, label: 'Campaigns', icon: <TrendingUp className="w-4 h-4" /> }] : []),
                     ] as const).map(tab => (
                       <button
@@ -11999,6 +12437,80 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                   placeholder="e.g. 250"
                                   className="w-full px-3 h-[38px] bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
                                 />
+                              </div>
+                            </div>
+                            <div className="space-y-2 mt-3">
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Marketing Team Assignees (Multi-Select)</label>
+                              <div className="flex flex-wrap gap-1.5 p-2 bg-muted/40 rounded-xl border border-border/50 max-h-32 overflow-y-auto">
+                                {assignableEmployees.map(emp => {
+                                  const idStr = String(emp.id || (emp as any)._id);
+                                  const isSelected = (editingProject.marketing_assignees || []).includes(idStr);
+                                  return (
+                                    <button
+                                      key={idStr}
+                                      type="button"
+                                      onClick={() => {
+                                        const currentList = editingProject.marketing_assignees || [];
+                                        const updatedList = isSelected
+                                          ? currentList.filter(x => x !== idStr)
+                                          : [...currentList, idStr];
+                                        setEditingProject({
+                                          ...editingProject,
+                                          marketing_assignees: updatedList
+                                        });
+                                      }}
+                                      className={cn(
+                                        "px-2.5 py-1 text-xs rounded-lg font-bold border transition-all flex items-center gap-1.5",
+                                        isSelected
+                                          ? "bg-primary text-primary-foreground border-primary"
+                                          : "bg-background text-foreground/70 border-border/50 hover:bg-muted"
+                                      )}
+                                    >
+                                      <User className="w-3 h-3" />
+                                      <span>{emp.name}</span>
+                                      {isSelected && <Check className="w-3 h-3" />}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            <div className="space-y-2 mt-3">
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Finance Team Assignees (Multi-Select)</label>
+                              <div className="flex flex-wrap gap-1.5 p-2 bg-muted/40 rounded-xl border border-border/50 max-h-32 overflow-y-auto">
+                                {assignableEmployees.map(emp => {
+                                  const idStr = String(emp.id || (emp as any)._id);
+                                  const currentFin = (editingProject.finance_assignees && Array.isArray(editingProject.finance_assignees))
+                                    ? editingProject.finance_assignees
+                                    : (editingProject.creativeTeam?.finance ? editingProject.creativeTeam.finance.split(",").map((x: string) => x.trim()).filter(Boolean) : []);
+                                  const isSelected = currentFin.includes(idStr);
+                                  return (
+                                    <button
+                                      key={idStr}
+                                      type="button"
+                                      onClick={() => {
+                                        const updated = isSelected ? currentFin.filter((x: string) => x !== idStr) : [...currentFin, idStr];
+                                        setEditingProject({
+                                          ...editingProject,
+                                          finance_assignees: updated,
+                                          creativeTeam: {
+                                            ...(editingProject.creativeTeam || {}),
+                                            finance: updated.join(",")
+                                          }
+                                        });
+                                      }}
+                                      className={cn(
+                                        "px-2.5 py-1 text-xs rounded-lg font-bold border transition-all flex items-center gap-1.5",
+                                        isSelected
+                                          ? "bg-emerald-600 text-white border-emerald-600"
+                                          : "bg-background text-foreground/70 border-border/50 hover:bg-muted"
+                                      )}
+                                    >
+                                      <IndianRupee className="w-3 h-3" />
+                                      <span>{emp.name}</span>
+                                      {isSelected && <Check className="w-3 h-3" />}
+                                    </button>
+                                  );
+                                })}
                               </div>
                             </div>
                           </div>
@@ -12406,13 +12918,13 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       {/* Category KPIs */}
       <div className="flex flex-wrap gap-4 pt-4 pb-2">
         {categoryStats.map((stat, i) => (
-          <div key={i} className="flex-1 min-w-[150px] bg-white border border-border/60 rounded-3xl p-5 shadow-sm flex flex-col justify-center transition-all hover:shadow-lg hover:-translate-y-1 relative overflow-hidden group">
+          <div key={i} className="flex-1 min-w-[150px] bg-card border border-border/60 rounded-3xl p-5 shadow-sm flex flex-col justify-center transition-all hover:shadow-lg hover:-translate-y-1 relative overflow-hidden group">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary/50 to-primary/20 opacity-0 group-hover:opacity-100 transition-opacity" />
             <div className="absolute -right-4 -bottom-4 w-16 h-16 bg-primary/5 rounded-full blur-2xl group-hover:bg-primary/10 transition-colors" />
             <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-2 truncate relative z-10" title={stat.category}>{stat.category}</p>
             <div className="flex items-baseline gap-1.5 relative z-10">
-              <p className="text-3xl font-black text-foreground tracking-tighter">{stat.clientCount}</p>
-              <p className="text-[10px] font-medium text-muted-foreground mb-1 uppercase">Clients</p>
+              <p className="text-3xl font-black text-foreground tracking-tighter">{stat.count}</p>
+              <p className="text-[10px] font-medium text-muted-foreground mb-1 uppercase">{stat.unitLabel}</p>
             </div>
           </div>
         ))}
@@ -12679,7 +13191,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   }
                   setSelectedProjectId(group.primaryProject.id);
                 }}
-                className="group bg-white border border-border/40 rounded-[2rem] p-6 shadow-sm hover:shadow-2xl hover:shadow-primary/5 hover:-translate-y-1 hover:border-primary/30 transition-all duration-300 relative flex flex-col cursor-pointer"
+                className="group bg-card border border-border/60 rounded-[2rem] p-6 shadow-sm hover:shadow-2xl hover:shadow-primary/5 hover:-translate-y-1 hover:border-primary/30 transition-all duration-300 relative flex flex-col cursor-pointer"
               >
                 {/* Background Accent */}
                 <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-primary/[0.03] to-transparent rounded-t-[2rem] pointer-events-none transition-opacity opacity-0 group-hover:opacity-100"></div>
@@ -12687,14 +13199,72 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 <div className="flex justify-between items-start mb-5 relative z-10">
                   {/* K5: highlighted logo */}
                   <BrandLogo src={group.client?.logo} alt={group.displayName} size="w-20 h-20" />
-                  <span className={cn("px-2.5 py-1 rounded-full text-[11px] font-black border shrink-0", group.statusStyle)}>
-                    {group.status}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {/* Dynamic Finance button (K10 / Audio transcript [27:01]) */}
+                    {canUserAccessFinance(group) && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const targetClient = (group.client as any) || { id: group.primaryProject.clientId || group.primaryProject.id, name: group.displayName, companyName: group.displayName };
+                          setQuickFinanceClient(targetClient);
+                        }}
+                        className="p-1.5 text-emerald-600 hover:bg-emerald-500/10 rounded-lg transition-colors border border-emerald-500/20 bg-background/50 backdrop-blur-sm cursor-pointer"
+                        title="Client Finance & Payments"
+                      >
+                        <IndianRupee className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+
+                    {/* Universal Follow-up History button (Audio transcript [20:55, 22:22]) */}
+                    <button
+                      type="button"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        const targetClient = (group.client as any) || { id: group.primaryProject.clientId || group.primaryProject.id, name: group.displayName, companyName: group.displayName };
+                        setQuickFollowupClient(targetClient);
+                        const targetProj = group.primaryProject;
+                        if (targetProj) {
+                          try {
+                            const res = await api.get<any[]>(`/projects/${targetProj.id}/followups`, { showLoader: false });
+                            setQuickFollowupLogs(Array.isArray(res) ? res : []);
+                          } catch {
+                            setQuickFollowupLogs([]);
+                          }
+                        } else {
+                          setQuickFollowupLogs([]);
+                        }
+                      }}
+                      className="p-1.5 text-amber-600 hover:bg-amber-500/10 rounded-lg transition-colors border border-amber-500/20 bg-background/50 backdrop-blur-sm cursor-pointer"
+                      title="Client Follow-up Logs & History"
+                    >
+                      <Clock className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleArchiveProject(group.primaryProject, !group.primaryProject.is_archived);
+                      }}
+                      className="p-1.5 rounded-lg border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+                      title={group.primaryProject.is_archived ? "Restore to Active" : "Archive Project"}
+                    >
+                      {group.primaryProject.is_archived ? (
+                        <ArchiveRestore className="w-3.5 h-3.5 text-primary" />
+                      ) : (
+                        <Archive className="w-3.5 h-3.5 text-muted-foreground hover:text-amber-500" />
+                      )}
+                    </button>
+                    <span className={cn("px-2.5 py-1 rounded-full text-[11px] font-black border shrink-0", group.statusStyle)}>
+                      {group.status}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="relative z-10 mb-4">
                   <h3 className="text-xl font-black tracking-tight text-foreground line-clamp-2 leading-tight group-hover:text-primary transition-colors">
-                    {group.displayName}
+                    {group.displayName}{group.client?.companyName && group.client.companyName !== group.displayName ? ` (${group.client.companyName})` : ""}
                   </h3>
                   <div className="flex flex-wrap items-center gap-2 mt-3">
                     <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-1 bg-muted rounded-md text-muted-foreground">
@@ -12764,25 +13334,80 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   </div>
                 )}
 
-                <div className="flex justify-between items-end pt-4 border-t border-border/40 relative z-10 gap-3">
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Budget</span>
-                    <span className="text-base font-black text-foreground mt-0.5 font-mono truncate">{group.budgetFormatted || "—"}</span>
+                {/* For clients with only Digital Marketing projects, don't show irrelevant module task progress / zero budget */}
+                {group.categories.length > 0 && group.categories.every(cat => isMarketingCategory(cat)) ? (
+                  <div className="pt-4 border-t border-border/40 relative z-10 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span className="text-xs font-bold text-foreground">Digital Marketing Retainer</span>
+                      </div>
+                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                        Live Performance
+                      </span>
+                    </div>
+
+                    {/* Assigned Marketing Team & Finance Managers */}
+                    {(() => {
+                      const dmSubs = group.subProjects.filter(sp => isMarketingCategory(sp.category));
+                      const allMktAssignees = Array.from(new Set(dmSubs.flatMap(sp => sp.marketing_assignees || [])));
+                      const allFinAssignees = Array.from(new Set(dmSubs.flatMap((sp: any) => {
+                        if (sp.finance_assignees && Array.isArray(sp.finance_assignees)) return sp.finance_assignees;
+                        if (sp.creativeTeam?.finance) return sp.creativeTeam.finance.split(",").map((x: string) => x.trim()).filter(Boolean);
+                        return [];
+                      })));
+
+                      const mktEmps = allMktAssignees.map(id => employees.find(e => String(e.id) === String(id) || String((e as any)._id) === String(id))).filter(Boolean);
+                      const finEmps = allFinAssignees.map(id => employees.find(e => String(e.id) === String(id) || String((e as any)._id) === String(id))).filter(Boolean);
+
+                      if (mktEmps.length === 0 && finEmps.length === 0) return null;
+
+                      return (
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                          {mktEmps.length > 0 && (
+                            <div className="flex items-center gap-1.5 text-[10px] font-semibold text-muted-foreground bg-primary/5 px-2 py-1 rounded-lg border border-primary/10">
+                              <span className="text-primary font-bold">Marketing:</span>
+                              <div className="flex -space-x-1.5">
+                                {mktEmps.slice(0, 3).map((e: any, idx) => (
+                                  <UserAvatar key={idx} name={e.name} avatar={e.avatar} size="w-4 h-4" />
+                                ))}
+                              </div>
+                              <span className="truncate max-w-[120px]">{mktEmps.map((e: any) => e.name).join(", ")}</span>
+                            </div>
+                          )}
+                          {finEmps.length > 0 && canUserAccessFinance(group) && (
+                            <div className="flex items-center gap-1.5 text-[10px] font-semibold text-emerald-600 bg-emerald-500/5 px-2 py-1 rounded-lg border border-emerald-500/20">
+                              <IndianRupee className="w-2.5 h-2.5" />
+                              <span className="truncate max-w-[100px]">{finEmps.map((e: any) => e.name).join(", ")}</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
-                  <div className="flex flex-col text-right shrink-0">
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                      Task Progress
-                    </span>
-                    <span className="text-base font-black text-primary mt-0.5 font-mono">{group.taskPct}%</span>
-                  </div>
-                </div>
-                <div className="h-1.5 rounded-full bg-muted mt-3 overflow-hidden relative z-10">
-                  <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${Math.min(100, Math.max(0, group.taskPct))}%` }} />
-                </div>
-                <p className="text-[10px] font-bold text-emerald-600 mt-1.5 relative z-10">
-                  {group.totalTasks > 0 ? `${group.completedTasks}/${group.totalTasks} tasks completed` : "No tasks added"}
-                  {dp && <span className="text-muted-foreground font-normal ml-1">({dp.elapsed}/{dp.total}d)</span>}
-                </p>
+                ) : (
+                  <>
+                    <div className="flex justify-between items-end pt-4 border-t border-border/40 relative z-10 gap-3">
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Budget</span>
+                        <span className="text-base font-black text-foreground mt-0.5 font-mono truncate">{group.budgetFormatted || "—"}</span>
+                      </div>
+                      <div className="flex flex-col text-right shrink-0">
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                          Task Progress
+                        </span>
+                        <span className="text-base font-black text-primary mt-0.5 font-mono">{group.taskPct}%</span>
+                      </div>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted mt-3 overflow-hidden relative z-10">
+                      <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${Math.min(100, Math.max(0, group.taskPct))}%` }} />
+                    </div>
+                    <p className="text-[10px] font-bold text-emerald-600 mt-1.5 relative z-10">
+                      {group.totalTasks > 0 ? `${group.completedTasks}/${group.totalTasks} tasks completed` : "No tasks added"}
+                      {dp && <span className="text-muted-foreground font-normal ml-1">({dp.elapsed}/{dp.total}d)</span>}
+                    </p>
+                  </>
+                )}
 
                 {/* Sub-projects list styled like Brand Division with Open Project */}
                 <div className="space-y-2 mt-4 pt-3 border-t border-border/40 relative z-10 max-h-[380px] overflow-y-auto pr-1">
@@ -12880,7 +13505,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 setSelectedClientId(client.id);
                 setSelectedProjectId(null);
               }}
-              className="group bg-white border border-border/40 rounded-[2rem] p-6 shadow-sm hover:shadow-2xl hover:shadow-primary/5 hover:-translate-y-1 hover:border-primary/30 transition-all duration-300 relative flex flex-col cursor-pointer"
+              className="group bg-card border border-border/60 rounded-[2rem] p-6 shadow-sm hover:shadow-2xl hover:shadow-primary/5 hover:-translate-y-1 hover:border-primary/30 transition-all duration-300 relative flex flex-col cursor-pointer"
             >
               {/* Background Accent */}
               <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-primary/[0.03] to-transparent rounded-t-[2rem] pointer-events-none transition-opacity opacity-0 group-hover:opacity-100"></div>
@@ -12889,67 +13514,109 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 {/* K5: highlighted logo */}
                 <BrandLogo src={client.logo} alt={client.name} size="w-20 h-20" />
 
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button className="p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground rounded-lg transition-colors outline-none focus:ring-2 focus:ring-primary/20 bg-background/50 backdrop-blur-sm">
-                      <MoreHorizontal className="w-5 h-5" />
+                <div className="flex items-center gap-1.5">
+                  {canUserAccessFinance(client) && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setQuickFinanceClient(client);
+                      }}
+                      className="p-1.5 text-emerald-600 hover:bg-emerald-500/10 rounded-lg transition-colors border border-emerald-500/20 bg-background/50 backdrop-blur-sm cursor-pointer"
+                      title="Quick Finance & Payments"
+                    >
+                      <IndianRupee className="w-4 h-4" />
                     </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="end"
-                    className="w-48 rounded-2xl p-2 border-border/60 shadow-xl bg-background/95 backdrop-blur-md"
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      setQuickFollowupClient(client);
+                      const clientProjs = projects.filter(p => p.clientId === client.id);
+                      const targetProj = clientProjs[0];
+                      if (targetProj) {
+                        try {
+                          const res = await api.get<any[]>(`/projects/${targetProj.id}/followups`, { showLoader: false });
+                          setQuickFollowupLogs(Array.isArray(res) ? res : []);
+                        } catch {
+                          setQuickFollowupLogs([]);
+                        }
+                      } else {
+                        setQuickFollowupLogs([]);
+                      }
+                    }}
+                    className="p-1.5 text-primary hover:bg-primary/10 rounded-lg transition-colors border border-primary/20 bg-background/50 backdrop-blur-sm"
+                    title="Quick Follow-up History & Logs"
                   >
-                    <DropdownMenuItem
-                      onSelect={() => {
-                        setTimeout(() => {
-                          setEditingClient(client);
-                          setIsEditClientModalOpen(true);
-                        }, 100);
-                      }}
-                      className="rounded-xl cursor-pointer py-2.5 focus:bg-primary/10 focus:text-primary font-medium transition-colors"
+                    <Clock className="w-4 h-4" />
+                  </button>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground rounded-lg transition-colors outline-none focus:ring-2 focus:ring-primary/20 bg-background/50 backdrop-blur-sm">
+                        <MoreHorizontal className="w-5 h-5" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="end"
+                      className="w-48 rounded-2xl p-2 border-border/60 shadow-xl bg-background/95 backdrop-blur-md"
                     >
-                      <Edit2 className="w-4 h-4 mr-2" /> Edit Client
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator className="bg-border/50" />
-                    {client.status === 'Archived' ? (
                       <DropdownMenuItem
                         onSelect={() => {
                           setTimeout(() => {
-                            unarchiveClient(client);
+                            setEditingClient(client);
+                            setIsEditClientModalOpen(true);
                           }, 100);
                         }}
-                        className="rounded-xl cursor-pointer py-2.5 focus:bg-emerald-500/10 focus:text-emerald-600 font-medium text-emerald-600 transition-colors"
+                        className="rounded-xl cursor-pointer py-2.5 focus:bg-primary/10 focus:text-primary font-medium transition-colors"
                       >
-                        <ArchiveRestore className="w-4 h-4 mr-2" /> Unarchive Client
+                        <Edit2 className="w-4 h-4 mr-2" /> Edit Client
                       </DropdownMenuItem>
-                    ) : (
+                      <DropdownMenuSeparator className="bg-border/50" />
+                      {client.status === 'Archived' ? (
+                        <DropdownMenuItem
+                          onSelect={() => {
+                            setTimeout(() => {
+                              unarchiveClient(client);
+                            }, 100);
+                          }}
+                          className="rounded-xl cursor-pointer py-2.5 focus:bg-emerald-500/10 focus:text-emerald-600 font-medium text-emerald-600 transition-colors"
+                        >
+                          <ArchiveRestore className="w-4 h-4 mr-2" /> Unarchive Client
+                        </DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem
+                          onSelect={() => {
+                            setTimeout(() => {
+                              archiveClient(client);
+                            }, 100);
+                          }}
+                          className="rounded-xl cursor-pointer py-2.5 focus:bg-amber-500/10 focus:text-amber-600 font-medium text-amber-600 transition-colors"
+                        >
+                          <Archive className="w-4 h-4 mr-2" /> Archive Client
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem
                         onSelect={() => {
                           setTimeout(() => {
-                            archiveClient(client);
+                            confirmDeleteClient(client);
                           }, 100);
                         }}
-                        className="rounded-xl cursor-pointer py-2.5 focus:bg-amber-500/10 focus:text-amber-600 font-medium text-amber-600 transition-colors"
+                        className="rounded-xl cursor-pointer py-2.5 focus:bg-rose-500/10 focus:text-rose-600 font-medium text-rose-600 transition-colors"
                       >
-                        <Archive className="w-4 h-4 mr-2" /> Archive Client
+                        <Trash2 className="w-4 h-4 mr-2" /> Delete
                       </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem
-                      onSelect={() => {
-                        setTimeout(() => {
-                          confirmDeleteClient(client);
-                        }, 100);
-                      }}
-                      className="rounded-xl cursor-pointer py-2.5 focus:bg-rose-500/10 focus:text-rose-600 font-medium text-rose-600 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4 mr-2" /> Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
 
               <div className="relative z-10 mb-6 flex-grow">
-                <h3 className="text-xl font-black tracking-tight text-foreground line-clamp-2 leading-tight group-hover:text-primary transition-colors">{client.name}</h3>
+                <h3 className="text-xl font-black tracking-tight text-foreground line-clamp-2 leading-tight group-hover:text-primary transition-colors">
+                  {client.name}{client.companyName && client.companyName !== client.name ? ` (${client.companyName})` : ""}
+                </h3>
 
                 <div className="flex flex-wrap items-center gap-3 mt-3">
                   <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-1 bg-primary/10 text-primary rounded-md">
@@ -13334,9 +14001,17 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             </button>
             <button
               onClick={handleCreateProject}
-              className="px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all"
+              disabled={isCreatingProject}
+              className="px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center gap-2"
             >
-              Create Project
+              {isCreatingProject ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Creating...</span>
+                </>
+              ) : (
+                "Create Project"
+              )}
             </button>
           </div>
         </DialogContent>
@@ -13583,6 +14258,70 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         description={confirmModalState.description}
         itemName={confirmModalState.itemName}
       />
+
+      {/* Quick Outside Client Finance Modal */}
+      {quickFinanceClient && (
+        <ClientFinanceModal
+          isOpen={!!quickFinanceClient}
+          onClose={() => setQuickFinanceClient(null)}
+          clientName={quickFinanceClient.name}
+          companyName={quickFinanceClient.companyName}
+          payments={(() => {
+            const clientProjs = projects.filter(p => p.clientId === quickFinanceClient.id || p.id === quickFinanceClient.id || (quickFinanceClient.name && p.name.trim().toLowerCase() === quickFinanceClient.name.trim().toLowerCase()));
+            return clientProjs.flatMap(p => p.payments || []);
+          })()}
+          onSavePayment={async (newPay) => {
+            const clientProjs = projects.filter(p => p.clientId === quickFinanceClient.id || p.id === quickFinanceClient.id || (quickFinanceClient.name && p.name.trim().toLowerCase() === quickFinanceClient.name.trim().toLowerCase()));
+            const targetProj = clientProjs[0];
+            if (!targetProj) {
+              toast.error("Please create a project for this client first to record payments");
+              return;
+            }
+            const entry = {
+              id: `pay-${Date.now()}`,
+              date: newPay.date,
+              amount: newPay.amount,
+              work_from: newPay.work_from || "",
+              work_to: newPay.work_to || "",
+              next_reminder: newPay.next_reminder || "",
+              note: newPay.note || "",
+            };
+            const nextList = [...(targetProj.payments || []), entry];
+            await api.put(`/projects/${targetProj.id}`, { finance: { ...buildFinancePayload(targetProj), payments: nextList } });
+            await loadLiveData();
+            toast.success("Payment saved successfully");
+          }}
+          employees={assignableEmployees}
+        />
+      )}
+
+      {/* Quick Outside Client Follow-up Audit Logs Modal */}
+      {quickFollowupClient && (
+        <ClientFollowupModal
+          isOpen={!!quickFollowupClient}
+          onClose={() => setQuickFollowupClient(null)}
+          clientName={quickFollowupClient.name}
+          companyName={quickFollowupClient.companyName}
+          followups={quickFollowupLogs}
+          onAddFollowup={async (entry) => {
+            const clientProjs = projects.filter(p => p.clientId === quickFollowupClient.id || p.id === quickFollowupClient.id || (quickFollowupClient.name && p.name.trim().toLowerCase() === quickFollowupClient.name.trim().toLowerCase()));
+            const targetProj = clientProjs[0];
+            if (!targetProj) {
+              toast.error("Please create a project for this client first to log followups");
+              return;
+            }
+            await api.post(`/projects/${targetProj.id}/followups`, {
+              text: entry.text,
+              next_date: entry.next_date
+            });
+            const res = await api.get<any[]>(`/projects/${targetProj.id}/followups`, { showLoader: false });
+            setQuickFollowupLogs(Array.isArray(res) ? res : []);
+            await loadLiveData();
+            toast.success("Follow-up logged successfully");
+          }}
+        />
+      )}
+
       {renderSmmModals()}
     </div>
   );
