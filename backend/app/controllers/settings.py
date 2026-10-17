@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from typing import Optional
-from app.schemas.settings import SettingsCreateOrUpdate, SettingsResponse
+from app.schemas.settings import SettingsCreateOrUpdate, SettingsResponse, BrandingSettings
 from app.services.settings import SettingsService
 from app.controllers.auth import get_current_employee
 from app.redis.service import get_cache, set_cache, clear_pattern
@@ -26,6 +26,18 @@ async def get_settings(current_user: dict = Depends(get_current_employee)):
     res = await SettingsService.get_settings()
     if res is not None:
         await set_cache(cache_key, res, ttl=300)
+    return res
+
+@router.get("/branding", response_model=Optional[BrandingSettings])
+async def get_branding():
+    """Public: the login page is themed too. Null until an admin saves branding once."""
+    return await SettingsService.get_branding()
+
+@router.put("/branding", response_model=BrandingSettings)
+async def update_branding(data: BrandingSettings, current_user: dict = Depends(get_current_employee)):
+    check_admin_role(current_user)
+    res = await SettingsService.update_branding(data)
+    await clear_pattern("settings:*")
     return res
 
 @router.put("", response_model=SettingsResponse)

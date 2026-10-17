@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Literal
 from datetime import datetime
 
 class SettingsCreateOrUpdate(BaseModel):
@@ -51,6 +51,22 @@ class SettingsResponse(BaseModel):
     updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(populate_by_name=True)
+
+# --- App branding / white-label theme (Admin Settings → Brand Color, UI & Typography, Company Identity) ---
+# Logo and favicon are small images kept inline as data URLs
+MAX_BRAND_IMAGE_CHARS = 3_000_000
+
+class BrandingSettings(BaseModel):
+    color: str = Field("#10b981", pattern=r"^#[0-9a-fA-F]{3,8}$")
+    is_gradient: bool = False
+    gradient_type: Literal["linear", "radial"] = "linear"
+    gradient_direction: str = Field("to right", max_length=40)
+    gradient_colors: List[str] = Field(default_factory=lambda: ["#0284c7"], max_length=5)
+    radius: float = Field(0.75, ge=0, le=2)
+    font_family: str = Field("Inter", max_length=80)
+    company_name: str = Field("HR Suite", max_length=120)
+    logo_url: str = Field("", max_length=MAX_BRAND_IMAGE_CHARS)
+    favicon_url: str = Field("", max_length=MAX_BRAND_IMAGE_CHARS)
 
 # Aliases for backward compatibility
 InvoiceSettingsCreateOrUpdate = SettingsCreateOrUpdate

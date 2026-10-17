@@ -1,6 +1,6 @@
 from typing import Dict, Any, Optional
 from app.repository.settings import SettingsRepository
-from app.schemas.settings import SettingsCreateOrUpdate
+from app.schemas.settings import SettingsCreateOrUpdate, BrandingSettings
 from app.redis.service import get_cache, set_cache, delete_cache
 
 CACHE_KEY_SETTINGS = "invoice_settings:active"
@@ -23,5 +23,17 @@ class SettingsService:
         updated = await SettingsRepository.save_or_update_settings(update_dict)
         await delete_cache(CACHE_KEY_SETTINGS)
         return updated
+
+    @staticmethod
+    async def get_branding() -> Optional[Dict[str, Any]]:
+        branding = (await SettingsService.get_settings()).get("branding")
+        return BrandingSettings(**branding).model_dump() if branding else None
+
+    @staticmethod
+    async def update_branding(data: BrandingSettings) -> Dict[str, Any]:
+        branding = data.model_dump()
+        await SettingsRepository.save_or_update_settings({"branding": branding})
+        await delete_cache(CACHE_KEY_SETTINGS)
+        return branding
 
 InvoiceSettingsService = SettingsService
