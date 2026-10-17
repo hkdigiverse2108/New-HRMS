@@ -53,6 +53,7 @@ export function UpdateActivityModal({
   const [selectedTask, setSelectedTask] = useState<SelectedTaskInfo | null>(null);
   const [isAddingCustom, setIsAddingCustom] = useState(false);
   const [customTaskTitle, setCustomTaskTitle] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const tabs: WorkActivityType[] = [
     "Today's Work",
@@ -72,8 +73,25 @@ export function UpdateActivityModal({
       try {
         const todayDateStr: string = String(new Date().toISOString().split("T")[0] || "");
         const addedTaskIds = new Set<string>();
+        const seenTaskKeys = new Set<string>();
         const todayList: TaskItem[] = [];
         const upcomingList: TaskItem[] = [];
+
+        const pushToday = (item: TaskItem) => {
+          const normTitle = (item.title || "").trim().toLowerCase();
+          const key = `${normTitle}_${item.dueDate || ""}`;
+          if (seenTaskKeys.has(key)) return;
+          seenTaskKeys.add(key);
+          todayList.push(item);
+        };
+
+        const pushUpcoming = (item: TaskItem) => {
+          const normTitle = (item.title || "").trim().toLowerCase();
+          const key = `${normTitle}_${item.dueDate || ""}`;
+          if (seenTaskKeys.has(key)) return;
+          seenTaskKeys.add(key);
+          upcomingList.push(item);
+        };
 
         // 1. Fetch daily overview (today & upcoming tasks)
         let dailyRes: any = null;
@@ -92,7 +110,7 @@ export function UpdateActivityModal({
             const rawDue = t.due_date ? String(t.due_date).split("T")[0] : undefined;
             const due: string = rawDue || todayDateStr;
             const isPreviousPending = Boolean(due && todayDateStr && due < todayDateStr);
-            todayList.push({
+            pushToday({
               id: taskId,
               title: t.title || t.name || "Task",
               dueDate: due,
@@ -112,7 +130,7 @@ export function UpdateActivityModal({
 
             const rawDue = t.due_date ? String(t.due_date).split("T")[0] : undefined;
             const due: string = rawDue || "";
-            upcomingList.push({
+            pushUpcoming({
               id: taskId,
               title: t.title || t.name || "Upcoming Task",
               dueDate: due,
@@ -137,7 +155,7 @@ export function UpdateActivityModal({
             const due: string = rawDue || "";
             if (due && todayDateStr && due < todayDateStr) {
               // Previous days' uncompleted/pending task -> show in Today's Work!
-              todayList.push({
+              pushToday({
                 id: taskId,
                 title: t.title || "Pending Task",
                 dueDate: due,
@@ -145,7 +163,7 @@ export function UpdateActivityModal({
                 category: "Today's Work",
               });
             } else if (due === todayDateStr) {
-              todayList.push({
+              pushToday({
                 id: taskId,
                 title: t.title || "Daily Task",
                 dueDate: due,
@@ -153,7 +171,7 @@ export function UpdateActivityModal({
                 category: "Today's Work",
               });
             } else {
-              upcomingList.push({
+              pushUpcoming({
                 id: taskId,
                 title: t.title || "Upcoming Task",
                 dueDate: due,
@@ -164,7 +182,7 @@ export function UpdateActivityModal({
           });
         } catch {}
 
-        // 2. Fetch Research items
+        // 3. Fetch Research items
         const researchList: TaskItem[] = [];
         try {
           // Same source as the Research page: own research + research shared with this employee
@@ -181,7 +199,7 @@ export function UpdateActivityModal({
           });
         } catch {}
 
-        // 3. Fetch Activity items (Updated per transcript)
+        // 4. Fetch Activity items (Updated per transcript)
         const activityList: TaskItem[] = [
           { id: "act-1", title: "Client Communication", dueDate: todayDateStr, badge: "Activity", category: "Activity" },
           { id: "act-2", title: "Stream Coordination", dueDate: todayDateStr, badge: "Activity", category: "Activity" },
@@ -190,23 +208,37 @@ export function UpdateActivityModal({
           { id: "act-5", title: "Game Session", dueDate: todayDateStr, badge: "Activity", category: "Activity" },
         ];
 
-        // 4. Fetch Meeting items (Updated per transcript)
+        // 5. Fetch Meeting items (Updated per transcript)
         const meetingList: TaskItem[] = [
           { id: "meet-1", title: "Admin Meeting", dueDate: todayDateStr, badge: "Meeting", category: "Meeting" },
           { id: "meet-2", title: "Client Meeting", dueDate: todayDateStr, badge: "Meeting", category: "Meeting" },
         ];
 
-        // 5. Load saved custom activities from localStorage (Task 34)
+        // 6. Load saved custom activities from localStorage (Task 34)
         if (typeof window !== "undefined") {
           try {
             const savedStr = localStorage.getItem("hrms_custom_activities");
             if (savedStr) {
               const savedItems: Array<{ id: string; title: string; category: WorkActivityType; dueDate?: string }> = JSON.parse(savedStr);
               savedItems.forEach(item => {
+                const title = (item.title || "").trim();
+                if (!title) return;
+                const due = item.dueDate || todayDateStr;
+                const normTitle = title.toLowerCase();
+
+                // If this task title already exists in todayList (or upcoming), avoid duplicate custom card!
+                const alreadyExists = todayList.some(x => x.title.toLowerCase().trim() === normTitle) ||
+                                     upcomingList.some(x => x.title.toLowerCase().trim() === normTitle);
+                if (alreadyExists) return;
+
+                const key = `${normTitle}_${due}`;
+                if (seenTaskKeys.has(key)) return;
+                seenTaskKeys.add(key);
+
                 const customItem: TaskItem = {
                   id: item.id,
-                  title: item.title,
-                  dueDate: item.dueDate || todayDateStr,
+                  title: title,
+                  dueDate: due,
                   badge: "Custom",
                   category: item.category,
                   isCustom: true,
@@ -284,6 +316,25 @@ export function UpdateActivityModal({
     const cleanTitle = customTaskTitle.trim();
     const createdTaskId = `custom-${Date.now()}`;
     const todayStr = new Date().toISOString().split("T")[0];
+
+    // If an existing task in this tab already has the same title, select it instead of adding duplicate!
+    const existingSame = (tasks[activeTab] || []).find(
+      t => t.title.toLowerCase().trim() === cleanTitle.toLowerCase()
+    );
+    if (existingSame) {
+      setSelectedTask({
+        taskId: existingSame.id,
+        taskTitle: existingSame.title,
+        taskType: activeTab,
+        dueDate: existingSame.dueDate,
+        badge: existingSame.badge,
+        isCustom: existingSame.isCustom,
+      });
+      setIsAddingCustom(false);
+      setCustomTaskTitle("");
+      toast.info(`Selected existing task: "${existingSame.title}"`);
+      return;
+    }
 
     // Research is created right away so it appears on the Research page even if punch-in is cancelled
     if (activeTab === "Research") {
@@ -371,63 +422,88 @@ export function UpdateActivityModal({
   };
 
   const handleSave = async () => {
+    if (isSubmitting) return;
     if (!selectedTask || !selectedTask.taskTitle.trim()) {
       toast.error("Please select 1 task to continue.");
       return;
     }
 
-    const taskToSave = { ...selectedTask };
+    setIsSubmitting(true);
+    try {
+      const taskToSave = { ...selectedTask };
 
-    // Custom research is saved to the Research module so it shows on the Research page
-    if (taskToSave.isCustom && taskToSave.taskType === "Research") {
-      try {
-        const res = await api.post<any>("/research", {
-          title: taskToSave.taskTitle,
-          description: "Added during Punch-In activity tracking",
-        }, { showErrorToast: false });
-        if (res?._id || res?.id) {
-          taskToSave.taskId = String(res._id || res.id);
-          taskToSave.isCustom = false;
-        }
-      } catch (err) {
-        console.warn("Could not save custom research:", err);
-        toast.error("Could not save research. Please try again.");
-        return;
-      }
-    } else if (taskToSave.isCustom) {
-    // If custom task, sync to backend tasks collection now (only for the 1 selected task!)
-      try {
-        const todayStr = new Date().toISOString().split("T")[0];
-        const res = await api.post<any>("/tasks", {
-          title: taskToSave.taskTitle,
-          priority: "Medium",
-          status: "In Progress",
-          assigned_to: employeeId,
-          due_date: todayStr,
-          description: `Created during Punch-In activity tracking (${taskToSave.taskType})`,
-          task_category: taskToSave.taskType === "Research" ? "Research" : "General",
-        }, { showErrorToast: false });
-        if (res?._id || res?.id) {
-          taskToSave.taskId = String(res._id || res.id);
-        }
-
-        // Persist in localStorage
+      // Custom research is saved to the Research module so it shows on the Research page
+      if (taskToSave.isCustom && taskToSave.taskType === "Research") {
         try {
-          const savedStr = localStorage.getItem("hrms_custom_activities");
-          const currentSaved = savedStr ? JSON.parse(savedStr) : [];
-          const updated = [
-            { id: taskToSave.taskId, title: taskToSave.taskTitle, category: taskToSave.taskType, dueDate: todayStr },
-            ...currentSaved.filter((x: any) => x.title.toLowerCase() !== taskToSave.taskTitle.toLowerCase())
-          ].slice(0, 30);
-          localStorage.setItem("hrms_custom_activities", JSON.stringify(updated));
-        } catch {}
-      } catch (err) {
-        console.warn("Could not sync custom task to tasks endpoint:", err);
-      }
-    }
+          const res = await api.post<any>("/research", {
+            title: taskToSave.taskTitle,
+            description: "Added during Punch-In activity tracking",
+          }, { showErrorToast: false });
+          if (res?._id || res?.id) {
+            taskToSave.taskId = String(res._id || res.id);
+            taskToSave.isCustom = false;
+          }
+        } catch (err) {
+          console.warn("Could not save custom research:", err);
+          toast.error("Could not save research. Please try again.");
+          return;
+        }
+      } else if (taskToSave.isCustom) {
+        // If an active task with the same title or ID already exists in loaded tasks, reuse it!
+        const allLoaded = [
+          ...(tasks["Today's Work"] || []),
+          ...(tasks["Upcoming Work"] || []),
+        ];
+        const existingTask = allLoaded.find(
+          t => t.id && !t.id.startsWith("custom-") && (
+            t.id === taskToSave.taskId || 
+            t.title.toLowerCase().trim() === taskToSave.taskTitle.toLowerCase().trim()
+          )
+        );
 
-    onSave(taskToSave);
-    onClose();
+        if (existingTask) {
+          // Re-use existing task instead of creating duplicate in database!
+          taskToSave.taskId = existingTask.id;
+          taskToSave.isCustom = false;
+        } else {
+          // Only sync to backend if it's truly a brand new task
+          try {
+            const todayStr = new Date().toISOString().split("T")[0];
+            const res = await api.post<any>("/tasks", {
+              title: taskToSave.taskTitle,
+              priority: "Medium",
+              status: "In Progress",
+              assigned_to: employeeId,
+              due_date: todayStr,
+              description: `Created during Punch-In activity tracking (${taskToSave.taskType})`,
+              task_category: taskToSave.taskType === "Research" ? "Research" : "General",
+            }, { showErrorToast: false });
+            if (res?._id || res?.id) {
+              taskToSave.taskId = String(res._id || res.id);
+              taskToSave.isCustom = false;
+            }
+
+            // Persist in localStorage
+            try {
+              const savedStr = localStorage.getItem("hrms_custom_activities");
+              const currentSaved = savedStr ? JSON.parse(savedStr) : [];
+              const updated = [
+                { id: taskToSave.taskId, title: taskToSave.taskTitle, category: taskToSave.taskType, dueDate: todayStr },
+                ...currentSaved.filter((x: any) => x.title.toLowerCase().trim() !== taskToSave.taskTitle.toLowerCase().trim())
+              ].slice(0, 30);
+              localStorage.setItem("hrms_custom_activities", JSON.stringify(updated));
+            } catch {}
+          } catch (err) {
+            console.warn("Could not sync custom task to tasks endpoint:", err);
+          }
+        }
+      }
+
+      onSave(taskToSave);
+      onClose();
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -658,10 +734,10 @@ export function UpdateActivityModal({
           <button
             type="button"
             onClick={handleSave}
-            disabled={!selectedTask || !selectedTask.taskTitle.trim()}
-            className="px-6 py-2.5 text-sm font-bold bg-primary text-primary-foreground hover:bg-primary/95 rounded-xl shadow-md shadow-primary/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={isSubmitting || !selectedTask || !selectedTask.taskTitle.trim()}
+            className="px-6 py-2.5 text-sm font-bold bg-primary text-primary-foreground hover:bg-primary/95 rounded-xl shadow-md shadow-primary/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            {isChangeMode ? "Save Changes" : "Confirm & Punch In"}
+            {isSubmitting ? "Saving..." : (isChangeMode ? "Save Changes" : "Confirm & Punch In")}
           </button>
         </div>
       </div>
