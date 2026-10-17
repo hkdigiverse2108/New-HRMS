@@ -599,16 +599,21 @@ function SidebarBody({
   return (
     <>
       <div className="flex h-14 shrink-0 items-center gap-3 border-b border-sidebar-border px-3">
-        {logoUrl ? (
+        {logoUrl && !collapsed ? (
+          // Uploaded logo takes the whole header; it already carries the company name
+          <div className="flex h-10 min-w-0 flex-1 items-center">
+            <img src={logoUrl} alt={companyName} className="h-full w-auto max-w-full object-contain object-left" />
+          </div>
+        ) : logoUrl ? (
           <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white border border-border overflow-hidden">
-            <img src={logoUrl} alt="Logo" className="max-w-full max-h-full object-contain p-0.5" />
+            <img src={logoUrl} alt={companyName} className="max-w-full max-h-full object-contain p-0.5" />
           </div>
         ) : (
           <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-sidebar-primary text-sm font-black text-sidebar-primary-foreground">
             {companyName.charAt(0)}
           </div>
         )}
-        {!collapsed && (
+        {!collapsed && !logoUrl && (
           <div className="min-w-0">
             <p className="truncate text-sm font-bold">{companyName}</p>
             <p className="truncate text-[11px] text-sidebar-muted">Workspace</p>
@@ -947,7 +952,13 @@ export function AppSidebar({ active = "/dashboard", setActive }: { active?: stri
         >
           <Menu className="h-5 w-5" />
         </button>
-        <p className="text-sm font-bold truncate flex-1 min-w-0">{companyName}</p>
+        {logoUrl ? (
+          <div className="flex h-9 min-w-0 flex-1 items-center">
+            <img src={logoUrl} alt={companyName} className="h-full w-auto max-w-full object-contain object-left" />
+          </div>
+        ) : (
+          <p className="text-sm font-bold truncate flex-1 min-w-0">{companyName}</p>
+        )}
       </header>
 
       {/* Mobile drawer */}

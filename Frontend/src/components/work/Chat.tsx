@@ -49,6 +49,7 @@ import { api, getAuthToken } from "@/lib/api";
 import { getApiUrl, resolveApiUrl } from "@/lib/config";
 import { WhatsAppEmojiPicker } from "./WhatsAppEmojiPicker";
 import { hasModulePermission, isUserAdmin } from "@/lib/permissions";
+import { getAppFavicon } from "@/lib/favicon";
 
 export const DEFAULT_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
@@ -1146,7 +1147,7 @@ function ChatInner() {
         try {
           new Notification("HK DigiVerse HRMS", {
             body: "Desktop notifications are now active. You will receive alerts when new messages arrive!",
-            icon: "/favicon.ico",
+            icon: getAppFavicon(),
           });
         } catch { }
       } else if (perm === "denied") {
@@ -1162,7 +1163,7 @@ function ChatInner() {
     if (typeof Notification === "undefined") return;
     if (Notification.permission !== "granted") return;
 
-    let finalIcon = "/favicon.ico";
+    let finalIcon = getAppFavicon();
     if (avatarUrl && typeof avatarUrl === "string" && avatarUrl.trim()) {
       const clean = avatarUrl.trim();
       if (clean.startsWith("http://") || clean.startsWith("https://") || clean.startsWith("data:")) {

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { 
   X, Search, AlertTriangle, MessageSquareWarning, ShieldAlert, 
-  Plus, IndianRupee, Trophy, Trash2, RefreshCw, Loader2, Calendar
+  Plus, IndianRupee, Trophy, Trash2, RefreshCw, Loader2, Calendar, Pencil, Save
 } from "lucide-react";
 import { DialogClose, Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
@@ -44,6 +44,7 @@ interface PenaltyType {
   default_price: number;
   warning_limit: number;
   description?: string;
+  system_key?: string | null;
 }
 
 interface PenaltySummary {
@@ -127,11 +128,15 @@ export function Penalties() {
   const [newDate, setNewDate] = useState(new Date().toISOString().split("T")[0]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Add Penalty Type Modal State
+  // Penalty Types Modal State (add / edit / remove)
   const emptyTypeForm = { name: "", default_price: "", warning_limit: "", description: "" };
   const [isTypeOpen, setIsTypeOpen] = useState(false);
   const [typeForm, setTypeForm] = useState(emptyTypeForm);
+  const [editingTypeId, setEditingTypeId] = useState<string | null>(null);
   const [isSavingType, setIsSavingType] = useState(false);
+  const [typeDeleteConfirm, setTypeDeleteConfirm] = useState<{ isOpen: boolean; id: string | null; label: string }>({ isOpen: false, id: null, label: "" });
+  // Built-in type used by automatic late penalties (re-created with defaults if deleted)
+  const isSystemType = (t?: PenaltyType) => t?.system_key === "late_punch_in";
 
   // Waive / Resolve Dialog State
   const [isUpdateOpen, setIsUpdateOpen] = useState(false);
@@ -237,7 +242,8 @@ export function Penalties() {
           name: t.name,
           default_price: t.default_price || 0,
           warning_limit: t.warning_limit || 0,
-          description: t.description || ""
+          description: t.description || "",
+          system_key: t.system_key ?? null
         })));
       }
     } catch (err) {
@@ -306,8 +312,23 @@ export function Penalties() {
     }
   };
 
-  // Submit Create Penalty Type
-  const handleCreateType = async (e: React.FormEvent) => {
+  const resetTypeForm = () => {
+    setTypeForm(emptyTypeForm);
+    setEditingTypeId(null);
+  };
+
+  const startEditType = (t: PenaltyType) => {
+    setEditingTypeId(t.id);
+    setTypeForm({
+      name: t.name,
+      default_price: String(t.default_price),
+      warning_limit: String(t.warning_limit),
+      description: t.description || "",
+    });
+  };
+
+  // Submit Create / Update Penalty Type
+  const handleSaveType = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!typeForm.name.trim()) {
       toast.error("Penalty type name is required");
@@ -323,22 +344,46 @@ export function Penalties() {
       toast.error("Warning limit must be a whole number (0 or more)");
       return;
     }
+    const payload = {
+      name: typeForm.name.trim(),
+      default_price: price,
+      warning_limit: limit,
+      description: typeForm.description.trim(),
+    };
     setIsSavingType(true);
     try {
-      await api.post("/penalties/types", {
-        name: typeForm.name.trim(),
-        default_price: price,
-        warning_limit: limit,
-        description: typeForm.description.trim(),
-      });
-      toast.success("Penalty type added");
-      setTypeForm(emptyTypeForm);
-      setIsTypeOpen(false);
+      if (editingTypeId) {
+        await api.put(`/penalties/types/${editingTypeId}`, payload);
+        toast.success("Penalty type updated");
+        // Record rows read the type name via lookup, so refresh them after a rename
+        fetchPenaltiesData();
+      } else {
+        await api.post("/penalties/types", payload);
+        toast.success("Penalty type added");
+      }
+      resetTypeForm();
       fetchPenaltyTypes();
     } catch {
       // api layer shows the backend message (e.g. duplicate name)
     } finally {
       setIsSavingType(false);
+    }
+  };
+
+  const confirmRemoveType = async () => {
+    const id = typeDeleteConfirm.id;
+    setTypeDeleteConfirm({ isOpen: false, id: null, label: "" });
+    if (!id) return;
+    try {
+      await api.delete(`/penalties/types/${id}`);
+      toast.success("Penalty type removed");
+      if (editingTypeId === id) resetTypeForm();
+      if (newTypeId === id) setNewTypeId("");
+      // Refetch: the automatic late type comes back, and records keep the deleted type's name
+      fetchPenaltyTypes();
+      fetchPenaltiesData();
+    } catch {
+      // api layer shows the backend message (e.g. type is in use)
     }
   };
 
@@ -371,8 +416,14 @@ export function Penalties() {
         status: "Active"
       };
 
-      await api.post("/penalties", payload);
-      toast.success(`${newType} assigned successfully!`);
+      // The type's warning limit can turn this into a warning, so trust the saved record
+      const created = await api.post<{ is_warning?: boolean }>("/penalties", payload);
+      const savedAsWarning = created?.is_warning ?? newType === "Warning";
+      toast.success(
+        savedAsWarning && newType === "Penalty"
+          ? "Warning issued — this employee still has warnings left for this penalty type"
+          : `${savedAsWarning ? "Warning" : "Penalty"} assigned successfully!`
+      );
       
       setIsNewOpen(false);
       // Reset form
@@ -478,7 +529,7 @@ export function Penalties() {
         : (selectedEmployeeFilter === "All" || rec.employee_id === selectedEmployeeFilter);
 
       // Penalty Type Filter
-      const matchesType = selectedTypeFilter === "All" || rec.penalty_type_name.toLowerCase() === selectedTypeFilter.toLowerCase();
+      const matchesType = selectedTypeFilter === "All" || rec.penalty_type_id === selectedTypeFilter;
 
       // Search filter
       const q = searchQuery.toLowerCase().trim();
@@ -492,15 +543,18 @@ export function Penalties() {
     });
   }, [records, activeTab, statusFilter, selectedEmployeeFilter, selectedTypeFilter, searchQuery]);
 
-  // Type filter: configured types plus any type found on records (e.g. automatic Late Punch-in)
-  const typeFilterNames = useMemo(() => {
-    const byKey = new Map<string, string>();
-    [...penaltyTypes.map(t => t.name), ...records.map(r => r.penalty_type_name)].forEach(name => {
-      const key = (name || "").trim().toLowerCase();
-      if (key && !byKey.has(key)) byKey.set(key, name.trim());
-    });
-    return Array.from(byKey.values());
-  }, [penaltyTypes, records]);
+  // Type filter: only the types configured under Penalty Types, matched by id
+  // so a deleted-type name on old records never shows up here
+  const typeFilterOptions = useMemo(
+    () => penaltyTypes.filter(t => t.id && t.name).map(t => ({ label: t.name.trim(), value: t.id })),
+    [penaltyTypes]
+  );
+
+  // Reset the filter if its type was deleted
+  useEffect(() => {
+    if (selectedTypeFilter === "All") return;
+    if (!typeFilterOptions.some(o => o.value === selectedTypeFilter)) setSelectedTypeFilter("All");
+  }, [typeFilterOptions, selectedTypeFilter]);
 
   // Dynamic KPI Metrics (fallback to client calc if summary not yet loaded)
   const activePenaltiesCount = summary?.active_penalties_count ?? records.filter(r => !r.is_warning && r.status === "Active").length;
@@ -705,7 +759,7 @@ export function Penalties() {
                   onChange={(val) => setSelectedTypeFilter(String(val))}
                   options={[
                     { label: "All Types", value: "All" },
-                    ...typeFilterNames.map(name => ({ label: name, value: name }))
+                    ...typeFilterOptions
                   ]}
                   placeholder="Penalty Type"
                   className="w-full h-[38px] text-xs bg-background border-border rounded-xl"
@@ -746,17 +800,17 @@ export function Penalties() {
               </button>
 
               {isAdminOrHr && (
-                <Dialog open={isTypeOpen} onOpenChange={setIsTypeOpen}>
+                <Dialog open={isTypeOpen} onOpenChange={open => { setIsTypeOpen(open); if (!open) resetTypeForm(); }}>
                   <DialogTrigger asChild>
                     <button className="px-3.5 py-2 rounded-xl border border-border bg-card text-foreground hover:bg-muted font-bold text-sm transition-all flex items-center gap-2 shadow-sm shrink-0">
                       <ShieldAlert className="w-4 h-4" />
-                      <span className="hidden sm:inline">Add Penalty Type</span>
+                      <span className="hidden sm:inline">Penalty Types</span>
                     </button>
                   </DialogTrigger>
-                  <DialogContent className="w-[calc(100vw-24px)] sm:max-w-[460px] max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
-                    <div className="flex items-center justify-between px-6 md:px-8 py-5 border-b border-border/50 bg-muted/30">
+                  <DialogContent className="w-[calc(100vw-24px)] sm:max-w-[860px] max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+                    <div className="flex items-center justify-between px-6 md:px-8 py-5 border-b border-border/50 bg-muted/30 shrink-0">
                       <div>
-                        <h2 className="text-xl md:text-2xl font-black tracking-tight">Add Penalty Type</h2>
+                        <h2 className="text-xl md:text-2xl font-black tracking-tight">Penalty Types</h2>
                         <p className="text-xs text-muted-foreground mt-0.5">Warning limit = warnings before it becomes a paid penalty</p>
                       </div>
                       <DialogClose asChild>
@@ -766,8 +820,61 @@ export function Penalties() {
                       </DialogClose>
                     </div>
 
-                    <form onSubmit={handleCreateType} className="flex flex-col min-h-0 max-h-[90dvh]">
-                      <div className="p-4 sm:p-6 md:p-8 space-y-5 overflow-y-auto flex-1 min-h-0">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-4 sm:p-6 overflow-y-auto flex-1 min-h-0">
+                      {/* Existing types */}
+                      <div className="space-y-3 md:max-h-[60dvh] md:overflow-y-auto md:pr-2 custom-scrollbar">
+                        {penaltyTypes.length === 0 ? (
+                          <div className="text-center p-8 text-muted-foreground text-sm border border-dashed border-border rounded-xl">
+                            No penalty types yet. Add one using the form.
+                          </div>
+                        ) : penaltyTypes.map(t => (
+                          <div
+                            key={t.id}
+                            className={cn(
+                              "flex items-start justify-between gap-3 p-4 rounded-xl border bg-background/50 hover:bg-muted/30 transition-colors",
+                              editingTypeId === t.id ? "border-primary/50 ring-2 ring-primary/10" : "border-border/50"
+                            )}
+                          >
+                            <div className="min-w-0">
+                              <h4 className="font-bold text-foreground text-sm">{t.name}</h4>
+                              {t.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{t.description}</p>}
+                              <div className="flex flex-wrap items-center gap-2 mt-2">
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-destructive/10 text-destructive">
+                                  ₹{t.default_price}
+                                </span>
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-700">
+                                  {t.warning_limit > 0 ? `${t.warning_limit} warning${t.warning_limit > 1 ? "s" : ""} before penalty` : "No warnings"}
+                                </span>
+                                {isSystemType(t) && (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-muted text-foreground/70">Automatic</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => startEditType(t)}
+                                title="Edit"
+                                className="p-2 hover:bg-primary/10 text-muted-foreground hover:text-primary rounded-lg transition-colors"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setTypeDeleteConfirm({ isOpen: true, id: t.id, label: t.name })}
+                                title="Delete"
+                                className="p-2 hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-lg transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Add / Edit form */}
+                      <form onSubmit={handleSaveType} className="bg-muted/30 border border-border rounded-2xl p-5 space-y-4 h-fit">
+                        <h4 className="font-bold text-sm text-foreground">{editingTypeId ? "Edit Penalty Type" : "Add Penalty Type"}</h4>
                         <div className="space-y-1.5">
                           <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
                             Name *
@@ -781,10 +888,10 @@ export function Penalties() {
                             className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                           />
                         </div>
-                        <div className="flex flex-col sm:flex-row gap-4">
-                          <div className="space-y-1.5 flex-1">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
                             <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
-                              Default Amount (₹)
+                              Amount (₹)
                             </label>
                             <input
                               type="number"
@@ -795,7 +902,7 @@ export function Penalties() {
                               className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                             />
                           </div>
-                          <div className="space-y-1.5 flex-1">
+                          <div className="space-y-1.5">
                             <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
                               Warning Limit
                             </label>
@@ -822,26 +929,28 @@ export function Penalties() {
                             className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
                           />
                         </div>
-                      </div>
-
-                      <div className="px-6 md:px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => setIsTypeOpen(false)}
-                          className="px-4 py-2 bg-background border border-border text-foreground/80 hover:bg-muted font-bold text-sm rounded-xl transition-colors"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          disabled={isSavingType}
-                          className="px-5 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm rounded-xl transition-colors flex items-center gap-2"
-                        >
-                          {isSavingType && <Loader2 className="w-4 h-4 animate-spin" />}
-                          Save Type
-                        </button>
-                      </div>
-                    </form>
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {editingTypeId && (
+                            <button
+                              type="button"
+                              onClick={resetTypeForm}
+                              disabled={isSavingType}
+                              className="flex-1 min-w-[100px] h-10 px-4 whitespace-nowrap bg-background border border-border text-foreground/80 hover:bg-muted font-bold text-sm rounded-xl transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          )}
+                          <button
+                            type="submit"
+                            disabled={isSavingType}
+                            className="flex-1 min-w-[140px] h-10 px-4 whitespace-nowrap bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-60"
+                          >
+                            {isSavingType ? <Loader2 className="w-4 h-4 animate-spin" /> : editingTypeId ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                            {editingTypeId ? "Save Changes" : "Add Type"}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
                   </DialogContent>
                 </Dialog>
               )}
@@ -884,6 +993,15 @@ export function Penalties() {
                             placeholder="Select Pre-defined Type"
                             className="w-full h-[40px] px-3 bg-muted/30 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 font-medium"
                           />
+                          {(() => {
+                            const limit = penaltyTypes.find(t => t.id === newTypeId)?.warning_limit || 0;
+                            if (limit <= 0) return null;
+                            return (
+                              <p className="text-[11px] font-medium text-amber-700 bg-amber-100/60 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                                Each employee first gets {limit} warning{limit > 1 ? "s" : ""} for this type; after that it is added as a penalty automatically.
+                              </p>
+                            );
+                          })()}
                         </div>
 
                         {/* Record Type Switch */}
@@ -1373,6 +1491,20 @@ export function Penalties() {
         description="Are you sure you want to remove this disciplinary record? This action will remove it from payroll calculations and active violation statistics."
         confirmText="Delete Record"
         variant="destructive"
+      />
+
+      {/* Remove Penalty Type Confirmation */}
+      <ConfirmModal
+        isOpen={typeDeleteConfirm.isOpen}
+        onClose={() => setTypeDeleteConfirm({ isOpen: false, id: null, label: "" })}
+        onConfirm={confirmRemoveType}
+        title="Remove Penalty Type"
+        description={
+          isSystemType(penaltyTypes.find(t => t.id === typeDeleteConfirm.id))
+            ? `"${typeDeleteConfirm.label}" is used for automatic late penalties. It will be re-created with default settings (₹100, no warnings) the next time it is needed. Existing records keep their name.`
+            : `Are you sure you want to remove the penalty type "${typeDeleteConfirm.label}"? Existing penalty records of this type will keep its name.`
+        }
+        itemName={typeDeleteConfirm.label}
       />
     </div>
   );

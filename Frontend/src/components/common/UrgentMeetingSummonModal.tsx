@@ -10,6 +10,7 @@ import {
 import { useAuth } from "@/components/auth/AuthContext";
 import { getAuthToken } from "@/lib/api";
 import { getApiUrl } from "@/lib/config";
+import { getAppFavicon } from "@/lib/favicon";
 
 interface SummonEvent {
   summon_id: string;
@@ -49,7 +50,7 @@ function formatToIST(timestamp?: string | number | Date): string {
 
 // Convert relative avatar path to full backend image URL
 function getFullAvatarUrl(avatar?: string): string {
-  if (!avatar) return "/favicon.ico";
+  if (!avatar) return getAppFavicon() || "";
   if (avatar.startsWith("http://") || avatar.startsWith("https://") || avatar.startsWith("data:")) {
     return avatar;
   }
@@ -101,11 +102,11 @@ export function UrgentMeetingSummonModal() {
     // 2. Fire high-priority desktop notification so user sees it over WhatsApp or any other app
     if (typeof Notification !== "undefined" && Notification.permission === "granted") {
       try {
-        const avatarUrl = summon.caller_avatar ? getFullAvatarUrl(summon.caller_avatar) : "/favicon.ico";
+        const avatarUrl = summon.caller_avatar ? getFullAvatarUrl(summon.caller_avatar) : getAppFavicon();
         const notif = new Notification(`🚨 URGENT SUMMON: ${summon.caller_name}`, {
           body: `Report immediately to ${summon.location}. Instructions: "${summon.notes}"`,
-          icon: avatarUrl,
-          badge: "/favicon.ico",
+          ...(avatarUrl ? { icon: avatarUrl } : {}),
+          ...(getAppFavicon() ? { badge: getAppFavicon() as string } : {}),
           requireInteraction: true,
           tag: `summon-${summon.summon_id}`,
         });
@@ -311,7 +312,10 @@ export function UrgentMeetingSummonModal() {
                   alt={activeSummon.caller_name}
                   className="w-9 h-9 rounded-full object-cover border border-border/70 shadow-sm shrink-0"
                   onError={(e) => {
-                    (e.target as HTMLImageElement).src = "/favicon.ico";
+                    const fallback = getAppFavicon();
+                    const img = e.target as HTMLImageElement;
+                    if (fallback && img.src !== fallback) img.src = fallback;
+                    else img.style.display = "none";
                   }}
                 />
               ) : null}

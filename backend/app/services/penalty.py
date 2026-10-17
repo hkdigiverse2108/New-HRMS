@@ -3,8 +3,10 @@ from typing import Optional, List, Dict, Any
 from app.repository.penalty import PenaltyTypeRepository, EmployeePenaltyRepository, EMPLOYEE_CARD_PROJECTION, employee_card
 from app.schemas.penalty import PenaltyTypeCreate, PenaltyTypeUpdate, EmployeePenaltyCreate, EmployeePenaltyUpdate, PenaltySummaryResponse
 
-# v2: older "penalties:types:all" entries never expired and could miss auto-created types
-PENALTY_TYPES_CACHE_KEY = "penalties:types:v2"
+# v3: cached lists must carry system_key (v2 entries predate it)
+PENALTY_TYPES_CACHE_KEY = "penalties:types:v3"
+# Marks the type used by automatic late penalties, so it can be renamed freely
+LATE_PUNCHIN_SYSTEM_KEY = "late_punch_in"
 
 class PenaltyService:
     # --- Penalty Types ---
@@ -30,14 +32,14 @@ class PenaltyService:
             # Seed default penalty presets if collection is empty
             defaults = [
                 {"name": "Late Arrival", "default_price": 100.0, "warning_limit": 3, "description": "Repeated late arrivals without prior notice."},
-                {"name": "Late Punch-in", "default_price": 100.0, "warning_limit": 0, "description": "Automatic penalty for punching in late."},
+                {"name": "Late Punch-in", "default_price": 100.0, "warning_limit": 0, "description": "Automatic penalty for punching in late.", "system_key": LATE_PUNCHIN_SYSTEM_KEY},
                 {"name": "Security Policy Violation", "default_price": 500.0, "warning_limit": 0, "description": "Unauthorized access or violation of company security policies."},
                 {"name": "No Show", "default_price": 200.0, "warning_limit": 0, "description": "Absent from work without notice or approval."}
             ]
             for d in defaults:
                 await PenaltyTypeRepository.create(d)
             types = await PenaltyTypeRepository.get_all()
-        elif not any(t.get("name", "").strip().lower() == "late punch-in" for t in types):
+        elif not any(t.get("system_key") == LATE_PUNCHIN_SYSTEM_KEY for t in types):
             # Automatic late penalties need this type; keep it in every dropdown
             await PenaltyService.ensure_late_punchin_penalty_type()
             types = await PenaltyTypeRepository.get_all()
@@ -45,21 +47,28 @@ class PenaltyService:
 
     @staticmethod
     async def ensure_late_punchin_penalty_type() -> str:
+        from app.redis.service import delete_cache
         types = await PenaltyTypeRepository.get_all()
         for t in types:
-            if t.get("name", "").lower() == "late punch-in":
+            if t.get("system_key") == LATE_PUNCHIN_SYSTEM_KEY:
                 return str(t["_id"])
-                
+
+        # Older data identified this type by name only; tag it so a rename keeps it linked
+        for t in types:
+            if t.get("name", "").strip().lower() == "late punch-in":
+                await PenaltyTypeRepository.update(str(t["_id"]), {"system_key": LATE_PUNCHIN_SYSTEM_KEY})
+                await delete_cache(PENALTY_TYPES_CACHE_KEY)
+                return str(t["_id"])
+
         # Create it if it doesn't exist
-        new_type = PenaltyTypeCreate(
-            name="Late Punch-in",
-            default_price=100.0,
-            warning_limit=0,
-            description="Automatic penalty for punching in late."
-        )
-        created = await PenaltyService.create_penalty_type(new_type)
+        created = await PenaltyTypeRepository.create({
+            "name": "Late Punch-in",
+            "default_price": 100.0,
+            "warning_limit": 0,
+            "description": "Automatic penalty for punching in late.",
+            "system_key": LATE_PUNCHIN_SYSTEM_KEY,
+        })
         # Created outside the types API, so drop the cached list ourselves
-        from app.redis.service import delete_cache
         await delete_cache(PENALTY_TYPES_CACHE_KEY)
         return str(created.get("_id") or created.get("id"))
 
@@ -79,9 +88,6 @@ class PenaltyService:
             update_data["name"] = (update_data["name"] or "").strip()
             if not update_data["name"]:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Penalty type name is required")
-            existing = await PenaltyService.get_penalty_type_by_id(item_id)
-            if existing.get("name", "").lower() == "late punch-in" and update_data["name"].lower() != "late punch-in":
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="'Late Punch-in' is used by automatic penalties and cannot be renamed")
             await PenaltyService._ensure_unique_type_name(update_data["name"], exclude_id=item_id)
             
         updated_item = await PenaltyTypeRepository.update(item_id, update_data)
@@ -92,14 +98,10 @@ class PenaltyService:
     @staticmethod
     async def delete_penalty_type(item_id: str):
         existing = await PenaltyService.get_penalty_type_by_id(item_id)
-        if existing.get("name", "").lower() == "late punch-in":
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="'Late Punch-in' is used by automatic penalties and cannot be deleted")
-        in_use = await EmployeePenaltyRepository.count_by_type(item_id)
-        if in_use:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"This penalty type is used by {in_use} penalty record(s) and cannot be deleted"
-            )
+        # Records keep a copy of the type name so their history still reads correctly
+        if await EmployeePenaltyRepository.count_by_type(item_id):
+            await EmployeePenaltyRepository.snapshot_type_name(item_id, existing.get("name") or "Penalty")
+        # The automatic late type is re-created with defaults the next time it is needed
         success = await PenaltyTypeRepository.delete(item_id)
         if not success:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Penalty type not found")
@@ -113,32 +115,35 @@ class PenaltyService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid penalty type")
         
         insert_data = data.model_dump(exclude_unset=True)
-        warning_limit = type_exists.get("warning_limit", 0)
-        
-        # Check previous penalties for warning limit
-        previous_penalties = await EmployeePenaltyRepository.get_all(
-            is_deleted=False, 
-            employee_id=data.employee_id, 
-            penalty_type_id=data.penalty_type_id
-        )
-        count = previous_penalties.get("total", len(previous_penalties.get("data", [])))
-        
-        if data.is_warning is not None:
-            insert_data["is_warning"] = data.is_warning
-            if data.is_warning:
-                insert_data["price"] = 0.0
-            else:
-                insert_data["price"] = data.price if data.price is not None else float(type_exists.get("default_price", 0.0))
-        elif warning_limit > 0:
-            if count < warning_limit:
-                insert_data["is_warning"] = True
-                insert_data["price"] = 0.0
-            else:
-                insert_data["is_warning"] = False
-                insert_data["price"] = data.price if data.price is not None else float(type_exists.get("default_price", 0.0))
+        # Fallback name for this record if its type is ever deleted (live type name is shown otherwise)
+        insert_data["penalty_type_name"] = type_exists.get("name") or "Penalty"
+        warning_limit = int(type_exists.get("warning_limit", 0) or 0)
+        default_price = float(type_exists.get("default_price", 0.0))
+
+        # Warnings this employee already got for this type (waived ones don't count)
+        warnings_given = 0
+        if warning_limit > 0:
+            previous_warnings = await EmployeePenaltyRepository.get_all(
+                is_deleted=False,
+                employee_id=data.employee_id,
+                penalty_type_id=data.penalty_type_id,
+                type_filter="warning",
+            )
+            warnings_given = sum(1 for p in previous_warnings.get("data", []) if p.get("status") != "Waived")
+
+        if warning_limit > 0 and warnings_given < warning_limit:
+            # Type's warning limit decides first: the first N records are always warnings
+            insert_data["is_warning"] = True
+            insert_data["price"] = 0.0
+            insert_data["impact_payroll"] = False
+        elif data.is_warning:
+            # Limit used up (or none set), but a warning was asked for explicitly
+            insert_data["is_warning"] = True
+            insert_data["price"] = 0.0
+            insert_data["impact_payroll"] = False
         else:
             insert_data["is_warning"] = False
-            insert_data["price"] = data.price if data.price is not None else float(type_exists.get("default_price", 0.0))
+            insert_data["price"] = data.price if data.price else default_price
 
         if "impact_payroll" not in insert_data:
             insert_data["impact_payroll"] = not insert_data.get("is_warning", False) and (float(insert_data.get("price", 0)) > 0)
@@ -212,12 +217,14 @@ class PenaltyService:
         if not update_data:
             return await PenaltyService.get_penalty_by_id(item_id)
             
-        # If penalty type is changing and no explicit price is provided, update default price
-        if "penalty_type_id" in update_data and "price" not in update_data:
+        # If penalty type is changing, take its current name (and default price unless one is given)
+        if update_data.get("penalty_type_id"):
             type_exists = await PenaltyTypeRepository.get_by_id(update_data["penalty_type_id"])
             if not type_exists:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid penalty type")
-            update_data["price"] = type_exists.get("default_price", 0.0)
+            update_data["penalty_type_name"] = type_exists.get("name") or "Penalty"
+            if "price" not in update_data:
+                update_data["price"] = type_exists.get("default_price", 0.0)
             
         updated_item = await EmployeePenaltyRepository.update(item_id, update_data)
         if not updated_item:

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { FAVICON_STORAGE_KEY, syncFaviconToServiceWorker } from "@/lib/favicon";
 
 interface ThemeContextType {
   color: string;
@@ -17,6 +18,8 @@ interface ThemeContextType {
   setFontFamily: (font: string) => void;
   logoUrl: string;
   setLogoUrl: (url: string) => void;
+  faviconUrl: string;
+  setFaviconUrl: (url: string) => void;
   companyName: string;
   setCompanyName: (name: string) => void;
 }
@@ -72,6 +75,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [radius, setRadius] = useState<number>(0.75);
   const [fontFamily, setFontFamily] = useState<string>("Inter");
   const [logoUrl, setLogoUrl] = useState<string>("");
+  const [faviconUrl, setFaviconUrl] = useState<string>("");
   const [companyName, setCompanyName] = useState<string>("HR Suite");
 
   useEffect(() => {
@@ -84,6 +88,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const savedRadius = localStorage.getItem("app-theme-radius");
     const savedFont = localStorage.getItem("app-theme-font");
     const savedLogo = localStorage.getItem("app-theme-logo");
+    const savedFavicon = localStorage.getItem(FAVICON_STORAGE_KEY);
     const savedName = localStorage.getItem("app-theme-name");
 
     if (savedColor) setColor(savedColor);
@@ -100,6 +105,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     } if (savedRadius) setRadius(parseFloat(savedRadius));
     if (savedFont) setFontFamily(savedFont);
     if (savedLogo) setLogoUrl(savedLogo);
+    if (savedFavicon) setFaviconUrl(savedFavicon);
     if (savedName) setCompanyName(savedName);
   }, []);
 
@@ -179,6 +185,27 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   }, [color, isGradient, gradientType, gradientDirection, gradientColors, radius, fontFamily, logoUrl, companyName]);
 
+  // Browser tab icon: the favicon uploaded in Admin Settings
+  useEffect(() => {
+    // Runs after the load effect above has already read the saved value
+    localStorage.setItem(FAVICON_STORAGE_KEY, faviconUrl);
+    syncFaviconToServiceWorker(faviconUrl);
+    // No upload means no icon at all (never the bundled default)
+    const href = faviconUrl || "data:,";
+    const links = document.querySelectorAll<HTMLLinkElement>('link[rel~="icon"], link[rel="apple-touch-icon"]');
+    if (links.length === 0) {
+      const link = document.createElement("link");
+      link.rel = "icon";
+      document.head.appendChild(link);
+      link.href = href;
+      return;
+    }
+    links.forEach(link => {
+      link.href = href;
+      link.removeAttribute("type");
+    });
+  }, [faviconUrl]);
+
   return (
     <ThemeContext.Provider value={{ 
       color, setColor, 
@@ -189,6 +216,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       radius, setRadius, 
       fontFamily, setFontFamily, 
       logoUrl, setLogoUrl, 
+      faviconUrl, setFaviconUrl,
       companyName, setCompanyName 
     }}>
       {children}
