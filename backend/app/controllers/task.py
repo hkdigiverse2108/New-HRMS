@@ -102,6 +102,8 @@ async def create_task(data: TaskCreate, current_user: dict = Depends(get_current
         
     created = await TaskService.create_task(data, assigned_by)
     await clear_pattern("tasks:*")
+    if getattr(data.status, "value", data.status) == "inprogress":
+        await _sync_punch_in_task(str(created["_id"]))
     return await TaskService.get_task_by_id(created["_id"])
 
 @router.post("/quick-assign", response_model=list[TaskResponse], status_code=status.HTTP_201_CREATED)
@@ -298,6 +300,16 @@ async def get_task_by_id(task_id: str, current_user: dict = Depends(get_current_
             
     return item
 
+async def _sync_punch_in_task(task_id: str) -> None:
+    try:
+        from app.services.attendance import AttendanceService
+        task = await TaskService.get_task_by_id(task_id)
+        if task and task.get("assigned_to"):
+            await AttendanceService.sync_task_started(str(task["assigned_to"]), task)
+            await clear_pattern("attendance:*")
+    except Exception as e:
+        print(f"[TASK] Could not sync punch-in task {task_id}: {e}")
+
 @router.put("/{task_id}", response_model=TaskResponse)
 async def update_task(task_id: str, data: TaskUpdate, current_user: dict = Depends(get_current_employee)):
     item = await TaskService.get_task_by_id(task_id)
@@ -328,6 +340,19 @@ async def update_task(task_id: str, data: TaskUpdate, current_user: dict = Depen
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to update task")
         
     await clear_pattern("tasks:*")
+
+    # Starting a task here also makes it the current task in the punch-in widget
+    new_status = getattr(data.status, "value", data.status)
+    if new_status == "inprogress" and item.get("status") != "inprogress":
+        await _sync_punch_in_task(task_id)
+
+    # Punch-in keeps a copy of the task title; keep it in step with the edit
+    new_title = (data.title or "").strip() if data.title is not None else ""
+    if new_title and new_title != (item.get("title") or ""):
+        from app.repository.attendance import AttendanceRepository
+        if await AttendanceRepository.rename_task(task_id, new_title):
+            await clear_pattern("attendance:*")
+
     return await TaskService.get_task_by_id(task_id)
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)

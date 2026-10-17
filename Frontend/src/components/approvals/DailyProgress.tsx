@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { 
   Search, 
+  User as UserIcon,
   Filter, 
   CheckCircle2, 
   Clock, 
@@ -17,7 +18,8 @@ import {
 } from "lucide-react";
 import { DialogClose, Dialog, DialogContent } from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/select";
-import { DatePicker } from "@/components/ui/date-picker";
+import { DateRangeFilter } from "@/components/common/DateRangeFilter";
+import { format as formatDateFns, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { toast } from "@/lib/toast";
@@ -150,11 +152,30 @@ export function DailyProgress() {
 
   // Filter Group Tab: 'leaders_hr' (Team Leaders, Heads, HR - default for Admin) vs 'employees' (Regular Staff)
   const [groupTab, setGroupTab] = useState<GroupTab>("leaders_hr");
+  // Team Leader (not Admin/HR/Head): own report vs team members' reports
+  const showLeaderTabs = isTeamLeader && !(isAdmin || isHr || isHead);
+  const [leaderView, setLeaderView] = useState<"team" | "my">("team");
 
   const [search, setSearch] = useState("");
   // Default = TODAY
   const [startDate, setStartDate] = useState(todayStr());
   const [endDate, setEndDate] = useState(todayStr());
+
+  // Picker works with Date objects; the API and filters use YYYY-MM-DD strings
+  const dateRangeValue = useMemo(
+    () => (startDate ? { from: parseISO(startDate), to: parseISO(endDate || startDate) } : undefined),
+    [startDate, endDate]
+  );
+  const handleDateRangeChange = (range?: { from?: Date; to?: Date }) => {
+    if (!range?.from) {
+      setStartDate("");
+      setEndDate("");
+      return;
+    }
+    // A single picked day (no end yet) filters just that day
+    setStartDate(formatDateFns(range.from, "yyyy-MM-dd"));
+    setEndDate(formatDateFns(range.to || range.from, "yyyy-MM-dd"));
+  };
   const [statusFilter, setStatusFilter] = useState<VerificationStatus | "All">("All");
   const [employeeFilter, setEmployeeFilter] = useState<string>("All");
   const [departmentFilter, setDepartmentFilter] = useState<string>("All");
@@ -291,10 +312,16 @@ export function DailyProgress() {
     fetchStats();
   }, [fetchRecords, fetchStats]);
 
+  const myProgressCount = records.filter(r => r.employee_id === user?.id).length;
+  const teamProgressCount = records.filter(r => r.employee_id !== user?.id).length;
+
   const filteredRecords = records.filter(rec => {
     if (!isReviewer && rec.employee_id !== user?.id) return false;
-    // Team Leader: only team members, own report is not shown
-    if (isTeamLeader && rec.employee_id === user?.id) return false;
+    // Team Leader: "My Progress" = own report, "Team Progress" = team members
+    if (showLeaderTabs) {
+      if (leaderView === "my" && rec.employee_id !== user?.id) return false;
+      if (leaderView === "team" && rec.employee_id === user?.id) return false;
+    }
 
     // Reviewer category tabs (Admin, HR, Head)
     if (isAdmin || isHr || isHead) {
@@ -499,6 +526,43 @@ export function DailyProgress() {
         </div>
       )}
 
+      {/* My / Team tabs for Team Leaders */}
+      {showLeaderTabs && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-1.5 bg-card/60 border border-border/40 rounded-2xl">
+          <div className="flex items-center gap-1.5 p-1 bg-muted/40 rounded-xl w-full sm:w-auto">
+            {([
+              { key: "my", label: "My Progress", icon: <UserIcon className="w-4 h-4 text-amber-500" />, count: myProgressCount },
+              { key: "team", label: "Team Progress", icon: <Users className="w-4 h-4 text-primary" />, count: teamProgressCount },
+            ] as const).map(tab => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => { setLeaderView(tab.key); setEmployeeFilter("All"); }}
+                className={cn(
+                  "flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-xs font-black transition-all cursor-pointer",
+                  leaderView === tab.key
+                    ? "bg-card text-foreground shadow-sm border border-border/60"
+                    : "text-muted-foreground hover:text-foreground hover:bg-card/50"
+                )}
+              >
+                {tab.icon}
+                <span>{tab.label}</span>
+                <span className={cn(
+                  "px-2 py-0.5 rounded-full text-[10px] font-black",
+                  leaderView === tab.key ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                )}>
+                  {tab.count}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <div className="text-xs text-muted-foreground font-medium px-2 hidden sm:block">
+            {leaderView === "my" ? "Showing your own daily progress" : "Showing your team members' daily progress"}
+          </div>
+        </div>
+      )}
+
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-card border border-border/50 p-4 rounded-2xl shadow-sm">
         <div className="relative w-full sm:max-w-md">
@@ -514,14 +578,17 @@ export function DailyProgress() {
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           {isReviewer && (
             <>
-              <div className="relative w-full sm:w-[170px]">
-                <SearchableSelect
-                  value={employeeFilter}
-                  onChange={(val) => setEmployeeFilter(val)}
-                  options={employeeOptions.length > 0 ? employeeOptions : [{ label: "All Employees", value: "All" }]}
-                  className="w-full h-[42px] bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-xs font-bold cursor-pointer"
-                />
-              </div>
+              {/* "My Progress" only has the leader's own report, so no employee filter there */}
+              {!(showLeaderTabs && leaderView === "my") && (
+                <div className="relative w-full sm:w-[170px]">
+                  <SearchableSelect
+                    value={employeeFilter}
+                    onChange={(val) => setEmployeeFilter(val)}
+                    options={employeeOptions.length > 0 ? employeeOptions : [{ label: "All Employees", value: "All" }]}
+                    className="w-full h-[42px] bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-xs font-bold cursor-pointer"
+                  />
+                </div>
+              )}
               {(isAdmin || isHr) && (
                 <div className="relative w-full sm:w-[190px]">
                   <SearchableSelect
@@ -534,18 +601,12 @@ export function DailyProgress() {
               )}
             </>
           )}
-          <DatePicker
-            value={startDate}
-            onChange={(val) => setStartDate(val)}
-            placeholder="Start date"
-            className="w-full sm:w-[135px]"
-          />
-          <span className="text-muted-foreground text-sm font-bold">to</span>
-          <DatePicker
-            value={endDate}
-            onChange={(val) => setEndDate(val)}
-            placeholder="End date"
-            className="w-full sm:w-[135px]"
+          {/* One picker: click a single day, or a start and an end day for a range */}
+          <DateRangeFilter
+            value={dateRangeValue}
+            onChange={handleDateRangeChange}
+            placeholder="Select date / range"
+            className="w-full sm:w-auto"
           />
           <div className="relative w-full sm:w-auto">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />

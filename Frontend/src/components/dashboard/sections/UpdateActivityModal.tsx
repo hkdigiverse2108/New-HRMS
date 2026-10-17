@@ -20,6 +20,7 @@ interface UpdateActivityModalProps {
   onClose: () => void;
   onSave: (task: SelectedTaskInfo) => void;
   currentTaskTitle?: string | null;
+  currentTaskId?: string | null;
   employeeId?: string;
   isChangeMode?: boolean;
 }
@@ -38,6 +39,7 @@ export function UpdateActivityModal({
   onClose,
   onSave,
   currentTaskTitle,
+  currentTaskId,
   employeeId,
   isChangeMode = false,
 }: UpdateActivityModalProps) {
@@ -219,7 +221,13 @@ export function UpdateActivityModal({
           try {
             const savedStr = localStorage.getItem("hrms_custom_activities");
             if (savedStr) {
-              const savedItems: Array<{ id: string; title: string; category: WorkActivityType; dueDate?: string }> = JSON.parse(savedStr);
+              const allSaved: Array<{ id: string; title: string; category: WorkActivityType; dueDate?: string }> = JSON.parse(savedStr);
+              // Entries that are real tasks come from the API with their current title
+              // (a rename, completion or delete must not leave an old copy behind)
+              const savedItems = allSaved.filter(item => !/^[a-f0-9]{24}$/i.test(String(item.id || "")));
+              if (savedItems.length !== allSaved.length) {
+                localStorage.setItem("hrms_custom_activities", JSON.stringify(savedItems));
+              }
               savedItems.forEach(item => {
                 const title = (item.title || "").trim();
                 if (!title) return;
@@ -264,7 +272,9 @@ export function UpdateActivityModal({
           // If editing an existing task, preselect only that one
           if (currentTaskTitle) {
             const allItems = [...todayList, ...upcomingList, ...researchList, ...activityList, ...meetingList];
-            const found = allItems.find(x => x.title.toLowerCase() === currentTaskTitle.toLowerCase());
+            // Match by id first so a renamed task is still found
+            const found = (currentTaskId && allItems.find(x => x.id === String(currentTaskId))) ||
+              allItems.find(x => x.title.toLowerCase() === currentTaskTitle.toLowerCase());
             if (found) {
               setSelectedTask({
                 taskId: found.id,

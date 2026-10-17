@@ -69,6 +69,14 @@ async def resolve_pending_punch_out(
     await clear_pattern("attendance:*")
     return result
 
+async def _start_selected_task(employee_id: str, task_id: Optional[str]) -> None:
+    """The task chosen at punch-in / task switch becomes the only in-progress task."""
+    try:
+        from app.services.task import TaskService
+        await TaskService.start_task_for_punch_in(employee_id, task_id)
+    except Exception as e:
+        print(f"[ATTENDANCE] Could not start task {task_id}: {e}")
+
 @router.post("/punch-in/{employee_id}")
 async def punch_in(
     employee_id: str,
@@ -104,6 +112,7 @@ async def punch_in(
         task_title=task_title,
         task_type=task_type
     )
+    await _start_selected_task(employee_id, task_id)
 
     if result and result.get("is_late"):
         try:
@@ -140,6 +149,7 @@ async def change_active_task(
         task_title=payload.task_title,
         task_type=payload.task_type
     )
+    await _start_selected_task(employee_id, payload.task_id)
     await clear_pattern("attendance:*")
     return result
 

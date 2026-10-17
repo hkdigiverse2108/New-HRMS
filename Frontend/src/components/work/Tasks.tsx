@@ -708,6 +708,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
         }
         await api.put(`/tasks/${editingTaskId}`, payload);
         toast.success("Task updated successfully!");
+        // Punch-in widget shows the current task title; let it refetch
+        window.dispatchEvent(new Event("attendance_updated"));
       } else {
         await api.post("/tasks", payload);
         toast.success(isSelf ? "Task added to your personal list!" : "New task created successfully!");
@@ -764,6 +766,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
       await api.put(`/tasks/${taskId}`, { status: backendStatus });
       toast.success(`Task status updated to ${nextStatus}!`);
       fetchTasksData();
+      // Starting a task also switches the punch-in widget's current task
+      if (backendStatus === "inprogress") window.dispatchEvent(new Event("attendance_updated"));
     } catch (e: any) {
       console.error("Failed to update status:", e);
       toast.error(e?.message || "Failed to update task status.");

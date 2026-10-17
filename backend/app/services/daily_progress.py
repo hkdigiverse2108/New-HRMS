@@ -151,8 +151,11 @@ class DailyProgressService:
                     continue
                 target.append(e)
             elif is_tl:
-                # Team Leader: manages team members, employee only (no other TL/Head/HR), excludes self
-                if eid == uid or is_l_hr:
+                # Team Leader: own report plus team members (no other TL/Head/HR)
+                if eid == uid:
+                    target.append(e)
+                    continue
+                if is_l_hr:
                     continue
                 user_dept = str(current_user.get("work_details", {}).get("department") or "").strip().lower()
                 user_sub = str(current_user.get("work_details", {}).get("sub_department") or "").strip().lower()

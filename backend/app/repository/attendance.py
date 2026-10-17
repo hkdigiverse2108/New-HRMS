@@ -27,6 +27,21 @@ class AttendanceRepository:
     collection_name = "attendance"
 
     @classmethod
+    async def rename_task(cls, task_id: str, title: str) -> int:
+        """Update the task title copied onto attendance records (current task + task history)."""
+        collection = await cls.get_collection()
+        current = await collection.update_many(
+            {"current_task_id": task_id},
+            {"$set": {"current_task_title": title}},
+        )
+        history = await collection.update_many(
+            {"task_history.task_id": task_id},
+            {"$set": {"task_history.$[t].task_title": title}},
+            array_filters=[{"t.task_id": task_id}],
+        )
+        return current.modified_count + history.modified_count
+
+    @classmethod
     async def get_collection(cls):
         db = get_database()
         return db[cls.collection_name]

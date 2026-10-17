@@ -264,7 +264,8 @@ class TaskService:
             except Exception as ne:
                 print(f"[TASK NOTIF ERROR] {ne}")
 
-        if str(insert_data.get("status", "")).lower() == "inprogress" and insert_data.get("assigned_to"):
+        status_value = getattr(insert_data.get("status"), "value", insert_data.get("status"))
+        if str(status_value or "").lower() == "inprogress" and insert_data.get("assigned_to"):
             await TaskService._enforce_single_inprogress_task(insert_data["assigned_to"], created_id, assigned_by)
 
         await clear_pattern("tasks:*")
@@ -408,6 +409,20 @@ class TaskService:
         return item
 
     @staticmethod
+    async def start_task_for_punch_in(employee_id: str, task_id: Optional[str]) -> None:
+        """Task picked in the punch-in widget becomes the employee's only in-progress task."""
+        if not task_id or not employee_id:
+            return
+        task = await TaskRepository.get_by_id(task_id)
+        # Research items and custom entries are not tasks; finished tasks stay finished
+        if not task or task.get("is_deleted") or str(task.get("assigned_to")) != str(employee_id):
+            return
+        if task.get("status") in ("inprogress", "completed"):
+            return
+        from app.schemas.task import TaskUpdate
+        await TaskService.update_task(task_id, TaskUpdate(status="inprogress"), updater_id=str(employee_id))
+
+    @staticmethod
     async def _enforce_single_inprogress_task(employee_id: str, current_task_id: str, updater_id: Optional[str] = None):
         if not employee_id:
             return
@@ -455,7 +470,8 @@ class TaskService:
                 if old_val != new_val:
                     if key == "status":
                         old_s = old_val
-                        new_s = str(new_val).lower()
+                        # TaskStatus is a str Enum: str() gives "TaskStatus.IN_PROGRESS", so use .value
+                        new_s = str(getattr(new_val, "value", new_val)).lower()
                         status_changed = True
                         activity.append({
                             "action": "status_changed",

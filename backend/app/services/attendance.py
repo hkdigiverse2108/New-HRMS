@@ -686,6 +686,24 @@ class AttendanceService:
         return created
 
     @classmethod
+    async def sync_task_started(cls, employee_id: str, task: Dict[str, Any]) -> None:
+        """A task set to in-progress from Tasks becomes the punch-in's current task,
+        if the employee is punched in and working (not on break) right now."""
+        today_str = format_date_ist(get_now_ist())
+        record = await AttendanceRepository.get_by_employee_and_date(employee_id, today_str)
+        if not record or record.get("status") not in ("Active", "Late", "Present"):
+            return
+        task_id = str(task.get("_id") or task.get("id") or "")
+        if not task_id or str(record.get("current_task_id") or "") == task_id:
+            return
+        await cls.change_active_task(
+            employee_id=employee_id,
+            task_id=task_id,
+            task_title=task.get("title") or "Task",
+            task_type="Today's Work",
+        )
+
+    @classmethod
     async def change_active_task(
         cls,
         employee_id: str,
