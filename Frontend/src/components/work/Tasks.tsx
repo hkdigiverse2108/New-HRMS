@@ -1564,7 +1564,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                               <div className="flex items-center gap-2 pt-1">
                                 <button
                                   onClick={(e) => handleAcceptTransfer(task.id, e)}
-                                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-black transition-colors"
+                                  className="px-2.5 py-1 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-[10px] font-black transition-colors"
                                 >
                                   Accept
                                 </button>
@@ -1597,7 +1597,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                               <div className="flex items-center gap-2">
                                 <button
                                   onClick={(e) => handleApproveTask(task.id, e)}
-                                  className="flex-1 py-1 px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-black flex items-center justify-center gap-1 shadow-sm transition-colors"
+                                  className="flex-1 py-1 px-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-[10px] font-black flex items-center justify-center gap-1 shadow-sm transition-colors"
                                 >
                                   <Check className="w-3 h-3" /> Approve
                                 </button>
@@ -1795,7 +1795,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                           {canApprove && (
                             <button
                               onClick={(e) => handleApproveTask(task.id, e)}
-                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-black flex items-center gap-1 shadow-sm transition-colors"
+                              className="px-2.5 py-1 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-[10px] font-black flex items-center gap-1 shadow-sm transition-colors"
                               title="Approve completed task"
                             >
                               <Check className="w-3 h-3" /> Approve
@@ -1874,7 +1874,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                             <>
                               <button
                                 onClick={(e) => handleAcceptTransfer(task.id, e)}
-                                className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold"
+                                className="px-2 py-1 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-[10px] font-bold"
                               >
                                 Accept
                               </button>

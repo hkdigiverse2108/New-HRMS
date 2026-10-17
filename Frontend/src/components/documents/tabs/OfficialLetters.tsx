@@ -610,7 +610,7 @@ export function OfficialLetters({ onNavigate }: { onNavigate?: ((path: string) =
               {viewDocModal.doc && (
                 <button
                   onClick={() => handleDownloadPDF(viewDocModal.doc!)}
-                  className="px-3.5 py-1.5 text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl transition-colors flex items-center gap-1.5 shadow-xs"
+                  className="px-3.5 py-1.5 text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl transition-colors flex items-center gap-1.5 shadow-xs"
                 >
                   <Download className="w-3.5 h-3.5" /> Download PDF
                 </button>

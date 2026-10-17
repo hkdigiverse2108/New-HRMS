@@ -1452,7 +1452,7 @@ export default function SeatingArrangementPage() {
               </Button>
               <Button
                 onClick={handleSaveAllotment}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl px-5 py-2 text-sm shadow-md transition-colors"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl px-5 py-2 text-sm shadow-md transition-colors"
               >
                 Save Changes
               </Button>
@@ -1629,7 +1629,7 @@ export default function SeatingArrangementPage() {
                     setSelectedDeskForEdit(null);
                     toast.success("Desk configuration saved!");
                   }}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl px-5 py-2 text-sm shadow-md transition-colors"
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl px-5 py-2 text-sm shadow-md transition-colors"
                 >
                   Save Layout
                 </Button>

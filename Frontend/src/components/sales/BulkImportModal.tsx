@@ -204,7 +204,7 @@ export function BulkImportModal({
           <Button
             onClick={handleImport}
             disabled={isSubmitting || parsedRows.length === 0}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold"
           >
             {isSubmitting ? "Importing..." : `Import ${parsedRows.length} Leads`}
           </Button>

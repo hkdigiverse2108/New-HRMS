@@ -214,7 +214,7 @@ export function FollowUpDialog({ lead, userName, trigger, open, onOpenChange }: 
                 size="sm"
                 onClick={handleAddFollowUp}
                 disabled={isSubmitting || !note.trim()}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-5 min-h-[44px] sm:min-h-0 sm:h-8 w-full sm:w-auto rounded-xl shadow-xs"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold px-5 min-h-[44px] sm:min-h-0 sm:h-8 w-full sm:w-auto rounded-xl shadow-xs"
               >
                 {isSubmitting ? "Saving..." : "Log Follow-up"}
               </Button>

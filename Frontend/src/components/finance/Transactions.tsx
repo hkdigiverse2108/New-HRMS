@@ -109,7 +109,7 @@ export function Transactions() {
           </button>
           <button
             onClick={() => setIsAddCreditOpen(true)}
-            className="px-3 sm:px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-colors shadow-sm flex items-center gap-2 text-xs sm:text-sm"
+            className="px-3 sm:px-4 py-2 bg-primary text-primary-foreground font-bold rounded-lg hover:bg-primary/90 transition-colors shadow-sm flex items-center gap-2 text-xs sm:text-sm"
           >
             <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Add Credit (Invoice)
           </button>
@@ -274,7 +274,7 @@ export function Transactions() {
             </div>
             <button
               onClick={() => setIsAddCreditOpen(true)}
-              className="px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-colors shadow-sm flex items-center gap-2 text-sm shrink-0"
+              className="px-4 py-2 bg-primary text-primary-foreground font-bold rounded-lg hover:bg-primary/90 transition-colors shadow-sm flex items-center gap-2 text-sm shrink-0"
             >
               <Plus className="w-4 h-4" /> Add Credit
             </button>
@@ -445,7 +445,7 @@ export function Transactions() {
           </div>
           <div className="px-4 sm:px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
             <button onClick={() => setIsAddCreditOpen(false)} className="px-4 py-2 font-bold text-sm bg-background border border-border/50 rounded-lg hover:bg-muted transition-colors">Cancel</button>
-            <button onClick={() => setIsAddCreditOpen(false)} className="px-4 py-2 font-bold text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors">Save Credit</button>
+            <button onClick={() => setIsAddCreditOpen(false)} className="px-4 py-2 font-bold text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors">Save Credit</button>
           </div>
         </DialogContent>
       </Dialog>
@@ -554,7 +554,7 @@ export function Transactions() {
           )}
           <div className="px-4 sm:px-6 md:px-8 py-4 border-t border-border/50 flex justify-end gap-3">
             <button onClick={() => setEditCredit(null)} className="px-4 py-2 font-bold text-sm bg-background border border-border/50 rounded-lg hover:bg-muted transition-colors">Cancel</button>
-            <button onClick={saveEditCredit} className="px-4 py-2 font-bold text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors">Save Changes</button>
+            <button onClick={saveEditCredit} className="px-4 py-2 font-bold text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors">Save Changes</button>
           </div>
         </DialogContent>
       </Dialog>

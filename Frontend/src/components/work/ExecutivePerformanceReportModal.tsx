@@ -102,23 +102,23 @@ export const ExecutivePerformanceReportModal: React.FC<ExecutivePerformanceRepor
         const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
         if (timeframe === "TODAY") {
-          const tStr = today.toISOString().split("T")[0] || "";
+          const tStr = today.toISOString().slice(0, 10);
           if (r.date !== tStr) return false;
         } else if (timeframe === "YESTERDAY") {
           const y = new Date(todayStart);
           y.setDate(y.getDate() - 1);
-          const yStr = y.toISOString().split("T")[0] || "";
+          const yStr = y.toISOString().slice(0, 10);
           if (r.date !== yStr) return false;
         } else if (timeframe === "LAST_7") {
-          const past = new Date(todayStart);
-          past.setDate(past.getDate() - 7);
-          const pastStr = past.toISOString().split("T")[0] || "";
-          if (r.date < pastStr) return false;
+          const past7 = new Date(todayStart);
+          past7.setDate(past7.getDate() - 7);
+          const past7Str = past7.toISOString().slice(0, 10);
+          if (r.date < past7Str) return false;
         } else if (timeframe === "LAST_30") {
-          const past = new Date(todayStart);
-          past.setDate(past.getDate() - 30);
-          const pastStr = past.toISOString().split("T")[0] || "";
-          if (r.date < pastStr) return false;
+          const past30 = new Date(todayStart);
+          past30.setDate(past30.getDate() - 30);
+          const past30Str = past30.toISOString().slice(0, 10);
+          if (r.date < past30Str) return false;
         } else if (timeframe === "THIS_MONTH") {
           const mStart = new Date(today.getFullYear(), today.getMonth(), 1);
           const mStr = `${mStart.getFullYear()}-${String(mStart.getMonth() + 1).padStart(2, "0")}-01`;
@@ -387,9 +387,9 @@ export const ExecutivePerformanceReportModal: React.FC<ExecutivePerformanceRepor
         <span class="text-[10px] font-bold bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/30">Client Deliverable</span>
       </div>
       <div class="flex items-center gap-2">
-        <button onclick="window.print()" class="px-4 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-md transition flex items-center gap-1.5">
+        <button id="standalonePrintBtn" onclick="triggerStandalonePrint()" class="px-4 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer">
           <i data-lucide="printer" class="w-3.5 h-3.5"></i>
-          <span>Save PDF / Print</span>
+          <span id="standalonePrintBtnText">Save PDF / Print</span>
         </button>
       </div>
     </div>
@@ -654,6 +654,30 @@ export const ExecutivePerformanceReportModal: React.FC<ExecutivePerformanceRepor
         });
       }
     };
+
+    function triggerStandalonePrint() {
+      var btn = document.getElementById('standalonePrintBtn');
+      var txt = document.getElementById('standalonePrintBtnText');
+      if (btn && txt) {
+        btn.disabled = true;
+        btn.style.opacity = '0.75';
+        btn.style.cursor = 'wait';
+        btn.style.pointerEvents = 'none';
+        txt.innerText = 'Opening PDF...';
+      }
+      setTimeout(function() {
+        window.print();
+        setTimeout(function() {
+          if (btn && txt) {
+            btn.disabled = false;
+            btn.style.opacity = '1';
+            btn.style.cursor = 'pointer';
+            btn.style.pointerEvents = 'auto';
+            txt.innerText = 'Save PDF / Print';
+          }
+        }, 3000);
+      }, 200);
+    }
   </script>
 </body>
 </html>`;
@@ -689,25 +713,33 @@ export const ExecutivePerformanceReportModal: React.FC<ExecutivePerformanceRepor
     }
   };
 
-  // Unclipped, Clean Print to PDF using an isolated print iframe
+  // Unclipped, Clean Print to PDF using an isolated print iframe with anti-multi-click lock
   const handlePrint = () => {
     if (isPrinting) return;
     setIsPrinting(true);
     try {
+      const oldIframe = document.getElementById("hrms-print-iframe");
+      if (oldIframe) {
+        oldIframe.remove();
+      }
+
       const iframe = document.createElement("iframe");
+      iframe.id = "hrms-print-iframe";
       iframe.style.position = "fixed";
       iframe.style.right = "0";
       iframe.style.bottom = "0";
       iframe.style.width = "0";
       iframe.style.height = "0";
       iframe.style.border = "0";
+      iframe.style.opacity = "0";
+      iframe.style.pointerEvents = "none";
       iframe.style.zIndex = "-999";
       document.body.appendChild(iframe);
 
       const doc = iframe.contentWindow?.document;
       if (!doc) {
         window.print();
-        setIsPrinting(false);
+        setTimeout(() => setIsPrinting(false), 2500);
         return;
       }
 
@@ -716,7 +748,10 @@ export const ExecutivePerformanceReportModal: React.FC<ExecutivePerformanceRepor
       doc.write(html);
       doc.close();
 
-      setTimeout(() => {
+      let printed = false;
+      const doPrint = () => {
+        if (printed) return;
+        printed = true;
         try {
           iframe.contentWindow?.focus();
           iframe.contentWindow?.print();
@@ -724,24 +759,60 @@ export const ExecutivePerformanceReportModal: React.FC<ExecutivePerformanceRepor
           console.warn("Iframe print error, falling back to window.print():", e);
           window.print();
         } finally {
+          // Keep loader active for 3.5s to prevent multiple rapid clicks
+          setTimeout(() => {
+            setIsPrinting(false);
+            setTimeout(() => {
+              const current = document.getElementById("hrms-print-iframe");
+              if (current) current.remove();
+            }, 1000);
+          }, 3500);
+        }
+      };
+
+      try {
+        iframe.contentWindow?.addEventListener("afterprint", () => {
           setIsPrinting(false);
           setTimeout(() => {
-            if (document.body.contains(iframe)) {
-              document.body.removeChild(iframe);
-            }
-          }, 3000);
-        }
-      }, 700);
+            const current = document.getElementById("hrms-print-iframe");
+            if (current) current.remove();
+          }, 500);
+        });
+      } catch (e) {
+        // ignore
+      }
+
+      // Allow iframe styles and Chart.js to initialize cleanly
+      setTimeout(doPrint, 1100);
     } catch (err) {
       console.error("Print invocation error:", err);
-      setIsPrinting(false);
       window.print();
+      setTimeout(() => setIsPrinting(false), 2500);
     }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
-      <DialogContent className="max-w-5xl w-[96vw] max-h-[94vh] bg-background border-border/60 rounded-3xl p-0 overflow-y-auto shadow-2xl print:border-none print:shadow-none print:max-w-full print:w-full print:m-0 print:p-0">
+      <DialogContent className="max-w-5xl w-[96vw] max-h-[94vh] bg-background border-border/60 rounded-3xl p-0 overflow-y-auto shadow-2xl print:border-none print:shadow-none print:max-w-full print:w-full print:m-0 print:p-0 relative">
+        {/* Full Modal Loading Overlay while preparing Print preview to completely block multiple clicks */}
+        {isPrinting && (
+          <div className="absolute inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex flex-col items-center justify-center p-6 rounded-3xl animate-in fade-in duration-200">
+            <div className="bg-slate-900 border border-slate-700/90 rounded-2xl p-6 shadow-2xl flex flex-col items-center text-center max-w-sm space-y-3.5">
+              <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center ring-4 ring-emerald-500/10">
+                <Loader2 className="w-6 h-6 animate-spin" />
+              </div>
+              <div>
+                <h4 className="font-bold text-base text-white">Opening PDF / Print Preview</h4>
+                <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                  Compiling clean unclipped report layout and opening print dialog. Please wait a moment...
+                </p>
+              </div>
+              <div className="text-[11px] font-semibold text-emerald-300 bg-emerald-500/10 px-3.5 py-1 rounded-full border border-emerald-500/30">
+                Please wait • Multiple clicks prevented
+              </div>
+            </div>
+          </div>
+        )}
         
         {/* NON-PRINT CONTROLS BAR */}
         <aside className="sticky top-0 z-40 bg-slate-900 border-b border-slate-800 text-white p-3.5 print:hidden flex flex-wrap items-center justify-between gap-2.5 shadow-md">
@@ -887,11 +958,11 @@ export const ExecutivePerformanceReportModal: React.FC<ExecutivePerformanceRepor
             <button
               type="button"
               onClick={handlePrint}
-              disabled={isPrinting}
+              disabled={isPrinting || isDownloading}
               className={cn(
                 "px-3.5 py-1.5 font-bold rounded-xl text-white transition flex items-center gap-1.5 shadow-md shadow-emerald-600/20",
                 isPrinting
-                  ? "bg-emerald-700/80 cursor-wait opacity-80"
+                  ? "bg-emerald-700/80 cursor-wait opacity-80 pointer-events-none"
                   : "bg-emerald-600 hover:bg-emerald-500 cursor-pointer"
               )}
               title="Save clean unclipped PDF or Print"

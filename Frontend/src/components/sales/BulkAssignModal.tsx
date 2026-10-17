@@ -111,7 +111,7 @@ export function BulkAssignModal({
           <Button
             onClick={handleAssign}
             disabled={isSubmitting || selectedEmployees.length === 0}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold"
           >
             {isSubmitting ? "Assigning..." : `Assign to ${selectedEmployees.length} Member(s)`}
           </Button>

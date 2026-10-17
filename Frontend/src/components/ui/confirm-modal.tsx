@@ -31,7 +31,7 @@ export function ConfirmModal({
   const headerBgClass = isRestore ? "bg-emerald-50/50" : isInfo ? "bg-blue-50/50" : "bg-red-50/50";
   const iconBgClass = isRestore ? "bg-emerald-100 text-emerald-600" : isInfo ? "bg-blue-100 text-blue-600" : "bg-red-100 text-red-600";
   const buttonClass = isRestore 
-    ? "bg-emerald-500 hover:bg-emerald-600 shadow-primary/20" 
+    ? "bg-primary hover:bg-primary/90 shadow-primary/20" 
     : isInfo
     ? "bg-blue-500 hover:bg-blue-600 shadow-blue-500/20"
     : "bg-red-500 hover:bg-red-600 shadow-red-500/20";

@@ -1,5 +1,21 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { FAVICON_STORAGE_KEY, syncFaviconToServiceWorker } from "@/lib/favicon";
+import { api } from "@/lib/api";
+import { ensureGoogleFonts } from "@/lib/fonts";
+
+/** Branding saved company-wide via /settings/branding (shape matches the backend). */
+export interface Branding {
+  color: string;
+  is_gradient: boolean;
+  gradient_type: "linear" | "radial";
+  gradient_direction: string;
+  gradient_colors: string[];
+  radius: number;
+  font_family: string;
+  company_name: string;
+  logo_url: string;
+  favicon_url: string;
+}
 
 interface ThemeContextType {
   color: string;
@@ -22,6 +38,16 @@ interface ThemeContextType {
   setFaviconUrl: (url: string) => void;
   companyName: string;
   setCompanyName: (name: string) => void;
+  /** Last saved branding (what everyone sees) */
+  branding: Branding;
+  /** Shows unsaved branding across the app without saving it */
+  previewBranding: (branding: Branding) => void;
+  /** Drops any preview and goes back to the saved branding */
+  resetPreview: () => void;
+  /** False until branding has been saved company-wide at least once */
+  brandingSaved: boolean;
+  /** Saves branding for everyone, then applies it here */
+  saveBranding: (branding: Branding) => Promise<void>;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -65,6 +91,36 @@ function hexToHSL(H: string) {
   return { h, s, l, luminance };
 }
 
+const DEFAULT_BRANDING: Branding = {
+  color: "#10b981",
+  is_gradient: false,
+  gradient_type: "linear",
+  gradient_direction: "to right",
+  gradient_colors: ["#0284c7"],
+  radius: 0.75,
+  font_family: "Inter",
+  company_name: "HR Suite",
+  logo_url: "",
+  favicon_url: "",
+};
+
+// Only saved branding is cached for the next page load, never an unsaved preview
+function cacheBranding(b: Branding) {
+  try {
+    localStorage.setItem("app-theme-color", b.color);
+    localStorage.setItem("app-theme-is-gradient", String(b.is_gradient));
+    localStorage.setItem("app-theme-gradient-type", b.gradient_type);
+    localStorage.setItem("app-theme-gradient-direction", b.gradient_direction);
+    localStorage.setItem("app-theme-gradient-colors", JSON.stringify(b.gradient_colors));
+    localStorage.setItem("app-theme-radius", String(b.radius));
+    localStorage.setItem("app-theme-font", b.font_family);
+    localStorage.setItem("app-theme-name", b.company_name);
+    localStorage.setItem(FAVICON_STORAGE_KEY, b.favicon_url || "");
+    // A large logo may not fit in localStorage, which is fine
+    localStorage.setItem("app-theme-logo", b.logo_url || "");
+  } catch {}
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [color, setColor] = useState<string>("#10b981");
   const [isGradient, setIsGradient] = useState<boolean>(false);
@@ -77,6 +133,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [logoUrl, setLogoUrl] = useState<string>("");
   const [faviconUrl, setFaviconUrl] = useState<string>("");
   const [companyName, setCompanyName] = useState<string>("HR Suite");
+
+  // Saved branding, kept apart from what is on screen so previews can be undone
+  const [savedBranding, setSavedBranding] = useState<Branding>(DEFAULT_BRANDING);
+  const savedBrandingRef = useRef<Branding>(DEFAULT_BRANDING);
+  const setSaved = (b: Branding) => {
+    savedBrandingRef.current = b;
+    setSavedBranding(b);
+  };
 
   useEffect(() => {
     const savedColor = localStorage.getItem("app-theme-color");
@@ -91,23 +155,68 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const savedFavicon = localStorage.getItem(FAVICON_STORAGE_KEY);
     const savedName = localStorage.getItem("app-theme-name");
 
-    if (savedColor) setColor(savedColor);
-    if (savedIsGradient) setIsGradient(savedIsGradient === "true");
-    if (savedGradientType) setGradientType(savedGradientType as "linear" | "radial");
-    if (savedGradientDirection) setGradientDirection(savedGradientDirection);
+    let parsedGradientColors: string[] | null = null;
     if (savedGradientColors) {
       try {
         const parsed = JSON.parse(savedGradientColors);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setGradientColors(parsed);
-        }
+        if (Array.isArray(parsed) && parsed.length > 0) parsedGradientColors = parsed;
       } catch (e) {}
-    } if (savedRadius) setRadius(parseFloat(savedRadius));
-    if (savedFont) setFontFamily(savedFont);
-    if (savedLogo) setLogoUrl(savedLogo);
-    if (savedFavicon) setFaviconUrl(savedFavicon);
-    if (savedName) setCompanyName(savedName);
+    }
+    const cached = savedBrandingRef.current;
+    const loaded: Branding = {
+      color: savedColor || cached.color,
+      is_gradient: savedIsGradient ? savedIsGradient === "true" : cached.is_gradient,
+      gradient_type: (savedGradientType as "linear" | "radial") || cached.gradient_type,
+      gradient_direction: savedGradientDirection || cached.gradient_direction,
+      gradient_colors: parsedGradientColors || cached.gradient_colors,
+      radius: savedRadius ? parseFloat(savedRadius) : cached.radius,
+      font_family: savedFont || cached.font_family,
+      company_name: savedName || cached.company_name,
+      logo_url: savedLogo || "",
+      favicon_url: savedFavicon || "",
+    };
+    applyBranding(loaded);
+    setSaved(loaded);
   }, []);
+
+  const applyBranding = (b: Branding) => {
+    setColor(b.color);
+    setIsGradient(b.is_gradient);
+    setGradientType(b.gradient_type);
+    setGradientDirection(b.gradient_direction);
+    setGradientColors(b.gradient_colors?.length ? b.gradient_colors : ["#0284c7"]);
+    setRadius(b.radius);
+    setFontFamily(b.font_family);
+    setCompanyName(b.company_name);
+    setLogoUrl(b.logo_url || "");
+    setFaviconUrl(b.favicon_url || "");
+  };
+
+  // localStorage above only paints the last-known theme quickly; the saved branding wins
+  const [brandingSaved, setBrandingSaved] = useState(false);
+  useEffect(() => {
+    api.get<Branding | null>("/settings/branding", { showLoader: false, showErrorToast: false, skipAuth: true })
+      .then(b => {
+        if (!b) return;
+        applyBranding(b);
+        setSaved(b);
+        cacheBranding(b);
+        setBrandingSaved(true);
+      })
+      .catch(() => {});
+  }, []);
+
+  const saveBranding = async (b: Branding) => {
+    const res = await api.put<Branding>("/settings/branding", b, { showLoader: false });
+    const next = res || b;
+    applyBranding(next);
+    setSaved(next);
+    cacheBranding(next);
+    setBrandingSaved(true);
+  };
+
+  const previewBranding = (b: Branding) => applyBranding(b);
+  const resetPreview = () => applyBranding(savedBrandingRef.current);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -143,20 +252,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     
     // Apply new white-label settings
     root.style.setProperty("--radius", `${radius}rem`);
-    window.document.body.style.fontFamily = fontFamily === "System" 
+    ensureGoogleFonts([fontFamily]);
+    const fontStack = fontFamily === "System" 
       ? "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" 
       : `'${fontFamily}', sans-serif`;
+    window.document.body.style.fontFamily = fontStack;
+    // Tailwind's font-sans utilities read this, so they follow the chosen font too
+    root.style.setProperty("--font-sans", fontStack);
 
-    localStorage.setItem("app-theme-color", color);
-    localStorage.setItem("app-theme-is-gradient", isGradient.toString());
-    localStorage.setItem("app-theme-gradient-type", gradientType);
-    localStorage.setItem("app-theme-gradient-direction", gradientDirection);
-    localStorage.setItem("app-theme-gradient-colors", JSON.stringify(gradientColors));
-
-    localStorage.setItem("app-theme-radius", radius.toString());
-    localStorage.setItem("app-theme-font", fontFamily);
-    localStorage.setItem("app-theme-logo", logoUrl);
-    localStorage.setItem("app-theme-name", companyName);
 
     // Apply gradient override
     let styleEl = document.getElementById("theme-gradient-override");
@@ -175,8 +278,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         ? `linear-gradient(${gradientDirection}, var(--primary), ${parsedColors.join(", ")})`
         : `radial-gradient(circle, var(--primary), ${parsedColors.join(", ")})`;
       
+      // Solid brand fills, including ones that only appear on hover/focus/active or a state
       styleEl.innerHTML = `
-        .bg-primary, .bg-sidebar-primary {
+        .bg-primary, .bg-sidebar-primary,
+        .hover\\:bg-primary:hover, .hover\\:bg-sidebar-primary:hover,
+        .focus\\:bg-primary:focus, .active\\:bg-primary:active,
+        .group:hover .group-hover\\:bg-primary,
+        [data-state="active"].data-\\[state\\=active\\]\\:bg-primary,
+        [data-state="checked"].data-\\[state\\=checked\\]\\:bg-primary,
+        [aria-selected="true"].aria-selected\\:bg-primary {
           background-image: ${bgImage} !important;
         }
       `;
@@ -188,7 +298,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // Browser tab icon: the favicon uploaded in Admin Settings
   useEffect(() => {
     // Runs after the load effect above has already read the saved value
-    localStorage.setItem(FAVICON_STORAGE_KEY, faviconUrl);
     syncFaviconToServiceWorker(faviconUrl);
     // No upload means no icon at all (never the bundled default)
     const href = faviconUrl || "data:,";
@@ -217,7 +326,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       fontFamily, setFontFamily, 
       logoUrl, setLogoUrl, 
       faviconUrl, setFaviconUrl,
-      companyName, setCompanyName 
+      companyName, setCompanyName,
+      branding: savedBranding, brandingSaved, saveBranding, previewBranding, resetPreview
     }}>
       {children}
     </ThemeContext.Provider>

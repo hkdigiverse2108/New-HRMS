@@ -342,7 +342,7 @@ export function Overtime() {
                         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                       ) : editing?.id === req._id ? (
                         <>
-                          <button onClick={saveEdit} className="flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[12px] font-semibold text-white hover:bg-emerald-700">
+                          <button onClick={saveEdit} className="flex items-center gap-1 rounded-lg bg-primary px-2.5 py-1.5 text-[12px] font-semibold text-primary-foreground hover:bg-primary/90">
                             <Check className="h-3.5 w-3.5" /> Save
                           </button>
                           <button onClick={() => setEditing(null)} className="flex items-center gap-1 rounded-lg border border-border/80 px-2.5 py-1.5 text-[12px] font-semibold text-foreground/70 hover:bg-muted/50">
@@ -363,7 +363,7 @@ export function Overtime() {
                           )}
                           {data?.can_approve && tab === "all" && req.status === "Pending" && (
                             <>
-                              <button onClick={() => decide(req, "Approved")} className="flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[12px] font-semibold text-white hover:bg-emerald-700">
+                              <button onClick={() => decide(req, "Approved")} className="flex items-center gap-1 rounded-lg bg-primary px-2.5 py-1.5 text-[12px] font-semibold text-primary-foreground hover:bg-primary/90">
                                 <Check className="h-3.5 w-3.5" /> Approve
                               </button>
                               <button onClick={() => decide(req, "Rejected")} className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[12px] font-semibold text-rose-700 hover:bg-rose-100">

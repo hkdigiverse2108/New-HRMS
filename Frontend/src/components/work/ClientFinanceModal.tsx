@@ -211,7 +211,7 @@ export const ClientFinanceModal: React.FC<ClientFinanceModalProps> = ({
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="w-full h-9 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 shadow-sm"
+                    className="w-full h-9 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 shadow-sm"
                   >
                     {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
                     <span>Save Payment</span>

@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { Settings, Image as ImageIcon, Layout, Type, Palette, Shield, CreditCard, ChevronDown, CheckCircle2, Search, X, Plus, GripVertical, Settings2, Save, Paintbrush, Square, Briefcase, MessageSquare, FileText, Upload, Eye } from "lucide-react";
+import { Settings, Image as ImageIcon, Layout, Type, Palette, Shield, CreditCard, ChevronDown, CheckCircle2, Search, X, Plus, GripVertical, Settings2, Save, Paintbrush, Square, Briefcase, MessageSquare, FileText, Upload, Eye, Loader2, Check } from "lucide-react";
 import { toast } from "@/lib/toast";
-import { useTheme } from "../ThemeProvider";
+import { useTheme, type Branding } from "../ThemeProvider";
+import { ensureGoogleFonts } from "@/lib/fonts";
 import { SearchableSelect } from "@/components/ui/select";
 import { NotificationSettingsCard } from "@/components/notifications/NotificationSettingsCard";
 import { InvoiceSettingsCard } from "./settings/InvoiceSettingsCard";
@@ -48,6 +49,11 @@ function FontSelector({ value, onChange }: { value: string; onChange: (v: string
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  // Load every font in the list so each option previews in its own typeface
+  useEffect(() => {
+    if (open) ensureGoogleFonts(FONTS.map(f => f.value));
+  }, [open]);
 
   const filtered = FONTS.filter(f => f.label.toLowerCase().includes(search.toLowerCase()));
   const selected = FONTS.find(f => f.value === value) || FONTS[0];
@@ -102,21 +108,90 @@ function FontSelector({ value, onChange }: { value: string; onChange: (v: string
   );
 }
 
+// Quick-pick brand colors under "Generated Palette"
+const PALETTE_COLORS = [
+  { label: "Emerald", hex: "#10b981" },
+  { label: "Green", hex: "#059669" },
+  { label: "Blue", hex: "#3b82f6" },
+  { label: "Amber", hex: "#f59e0b" },
+  { label: "Rose", hex: "#f43f5e" },
+  { label: "Violet", hex: "#8b5cf6" },
+];
+
+// Cheap equality for branding drafts (logo/favicon are long strings, compared directly)
+function sameBranding(a: Branding, b: Branding) {
+  return (Object.keys(a) as (keyof Branding)[]).every(k =>
+    k === "gradient_colors" ? a[k].join("|") === b[k].join("|") : a[k] === b[k]
+  );
+}
+
+function brandingKey(b: Branding) {
+  // Length stands in for the image contents so the key stays small
+  return [b.color, b.is_gradient, b.gradient_type, b.gradient_direction, b.gradient_colors.join("|"), b.radius,
+    b.font_family, b.company_name, b.logo_url.length, b.logo_url.slice(-32), b.favicon_url.length, b.favicon_url.slice(-32)].join("~");
+}
+
 export function AdminSettings() {
-  const { 
-    color, setColor, 
-    isGradient, setIsGradient,
-    gradientType, setGradientType,
-    gradientDirection, setGradientDirection,
-    gradientColors, setGradientColors,
-    radius, setRadius, 
-    fontFamily, setFontFamily, 
-    logoUrl, setLogoUrl, 
-    faviconUrl, setFaviconUrl,
-    companyName, setCompanyName 
-  } = useTheme();
+  const { branding, saveBranding, previewBranding, resetPreview } = useTheme();
+
+  // Branding edits stay in this draft; the app only changes after "Save Changes"
+  const [draft, setDraft] = useState<Branding>(branding);
+  const [isSavingBranding, setIsSavingBranding] = useState(false);
+  const lastSaved = useRef<Branding>(branding);
+  useEffect(() => {
+    // Saved branding loaded or changed: take it over unless the admin has unsaved edits
+    setDraft(d => (sameBranding(d, lastSaved.current) ? branding : d));
+    lastSaved.current = branding;
+  }, [brandingKey(branding)]);
+  const isBrandingDirty = !sameBranding(draft, branding);
+
+  // Unsaved edits show across the whole app right away (preview only)
+  useEffect(() => {
+    previewBranding(draft);
+  }, [brandingKey(draft)]);
+  // Leaving the page without saving brings the saved branding back
+  useEffect(() => () => resetPreview(), []);
+
+  const setField = <K extends keyof Branding>(key: K) => (value: Branding[K]) =>
+    setDraft(d => ({ ...d, [key]: value }));
+  const color = draft.color, setColor = setField("color");
+  const isGradient = draft.is_gradient, setIsGradient = setField("is_gradient");
+  const gradientType = draft.gradient_type, setGradientType = setField("gradient_type");
+  const gradientDirection = draft.gradient_direction, setGradientDirection = setField("gradient_direction");
+  const gradientColors = draft.gradient_colors, setGradientColors = setField("gradient_colors");
+  const radius = draft.radius, setRadius = setField("radius");
+  const fontFamily = draft.font_family, setFontFamily = setField("font_family");
+  const logoUrl = draft.logo_url, setLogoUrl = setField("logo_url");
+  const faviconUrl = draft.favicon_url, setFaviconUrl = setField("favicon_url");
+  const companyName = draft.company_name, setCompanyName = setField("company_name");
+
+  // Preview of the draft brand fill (the app's own --primary still shows the saved one)
+  const paletteColorSelected = PALETTE_COLORS.some(c => c.hex === color.toLowerCase());
+  const draftBrandFill = isGradient
+    ? gradientType === "linear"
+      ? `linear-gradient(${gradientDirection}, ${[color, ...gradientColors].join(", ")})`
+      : `radial-gradient(circle, ${[color, ...gradientColors].join(", ")})`
+    : color;
+
+  const handleSaveBranding = async () => {
+    if (!companyName.trim()) {
+      toast.error("Company name is required");
+      return;
+    }
+    setIsSavingBranding(true);
+    try {
+      await saveBranding({ ...draft, company_name: companyName.trim() });
+      toast.success("Settings saved successfully!");
+    } catch {
+      // api layer shows the backend message
+    } finally {
+      setIsSavingBranding(false);
+    }
+  };
 
   const [draggedColorIndex, setDraggedColorIndex] = useState<number | null>(null);
+  // Only the grip handle starts a drag, so the color pickers in each row stay clickable
+  const [dragHandleIndex, setDragHandleIndex] = useState<number | null>(null);
   const [canCreateChannels, setCanCreateChannels] = useState(() => {
     if (typeof window === "undefined") return true;
     return localStorage.getItem("hrms_chat_can_create_channels") !== "false";
@@ -164,6 +239,12 @@ export function AdminSettings() {
   };
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    // Saved with the settings, so keep it to a reasonable size
+    if (file && file.size > 2 * 1024 * 1024) {
+      toast.error("Logo must be smaller than 2 MB");
+      e.target.value = "";
+      return;
+    }
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -176,7 +257,7 @@ export function AdminSettings() {
   const handleFaviconUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    // Stored in the browser, so keep it small like a real favicon
+    // Saved with the settings, so keep it small like a real favicon
     if (file.size > 512 * 1024) {
       toast.error("Favicon must be smaller than 512 KB");
       e.target.value = "";
@@ -199,9 +280,27 @@ export function AdminSettings() {
           <h1 className="text-3xl md:text-4xl font-black tracking-tight text-foreground">Global Configuration</h1>
           <p className="text-muted-foreground mt-2 font-medium">Manage platform-wide settings and white-label branding.</p>
         </div>
-        <button onClick={() => toast.success("Settings saved successfully!")} className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-bold shadow-md hover:bg-primary/90 transition-colors">
-          <Save className="w-4 h-4" /> Save Changes
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {isBrandingDirty && (
+            <>
+              <span className="text-xs font-bold text-amber-700 bg-amber-100 border border-amber-200 px-2.5 py-1 rounded-lg">Unsaved changes</span>
+              <button
+                onClick={() => setDraft(branding)}
+                disabled={isSavingBranding}
+                className="px-4 py-2 rounded-xl border border-border bg-background text-sm font-bold hover:bg-muted transition-colors disabled:opacity-60"
+              >
+                Discard
+              </button>
+            </>
+          )}
+          <button
+            onClick={handleSaveBranding}
+            disabled={isSavingBranding}
+            className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-bold shadow-md hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSavingBranding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save Changes
+          </button>
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
@@ -225,7 +324,7 @@ export function AdminSettings() {
             Select the primary brand color. The platform will automatically generate matching backgrounds, sidebars, and chart palettes.
           </p>
           
-          <div className="flex flex-col gap-4 mt-auto">
+          <div className="flex flex-col gap-4">
             {/* Gradient Toggle */}
             <div className="flex items-center justify-between p-3 border border-border rounded-xl bg-muted/20">
               <span className="text-sm font-bold text-foreground">Enable Gradient</span>
@@ -240,16 +339,17 @@ export function AdminSettings() {
                 <div className="flex items-center gap-4">
                   <div className="relative w-12 h-12 rounded-xl overflow-hidden border-2 border-background shadow-sm shrink-0">
                     <input
+                      id="brand-color-0"
                       type="color"
                       value={color}
                       onChange={(e) => setColor(e.target.value)}
                       className="absolute inset-[-10px] w-20 h-20 cursor-pointer"
                     />
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <label htmlFor="brand-color-0" className="flex-1 min-w-0 cursor-pointer">
                     <div className="text-sm font-bold">Brand Color</div>
                     <div className="text-xs text-muted-foreground uppercase">{color}</div>
-                  </div>
+                  </label>
                 </div>
               ) : (
                 /* Gradient Settings */
@@ -264,7 +364,7 @@ export function AdminSettings() {
                             "flex items-center gap-4 p-2 rounded-xl border border-transparent transition-colors",
                             draggedColorIndex === idx ? "opacity-50 border-dashed border-primary" : "hover:border-border"
                           )}
-                          draggable
+                          draggable={dragHandleIndex === idx}
                           onDragStart={(e) => {
                             setDraggedColorIndex(idx);
                             e.dataTransfer.effectAllowed = "move";
@@ -288,13 +388,20 @@ export function AdminSettings() {
                             setGradientColors(newColors.slice(1));
                             setDraggedColorIndex(null);
                           }}
-                          onDragEnd={() => setDraggedColorIndex(null)}
+                          onDragEnd={() => { setDraggedColorIndex(null); setDragHandleIndex(null); }}
                         >
-                          <div className="cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground transition-colors p-1">
+                          <div
+                            onMouseDown={() => setDragHandleIndex(idx)}
+                            onMouseUp={() => setDragHandleIndex(null)}
+                            onTouchStart={() => setDragHandleIndex(idx)}
+                            title="Drag to reorder"
+                            className="cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground transition-colors p-1"
+                          >
                             <GripVertical className="w-4 h-4" />
                           </div>
                           <div className="relative w-12 h-12 rounded-xl overflow-hidden border-2 border-background shadow-sm shrink-0">
                             <input
+                              id={`gradient-color-${idx}`}
                               type="color"
                               value={colorItem}
                               onChange={(e) => {
@@ -306,10 +413,10 @@ export function AdminSettings() {
                               className="absolute inset-[-10px] w-20 h-20 cursor-pointer"
                             />
                           </div>
-                          <div className="flex-1 min-w-0">
+                          <label htmlFor={`gradient-color-${idx}`} className="flex-1 min-w-0 cursor-pointer">
                             <div className="text-sm font-bold">{idx === 0 ? "Start Color" : `Color ${idx + 1}`}</div>
                             <div className="text-xs text-muted-foreground uppercase">{colorItem}</div>
-                          </div>
+                          </label>
                           {allColors.length > 2 && (
                             <button
                               type="button"
@@ -375,17 +482,44 @@ export function AdminSettings() {
               )}
             </div>
 
-            {/* Generated Palette Preview */}
+            {/* Generated Palette: pick a color to preview it everywhere; Save keeps it */}
             <div className="mt-2">
-              <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Generated Palette</div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Generated Palette</div>
+                {isBrandingDirty && (
+                  <span className="text-[10px] font-bold text-amber-700">Preview — click Save to keep it</span>
+                )}
+              </div>
               <div className="flex gap-2 w-full">
-                <div className="flex-1 h-8 rounded-md shadow-sm border border-border/50 transition-colors bg-primary" title="Primary" />
-                <div className="flex-1 h-8 rounded-md shadow-sm border border-border/50 transition-colors bg-sidebar-primary" title="Sidebar" />
-                <div className="flex-1 h-8 rounded-md shadow-sm border border-border/50 transition-colors" style={{ backgroundColor: 'var(--chart-1)' }} title="Chart 1" />
-                <div className="flex-1 h-8 rounded-md shadow-sm border border-border/50 transition-colors" style={{ backgroundColor: 'var(--chart-2)' }} title="Chart 2" />
-                <div className="flex-1 h-8 rounded-md shadow-sm border border-border/50 transition-colors" style={{ backgroundColor: 'var(--chart-3)' }} title="Chart 3" />
-                <div className="flex-1 h-8 rounded-md shadow-sm border border-border/50 transition-colors" style={{ backgroundColor: 'var(--chart-4)' }} title="Chart 4" />
-                <div className="flex-1 h-8 rounded-md shadow-sm border border-border/50 transition-colors" style={{ backgroundColor: 'var(--chart-5)' }} title="Chart 5" />
+                {/* Current brand (solid or gradient) */}
+                <div
+                  className={cn(
+                    "relative flex-1 h-8 rounded-md shadow-sm border border-border/50",
+                    !paletteColorSelected && "ring-2 ring-offset-2 ring-offset-card ring-foreground/70"
+                  )}
+                  style={{ background: draftBrandFill }}
+                  title="Current brand color"
+                >
+                  {!paletteColorSelected && <Check className="absolute inset-0 m-auto w-4 h-4 text-white drop-shadow" />}
+                </div>
+                {PALETTE_COLORS.map(c => {
+                  const selected = color.toLowerCase() === c.hex;
+                  return (
+                    <button
+                      key={c.hex}
+                      type="button"
+                      onClick={() => setColor(c.hex)}
+                      title={`${c.label} (${c.hex.toUpperCase()})`}
+                      className={cn(
+                        "relative flex-1 h-8 rounded-md shadow-sm border border-border/50 transition-transform hover:scale-105",
+                        selected && "ring-2 ring-offset-2 ring-offset-card ring-foreground/70"
+                      )}
+                      style={{ backgroundColor: c.hex }}
+                    >
+                      {selected && <Check className="absolute inset-0 m-auto w-4 h-4 text-white drop-shadow" />}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -401,7 +535,7 @@ export function AdminSettings() {
             Configure global platform behavior such as date formats and timezone defaults.
           </p>
           
-          <div className="flex flex-col gap-4 mt-auto">
+          <div className="flex flex-col gap-4">
             <div>
               <label className="block text-xs font-bold text-muted-foreground mb-1.5 uppercase tracking-wide">Date Format</label>
               <SearchableSelect 
@@ -447,7 +581,7 @@ export function AdminSettings() {
             Update the company name, upload a custom logo for the sidebar and a favicon for the browser tab.
           </p>
           
-          <div className="flex flex-col gap-4 mt-auto">
+          <div className="flex flex-col gap-4">
             <div>
               <label className="block text-xs font-bold text-muted-foreground mb-1.5 uppercase tracking-wide">Company Name</label>
               <input 
@@ -525,7 +659,7 @@ export function AdminSettings() {
             Adjust the shape of UI elements and select a global font family.
           </p>
           
-          <div className="flex flex-col gap-6 mt-auto">
+          <div className="flex flex-col gap-6">
             <div>
               <div className="flex justify-between items-center mb-1.5">
                 <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wide">Border Radius</label>

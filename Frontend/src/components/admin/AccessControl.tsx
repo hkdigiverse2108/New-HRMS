@@ -474,7 +474,7 @@ export function AccessControl() {
           <button
             onClick={handleSave}
             disabled={isSaving}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-xs sm:text-sm font-black shadow-md hover:bg-emerald-700 transition-all disabled:opacity-50 active:scale-95"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-xs sm:text-sm font-black shadow-md hover:bg-primary/90 transition-all disabled:opacity-50 active:scale-95"
           >
             <Save className="w-4 h-4" />
             <span>{isSaving ? "Saving..." : "Save Changes"}</span>

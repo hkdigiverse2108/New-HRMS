@@ -929,7 +929,7 @@ export default function ResourceManagementPage() {
           <div className="p-6 border-t border-border flex justify-end gap-3 bg-gray-50/50">
             <Button variant="outline" className="font-medium bg-white" onClick={handleCancel} disabled={isSaving}>Cancel</Button>
             <Button 
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-md"
               onClick={handleSaveResource}
               disabled={isSaving}
             >
@@ -1417,7 +1417,7 @@ export default function ResourceManagementPage() {
               </div>
               <div className="p-6 border-t border-border flex justify-end gap-3 bg-gray-50/50">
                 <Button variant="outline" size="sm" onClick={handleCancelCategory}>Cancel</Button>
-                <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md" size="sm" onClick={handleSaveCategory} disabled={isSaving}>
+                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-md" size="sm" onClick={handleSaveCategory} disabled={isSaving}>
                   {isSaving ? "Saving..." : (editingCategoryId ? "Update Category" : "Save Category")}
                 </Button>
               </div>
@@ -1429,7 +1429,7 @@ export default function ResourceManagementPage() {
                   <h2 className="text-lg font-bold text-foreground">Asset Categories</h2>
                   <p className="text-xs text-muted-foreground mt-0.5">Perform CRUD operations on inventory asset classifications.</p>
                 </div>
-                <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md" size="sm" onClick={() => setIsAddingCategoryMode(true)}>
+                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-md" size="sm" onClick={() => setIsAddingCategoryMode(true)}>
                   <Plus className="w-4 h-4 mr-1.5" />
                   Add Category
                 </Button>

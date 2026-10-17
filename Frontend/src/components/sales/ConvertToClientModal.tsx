@@ -503,7 +503,7 @@ export function ConvertToClientModal({
                   variant={isGstInclusive ? "default" : "outline"}
                   size="sm"
                   onClick={() => setIsGstInclusive(!isGstInclusive)}
-                  className={`text-xs font-bold min-h-[44px] sm:h-8 w-full sm:w-auto px-3 rounded-xl transition-all ${isGstInclusive ? "bg-emerald-600 hover:bg-emerald-700 text-white" : ""
+                  className={`text-xs font-bold min-h-[44px] sm:h-8 w-full sm:w-auto px-3 rounded-xl transition-all ${isGstInclusive ? "bg-primary hover:bg-primary/90 text-primary-foreground" : ""
                     }`}
                 >
                   {isGstInclusive ? "GST Included (18%)" : "GST Extra (+18%)"}
@@ -849,7 +849,7 @@ export function ConvertToClientModal({
             </Button>
             <Button
               type="submit"
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs gap-1.5 shadow-sm"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-black text-xs gap-1.5 shadow-sm"
               disabled={isSubmitting}
             >
               <Trophy className="w-4 h-4" />

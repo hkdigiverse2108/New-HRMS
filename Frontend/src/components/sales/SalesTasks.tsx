@@ -216,7 +216,7 @@ export function SalesTasks({ onAction }: { onAction?: (action: string) => void }
         </div>
         <button
           onClick={() => onAction?.("Create Task")}
-          className="flex items-center justify-center gap-1.5 w-full sm:w-auto min-h-[44px] sm:min-h-0 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 shadow-sm"
+          className="flex items-center justify-center gap-1.5 w-full sm:w-auto min-h-[44px] sm:min-h-0 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 shadow-sm"
         >
           <Plus className="h-4 w-4" /> Create Task
         </button>

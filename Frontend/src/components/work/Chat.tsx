@@ -3331,7 +3331,7 @@ function ChatInner() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Jump to..."
-              className="w-full pl-9 pr-4 py-1.5 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 placeholder:text-muted-foreground transition-all"
+              className="w-full pl-9 pr-4 py-1.5 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground transition-all"
             />
           </div>
         </div>
@@ -3349,7 +3349,7 @@ function ChatInner() {
             <button
               type="button"
               onClick={requestDesktopNotificationPermission}
-              className="px-2.5 py-1 text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-md shrink-0 shadow-xs cursor-pointer transition-all active:scale-95"
+              className="px-2.5 py-1 text-[11px] font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-md shrink-0 shadow-xs cursor-pointer transition-all active:scale-95"
             >
               Enable
             </button>
@@ -3396,7 +3396,7 @@ function ChatInner() {
                       <span className="truncate">{channel.name}</span>
                     </div>
                     {Boolean(channel.unread_count && channel.unread_count > 0) && (
-                      <span className="bg-emerald-600 text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full shrink-0">
+                      <span className="bg-primary text-primary-foreground text-[10px] font-bold px-1.5 py-0.2 rounded-full shrink-0">
                         {channel.unread_count}
                       </span>
                     )}
@@ -3466,7 +3466,7 @@ function ChatInner() {
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       {Boolean(dm.unread_count && dm.unread_count > 0) ? (
-                        <span className="bg-emerald-600 text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full shrink-0">
+                        <span className="bg-primary text-primary-foreground text-[10px] font-bold px-1.5 py-0.2 rounded-full shrink-0">
                           {dm.unread_count}
                         </span>
                       ) : (
@@ -3659,7 +3659,7 @@ function ChatInner() {
                   }
                 }}
                 placeholder="Find in this chat... (Press Enter for next, Esc to close)"
-                className="w-full pl-9 pr-8 py-1.5 bg-background border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                className="w-full pl-9 pr-8 py-1.5 bg-background border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary"
               />
               {chatSearchQuery && (
                 <button
@@ -4204,7 +4204,7 @@ function ChatInner() {
                                         </span>
                                         <span className={cn(
                                           "text-[11.5px] font-bold font-mono px-1.5 py-0.5 rounded-md",
-                                          isMe ? "bg-white/20 text-white" : "bg-muted text-foreground"
+                                          isMe ? "bg-white/20 text-primary-foreground" : "bg-muted text-foreground"
                                         )}>
                                           {percent}%
                                         </span>
@@ -4221,13 +4221,13 @@ function ChatInner() {
                                           className={cn(
                                             "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10.5px] font-medium transition-colors",
                                             isMe
-                                              ? "bg-black/35 text-white border border-white/25 shadow-xs"
+                                              ? "bg-black/35 text-primary-foreground border border-white/25 shadow-xs"
                                               : "bg-card text-foreground border border-border/80 shadow-2xs"
                                           )}
                                         >
                                           <span className={cn(
                                             "w-3.5 h-3.5 rounded-full text-[9px] font-bold flex items-center justify-center shrink-0",
-                                            isMe ? "bg-white/25 text-white" : "bg-emerald-600/15 text-emerald-700 dark:text-emerald-400"
+                                            isMe ? "bg-white/25 text-primary-foreground" : "bg-emerald-600/15 text-emerald-700 dark:text-emerald-400"
                                           )}>
                                             {voter.name.charAt(0).toUpperCase()}
                                           </span>
@@ -4263,7 +4263,7 @@ function ChatInner() {
                               className={cn(
                                 "text-[11.5px] font-semibold flex items-center gap-1.5 cursor-pointer transition-colors px-2 py-1 rounded-lg",
                                 isMe
-                                  ? "bg-white/15 text-white hover:bg-white/25"
+                                  ? "bg-white/15 text-primary-foreground hover:bg-white/25"
                                   : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20"
                               )}
                             >
@@ -4311,7 +4311,7 @@ function ChatInner() {
                               className={cn(
                                 "w-full px-2.5 py-1.5 text-xs rounded-lg border focus:outline-none resize-none",
                                 isMe
-                                  ? "bg-white/10 text-white border-white/30 placeholder:text-white/60 focus:ring-1 focus:ring-white"
+                                  ? "bg-white/10 text-primary-foreground border-white/30 placeholder:text-white/60 focus:ring-1 focus:ring-white"
                                   : "bg-background text-foreground border-border focus:ring-1 focus:ring-primary"
                               )}
                             />
@@ -4321,7 +4321,7 @@ function ChatInner() {
                                 onClick={() => setEditingMessageId(null)}
                                 className={cn(
                                   "px-2 py-0.5 text-[10px] font-bold rounded cursor-pointer",
-                                  isMe ? "text-white/80 hover:text-white" : "text-muted-foreground hover:text-foreground"
+                                  isMe ? "text-white/80 hover:text-primary-foreground" : "text-muted-foreground hover:text-foreground"
                                 )}
                               >
                                 Cancel
@@ -4330,7 +4330,7 @@ function ChatInner() {
                                 type="button"
                                 onClick={handleSaveEditMessage}
                                 disabled={isSavingEdit || !editingMessageText.trim()}
-                                className="px-2.5 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold cursor-pointer disabled:opacity-50"
+                                className="px-2.5 py-0.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded text-[10px] font-bold cursor-pointer disabled:opacity-50"
                               >
                                 {isSavingEdit ? "Saving..." : "Save"}
                               </button>
@@ -4668,7 +4668,7 @@ function ChatInner() {
             <button
               type="button"
               onClick={stopRecording}
-              className="w-10 h-10 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shadow-md transition-colors cursor-pointer shrink-0 ml-1"
+              className="w-10 h-10 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground flex items-center justify-center shadow-md transition-colors cursor-pointer shrink-0 ml-1"
               title="Send Voice Message"
             >
               <Send className="w-5 h-5 ml-0.5" />
@@ -4959,7 +4959,7 @@ function ChatInner() {
                   removePasteImage(idx);
                 }}
                 title="Discard image"
-                className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/75 hover:bg-rose-600 text-white flex items-center justify-center opacity-90 transition-colors shadow-xs"
+                className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/75 hover:bg-rose-600 text-primary-foreground flex items-center justify-center opacity-90 transition-colors shadow-xs"
               >
                 <X className="w-3 h-3" />
               </button>
@@ -4990,12 +4990,12 @@ function ChatInner() {
           type="button"
           disabled={isUploading}
           onClick={handleSendPastedImage}
-          className="relative w-12 h-12 rounded-full bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-50 text-white flex items-center justify-center transition-all shadow-lg shrink-0 cursor-pointer"
+          className="relative w-12 h-12 rounded-full bg-primary hover:bg-primary/90 active:scale-95 disabled:opacity-50 text-primary-foreground flex items-center justify-center transition-all shadow-lg shrink-0 cursor-pointer"
           title="Send images"
         >
           <Send className="w-5 h-5 ml-0.5" />
           {pastePreviewUrls.length > 1 && (
-            <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-emerald-800 border-2 border-background text-[10px] font-black flex items-center justify-center text-white">
+            <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-emerald-800 border-2 border-background text-[10px] font-black flex items-center justify-center text-primary-foreground">
               {pastePreviewUrls.length}
             </span>
           )}
@@ -5014,7 +5014,7 @@ function ChatInner() {
   previewMediaUrl && (
     <div className="fixed inset-0 bg-[#0b141a]/95 z-50 flex flex-col backdrop-blur-md">
       {/* Top bar */}
-      <div className="flex items-center justify-between px-3 sm:px-5 py-2.5 text-white shrink-0">
+      <div className="flex items-center justify-between px-3 sm:px-5 py-2.5 text-primary-foreground shrink-0">
         <div className="flex items-center gap-2.5 min-w-0">
           {(() => {
             const cur = (channelMedia[previewIndex] as ChatMessage | undefined) || channelMedia.find((m) => m.media_url === previewMediaUrl);
@@ -5150,7 +5150,7 @@ function ChatInner() {
                 value={newChannelMemberSearch}
                 onChange={(e) => setNewChannelMemberSearch(e.target.value)}
                 placeholder="Search colleagues to add..."
-                className="w-full pl-8 pr-3 py-1.5 bg-muted/40 border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                className="w-full pl-8 pr-3 py-1.5 bg-muted/40 border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
             <div className="max-h-36 overflow-y-auto space-y-1 p-1 bg-muted/20 rounded-xl border border-border/60">
@@ -5205,7 +5205,7 @@ function ChatInner() {
               onClick={() => setNewChannelAutoJoin(!newChannelAutoJoin)}
               className={cn(
                 "w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer shrink-0",
-                newChannelAutoJoin ? "bg-emerald-600 justify-end" : "bg-muted-foreground/30 justify-start"
+                newChannelAutoJoin ? "bg-primary justify-end" : "bg-muted-foreground/30 justify-start"
               )}
             >
               <div className="w-4 h-4 rounded-full bg-white shadow-md transform transition-transform" />
@@ -5222,7 +5222,7 @@ function ChatInner() {
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors shadow-xs cursor-pointer"
+              className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs rounded-xl transition-colors shadow-xs cursor-pointer"
             >
               Create
             </button>
@@ -5259,7 +5259,7 @@ function ChatInner() {
               value={editChannelName}
               onChange={(e) => setEditChannelName(e.target.value)}
               placeholder="hello"
-              className="w-full px-4 py-2.5 bg-background border border-border rounded-full text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
+              className="w-full px-4 py-2.5 bg-background border border-border rounded-full text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-emerald-500"
             />
           </div>
           <div>
@@ -5271,7 +5271,7 @@ function ChatInner() {
               value={editChannelDesc}
               onChange={(e) => setEditChannelDesc(e.target.value)}
               placeholder="Channel topic..."
-              className="w-full px-4 py-2.5 bg-background border border-border rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
+              className="w-full px-4 py-2.5 bg-background border border-border rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-emerald-500"
             />
           </div>
 
@@ -5288,7 +5288,7 @@ function ChatInner() {
               onClick={() => setEditChannelAutoJoin(!editChannelAutoJoin)}
               className={cn(
                 "w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer shrink-0",
-                editChannelAutoJoin ? "bg-emerald-600 justify-end" : "bg-muted-foreground/30 justify-start"
+                editChannelAutoJoin ? "bg-primary justify-end" : "bg-muted-foreground/30 justify-start"
               )}
             >
               <div className="w-4 h-4 rounded-full bg-white shadow-md transform transition-transform" />
@@ -5322,7 +5322,7 @@ function ChatInner() {
                         value={memberSearch}
                         onChange={(e) => setMemberSearch(e.target.value)}
                         placeholder="Search employee..."
-                        className="flex-1 px-3 py-1.5 bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                        className="flex-1 px-3 py-1.5 bg-muted/50 border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                       {editChannelMemberIds.length > 0 && (
                         <button
@@ -5385,7 +5385,7 @@ function ChatInner() {
                 type="button"
                 onClick={handleAddMember}
                 disabled={editChannelMemberIds.length === 0}
-                className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 disabled:hover:bg-emerald-500 text-white rounded-full text-xs font-bold transition-colors cursor-pointer shrink-0"
+                className="px-4 py-2.5 bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:hover:bg-primary/90 text-primary-foreground rounded-full text-xs font-bold transition-colors cursor-pointer shrink-0"
               >
                 Add {editChannelMemberIds.length > 0 && `(${editChannelMemberIds.length})`}
               </button>
@@ -5449,7 +5449,7 @@ function ChatInner() {
               </button>
               <button
                 type="submit"
-                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full text-xs font-bold"
+                className="px-5 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-full text-xs font-bold"
               >
                 Save
               </button>
@@ -5501,7 +5501,7 @@ function ChatInner() {
               value={groupMemberSearch}
               onChange={(e) => setGroupMemberSearch(e.target.value)}
               placeholder="Search members in this group..."
-              className="w-full pl-9 pr-3 py-2 bg-background border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              className="w-full pl-9 pr-3 py-2 bg-background border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
         </div>
@@ -5595,7 +5595,7 @@ function ChatInner() {
                 setIsGroupMembersModalOpen(false);
                 openEditChannel();
               }}
-              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              className="px-3 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs font-bold transition-colors cursor-pointer"
             >
               Manage Members
             </button>
@@ -5637,7 +5637,7 @@ function ChatInner() {
               value={pollQuestion}
               onChange={(e) => setPollQuestion(e.target.value)}
               placeholder="e.g. Which sprint goal should we prioritize?"
-              className="w-full px-3 py-2 bg-muted/40 border border-border rounded-xl text-xs focus:ring-1 focus:ring-emerald-500 outline-none"
+              className="w-full px-3 py-2 bg-muted/40 border border-border rounded-xl text-xs focus:ring-1 focus:ring-primary outline-none"
             />
           </div>
 
@@ -5658,7 +5658,7 @@ function ChatInner() {
                       setPollOptions(updated);
                     }}
                     placeholder={`Option ${i + 1}`}
-                    className="flex-1 px-3 py-1.5 bg-muted/40 border border-border rounded-xl text-xs focus:ring-1 focus:ring-emerald-500 outline-none"
+                    className="flex-1 px-3 py-1.5 bg-muted/40 border border-border rounded-xl text-xs focus:ring-1 focus:ring-primary outline-none"
                   />
                   {pollOptions.length > 2 && (
                     <button
@@ -5706,7 +5706,7 @@ function ChatInner() {
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold shadow-xs hover:bg-emerald-700"
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-xs font-bold shadow-xs hover:bg-primary/90"
             >
               Create Poll
             </button>
@@ -5750,7 +5750,7 @@ function ChatInner() {
               value={newDmSearch}
               onChange={(e) => setNewDmSearch(e.target.value)}
               placeholder="Search by name, email, designation..."
-              className="w-full pl-8 pr-7 py-1.5 bg-background border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 font-medium"
+              className="w-full pl-8 pr-7 py-1.5 bg-background border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary font-medium"
             />
             {newDmSearch && (
               <button
@@ -5910,7 +5910,7 @@ function ChatInner() {
             type="button"
             disabled={forwardTargets.length === 0 || isForwarding}
             onClick={handleForwardConfirm}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors"
+            className="px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-40 text-primary-foreground rounded-xl text-xs font-bold cursor-pointer transition-colors"
           >
             {isForwarding ? "Forwarding..." : `Forward → ${forwardTargets.length ? `(${forwardTargets.length})` : ""}`}
           </button>
@@ -5926,9 +5926,9 @@ function ChatInner() {
 {
   pdfUrl && (
     <div className="fixed inset-0 bg-[#0b141a]/95 z-50 flex flex-col">
-      <div className="flex items-center justify-between px-3 sm:px-5 py-2.5 text-white shrink-0">
+      <div className="flex items-center justify-between px-3 sm:px-5 py-2.5 text-primary-foreground shrink-0">
         <div className="flex items-center gap-2.5 min-w-0">
-          <span className="w-8 h-10 rounded bg-rose-600 text-white flex items-center justify-center text-[9px] font-black shrink-0">PDF</span>
+          <span className="w-8 h-10 rounded bg-rose-600 text-primary-foreground flex items-center justify-center text-[9px] font-black shrink-0">PDF</span>
           <div className="min-w-0">
             <div className="font-bold text-sm truncate max-w-[50vw]">{pdfName}</div>
             <div className="text-[11px] text-white/60">PDF viewer</div>
@@ -5987,10 +5987,10 @@ function ChatInner() {
               await cb();
             }}
             className={cn(
-              "px-5 py-2 text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer",
+              "px-5 py-2 text-primary-foreground rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer",
               confirmDialog.variant === "danger"
                 ? "bg-rose-600 hover:bg-rose-700"
-                : "bg-emerald-600 hover:bg-emerald-700"
+                : "bg-primary hover:bg-primary/90"
             )}
           >
             {confirmDialog.confirmText || "Confirm"}
@@ -6348,7 +6348,7 @@ function ChatInner() {
             <button
               type="button"
               onClick={() => setViewVotesPollMsg(null)}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer"
+              className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold rounded-xl shadow-xs cursor-pointer"
             >
               Close
             </button>
@@ -6497,7 +6497,7 @@ function ChatInner() {
               <button
                 type="button"
                 onClick={() => setMessageInfoMsg(null)}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer"
+                className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold rounded-xl shadow-xs cursor-pointer"
               >
                 Close
               </button>
@@ -6535,7 +6535,7 @@ class ChatErrorBoundary extends React.Component<{ children: React.ReactNode }, {
           <button
             type="button"
             onClick={() => this.setState({ hasError: false, error: null })}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
+            className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs font-bold shadow-xs cursor-pointer"
           >
             Reload Chat
           </button>

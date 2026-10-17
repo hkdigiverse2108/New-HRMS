@@ -328,7 +328,7 @@ export function SalesPipeline({ onAction }: { onAction?: (action: string) => voi
           ))}
         </div>
 
-        <button onClick={() => onAction?.("Add Lead")} className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 shrink-0 w-full sm:w-auto min-h-[44px] sm:min-h-0">
+        <button onClick={() => onAction?.("Add Lead")} className="flex items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 shrink-0 w-full sm:w-auto min-h-[44px] sm:min-h-0">
           <Plus className="h-4 w-4" /> Add Deal
         </button>
       </div>

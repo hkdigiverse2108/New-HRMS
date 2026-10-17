@@ -237,7 +237,7 @@ export function InvoiceApprovals() {
               </button>
               <button
                 onClick={() => handleAction("Approved")}
-                className="px-6 py-2.5 min-h-[44px] sm:min-h-0 bg-emerald-500 text-emerald-50 hover:bg-emerald-600 font-bold rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 w-full sm:w-auto"
+                className="px-6 py-2.5 min-h-[44px] sm:min-h-0 bg-primary text-emerald-50 hover:bg-primary/90 font-bold rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 w-full sm:w-auto"
               >
                 <Check className="w-4 h-4" /> Approve
               </button>

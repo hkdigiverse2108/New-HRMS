@@ -403,7 +403,7 @@ export function BonusDeductions() {
                           onClick={() => setApplying(entry)}
                           disabled={actingId === entry.id}
                           title="Approve"
-                          className="h-7 w-7 inline-flex items-center justify-center rounded-full bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-60"
+                          className="h-7 w-7 inline-flex items-center justify-center rounded-full bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-60"
                         >
                           {actingId === entry.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                         </button>
@@ -557,7 +557,7 @@ export function BonusDeductions() {
             <button
               onClick={handleCreate}
               disabled={isSaving}
-              className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition-colors disabled:opacity-60"
+              className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-2.5 rounded-lg transition-colors disabled:opacity-60"
             >
               {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
               Submit for Approval

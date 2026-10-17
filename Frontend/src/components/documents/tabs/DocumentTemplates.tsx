@@ -1006,7 +1006,7 @@ export function DocumentTemplates() {
             </h3>
             <button
               onClick={handleStartCreateInline}
-              className="p-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl transition-colors shadow-sm flex items-center justify-center"
+              className="p-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl transition-colors shadow-sm flex items-center justify-center"
               title="Create New Template"
             >
               <Plus className="w-4 h-4" />
@@ -1110,7 +1110,7 @@ export function DocumentTemplates() {
                   <button
                     onClick={handleSaveTemplate}
                     disabled={!tempName.trim() || !docBlocks.join("").replace(/<[^>]*>/g, "").trim() || isSubmitting}
-                    className="px-6 py-2 bg-emerald-600 text-white hover:bg-emerald-700 font-bold text-sm rounded-xl transition-colors disabled:opacity-50 shadow-md flex items-center gap-2"
+                    className="px-6 py-2 bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm rounded-xl transition-colors disabled:opacity-50 shadow-md flex items-center gap-2"
                   >
                     {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                     {isSubmitting ? "Saving..." : editingTemplateId ? "Update Template" : "Save Template"}
@@ -1414,7 +1414,7 @@ export function DocumentTemplates() {
                   </button>
                   <button
                     onClick={() => handleStartEditInline(selectedTemplate)}
-                    className="px-5 py-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl transition-colors font-bold text-sm flex items-center gap-1.5 shadow-md"
+                    className="px-5 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl transition-colors font-bold text-sm flex items-center gap-1.5 shadow-md"
                   >
                     <Edit2 className="w-4 h-4" /> Edit Content
                   </button>

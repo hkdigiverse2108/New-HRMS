@@ -381,7 +381,7 @@ export function UrgentMeetingSummonModal() {
             onClick={() => {
               setActiveSummon(null);
             }}
-            className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-2xl text-center shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+            className="flex-1 py-3 px-4 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold text-xs rounded-2xl text-center shadow-lg shadow-primary/25 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
           >
             <CheckCircle2 className="w-4 h-4" />
             <span>I&apos;m On My Way / Acknowledge</span>
