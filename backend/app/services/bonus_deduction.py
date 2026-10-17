@@ -100,8 +100,11 @@ class BonusDeductionService:
             amount = float(p.get("price") or 0)
             if amount <= 0:
                 continue
-            emp = employees.get(p.get("employee_id"))
             status_ = p.get("status") or "Active"
+            # Waived and Resolved penalties are never deducted, so keep them out of the list
+            if status_ in ("Waived", "Resolved"):
+                continue
+            emp = employees.get(p.get("employee_id"))
             counts = penalty_applies(p)
             rows.append(_entry(
                 id=p["_id"],

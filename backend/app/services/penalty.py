@@ -1,13 +1,27 @@
 from fastapi import HTTPException, status
 from typing import Optional, List, Dict, Any
-from app.repository.penalty import PenaltyTypeRepository, EmployeePenaltyRepository
+from app.repository.penalty import PenaltyTypeRepository, EmployeePenaltyRepository, EMPLOYEE_CARD_PROJECTION, employee_card
 from app.schemas.penalty import PenaltyTypeCreate, PenaltyTypeUpdate, EmployeePenaltyCreate, EmployeePenaltyUpdate, PenaltySummaryResponse
+
+# v2: older "penalties:types:all" entries never expired and could miss auto-created types
+PENALTY_TYPES_CACHE_KEY = "penalties:types:v2"
 
 class PenaltyService:
     # --- Penalty Types ---
     @staticmethod
+    async def _ensure_unique_type_name(name: str, exclude_id: Optional[str] = None):
+        for t in await PenaltyTypeRepository.get_all():
+            if t.get("name", "").strip().lower() == name.strip().lower() and str(t["_id"]) != exclude_id:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Penalty type '{name.strip()}' already exists")
+
+    @staticmethod
     async def create_penalty_type(data: PenaltyTypeCreate):
-        return await PenaltyTypeRepository.create(data.model_dump(exclude_unset=True))
+        insert_data = data.model_dump(exclude_unset=True)
+        insert_data["name"] = data.name.strip()
+        if not insert_data["name"]:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Penalty type name is required")
+        await PenaltyService._ensure_unique_type_name(insert_data["name"])
+        return await PenaltyTypeRepository.create(insert_data)
 
     @staticmethod
     async def get_all_penalty_types():
@@ -22,6 +36,10 @@ class PenaltyService:
             ]
             for d in defaults:
                 await PenaltyTypeRepository.create(d)
+            types = await PenaltyTypeRepository.get_all()
+        elif not any(t.get("name", "").strip().lower() == "late punch-in" for t in types):
+            # Automatic late penalties need this type; keep it in every dropdown
+            await PenaltyService.ensure_late_punchin_penalty_type()
             types = await PenaltyTypeRepository.get_all()
         return types
 
@@ -40,6 +58,9 @@ class PenaltyService:
             description="Automatic penalty for punching in late."
         )
         created = await PenaltyService.create_penalty_type(new_type)
+        # Created outside the types API, so drop the cached list ourselves
+        from app.redis.service import delete_cache
+        await delete_cache(PENALTY_TYPES_CACHE_KEY)
         return str(created.get("_id") or created.get("id"))
 
     @staticmethod
@@ -54,6 +75,14 @@ class PenaltyService:
         update_data = data.model_dump(exclude_unset=True)
         if not update_data:
             return await PenaltyService.get_penalty_type_by_id(item_id)
+        if "name" in update_data:
+            update_data["name"] = (update_data["name"] or "").strip()
+            if not update_data["name"]:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Penalty type name is required")
+            existing = await PenaltyService.get_penalty_type_by_id(item_id)
+            if existing.get("name", "").lower() == "late punch-in" and update_data["name"].lower() != "late punch-in":
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="'Late Punch-in' is used by automatic penalties and cannot be renamed")
+            await PenaltyService._ensure_unique_type_name(update_data["name"], exclude_id=item_id)
             
         updated_item = await PenaltyTypeRepository.update(item_id, update_data)
         if not updated_item:
@@ -62,6 +91,15 @@ class PenaltyService:
 
     @staticmethod
     async def delete_penalty_type(item_id: str):
+        existing = await PenaltyService.get_penalty_type_by_id(item_id)
+        if existing.get("name", "").lower() == "late punch-in":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="'Late Punch-in' is used by automatic penalties and cannot be deleted")
+        in_use = await EmployeePenaltyRepository.count_by_type(item_id)
+        if in_use:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"This penalty type is used by {in_use} penalty record(s) and cannot be deleted"
+            )
         success = await PenaltyTypeRepository.delete(item_id)
         if not success:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Penalty type not found")
@@ -148,64 +186,18 @@ class PenaltyService:
         page: Optional[int] = None, 
         limit: Optional[int] = None
     ):
-        result = await EmployeePenaltyRepository.get_all(
-            is_deleted=is_deleted, 
-            employee_id=employee_id, 
-            penalty_type_id=penalty_type_id, 
+        return await EmployeePenaltyRepository.get_all_populated(
+            is_deleted=is_deleted,
+            employee_id=employee_id,
+            penalty_type_id=penalty_type_id,
             status=status,
             type_filter=type_filter,
             search=search,
-            start_date=start_date, 
-            end_date=end_date, 
-            page=page, 
+            start_date=start_date,
+            end_date=end_date,
+            page=page,
             limit=limit
         )
-        
-        from app.repository.employee import EmployeeRepository
-        # Cache penalty types to avoid N queries
-        penalty_types = await PenaltyTypeRepository.get_all()
-        pt_map = {str(pt["_id"]): pt.get("name") for pt in penalty_types}
-        
-        # Cache employees to avoid repeated queries for the same employee
-        emp_cache = {}
-        
-        for item in result.get("data", []):
-            pt_id = item.get("penalty_type_id")
-            if pt_id:
-                item["penalty_type_name"] = pt_map.get(str(pt_id))
-                
-            emp_id = item.get("employee_id")
-            if emp_id:
-                if str(emp_id) not in emp_cache:
-                    emp = await EmployeeRepository.get_employee_by_id(emp_id)
-                    if emp:
-                        personal = emp.get("personal_info", {})
-                        work = emp.get("work_details", {})
-                        name = f"{personal.get('first_name', '')} {personal.get('last_name', '')}".strip() or "Employee"
-                        avatar = personal.get("profile_photo", "") or personal.get("avatar", "")
-                        role = work.get("designation", "") or work.get("system_role", "Employee")
-                        dept = work.get("department", "")
-                        emp_cache[str(emp_id)] = {
-                            "employee_name": name, 
-                            "avatar": avatar,
-                            "role": role,
-                            "department": dept
-                        }
-                    else:
-                        emp_cache[str(emp_id)] = {
-                            "employee_name": "Unknown", 
-                            "avatar": "",
-                            "role": "Staff",
-                            "department": "General"
-                        }
-                
-                cached_emp = emp_cache[str(emp_id)]
-                item["employee_name"] = cached_emp["employee_name"]
-                item["avatar"] = cached_emp["avatar"]
-                item["role"] = cached_emp["role"]
-                item["department"] = cached_emp["department"]
-                
-        return result
 
     @staticmethod
     async def get_penalty_by_id(item_id: str):
@@ -242,33 +234,20 @@ class PenaltyService:
     @staticmethod
     async def get_leaderboard(month: Optional[int] = None, year: Optional[int] = None):
         facets = await EmployeePenaltyRepository.get_leaderboard(month=month, year=year)
+        entries = facets.get("top_by_violations", []) + facets.get("top_by_amount", [])
+
+        # One query for every employee on both boards, projected to the card fields only
+        from bson import ObjectId
         from app.repository.employee import EmployeeRepository
-        
-        async def enrich_entry(entry: dict):
-            emp_id = entry.get("employee_id")
-            if not emp_id:
-                return
-            emp = await EmployeeRepository.get_employee_by_id(emp_id)
-            if emp:
-                personal = emp.get("personal_info", {})
-                work = emp.get("work_details", {})
-                name = f"{personal.get('first_name', '')} {personal.get('last_name', '')}".strip() or "Employee"
-                entry["employee_name"] = name
-                entry["avatar"] = personal.get("profile_photo", "") or personal.get("avatar", "")
-                entry["department"] = work.get("department", "General")
-                entry["role"] = work.get("designation", "Staff")
-            else:
-                entry["employee_name"] = "Unknown Employee"
-                entry["avatar"] = ""
-                entry["department"] = "Unknown"
-                entry["role"] = "Unknown"
-                
-        for entry in facets.get("top_by_violations", []):
-            await enrich_entry(entry)
-            
-        for entry in facets.get("top_by_amount", []):
-            await enrich_entry(entry)
-            
+        ids = {e["employee_id"] for e in entries if ObjectId.is_valid(e.get("employee_id") or "")}
+        collection = await EmployeeRepository.get_collection()
+        cards = {}
+        async for emp in collection.find({"_id": {"$in": [ObjectId(i) for i in ids]}}, EMPLOYEE_CARD_PROJECTION):
+            cards[str(emp["_id"])] = employee_card(emp)
+
+        for entry in entries:
+            entry.update(cards.get(entry.get("employee_id")) or employee_card(None))
+
         return facets
 
     @staticmethod

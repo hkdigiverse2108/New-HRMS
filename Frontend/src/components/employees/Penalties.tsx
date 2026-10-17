@@ -9,6 +9,8 @@ import { toast } from "@/lib/toast";
 import { cn, formatDate } from "@/lib/utils";
 import { SearchableSelect } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
+import { DateRangeFilter } from "@/components/common/DateRangeFilter";
+import { format } from "date-fns";
 import { api } from "@/lib/api";
 import { useAuth } from "@/components/auth/AuthContext";
 import { hasModulePermission, isUserAdmin } from "@/lib/permissions";
@@ -104,6 +106,10 @@ export function Penalties() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedEmployeeFilter, setSelectedEmployeeFilter] = useState<string>("All");
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>("All");
+  const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date } | undefined>(undefined);
+  // Strings keep the fetch callback stable; a single picked day filters just that day
+  const dateFrom = dateRange?.from ? format(dateRange.from, "yyyy-MM-dd") : "";
+  const dateTo = dateRange?.to ? format(dateRange.to, "yyyy-MM-dd") : dateFrom;
   const [leaderboardSort, setLeaderboardSort] = useState<"violations" | "amount">("violations");
   const [leaderboardMonth, setLeaderboardMonth] = useState<string>(() => {
     const d = new Date();
@@ -118,9 +124,14 @@ export function Penalties() {
   const [newTypeId, setNewTypeId] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [newAmount, setNewAmount] = useState("");
-  const [newImpact, setNewImpact] = useState(true);
   const [newDate, setNewDate] = useState(new Date().toISOString().split("T")[0]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Add Penalty Type Modal State
+  const emptyTypeForm = { name: "", default_price: "", warning_limit: "", description: "" };
+  const [isTypeOpen, setIsTypeOpen] = useState(false);
+  const [typeForm, setTypeForm] = useState(emptyTypeForm);
+  const [isSavingType, setIsSavingType] = useState(false);
 
   // Waive / Resolve Dialog State
   const [isUpdateOpen, setIsUpdateOpen] = useState(false);
@@ -144,7 +155,11 @@ export function Penalties() {
 
     try {
       // 1. Fetch Penalties List
-      const penaltyRes = await api.get<{ data?: any[]; total?: number }>("/penalties?limit=200", {
+      // Date range is filtered on the server so older records outside the 200 limit are still found
+      const params = new URLSearchParams({ limit: "200" });
+      if (dateFrom) params.set("start_date", dateFrom);
+      if (dateTo) params.set("end_date", dateTo);
+      const penaltyRes = await api.get<{ data?: any[]; total?: number }>(`/penalties?${params.toString()}`, {
         showLoader: false,
         showErrorToast: false
       });
@@ -207,7 +222,7 @@ export function Penalties() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, []);
+  }, [dateFrom, dateTo]);
 
   // Fetch Penalty Types (Templates)
   const fetchPenaltyTypes = useCallback(async () => {
@@ -256,11 +271,15 @@ export function Penalties() {
     }
   }, []);
 
+  // Re-runs whenever the date range changes
   useEffect(() => {
     fetchPenaltiesData();
+  }, [fetchPenaltiesData]);
+
+  useEffect(() => {
     fetchPenaltyTypes();
     fetchEmployeesList();
-  }, [fetchPenaltiesData, fetchPenaltyTypes, fetchEmployeesList]);
+  }, [fetchPenaltyTypes, fetchEmployeesList]);
 
   // Non-admin: default to self ("My Penalties" month-wise — Audio PDF)
   useEffect(() => {
@@ -277,15 +296,49 @@ export function Penalties() {
       if (selected.warning_limit > 0 && selected.default_price === 0) {
         setNewType("Warning");
         setNewAmount("0");
-        setNewImpact(false);
       } else {
         setNewType("Penalty");
         setNewAmount(selected.default_price ? String(selected.default_price) : "");
-        setNewImpact(true);
       }
       if (selected.description && !newDesc) {
         setNewDesc(selected.description);
       }
+    }
+  };
+
+  // Submit Create Penalty Type
+  const handleCreateType = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!typeForm.name.trim()) {
+      toast.error("Penalty type name is required");
+      return;
+    }
+    const price = Number(typeForm.default_price || 0);
+    const limit = Number(typeForm.warning_limit || 0);
+    if (Number.isNaN(price) || price < 0) {
+      toast.error("Default amount must be 0 or more");
+      return;
+    }
+    if (!Number.isInteger(limit) || limit < 0) {
+      toast.error("Warning limit must be a whole number (0 or more)");
+      return;
+    }
+    setIsSavingType(true);
+    try {
+      await api.post("/penalties/types", {
+        name: typeForm.name.trim(),
+        default_price: price,
+        warning_limit: limit,
+        description: typeForm.description.trim(),
+      });
+      toast.success("Penalty type added");
+      setTypeForm(emptyTypeForm);
+      setIsTypeOpen(false);
+      fetchPenaltyTypes();
+    } catch {
+      // api layer shows the backend message (e.g. duplicate name)
+    } finally {
+      setIsSavingType(false);
     }
   };
 
@@ -314,7 +367,7 @@ export function Penalties() {
         penalty_date: newDate || new Date().toISOString().split("T")[0],
         price: newType === "Penalty" ? (parseFloat(newAmount) || 0) : 0,
         is_warning: newType === "Warning",
-        impact_payroll: newType === "Penalty" ? newImpact : false,
+        impact_payroll: newType === "Penalty",
         status: "Active"
       };
 
@@ -328,7 +381,6 @@ export function Penalties() {
       setNewDesc("");
       setNewAmount("");
       setNewType("Penalty");
-      setNewImpact(true);
       setNewDate(new Date().toISOString().split("T")[0]);
 
       // Refresh list & stats
@@ -439,6 +491,16 @@ export function Penalties() {
       return matchesTab && matchesStatus && matchesEmployee && matchesType && matchesSearch;
     });
   }, [records, activeTab, statusFilter, selectedEmployeeFilter, selectedTypeFilter, searchQuery]);
+
+  // Type filter: configured types plus any type found on records (e.g. automatic Late Punch-in)
+  const typeFilterNames = useMemo(() => {
+    const byKey = new Map<string, string>();
+    [...penaltyTypes.map(t => t.name), ...records.map(r => r.penalty_type_name)].forEach(name => {
+      const key = (name || "").trim().toLowerCase();
+      if (key && !byKey.has(key)) byKey.set(key, name.trim());
+    });
+    return Array.from(byKey.values());
+  }, [penaltyTypes, records]);
 
   // Dynamic KPI Metrics (fallback to client calc if summary not yet loaded)
   const activePenaltiesCount = summary?.active_penalties_count ?? records.filter(r => !r.is_warning && r.status === "Active").length;
@@ -584,8 +646,8 @@ export function Penalties() {
         {/* Left Column: Records List */}
         <div className="flex-1 flex flex-col min-h-0 bg-card border border-border rounded-3xl shadow-sm overflow-hidden">
           {/* Toolbar */}
-          <div className="p-4 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-muted/30 shrink-0">
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 scrollbar-hide">
+          <div className="p-4 border-b border-border flex flex-wrap items-center gap-3 bg-muted/30 shrink-0">
+            <div className="order-1 mr-auto flex flex-wrap items-center gap-2">
               {(["All", "Penalty", "Warning"] as const).map(tab => (
                 <button
                   key={tab}
@@ -619,7 +681,7 @@ export function Penalties() {
               ))}
             </div>
             
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="order-3 w-full flex flex-wrap items-center gap-3">
               {/* Employee Filter (admin/HR only — others locked to self) */}
               {isAdminOrHr && (
               <div className="w-40 sm:w-44">
@@ -643,25 +705,36 @@ export function Penalties() {
                   onChange={(val) => setSelectedTypeFilter(String(val))}
                   options={[
                     { label: "All Types", value: "All" },
-                    ...penaltyTypes.map(t => ({ label: t.name, value: t.name }))
+                    ...typeFilterNames.map(name => ({ label: name, value: name }))
                   ]}
                   placeholder="Penalty Type"
                   className="w-full h-[38px] text-xs bg-background border-border rounded-xl"
                 />
               </div>
 
-              <div className="relative">
+              {/* Date Filter (single day or range) */}
+              <DateRangeFilter
+                value={dateRange}
+                onChange={(range) => setDateRange(range?.from ? range : undefined)}
+                placeholder="All Dates"
+                align="start"
+                className="h-[38px] px-3 text-xs sm:text-xs font-normal text-foreground bg-background border-border rounded-xl [&_span]:font-normal"
+              />
+
+              <div className="relative flex-1 min-w-[180px]">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input 
-                  type="text" 
-                  placeholder="Search records..." 
+                <input
+                  type="text"
+                  placeholder="Search records..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  className="w-full sm:w-48 pl-9 pr-4 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                  className="w-full pl-9 pr-4 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                 />
               </div>
-              
-              <button 
+            </div>
+
+            <div className="order-2 flex flex-wrap items-center gap-2">
+              <button
                 onClick={() => setShowLeaderboard(!showLeaderboard)}
                 className={cn(
                   "px-3.5 py-2 rounded-xl border border-border bg-card text-foreground hover:bg-muted font-bold text-sm transition-all flex items-center gap-2 shadow-sm shrink-0", 
@@ -671,7 +744,108 @@ export function Penalties() {
                 <Trophy className="w-4 h-4" />
                 <span className="hidden sm:inline">Leaderboard</span>
               </button>
-              
+
+              {isAdminOrHr && (
+                <Dialog open={isTypeOpen} onOpenChange={setIsTypeOpen}>
+                  <DialogTrigger asChild>
+                    <button className="px-3.5 py-2 rounded-xl border border-border bg-card text-foreground hover:bg-muted font-bold text-sm transition-all flex items-center gap-2 shadow-sm shrink-0">
+                      <ShieldAlert className="w-4 h-4" />
+                      <span className="hidden sm:inline">Add Penalty Type</span>
+                    </button>
+                  </DialogTrigger>
+                  <DialogContent className="w-[calc(100vw-24px)] sm:max-w-[460px] max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+                    <div className="flex items-center justify-between px-6 md:px-8 py-5 border-b border-border/50 bg-muted/30">
+                      <div>
+                        <h2 className="text-xl md:text-2xl font-black tracking-tight">Add Penalty Type</h2>
+                        <p className="text-xs text-muted-foreground mt-0.5">Warning limit = warnings before it becomes a paid penalty</p>
+                      </div>
+                      <DialogClose asChild>
+                        <button className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors">
+                          <X className="w-5 h-5" />
+                        </button>
+                      </DialogClose>
+                    </div>
+
+                    <form onSubmit={handleCreateType} className="flex flex-col min-h-0 max-h-[90dvh]">
+                      <div className="p-4 sm:p-6 md:p-8 space-y-5 overflow-y-auto flex-1 min-h-0">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
+                            Name *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. Dress Code Violation"
+                            value={typeForm.name}
+                            onChange={e => setTypeForm(f => ({ ...f, name: e.target.value }))}
+                            className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                          />
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-4">
+                          <div className="space-y-1.5 flex-1">
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
+                              Default Amount (₹)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              placeholder="0"
+                              value={typeForm.default_price}
+                              onChange={e => setTypeForm(f => ({ ...f, default_price: e.target.value }))}
+                              className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                            />
+                          </div>
+                          <div className="space-y-1.5 flex-1">
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
+                              Warning Limit
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              placeholder="0"
+                              value={typeForm.warning_limit}
+                              onChange={e => setTypeForm(f => ({ ...f, warning_limit: e.target.value }))}
+                              className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
+                            Description
+                          </label>
+                          <textarea
+                            rows={3}
+                            placeholder="When should this penalty be applied?"
+                            value={typeForm.description}
+                            onChange={e => setTypeForm(f => ({ ...f, description: e.target.value }))}
+                            className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="px-6 md:px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setIsTypeOpen(false)}
+                          className="px-4 py-2 bg-background border border-border text-foreground/80 hover:bg-muted font-bold text-sm rounded-xl transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={isSavingType}
+                          className="px-5 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm rounded-xl transition-colors flex items-center gap-2"
+                        >
+                          {isSavingType && <Loader2 className="w-4 h-4 animate-spin" />}
+                          Save Type
+                        </button>
+                      </div>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              )}
+
               {canCreatePenalty && (
                 <Dialog open={isNewOpen} onOpenChange={setIsNewOpen}>
                   <DialogTrigger asChild>
@@ -724,9 +898,6 @@ export function Penalties() {
                               setNewType(t);
                               if (t === "Warning") {
                                 setNewAmount("0");
-                                setNewImpact(false);
-                              } else {
-                                setNewImpact(true);
                               }
                             }}
                             options={[
@@ -756,32 +927,19 @@ export function Penalties() {
                         
                         {/* Financial inputs (if Penalty) */}
                         {newType === "Penalty" && (
-                          <div className="flex flex-col sm:flex-row gap-4">
-                            <div className="space-y-1.5 flex-1">
-                              <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
-                                Deduction Amount (₹)
-                              </label>
-                              <input 
-                                type="number" 
-                                placeholder="e.g. 100"
-                                min="0"
-                                required
-                                value={newAmount}
-                                onChange={e => setNewAmount(e.target.value)}
-                                className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                              />
-                            </div>
-                            <div className="space-y-1.5 flex-1 flex flex-col justify-end pb-2">
-                              <label className="flex items-center gap-2 cursor-pointer select-none">
-                                <input 
-                                  type="checkbox" 
-                                  checked={newImpact}
-                                  onChange={e => setNewImpact(e.target.checked)}
-                                  className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
-                                />
-                                <span className="text-sm font-bold text-foreground/90">Affect Payroll</span>
-                              </label>
-                            </div>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
+                              Deduction Amount (₹)
+                            </label>
+                            <input
+                              type="number"
+                              placeholder="e.g. 100"
+                              min="0"
+                              required
+                              value={newAmount}
+                              onChange={e => setNewAmount(e.target.value)}
+                              className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                            />
                           </div>
                         )}
 
@@ -891,13 +1049,6 @@ export function Penalties() {
                             {!isRecordWarning && (
                               <span className="text-xs font-bold text-foreground/80 bg-muted px-2.5 py-0.5 rounded-md border border-border/50">
                                 Amount: ₹{record.price}
-                              </span>
-                            )}
-                            
-                            {/* Payroll Impact */}
-                            {record.impact_payroll && record.status === "Active" && (
-                              <span className="text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-md uppercase tracking-wider">
-                                Affects Payroll
                               </span>
                             )}
                           </div>

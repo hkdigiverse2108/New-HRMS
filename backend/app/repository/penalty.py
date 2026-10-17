@@ -3,6 +3,32 @@ from bson import ObjectId
 from typing import Optional
 from datetime import datetime, date
 
+# Only these employee fields are shown next to a penalty
+EMPLOYEE_CARD_PROJECTION = {
+    "personal_info.first_name": 1,
+    "personal_info.last_name": 1,
+    "personal_info.profile_photo": 1,
+    "personal_info.avatar": 1,
+    "work_details.designation": 1,
+    "work_details.system_role": 1,
+    "work_details.department": 1,
+}
+
+
+def employee_card(emp: Optional[dict]) -> dict:
+    """Flatten a projected employee doc into the name/avatar/role/department a penalty row shows."""
+    if not emp:
+        return {"employee_name": "Unknown", "avatar": "", "role": "Staff", "department": "General"}
+    personal = emp.get("personal_info") or {}
+    work = emp.get("work_details") or {}
+    return {
+        "employee_name": f"{personal.get('first_name', '')} {personal.get('last_name', '')}".strip() or "Employee",
+        "avatar": personal.get("profile_photo") or personal.get("avatar") or "",
+        "role": work.get("designation") or work.get("system_role") or "Employee",
+        "department": work.get("department") or "",
+    }
+
+
 class PenaltyTypeRepository:
     collection_name = "penalty_types"
 
@@ -65,6 +91,14 @@ class EmployeePenaltyRepository:
         return db[cls.collection_name]
 
     @classmethod
+    async def count_by_type(cls, penalty_type_id: str) -> int:
+        collection = await cls.get_collection()
+        ids = [penalty_type_id]
+        if ObjectId.is_valid(penalty_type_id):
+            ids.append(ObjectId(penalty_type_id))
+        return await collection.count_documents({"penalty_type_id": {"$in": ids}})
+
+    @classmethod
     async def create(cls, data: dict):
         collection = await cls.get_collection()
         data["created_at"] = datetime.utcnow()
@@ -100,12 +134,142 @@ class EmployeePenaltyRepository:
         status: Optional[str] = None,
         type_filter: Optional[str] = None,
         search: Optional[str] = None,
-        start_date: Optional[str] = None, 
-        end_date: Optional[str] = None, 
-        page: Optional[int] = None, 
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        page: Optional[int] = None,
         limit: Optional[int] = None
     ):
         collection = await cls.get_collection()
+        query = cls._build_query(is_deleted, employee_id, penalty_type_id, status, type_filter, search, start_date, end_date)
+
+        total = await collection.count_documents(query)
+
+        if page and limit:
+            skip = (page - 1) * limit
+            cursor = collection.find(query).sort("created_at", -1).skip(skip).limit(limit)
+            total_pages = (total + limit - 1) // limit
+        else:
+            cursor = collection.find(query).sort("created_at", -1)
+            page = 1
+            limit = total if total > 0 else 10
+            total_pages = 1 if total > 0 else 0
+
+        items = []
+        async for item in cursor:
+            items.append(cls._normalize(item))
+
+        return {
+            "data": items,
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages
+        }
+
+    @classmethod
+    async def get_all_populated(
+        cls,
+        is_deleted: bool = False,
+        employee_id: Optional[str] = None,
+        penalty_type_id: Optional[str] = None,
+        status: Optional[str] = None,
+        type_filter: Optional[str] = None,
+        search: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        page: Optional[int] = None,
+        limit: Optional[int] = None
+    ):
+        """Penalty list with only the employee and type fields the UI needs, in one aggregation."""
+        collection = await cls.get_collection()
+        query = cls._build_query(is_deleted, employee_id, penalty_type_id, status, type_filter, search, start_date, end_date)
+
+        data_stages: list = [{"$sort": {"created_at": -1}}]
+        if page and limit:
+            data_stages += [{"$skip": (page - 1) * limit}, {"$limit": limit}]
+        data_stages += [
+            {"$lookup": {
+                "from": "employees",
+                "let": {"eid": "$employee_id"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", {"$convert": {"input": "$$eid", "to": "objectId", "onError": None, "onNull": None}}]}}},
+                    {"$project": {"_id": 0, **EMPLOYEE_CARD_PROJECTION}},
+                ],
+                "as": "emp",
+            }},
+            {"$lookup": {
+                "from": PenaltyTypeRepository.collection_name,
+                "let": {"tid": "$penalty_type_id"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$_id", {"$convert": {"input": "$$tid", "to": "objectId", "onError": None, "onNull": None}}]}}},
+                    {"$project": {"_id": 0, "name": 1}},
+                ],
+                "as": "ptype",
+            }},
+            {"$project": {
+                "employee_id": 1, "penalty_type_id": 1, "reason": 1, "penalty_date": 1,
+                "price": 1, "is_warning": 1, "status": 1, "resolution_reason": 1,
+                "impact_payroll": 1, "is_deleted": 1, "created_at": 1,
+                "emp": {"$first": "$emp"},
+                "penalty_type_name": {"$first": "$ptype.name"},
+            }},
+        ]
+
+        pipeline = [
+            {"$match": query},
+            {"$facet": {"data": data_stages, "total": [{"$count": "n"}]}},
+        ]
+        result = await collection.aggregate(pipeline).to_list(1)
+        facet = result[0] if result else {"data": [], "total": []}
+        total = facet["total"][0]["n"] if facet["total"] else 0
+
+        items = []
+        for item in facet["data"]:
+            item = cls._normalize(item)
+            item.update(employee_card(item.pop("emp", None)))
+            items.append(item)
+
+        if page and limit:
+            total_pages = (total + limit - 1) // limit
+        else:
+            page = 1
+            limit = total if total > 0 else 10
+            total_pages = 1 if total > 0 else 0
+
+        return {
+            "data": items,
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages
+        }
+
+    @staticmethod
+    def _normalize(item: dict) -> dict:
+        item["_id"] = str(item["_id"])
+        if "employee_id" in item:
+            item["employee_id"] = str(item["employee_id"])
+        if "penalty_type_id" in item:
+            item["penalty_type_id"] = str(item["penalty_type_id"])
+        if "status" not in item:
+            item["status"] = "Active"
+        if "impact_payroll" not in item:
+            item["impact_payroll"] = not item.get("is_warning", False) and (float(item.get("price", 0)) > 0)
+        if "resolution_reason" not in item:
+            item["resolution_reason"] = None
+        return item
+
+    @staticmethod
+    def _build_query(
+        is_deleted: bool,
+        employee_id: Optional[str],
+        penalty_type_id: Optional[str],
+        status: Optional[str],
+        type_filter: Optional[str],
+        search: Optional[str],
+        start_date: Optional[str],
+        end_date: Optional[str],
+    ) -> dict:
         query = {"is_deleted": is_deleted}
         
         if employee_id and ObjectId.is_valid(str(employee_id)):
@@ -146,40 +310,7 @@ class EmployeePenaltyRepository:
             if not query["penalty_date"]:
                 del query["penalty_date"]
 
-        total = await collection.count_documents(query)
-
-        if page and limit:
-            skip = (page - 1) * limit
-            cursor = collection.find(query).sort("created_at", -1).skip(skip).limit(limit)
-            total_pages = (total + limit - 1) // limit
-        else:
-            cursor = collection.find(query).sort("created_at", -1)
-            page = 1
-            limit = total if total > 0 else 10
-            total_pages = 1 if total > 0 else 0
-
-        items = []
-        async for item in cursor:
-            item["_id"] = str(item["_id"])
-            if "employee_id" in item:
-                item["employee_id"] = str(item["employee_id"])
-            if "penalty_type_id" in item:
-                item["penalty_type_id"] = str(item["penalty_type_id"])
-            if "status" not in item:
-                item["status"] = "Active"
-            if "impact_payroll" not in item:
-                item["impact_payroll"] = not item.get("is_warning", False) and (float(item.get("price", 0)) > 0)
-            if "resolution_reason" not in item:
-                item["resolution_reason"] = None
-            items.append(item)
-            
-        return {
-            "data": items,
-            "total": total,
-            "page": page,
-            "limit": limit,
-            "total_pages": total_pages
-        }
+        return query
 
     @classmethod
     async def get_by_id(cls, item_id: str):

@@ -608,11 +608,15 @@ class AttendanceService:
                 late_penalty_id = await PenaltyService.ensure_late_punchin_penalty_type()
                 
                 # Check if penalty already exists for today to prevent duplicates
-                existing_penalties = await PenaltyService.get_all_penalties(
-                    employee_id=employee_id, 
-                    penalty_type_id=late_penalty_id, 
-                    start_date=today_str, 
-                    end_date=today_str
+                # Only an existence check, so skip the employee/type population
+                from app.repository.penalty import EmployeePenaltyRepository
+                existing_penalties = await EmployeePenaltyRepository.get_all(
+                    employee_id=employee_id,
+                    penalty_type_id=late_penalty_id,
+                    start_date=today_str,
+                    end_date=today_str,
+                    page=1,
+                    limit=1
                 )
                 if not existing_penalties.get("data"):
                     penalty_data = EmployeePenaltyCreate(

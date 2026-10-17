@@ -10,7 +10,7 @@ from app.schemas.penalty import (
     PenaltySummaryResponse
 )
 from app.schemas.pagination import PaginatedResponse
-from app.services.penalty import PenaltyService
+from app.services.penalty import PenaltyService, PENALTY_TYPES_CACHE_KEY
 from app.controllers.auth import RoleChecker, get_current_employee
 from app.redis.service import (
     get_cache, 
@@ -35,12 +35,12 @@ async def invalidate_penalty_caches():
 @router.post("/types", response_model=PenaltyTypeResponse, status_code=status.HTTP_201_CREATED)
 async def create_penalty_type(data: PenaltyTypeCreate, current_user: dict = Depends(admin_hr_checker)):
     result = await PenaltyService.create_penalty_type(data)
-    await delete_cache("penalties:types:all")
+    await delete_cache(PENALTY_TYPES_CACHE_KEY)
     return result
 
 @router.get("/types", response_model=List[PenaltyTypeResponse])
 async def get_penalty_types(current_user: dict = Depends(get_current_employee)):
-    cache_key = "penalties:types:all"
+    cache_key = PENALTY_TYPES_CACHE_KEY
     cached = await get_cache(cache_key)
     if cached is not None:
         return cached
@@ -52,14 +52,15 @@ async def get_penalty_types(current_user: dict = Depends(get_current_employee)):
 @router.put("/types/{item_id}", response_model=PenaltyTypeResponse)
 async def update_penalty_type(item_id: str, data: PenaltyTypeUpdate, current_user: dict = Depends(admin_hr_checker)):
     result = await PenaltyService.update_penalty_type(item_id, data)
-    await delete_cache("penalties:types:all")
+    await delete_cache(PENALTY_TYPES_CACHE_KEY)
     await delete_cache(f"penalty_type:{item_id}")
+    await invalidate_penalty_caches()
     return result
 
 @router.delete("/types/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_penalty_type(item_id: str, current_user: dict = Depends(admin_hr_checker)):
     result = await PenaltyService.delete_penalty_type(item_id)
-    await delete_cache("penalties:types:all")
+    await delete_cache(PENALTY_TYPES_CACHE_KEY)
     await delete_cache(f"penalty_type:{item_id}")
     return result
 
