@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { FAVICON_STORAGE_KEY, syncFaviconToServiceWorker } from "@/lib/favicon";
 
 interface ThemeContextType {
   color: string;
@@ -87,7 +88,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const savedRadius = localStorage.getItem("app-theme-radius");
     const savedFont = localStorage.getItem("app-theme-font");
     const savedLogo = localStorage.getItem("app-theme-logo");
-    const savedFavicon = localStorage.getItem("app-theme-favicon");
+    const savedFavicon = localStorage.getItem(FAVICON_STORAGE_KEY);
     const savedName = localStorage.getItem("app-theme-name");
 
     if (savedColor) setColor(savedColor);
@@ -187,7 +188,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // Browser tab icon: the favicon uploaded in Admin Settings
   useEffect(() => {
     // Runs after the load effect above has already read the saved value
-    localStorage.setItem("app-theme-favicon", faviconUrl);
+    localStorage.setItem(FAVICON_STORAGE_KEY, faviconUrl);
+    syncFaviconToServiceWorker(faviconUrl);
     // No upload means no icon at all (never the bundled default)
     const href = faviconUrl || "data:,";
     const links = document.querySelectorAll<HTMLLinkElement>('link[rel~="icon"], link[rel="apple-touch-icon"]');

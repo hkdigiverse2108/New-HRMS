@@ -16,6 +16,27 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
+// Favicon from Admin Settings, kept in the cache so it survives SW restarts
+const FAVICON_CACHE_KEY = '/__app-favicon';
+
+async function getAppFavicon() {
+  try {
+    const cache = await caches.open(CACHE_NAME);
+    const res = await cache.match(FAVICON_CACHE_KEY);
+    return res ? (await res.text()) || undefined : undefined;
+  } catch (e) {
+    return undefined;
+  }
+}
+
+async function setAppFavicon(url) {
+  try {
+    const cache = await caches.open(CACHE_NAME);
+    if (url) await cache.put(FAVICON_CACHE_KEY, new Response(url));
+    else await cache.delete(FAVICON_CACHE_KEY);
+  } catch (e) {}
+}
+
 // Install event
 self.addEventListener('install', (event) => {
   console.log('[SW] Installing service worker');
@@ -42,11 +63,13 @@ self.addEventListener('push', (event) => {
   }
 
   const title = data.title || 'HRMS Notification';
-  const icon = data.icon || '/favicon.ico';
+
+  event.waitUntil((async () => {
+  const favicon = await getAppFavicon();
   const options = {
     body: data.body || 'You have a new notification',
-    icon: icon,
-    badge: data.badge || '/favicon.ico',
+    icon: data.icon || favicon,
+    badge: data.badge || favicon,
     image: data.image,
     data: data.data || {},
     actions: data.actions || [
@@ -60,9 +83,8 @@ self.addEventListener('push', (event) => {
     timestamp: Date.now(),
   };
 
-  event.waitUntil(
-    self.registration.showNotification(title, options)
-  );
+  await self.registration.showNotification(title, options);
+  })());
 });
 
 // Notification click event
@@ -142,6 +164,10 @@ self.addEventListener('message', (event) => {
     self.skipWaiting();
   }
   
+  if (event.data && event.data.type === 'SET_FAVICON') {
+    event.waitUntil(setAppFavicon(event.data.url));
+  }
+
   if (event.data && event.data.type === 'SUBSCRIBE_PUSH') {
     event.waitUntil(subscribeToPush(event.data.vapidPublicKey));
   }
