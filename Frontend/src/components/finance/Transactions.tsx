@@ -585,39 +585,41 @@ export function Transactions() {
   };
 
   return (
-    <div className="w-full space-y-6 animate-in fade-in duration-500 pb-12 relative min-w-0">
+    <div className="w-full space-y-4 animate-in fade-in duration-500 pb-12 relative min-w-0">
 
       {/* Header */}
-      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-foreground">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-foreground leading-tight">
             Financial Ledger Management
           </h1>
-          <p className="text-muted-foreground mt-1 text-xs sm:text-sm font-medium">
+          <p className="text-muted-foreground mt-0.5 text-xs sm:text-sm font-medium truncate">
             Track Credit (Invoices) and Debt (Expenses) with dynamic balance calculations
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 sm:gap-2.5 w-full xl:w-auto">
-          <button onClick={openOpeningBalances} className="px-3 sm:px-4 py-2 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center gap-2 text-xs sm:text-sm">
-            <Wallet className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-500" /> Opening Balances
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Setup & export: icon buttons, labels show on very wide screens */}
+          <button onClick={openOpeningBalances} title="Opening Balances" className="h-9 px-2.5 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center justify-center gap-2 text-sm whitespace-nowrap">
+            <Wallet className="w-4 h-4 text-amber-500 shrink-0" /><span className="hidden 2xl:inline">Opening Balances</span>
           </button>
-          <button onClick={() => setIsManageBanksOpen(true)} className="px-3 sm:px-4 py-2 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center gap-2 text-xs sm:text-sm">
-            <Landmark className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary" /> Manage Banks
+          <button onClick={() => setIsManageBanksOpen(true)} title="Manage Banks" className="h-9 px-2.5 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center justify-center gap-2 text-sm whitespace-nowrap">
+            <Landmark className="w-4 h-4 text-primary shrink-0" /><span className="hidden 2xl:inline">Manage Banks</span>
           </button>
-          <button onClick={exportLedger} className="px-3 sm:px-4 py-2 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center gap-2 text-xs sm:text-sm">
-            <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-500" /> Export Ledger
+          <button onClick={exportLedger} title="Export Ledger" className="h-9 px-2.5 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center justify-center gap-2 text-sm whitespace-nowrap">
+            <Download className="w-4 h-4 text-indigo-500 shrink-0" /><span className="hidden 2xl:inline">Export Ledger</span>
           </button>
+          <span className="hidden sm:block w-px h-6 bg-border/60 mx-0.5" />
           <button
             onClick={openAddCredit}
-            className="px-3 sm:px-4 py-2 bg-primary text-primary-foreground font-bold rounded-lg hover:bg-primary/90 transition-colors shadow-sm flex items-center gap-2 text-xs sm:text-sm"
+            className="h-9 px-3 sm:px-4 bg-primary text-primary-foreground font-bold rounded-lg hover:bg-primary/90 transition-colors shadow-sm flex items-center justify-center gap-1.5 text-xs sm:text-sm whitespace-nowrap"
           >
-            <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Add Credit (Invoice)
+            <Plus className="w-4 h-4 shrink-0" /> Add Credit
           </button>
           <button
             onClick={openAddDebt}
-            className="px-3 sm:px-4 py-2 bg-rose-600 text-white font-bold rounded-lg hover:bg-rose-700 transition-colors shadow-sm flex items-center gap-2 text-xs sm:text-sm"
+            className="h-9 px-3 sm:px-4 bg-rose-600 text-white font-bold rounded-lg hover:bg-rose-700 transition-colors shadow-sm flex items-center justify-center gap-1.5 text-xs sm:text-sm whitespace-nowrap"
           >
-            <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Add Debt (Expense)
+            <Plus className="w-4 h-4 shrink-0" /> Add Debt
           </button>
         </div>
       </div>
@@ -626,7 +628,7 @@ export function Transactions() {
       <div className="flex flex-col md:flex-row justify-between gap-3 sm:gap-4 bg-muted/30 p-2 rounded-2xl border border-border/50">
         <div className="flex flex-wrap sm:flex-nowrap gap-2">
           <button
-            className={`flex-1 sm:flex-initial px-4 sm:px-6 py-2 sm:py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 ${activeAccountTab === "overview"
+            className={`flex-1 sm:flex-initial h-10 px-4 sm:px-6 text-xs sm:text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeAccountTab === "overview"
               ? "bg-background shadow-sm text-foreground"
               : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
               }`}
@@ -635,7 +637,7 @@ export function Transactions() {
             <LayoutGrid className={`w-4 h-4 ${activeAccountTab === "overview" ? "text-primary" : ""}`} /> Overview
           </button>
           <button
-            className={`flex-1 sm:flex-initial px-4 sm:px-6 py-2 sm:py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 ${activeAccountTab === "bank"
+            className={`flex-1 sm:flex-initial h-10 px-4 sm:px-6 text-xs sm:text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeAccountTab === "bank"
               ? "bg-background shadow-sm text-foreground"
               : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
               }`}
@@ -644,7 +646,7 @@ export function Transactions() {
             <Building2 className={`w-4 h-4 ${activeAccountTab === "bank" ? "text-primary" : ""}`} /> Bank Acc Management
           </button>
           <button
-            className={`flex-1 sm:flex-initial px-4 sm:px-6 py-2 sm:py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 ${activeAccountTab === "cash"
+            className={`flex-1 sm:flex-initial h-10 px-4 sm:px-6 text-xs sm:text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeAccountTab === "cash"
               ? "bg-background shadow-sm text-foreground"
               : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
               }`}
@@ -663,21 +665,21 @@ export function Transactions() {
 
       {/* Bank Accounts */}
       {activeAccountTab === "bank" && (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2.5">
           <button
             onClick={() => setSelectedBankId("all")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors flex items-center gap-1.5 ${selectedBankId === "all" ? "bg-emerald-600 text-white border-emerald-600" : "bg-background border-border/50 text-muted-foreground hover:text-foreground"}`}
+            className={`h-10 px-4 rounded-xl text-sm font-bold border transition-colors flex items-center gap-2 ${selectedBankId === "all" ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border/50 text-muted-foreground hover:text-foreground"}`}
           >
-            <Building2 className="w-3.5 h-3.5" /> All Accounts
+            <Building2 className="w-4 h-4" /> All Accounts
           </button>
           {bankAccounts.map((b) => {
             const id = bankIdOf(b);
             const active = selectedBankId === id;
             return (
               <button key={id} onClick={() => setSelectedBankId(id)} title={b.bank_name}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors flex items-center gap-1.5 ${active ? "bg-emerald-600 text-white border-emerald-600" : "bg-background border-border/50 text-muted-foreground hover:text-foreground"}`}>
-                <Landmark className="w-3.5 h-3.5" /> {bankLabel(b)}
-                {b.is_default && <span className={`text-[9px] uppercase tracking-wider ${active ? "text-white/80" : "text-emerald-600"}`}>Default</span>}
+                className={`h-10 px-4 rounded-xl text-sm font-bold border transition-colors flex items-center gap-2 ${active ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border/50 text-muted-foreground hover:text-foreground"}`}>
+                <Landmark className="w-4 h-4" /> {bankLabel(b)}
+                {b.is_default && <span className={`text-[9px] uppercase tracking-wider ${active ? "text-primary-foreground/80" : "text-primary"}`}>Default</span>}
               </button>
             );
           })}
@@ -685,7 +687,7 @@ export function Transactions() {
       )}
 
       {/* Filters */}
-      <div className="bg-background border border-border/50 rounded-2xl p-3 flex flex-wrap items-center gap-3 sm:gap-4 shadow-sm">
+      <div className="bg-background border border-border/50 rounded-2xl p-3 shadow-sm flex flex-wrap items-center gap-3 sm:gap-4">
         <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-muted-foreground pl-1 sm:pl-2">
           <Filter className="w-4 h-4" /> Filters:
         </div>
@@ -694,27 +696,37 @@ export function Transactions() {
           dateRange={dateRange}
           onChange={setDateRange}
           placeholder="Filter by transaction date"
-          className="w-full sm:w-auto"
+          className="w-full sm:w-[250px] h-[34px]"
         />
 
-        <div className="flex items-center gap-2 text-xs sm:text-sm">
-          <span className="text-muted-foreground font-medium">Category:</span>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <span className="text-xs sm:text-sm font-medium text-muted-foreground">Category:</span>
           <SearchableSelect
             value={filterCategory}
             onChange={setFilterCategory}
             options={categoryOptions}
-            className="w-[140px] h-[34px] pl-3 pr-3 bg-background border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+            className="flex-1 sm:flex-none sm:w-[180px] h-[34px] px-3 bg-background border border-border/70 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
           />
         </div>
-        <div className="flex items-center gap-2 text-xs sm:text-sm border-t sm:border-t-0 sm:border-l border-border/50 pt-2 sm:pt-0 sm:pl-4">
-          <span className="text-muted-foreground font-medium">Brand:</span>
+
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <span className="text-xs sm:text-sm font-medium text-muted-foreground">Brand:</span>
           <SearchableSelect
             value={filterBrand}
             onChange={setFilterBrand}
             options={brandFilterOptions}
-            className="w-[140px] h-[34px] pl-3 pr-3 bg-background border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+            className="flex-1 sm:flex-none sm:w-[160px] h-[34px] px-3 bg-background border border-border/70 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
           />
         </div>
+
+        {(dateRange.from || dateRange.to || filterCategory !== "All Categories" || filterBrand !== "All Brands") && (
+          <button
+            onClick={() => { setDateRange({ from: undefined, to: undefined }); setFilterCategory("All Categories"); setFilterBrand("All Brands"); }}
+            className="h-[34px] px-3 rounded-lg text-xs font-bold text-rose-600 border border-rose-200 bg-rose-50 hover:bg-rose-100 transition-colors flex items-center justify-center gap-1"
+          >
+            <X className="w-3.5 h-3.5" /> Clear
+          </button>
+        )}
       </div>
 
       {/* Summary Cards */}
