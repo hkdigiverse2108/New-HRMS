@@ -21,6 +21,7 @@ class TransactionBase(BaseModel):
     narrative: Optional[str] = None
     attachment: Optional[str] = Field(None, description="Document URL or filename")
     invoice_id: Optional[str] = Field(None, description="Linked invoice id")
+    bank_account_id: Optional[str] = Field(None, description="Linked bank account id (bank entries)")
 
 
 class TransactionCreate(TransactionBase):
@@ -41,6 +42,7 @@ class TransactionUpdate(BaseModel):
     narrative: Optional[str] = None
     attachment: Optional[str] = None
     invoice_id: Optional[str] = None
+    bank_account_id: Optional[str] = None
 
 
 class TransactionResponse(TransactionBase):
@@ -55,6 +57,10 @@ class TransactionResponse(TransactionBase):
 class OpeningBalances(BaseModel):
     bank: float = 0.0
     cash: float = 0.0
+
+
+class BankOpeningBalance(BaseModel):
+    amount: float = 0.0
 
 
 class OptionList(BaseModel):

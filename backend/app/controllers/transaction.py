@@ -9,7 +9,7 @@ from app.config import ROOT_DIR
 from app.database.db import get_database
 from app.schemas.transaction import (
     TransactionCreate, TransactionUpdate, TransactionResponse, OpeningBalances,
-    OptionList, OptionName,
+    OptionList, OptionName, BankOpeningBalance,
 )
 from app.controllers.auth import get_current_employee
 
@@ -18,6 +18,7 @@ router = APIRouter(prefix="/transactions", tags=["Finance Transactions"])
 COLLECTION = "finance_transactions"
 SETTINGS_COLLECTION = "finance_settings"
 OPENING_BALANCES_ID = "opening_balances"
+BANK_OPENING_BALANCES_ID = "bank_opening_balances"
 # Dropdown option lists (custom + hidden entries) stored in finance_settings
 OPTION_LIST_IDS = {
     "credit-category": "credit_categories",
@@ -38,15 +39,32 @@ def _serialize(doc: dict) -> dict:
     return doc
 
 
-async def _next_expense_number() -> str:
-    """Expense numbers use YYMMXXX format, e.g. 2610001."""
-    prefix = datetime.now().strftime("%y%m")
-    last = await _col().find_one(
-        {"type": "debit", "ref_no": {"$regex": f"^{prefix}\\d{{3}}$"}},
-        sort=[("ref_no", -1)],
+async def _next_expense_number(entry_date: str) -> tuple[str, int]:
+    """Expense numbers are DDMM of the entry date + a running sequence, e.g. 1910001, 2010002.
+    With no active debit entries the sequence starts again at 001; otherwise deleted entries keep
+    their sequence so a number is never handed out twice."""
+    has_active = await _col().find_one({"type": "debit", "is_deleted": {"$ne": True}}, {"_id": 1})
+    last = await _col().find_one({"type": "debit", "expense_seq": {"$exists": True}}, sort=[("expense_seq", -1)]) if has_active else None
+    seq = (last["expense_seq"] if last else 0) + 1
+    try:
+        prefix = datetime.strptime(entry_date[:10], "%Y-%m-%d").strftime("%d%m")
+    except ValueError:
+        prefix = datetime.now().strftime("%d%m")
+    return f"{prefix}{seq:03d}", seq
+
+
+async def _default_bank_account_id() -> Optional[str]:
+    """Default bank account, else the oldest one; used when an invoice has no bank account."""
+    accounts = get_database()["bank_accounts"]
+    doc = await accounts.find_one({"is_deleted": False, "is_default": True}) or await accounts.find_one(
+        {"is_deleted": False}, sort=[("created_at", 1)]
     )
-    seq = int(last["ref_no"][4:]) + 1 if last else 1
-    return f"{prefix}{seq:03d}"
+    return str(doc["_id"]) if doc else None
+
+
+def _require_bank_account(account: Optional[str], bank_account_id: Optional[str]) -> None:
+    if account == "bank" and not bank_account_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Please select a bank account for bank entries")
 
 
 async def _get_or_404(transaction_id: str) -> dict:
@@ -66,17 +84,49 @@ async def get_opening_balances(current_user: dict = Depends(get_current_employee
 
 @router.put("/opening-balances", response_model=OpeningBalances)
 async def update_opening_balances(data: OpeningBalances, current_user: dict = Depends(get_current_employee)):
-    if await _col().count_documents({"is_deleted": False}, limit=1):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Opening balances cannot be changed after a credit or debit entry has been added",
-        )
+    current = await get_database()[SETTINGS_COLLECTION].find_one({"_id": OPENING_BALANCES_ID}) or {}
+    # "bank" here is the legacy balance for bank entries not linked to a bank account
+    lock_queries = {
+        "cash": {"account": "cash"},
+        "bank": {"account": "bank", "bank_account_id": {"$in": [None, ""]}},
+    }
+    for field, query in lock_queries.items():
+        if getattr(data, field) != current.get(field, 0.0) and await _col().count_documents({**query, "is_deleted": False}, limit=1):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"The {field} opening balance cannot be changed after an entry has been added",
+            )
     await get_database()[SETTINGS_COLLECTION].update_one(
         {"_id": OPENING_BALANCES_ID},
         {"$set": {**data.model_dump(), "updated_at": datetime.utcnow()}},
         upsert=True,
     )
     return data
+
+
+@router.get("/opening-balances/bank-accounts")
+async def get_bank_opening_balances(current_user: dict = Depends(get_current_employee)):
+    doc = await get_database()[SETTINGS_COLLECTION].find_one({"_id": BANK_OPENING_BALANCES_ID}) or {}
+    return doc.get("balances", {})
+
+
+@router.put("/opening-balances/bank-accounts/{account_id}")
+async def update_bank_opening_balance(account_id: str, data: BankOpeningBalance, current_user: dict = Depends(get_current_employee)):
+    settings = get_database()[SETTINGS_COLLECTION]
+    balances = (await settings.find_one({"_id": BANK_OPENING_BALANCES_ID}) or {}).get("balances", {})
+    if data.amount != balances.get(account_id, 0.0) and await _col().count_documents(
+        {"bank_account_id": account_id, "is_deleted": False}, limit=1
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Opening balance cannot be changed after an entry has been added to this account",
+        )
+    await settings.update_one(
+        {"_id": BANK_OPENING_BALANCES_ID},
+        {"$set": {f"balances.{account_id}": data.amount, "updated_at": datetime.utcnow()}},
+        upsert=True,
+    )
+    return {account_id: data.amount}
 
 
 def _option_list_id(kind: str) -> str:
@@ -150,6 +200,7 @@ async def sync_invoices(current_user: dict = Depends(get_current_employee)):
     })
     now = datetime.utcnow()
     new_docs = []
+    default_bank_id = await _default_bank_account_id()
     async for inv in cursor:
         inv_id = str(inv["_id"])
         if inv_id in synced_ids:
@@ -167,6 +218,7 @@ async def sync_invoices(current_user: dict = Depends(get_current_employee)):
             "remarks": inv.get("notes") or "",
             "source": "invoice",
             "invoice_id": inv_id,
+            "bank_account_id": inv.get("bank_account_id") or default_bank_id,
             "created_at": now,
             "updated_at": now,
             "is_deleted": False,
@@ -180,6 +232,7 @@ async def sync_invoices(current_user: dict = Depends(get_current_employee)):
 async def get_transactions(
     account: Optional[str] = Query(None, description="'bank' or 'cash'"),
     type: Optional[str] = Query(None, description="'credit' or 'debit'"),
+    bank_account_id: Optional[str] = Query(None, description="Bank account id"),
     current_user: dict = Depends(get_current_employee),
 ):
     query: dict = {"is_deleted": False}
@@ -187,6 +240,8 @@ async def get_transactions(
         query["account"] = account
     if type:
         query["type"] = type
+    if bank_account_id:
+        query["bank_account_id"] = bank_account_id
     items = await _col().find(query).sort([("date", -1), ("created_at", -1)]).to_list(length=5000)
     return [_serialize(i) for i in items]
 
@@ -194,8 +249,12 @@ async def get_transactions(
 @router.post("", response_model=TransactionResponse, response_model_exclude_none=True, status_code=status.HTTP_201_CREATED)
 async def create_transaction(data: TransactionCreate, current_user: dict = Depends(get_current_employee)):
     doc = data.model_dump()
+    _require_bank_account(doc["account"], doc.get("bank_account_id"))
     if not (doc.get("ref_no") or "").strip():
-        doc["ref_no"] = await _next_expense_number() if doc["type"] == "debit" else None
+        if doc["type"] == "debit":
+            doc["ref_no"], doc["expense_seq"] = await _next_expense_number(doc["date"])
+        else:
+            doc["ref_no"] = None
     now = datetime.utcnow()
     doc.update({"source": "manual", "created_at": now, "updated_at": now, "is_deleted": False})
     result = await _col().insert_one(doc)
@@ -205,8 +264,9 @@ async def create_transaction(data: TransactionCreate, current_user: dict = Depen
 
 @router.put("/{transaction_id}", response_model=TransactionResponse, response_model_exclude_none=True)
 async def update_transaction(transaction_id: str, data: TransactionUpdate, current_user: dict = Depends(get_current_employee)):
-    await _get_or_404(transaction_id)
+    current = await _get_or_404(transaction_id)
     updates = data.model_dump(exclude_unset=True)
+    _require_bank_account(updates.get("account", current.get("account")), updates.get("bank_account_id", current.get("bank_account_id")))
     updates["updated_at"] = datetime.utcnow()
     await _col().update_one({"_id": ObjectId(transaction_id)}, {"$set": updates})
     return _serialize(await _get_or_404(transaction_id))

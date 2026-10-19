@@ -30,6 +30,9 @@ from app.controllers.preset import router as preset_router
 from app.controllers.invoice import router as invoice_router
 from app.controllers.bank_account import router as bank_account_router
 from app.controllers.transaction import router as transaction_router
+from app.controllers.other_transaction import router as other_transaction_router
+from app.controllers.finance_lock import router as finance_lock_router
+from app.controllers.otp_copy import router as otp_copy_router
 from app.controllers.quotation import router as quotation_router
 from app.controllers.settings import router as settings_router
 from app.controllers.payroll import router as payroll_router
@@ -164,6 +167,9 @@ app.include_router(preset_router)
 app.include_router(invoice_router)
 app.include_router(bank_account_router)
 app.include_router(transaction_router)
+app.include_router(other_transaction_router)
+app.include_router(finance_lock_router)
+app.include_router(otp_copy_router)
 app.include_router(quotation_router)
 app.include_router(settings_router)
 app.include_router(payroll_router)

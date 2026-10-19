@@ -540,7 +540,9 @@ function SidebarBody({
   };
 
   const userAllowedNavItems = useMemo(() => {
-    return filterNavigationForUser(navItems, user);
+    return filterNavigationForUser(navItems, user).map((item) =>
+      item.children ? { ...item, children: item.children.filter((c) => !c.hideInSidebar) } : item,
+    );
   }, [user]);
 
   const filtered = useMemo(() => {
