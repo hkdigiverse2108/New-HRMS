@@ -458,6 +458,17 @@ export function UpdateActivityModal({
           toast.error("Could not save research. Please try again.");
           return;
         }
+      } else if (taskToSave.isCustom && (taskToSave.taskType === "Activity" || taskToSave.taskType === "Meeting")) {
+        // Activity / Meeting are not tasks: remember them on this device only, never create a task
+        try {
+          const savedStr = localStorage.getItem("hrms_custom_activities");
+          const currentSaved = savedStr ? JSON.parse(savedStr) : [];
+          const updated = [
+            { id: taskToSave.taskId, title: taskToSave.taskTitle, category: taskToSave.taskType, dueDate: new Date().toISOString().split("T")[0] },
+            ...currentSaved.filter((x: any) => !(x.category === taskToSave.taskType && x.title.toLowerCase().trim() === taskToSave.taskTitle.toLowerCase().trim()))
+          ].slice(0, 30);
+          localStorage.setItem("hrms_custom_activities", JSON.stringify(updated));
+        } catch {}
       } else if (taskToSave.isCustom) {
         // If an active task with the same title or ID already exists in loaded tasks, reuse it!
         const allLoaded = [
@@ -523,7 +534,7 @@ export function UpdateActivityModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start justify-between p-6 pb-4 border-b border-border/50">
+        <div className="flex items-start justify-between p-6 pb-4 border-b border-border/50 shrink-0">
           <div>
             <h2 className="text-xl font-bold tracking-tight text-foreground">
               {isChangeMode ? "Change Active Task" : "Update Activity"}
@@ -542,7 +553,7 @@ export function UpdateActivityModal({
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex items-center gap-1.5 px-6 pt-4 pb-2 border-b border-border/30 overflow-x-auto scrollbar-none">
+        <div className="flex items-center gap-1.5 px-6 py-3 border-b border-border/30 overflow-x-auto overflow-y-hidden scrollbar-none shrink-0">
           {tabs.map((tab) => {
             const isActive = activeTab === tab;
             return (
@@ -733,7 +744,7 @@ export function UpdateActivityModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-4 px-6 border-t border-border/50 bg-muted/20">
+        <div className="flex items-center justify-end gap-3 p-4 px-6 border-t border-border/50 bg-muted/20 shrink-0">
           <button
             type="button"
             onClick={onClose}
