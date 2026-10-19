@@ -29,6 +29,7 @@ from app.controllers.booking import booking_router, public_booking_router
 from app.controllers.preset import router as preset_router
 from app.controllers.invoice import router as invoice_router
 from app.controllers.bank_account import router as bank_account_router
+from app.controllers.transaction import router as transaction_router
 from app.controllers.quotation import router as quotation_router
 from app.controllers.settings import router as settings_router
 from app.controllers.payroll import router as payroll_router
@@ -162,6 +163,7 @@ app.include_router(public_booking_router)
 app.include_router(preset_router)
 app.include_router(invoice_router)
 app.include_router(bank_account_router)
+app.include_router(transaction_router)
 app.include_router(quotation_router)
 app.include_router(settings_router)
 app.include_router(payroll_router)
