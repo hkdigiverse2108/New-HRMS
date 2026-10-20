@@ -1,4 +1,5 @@
 from bson import ObjectId
+from datetime import datetime
 from typing import Optional, List, Dict, Any
 from app.database.db import get_database
 
@@ -19,6 +20,7 @@ class OvertimeRepository:
     @classmethod
     async def create(cls, data: dict) -> Dict[str, Any]:
         collection = await cls.get_collection()
+        data["is_deleted"] = False
         res = await collection.insert_one(data)
         return await cls.get_by_id(str(res.inserted_id))
 
@@ -27,21 +29,21 @@ class OvertimeRepository:
         if not ObjectId.is_valid(str(request_id)):
             return None
         collection = await cls.get_collection()
-        return cls._clean(await collection.find_one({"_id": ObjectId(str(request_id))}))
+        return cls._clean(await collection.find_one({"_id": ObjectId(str(request_id)), "is_deleted": {"$ne": True}}))
 
     @classmethod
     async def find_active_for_day(cls, employee_id: str, date: str) -> Optional[Dict[str, Any]]:
         """A pending or approved request of this employee for this day (one per day)."""
         collection = await cls.get_collection()
         return cls._clean(await collection.find_one(
-            {"employee_id": employee_id, "date": date, "status": {"$in": ["Pending", "Approved"]}}
+            {"employee_id": employee_id, "date": date, "status": {"$in": ["Pending", "Approved"]}, "is_deleted": {"$ne": True}}
         ))
 
     @classmethod
     async def list(cls, employee_id: Optional[str] = None, status: Optional[str] = None,
                    start: Optional[str] = None, end: Optional[str] = None) -> List[Dict[str, Any]]:
         collection = await cls.get_collection()
-        query: Dict[str, Any] = {}
+        query: Dict[str, Any] = {"is_deleted": {"$ne": True}}
         if employee_id:
             query["employee_id"] = employee_id
         if status:
@@ -60,4 +62,7 @@ class OvertimeRepository:
     @classmethod
     async def delete(cls, request_id: str) -> None:
         collection = await cls.get_collection()
-        await collection.delete_one({"_id": ObjectId(str(request_id))})
+        await collection.update_one(
+            {"_id": ObjectId(str(request_id))},
+            {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}}
+        )

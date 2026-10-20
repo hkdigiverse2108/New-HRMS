@@ -1,3 +1,4 @@
+from datetime import datetime
 from app.database.db import get_database
 from bson import ObjectId
 from app.schemas.enums import GenderEnum, SystemRole, WorkModeEnum
@@ -286,7 +287,7 @@ class EmployeeRepository:
                 return False
             await collection.update_one(
                 {"_id": ObjectId(employee_id)},
-                {"$set": {"work_details.is_delete": True}}
+                {"$set": {"work_details.is_delete": True, "deleted_at": datetime.utcnow()}}
             )
             return True
         except Exception:

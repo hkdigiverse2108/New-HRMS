@@ -66,6 +66,7 @@ class RemarkService:
         total_employees = await db["employees"].count_documents({})
         
         pipeline = [
+            {"$match": {"is_deleted": {"$ne": True}}},
             {"$group": {"_id": "$employee_id", "avg_rating": {"$avg": "$rating"}}}
         ]
         cursor = db["remarks"].aggregate(pipeline)

@@ -234,7 +234,7 @@ class BookingRepository:
     @classmethod
     async def get_employee_booking_pages(cls, employee_id: str) -> List[Dict[str, Any]]:
         db = await cls.get_db()
-        cursor = db[cls.page_collection].find({"employee_id": employee_id})
+        cursor = db[cls.page_collection].find({"employee_id": employee_id, "is_deleted": {"$ne": True}})
         docs = await cursor.to_list(length=100)
         return [await cls._populate_page_doc(d) for d in docs]
 
@@ -243,7 +243,7 @@ class BookingRepository:
         db = await cls.get_db()
         try:
             obj_id = ObjectId(page_id)
-            query = {"_id": obj_id}
+            query = {"_id": obj_id, "is_deleted": {"$ne": True}}
             if employee_id:
                 query["employee_id"] = employee_id
             doc = await db[cls.page_collection].find_one(query)
@@ -256,7 +256,7 @@ class BookingRepository:
         db = await cls.get_db()
         try:
             obj_id = ObjectId(page_id)
-            existing = await db[cls.page_collection].find_one({"_id": obj_id, "employee_id": employee_id})
+            existing = await db[cls.page_collection].find_one({"_id": obj_id, "employee_id": employee_id, "is_deleted": {"$ne": True}})
             if not existing:
                 return False
 
@@ -289,8 +289,11 @@ class BookingRepository:
         db = await cls.get_db()
         try:
             obj_id = ObjectId(page_id)
-            result = await db[cls.page_collection].delete_one({"_id": obj_id, "employee_id": employee_id})
-            return result.deleted_count > 0
+            result = await db[cls.page_collection].update_one(
+                {"_id": obj_id, "employee_id": employee_id, "is_deleted": {"$ne": True}},
+                {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}}
+            )
+            return result.modified_count > 0
         except Exception:
             return False
 
@@ -426,6 +429,7 @@ class BookingRepository:
 
         # 1. HRMS Events
         hrms_cursor = db["schedule_events"].find({
+                "is_deleted": {"$ne": True},
             "date": date_str,
             "$or": [
                 {"primary_employee_id": employee_id},
@@ -462,7 +466,8 @@ class BookingRepository:
                 "employee_id": employee_id,
                 "status": "APPROVED",
                 "start_date": {"$lte": date_str},
-                "end_date": {"$gte": date_str}
+                "end_date": {"$gte": date_str},
+                "is_deleted": {"$ne": True}
             })
             leaves = await leave_cursor.to_list(length=100)
             if leaves:
@@ -557,6 +562,7 @@ class BookingRepository:
 
         # 2. Check existing HRMS schedule events for host
         existing_events_cursor = db["schedule_events"].find({
+                "is_deleted": {"$ne": True},
             "date": date_str,
             "$or": [
                 {"primary_employee_id": employee_id},
@@ -671,7 +677,10 @@ class BookingRepository:
             # Delete associated HRMS event if present
             hrms_event_id = booking.get("hrms_event_id")
             if hrms_event_id and ObjectId.is_valid(hrms_event_id):
-                await db["schedule_events"].delete_one({"_id": ObjectId(hrms_event_id)})
+                await db["schedule_events"].update_one(
+                    {"_id": ObjectId(hrms_event_id)},
+                    {"$set": {"is_deleted": True, "deleted_at": datetime.utcnow()}}
+                )
 
             # Update booking status to CANCELLED
             await db[cls.booking_collection].update_one({"_id": obj_id}, {"$set": {"status": "CANCELLED"}})

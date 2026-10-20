@@ -1,3 +1,4 @@
+from app.database.soft_delete_index import ensure_active_unique_index
 from pydantic import BaseModel, Field, ConfigDict
 from bson import ObjectId
 import logging
@@ -42,7 +43,7 @@ class DesignationDBModel(BaseModel):
 async def setup_designation_indexes(db):
     try:
         collection = db["designations"]
-        await collection.create_index("name", unique=True)
+        await ensure_active_unique_index(collection, [("name", 1)])
         logger.info("Designation database indexes setup successfully.")
     except Exception as e:
         logger.error(f"Failed to setup designation indexes: {e}")

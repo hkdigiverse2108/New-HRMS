@@ -495,7 +495,7 @@ class ScheduleRepository:
                             {"type": {"$in": ["Holiday", "Public Holiday", "Company Leave"]}}
                         ]
                     }
-                    h_cursor = db[cls.events_collection].find(h_query)
+                    h_cursor = db[cls.events_collection].find({**h_query, "is_deleted": {"$ne": True}})
                     h_events_raw = await h_cursor.to_list(length=500)
                     for ev in serialize_mongo(h_events_raw):
                         merged[str(ev.get("_id") or ev.get("id"))] = ev
@@ -543,6 +543,7 @@ class ScheduleRepository:
         user_ids = await cls._resolve_employee_ids(db, user_id)
         today_str = date.today().isoformat()
         todays_count = await db[cls.events_collection].count_documents({
+            "is_deleted": {"$ne": True},
             "date": today_str,
             "$or": [
                 {"created_by": {"$in": user_ids}},
@@ -566,7 +567,7 @@ class ScheduleRepository:
                     {"attendees": {"$in": user_ids}}
                 ]
             }
-            cursor = db[cls.events_collection].find(query)
+            cursor = db[cls.events_collection].find({**query, "is_deleted": {"$ne": True}})
             custom_events_raw = await cursor.to_list(length=500)
             custom_events = serialize_mongo(custom_events_raw)
             all_events.extend(custom_events)
@@ -590,7 +591,7 @@ class ScheduleRepository:
                         {"type": {"$in": ["Holiday", "Public Holiday", "Company Leave"]}}
                     ]
                 }
-                h_cursor = db[cls.events_collection].find(h_query)
+                h_cursor = db[cls.events_collection].find({**h_query, "is_deleted": {"$ne": True}})
                 h_events_raw = await h_cursor.to_list(length=500)
                 for ev in serialize_mongo(h_events_raw):
                     ev_id = str(ev.get("_id") or ev.get("id"))
@@ -692,7 +693,7 @@ class ScheduleRepository:
                 {"attendees": {"$in": employee_ids}}
             ]
         }
-        cursor = db[cls.events_collection].find(query)
+        cursor = db[cls.events_collection].find({**query, "is_deleted": {"$ne": True}})
         existing_events = await cursor.to_list(length=200)
 
         # Build list of busy minute ranges
@@ -709,7 +710,8 @@ class ScheduleRepository:
                 "employee_id": {"$in": employee_ids},
                 "status": "APPROVED",
                 "start_date": {"$lte": date_str},
-                "end_date": {"$gte": date_str}
+                "end_date": {"$gte": date_str},
+                "is_deleted": {"$ne": True}
             })
             leaves = await leave_cursor.to_list(length=100)
             if leaves:
@@ -758,7 +760,7 @@ class ScheduleRepository:
         db = await cls.get_db()
         
         # 1. Departments dynamically from 'departments' collection + 'employees'
-        dept_cursor = db["departments"].find({}, {"_id": 1, "department_name": 1, "name": 1})
+        dept_cursor = db["departments"].find({"is_deleted": {"$ne": True}}, {"_id": 1, "department_name": 1, "name": 1})
         raw_depts = await dept_cursor.to_list(length=200)
         
         departments = []
@@ -782,7 +784,7 @@ class ScheduleRepository:
             pass
 
         # 2. Designations dynamically from 'designations' collection + 'employees'
-        desig_cursor = db["designations"].find({}, {"_id": 1, "designation_name": 1, "name": 1})
+        desig_cursor = db["designations"].find({"is_deleted": {"$ne": True}}, {"_id": 1, "designation_name": 1, "name": 1})
         raw_desigs = await desig_cursor.to_list(length=200)
         
         designations = []
@@ -869,7 +871,7 @@ class ScheduleRepository:
                 {"attendees": {"$in": target_ids}}
             ]
         }
-        cursor = db[cls.events_collection].find(query)
+        cursor = db[cls.events_collection].find({**query, "is_deleted": {"$ne": True}})
         custom_events_raw = await cursor.to_list(length=500)
         custom_events = serialize_mongo(custom_events_raw)
 
@@ -960,7 +962,7 @@ class ScheduleRepository:
         db = await cls.get_db()
         try:
             obj_id = ObjectId(event_id)
-            doc = await db[cls.events_collection].find_one({"_id": obj_id})
+            doc = await db[cls.events_collection].find_one({"_id": obj_id, "is_deleted": {"$ne": True}})
             return serialize_mongo(doc) if doc else None
         except Exception:
             return None
@@ -1033,7 +1035,7 @@ class ScheduleRepository:
             )
 
             # Try to retrieve existing doc if in database to retain date/title
-            existing_doc = await db[cls.events_collection].find_one({"$or": match_or})
+            existing_doc = await db[cls.events_collection].find_one({"$or": match_or, "is_deleted": {"$ne": True}})
             if existing_doc:
                 if not event_date:
                     event_date = existing_doc.get("date")
@@ -1058,7 +1060,10 @@ class ScheduleRepository:
                 )
 
                 # 2. Delete from schedule_events collection if it exists there
-                await db[cls.events_collection].delete_many({"$or": match_or})
+                await db[cls.events_collection].update_many(
+                    {"$or": match_or, "is_deleted": {"$ne": True}},
+                    {"$set": {"is_deleted": True, "deleted_at": datetime.utcnow(), "deleted_by": user_id}}
+                )
 
                 # 3. Clear Redis cache for instant update
                 try:
@@ -1077,6 +1082,7 @@ class ScheduleRepository:
             user_ids = await cls._resolve_employee_ids(db, user_id)
             query = {
                 "$and": [
+                    {"is_deleted": {"$ne": True}},
                     {"$or": match_or},
                     {"$or": [
                         {"created_by": {"$in": user_ids}},
@@ -1085,8 +1091,11 @@ class ScheduleRepository:
                     ]}
                 ]
             }
-            result = await db[cls.events_collection].delete_one(query)
-            if result.deleted_count > 0:
+            result = await db[cls.events_collection].update_one(
+                query,
+                {"$set": {"is_deleted": True, "deleted_at": datetime.utcnow(), "deleted_by": user_id}}
+            )
+            if result.modified_count > 0:
                 try:
                     from app.redis.service import clear_pattern
                     await clear_pattern("schedule:*")

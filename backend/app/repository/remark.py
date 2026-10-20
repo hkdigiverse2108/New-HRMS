@@ -37,6 +37,7 @@ class RemarkRepository:
         now = datetime.utcnow()
         doc = {
             **data,
+            "is_deleted": False,
             "created_at": now,
             "updated_at": now
         }
@@ -47,13 +48,13 @@ class RemarkRepository:
     @classmethod
     async def get_remark_by_id(cls, remark_id: str) -> Optional[Dict[str, Any]]:
         collection = await cls.get_collection()
-        doc = await collection.find_one({"_id": ObjectId(remark_id)})
+        doc = await collection.find_one({"_id": ObjectId(remark_id), "is_deleted": {"$ne": True}})
         return serialize_mongo(doc) if doc else None
 
     @classmethod
     async def get_all_remarks(cls, query: Dict[str, Any] = None) -> List[Dict[str, Any]]:
         collection = await cls.get_collection()
-        query = query or {}
+        query = {**(query or {}), "is_deleted": {"$ne": True}}
         cursor = collection.find(query).sort("created_at", -1)
         records = []
         async for doc in cursor:
@@ -73,14 +74,17 @@ class RemarkRepository:
     @classmethod
     async def delete_remark(cls, remark_id: str) -> bool:
         collection = await cls.get_collection()
-        result = await collection.delete_one({"_id": ObjectId(remark_id)})
-        return result.deleted_count > 0
+        result = await collection.update_one(
+            {"_id": ObjectId(remark_id), "is_deleted": {"$ne": True}},
+            {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}}
+        )
+        return result.modified_count > 0
 
     @classmethod
     async def get_all_questions(cls, query: Dict[str, Any] = None) -> List[Dict[str, Any]]:
         db = get_database()
         collection = db["remark_questions"]
-        query = query or {}
+        query = {**(query or {}), "is_deleted": {"$ne": True}}
         cursor = collection.find(query).sort("created_at", 1)
         records = []
         async for doc in cursor:
@@ -94,6 +98,7 @@ class RemarkRepository:
         now = datetime.utcnow()
         doc = {
             **data,
+            "is_deleted": False,
             "created_at": now,
             "updated_at": now
         }
@@ -105,7 +110,7 @@ class RemarkRepository:
     async def get_question_by_id(cls, question_id: str) -> Optional[Dict[str, Any]]:
         db = get_database()
         collection = db["remark_questions"]
-        doc = await collection.find_one({"_id": ObjectId(question_id)})
+        doc = await collection.find_one({"_id": ObjectId(question_id), "is_deleted": {"$ne": True}})
         return serialize_mongo(doc) if doc else None
 
     @classmethod
@@ -123,5 +128,8 @@ class RemarkRepository:
     async def delete_question(cls, question_id: str) -> bool:
         db = get_database()
         collection = db["remark_questions"]
-        result = await collection.delete_one({"_id": ObjectId(question_id)})
-        return result.deleted_count > 0
+        result = await collection.update_one(
+            {"_id": ObjectId(question_id), "is_deleted": {"$ne": True}},
+            {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}}
+        )
+        return result.modified_count > 0

@@ -554,7 +554,7 @@ class SalesRepository:
     @classmethod
     async def get_targets(cls, month: Optional[str] = None, year: Optional[int] = None, target_type: Optional[str] = None) -> List[dict]:
         coll = await cls.get_targets_collection()
-        query: Dict[str, Any] = {}
+        query: Dict[str, Any] = {"is_deleted": {"$ne": True}}
         if month:
             query["month"] = month
         if year:
@@ -571,6 +571,7 @@ class SalesRepository:
     async def create_target(cls, target_dict: dict) -> dict:
         coll = await cls.get_targets_collection()
         target_dict["created_at"] = datetime.utcnow()
+        target_dict["is_deleted"] = False
         result = await coll.insert_one(target_dict)
         target_dict["id"] = str(result.inserted_id)
         return target_dict
@@ -579,6 +580,7 @@ class SalesRepository:
     async def update_target(cls, target_id: str, update_dict: dict) -> Optional[dict]:
         coll = await cls.get_targets_collection()
         query = {"_id": ObjectId(target_id)} if ObjectId.is_valid(target_id) else {"id": target_id}
+        query["is_deleted"] = {"$ne": True}
         await coll.update_one(query, {"$set": update_dict})
         doc = await coll.find_one(query)
         if doc:
@@ -589,8 +591,9 @@ class SalesRepository:
     async def delete_target(cls, target_id: str) -> bool:
         coll = await cls.get_targets_collection()
         query = {"_id": ObjectId(target_id)} if ObjectId.is_valid(target_id) else {"id": target_id}
-        result = await coll.delete_one(query)
-        return result.deleted_count > 0
+        query["is_deleted"] = {"$ne": True}
+        result = await coll.update_one(query, {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}})
+        return result.modified_count > 0
 
     # ==============================================================================
     # SENSITIVE PAYMENT & FINANCIAL DATA MASKING (Audio 8 privacy rule)
@@ -989,7 +992,7 @@ class SalesRepository:
         current_month_str = now.strftime("%B")
         current_year = now.year
         targets_coll = await cls.get_targets_collection()
-        target_docs = await targets_coll.find({"year": current_year}).to_list(length=100)
+        target_docs = await targets_coll.find({"year": current_year, "is_deleted": {"$ne": True}}).to_list(length=100)
         total_target = sum(float(t.get("target_amount") or 0.0) for t in target_docs)
         if total_target == 0:
             total_target = 5000000.0  # default baseline if not configured
@@ -1145,7 +1148,7 @@ class SalesRepository:
 
             # Load targets
             targets_coll = await cls.get_targets_collection()
-            targets_docs = await targets_coll.find({}).to_list(length=200)
+            targets_docs = await targets_coll.find({"is_deleted": {"$ne": True}}).to_list(length=200)
             target_map = {t.get("employee_name"): float(t.get("target_amount") or 0.0) for t in targets_docs if t.get("employee_name")}
 
             rep_metrics = []

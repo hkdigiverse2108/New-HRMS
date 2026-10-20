@@ -48,6 +48,7 @@ async def get_company_leave_holidays(year: int, month: int) -> List[str]:
             from app.database.db import get_database
             db = get_database()
         cursor = db["schedule_events"].find({
+            "is_deleted": {"$ne": True},
             "date": {"$regex": f"^{year:04d}-{month:02d}-"},
             "$or": [
                 {"category": {"$in": ["company_leave", "google_holidays", "holiday"]}},

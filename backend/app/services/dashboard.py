@@ -177,7 +177,7 @@ class DashboardService:
                 leave_ids: set = set()
                 try:
                     cur2 = db["leave_requests"].find(
-                        {"status": "Approved", "start_date": {"$lte": ds}, "end_date": {"$gte": ds}},
+                        {"status": "Approved", "start_date": {"$lte": ds}, "end_date": {"$gte": ds}, "is_deleted": {"$ne": True}},
                         {"employee_id": 1},
                     )
                     async for doc in cur2:
@@ -195,7 +195,7 @@ class DashboardService:
             except Exception:
                 pass
             try:
-                out["pending_leaves"] = await db["leave_requests"].count_documents({"status": "Pending"})
+                out["pending_leaves"] = await db["leave_requests"].count_documents({"status": "Pending", "is_deleted": {"$ne": True}})
             except Exception:
                 pass
             try:
@@ -378,7 +378,7 @@ class DashboardService:
             ds = _date.today().isoformat()
             names: list = []
             try:
-                cur = db["departments"].find({}, {"name": 1})
+                cur = db["departments"].find({"is_deleted": {"$ne": True}}, {"name": 1})
                 async for d in cur:
                     if d.get("name"):
                         names.append(d["name"])

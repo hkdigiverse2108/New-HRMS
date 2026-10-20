@@ -55,13 +55,15 @@ class DailyProgressRepository:
             end_day = datetime(sub_dt.year, sub_dt.month, sub_dt.day, 23, 59, 59)
             existing = await collection.find_one({
                 "employee_id": emp_id,
-                "submitted_at": {"$gte": start_day, "$lte": end_day}
+                "submitted_at": {"$gte": start_day, "$lte": end_day},
+                "is_deleted": {"$ne": True}
             })
             if existing:
                 return serialize_mongo(existing)
 
         doc = {
             **data,
+            "is_deleted": False,
             "status": "PENDING",
             "rating": 0,
             "remarks": None,
@@ -85,13 +87,13 @@ class DailyProgressRepository:
         collection = await cls.get_collection()
         if not ObjectId.is_valid(progress_id):
             return None
-        doc = await collection.find_one({"_id": ObjectId(progress_id)})
+        doc = await collection.find_one({"_id": ObjectId(progress_id), "is_deleted": {"$ne": True}})
         return serialize_mongo(doc) if doc else None
 
     @classmethod
     async def get_all_progress(cls, query: Dict[str, Any]) -> List[Dict[str, Any]]:
         collection = await cls.get_collection()
-        cursor = collection.find(query).sort("submitted_at", -1)
+        cursor = collection.find({**query, "is_deleted": {"$ne": True}}).sort("submitted_at", -1)
         records = []
         async for doc in cursor:
             records.append(serialize_mongo(doc))
@@ -120,13 +122,17 @@ class DailyProgressRepository:
         collection = await cls.get_collection()
         if not ObjectId.is_valid(progress_id):
             return False
-        result = await collection.delete_one({"_id": ObjectId(progress_id)})
-        return result.deleted_count > 0
+        result = await collection.update_one(
+            {"_id": ObjectId(progress_id), "is_deleted": {"$ne": True}},
+            {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}}
+        )
+        return result.modified_count > 0
 
     @classmethod
     async def get_stats(cls, query: Dict[str, Any]) -> Dict[str, Any]:
         collection = await cls.get_collection()
         
+        query = {**query, "is_deleted": {"$ne": True}}
         total_reports = await collection.count_documents(query)
         
         pending_query = {**query, "status": "PENDING"}

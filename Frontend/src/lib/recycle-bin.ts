@@ -13,8 +13,17 @@ export interface RecycleBinItem {
   };
 }
 
+export interface ServerRecycleBinItem {
+  id: string;
+  module: string;
+  module_label: string;
+  page: string;
+  item_name: string;
+  deleted_at: string | null;
+  deleted_by?: string | null;
+}
+
 export const RECYCLE_BIN_KEY = "hrms_recycle_bin";
-export const RECYCLE_BIN_DAYS_LIMIT = 30;
 
 export function getRecycleBinItems(): RecycleBinItem[] {
   try {
@@ -122,19 +131,4 @@ export function permanentlyDeleteItem(binId: string) {
   const items = getRecycleBinItems();
   const newItems = items.filter(item => item.id !== binId);
   saveRecycleBinItems(newItems);
-}
-
-export function cleanupOldItems() {
-  const items = getRecycleBinItems();
-  const now = Date.now();
-  const msInDay = 24 * 60 * 60 * 1000;
-  
-  const validItems = items.filter(item => {
-    const daysOld = (now - item.deletedAt) / msInDay;
-    return daysOld <= RECYCLE_BIN_DAYS_LIMIT;
-  });
-  
-  if (validItems.length !== items.length) {
-    saveRecycleBinItems(validItems);
-  }
 }

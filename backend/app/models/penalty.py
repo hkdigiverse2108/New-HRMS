@@ -1,3 +1,4 @@
+from app.database.soft_delete_index import ensure_active_unique_index
 from pydantic import BaseModel, Field, ConfigDict
 from bson import ObjectId
 from datetime import datetime
@@ -64,7 +65,7 @@ logger = logging.getLogger(__name__)
 async def setup_penalty_indexes(db):
     try:
         pt_col = db["penalty_types"]
-        await pt_col.create_index("name", unique=True)
+        await ensure_active_unique_index(pt_col, [("name", 1)])
         
         ep_col = db["employee_penalties"]
         await ep_col.create_index([("employee_id", 1), ("is_deleted", 1)])

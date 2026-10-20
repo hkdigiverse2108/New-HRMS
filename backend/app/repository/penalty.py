@@ -40,6 +40,7 @@ class PenaltyTypeRepository:
     @classmethod
     async def create(cls, data: dict):
         collection = await cls.get_collection()
+        data["is_deleted"] = False
         result = await collection.insert_one(data)
         data["_id"] = str(result.inserted_id)
         return data
@@ -48,7 +49,7 @@ class PenaltyTypeRepository:
     async def get_all(cls):
         collection = await cls.get_collection()
         items = []
-        async for item in collection.find():
+        async for item in collection.find({"is_deleted": {"$ne": True}}):
             item["_id"] = str(item["_id"])
             items.append(item)
         return items
@@ -57,7 +58,7 @@ class PenaltyTypeRepository:
     async def get_by_id(cls, item_id: str):
         collection = await cls.get_collection()
         try:
-            item = await collection.find_one({"_id": ObjectId(item_id)})
+            item = await collection.find_one({"_id": ObjectId(item_id), "is_deleted": {"$ne": True}})
             if item:
                 item["_id"] = str(item["_id"])
             return item
@@ -77,8 +78,11 @@ class PenaltyTypeRepository:
     async def delete(cls, item_id: str):
         collection = await cls.get_collection()
         try:
-            result = await collection.delete_one({"_id": ObjectId(item_id)})
-            return result.deleted_count > 0
+            result = await collection.update_one(
+                {"_id": ObjectId(item_id), "is_deleted": {"$ne": True}},
+                {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}}
+            )
+            return result.modified_count > 0
         except Exception:
             return False
 

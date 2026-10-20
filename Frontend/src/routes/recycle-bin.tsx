@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { RecycleBin } from '@/components/admin/RecycleBin'
+import { Index } from './index'
 
+// Rendered through the app shell (sidebar, padding) like every other page; Index picks RecycleBin by path.
 export const Route = createFileRoute('/recycle-bin')({
-  component: RecycleBin,
+  component: Index,
 })

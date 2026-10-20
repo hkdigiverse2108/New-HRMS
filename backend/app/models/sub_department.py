@@ -1,3 +1,4 @@
+from app.database.soft_delete_index import ensure_active_unique_index
 from pydantic import BaseModel, Field, ConfigDict
 from bson import ObjectId
 import logging
@@ -46,7 +47,7 @@ async def setup_sub_department_indexes(db):
         await collection.create_index("name", unique=False)
         # Assuming sub-department names might be same across different departments, 
         # so unique=False is safer unless we make compound index (department_id, name)
-        await collection.create_index([("department_id", 1), ("name", 1)], unique=True)
+        await ensure_active_unique_index(collection, [("department_id", 1), ("name", 1)])
         logger.info("Sub-department database indexes setup successfully.")
     except Exception as e:
         logger.error(f"Failed to setup sub-department indexes: {e}")

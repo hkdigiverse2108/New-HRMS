@@ -131,7 +131,7 @@ class PayrollService:
         """
         collection = get_database()["leave_requests"]
         result = defaultdict(dict)
-        query = {"status": "Approved", "start_date": {"$lte": end}, "end_date": {"$gte": start}}
+        query = {"status": "Approved", "start_date": {"$lte": end}, "end_date": {"$gte": start}, "is_deleted": {"$ne": True}}
         async for lv in collection.find(query):
             weight = 0.5 if lv.get("day_type") in HALF_DAY_TYPES else 1.0
             unpaid = _is_unpaid_type(lv.get("type") or lv.get("leave_type"))

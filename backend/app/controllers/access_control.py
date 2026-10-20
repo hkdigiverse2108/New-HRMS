@@ -81,7 +81,7 @@ async def get_available_roles():
 async def get_available_departments():
     """Returns list of all available departments for Department Presets."""
     db = get_database()
-    depts = await db["departments"].find({}).to_list(100)
+    depts = await db["departments"].find({"is_deleted": {"$ne": True}}).to_list(100)
     if depts:
         return [d["name"] for d in depts if d.get("name")]
     return ["HR", "Development", "Management", "Python", "Sales", "Creative", "Product", "Digital Marketing", "Finance"]

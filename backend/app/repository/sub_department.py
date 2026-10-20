@@ -1,4 +1,5 @@
 from typing import Optional
+from datetime import datetime
 from app.database.db import get_database
 from bson import ObjectId
 
@@ -13,6 +14,7 @@ class SubDepartmentRepository:
     @classmethod
     async def create(cls, data: dict):
         collection = await cls.get_collection()
+        data["is_deleted"] = False
         result = await collection.insert_one(data)
         data["_id"] = str(result.inserted_id)
         return data
@@ -20,10 +22,10 @@ class SubDepartmentRepository:
     @classmethod
     async def get_all(cls, page: Optional[int] = None, limit: Optional[int] = None):
         collection = await cls.get_collection()
-        total = await collection.count_documents({})
+        total = await collection.count_documents({"is_deleted": {"$ne": True}})
         items = []
         if limit is None or limit <= 0 or page is None:
-            async for item in collection.find():
+            async for item in collection.find({"is_deleted": {"$ne": True}}):
                 item["_id"] = str(item["_id"])
                 items.append(item)
             return {
@@ -36,7 +38,7 @@ class SubDepartmentRepository:
         else:
             p = page
             skip = (p - 1) * limit
-            async for item in collection.find().skip(skip).limit(limit):
+            async for item in collection.find({"is_deleted": {"$ne": True}}).skip(skip).limit(limit):
                 item["_id"] = str(item["_id"])
                 items.append(item)
             return {
@@ -51,7 +53,7 @@ class SubDepartmentRepository:
     async def get_by_id(cls, item_id: str):
         collection = await cls.get_collection()
         try:
-            item = await collection.find_one({"_id": ObjectId(item_id)})
+            item = await collection.find_one({"_id": ObjectId(item_id), "is_deleted": {"$ne": True}})
             if item:
                 item["_id"] = str(item["_id"])
             return item
@@ -78,6 +80,7 @@ class SubDepartmentRepository:
             pass
 
         query = {
+            "is_deleted": {"$ne": True},
             "$or": [
                 {"department_id": {"$in": dept_ids_to_match}},
                 {"department_name": dept_str},
@@ -124,7 +127,10 @@ class SubDepartmentRepository:
     async def delete(cls, item_id: str):
         collection = await cls.get_collection()
         try:
-            result = await collection.delete_one({"_id": ObjectId(item_id)})
-            return result.deleted_count > 0
+            result = await collection.update_one(
+                {"_id": ObjectId(item_id), "is_deleted": {"$ne": True}},
+                {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}}
+            )
+            return result.modified_count > 0
         except Exception:
             return False

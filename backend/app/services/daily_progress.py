@@ -837,7 +837,7 @@ class DailyProgressService:
             if db is None:
                 return out
             cursor = db["leave_requests"].find(
-                {"status": "Approved", "start_date": {"$lte": end.isoformat()}, "end_date": {"$gte": start.isoformat()}},
+                {"status": "Approved", "start_date": {"$lte": end.isoformat()}, "end_date": {"$gte": start.isoformat()}, "is_deleted": {"$ne": True}},
                 {"employee_id": 1, "start_date": 1, "end_date": 1},
             )
             async for doc in cursor:

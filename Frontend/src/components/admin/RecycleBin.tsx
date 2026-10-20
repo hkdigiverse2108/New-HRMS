@@ -1,67 +1,138 @@
 import { useState, useEffect } from "react";
-import { Trash2, RotateCcw, AlertTriangle, Info } from "lucide-react";
+import { Trash2, RotateCcw, Info } from "lucide-react";
 import { SearchInput } from "@/components/common/SearchInput";
-import { getRecycleBinItems, restoreItem, permanentlyDeleteItem, cleanupOldItems, RecycleBinItem, RECYCLE_BIN_DAYS_LIMIT } from "@/lib/recycle-bin";
+import { getRecycleBinItems, restoreItem, permanentlyDeleteItem, RecycleBinItem, ServerRecycleBinItem } from "@/lib/recycle-bin";
+import { api } from "@/lib/api";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { formatDistanceToNow, format } from "date-fns";
 import { toast } from "@/lib/toast";
-import { cn } from "@/lib/utils";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";
 
+// Local (browser) and server (database) deleted items share one list; `serverModule` marks the latter.
+type BinRow = RecycleBinItem & { serverModule?: string; page: string };
+
+// Page each browser-stored (local) item type belongs to; server items carry their own page.
+const LOCAL_PAGES: Record<string, string> = {
+  "Restricted App": "Restrictions",
+  "Restricted URL": "Restrictions",
+  "Spotlight Employee": "Dashboard",
+  "Financial Plan Category": "Finance",
+  "Lead Category": "Sales",
+  "Lead Source": "Sales",
+  "Pipeline Stage": "Sales",
+  "Project Category": "Projects & Clients",
+  "Project": "Projects & Clients",
+  "Client": "Projects & Clients",
+  "Resource Type": "Resource Management",
+};
+
+const toRow = (s: ServerRecycleBinItem): BinRow => ({
+  id: s.id,
+  module: s.module_label,
+  itemName: s.item_name,
+  deletedAt: s.deleted_at ? new Date(s.deleted_at).getTime() : Date.now(),
+  restoreData: { storageKey: "", data: null },
+  serverModule: s.module,
+  page: s.page,
+});
+
 export function RecycleBin() {
-  const [items, setItems] = useState<RecycleBinItem[]>([]);
+  const [items, setItems] = useState<BinRow[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [pageFilter, setPageFilter] = useState("all");
   const [confirmModalState, setConfirmModalState] = useState<{isOpen: boolean, action: 'restore' | 'delete', id: string, title: string, desc: string, itemName: string}>({
     isOpen: false, action: 'restore', id: "", title: "", desc: "", itemName: ""
   });
 
+  const reload = async () => {
+    const local: BinRow[] = getRecycleBinItems().map(i => ({ ...i, page: LOCAL_PAGES[i.module] ?? "Other" }));
+    let server: BinRow[] = [];
+    try {
+      const res = await api.get<ServerRecycleBinItem[]>("/recycle-bin", { showErrorToast: false });
+      server = (res || []).map(toRow);
+    } catch {
+      // Not an admin or server unreachable: still show the local items.
+    }
+    setItems([...server, ...local]);
+  };
+
   useEffect(() => {
-    cleanupOldItems();
-    setItems(getRecycleBinItems());
+    reload();
   }, []);
 
-  const handleRestore = () => {
-    const success = restoreItem(confirmModalState.id);
-    if (success) {
+  const findRow = (id: string) => items.find(i => i.id === id);
+
+  const handleRestore = async () => {
+    const row = findRow(confirmModalState.id);
+    if (row?.serverModule) {
+      try {
+        await api.post(`/recycle-bin/${row.serverModule}/${row.id}/restore`, undefined, { showErrorToast: true });
+        toast.success("Item restored successfully");
+      } catch {
+        // apiRequest already surfaced the error toast
+      }
+    } else if (restoreItem(confirmModalState.id)) {
       toast.success("Item restored successfully");
-      setItems(getRecycleBinItems());
     } else {
       toast.error("Failed to restore item. Target storage may have changed.");
     }
+    await reload();
     setConfirmModalState(prev => ({ ...prev, isOpen: false }));
   };
 
-  const handleDelete = () => {
-    permanentlyDeleteItem(confirmModalState.id);
-    toast.success("Item permanently deleted");
-    setItems(getRecycleBinItems());
+  const handleDelete = async () => {
+    const row = findRow(confirmModalState.id);
+    if (row?.serverModule) {
+      try {
+        await api.delete(`/recycle-bin/${row.serverModule}/${row.id}`, { showErrorToast: true });
+        toast.success("Item permanently deleted");
+      } catch {
+        // apiRequest already surfaced the error toast
+      }
+    } else {
+      permanentlyDeleteItem(confirmModalState.id);
+      toast.success("Item permanently deleted");
+    }
+    await reload();
     setConfirmModalState(prev => ({ ...prev, isOpen: false }));
   };
 
-  const filteredItems = items.filter(i => 
-    i.itemName.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    i.module.toLowerCase().includes(searchQuery.toLowerCase())
+  const pageCounts = items.reduce<Record<string, number>>((acc, i) => {
+    acc[i.page] = (acc[i.page] || 0) + 1;
+    return acc;
+  }, {});
+  const pages = Object.keys(pageCounts).sort();
+
+  // A page whose last item was restored/deleted would leave the filter on an empty tab.
+  useEffect(() => {
+    if (pageFilter !== "all" && !pageCounts[pageFilter]) setPageFilter("all");
+  }, [items]);
+
+  const filteredItems = items.filter(i =>
+    (pageFilter === "all" || i.page === pageFilter) &&
+    (i.itemName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    i.module.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   const { items: sortedItems, requestSort, sortConfig } = useSortableData(filteredItems);
 
   return (
-    <div className="w-full space-y-6 animate-in fade-in duration-500 pb-12 relative">
+    <div className="w-full space-y-8 animate-in fade-in duration-500 pb-12 relative">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-foreground flex items-center gap-2 sm:gap-3">
-            <Trash2 className="w-6 sm:w-8 h-6 sm:h-8 text-rose-500 shrink-0" />
+          <h1 className="text-3xl font-black tracking-tight text-foreground flex items-center gap-2">
+            <Trash2 className="w-8 h-8 text-rose-500 shrink-0" />
             Recycle Bin
           </h1>
-          <p className="text-muted-foreground mt-1 sm:mt-2 text-xs sm:text-sm font-medium">
-            Restore deleted items within {RECYCLE_BIN_DAYS_LIMIT} days. Items older than this will be permanently removed.
+          <p className="text-muted-foreground mt-1 text-sm font-medium">
+            Deleted items stay here until you restore them or delete them permanently.
           </p>
         </div>
       </div>
 
-      <div className="bg-card border border-border/50 rounded-2xl shadow-sm overflow-hidden flex flex-col min-h-[500px]">
-        <div className="p-3 sm:p-4 md:p-6 border-b border-border/50 flex flex-col sm:flex-row justify-between gap-3 sm:gap-4 items-stretch sm:items-center bg-muted/10">
+      <div className="bg-card border border-border/50 rounded-3xl shadow-sm overflow-hidden flex flex-col min-h-[500px]">
+        <div className="p-4 sm:p-6 border-b border-border/50 flex flex-col sm:flex-row justify-between gap-4 items-stretch sm:items-center">
           <div className="w-full sm:max-w-md">
             <SearchInput 
               placeholder="Search deleted items..."
@@ -70,9 +141,19 @@ export function RecycleBin() {
               className="w-full"
             />
           </div>
-          <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-lg border border-border/50 shrink-0 self-start sm:self-auto">
-            <Info className="w-4 h-4" />
-            <span>{items.length} items in bin</span>
+          <div className="flex flex-wrap items-center gap-3 self-start sm:self-auto">
+            <select
+              value={pageFilter}
+              onChange={e => setPageFilter(e.target.value)}
+              className="h-9 rounded-lg border border-border/50 bg-background px-3 text-xs font-bold text-foreground outline-none focus:ring-2 focus:ring-primary/30"
+            >
+              <option value="all">All Pages</option>
+              {pages.map(pg => <option key={pg} value={pg}>{pg} ({pageCounts[pg]})</option>)}
+            </select>
+            <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-lg border border-border/50 shrink-0">
+              <Info className="w-4 h-4" />
+              <span>{items.length} items in bin</span>
+            </div>
           </div>
         </div>
 
@@ -91,46 +172,34 @@ export function RecycleBin() {
             <table className="w-full text-left border-collapse whitespace-nowrap min-w-[800px]">
               <thead className="bg-muted/30 text-[10px] font-black uppercase tracking-widest text-muted-foreground border-b border-border/50">
                 <tr>
-                  <SortableHeader label="Module" sortKey="module" currentSort={sortConfig} onSort={requestSort} className="p-4 w-[20%]" />
-                  <SortableHeader label="Item Name" sortKey="itemName" currentSort={sortConfig} onSort={requestSort} className="p-4 w-[35%]" />
-                  <SortableHeader label="Deleted On" sortKey="deletedAt" currentSort={sortConfig} onSort={requestSort} className="p-4 w-[20%]" />
-                  <th className="p-4 w-[15%]">Days Left</th>
-                  <th className="p-4 w-[10%] text-right">Actions</th>
+                  <SortableHeader label="Module" sortKey="module" currentSort={sortConfig} onSort={requestSort} className="px-6 py-4 w-[20%]" />
+                  <SortableHeader label="Item Name" sortKey="itemName" currentSort={sortConfig} onSort={requestSort} className="px-6 py-4 w-[45%]" />
+                  <SortableHeader label="Deleted On" sortKey="deletedAt" currentSort={sortConfig} onSort={requestSort} className="px-6 py-4 w-[20%]" />
+                  <th className="px-6 py-4 w-[10%] text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/30">
                 {sortedItems.map(item => {
                   const deletedDate = new Date(item.deletedAt);
-                  const expiryDate = new Date(item.deletedAt + (RECYCLE_BIN_DAYS_LIMIT * 24 * 60 * 60 * 1000));
-                  const daysLeft = Math.ceil((expiryDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
                   
                   return (
-                    <tr key={item.id} className="hover:bg-muted/10 transition-colors group">
-                      <td className="p-4">
+                    <tr key={`${item.serverModule ?? "local"}-${item.id}`} className="hover:bg-muted/10 transition-colors group">
+                      <td className="px-6 py-4">
                         <span className="inline-flex px-2 py-1 bg-primary/10 text-primary text-xs font-bold rounded-md">
                           {item.module}
                         </span>
                       </td>
-                      <td className="p-4">
+                      <td className="px-6 py-4">
                         <p className="text-sm font-bold text-foreground truncate max-w-[300px]" title={item.itemName}>
                           {item.itemName}
                         </p>
                       </td>
-                      <td className="p-4">
+                      <td className="px-6 py-4">
                         <p className="text-sm font-medium text-foreground">{format(deletedDate, 'dd/MM/yyyy')}</p>
                         <p className="text-xs text-muted-foreground">{formatDistanceToNow(deletedDate, { addSuffix: true })}</p>
                       </td>
-                      <td className="p-4">
-                        <span className={cn(
-                          "text-sm font-black flex items-center gap-1.5",
-                          daysLeft <= 3 ? "text-rose-500" : daysLeft <= 10 ? "text-amber-500" : "text-emerald-500"
-                        )}>
-                          {daysLeft <= 3 && <AlertTriangle className="w-3.5 h-3.5" />}
-                          {daysLeft} {daysLeft === 1 ? 'day' : 'days'}
-                        </span>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex items-center justify-end gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-end gap-1">
                           <button 
                             onClick={() => setConfirmModalState({
                               isOpen: true, action: 'restore', id: item.id, 

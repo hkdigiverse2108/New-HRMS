@@ -5,6 +5,7 @@ from app.database.db import connect_to_mongo, close_mongo_connection, db
 from app.controllers.employee import router as employee_router
 from app.controllers.auth import router as auth_router
 from app.controllers.department import router as department_router
+from app.controllers.recycle_bin import router as recycle_bin_router
 from app.controllers.sub_department import router as sub_department_router
 from app.controllers.designation import router as designation_router
 from app.controllers.access_control import router as access_control_router
@@ -140,6 +141,7 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 app.include_router(auth_router)
 app.include_router(employee_router)
 app.include_router(department_router)
+app.include_router(recycle_bin_router)
 app.include_router(sub_department_router)
 app.include_router(designation_router)
 app.include_router(access_control_router)

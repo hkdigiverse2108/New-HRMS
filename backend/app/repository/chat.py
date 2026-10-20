@@ -39,7 +39,7 @@ class ChatRepository:
     async def create_channel(cls, data: Dict[str, Any]) -> Dict[str, Any]:
         db = await cls.get_db()
         now = datetime.utcnow()
-        doc = {**data, "created_at": now}
+        doc = {**data, "is_deleted": False, "created_at": now}
         result = await db[cls.channels_collection].insert_one(doc)
         doc["_id"] = result.inserted_id
         return serialize_mongo(doc)
@@ -54,7 +54,7 @@ class ChatRepository:
         db = await cls.get_db()
 
         # Check if self channel exists for this user, if not create it automatically
-        self_ch = await db[cls.channels_collection].find_one({"type": "self", "members": [user_id]})
+        self_ch = await db[cls.channels_collection].find_one({"type": "self", "members": [user_id], "is_deleted": {"$ne": True}})
         if not self_ch:
             self_doc = {
                 "name": "You (Message Yourself)",
@@ -65,7 +65,7 @@ class ChatRepository:
             }
             await db[cls.channels_collection].insert_one(self_doc)
 
-        cursor = db[cls.channels_collection].find({"members": user_id}).sort("created_at", -1)
+        cursor = db[cls.channels_collection].find({"members": user_id, "is_deleted": {"$ne": True}}).sort("created_at", -1)
         raw_channels = await cursor.to_list(length=100)
         channels = serialize_mongo(raw_channels)
         
@@ -74,7 +74,7 @@ class ChatRepository:
             
             # Fetch last message
             last_msg_doc = await db[cls.messages_collection].find_one(
-                {"channel_id": ch_id},
+                {"channel_id": ch_id, "is_deleted": {"$ne": True}},
                 sort=[("timestamp", pymongo.DESCENDING)]
             )
             
@@ -92,7 +92,8 @@ class ChatRepository:
             unread_count = await db[cls.messages_collection].count_documents({
                 "channel_id": ch_id,
                 "sender_id": {"$ne": user_id},
-                "is_read_by": {"$ne": user_id}
+                "is_read_by": {"$ne": user_id},
+                "is_deleted": {"$ne": True}
             })
             ch["unread_count"] = unread_count
 
@@ -131,12 +132,12 @@ class ChatRepository:
         doc = None
         try:
             if ObjectId.is_valid(str(channel_id)):
-                doc = await db[cls.channels_collection].find_one({"_id": ObjectId(str(channel_id))})
+                doc = await db[cls.channels_collection].find_one({"_id": ObjectId(str(channel_id)), "is_deleted": {"$ne": True}})
         except Exception:
             pass
         if not doc:
             try:
-                doc = await db[cls.channels_collection].find_one({"_id": str(channel_id)})
+                doc = await db[cls.channels_collection].find_one({"_id": str(channel_id), "is_deleted": {"$ne": True}})
             except Exception:
                 pass
         return serialize_mongo(doc) if doc else None
@@ -203,8 +204,11 @@ class ChatRepository:
             if not f:
                 continue
             try:
-                result = await db[cls.channels_collection].delete_one(f)
-                if result.deleted_count > 0:
+                f["is_deleted"] = {"$ne": True}
+                result = await db[cls.channels_collection].update_one(
+                    f, {"$set": {"is_deleted": True, "deleted_at": datetime.utcnow()}}
+                )
+                if result.modified_count > 0:
                     return True
             except Exception:
                 continue
@@ -282,7 +286,8 @@ class ChatRepository:
         # Find all groups with auto_join_new_employees: True
         cursor = db[cls.channels_collection].find({
             "auto_join_new_employees": True,
-            "type": {"$nin": ["direct", "self"]}
+            "type": {"$nin": ["direct", "self"]},
+            "is_deleted": {"$ne": True}
         })
         channels = await cursor.to_list(length=100)
         from app.services.websocket_manager import manager
@@ -366,7 +371,7 @@ class ChatRepository:
     async def get_messages(cls, channel_id: str, limit: int = 30, skip: int = 0) -> List[Dict[str, Any]]:
         db = await cls.get_db()
         cursor = db[cls.messages_collection].find(
-            {"channel_id": channel_id}
+            {"channel_id": channel_id, "is_deleted": {"$ne": True}}
         ).sort("timestamp", -1).skip(skip).limit(limit)
         docs = await cursor.to_list(length=limit)
         return serialize_mongo(docs)
@@ -510,7 +515,8 @@ class ChatRepository:
     async def get_saved_messages(cls, user_id: str, limit: int = 50, skip: int = 0) -> List[Dict[str, Any]]:
         db = await cls.get_db()
         cursor = db[cls.messages_collection].find({
-            "saved_by": user_id
+            "saved_by": user_id,
+            "is_deleted": {"$ne": True}
         }).sort("timestamp", -1).skip(skip).limit(limit)
         docs = await cursor.to_list(length=limit)
         return [cls.sanitize_poll_for_user(serialize_mongo(doc), user_id) for doc in docs]
@@ -600,7 +606,7 @@ class ChatRepository:
         except Exception:
             return None
 
-        msg = await db[cls.messages_collection].find_one({"_id": msg_id_obj})
+        msg = await db[cls.messages_collection].find_one({"_id": msg_id_obj, "is_deleted": {"$ne": True}})
         if not msg:
             return None
 
@@ -613,7 +619,10 @@ class ChatRepository:
         if not is_sender and not is_chan_admin and not is_admin:
             return None
 
-        await db[cls.messages_collection].delete_one({"_id": msg_id_obj})
+        await db[cls.messages_collection].update_one(
+            {"_id": msg_id_obj},
+            {"$set": {"is_deleted": True, "deleted_at": datetime.utcnow()}}
+        )
         if channel_id:
             try:
                 await clear_pattern(f"chat:history:{channel_id}:*")
@@ -691,7 +700,8 @@ class ChatRepository:
         db = await cls.get_db()
         cursor = db[cls.messages_collection].find({
             "channel_id": channel_id,
-            "is_pinned": True
+            "is_pinned": True,
+            "is_deleted": {"$ne": True}
         }).sort("pinned_at", -1)
         docs = await cursor.to_list(length=50)
         return serialize_mongo(docs)
@@ -703,6 +713,7 @@ class ChatRepository:
         regex = re.compile(re.escape(query), re.IGNORECASE)
         cursor = db[cls.messages_collection].find({
             "channel_id": channel_id,
+            "is_deleted": {"$ne": True},
             "$or": [
                 {"content": {"$regex": regex}},
                 {"file_name": {"$regex": regex}},
@@ -715,7 +726,7 @@ class ChatRepository:
     @classmethod
     async def get_shared_media(cls, channel_id: str, media_type: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
         db = await cls.get_db()
-        query: Dict[str, Any] = {"channel_id": channel_id}
+        query: Dict[str, Any] = {"channel_id": channel_id, "is_deleted": {"$ne": True}}
         
         if media_type == "docs":
             query["message_type"] = "file"
@@ -743,7 +754,8 @@ class ChatRepository:
             unread_count = await db[cls.messages_collection].count_documents({
                 "channel_id": ch_id,
                 "sender_id": {"$ne": user_id},
-                "is_read_by": {"$ne": user_id}
+                "is_read_by": {"$ne": user_id},
+                "is_deleted": {"$ne": True}
             })
             results.append({
                 "channel_id": ch_id,

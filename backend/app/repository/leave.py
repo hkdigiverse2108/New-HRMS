@@ -38,6 +38,7 @@ class LeaveRepository:
         now_iso = now_utc.isoformat() + "Z"
         leave_data["applied_on"] = leave_data.get("applied_on") or now_utc.strftime("%Y-%m-%d")
         leave_data["created_at"] = leave_data.get("created_at") or now_iso
+        leave_data["is_deleted"] = False
         result = await collection.insert_one(leave_data)
         leave_data["id"] = str(result.inserted_id)
         leave_data["_id"] = str(result.inserted_id)
@@ -47,9 +48,9 @@ class LeaveRepository:
     async def get_by_id(cls, leave_id: str) -> Optional[Dict[str, Any]]:
         collection = await cls.get_collection()
         try:
-            doc = await collection.find_one({"_id": ObjectId(leave_id)})
+            doc = await collection.find_one({"_id": ObjectId(leave_id), "is_deleted": {"$ne": True}})
         except Exception:
-            doc = await collection.find_one({"id": leave_id})
+            doc = await collection.find_one({"id": leave_id, "is_deleted": {"$ne": True}})
         return serialize_mongo(doc)
 
     @classmethod
@@ -108,7 +109,7 @@ class LeaveRepository:
         limit: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         collection = await cls.get_collection()
-        query: Dict[str, Any] = {}
+        query: Dict[str, Any] = {"is_deleted": {"$ne": True}}
         if employee_id:
             query["employee_id"] = employee_id
         if status and status != "All":
@@ -147,7 +148,8 @@ class LeaveRepository:
             "employee_id": employee_id,
             "status": "Approved",
             "start_date": {"$lte": date_str},
-            "end_date": {"$gte": date_str}
+            "end_date": {"$gte": date_str},
+            "is_deleted": {"$ne": True}
         })
         return serialize_mongo(doc)
 
@@ -159,6 +161,10 @@ class LeaveRepository:
         except Exception:
             filter_query = {"_id": leave_id}
             
-        result = await collection.delete_one(filter_query)
-        return result.deleted_count > 0
+        filter_query["is_deleted"] = {"$ne": True}
+        result = await collection.update_one(
+            filter_query,
+            {"$set": {"is_deleted": True, "updated_at": datetime.utcnow().isoformat()}}
+        )
+        return result.modified_count > 0
 
