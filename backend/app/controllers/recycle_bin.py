@@ -44,6 +44,7 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
     "task": _entry("Task", "tasks", ["title", "name"], page="Tasks"),
     "content": _entry("Content Item", "content_items", ["title", "name"], page="Projects & Clients"),
     "bank_account": _entry("Bank Account", "bank_accounts", ["bank_name", "account_name"], page="Finance"),
+    "invoice_service": _entry("Invoice Service", "invoice_services", ["description"], page="Invoices"),
     "invoice": _entry("Invoice", "invoices", ["invoice_number"], page="Invoices"),
     "quotation": _entry("Quotation", "quotations", ["quotation_number"], page="Quotations"),
     "transaction": _entry("Transaction", "finance_transactions", ["ref_no", "description", "brand"], page="Finance"),

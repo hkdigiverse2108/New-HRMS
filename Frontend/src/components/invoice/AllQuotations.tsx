@@ -1740,16 +1740,28 @@ export function AllQuotations({
                         </button>
 
                         {/* Download PDF */}
-                        <a
-                          href={`${API_URL}/quotations/${q.id}/download`}
-                          download={`${q.quotationNumber}.pdf`}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const blob = await api.getBlob(`/quotations/${q.id}/download`);
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement("a");
+                              a.href = url;
+                              a.download = `${q.quotationNumber || "quotation"}.pdf`;
+                              document.body.appendChild(a);
+                              a.click();
+                              a.remove();
+                              setTimeout(() => URL.revokeObjectURL(url), 1000);
+                            } catch {
+                              toast.error("Failed to download quotation PDF");
+                            }
+                          }}
                           className="p-1.5 sm:p-2 inline-flex items-center justify-center text-muted-foreground hover:text-emerald-600 hover:bg-emerald-500/10 rounded-lg transition-colors cursor-pointer"
                           title="Download PDF"
                         >
                           <Download className="w-4 h-4" />
-                        </a>
+                        </button>
 
                         {/* Update / Edit */}
                         <button

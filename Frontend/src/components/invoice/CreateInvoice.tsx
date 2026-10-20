@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { Plus, Trash2, FileText, Send, Save, ArrowLeft, Building2, Calendar, IndianRupee, QrCode, Loader2, CheckCircle2 } from "lucide-react";
 import QRCode from "qrcode";
@@ -9,6 +10,8 @@ import { useDepartments } from "@/components/employees/DepartmentContext";
 import { api } from "@/lib/api";
 import { API_URL } from "@/lib/config";
 import { toast } from "@/lib/toast";
+import { InvoiceService, fetchInvoiceServices } from "@/lib/invoice-services";
+import { ServiceDescriptionInput } from "@/components/invoice/ServiceDescriptionInput";
 
 interface LineItem {
   id: string;
@@ -18,6 +21,8 @@ interface LineItem {
   rate: number;
   discount: number;
   discountType?: "percent" | "amount";
+  /** Both forms of the discount of the service this line was picked from (% and ₹ per unit) */
+  serviceDiscount?: { percent: number; amount: number };
 }
 
 const INDIAN_STATES = [
@@ -83,6 +88,13 @@ export function CreateInvoice({
   const fromQuotationId = isEditMode ? "" : searchParams.get("fromQuotation") || "";
   const [sourceQuotationNumber, setSourceQuotationNumber] = useState<string>("");
   const [pendingQuotationClient, setPendingQuotationClient] = useState<string>("");
+  // Quotation client that isn't a saved client yet: asks the user whether to create it
+  const [clientCreatePrompt, setClientCreatePrompt] = useState<{
+    name: string; company: string; email: string; phone: string; address: string;
+    gstin: string; stateUt: string; departments: string[]; notes: string;
+  } | null>(null);
+  const [isCreatingClient, setIsCreatingClient] = useState<boolean>(false);
+  const quotationDraftRef = useRef<any>(null);
   const quotationBankRef = useRef<boolean>(false);
 
   const [isLoadingInvoice, setIsLoadingInvoice] = useState<boolean>(isEditMode || Boolean(fromQuotationId));
@@ -220,7 +232,10 @@ export function CreateInvoice({
         else setModeOfPayment(asProforma ? "Cash" : "Current Account");
 
         if (q.client_id) setSelectedClientId(String(q.client_id));
-        else if (q.client_name) setPendingQuotationClient(String(q.client_name));
+        else if (q.client_name) {
+          setPendingQuotationClient(String(q.client_name));
+          quotationDraftRef.current = q;
+        }
         if (q.client_address) setClientAddress(q.client_address);
         if (q.client_phone) setClientPhone(q.client_phone);
         if (q.client_gstin) setClientGstin(q.client_gstin);
@@ -497,10 +512,58 @@ export function CreateInvoice({
       // Tax Invoice needs a GSTIN: use the client's if the quotation didn't have one
       if (match.gstin) setClientGstin((prev) => prev || match.gstin);
     } else {
-      toast.error(`Client "${pendingQuotationClient}" not found. Please select the client.`);
+      const q = quotationDraftRef.current || {};
+      const depts: string[] = Array.isArray(q.departments) && q.departments.length > 0
+        ? q.departments
+        : q.client_department
+        ? String(q.client_department).split(",").map((d: string) => d.trim()).filter(Boolean)
+        : [];
+      setClientCreatePrompt({
+        name: pendingQuotationClient,
+        company: q.client_company || pendingQuotationClient,
+        email: q.client_email || "",
+        phone: q.client_phone || clientPhone || "",
+        address: q.client_address || clientAddress || "",
+        gstin: q.client_gstin || clientGstin || "",
+        stateUt: q.state_ut || stateUt || "",
+        departments: depts.length > 0 ? depts : selectedDepartments,
+        notes: [q.subject ? `Subject: ${q.subject}` : "", q.quotation_number ? `Created from quotation ${q.quotation_number}` : ""]
+          .filter(Boolean).join(" | "),
+      });
     }
     setPendingQuotationClient("");
   }, [clients, pendingQuotationClient]);
+
+  // Create the client from the quotation details and select it on this invoice
+  const handleCreateClientFromQuotation = async () => {
+    if (!clientCreatePrompt) return;
+    const c = clientCreatePrompt;
+    try {
+      setIsCreatingClient(true);
+      const created: any = await api.post("/clients", {
+        contact_person_name: c.name,
+        company_name: c.company || c.name,
+        phone_number: c.phone || "-",
+        email_address: c.email || undefined,
+        address: c.address || undefined,
+        state_ut: c.stateUt || undefined,
+        gstin: c.gstin || undefined,
+        service_details: { departments: c.departments },
+        additional_notes: c.notes || undefined,
+      });
+      const newId = String(created?._id || created?.id || "");
+      if (newId) {
+        setClients((prev) => [...prev, created]);
+        setSelectedClientId(newId);
+      }
+      toast.success("Client created and selected");
+      setClientCreatePrompt(null);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to create client");
+    } finally {
+      setIsCreatingClient(false);
+    }
+  };
 
   // Fetch Next Number on Mount or Invoice Type change
   useEffect(() => {
@@ -601,6 +664,59 @@ export function CreateInvoice({
       setItems((prev) => prev.filter((i) => i.id !== deleteConfirm.id));
     }
     setDeleteConfirm({ isOpen: false, id: null });
+  };
+
+  // Services catalog for the Item Description dropdown (Admin Settings → Services Catalog)
+  const [services, setServices] = useState<InvoiceService[]>([]);
+  useEffect(() => {
+    fetchInvoiceServices()
+      .then((list) => setServices(list || []))
+      .catch(() => {});
+  }, []);
+
+  // Picking a service copies its values into this line. From then on the line is the invoice's own copy:
+  // editing it here never changes the catalog, and later catalog edits never change this invoice.
+  const applyService = (id: string, service: InvoiceService) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              description: service.description,
+              sac: service.sac || "",
+              rate: Number(service.rate) || 0,
+              // The discount the service was set up with: a percentage stays a %, an amount stays in ₹
+              ...(service.discount_type === "percent"
+                ? { discount: Number(service.discount) || 0, discountType: "percent" as const }
+                : { discount: Number(service.discount_amount) || 0, discountType: "amount" as const }),
+              serviceDiscount: { percent: Number(service.discount) || 0, amount: Number(service.discount_amount) || 0 },
+            }
+          : item
+      )
+    );
+  };
+
+  // Switching % / ₹ converts the discount instead of just relabelling it. A line still showing its service's
+  // own discount switches to the service's value for the other kind; otherwise it is converted using the rate.
+  const switchDiscountType = (id: string, next: "percent" | "amount") => {
+    setItems((prev) =>
+      prev.map((item) => {
+        const current = item.discountType === "percent" ? "percent" : "amount";
+        if (item.id !== id || current === next) return item;
+        const value = Number(item.discount) || 0;
+        const rate = Number(item.rate) || 0;
+        const svc = item.serviceDiscount;
+        let converted: number;
+        if (svc && value === svc[current]) {
+          converted = svc[next];
+        } else if (next === "percent") {
+          converted = rate ? Math.round((value / rate) * 10000) / 100 : 0;
+        } else {
+          converted = Math.round(((rate * value) / 100) * 100) / 100;
+        }
+        return { ...item, discount: converted, discountType: next };
+      })
+    );
   };
 
   const updateItem = (id: string, field: keyof LineItem, value: any) => {
@@ -764,6 +880,28 @@ export function CreateInvoice({
 
     try {
       setIsSubmitting(true);
+
+      // Keep the saved client in sync with the details edited on this invoice
+      if (client && selectedClientId) {
+        const updates: any = {};
+        if (clientAddress.trim() && clientAddress.trim() !== (client.address || "")) updates.address = clientAddress.trim();
+        if (clientPhone.trim() && clientPhone.trim() !== (client.phone_number || client.phone || "")) updates.phone_number = clientPhone.trim();
+        if (clientGstin.trim() && clientGstin.trim() !== (client.gstin || "")) updates.gstin = clientGstin.trim();
+        if (stateUt && stateUt !== (client.state_ut || "")) updates.state_ut = stateUt;
+        const oldDepts: string[] = client.service_details?.departments || [];
+        if (selectedDepartments.length > 0 && [...selectedDepartments].sort().join("|") !== [...oldDepts].sort().join("|")) {
+          updates.service_details = { departments: selectedDepartments };
+        }
+        if (Object.keys(updates).length > 0) {
+          try {
+            const updated: any = await api.put(`/clients/${selectedClientId}`, updates, { showErrorToast: false, showLoader: false });
+            setClients((prev) => prev.map((c) => (String(c._id || c.id) === selectedClientId ? { ...c, ...(updated || updates) } : c)));
+          } catch (e) {
+            console.warn("Failed to sync client details", e);
+          }
+        }
+      }
+
       if (isEditMode) {
         await api.put(`/invoices/${editInvoiceId}`, payload);
         toast.success(
@@ -798,6 +936,44 @@ export function CreateInvoice({
 
   return (
     <div className="w-full space-y-6 sm:space-y-8 animate-in fade-in duration-500 min-w-0">
+      {clientCreatePrompt && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-2xl bg-card border border-border p-6 shadow-xl space-y-4">
+            <h3 className="text-lg font-bold text-foreground">Create new client?</h3>
+            <p className="text-sm text-muted-foreground">
+              "{clientCreatePrompt.name}" is not a saved client. Create it from the quotation details and select it on this invoice?
+            </p>
+            <div className="text-xs rounded-xl bg-muted/50 p-3 space-y-1 text-foreground">
+              {clientCreatePrompt.company && <div><b>Company:</b> {clientCreatePrompt.company}</div>}
+              {clientCreatePrompt.phone && <div><b>Phone:</b> {clientCreatePrompt.phone}</div>}
+              {clientCreatePrompt.email && <div><b>Email:</b> {clientCreatePrompt.email}</div>}
+              {clientCreatePrompt.address && <div><b>Address:</b> {clientCreatePrompt.address}</div>}
+              {clientCreatePrompt.gstin && <div><b>GSTIN:</b> {clientCreatePrompt.gstin}</div>}
+              {clientCreatePrompt.stateUt && <div><b>State:</b> {clientCreatePrompt.stateUt}</div>}
+              {clientCreatePrompt.departments.length > 0 && <div><b>Departments:</b> {clientCreatePrompt.departments.join(", ")}</div>}
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setClientCreatePrompt(null)}
+                disabled={isCreatingClient}
+                className="px-4 py-2 rounded-xl text-sm font-semibold border border-border hover:bg-muted cursor-pointer"
+              >
+                No
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateClientFromQuotation}
+                disabled={isCreatingClient}
+                className="px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-primary-foreground hover:opacity-90 cursor-pointer disabled:opacity-60"
+              >
+                {isCreatingClient ? "Creating..." : "Yes, create client"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
       {/* Top Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex items-center gap-3 sm:gap-4">
@@ -1320,14 +1496,12 @@ export function CreateInvoice({
                 >
                   {/* ITEM DESCRIPTION */}
                   <div className="col-span-4">
-                    <input
-                      type="text"
+                    <ServiceDescriptionInput
                       value={item.description}
-                      onChange={(e) =>
-                        updateItem(item.id, "description", e.target.value)
-                      }
-                      placeholder="Enter product/service name"
-                      className="w-full h-11 px-3.5 bg-background border border-border/70 rounded-xl text-sm font-medium text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      services={services}
+                      onChange={(text) => updateItem(item.id, "description", text)}
+                      onPick={(service) => applyService(item.id, service)}
+                      placeholder="Select or enter product/service name"
                     />
                   </div>
 
@@ -1401,7 +1575,7 @@ export function CreateInvoice({
                       <div className="absolute right-1 flex items-center bg-muted/80 p-0.5 rounded-lg border border-border/60 text-[10px] font-bold select-none">
                         <button
                           type="button"
-                          onClick={() => updateItem(item.id, "discountType", "percent")}
+                          onClick={() => switchDiscountType(item.id, "percent")}
                           className={cn(
                             "px-1.5 py-0.5 rounded transition-all cursor-pointer",
                             item.discountType === "percent"
@@ -1414,7 +1588,7 @@ export function CreateInvoice({
                         </button>
                         <button
                           type="button"
-                          onClick={() => updateItem(item.id, "discountType", "amount")}
+                          onClick={() => switchDiscountType(item.id, "amount")}
                           className={cn(
                             "px-1.5 py-0.5 rounded transition-all cursor-pointer",
                             (!item.discountType || item.discountType === "amount")

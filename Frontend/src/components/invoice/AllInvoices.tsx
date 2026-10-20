@@ -17,9 +17,11 @@ import {
   Ban,
   AlertTriangle,
   History,
+  Briefcase,
 } from "lucide-react";
 import QRCode from "qrcode";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { ServicesManagerModal } from "./ServicesManagerModal";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";
@@ -99,6 +101,7 @@ export function AllInvoices({ setActive }: { setActive?: (path: string) => void 
 
   // Other Accounts State
   const [showAccountsModal, setShowAccountsModal] = useState(false);
+  const [showServicesModal, setShowServicesModal] = useState(false);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(false);
   const [submittingAccount, setSubmittingAccount] = useState(false);
@@ -621,6 +624,16 @@ export function AllInvoices({ setActive }: { setActive?: (path: string) => void 
                 {bankAccounts.length}
               </span>
             )}
+          </button>
+
+          {/* Services catalog: add / edit / delete the services offered in the invoice Item Description dropdown */}
+          <button
+            type="button"
+            onClick={() => setShowServicesModal(true)}
+            className="w-full sm:w-auto px-4 py-2 sm:py-2.5 bg-card border border-border/70 hover:border-primary/50 text-foreground font-bold rounded-xl hover:bg-muted/50 transition-colors flex items-center justify-center gap-2 shadow-sm text-xs sm:text-sm group"
+          >
+            <Briefcase className="w-4 h-4 text-primary group-hover:scale-110 transition-transform" />
+            Services
           </button>
 
           {setActive && (
@@ -1215,6 +1228,9 @@ export function AllInvoices({ setActive }: { setActive?: (path: string) => void 
         description={`Are you sure you want to delete the account "${deleteAccountConfirm.name}"?`}
         itemName={deleteAccountConfirm.name}
       />
+
+      {/* Manage Services Modal */}
+      <ServicesManagerModal open={showServicesModal} onClose={() => setShowServicesModal(false)} />
 
       {/* Manage Other Accounts Modal */}
       {showAccountsModal && (

@@ -78,7 +78,9 @@ async def download_generated_document_pdf(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF file not found on disk")
 
     abs_path = os.path.abspath(pdf_path)
-    file_title = f"{item.get('template_name', 'document')}_{item.get('employee_code', 'EMP')}.pdf"
+    tpl_name = str(item.get('template_name') or 'Document').replace('_', ' ').strip()
+    emp_name = str(item.get('employee_name') or item.get('employee_code') or '').replace('_', ' ').strip()
+    file_title = f"{tpl_name} - {emp_name}.pdf" if emp_name else f"{tpl_name}.pdf"
     return FileResponse(
         path=abs_path,
         media_type="application/pdf",

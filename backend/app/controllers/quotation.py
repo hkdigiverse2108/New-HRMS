@@ -120,6 +120,27 @@ async def download_quotation_pdf(quotation_id: str, current_user: dict = Depends
         content_disposition_type="inline"
     )
 
+@router.get("/{quotation_id}/download")
+async def download_quotation_pdf_attachment(quotation_id: str, current_user: dict = Depends(get_current_employee)):
+    item = await QuotationService.get_quotation_by_id(quotation_id)
+    if not item or item.get("is_deleted"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quotation not found")
+
+    updated_item = await QuotationService._generate_and_store_quotation_pdf(quotation_id, delete_old=True)
+    pdf_path = (updated_item or item).get("pdf_path")
+
+    if not pdf_path or not os.path.exists(os.path.abspath(pdf_path)):
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to locate or generate PDF file")
+
+    abs_path = os.path.abspath(pdf_path)
+    quo_num = item.get("quotation_number", "quotation")
+    return FileResponse(
+        path=abs_path,
+        media_type="application/pdf",
+        filename=f"{quo_num}.pdf",
+        content_disposition_type="attachment"
+    )
+
 @router.get("/{quotation_id}", response_model=QuotationResponse, response_model_exclude_none=True)
 async def get_quotation_by_id(quotation_id: str, current_user: dict = Depends(get_current_employee)):
     cache_key = f"quotations:item:{quotation_id}"

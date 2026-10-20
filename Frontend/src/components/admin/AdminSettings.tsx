@@ -8,6 +8,7 @@ import { SearchableSelect } from "@/components/ui/select";
 import { NotificationSettingsCard } from "@/components/notifications/NotificationSettingsCard";
 import { InvoiceSettingsCard } from "./settings/InvoiceSettingsCard";
 import { LetterheadCard } from "./settings/LetterheadCard";
+import { ServicesCatalogCard } from "./settings/ServicesCatalogCard";
 
 const FONTS = [
   { value: "System", label: "System Default" },
@@ -679,6 +680,9 @@ export function AdminSettings() {
 
         {/* Invoice & Billing Details Card */}
         <InvoiceSettingsCard />
+
+        {/* Services Catalog: feeds the Item Description dropdown on invoices */}
+        <ServicesCatalogCard />
 
         {/* Company Letterhead Card (Upload only via /settings/letterhead) */}
         <LetterheadCard />

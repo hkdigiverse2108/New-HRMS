@@ -186,11 +186,13 @@ class PDFGeneratorService:
             rightMargin=25,
             leftMargin=25,
             topMargin=25,
-            bottomMargin=25
+            bottomMargin=25,
+            title="Quotation" if "QUOTATION" in str(data.get("invoice_type") or "").upper() else "Invoice",
+            author=str(data.get("company_name") or "")
         )
 
         styles = getSampleStyleSheet()
-        
+
         # Color Palette Dynamically Fetched from Settings (Primary Color & Secondary Color)
         start_color, end_color = get_gradient_colors(data.get("primary_color"), data.get("secondary_color"))
         clean_s = start_color.replace("#", "")

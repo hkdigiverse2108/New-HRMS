@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { ArrowLeft, Download, Send, Printer, User, FileText, Sparkles, Settings2, Loader2 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { SearchableSelect } from "@/components/ui/select";
 import { api } from "@/lib/api";
 import { toast } from "@/lib/toast";
+import { getApiUrl } from "@/lib/config";
 
 interface EmployeeItem {
   id: string;
@@ -155,13 +156,17 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
     return DEFAULT_LETTERHEAD;
   });
 
+  const settingsLetterheadRef = useRef<string>("");
+
   useEffect(() => {
     const handleSync = () => {
       if (typeof window !== "undefined") {
         const stored = localStorage.getItem("document_letterhead_config");
         if (stored) {
           try {
-            setLetterhead(JSON.parse(stored));
+            const parsed = JSON.parse(stored);
+            // Keep the Admin Settings letterhead if one was loaded
+            setLetterhead((prev) => ({ ...parsed, headerImageUrl: settingsLetterheadRef.current || parsed.headerImageUrl }));
           } catch (e) { }
         }
       }
@@ -173,6 +178,25 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
       window.removeEventListener("storage", handleSync);
       window.removeEventListener("focus", handleSync);
     };
+  }, []);
+
+  // Company letterhead uploaded in Admin Settings takes priority over the local default
+  useEffect(() => {
+    const loadSettingsLetterhead = async () => {
+      try {
+        const res = await api.get<any>("/settings", { showLoader: false, showErrorToast: false });
+        const url: string | null = res?.letterhead_url || null;
+        if (!url) return;
+        const full = /^(https?:|data:)/.test(url)
+          ? url
+          : `${getApiUrl().replace(/\/+$/, "")}${url.startsWith("/") ? "" : "/"}${url}`;
+        settingsLetterheadRef.current = full;
+        setLetterhead((prev) => ({ ...prev, enabled: true, headerImageUrl: full }));
+      } catch (e) {
+        console.warn("Failed to load company letterhead from settings", e);
+      }
+    };
+    loadSettingsLetterhead();
   }, []);
 
   // Fetch templates and employees from backend API
@@ -615,9 +639,10 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
     if (!selectedTemp || isExporting) return;
     setIsExporting(true);
 
-    const docName = selectedTemp.name.replace(/[^a-zA-Z0-9_-]/g, "_");
-    const empNameStr = selectedEmp ? selectedEmp.name.replace(/[^a-zA-Z0-9_-]/g, "_") : "Document";
-    const fileName = `${docName}_${empNameStr}.pdf`;
+    const cleanName = (s: string) => s.replace(/[\\/:*?"<>|_]+/g, " ").replace(/\s+/g, " ").trim();
+    const docName = cleanName(selectedTemp.name);
+    const empNameStr = selectedEmp ? cleanName(selectedEmp.name) : "Document";
+    const fileName = `${docName} - ${empNameStr}.pdf`;
 
     const originalBodyStyle = document.body.style.cssText;
     const originalHtmlStyle = document.documentElement.style.cssText;
