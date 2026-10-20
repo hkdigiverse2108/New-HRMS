@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { Layers, Plus, Search, Edit2, Trash2, X, Check, Building2, Filter } from "lucide-react";
 import { api } from "@/lib/api";
 import { useDepartments } from "./DepartmentContext";
+import { useUsedOrgValues, ShowUnusedToggle } from "./useUsedOrgValues";
 import { SearchableSelect } from "@/components/ui/select";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
@@ -28,6 +29,8 @@ export function SubDepartmentsManager({ onSubDepartmentsCountChange }: SubDepart
   const [subDepartments, setSubDepartments] = useState<SubDepartmentRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const { subDepartmentCount } = useUsedOrgValues();
+  const [showUnused, setShowUnused] = useState(false);
   const [selectedDeptFilter, setSelectedDeptFilter] = useState<string>("all");
 
   // Add Modal State
@@ -94,9 +97,9 @@ export function SubDepartmentsManager({ onSubDepartmentsCountChange }: SubDepart
         selectedDeptFilter === "all" ||
         s.department_name?.toLowerCase() === selectedDeptFilter.toLowerCase() ||
         s.department_id === selectedDeptFilter;
-      return matchesSearch && matchesDept;
+      return matchesSearch && matchesDept && (showUnused || subDepartmentCount(s.name) > 0);
     });
-  }, [subDepartments, search, selectedDeptFilter]);
+  }, [subDepartments, search, selectedDeptFilter, showUnused, subDepartmentCount]);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -205,6 +208,7 @@ export function SubDepartmentsManager({ onSubDepartmentsCountChange }: SubDepart
               className="w-full h-10 pl-9 pr-4 rounded-xl border border-border bg-background text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
             />
           </div>
+          <ShowUnusedToggle checked={showUnused} onChange={setShowUnused} />
 
           {canCreate && (
             <button

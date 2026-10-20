@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { formatPersonName } from "@/lib/utils";
 import { EMPLOYEES, Employee } from './employee-data';
-import { ORG_DATA, OrgNodeData } from './org-data';
+import { OrgNodeData, ORG_ROOT_ID } from './org-data';
 import { api } from '@/lib/api';
+import { getAppFavicon } from "@/lib/favicon";
 import { toast } from "@/lib/toast";
 
 interface EmployeeContextType {
@@ -14,8 +15,15 @@ interface EmployeeContextType {
   fetchEmployeeById: (id: string) => Promise<Employee | null>;
   deleteEmployee: (id: string) => Promise<void>;
   refreshEmployees: () => Promise<void>;
-  updateTree: (newTree: OrgNodeData) => void;
+  /** managerId: employee id, "ROOT" (directly under company) or null (unassigned) */
+  setReportsTo: (employeeId: string, managerId: string | null) => Promise<void>;
+  /** Put employeeId in the same chart box as primaryId */
+  setPeerOf: (employeeId: string, primaryId: string) => Promise<void>;
+  /** Several reporting-line changes in one request (applied in order) */
+  applyOrgChanges: (changes: OrgChange[]) => Promise<void>;
 }
+
+export type OrgChange = { id: string; reportsTo?: string | null; peerOf?: string };
 
 const EmployeeContext = createContext<EmployeeContextType | undefined>(undefined);
 
@@ -57,6 +65,8 @@ function mapBackendToEmployee(be: any): Employee {
     department: w.department || "Development",
     sub_department: w.sub_department || "",
     designation: w.designation || "",
+    reportsTo: w.reports_to || "",
+    orgPeerOf: w.org_peer_of || "",
     status: w.is_block ? "Inactive" : "Active",
     workMode: w.work_mode || "WFO",
     joinDate: w.joining_date ? String(w.joining_date) : "",
@@ -131,6 +141,8 @@ function mapEmployeeToBackendPayload(fe: Partial<Employee>) {
       department: fe.department || "Development",
       sub_department: fe.sub_department || null,
       designation: fe.designation || null,
+      reports_to: fe.reportsTo || null,
+      org_peer_of: fe.orgPeerOf || null,
       is_delete: false,
       is_block: fe.status === "Inactive",
       work_mode: fe.workMode || "WFO",
@@ -200,14 +212,6 @@ export function EmployeeProvider({ children }: { children: React.ReactNode }) {
 
   const [isLoading, setIsLoading] = useState(false);
 
-  const [treeData, setTreeData] = useState<OrgNodeData>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('hrms_org_tree');
-      if (saved) return JSON.parse(saved);
-    }
-    return ORG_DATA;
-  });
-
   const isFetchingRef = useRef(false);
 
   const fetchEmployeesFromBackend = useCallback(async () => {
@@ -245,11 +249,130 @@ export function EmployeeProvider({ children }: { children: React.ReactNode }) {
     }
   }, [employees]);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('hrms_org_tree', JSON.stringify(treeData));
+  // Org chart is derived from real employees: each one points to its manager through `reportsTo`.
+  // Anyone not reachable from the company root (no manager, deleted manager, loop) stays unassigned.
+  const treeData = useMemo<OrgNodeData>(() => {
+    const active = employees.filter(e => e.status !== "Inactive");
+    const activeById = new Map(active.map(e => [e.id, e]));
+
+    // People sharing a box: peer -> main person of that box
+    const peersOf = new Map<string, Employee[]>();
+    const boxOf = (id: string) => {
+      const e = activeById.get(id);
+      const primary = e?.orgPeerOf ? activeById.get(e.orgPeerOf) : undefined;
+      return primary && !primary.orgPeerOf ? primary.id : id;
+    };
+    active.forEach(e => {
+      if (e.orgPeerOf && boxOf(e.id) !== e.id) {
+        const key = boxOf(e.id);
+        peersOf.set(key, [...(peersOf.get(key) || []), e]);
+      }
+    });
+
+    const byManager = new Map<string, Employee[]>();
+    active.forEach(e => {
+      if (boxOf(e.id) !== e.id) return; // peers are drawn inside their box
+      // Only people explicitly placed (under the company or a manager) appear in the chart;
+      // everyone else waits in the Unassigned Pool until the admin builds the stages.
+      let key = e.reportsTo || "";
+      if (!key || key === "NONE") return;
+      if (key !== "ROOT") {
+        if (!activeById.has(key)) return;
+        key = boxOf(key); // reporting to anyone in a box hangs under that box
+      }
+      byManager.set(key, [...(byManager.get(key) || []), e]);
+    });
+
+    const toPerson = (e: Employee): OrgNodeData => ({
+      id: e.id,
+      name: e.name,
+      role: e.designation || e.role,
+      department: e.department,
+      avatar: e.avatar || `https://ui-avatars.com/api/?background=random&name=${encodeURIComponent(e.name)}`,
+      status: "Active",
+    });
+    const visited = new Set<string>();
+    const toNode = (e: Employee): OrgNodeData => {
+      visited.add(e.id);
+      const children = (byManager.get(e.id) || []).filter(c => !visited.has(c.id)).map(toNode);
+      const members = (peersOf.get(e.id) || []).map(toPerson);
+      return { ...toPerson(e), children, ...(members.length ? { members } : {}) };
+    };
+    const rootChildren = (byManager.get("ROOT") || []).map(toNode);
+    return {
+      id: ORG_ROOT_ID,
+      name: "HariKrushn DigiVerse LLP",
+      role: "Organization",
+      department: "Company",
+      avatar: getAppFavicon() || "https://ui-avatars.com/api/?background=0f2552&color=fff&name=H",
+      status: "Active",
+      children: rootChildren,
+    };
+  }, [employees]);
+
+  const setReportsTo = async (employeeId: string, managerId: string | null) => {
+    const before = employees.find(e => e.id === employeeId);
+    const previous = { reportsTo: before?.reportsTo || "", orgPeerOf: before?.orgPeerOf || "" };
+    setEmployees(prev => prev.map(e => e.id === employeeId ? { ...e, reportsTo: managerId ?? "NONE", orgPeerOf: "" } : e));
+    try {
+      await api.put(`/employees/${employeeId}/reports-to`, { reports_to: managerId ?? "NONE" }, {
+        showLoader: false,
+        showErrorToast: true,
+      });
+    } catch (err) {
+      setEmployees(prev => prev.map(e => e.id === employeeId ? { ...e, ...previous } : e));
+      throw err;
     }
-  }, [treeData]);
+  };
+
+  const applyOrgChanges = async (changes: OrgChange[]) => {
+    if (changes.length === 0) return;
+    const ids = new Set(changes.map(c => c.id));
+    const snapshot = new Map(employees.filter(e => ids.has(e.id)).map(e => [e.id, { reportsTo: e.reportsTo || "", orgPeerOf: e.orgPeerOf || "" }]));
+    // Show the result straight away; the server call runs once for all changes
+    setEmployees(prev => {
+      const next = prev.map(e => ({ ...e }));
+      const byId = new Map(next.map(e => [e.id, e]));
+      for (const c of changes) {
+        const e = byId.get(c.id);
+        if (!e) continue;
+        if (c.peerOf) {
+          e.orgPeerOf = c.peerOf;
+          e.reportsTo = byId.get(c.peerOf)?.reportsTo || "";
+        } else {
+          e.reportsTo = c.reportsTo ?? "NONE";
+          e.orgPeerOf = "";
+        }
+      }
+      return next;
+    });
+    try {
+      await api.post('/employees/org-structure/batch', {
+        items: changes.map(c => c.peerOf
+          ? { employee_id: c.id, peer_of: c.peerOf }
+          : { employee_id: c.id, reports_to: c.reportsTo ?? "NONE" }),
+      }, { showLoader: false, showErrorToast: true });
+    } catch (err) {
+      setEmployees(prev => prev.map(e => snapshot.has(e.id) ? { ...e, ...snapshot.get(e.id)! } : e));
+      throw err;
+    }
+  };
+
+  const setPeerOf = async (employeeId: string, primaryId: string) => {
+    const before = employees.find(e => e.id === employeeId);
+    const previous = { reportsTo: before?.reportsTo || "", orgPeerOf: before?.orgPeerOf || "" };
+    const primary = employees.find(e => e.id === primaryId);
+    setEmployees(prev => prev.map(e => e.id === employeeId ? { ...e, orgPeerOf: primaryId, reportsTo: primary?.reportsTo || "" } : e));
+    try {
+      await api.put(`/employees/${employeeId}/reports-to`, { peer_of: primaryId }, {
+        showLoader: false,
+        showErrorToast: true,
+      });
+    } catch (err) {
+      setEmployees(prev => prev.map(e => e.id === employeeId ? { ...e, ...previous } : e));
+      throw err;
+    }
+  };
 
   const addEmployee = async (employeeData: Partial<Employee>): Promise<Employee> => {
     const payload = mapEmployeeToBackendPayload(employeeData);
@@ -307,30 +430,6 @@ export function EmployeeProvider({ children }: { children: React.ReactNode }) {
     });
     setEmployees(prev => prev.filter(emp => emp.id !== id));
     toast.success("Employee removed from company records.");
-
-    // Also remove from org tree if present
-    const newTree = JSON.parse(JSON.stringify(treeData)) as OrgNodeData;
-    const removeNode = (node: OrgNodeData): boolean => {
-      if (node.children) {
-        const index = node.children.findIndex(c => c.id === id);
-        if (index !== -1) {
-          node.children.splice(index, 1);
-          return true;
-        }
-        for (const child of node.children) {
-          if (removeNode(child)) return true;
-        }
-      }
-      return false;
-    };
-
-    if (removeNode(newTree)) {
-      setTreeData(newTree);
-    }
-  };
-
-  const updateTree = (newTree: OrgNodeData) => {
-    setTreeData(newTree);
   };
 
   return (
@@ -343,7 +442,9 @@ export function EmployeeProvider({ children }: { children: React.ReactNode }) {
       fetchEmployeeById,
       deleteEmployee,
       refreshEmployees: fetchEmployeesFromBackend,
-      updateTree
+      setReportsTo,
+      setPeerOf,
+      applyOrgChanges
     }}>
       {children}
     </EmployeeContext.Provider>

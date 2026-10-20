@@ -13,6 +13,10 @@ export interface Employee {
   profile_photo?: string;
   performanceScore: number; // Out of 100
   employeeId?: string;
+  /** Org chart: manager's employee id, "ROOT" = directly under the company, empty = unassigned */
+  reportsTo?: string;
+  /** Org chart: shares this employee's box (same stage) instead of reporting to someone */
+  orgPeerOf?: string;
   signature?: string;
   signature_url?: string;
   

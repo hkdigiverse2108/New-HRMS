@@ -8,18 +8,15 @@ export function UnassignedSidebar() {
   const [isOpen, setIsOpen] = useState(true);
   const { employees, treeData } = useEmployeesContext();
 
-  // Helper to find all names in the tree
-  const getTreeNames = (node: OrgNodeData, names: Set<string>) => {
-    names.add(node.name);
-    if (node.children) {
-      node.children.forEach(child => getTreeNames(child, names));
-    }
-    return names;
+  const placedIds = new Set<string>();
+  const collectIds = (node: OrgNodeData) => {
+    placedIds.add(node.id);
+    (node.members || []).forEach(m => placedIds.add(m.id));
+    (node.children || []).forEach(collectIds);
   };
+  collectIds(treeData);
 
-  const assignedNames = getTreeNames(treeData, new Set<string>());
-  
-  const unassignedEmployees = employees.filter(emp => !assignedNames.has(emp.name));
+  const unassignedEmployees = employees.filter(emp => emp.status !== "Inactive" && !placedIds.has(emp.id));
 
   const handleDragStart = (e: React.DragEvent, id: string) => {
     e.dataTransfer.setData("nodeId", id);
@@ -72,13 +69,13 @@ export function UnassignedSidebar() {
                   <GripVertical className="w-4 h-4" />
                 </div>
                 <img 
-                  src={emp.avatar} 
+                  src={emp.avatar || `https://ui-avatars.com/api/?background=random&name=${encodeURIComponent(emp.name)}`} 
                   alt={emp.name} 
                   className="w-10 h-10 rounded-full object-cover border border-border/50 pointer-events-none" 
                 />
                 <div className="min-w-0">
                   <p className="text-sm font-bold text-foreground truncate leading-tight mb-0.5">{emp.name}</p>
-                  <p className="text-xs text-muted-foreground truncate">{emp.role}</p>
+                  <p className="text-xs text-muted-foreground truncate">{emp.designation || emp.role}</p>
                 </div>
               </div>
             ))

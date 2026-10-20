@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Building2, Plus, Search, Edit2, Trash2, X, Check, Layers, AlertCircle } from "lucide-react";
 import { useDepartments } from "./DepartmentContext";
+import { useUsedOrgValues, ShowUnusedToggle } from "./useUsedOrgValues";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { toast } from "@/lib/toast";
@@ -26,8 +27,13 @@ export function DepartmentsManager({ subDepartmentsCountMap = {}, onDepartmentCh
     dept: null,
   });
 
-  const filteredDepartments = departments.filter((d) =>
-    d.toLowerCase().includes(search.toLowerCase().trim())
+  const { departmentCount } = useUsedOrgValues();
+  const [showUnused, setShowUnused] = useState(false);
+
+  const filteredDepartments = departments.filter(
+    (d) =>
+      d.toLowerCase().includes(search.toLowerCase().trim()) &&
+      (showUnused || departmentCount(d) > 0)
   );
 
   const handleAdd = async (e: React.FormEvent) => {
@@ -98,6 +104,7 @@ export function DepartmentsManager({ subDepartmentsCountMap = {}, onDepartmentCh
               className="w-full h-10 pl-9 pr-4 rounded-xl border border-border bg-background text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
             />
           </div>
+          <ShowUnusedToggle checked={showUnused} onChange={setShowUnused} />
           {canCreate && (
             <button
               onClick={() => setIsAddOpen(true)}

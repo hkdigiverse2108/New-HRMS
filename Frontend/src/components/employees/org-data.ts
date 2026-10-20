@@ -6,7 +6,11 @@ export interface OrgNodeData {
   avatar: string;
   status: 'Active' | 'On Leave' | 'Remote' | 'Inactive';
   children?: OrgNodeData[];
+  /** Other people shown in the same box (joint stage) */
+  members?: OrgNodeData[];
 }
+
+export const ORG_ROOT_ID = "ORG-ROOT";
 
 export const ORG_DATA: OrgNodeData = {
   id: "CEO-01",

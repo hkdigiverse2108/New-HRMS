@@ -286,6 +286,122 @@ async def update_employee(employee_id: str, employee: EmployeeUpdate, request: R
     return updated_emp
 
 # ==============================================================================
+# 4b. ORG STRUCTURE: who an employee reports to
+# ==============================================================================
+class ReportsToUpdate(BaseModel):
+    # employee _id of the manager, "ROOT" = directly under the company, None = unassigned
+    reports_to: Optional[str] = None
+    # employee _id to share the same chart box with (joint stage, e.g. CEO + CMO); overrides reports_to
+    peer_of: Optional[str] = None
+
+
+def _ensure_can_edit_org(current_user: dict):
+    # Only Admin and HR may change the org structure
+    work_info = current_user.get("work_details") or {}
+    dept = str(work_info.get("department") or "").strip().lower()
+    desig = str(work_info.get("designation") or "").strip().lower()
+    if work_info.get("system_role") != "Admin" and dept != "hr" and "hr" not in desig:
+        raise HTTPException(status_code=403, detail="Only Admin and HR can change the organization structure")
+
+
+async def _apply_org_change(employee_id: str, body: ReportsToUpdate) -> dict:
+    """Saves one reporting-line change; caches are cleared by the caller."""
+    from app.repository.employee import EmployeeRepository
+
+    emp = await EmployeeRepository.get_employee_by_id(employee_id)
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    emp_id = str(emp.get("_id") or emp.get("id"))
+
+    if body.peer_of:
+        primary = await EmployeeRepository.get_employee_by_id(body.peer_of)
+        if not primary:
+            raise HTTPException(status_code=404, detail="Employee not found")
+        # Join the box's main person, never a fellow peer
+        pw = primary.get("work_details") or {}
+        if pw.get("org_peer_of"):
+            primary = await EmployeeRepository.get_employee_by_id(pw["org_peer_of"]) or primary
+            pw = primary.get("work_details") or {}
+        primary_id = str(primary.get("_id") or primary.get("id"))
+        if primary_id == emp_id:
+            raise HTTPException(status_code=400, detail="An employee cannot be paired with themselves")
+        await EmployeeRepository.update_employee(emp_id, {
+            "work_details.org_peer_of": primary_id,
+            "work_details.reports_to": pw.get("reports_to"),
+        })
+        return {"id": emp_id, "peer_of": primary_id, "reports_to": pw.get("reports_to")}
+
+    manager_id = None
+    if body.reports_to in ("ROOT", "NONE"):
+        manager_id = body.reports_to
+    elif body.reports_to:
+        manager = await EmployeeRepository.get_employee_by_id(body.reports_to)
+        if not manager:
+            raise HTTPException(status_code=404, detail="Manager not found")
+        manager_id = str(manager.get("_id") or manager.get("id"))
+        if manager_id == emp_id:
+            raise HTTPException(status_code=400, detail="An employee cannot report to themselves")
+
+        # Walk up the manager's chain: moving under your own report would create a loop
+        seen = set()
+        cursor = manager
+        while cursor:
+            cid = str(cursor.get("_id") or cursor.get("id"))
+            if cid == emp_id:
+                raise HTTPException(status_code=400, detail="Cannot move a manager under their own report")
+            if cid in seen:
+                break
+            seen.add(cid)
+            cw = cursor.get("work_details") or {}
+            # A peer sits in its main person's box, so follow that person's line
+            parent_id = cw.get("org_peer_of") or cw.get("reports_to")
+            cursor = await EmployeeRepository.get_employee_by_id(parent_id) if parent_id and parent_id not in ("ROOT", "NONE") else None
+
+    await EmployeeRepository.update_employee(emp_id, {"work_details.reports_to": manager_id, "work_details.org_peer_of": None})
+
+    return {"id": emp_id, "reports_to": manager_id}
+
+
+class OrgChangeItem(ReportsToUpdate):
+    employee_id: str
+
+
+class OrgChangeBatch(BaseModel):
+    items: List[OrgChangeItem]
+
+
+@router.put("/{employee_id}/reports-to")
+async def update_employee_reports_to(
+    employee_id: str,
+    body: ReportsToUpdate,
+    current_user: dict = Depends(get_current_employee)
+):
+    _ensure_can_edit_org(current_user)
+    result = await _apply_org_change(employee_id, body)
+    await delete_cache(f"employee:{result['id']}")
+    await clear_pattern("employees:list:*")
+    return result
+
+
+@router.post("/org-structure/batch")
+async def update_org_structure_batch(
+    body: OrgChangeBatch,
+    current_user: dict = Depends(get_current_employee)
+):
+    """Applies several reporting-line changes in order with one cache refresh (bulk add / remove)."""
+    _ensure_can_edit_org(current_user)
+    results = []
+    try:
+        for item in body.items:
+            results.append(await _apply_org_change(item.employee_id, item))
+    finally:
+        for r in results:
+            await delete_cache(f"employee:{r['id']}")
+        await clear_pattern("employees:list:*")
+    return {"items": results}
+
+
+# ==============================================================================
 # 5. DELETE EMPLOYEE
 # ==============================================================================
 @router.delete("/{employee_id}", status_code=status.HTTP_204_NO_CONTENT)

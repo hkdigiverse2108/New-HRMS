@@ -6,6 +6,7 @@ import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { useModulePermissions } from "@/hooks/useModulePermissions";
+import { useUsedOrgValues, ShowUnusedToggle } from "./useUsedOrgValues";
 
 export interface DesignationRecord {
   id: string;
@@ -18,6 +19,8 @@ export function DesignationsManager() {
   const [designations, setDesignations] = useState<DesignationRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const { designationCount } = useUsedOrgValues();
+  const [showUnused, setShowUnused] = useState(false);
 
   // Add Modal
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -57,10 +60,12 @@ export function DesignationsManager() {
   }, []);
 
   const filteredList = useMemo(() => {
-    return designations.filter((d) =>
-      d.name.toLowerCase().includes(search.toLowerCase().trim())
+    return designations.filter(
+      (d) =>
+        d.name.toLowerCase().includes(search.toLowerCase().trim()) &&
+        (showUnused || designationCount(d.name) > 0)
     );
-  }, [designations, search]);
+  }, [designations, search, showUnused, designationCount]);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -151,6 +156,7 @@ export function DesignationsManager() {
               className="w-full h-10 pl-9 pr-4 rounded-xl border border-border bg-background text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
             />
           </div>
+          <ShowUnusedToggle checked={showUnused} onChange={setShowUnused} />
           {canCreate && (
             <button
               onClick={() => setIsAddOpen(true)}

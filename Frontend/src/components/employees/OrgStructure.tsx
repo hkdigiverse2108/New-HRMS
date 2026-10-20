@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
-import { ORG_DATA, OrgNodeData } from "./org-data";
-import { ChevronDown, ChevronUp, Users, ZoomIn, ZoomOut, Maximize, Settings, Plus, Trash2, Network, Building2, Layers, Briefcase, X } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { OrgNodeData, ORG_ROOT_ID } from "./org-data";
+import { ChevronDown, ChevronUp, Users, ZoomIn, ZoomOut, Maximize, Settings, Plus, Trash2, Network, Building2, Layers, Briefcase, X, Pencil, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ManageDepartmentsModal } from "./ManageDepartmentsModal";
 import { DepartmentDesignationManager } from "./DepartmentDesignationManager";
@@ -8,8 +8,116 @@ import { AddOrgNodeModal } from "./AddOrgNodeModal";
 import { DeleteConfirmModal } from "./DeleteConfirmModal";
 import { UnassignedSidebar } from "./UnassignedSidebar";
 import { toast } from "@/lib/toast";
-import { useEmployeesContext } from "./EmployeeContext";
+import { useEmployeesContext, type OrgChange } from "./EmployeeContext";
+import { useAuth } from "@/components/auth/AuthContext";
 import { useModulePermissions } from "@/hooks/useModulePermissions";
+
+const PersonCard = ({
+  person,
+  isRoot,
+  onMoveNode,
+  dropTargetId,
+  onAddClick,
+  onDeleteClick,
+  canCreate,
+  canUpdate,
+  canDelete,
+  compact = false,
+  footer,
+}: {
+  person: OrgNodeData,
+  isRoot: boolean,
+  onMoveNode: (draggedId: string, targetId: string) => void | Promise<void>,
+  dropTargetId: string,
+  onAddClick?: (() => void) | undefined,
+  onDeleteClick: (nodeId: string) => void,
+  canCreate?: boolean | undefined,
+  canUpdate?: boolean | undefined,
+  canDelete?: boolean | undefined,
+  compact?: boolean,
+  footer?: React.ReactNode,
+}) => (
+  <div
+    draggable={canUpdate && !isRoot}
+    onDragStart={(e) => {
+      if (!canUpdate) return;
+      e.dataTransfer.setData('nodeId', person.id);
+      e.stopPropagation();
+    }}
+    onDragOver={(e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    }}
+    onDrop={(e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const draggedId = e.dataTransfer.getData('nodeId');
+      if (draggedId) onMoveNode(draggedId, dropTargetId);
+    }}
+    className={cn(
+      "bg-white border border-border shadow-sm rounded-2xl p-4 max-w-[calc(100vw-48px)] z-10 relative transition-all hover:shadow-md hover:-translate-y-1 group/card inline-block mx-auto",
+      compact ? "w-[200px]" : "w-[220px]",
+      canUpdate && !isRoot ? "cursor-grab active:cursor-grabbing" : ""
+    )}
+  >
+    {((canCreate && onAddClick) || (canDelete && !isRoot)) && (
+      <div className="absolute top-3 right-3 flex flex-col gap-2 opacity-100 lg:opacity-0 lg:group-hover/card:opacity-100 lg:focus-within:opacity-100 transition-all z-20">
+        {canCreate && onAddClick && (
+          <button
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              onAddClick();
+            }}
+            className="p-1.5 min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 inline-flex items-center justify-center bg-muted/50 hover:bg-primary hover:text-primary-foreground text-muted-foreground rounded-lg shadow-sm border border-border transition-colors"
+            title="Add a member below or alongside this person"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+        )}
+        {canDelete && !isRoot && (
+          <button
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              onDeleteClick(person.id);
+            }}
+            className="p-1.5 min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 inline-flex items-center justify-center bg-muted/50 hover:bg-red-500 hover:text-white text-muted-foreground rounded-lg shadow-sm border border-border transition-colors"
+            title="Remove this person"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+    )}
+
+    <div className="flex flex-col items-center text-center">
+      <div className="relative mb-3">
+        <img
+          src={person.avatar}
+          alt={person.name}
+          className={cn(
+            "pointer-events-none box-border",
+            isRoot
+              ? "w-[72px] h-[72px] object-contain rounded-full bg-white p-[13px] border border-border/60 shadow-sm"
+              : "w-14 h-14 object-cover rounded-full border-2 border-white shadow-sm"
+          )}
+        />
+        {!isRoot && <span className={cn(
+          "absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-white",
+          person.status === 'Active' ? 'bg-emerald-500' :
+            person.status === 'On Leave' ? 'bg-amber-500' : 'bg-blue-500'
+        )} />}
+      </div>
+      <h3 className="text-[14px] font-bold text-foreground mb-0.5 truncate max-w-full" title={person.name}>{person.name}</h3>
+      <p className="text-[11px] text-muted-foreground font-medium mb-3 truncate max-w-full">{person.role}</p>
+      <span className="px-2.5 py-1 bg-muted/50 text-foreground/80 border border-border/50 text-[10px] font-bold uppercase tracking-wider rounded-lg mb-2 inline-block max-w-full truncate">
+        {person.department}
+      </span>
+      {footer}
+    </div>
+  </div>
+);
 
 const OrgNodeCard = ({
   node,
@@ -25,7 +133,7 @@ const OrgNodeCard = ({
   node: OrgNodeData,
   isExpanded: boolean,
   toggleExpand: () => void,
-  onMoveNode: (draggedId: string, targetId: string) => void,
+  onMoveNode: (draggedId: string, targetId: string) => void | Promise<void>,
   onAddClick: (node: OrgNodeData) => void,
   onDeleteClick: (nodeId: string) => void,
   canCreate?: boolean | undefined,
@@ -33,86 +141,69 @@ const OrgNodeCard = ({
   canDelete?: boolean | undefined,
 }) => {
   const hasChildren = node.children && node.children.length > 0;
+  const isRoot = node.id === ORG_ROOT_ID;
+  const members = node.members || [];
 
+  const reportsToggle = hasChildren ? (
+    <button
+      onClick={toggleExpand}
+      className="mt-2 w-full py-1.5 flex items-center justify-center gap-1.5 bg-muted/50 hover:bg-muted text-foreground/80 rounded-xl transition-colors text-[11px] font-bold"
+    >
+      <Users className="w-3 h-3" />
+      {node.children!.reduce((n, c) => n + 1 + (c.members?.length || 0), 0)} Reports
+      {isExpanded ? <ChevronUp className="w-3 h-3 ml-1" /> : <ChevronDown className="w-3 h-3 ml-1" />}
+    </button>
+  ) : null;
+
+  const common = { isRoot, onMoveNode, dropTargetId: node.id, onDeleteClick, canCreate, canUpdate, canDelete };
+
+  if (members.length === 0) {
+    const card = <PersonCard person={node} {...common} onAddClick={() => onAddClick(node)} footer={reportsToggle} />;
+    if (!canUpdate || isRoot) return card;
+    // Edit mode: show each box as a drop zone
+    return (
+      <div className="relative z-10 inline-flex rounded-3xl border-2 border-dashed border-emerald-300/70 bg-emerald-50/30 p-4">
+        {card}
+      </div>
+    );
+  }
+
+  // Joint stage: several people share one box and the same reports
   return (
     <div
-      draggable={canUpdate}
-      onDragStart={(e) => {
-        if (!canUpdate) return;
-        e.dataTransfer.setData('nodeId', node.id);
-        e.stopPropagation();
-      }}
-      onDragOver={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-      }}
+      onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault();
         e.stopPropagation();
         const draggedId = e.dataTransfer.getData('nodeId');
-        if (draggedId) {
-          onMoveNode(draggedId, node.id);
-        }
+        if (draggedId) onMoveNode(draggedId, node.id);
       }}
-      className="bg-white border border-border shadow-sm rounded-2xl p-4 w-[220px] max-w-[calc(100vw-48px)] z-10 relative transition-all hover:shadow-md hover:-translate-y-1 group inline-block mx-auto cursor-grab active:cursor-grabbing"
-    >
-      {(canCreate || canDelete) && (
-        <div className="absolute top-3 right-3 flex flex-col gap-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:focus-within:opacity-100 transition-all z-20">
-          {canCreate && (
-            <button
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                onAddClick(node);
-              }}
-              className="p-1.5 min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 inline-flex items-center justify-center bg-muted/50 hover:bg-primary hover:text-primary-foreground text-muted-foreground rounded-lg shadow-sm border border-border transition-colors"
-              title="Add report under this person"
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
-          )}
-          {canDelete && (
-            <button
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                onDeleteClick(node.id);
-              }}
-              className="p-1.5 min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 inline-flex items-center justify-center bg-muted/50 hover:bg-red-500 hover:text-white text-muted-foreground rounded-lg shadow-sm border border-border transition-colors"
-              title="Remove this person"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
+      className={cn(
+        "relative z-10 inline-flex flex-col items-center gap-3 rounded-3xl p-4 group/box",
+        canUpdate
+          ? "border-2 border-dashed border-emerald-300/70 bg-emerald-50/30"
+          : "border border-emerald-200/70 bg-emerald-50/20"
       )}
-
-      <div className="flex flex-col items-center text-center">
-        <div className="relative mb-3">
-          <img src={node.avatar} alt={node.name} className="w-14 h-14 rounded-full object-cover border-2 border-white shadow-sm pointer-events-none" />
-          <span className={cn(
-            "absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-white",
-            node.status === 'Active' ? 'bg-emerald-500' :
-              node.status === 'On Leave' ? 'bg-amber-500' : 'bg-blue-500'
-          )} />
-        </div>
-        <h3 className="text-[14px] font-bold text-foreground mb-0.5 truncate max-w-full" title={node.name}>{node.name}</h3>
-        <p className="text-[11px] text-muted-foreground font-medium mb-3 truncate max-w-full">{node.role}</p>
-        <span className="px-2.5 py-1 bg-muted/50 text-foreground/80 border border-border/50 text-[10px] font-bold uppercase tracking-wider rounded-lg mb-2 inline-block max-w-full truncate">
-          {node.department}
-        </span>
-
-        {hasChildren && (
-          <button
-            onClick={toggleExpand}
-            className="mt-2 w-full py-1.5 flex items-center justify-center gap-1.5 bg-muted/50 hover:bg-muted text-foreground/80 rounded-xl transition-colors text-[11px] font-bold"
-          >
-            <Users className="w-3 h-3" />
-            {node.children!.length} Reports
-            {isExpanded ? <ChevronUp className="w-3 h-3 ml-1" /> : <ChevronDown className="w-3 h-3 ml-1" />}
-          </button>
-        )}
+    >
+      {canCreate && (
+        <button
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            onAddClick(node);
+          }}
+          className="absolute -top-3 -right-3 p-1.5 inline-flex items-center justify-center bg-white hover:bg-primary hover:text-primary-foreground text-muted-foreground rounded-lg shadow-sm border border-border transition-colors z-20"
+          title="Add members below this group"
+        >
+          <Plus className="w-3.5 h-3.5" />
+        </button>
+      )}
+      <div className="flex gap-4">
+        {[node, ...members].map((p) => (
+          <PersonCard key={p.id} person={p} {...common} compact onAddClick={() => onAddClick(node)} />
+        ))}
       </div>
+      {reportsToggle && <div className="w-[220px]">{reportsToggle}</div>}
     </div>
   );
 };
@@ -127,7 +218,7 @@ const OrgTree = ({
   canDelete,
 }: {
   node: OrgNodeData,
-  onMoveNode: (draggedId: string, targetId: string) => void,
+  onMoveNode: (draggedId: string, targetId: string) => void | Promise<void>,
   onAddClick: (node: OrgNodeData) => void,
   onDeleteClick: (nodeId: string) => void,
   canCreate?: boolean | undefined,
@@ -171,202 +262,175 @@ const OrgTree = ({
 };
 
 export function OrgStructure() {
-  const { canCreate, canUpdate, canDelete, isAdmin } = useModulePermissions("/employees/org");
+  const { isAdmin } = useModulePermissions("/employees/org");
+  // Everyone can view the chart; only Admin and HR can change it
+  const { user } = useAuth();
+  const anyUser = user as any;
+  const userDept = String(anyUser?.department || anyUser?.work_details?.department || "").toLowerCase().trim();
+  const userDesig = String(anyUser?.designation || anyUser?.work_details?.designation || "").toLowerCase().trim();
+  const userRole = String(anyUser?.role || anyUser?.work_details?.system_role || "").toLowerCase().trim();
+  const isHr = userDept === "hr" || userDesig.includes("hr") || userRole === "hr";
+  const canEditOrg = isAdmin || isHr;
+  // Chart opens in view mode; Admin/HR switch to edit mode with the "Edit Chart" button
+  const [isEditMode, setIsEditMode] = useState(false);
+  const editing = canEditOrg && isEditMode;
+  const canCreate = editing;
+  const canUpdate = editing;
+  const canDelete = editing;
   const [zoom, setZoom] = useState(1);
+  const chartRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(document.fullscreenElement === chartRef.current);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  const toggleFullscreen = async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await chartRef.current?.requestFullscreen();
+    } catch {
+      toast.error("Fullscreen is not supported in this browser");
+    }
+  };
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeptDesignationOpen, setIsDeptDesignationOpen] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [selectedParent, setSelectedParent] = useState<OrgNodeData | null>(null);
   const [nodeToDelete, setNodeToDelete] = useState<OrgNodeData | null>(null);
 
-  const { employees, treeData, updateTree, addEmployee } = useEmployeesContext();
+  const { employees, treeData, applyOrgChanges } = useEmployeesContext();
 
-  const handleMoveNode = (draggedId: string, targetId: string) => {
+  // Box that contains this person (as main person or as a peer)
+  const findNode = (node: OrgNodeData, id: string): OrgNodeData | null => {
+    if (node.id === id || (node.members || []).some((m) => m.id === id)) return node;
+    for (const child of node.children || []) {
+      const found = findNode(child, id);
+      if (found) return found;
+    }
+    return null;
+  };
+
+  const findParent = (node: OrgNodeData, id: string): OrgNodeData | null => {
+    for (const child of node.children || []) {
+      if (child.id === id || (child.members || []).some((m) => m.id === id)) return node;
+      const found = findParent(child, id);
+      if (found) return found;
+    }
+    return null;
+  };
+
+  // Drag & drop: reassign the dragged person (from the chart or the unassigned pool) to a new manager
+  const handleMoveNode = async (draggedId: string, targetId: string) => {
+    if (!canUpdate) return;
     if (draggedId === targetId) return;
-
-    const newTree = JSON.parse(JSON.stringify(treeData)) as OrgNodeData;
-
-    // Check if dragging from unassigned
-    const unassignedEmployee = employees.find(emp => emp.id === draggedId);
-    let draggedNode: OrgNodeData | null = null;
-
-    if (draggedId === newTree.id) {
+    if (draggedId === ORG_ROOT_ID) {
       toast.error("Cannot move the root node");
       return;
     }
-
-    const findNode = (node: OrgNodeData, id: string): OrgNodeData | null => {
-      if (node.id === id) return node;
-      if (node.children) {
-        for (const child of node.children) {
-          const found = findNode(child, id);
-          if (found) return found;
-        }
-      }
-      return null;
-    };
-
-    const nodeToMove = unassignedEmployee || findNode(newTree, draggedId);
-    if (!nodeToMove) return;
-
-    if (!unassignedEmployee) {
-      let isCircular = false;
-      const checkDescendant = (node: OrgNodeData) => {
-        if (node.id === targetId) isCircular = true;
-        if (node.children) node.children.forEach(checkDescendant);
-      };
-      checkDescendant(nodeToMove as OrgNodeData);
-
-      if (isCircular) {
-        toast.error("Cannot move a manager under their own report");
-        return;
-      }
+    const dragged = findNode(treeData, draggedId);
+    // Dragging the main person of a joint box moves the whole box; a peer is pulled out on its own
+    const movesWholeBox = dragged && dragged.id === draggedId;
+    if (movesWholeBox && findNode(dragged, targetId)) {
+      toast.error("Cannot move a manager under their own report");
+      return;
     }
-    const removeNode = (node: OrgNodeData): boolean => {
-      if (node.children) {
-        const index = node.children.findIndex(c => c.id === draggedId);
-        if (index !== -1) {
-          draggedNode = node.children[index] || null;
-          node.children.splice(index, 1);
-          return true;
-        }
-        for (const child of node.children) {
-          if (removeNode(child)) return true;
-        }
-      }
-      return false;
-    };
-
-    if (unassignedEmployee) {
-      draggedNode = {
-        id: unassignedEmployee.id,
-        name: unassignedEmployee.name,
-        role: unassignedEmployee.role,
-        department: unassignedEmployee.department,
-        status: unassignedEmployee.status,
-        avatar: unassignedEmployee.avatar,
-        children: []
-      };
-    } else {
-      removeNode(newTree);
-    }
-
-    if (!draggedNode) return;
-
-    const insertNode = (node: OrgNodeData): boolean => {
-      if (node.id === targetId) {
-        if (!node.children) node.children = [];
-        node.children.push(draggedNode!);
-        return true;
-      }
-      if (node.children) {
-        for (const child of node.children) {
-          if (insertNode(child)) return true;
-        }
-      }
-      return false;
-    };
-
-    if (insertNode(newTree)) {
-      updateTree(newTree);
-      toast.success("Employee moved successfully");
+    const target = findNode(treeData, targetId);
+    if (dragged && target && dragged.id === target.id) return; // dropped inside its own box
+    const targetId2 = target ? target.id : targetId;
+    try {
+      await applyOrgChanges([
+        ...(movesWholeBox ? detachBoxChanges(dragged!) : []),
+        { id: draggedId, reportsTo: targetId2 === ORG_ROOT_ID ? "ROOT" : targetId2 },
+      ]);
+      toast.success("Reporting line updated");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update the organization structure");
     }
   };
 
-  const handleAddNode = (nodeData: Omit<OrgNodeData, 'id' | 'children'>) => {
-    if (!selectedParent) return;
+  // Before a box's main person leaves it, hand the box (peers + reports) to the next person in it
+  const detachBoxChanges = (box: OrgNodeData): OrgChange[] => {
+    const [next, ...rest] = box.members || [];
+    if (!next) return [];
+    const parent = findParent(treeData, box.id);
+    const parentId = parent && parent.id !== ORG_ROOT_ID ? parent.id : "ROOT";
+    return [
+      { id: next.id, reportsTo: parentId },
+      ...rest.map((m) => ({ id: m.id, peerOf: next.id })),
+      ...(box.children || []).map((c) => ({ id: c.id, reportsTo: next.id })),
+    ];
+  };
 
-    const newTree = JSON.parse(JSON.stringify(treeData)) as OrgNodeData;
-    const newId = `EMP-${Math.random().toString(36).substr(2, 9)}`;
-    const insertChild = (node: OrgNodeData): boolean => {
-      if (node.id === selectedParent.id) {
-        if (!node.children) node.children = [];
-        node.children.push({
-          ...nodeData,
-          id: newId,
-        });
-        return true;
-      }
-      if (node.children) {
-        for (const child of node.children) {
-          if (insertChild(child)) return true;
-        }
-      }
-      return false;
-    };
-
-    if (insertChild(newTree)) {
-      updateTree(newTree);
-
-      // Also add to global employees list
-      addEmployee({
-        id: newId,
-        name: nodeData.name,
-        role: nodeData.role,
-        department: "Engineering", // default or we can get from nodeData if we add it
-        status: "Active",
-        email: `${(nodeData.name.split(' ')[0] || "").toLowerCase()}@example.com`,
-        phone: "+1 555-0000",
-        avatar: nodeData.avatar,
-        performanceScore: 85,
-        joinDate: new Date().toISOString().split("T")[0] || ""
-      });
-
-      toast.success(`${nodeData.name} added under ${selectedParent.name}`);
+  // "+" on a card: pick an unassigned employee to place below this box or alongside it (same stage)
+  // "+" on a card: place the selected people below this box, separately or together in one box
+  const handleAddNode = async (employeeIds: string[], together: boolean) => {
+    if (!selectedParent || employeeIds.length === 0) return;
+    const names = employeeIds.map((id) => employees.find((e) => e.id === id)?.name || "Employee").join(", ");
+    const managerId = selectedParent.id === ORG_ROOT_ID ? "ROOT" : selectedParent.id;
+    try {
+      const [first, ...rest] = employeeIds;
+      // Close straight away; the chart updates instantly and the save runs in one request
       setAddModalOpen(false);
+      await applyOrgChanges([
+        { id: first!, reportsTo: managerId },
+        ...rest.map((id) => (together ? { id, peerOf: first! } : { id, reportsTo: managerId })),
+      ]);
+      toast.success(`${names} added under ${selectedParent.name}${together && rest.length ? " in one box" : ""}`);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update the organization structure");
     }
   };
 
   const handleDeleteNode = (nodeId: string) => {
-    const newTree = JSON.parse(JSON.stringify(treeData)) as OrgNodeData;
-
-    if (nodeId === newTree.id) {
+    if (nodeId === treeData.id) {
       toast.error("Cannot delete the root organization node.");
       return;
     }
-
-    const findNode = (node: OrgNodeData, id: string): OrgNodeData | null => {
-      if (node.id === id) return node;
-      if (node.children) {
-        for (const child of node.children) {
-          const found = findNode(child, id);
-          if (found) return found;
-        }
-      }
-      return null;
-    };
-
-    const node = findNode(newTree, nodeId);
-    if (node) {
-      setNodeToDelete(node);
+    const box = findNode(treeData, nodeId);
+    if (!box) return;
+    if (box.id === nodeId) setNodeToDelete(box);
+    else {
+      // A peer in a joint box: removing it leaves the box and its reports untouched
+      const peer = (box.members || []).find((m) => m.id === nodeId);
+      if (peer) setNodeToDelete({ ...peer, children: [] });
     }
   };
 
-  const confirmDelete = () => {
+  // Removing someone from the chart only unassigns them; their reports move up to their manager
+  const confirmDelete = async () => {
     if (!nodeToDelete) return;
-
-    const newTree = JSON.parse(JSON.stringify(treeData)) as OrgNodeData;
-
-    const removeNode = (node: OrgNodeData): boolean => {
-      if (node.children) {
-        const index = node.children.findIndex(c => c.id === nodeToDelete.id);
-        if (index !== -1) {
-          node.children.splice(index, 1);
-          return true;
-        }
-        for (const child of node.children) {
-          if (removeNode(child)) return true;
-        }
-      }
-      return false;
-    };
-
-    if (removeNode(newTree)) {
-      updateTree(newTree);
-      toast.success("Team member unassigned from this branch");
+    const box = findNode(treeData, nodeToDelete.id);
+    const changes: OrgChange[] = [];
+    if (box && box.id === nodeToDelete.id && (box.members || []).length > 0) {
+      changes.push(...detachBoxChanges(box));
+    } else if (box && box.id === nodeToDelete.id) {
+      const parent = findParent(treeData, nodeToDelete.id);
+      const newManager = parent && parent.id !== ORG_ROOT_ID ? parent.id : "ROOT";
+      for (const child of nodeToDelete.children || []) changes.push({ id: child.id, reportsTo: newManager });
     }
+    changes.push({ id: nodeToDelete.id, reportsTo: null });
     setNodeToDelete(null);
+    try {
+      await applyOrgChanges(changes);
+      toast.success("Team member unassigned from this branch");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update the organization structure");
+    }
   };
+
+  const placedIds = new Set<string>();
+  const collectIds = (n: OrgNodeData) => {
+    placedIds.add(n.id);
+    (n.members || []).forEach((m) => placedIds.add(m.id));
+    (n.children || []).forEach(collectIds);
+  };
+  collectIds(treeData);
+  const unassignedOptions = employees
+    .filter((e) => e.status !== "Inactive" && !placedIds.has(e.id))
+    .map((e) => ({ label: `${e.name}${e.designation || e.role ? ` (${e.designation || e.role})` : ""}`, value: e.id }));
 
   return (
     <div className="w-full animate-in fade-in zoom-in-95 duration-300 flex flex-col h-[calc(100vh-4rem)] pb-0">
@@ -374,11 +438,26 @@ export function OrgStructure() {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6 shrink-0">
         <div>
           <h1 className="text-[28px] font-black text-foreground tracking-tight mb-1">Organizational Structure</h1>
-          <p className="text-[14px] text-muted-foreground">Visual hierarchy of teams. Drag and drop cards to reorganize.</p>
+          <p className="text-[14px] text-muted-foreground">{editing ? "Edit mode: drag and drop cards to reorganize, use + to add members." : "Visual hierarchy of teams."}</p>
         </div>
 
         <div className="flex flex-wrap gap-2 sm:gap-4 items-center">
-          {(isAdmin || canUpdate) && (
+          {canEditOrg && (
+            <button
+              onClick={() => setIsEditMode((v) => !v)}
+              className={cn(
+                "flex items-center gap-2 px-3.5 py-2 font-bold rounded-xl shadow-sm transition-all text-xs active:scale-95 cursor-pointer",
+                isEditMode
+                  ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                  : "bg-card border border-border text-foreground/80 hover:bg-muted/50"
+              )}
+              title={isEditMode ? "Finish editing" : "Edit the organization chart"}
+            >
+              {isEditMode ? <Check className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
+              {isEditMode ? "Done" : "Edit Chart"}
+            </button>
+          )}
+          {canEditOrg && (
             <>
               <button
                 onClick={() => setIsDeptDesignationOpen(true)}
@@ -417,8 +496,9 @@ export function OrgStructure() {
             </button>
             <div className="w-px h-6 bg-border mx-1"></div>
             <button
-              onClick={() => setZoom(1)}
-              className="p-2 hover:bg-muted rounded-xl text-foreground/80 transition-colors"
+              onClick={toggleFullscreen}
+              title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+              className="p-2 hover:bg-muted rounded-xl text-foreground/80 transition-colors cursor-pointer"
             >
               <Maximize className="w-4 h-4" />
             </button>
@@ -427,7 +507,7 @@ export function OrgStructure() {
       </div>
 
       {/* Org Chart Container */}
-      <div className="flex-1 flex relative overflow-hidden rounded-3xl border border-border/60 shadow-inner">
+      <div ref={chartRef} className="flex-1 flex relative overflow-hidden rounded-3xl border border-border/60 shadow-inner bg-background">
         <div className="flex-1 bg-muted/50/50 overflow-auto">
           <style dangerouslySetInnerHTML={{
             __html: `
@@ -507,7 +587,7 @@ export function OrgStructure() {
           </div>
         </div>
 
-        <UnassignedSidebar />
+        {editing && <UnassignedSidebar />}
       </div>
 
       <ManageDepartmentsModal
@@ -519,6 +599,7 @@ export function OrgStructure() {
         isOpen={addModalOpen}
         onClose={() => setAddModalOpen(false)}
         onSubmit={handleAddNode}
+        options={unassignedOptions}
         {...(selectedParent?.name ? { parentName: selectedParent.name } : {})}
       />
 

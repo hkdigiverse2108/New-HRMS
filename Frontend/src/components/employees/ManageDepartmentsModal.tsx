@@ -2,6 +2,7 @@ import { useState } from "react";
 import { X, Plus, Trash2 } from "lucide-react";
 import { DialogClose,  Dialog, DialogContent  } from "@/components/ui/dialog";
 import { useDepartments } from "./DepartmentContext";
+import { useUsedOrgValues, ShowUnusedToggle } from "./useUsedOrgValues";
 import { toast } from "@/lib/toast";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 
@@ -13,6 +14,9 @@ interface ManageDepartmentsModalProps {
 export function ManageDepartmentsModal({ isOpen, onClose }: ManageDepartmentsModalProps) {
   const { departments, addDepartment, removeDepartment } = useDepartments();
   const [newDept, setNewDept] = useState("");
+  const { departmentCount } = useUsedOrgValues();
+  const [showUnused, setShowUnused] = useState(false);
+  const visibleDepartments = departments.filter((d) => showUnused || departmentCount(d) > 0);
   const [deleteConfirm, setDeleteConfirm] = useState<{isOpen: boolean, dept: string | null}>({isOpen: false, dept: null});
 
   if (!isOpen) return null;
@@ -72,13 +76,18 @@ export function ManageDepartmentsModal({ isOpen, onClose }: ManageDepartmentsMod
               </button>
             </form>
 
+            <div className="mb-3">
+              <ShowUnusedToggle checked={showUnused} onChange={setShowUnused} />
+            </div>
+
             <div className="space-y-2 max-h-[40vh] overflow-y-auto pr-2">
-              {departments.length === 0 ? (
-                <p className="text-center text-sm text-muted-foreground py-4">No departments found.</p>
+              {visibleDepartments.length === 0 ? (
+                <p className="text-center text-sm text-muted-foreground py-4">No departments used by employees yet.</p>
               ) : (
-                departments.map(dept => (
+                visibleDepartments.map(dept => (
                   <div key={dept} className="flex items-center justify-between gap-2 p-3 bg-white border border-border rounded-xl">
                     <span className="text-sm font-bold text-foreground/80 truncate min-w-0 flex-1 pr-2">{dept}</span>
+                    <span className="text-[11px] font-semibold text-muted-foreground shrink-0">{departmentCount(dept)} employees</span>
                     <button
                       onClick={() => setDeleteConfirm({ isOpen: true, dept })}
                       className="p-1.5 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center shrink-0 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
