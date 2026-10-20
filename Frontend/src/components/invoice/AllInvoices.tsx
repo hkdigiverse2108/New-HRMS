@@ -18,6 +18,7 @@ import {
   AlertTriangle,
   History,
   Briefcase,
+  Copy,
 } from "lucide-react";
 import QRCode from "qrcode";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -959,6 +960,22 @@ export function AllInvoices({ setActive }: { setActive?: (path: string) => void 
                             title="Update Invoice"
                           >
                             <Pencil className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const path = `/invoice/create?copyFrom=${inv.id}`;
+                              if (setActive) {
+                                setActive(path);
+                              } else {
+                                window.dispatchEvent(new CustomEvent("navigate_tab", { detail: path }));
+                              }
+                            }}
+                            className="p-1.5 sm:p-2 min-w-[36px] min-h-[36px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:text-indigo-600 hover:bg-indigo-500/10 rounded-lg transition-colors cursor-pointer"
+                            title="Copy Invoice"
+                          >
+                            <Copy className="w-4 h-4" />
                           </button>
 
                           <button

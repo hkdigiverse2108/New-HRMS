@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import {
   FileText,
   Download,
+  Copy,
   Trash2,
   ReceiptText,
   ArrowUpRight,
@@ -374,6 +375,22 @@ export function AllQuotations({
     }
 
     setViewMode("edit");
+  };
+
+  // Copy: open the create form prefilled with this quotation's details under a new quotation number
+  const openCopyForm = async (q: Quotation) => {
+    openEditForm(q);
+    setEditingQuotationId(null);
+    setFormStatus("sent");
+    setFormQuotationDate(new Date().toISOString().split("T")[0]);
+    setFormValidUntil("");
+    try {
+      const res = await api.get<any>("/quotations/next-number", { showLoader: false, showErrorToast: false });
+      setFormQuotationNumber(res?.next_quotation_number || `QUO-${String(quotations.length + 1).padStart(3, "0")}`);
+    } catch {
+      setFormQuotationNumber(`QUO-${String(quotations.length + 1).padStart(3, "0")}`);
+    }
+    setViewMode("create");
   };
 
   const updateItem = (id: string, field: keyof LineItem, value: any) => {
@@ -1771,6 +1788,16 @@ export function AllQuotations({
                           title="Edit Quotation"
                         >
                           <Pencil className="w-4 h-4" />
+                        </button>
+
+                        {/* Copy */}
+                        <button
+                          type="button"
+                          onClick={() => openCopyForm(q)}
+                          className="p-1.5 sm:p-2 inline-flex items-center justify-center text-muted-foreground hover:text-indigo-600 hover:bg-indigo-500/10 rounded-lg transition-colors cursor-pointer"
+                          title="Copy Quotation"
+                        >
+                          <Copy className="w-4 h-4" />
                         </button>
 
                         {/* Convert to Invoice */}

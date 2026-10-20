@@ -86,6 +86,8 @@ export function CreateInvoice({
   const isEditMode = Boolean(editInvoiceId);
   // "Convert to Official Invoice" from a quotation opens this page prefilled with that quotation
   const fromQuotationId = isEditMode ? "" : searchParams.get("fromQuotation") || "";
+  // "Copy" from the invoice list opens this page prefilled with that invoice as a brand new invoice
+  const copyFromInvoiceId = isEditMode || fromQuotationId ? "" : searchParams.get("copyFrom") || "";
   const [sourceQuotationNumber, setSourceQuotationNumber] = useState<string>("");
   const [pendingQuotationClient, setPendingQuotationClient] = useState<string>("");
   // Quotation client that isn't a saved client yet: asks the user whether to create it
@@ -97,7 +99,7 @@ export function CreateInvoice({
   const quotationDraftRef = useRef<any>(null);
   const quotationBankRef = useRef<boolean>(false);
 
-  const [isLoadingInvoice, setIsLoadingInvoice] = useState<boolean>(isEditMode || Boolean(fromQuotationId));
+  const [isLoadingInvoice, setIsLoadingInvoice] = useState<boolean>(isEditMode || Boolean(fromQuotationId) || Boolean(copyFromInvoiceId));
   const [invoiceStatus, setInvoiceStatus] = useState<string>("paid");
 
   // Top Form State (Screenshot 1)
@@ -139,13 +141,15 @@ export function CreateInvoice({
 
   // Fetch existing invoice if in Edit Mode
   useEffect(() => {
-    if (!editInvoiceId) return;
+    const loadId = editInvoiceId || copyFromInvoiceId;
+    if (!loadId) return;
+    const isCopy = !editInvoiceId;
 
     let isMounted = true;
     const fetchInvoiceData = async () => {
       try {
         setIsLoadingInvoice(true);
-        const res = await api.get<any>(`/invoices/${editInvoiceId}`, {
+        const res = await api.get<any>(`/invoices/${loadId}`, {
           showLoader: false,
           showErrorToast: true,
         });
@@ -153,7 +157,7 @@ export function CreateInvoice({
         if (!isMounted || !res) return;
 
         if (res.invoice_type) setInvoiceType(res.invoice_type);
-        if (res.invoice_number) setInvoiceNumber(res.invoice_number);
+        if (res.invoice_number && !isCopy) setInvoiceNumber(res.invoice_number);
         if (res.client_id) setSelectedClientId(String(res.client_id));
         if (res.client_address) setClientAddress(res.client_address);
         if (res.client_phone) setClientPhone(res.client_phone);
@@ -166,14 +170,14 @@ export function CreateInvoice({
         }
 
         if (res.mode_of_payment) setModeOfPayment(res.mode_of_payment);
-        if (res.issue_date) setIssueDate(res.issue_date);
+        if (res.issue_date && !isCopy) setIssueDate(res.issue_date);
         if (res.tax_option) setTaxOption(res.tax_option);
         if (res.cgst_rate !== undefined) setCgstRate(Number(res.cgst_rate) || 0);
         if (res.sgst_rate !== undefined) setSgstRate(Number(res.sgst_rate) || 0);
         if (res.igst_rate !== undefined) setIgstRate(Number(res.igst_rate) || 0);
         if (res.additional_discount !== undefined) setAdditionalDiscount(Number(res.additional_discount) || 0);
         if (res.notes) setNotes(res.notes);
-        if (res.status) setInvoiceStatus(res.status);
+        if (res.status && !isCopy) setInvoiceStatus(res.status);
 
         if (res.bank_name) setBankName(res.bank_name);
         if (res.account_number) setAccountNumber(res.account_number);
@@ -206,7 +210,7 @@ export function CreateInvoice({
     return () => {
       isMounted = false;
     };
-  }, [editInvoiceId]);
+  }, [editInvoiceId, copyFromInvoiceId]);
 
   // Prefill from quotation (Convert to Official Invoice). Terms stay the invoice terms from settings.
   useEffect(() => {
@@ -996,6 +1000,8 @@ export function CreateInvoice({
             <p className="text-muted-foreground mt-1 text-xs sm:text-sm font-medium">
               {isEditMode
                 ? "Update the client details and line items below to save the invoice."
+                : copyFromInvoiceId
+                ? "Copy of an existing invoice: details are prefilled, make your changes and generate a new invoice."
                 : fromQuotationId
                 ? `Converting quotation ${sourceQuotationNumber || ""}: details are prefilled, review and generate the invoice.`
                 : "Fill in the client details and line items below to generate the invoice."}
