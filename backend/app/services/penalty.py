@@ -46,6 +46,13 @@ class PenaltyService:
         return types
 
     @staticmethod
+    async def is_late_punchin_active() -> bool:
+        """Automatic late penalties are created only while their type is Active."""
+        type_id = await PenaltyService.ensure_late_punchin_penalty_type()
+        t = await PenaltyTypeRepository.get_by_id(type_id)
+        return bool((t or {}).get("is_active", True))
+
+    @staticmethod
     async def ensure_late_punchin_penalty_type() -> str:
         from app.redis.service import delete_cache
         types = await PenaltyTypeRepository.get_all()
@@ -98,10 +105,14 @@ class PenaltyService:
     @staticmethod
     async def delete_penalty_type(item_id: str):
         existing = await PenaltyService.get_penalty_type_by_id(item_id)
+        if existing.get("system_key") == LATE_PUNCHIN_SYSTEM_KEY:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="The automatic Late Punch-in penalty cannot be deleted. Mark it Inactive to stop it."
+            )
         # Records keep a copy of the type name so their history still reads correctly
         if await EmployeePenaltyRepository.count_by_type(item_id):
             await EmployeePenaltyRepository.snapshot_type_name(item_id, existing.get("name") or "Penalty")
-        # The automatic late type is re-created with defaults the next time it is needed
         success = await PenaltyTypeRepository.delete(item_id)
         if not success:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Penalty type not found")

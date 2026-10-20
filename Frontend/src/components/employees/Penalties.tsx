@@ -45,6 +45,7 @@ interface PenaltyType {
   warning_limit: number;
   description?: string;
   system_key?: string | null;
+  is_active?: boolean;
 }
 
 interface PenaltySummary {
@@ -243,7 +244,8 @@ export function Penalties() {
           default_price: t.default_price || 0,
           warning_limit: t.warning_limit || 0,
           description: t.description || "",
-          system_key: t.system_key ?? null
+          system_key: t.system_key ?? null,
+          is_active: t.is_active !== false
         })));
       }
     } catch (err) {
@@ -367,6 +369,18 @@ export function Penalties() {
       // api layer shows the backend message (e.g. duplicate name)
     } finally {
       setIsSavingType(false);
+    }
+  };
+
+  // Automatic late penalty: Active creates penalties on late punch-in from now on, Inactive stops it
+  const togglePenaltyTypeActive = async (t: PenaltyType) => {
+    const next = !(t.is_active !== false);
+    setPenaltyTypes(prev => prev.map(x => x.id === t.id ? { ...x, is_active: next } : x));
+    try {
+      await api.put(`/penalties/types/${t.id}`, { is_active: next });
+      toast.success(next ? `${t.name} is now active` : `${t.name} is now inactive`);
+    } catch {
+      setPenaltyTypes(prev => prev.map(x => x.id === t.id ? { ...x, is_active: !next } : x));
     }
   };
 
@@ -859,14 +873,36 @@ export function Penalties() {
                               >
                                 <Pencil className="w-4 h-4" />
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => setTypeDeleteConfirm({ isOpen: true, id: t.id, label: t.name })}
-                                title="Delete"
-                                className="p-2 hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-lg transition-colors"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                              {isSystemType(t) ? (
+                                <button
+                                  type="button"
+                                  role="switch"
+                                  aria-checked={t.is_active !== false}
+                                  onClick={() => togglePenaltyTypeActive(t)}
+                                  title={t.is_active !== false ? "Active: click to stop automatic penalties" : "Inactive: click to start automatic penalties"}
+                                  aria-label={t.is_active !== false ? "Active" : "Inactive"}
+                                  className="p-2 rounded-lg hover:bg-muted transition-colors cursor-pointer"
+                                >
+                                  <span className={cn(
+                                    "relative block h-4 w-7 rounded-full transition-colors",
+                                    t.is_active !== false ? "bg-emerald-500" : "bg-muted-foreground/30"
+                                  )}>
+                                    <span className={cn(
+                                      "absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-all",
+                                      t.is_active !== false ? "left-[14px]" : "left-0.5"
+                                    )} />
+                                  </span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setTypeDeleteConfirm({ isOpen: true, id: t.id, label: t.name })}
+                                  title="Delete"
+                                  className="p-2 hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-lg transition-colors"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -1500,9 +1536,7 @@ export function Penalties() {
         onConfirm={confirmRemoveType}
         title="Remove Penalty Type"
         description={
-          isSystemType(penaltyTypes.find(t => t.id === typeDeleteConfirm.id))
-            ? `"${typeDeleteConfirm.label}" is used for automatic late penalties. It will be re-created with default settings (₹100, no warnings) the next time it is needed. Existing records keep their name.`
-            : `Are you sure you want to remove the penalty type "${typeDeleteConfirm.label}"? Existing penalty records of this type will keep its name.`
+          `Are you sure you want to remove the penalty type "${typeDeleteConfirm.label}"? Existing penalty records of this type will keep its name.`
         }
         itemName={typeDeleteConfirm.label}
       />

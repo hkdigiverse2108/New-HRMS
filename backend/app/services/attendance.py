@@ -11,6 +11,11 @@ from app.repository.employee import EmployeeRepository
 from app.repository.payroll import PayrollRepository
 from app.redis.service import get_cache, set_cache, delete_cache, clear_pattern, make_list_key
 
+
+class _SkipLatePenalty(Exception):
+    """Raised to skip the automatic late penalty while its type is Inactive."""
+
+
 IST = pytz.timezone("Asia/Kolkata")
 
 async def get_company_leave_holidays(year: int, month: int) -> List[str]:
@@ -607,6 +612,8 @@ class AttendanceService:
                 from app.services.penalty import PenaltyService
                 from app.schemas.penalty import EmployeePenaltyCreate
                 late_penalty_id = await PenaltyService.ensure_late_punchin_penalty_type()
+                if not await PenaltyService.is_late_punchin_active():
+                    raise _SkipLatePenalty()
                 
                 # Check if penalty already exists for today to prevent duplicates
                 # Only an existence check, so skip the employee/type population
@@ -630,6 +637,8 @@ class AttendanceService:
                     await clear_pattern("penalties:list:*")
                     await delete_cache("penalties:leaderboard")
                     await delete_cache("penalties:summary")
+            except _SkipLatePenalty:
+                pass  # automatic late penalty is switched off (Inactive)
             except Exception as e:
                 print(f"Failed to auto-assign late penalty: {e}")
 

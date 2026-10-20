@@ -8,6 +8,7 @@ class PenaltyTypeBase(BaseModel):
     default_price: float = Field(0.0, description="Default price for this penalty type")
     warning_limit: int = Field(0, description="Number of times this acts as a warning before converting to a penalty")
     description: Optional[str] = None
+    is_active: bool = Field(True, description="Inactive automatic types stop creating new penalties")
 
 class PenaltyTypeCreate(PenaltyTypeBase):
     pass
@@ -17,6 +18,7 @@ class PenaltyTypeUpdate(BaseModel):
     default_price: Optional[float] = None
     warning_limit: Optional[int] = None
     description: Optional[str] = None
+    is_active: Optional[bool] = None
 
 class PenaltyTypeResponse(PenaltyTypeBase):
     id: str = Field(alias="_id")
