@@ -67,6 +67,9 @@ class BrandingSettings(BaseModel):
     company_name: str = Field("HR Suite", max_length=120)
     logo_url: str = Field("", max_length=MAX_BRAND_IMAGE_CHARS)
     favicon_url: str = Field("", max_length=MAX_BRAND_IMAGE_CHARS)
+    # Display preferences applied app-wide for every user
+    date_format: Literal["DD/MM/YYYY", "MM/DD/YYYY", "DD MMM YYYY", "MMM DD, YYYY", "YYYY-MM-DD"] = "MMM DD, YYYY"
+    name_format: Literal["First Last", "Last, First", "First M. Last", "Last, First M."] = "First Last"
 
 # Aliases for backward compatibility
 InvoiceSettingsCreateOrUpdate = SettingsCreateOrUpdate

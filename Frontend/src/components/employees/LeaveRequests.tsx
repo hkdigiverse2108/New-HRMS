@@ -6,7 +6,7 @@ import { SearchableSelect } from "@/components/ui/select";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { useSettingsContext } from "../payroll/SettingsContext";
 import { useAuth } from "@/components/auth/AuthContext";
-import { cn } from "@/lib/utils";
+import { cn, formatPersonName } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { DateRangeFilter } from "@/components/common/DateRangeFilter";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -243,7 +243,7 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
       const mapped = rawList.map((emp: any) => {
         const personal = emp.personal_info || {};
         const work = emp.work_details || {};
-        const name = `${personal.first_name || ""} ${personal.last_name || ""}`.trim() || emp.name || "Employee";
+        const name = formatPersonName(personal) || emp.name || "Employee";
         return {
           id: String(emp.id || emp._id || ""),
           name,
@@ -783,7 +783,6 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                           setNewEndDate(dateStr);
                         }}
                         placeholder="Select leave date"
-                        displayFormat="MMM dd, yyyy"
                         className="w-full h-[42px] sm:h-[44px] text-xs sm:text-sm px-3 sm:px-3.5"
                         align="center"
                       />
@@ -979,8 +978,8 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                       <div className="flex items-center gap-2 text-foreground/80 font-bold">
                         <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                         <span>
-                          {formatISTDate(request.startDate, "DD MMM YYYY")}
-                          {request.startDate !== request.endDate && ` - ${formatISTDate(request.endDate, "DD MMM YYYY")}`}
+                          {formatISTDate(request.startDate)}
+                          {request.startDate !== request.endDate && ` - ${formatISTDate(request.endDate)}`}
                         </span>
                       </div>
                       <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-[11px] font-black">
@@ -1279,7 +1278,6 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                       setNewEndDate(dateStr);
                     }}
                     placeholder="Select leave date"
-                    displayFormat="MMM dd, yyyy"
                     className="w-full h-[42px] sm:h-[44px] text-xs sm:text-sm px-3 sm:px-3.5"
                     align="center"
                   />

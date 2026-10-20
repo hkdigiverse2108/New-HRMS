@@ -44,7 +44,7 @@ import { toast } from "@/lib/toast";
 import { api } from "@/lib/api";
 import { SearchableSelect } from "@/components/ui/select";
 import { SearchInput } from "@/components/common/SearchInput";
-import { cn } from "@/lib/utils";
+import { cn, formatDate, formatPersonName } from "@/lib/utils";
 import { useAuth } from "@/components/auth/AuthContext";
 import { isUserAdmin, hasModulePermission } from "@/lib/permissions";
 import { resolveApiUrl } from "@/lib/config";
@@ -237,7 +237,7 @@ export function Hirings({ setActive }: HiringsProps = {}) {
         employment_type: item.employment_type || "Full-time",
         status: item.status || "Open",
         applications_count: Number(item.applications_count ?? item.referrals?.length ?? 0),
-        posted_date: item.posted_date || (item.created_at ? new Date(item.created_at).toLocaleDateString() : "Recently"),
+        posted_date: item.posted_date || (item.created_at ? formatDate(item.created_at) : "Recently"),
       }));
 
       setJobs(formatted);
@@ -653,7 +653,7 @@ export function Hirings({ setActive }: HiringsProps = {}) {
         status: "Pending",
         referred_by: {
           employee_id: String(anyUser?.id || anyUser?._id || anyUser?.employee_id || ""),
-          full_name: anyUser?.name || `${anyUser?.personal_info?.first_name || ""} ${anyUser?.personal_info?.last_name || ""}`.trim() || "You",
+          full_name: anyUser?.name || formatPersonName(anyUser?.personal_info) || "You",
           email: String(anyUser?.email || anyUser?.personal_info?.email_address || ""),
         },
         created_at: new Date().toISOString(),

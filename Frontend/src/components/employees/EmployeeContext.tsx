@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { formatPersonName } from "@/lib/utils";
 import { EMPLOYEES, Employee } from './employee-data';
 import { ORG_DATA, OrgNodeData } from './org-data';
 import { api } from '@/lib/api';
@@ -26,7 +27,7 @@ function mapBackendToEmployee(be: any): Employee {
   const d = be.document_checklist || {};
   const e = be.bond_and_exit || {};
 
-  const name = [p.first_name, p.middle_name, p.last_name].filter(Boolean).join(" ") || "Unnamed Employee";
+  const name = formatPersonName(p) || "Unnamed Employee";
   const photo = be.profile_photo || p.profile_photo || be.avatar || "";
 
   const role = w.system_role || "Employee";

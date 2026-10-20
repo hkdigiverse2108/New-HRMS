@@ -225,7 +225,7 @@ export function DateRangeFilter({
             <div className="flex items-center justify-between pt-2.5 mt-2 border-t border-border/50 text-xs gap-2 min-w-0">
               <span className="text-muted-foreground text-[10px] sm:text-[11px] truncate flex-1 min-w-0">
                 {internalRange?.from && internalRange?.to
-                  ? `${format(internalRange.from, "MMM dd, yyyy")} - ${format(internalRange.to, "MMM dd, yyyy")}`
+                  ? `${formatDate(internalRange.from)} - ${formatDate(internalRange.to)}`
                   : "Select start and end date"}
               </span>
               <div className="flex items-center gap-1.5 shrink-0">

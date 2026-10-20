@@ -4,7 +4,8 @@ import { SearchInput } from "@/components/common/SearchInput";
 import { getRecycleBinItems, restoreItem, permanentlyDeleteItem, RecycleBinItem, ServerRecycleBinItem } from "@/lib/recycle-bin";
 import { api } from "@/lib/api";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
-import { formatDistanceToNow, format } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
+import { formatDate } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";
@@ -195,7 +196,7 @@ export function RecycleBin() {
                         </p>
                       </td>
                       <td className="px-6 py-4">
-                        <p className="text-sm font-medium text-foreground">{format(deletedDate, 'dd/MM/yyyy')}</p>
+                        <p className="text-sm font-medium text-foreground">{formatDate(deletedDate)}</p>
                         <p className="text-xs text-muted-foreground">{formatDistanceToNow(deletedDate, { addSuffix: true })}</p>
                       </td>
                       <td className="px-6 py-4">

@@ -4,6 +4,8 @@
  */
 
 // IST is UTC + 5 hours 30 minutes = +330 minutes
+import { getDateFormat } from "./utils";
+
 const IST_OFFSET_MINUTES = 330;
 
 /**
@@ -40,7 +42,7 @@ export function toIST(dateInput: string | number | Date | null | undefined): Dat
  */
 export function formatISTDate(
   dateInput: string | number | Date | null | undefined,
-  pattern: "DD/MM/YYYY" | "YYYY-MM-DD" | "MMM DD, YYYY" | "DD MMM YYYY" = "MMM DD, YYYY"
+  pattern: "DD/MM/YYYY" | "MM/DD/YYYY" | "YYYY-MM-DD" | "MMM DD, YYYY" | "DD MMM YYYY" = getDateFormat()
 ): string {
   const d = toIST(dateInput);
   if (!d) return "--";
@@ -65,6 +67,8 @@ export function formatISTDate(
   switch (pattern) {
     case "DD/MM/YYYY":
       return `${day}/${monthNum}/${year}`;
+    case "MM/DD/YYYY":
+      return `${monthNum}/${day}/${year}`;
     case "YYYY-MM-DD":
       return `${year}-${monthNum}-${day}`;
     case "DD MMM YYYY":
@@ -133,7 +137,7 @@ export function formatAppliedOnIST(dateInput: string | number | Date | null | un
   const d = toIST(dateInput);
   if (!d) return "--";
 
-  const datePart = formatISTDate(d, "DD MMM YYYY");
+  const datePart = formatISTDate(d);
 
   // If input was purely a date string (YYYY-MM-DD) without time information
   if (typeof dateInput === "string" && /^\d{4}-\d{1,2}-\d{1,2}$/.test(dateInput.trim())) {

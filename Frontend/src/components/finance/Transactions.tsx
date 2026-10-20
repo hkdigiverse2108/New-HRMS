@@ -11,16 +11,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
 import { toast } from "@/lib/toast";
 import { API_URL } from "@/lib/config";
+import { formatDate } from "@/lib/utils";
 
 type AccountTab = "overview" | "bank" | "cash";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const toISODate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-const formatDate = (iso: string) => {
-  if (!iso) return "-";
-  const [y, m, d] = iso.slice(0, 10).split("-");
-  return y && m && d ? `${Number(d)}/${Number(m)}/${y}` : iso;
-};
 const formatINR = (n: number) => (n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const emptyCreditForm = () => ({ ref_no: "", date: todayISO(), amount: "", description: "", service: "", remarks: "", attachment: "", invoice_id: "" });

@@ -1,5 +1,6 @@
 import { Settings, Save, Bell, BellOff, Loader2, CheckCircle2, AlertCircle, HelpCircle, Mail } from "lucide-react";
 import { useState } from "react";
+import { formatDate } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { Switch } from "@/components/ui/switch";
@@ -151,7 +152,7 @@ export function SettingsModule() {
                       <div>
                         <p className="font-medium text-sm">{sub.user_agent || "Unknown Device"}</p>
                         <p className="text-xs text-muted-foreground">
-                          Added: {new Date(sub.created_at).toLocaleDateString()}
+                          Added: {formatDate(sub.created_at)}
                         </p>
                       </div>
                     </div>

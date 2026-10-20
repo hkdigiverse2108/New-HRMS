@@ -10,14 +10,10 @@ import { SearchInput } from "@/components/common/SearchInput";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
 import { toast } from "@/lib/toast";
+import { formatDate } from "@/lib/utils";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const toISODate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-const formatDate = (iso: string) => {
-  if (!iso) return "-";
-  const [y, m, d] = iso.slice(0, 10).split("-");
-  return y && m && d ? `${Number(d)}/${Number(m)}/${y}` : iso;
-};
 const formatINR = (n: number) => (n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const DEFAULT_METHODS = ["Bank Transfer", "Cash", "UPI / GPay / Paytm", "Cheque", "Other"];

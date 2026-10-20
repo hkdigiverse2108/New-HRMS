@@ -10,6 +10,7 @@ import {
   addMonths,
   subMonths,
 } from "date-fns";
+import { formatDate } from "@/lib/utils";
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -211,7 +212,7 @@ export function CalendarWidget({
               <div>
                 <div className="flex items-center justify-between pb-2 border-b border-border">
                   <span className="text-xs font-bold text-foreground">
-                    {format(selectedDate, "EEE, dd MMM yyyy")}
+                    {format(selectedDate, "EEE")}, {formatDate(selectedDate)}
                   </span>
                   <Badge variant="secondary" className="text-[10px] font-bold h-5 px-2">
                     {dayEvents.length} Event{dayEvents.length !== 1 ? "s" : ""}

@@ -1283,7 +1283,6 @@ export function CreateInvoice({
               value={issueDate}
               onChange={(val) => setIssueDate(val)}
               placeholder="DD-MM-YYYY"
-              displayFormat="dd-MM-yyyy"
               className="w-full h-11 bg-background border-border/70 rounded-xl"
             />
           </div>

@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useState, useEffect } from "react";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { X, Plus, Trash2, Calendar, Save, Loader2 } from "lucide-react";
 import { format, parseISO, getDaysInMonth, isSameMonth } from "date-fns";
 import { useSettingsContext } from "./SettingsContext";
@@ -328,7 +328,7 @@ export function PayrollSettings() {
                                 title="Click to edit reason"
                                 className="w-full text-[14px] font-semibold text-foreground bg-transparent rounded-md px-1 -mx-1 border border-transparent hover:border-border/80 focus:border-emerald-500 outline-none"
                               />
-                              <span className="text-[12px] text-muted-foreground">{format(parseISO(h.date), "MMM dd, yyyy")} • {h.type}</span>
+                              <span className="text-[12px] text-muted-foreground">{formatDate(parseISO(h.date))} • {h.type}</span>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">

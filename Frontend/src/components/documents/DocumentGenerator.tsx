@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { ArrowLeft, Download, Send, Printer, User, FileText, Sparkles, Settings2, Loader2 } from "lucide-react";
+import { formatDate } from "@/lib/utils";
 import { SearchableSelect } from "@/components/ui/select";
 import { api } from "@/lib/api";
 import { toast } from "@/lib/toast";
@@ -391,12 +392,10 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
     if (!val) return "";
     const trimmed = val.trim();
     if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-      const [y, m, d] = trimmed.split("-");
-      return `${d}-${m}-${y}`;
+      return formatDate(trimmed);
     }
     if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
-      const [y, m, d] = trimmed.slice(0, 10).split("-");
-      return `${d}-${m}-${y}`;
+      return formatDate(trimmed.slice(0, 10));
     }
     return trimmed;
   };

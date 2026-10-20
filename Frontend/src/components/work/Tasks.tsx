@@ -8,7 +8,7 @@ import {
 import { SearchInput } from "@/components/common/SearchInput";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DatePicker } from "@/components/ui/date-picker";
-import { cn } from "@/lib/utils";
+import { cn, formatDate, formatPersonName } from "@/lib/utils";
 import { DialogClose, Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/select";
 import { toast } from "@/lib/toast";
@@ -124,18 +124,18 @@ const formatDateDMY = (dateVal?: string | Date | null): string => {
     if (typeof dateVal === "string") {
       const trimmed = dateVal.trim();
       if (!trimmed) return "";
-      if (/^\d{2}-\d{2}-\d{4}$/.test(trimmed)) return trimmed;
+      if (/^\d{2}-\d{2}-\d{4}$/.test(trimmed)) return formatDate(`${trimmed.slice(6)}-${trimmed.slice(3, 5)}-${trimmed.slice(0, 2)}`);
       const match = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
       if (match && match[1] && match[2] && match[3]) {
         const year = match[1];
         const month = match[2].padStart(2, "0");
         const day = match[3].padStart(2, "0");
-        return `${day}-${month}-${year}`;
+        return formatDate(`${year}-${month}-${day}`);
       }
     }
     const d = new Date(dateVal);
     if (!isNaN(d.getTime())) {
-      return format(d, "dd-MM-yyyy");
+      return formatDate(d);
     }
     return String(dateVal);
   } catch {
@@ -324,7 +324,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
       if (rawList.length > 0) {
         const mapped = rawList.map((emp: any) => {
           const personal = emp.personal_info || {};
-          const name = personal.first_name ? `${personal.first_name} ${personal.last_name || ""}`.trim() : emp.name || "Employee";
+          const name = personal.first_name ? formatPersonName(personal) : emp.name || "Employee";
           return {
             id: String(emp._id || emp.id),
             name,
@@ -360,9 +360,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
   const currentUserName = useMemo(() => {
     const personal = anyUser?.personal_info || {};
-    const first = (personal.first_name || "").trim();
-    const last = (personal.last_name || "").trim();
-    const fullName = `${first} ${last}`.trim();
+    const fullName = formatPersonName(personal);
     return fullName || anyUser?.name || anyUser?.username || "Management";
   }, [anyUser]);
 
@@ -1062,7 +1060,6 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                         value={qt.dueDate}
                         onChange={(val) => updateQuickField(idx, "dueDate", val)}
                         placeholder="Due date"
-                        displayFormat="dd-MM-yyyy"
                         className="h-[36px] text-xs font-bold"
                       />
                     </div>
@@ -2139,7 +2136,6 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                     if (formErrors.dueDate) setFormErrors((prev) => ({ ...prev, dueDate: "" }));
                   }}
                   placeholder="Select due date"
-                  displayFormat="dd-MM-yyyy"
                   className={cn(
                     "h-[38px] text-xs font-bold",
                     formErrors.dueDate && "border-rose-500 ring-2 ring-rose-500/20"
@@ -2524,7 +2520,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                               {hist.from_employee_details?.employee_name || "Employee"} → {hist.to_employee_details?.employee_name || "Employee"}
                             </span>
                             <span className="text-[10px] text-muted-foreground">
-                              {hist.transferred_at ? format(new Date(hist.transferred_at), "dd/MM/yyyy HH:mm") : ""}
+                              {hist.transferred_at ? `${formatDate(hist.transferred_at)} ${format(new Date(hist.transferred_at), "HH:mm")}` : ""}
                             </span>
                           </div>
                           {hist.reason && <p className="text-[10px] text-muted-foreground italic">"{hist.reason}"</p>}
@@ -2698,7 +2694,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                         {events.map((ev) => {
                           const dateObj = new Date(ev.timestamp);
                           const formattedTime = !isNaN(dateObj.getTime())
-                            ? format(dateObj, "dd MMM yyyy, hh:mm a")
+                            ? `${formatDate(dateObj)}, ${format(dateObj, "hh:mm a")}`
                             : String(ev.timestamp);
 
                           return (

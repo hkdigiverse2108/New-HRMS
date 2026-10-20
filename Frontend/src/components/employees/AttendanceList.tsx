@@ -528,7 +528,7 @@ export function AttendanceList() {
       `"${r.employeeName}"`,
       `"${r.role}"`,
       `"${r.department}"`,
-      `"${formatISTDate(r.date, "DD/MM/YYYY")}"`,
+      `"${formatISTDate(r.date)}"`,
       `"${r.status}"`,
       `"${r.checkIn || "--:--"}"`,
       `"${r.checkOut || "--:--"}"`,
@@ -858,7 +858,7 @@ export function AttendanceList() {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="text-sm font-medium text-foreground/80">{formatISTDate(record.date, "DD MMM YYYY")}</span>
+                          <span className="text-sm font-medium text-foreground/80">{formatISTDate(record.date)}</span>
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex flex-col gap-1 items-start">
@@ -958,7 +958,7 @@ export function AttendanceList() {
             <div>
               <h2 className="text-lg sm:text-xl font-black tracking-tight">Attendance Timeline (IST)</h2>
               <p className="text-xs text-muted-foreground">
-                {selectedRecord && formatISTDate(selectedRecord.date, "DD MMM YYYY")}
+                {selectedRecord && formatISTDate(selectedRecord.date)}
               </p>
             </div>
             <DialogClose asChild>
@@ -1227,7 +1227,6 @@ export function AttendanceList() {
                   value={manualForm.date}
                   onChange={(val) => setManualForm((prev) => ({ ...prev, date: val }))}
                   placeholder="Select attendance date"
-                  displayFormat="dd-MM-yyyy"
                   className="w-full h-10 px-3 text-sm font-medium rounded-xl border border-border bg-background"
                 />
               </div>

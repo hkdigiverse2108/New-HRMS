@@ -8,7 +8,7 @@ import {
   ChevronLeft, ChevronRight, Search, Plus, Calendar as CalendarIcon, ChevronDown, Clock, Trash2, Link2Off, RefreshCw, X, Check
 } from "lucide-react";
 import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { Calendar as MiniCalendar } from "@/components/ui/calendar";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CreateEventModal } from "./CreateEventModal";
@@ -494,7 +494,7 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
           </div>
 
           <h2 className="text-base sm:text-xl font-medium text-foreground/80 min-w-fit">
-            {view === "Day" ? format(currentDate, "dd/MM/yyyy") : format(currentDate, "MMMM yyyy")}
+            {view === "Day" ? formatDate(currentDate) : format(currentDate, "MMMM yyyy")}
           </h2>
           <button onClick={fetchFeed} title="Refresh" className="p-1.5 hover:bg-muted rounded-full transition-colors">
             <RefreshCw className={cn("w-4 h-4 text-muted-foreground", isLoading && "animate-spin")} />
@@ -1051,7 +1051,6 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
                       value={newHolidayDate}
                       onChange={(val) => setNewHolidayDate(val || "")}
                       placeholder="Select date"
-                      displayFormat="dd-MM-yyyy"
                       className="h-8 text-xs bg-background"
                     />
                   </div>

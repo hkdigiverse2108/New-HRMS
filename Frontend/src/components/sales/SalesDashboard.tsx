@@ -29,7 +29,7 @@ import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { formatCurrency, aiInsights, type Lead } from "./sales-data";
 import { useSales } from "./SalesContext";
 import { useAuth } from "@/components/auth/AuthContext";
@@ -274,7 +274,7 @@ export function SalesDashboard({ setActive, onAction }: { setActive?: (path: str
         <div>
           <h1 className="text-2xl font-black tracking-tight sm:text-3xl">CEO Sales Dashboard</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {new Date().toLocaleDateString("en-GB", { day: '2-digit', month: '2-digit', year: 'numeric' })} · Live sales operating system for HK DigiVerse
+            {formatDate(new Date())} · Live sales operating system for HK DigiVerse
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

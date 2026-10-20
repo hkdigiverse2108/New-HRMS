@@ -6,7 +6,7 @@ import {
 import { DialogClose, Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { toast } from "@/lib/toast";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatDate, formatPersonName } from "@/lib/utils";
 import { SearchableSelect } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { DateRangeFilter } from "@/components/common/DateRangeFilter";
@@ -262,7 +262,7 @@ export function Penalties() {
       const opts: EmployeeOption[] = rawList.map((emp: any) => {
         const personal = emp.personal_info || {};
         const work = emp.work_details || {};
-        const name = `${personal.first_name || ""} ${personal.last_name || ""}`.trim() || emp.name || "Employee";
+        const name = formatPersonName(personal) || emp.name || "Employee";
         return {
           id: emp._id || emp.id,
           name,

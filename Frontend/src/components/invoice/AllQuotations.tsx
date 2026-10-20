@@ -980,7 +980,6 @@ export function AllQuotations({
                   value={formQuotationDate}
                   onChange={(val) => setFormQuotationDate(val)}
                   placeholder="DD-MM-YYYY"
-                  displayFormat="dd-MM-yyyy"
                   className="w-full h-11 bg-background border-border/70 rounded-xl"
                 />
               </div>
@@ -992,7 +991,6 @@ export function AllQuotations({
                   value={formValidUntil}
                   onChange={(val) => setFormValidUntil(val)}
                   placeholder="DD-MM-YYYY"
-                  displayFormat="dd-MM-yyyy"
                   className="w-full h-11 bg-background border-border/70 rounded-xl"
                 />
               </div>

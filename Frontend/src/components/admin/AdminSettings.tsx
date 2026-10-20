@@ -215,28 +215,20 @@ export function AdminSettings() {
     window.dispatchEvent(new Event("storage"));
   };
 
-  const [dateFormat, setDateFormat] = useState(() => {
-    if (typeof window === "undefined") return "MMM DD, YYYY";
-    return localStorage.getItem('hrms_date_format') || 'MMM DD, YYYY';
-  });
-
-  const handleDateFormatChange = (newFormat: string) => {
-    setDateFormat(newFormat);
-    localStorage.setItem('hrms_date_format', newFormat);
-    // Force a tiny delay so state sets, then reload to apply date format globally instantly
-    setTimeout(() => window.location.reload(), 100);
+  // Saved straight away (company-wide, independent of the branding draft); the reload makes every screen pick it up
+  const savePreference = async (patch: Partial<Pick<Branding, "date_format" | "name_format">>) => {
+    try {
+      await saveBranding({ ...branding, ...patch });
+      toast.success("Preference saved for everyone");
+      setTimeout(() => window.location.reload(), 600);
+    } catch {
+      // api layer shows the backend message
+    }
   };
-
-  const [nameFormat, setNameFormat] = useState(() => {
-    if (typeof window === "undefined") return "First Last";
-    return localStorage.getItem('hrms_name_format') || 'First Last';
-  });
-
-  const handleNameFormatChange = (newFormat: string) => {
-    setNameFormat(newFormat);
-    localStorage.setItem('hrms_name_format', newFormat);
-    setTimeout(() => window.location.reload(), 100);
-  };
+  const dateFormat = branding.date_format;
+  const nameFormat = branding.name_format;
+  const handleDateFormatChange = (v: string) => savePreference({ date_format: v as Branding["date_format"] });
+  const handleNameFormatChange = (v: string) => savePreference({ name_format: v as Branding["name_format"] });
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     // Saved with the settings, so keep it to a reasonable size
@@ -303,17 +295,9 @@ export function AdminSettings() {
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
-        
-        {/* Notification Preferences Card */}
-        <NotificationSettingsCard className="md:col-span-2 lg:col-span-2 xl:col-span-3" />
-
-        {/* Invoice & Billing Details Card */}
-        <InvoiceSettingsCard className="md:col-span-2 lg:col-span-2 xl:col-span-3" />
-
-        {/* Company Letterhead Card (Upload only via /settings/letterhead) */}
-        <LetterheadCard className="md:col-span-2 lg:col-span-2 xl:col-span-3" />
-
+      {/* Appearance & identity: two balanced columns, right under the page header (its Save button applies to these) */}
+      <div className="grid gap-6 md:grid-cols-2 items-start">
+        <div className="flex flex-col gap-6">
         {/* Theme Color Card */}
         <div className="bg-card border border-border/50 rounded-3xl p-6 shadow-sm flex flex-col">
           <div className="flex items-center gap-2 mb-4">
@@ -524,53 +508,45 @@ export function AdminSettings() {
             </div>
           </div>
         </div>
-
-        {/* System Preferences Card */}
+        {/* UI Elements Card */}
         <div className="bg-card border border-border/50 rounded-3xl p-6 shadow-sm flex flex-col">
           <div className="flex items-center gap-2 mb-4">
-            <Settings2 className="w-5 h-5 text-primary" />
-            <h3 className="text-lg font-black">System Preferences</h3>
+            <Square className="w-5 h-5 text-primary" />
+            <h3 className="text-lg font-black">UI & Typography</h3>
           </div>
           <p className="text-sm text-muted-foreground mb-6">
-            Configure global platform behavior such as date formats and timezone defaults.
+            Adjust the shape of UI elements and select a global font family.
           </p>
           
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-6">
             <div>
-              <label className="block text-xs font-bold text-muted-foreground mb-1.5 uppercase tracking-wide">Date Format</label>
-              <SearchableSelect 
-                value={dateFormat}
-                onChange={(val) => handleDateFormatChange(val as string)}
-                options={[
-                  { label: "DD/MM/YYYY (31/12/2026)", value: "DD/MM/YYYY" },
-                  { label: "MM/DD/YYYY (12/31/2026)", value: "MM/DD/YYYY" },
-                  { label: "DD MMM YYYY (31 Dec 2026)", value: "DD MMM YYYY" },
-                  { label: "MMM DD, YYYY (Dec 31, 2026)", value: "MMM DD, YYYY" },
-                  { label: "YYYY-MM-DD (2026-12-31)", value: "YYYY-MM-DD" },
-                ]}
-                className="w-full h-11 px-4 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm font-medium"
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wide">Border Radius</label>
+                <span className="text-xs font-bold bg-muted px-2 py-0.5 rounded-md">{radius}rem</span>
+              </div>
+              <input 
+                type="range" 
+                min="0" 
+                max="2" 
+                step="0.1" 
+                value={radius}
+                onChange={(e) => setRadius(parseFloat(e.target.value))}
+                className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
               />
-              <p className="text-[10px] text-muted-foreground mt-2">Changing this will reload the application to apply the format globally.</p>
+              <div className="flex justify-between mt-1 text-[10px] text-muted-foreground font-medium">
+                <span>Sharp</span>
+                <span>Rounded</span>
+              </div>
             </div>
-            
+
             <div>
-              <label className="block text-xs font-bold text-muted-foreground mb-1.5 uppercase tracking-wide">Name Format</label>
-              <SearchableSelect 
-                value={nameFormat}
-                onChange={(val) => handleNameFormatChange(val as string)}
-                options={[
-                  { label: "First Last (John Doe)", value: "First Last" },
-                  { label: "Last, First (Doe, John)", value: "Last, First" },
-                  { label: "First M. Last (John M. Doe)", value: "First M. Last" },
-                  { label: "Last, First M. (Doe, John M.)", value: "Last, First M." },
-                ]}
-                className="w-full h-11 px-4 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm font-medium"
-              />
-              <p className="text-[10px] text-muted-foreground mt-2">Preferred way to display employee names.</p>
+              <label className="block text-xs font-bold text-muted-foreground mb-1.5 uppercase tracking-wide">Global Font Family</label>
+              <FontSelector value={fontFamily} onChange={setFontFamily} />
             </div>
           </div>
         </div>
-
+        </div>
+        <div className="flex flex-col gap-6">
         {/* Brand Identity Card */}
         <div className="bg-card border border-border/50 rounded-3xl p-6 shadow-sm flex flex-col">
           <div className="flex items-center gap-2 mb-4">
@@ -648,45 +624,64 @@ export function AdminSettings() {
             </div>
           </div>
         </div>
-
-        {/* UI Elements Card */}
-        <div className="bg-card border border-border/50 rounded-3xl p-6 shadow-sm flex flex-col md:col-span-2 xl:col-span-1">
+        {/* System Preferences Card */}
+        <div className="bg-card border border-border/50 rounded-3xl p-6 shadow-sm flex flex-col">
           <div className="flex items-center gap-2 mb-4">
-            <Square className="w-5 h-5 text-primary" />
-            <h3 className="text-lg font-black">UI & Typography</h3>
+            <Settings2 className="w-5 h-5 text-primary" />
+            <h3 className="text-lg font-black">System Preferences</h3>
           </div>
           <p className="text-sm text-muted-foreground mb-6">
-            Adjust the shape of UI elements and select a global font family.
+            Configure global platform behavior such as date formats and timezone defaults.
           </p>
           
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-4">
             <div>
-              <div className="flex justify-between items-center mb-1.5">
-                <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wide">Border Radius</label>
-                <span className="text-xs font-bold bg-muted px-2 py-0.5 rounded-md">{radius}rem</span>
-              </div>
-              <input 
-                type="range" 
-                min="0" 
-                max="2" 
-                step="0.1" 
-                value={radius}
-                onChange={(e) => setRadius(parseFloat(e.target.value))}
-                className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+              <label className="block text-xs font-bold text-muted-foreground mb-1.5 uppercase tracking-wide">Date Format</label>
+              <SearchableSelect 
+                value={dateFormat}
+                onChange={(val) => handleDateFormatChange(val as string)}
+                options={[
+                  { label: "DD/MM/YYYY (31/12/2026)", value: "DD/MM/YYYY" },
+                  { label: "MM/DD/YYYY (12/31/2026)", value: "MM/DD/YYYY" },
+                  { label: "DD MMM YYYY (31 Dec 2026)", value: "DD MMM YYYY" },
+                  { label: "MMM DD, YYYY (Dec 31, 2026)", value: "MMM DD, YYYY" },
+                  { label: "YYYY-MM-DD (2026-12-31)", value: "YYYY-MM-DD" },
+                ]}
+                className="w-full h-11 px-4 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm font-medium"
               />
-              <div className="flex justify-between mt-1 text-[10px] text-muted-foreground font-medium">
-                <span>Sharp</span>
-                <span>Rounded</span>
-              </div>
+              <p className="text-[10px] text-muted-foreground mt-2">Applies to every date across the app, for all users. The app reloads after saving.</p>
             </div>
-
+            
             <div>
-              <label className="block text-xs font-bold text-muted-foreground mb-1.5 uppercase tracking-wide">Global Font Family</label>
-              <FontSelector value={fontFamily} onChange={setFontFamily} />
+              <label className="block text-xs font-bold text-muted-foreground mb-1.5 uppercase tracking-wide">Name Format</label>
+              <SearchableSelect 
+                value={nameFormat}
+                onChange={(val) => handleNameFormatChange(val as string)}
+                options={[
+                  { label: "First Last (John Doe)", value: "First Last" },
+                  { label: "Last, First (Doe, John)", value: "Last, First" },
+                  { label: "First M. Last (John M. Doe)", value: "First M. Last" },
+                  { label: "Last, First M. (Doe, John M.)", value: "Last, First M." },
+                ]}
+                className="w-full h-11 px-4 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm font-medium"
+              />
+              <p className="text-[10px] text-muted-foreground mt-2">Applies to employee names across the app, for all users.</p>
             </div>
           </div>
         </div>
-        
+        </div>
+      </div>
+
+      {/* Notifications, billing and letterhead */}
+      <div className="grid gap-6">
+        {/* Notification Preferences Card */}
+        <NotificationSettingsCard />
+
+        {/* Invoice & Billing Details Card */}
+        <InvoiceSettingsCard />
+
+        {/* Company Letterhead Card (Upload only via /settings/letterhead) */}
+        <LetterheadCard />
       </div>
 
       {/* Chat Permissions Card */}

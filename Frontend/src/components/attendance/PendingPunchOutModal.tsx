@@ -31,7 +31,7 @@ export function PendingPunchOutModal({
 
   if (!pendingRecord) return null;
 
-  const formattedDate = formatISTDate(pendingRecord.date, "DD MMM YYYY");
+  const formattedDate = formatISTDate(pendingRecord.date);
   const formattedCheckIn = formatISTTime(pendingRecord.check_in);
 
   const handleSubmit = async (e: React.FormEvent) => {

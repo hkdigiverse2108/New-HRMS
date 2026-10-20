@@ -35,7 +35,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { MarketingRecord } from "./DigitalMarketingOperations";
 
@@ -294,7 +294,7 @@ export const ExecutivePerformanceReportModal: React.FC<ExecutivePerformanceRepor
   // Standalone HTML Report Generator (matches executive_client_performance_report.html)
   const generateStandaloneHtmlReport = () => {
     const displayName = companyName || clientName || "Client Performance";
-    const dateStamp = new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+    const dateStamp = formatDate(new Date());
     const sym = currency === "INR" ? "₹" : "$";
 
     const formatVal = (amt: number) => {
@@ -1405,7 +1405,7 @@ export const ExecutivePerformanceReportModal: React.FC<ExecutivePerformanceRepor
           {/* Report Footer */}
           <div className="pt-6 border-t border-border/40 flex flex-wrap items-center justify-between gap-3 text-[11px] text-muted-foreground">
             <p>Generated via OmniTrack Enterprise Reporting System • Confidential Agency Client Deliverable</p>
-            <p>Audit Date: {new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</p>
+            <p>Audit Date: {formatDate(new Date())}</p>
           </div>
         </div>
       </DialogContent>

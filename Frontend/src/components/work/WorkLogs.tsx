@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { Clock, FileText, ScrollText, ChevronDown, ChevronUp, Calendar, Users, Activity, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { DateRange } from "react-day-picker";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { getAvatarUrl, handleAvatarError } from "@/lib/config";
 import { useSortableData } from "@/hooks/useSortableData";
@@ -111,7 +111,7 @@ export function WorkLogs() {
   const totalSeconds = filteredLogs.reduce((sum, log) => sum + log.seconds, 0);
   const activeNow = new Set(filteredLogs.filter(l => l.in_progress).map(l => l.employee_id)).size;
   const employeeCount = new Set(filteredLogs.map(l => l.employee_id)).size;
-  const rangeLabel = data ? `${format(new Date(data.start), "dd MMM")} – ${format(new Date(data.end), "dd MMM yyyy")}` : "";
+  const rangeLabel = data ? `${formatDate(data.start)} – ${formatDate(data.end)}` : "";
 
   const typeBadge = (type: string) => (
     <span className={cn("px-2 py-0.5 rounded-lg border text-[10px] font-bold", TYPE_STYLE[type] ?? "bg-muted text-muted-foreground border-border")}>
@@ -244,7 +244,7 @@ export function WorkLogs() {
                       </td>
                     )}
                     <td className="px-6 py-4">
-                      <div className="text-xs font-bold text-foreground">{format(new Date(log.date), "dd/MM/yyyy")}</div>
+                      <div className="text-xs font-bold text-foreground">{formatDate(log.date)}</div>
                       {timeLine(log)}
                     </td>
                     <td className="px-6 py-4 max-w-[340px]">
@@ -318,7 +318,7 @@ export function WorkLogs() {
                             <span className="text-[10px] font-black bg-primary/10 text-primary px-2 py-0.5 rounded-lg">{log.project || "Independent task"}</span>
                             {typeBadge(log.type)}
                             <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-lg flex items-center gap-1">
-                              <Calendar className="w-3 h-3" /> {format(new Date(log.date), "dd/MM/yyyy")}
+                              <Calendar className="w-3 h-3" /> {formatDate(log.date)}
                             </span>
                           </div>
                           <p className="text-xs text-foreground font-semibold leading-relaxed">{log.task}</p>

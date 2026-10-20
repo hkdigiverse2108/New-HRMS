@@ -3,7 +3,7 @@
 import * as React from "react";
 import { format, isValid, isBefore, isAfter, startOfToday } from "date-fns";
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, dateFnsPattern } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -96,7 +96,7 @@ export function DatePicker({
   maxDate,
   fromYear = 1940,
   toYear = 2050,
-  displayFormat = "dd/MM/yyyy",
+  displayFormat,
   valueFormat = "yyyy-MM-dd",
   clearable = true,
   id,
@@ -184,7 +184,7 @@ export function DatePicker({
     });
   };
 
-  const displayText = selectedDate && isValid(selectedDate) ? format(selectedDate, displayFormat) : "";
+  const displayText = selectedDate && isValid(selectedDate) ? format(selectedDate, displayFormat ?? dateFnsPattern()) : "";
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>

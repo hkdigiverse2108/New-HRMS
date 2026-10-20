@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Plus, Filter, FileText, CheckCircle2, XCircle, Clock, X, Download, Eye, Upload, Printer, Mail, FilePlus, Send, ChevronDown, Loader2, Trash2 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
+import { cn, formatPersonName } from "@/lib/utils";
 import { SearchableSelect } from "@/components/ui/select";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";
@@ -118,7 +118,7 @@ export function OfficialLetters({ onNavigate }: { onNavigate?: ((path: string) =
         const rawEmps = Array.isArray(empRes) ? empRes : empRes?.items || empRes?.data || [];
         setEmployees(rawEmps.map((e: any) => {
           const p = e.personal_info || {};
-          const name = [p.first_name, p.last_name].filter(Boolean).join(" ") || e.name || "Employee";
+          const name = formatPersonName(p) || e.name || "Employee";
           return { id: String(e._id || e.id || e.employee_id), name, role: e.work_details?.designation || e.role || "EMP" };
         }));
 

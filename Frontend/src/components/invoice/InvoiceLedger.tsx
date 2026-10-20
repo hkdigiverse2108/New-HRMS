@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Landmark, Download, FileText, IndianRupee, Receipt, Users, List } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { SearchableSelect } from "@/components/ui/select";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";
@@ -86,11 +86,6 @@ const toApiDate = (d?: Date) => {
   return `${d.getFullYear()}-${mm}-${dd}`;
 };
 
-const formatDate = (iso?: string | null) => {
-  if (!iso) return "-";
-  const [y, m, d] = iso.split("-");
-  return `${d}-${m}-${y}`;
-};
 
 const inr = (n: number) => `₹ ${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 const invoiceCount = (n: number) => `${n} invoice${n === 1 ? "" : "s"}`;

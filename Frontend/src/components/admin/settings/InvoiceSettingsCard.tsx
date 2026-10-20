@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ReceiptText, Save, Loader2, Upload, X, Building2, CreditCard, ShieldCheck, FileCheck, FileText, CheckCircle2 } from "lucide-react";
+import { ReceiptText, Palette, Save, Loader2, Upload, X, Building2, CreditCard, ShieldCheck, FileCheck, FileText, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { toast } from "@/lib/toast";
@@ -22,6 +22,8 @@ export interface InvoiceSettingsData {
   account_number: string;
   ifsc_code: string;
   account_name: string;
+  primary_color: string;
+  secondary_color: string;
 }
 
 const DEFAULT_INVOICE_SETTINGS: InvoiceSettingsData = {
@@ -44,7 +46,11 @@ const DEFAULT_INVOICE_SETTINGS: InvoiceSettingsData = {
   account_number: "9240200573774150",
   ifsc_code: "UTIB00028912",
   account_name: "Harikrushn DigiVerse LLP",
+  primary_color: "#C08497",
+  secondary_color: "#B5798C",
 };
+
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 
 export function InvoiceSettingsCard({
   className,
@@ -85,6 +91,8 @@ export function InvoiceSettingsCard({
             account_number: res.account_number || DEFAULT_INVOICE_SETTINGS.account_number,
             ifsc_code: res.ifsc_code || DEFAULT_INVOICE_SETTINGS.ifsc_code,
             account_name: res.account_name || DEFAULT_INVOICE_SETTINGS.account_name,
+            primary_color: res.primary_color || DEFAULT_INVOICE_SETTINGS.primary_color,
+            secondary_color: res.secondary_color || DEFAULT_INVOICE_SETTINGS.secondary_color,
           });
         }
       } catch (err) {
@@ -139,6 +147,10 @@ export function InvoiceSettingsCard({
 
   // Save changes via PUT /settings
   const handleSave = async () => {
+    if (!HEX_COLOR.test(formData.primary_color) || !HEX_COLOR.test(formData.secondary_color)) {
+      toast.error("Theme colors must be valid hex codes like #C08497");
+      return;
+    }
     try {
       setIsSaving(true);
       const payload = {
@@ -155,6 +167,8 @@ export function InvoiceSettingsCard({
         account_number: formData.account_number.trim(),
         ifsc_code: formData.ifsc_code.trim(),
         account_name: formData.account_name.trim(),
+        primary_color: formData.primary_color,
+        secondary_color: formData.secondary_color,
         company_name: formData.company_name?.trim(),
         company_address: formData.company_address?.trim(),
         company_phone: formData.company_phone?.trim(),
@@ -400,6 +414,75 @@ export function InvoiceSettingsCard({
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Section: Invoice & Quotation theme colors (PDF header gradient, badges, table headers) */}
+          <div className="bg-muted/20 border border-border/60 rounded-2xl p-5 sm:p-6 space-y-4">
+            <div className="flex items-center gap-2 text-foreground font-bold text-sm">
+              <Palette className="w-4 h-4 text-primary" />
+              <span>Invoice & Quotation Theme Colors</span>
+            </div>
+            <p className="text-xs text-muted-foreground font-medium">
+              These colors style the generated Invoice and Quotation PDFs. The first color is the main accent, the second is where the gradient ends.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {([
+                ["primary_color", "Primary Color (Start)"],
+                ["secondary_color", "Secondary Color (End)"],
+              ] as const).map(([field, label]) => {
+                const value = formData[field];
+                const valid = HEX_COLOR.test(value);
+                return (
+                  <div key={field}>
+                    <label className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
+                      {label}
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="color"
+                        value={valid ? value : "#000000"}
+                        onChange={(e) => handleChange(field, e.target.value.toUpperCase())}
+                        className="h-11 w-14 shrink-0 cursor-pointer rounded-xl border border-border/70 bg-background p-1"
+                        aria-label={label}
+                      />
+                      <input
+                        type="text"
+                        value={value}
+                        onChange={(e) => handleChange(field, e.target.value.startsWith("#") ? e.target.value : `#${e.target.value}`)}
+                        maxLength={7}
+                        placeholder="#C08497"
+                        className={cn(
+                          "w-full h-11 px-3.5 bg-background border rounded-xl text-sm font-medium uppercase focus:outline-none focus:ring-2",
+                          valid ? "border-border/70 focus:ring-primary/20" : "border-rose-400 focus:ring-rose-300/40"
+                        )}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
+                Preview
+              </label>
+              <div
+                className="h-10 w-full rounded-xl flex items-center px-4 text-xs font-bold text-white shadow-sm"
+                style={{
+                  background: `linear-gradient(to right, ${HEX_COLOR.test(formData.primary_color) ? formData.primary_color : DEFAULT_INVOICE_SETTINGS.primary_color}, ${HEX_COLOR.test(formData.secondary_color) ? formData.secondary_color : DEFAULT_INVOICE_SETTINGS.secondary_color})`,
+                }}
+              >
+                TAX INVOICE
+              </div>
+              <button
+                type="button"
+                onClick={() => setFormData((prev) => ({ ...prev, primary_color: DEFAULT_INVOICE_SETTINGS.primary_color, secondary_color: DEFAULT_INVOICE_SETTINGS.secondary_color }))}
+                className="mt-2 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Reset to default colors
+              </button>
             </div>
           </div>
 

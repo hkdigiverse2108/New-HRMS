@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, Fragment } from "react";
 import { X, Search, Plus, Filter, Check, MoreHorizontal, LayoutGrid, List, Briefcase, Calendar, Clock, Star, Circle, Trash2, Edit2, Archive, ArchiveRestore, ArrowLeft, Users, IndianRupee, FolderGit2, CheckCircle2, Settings2, TrendingUp, MousePointerClick, Target, BarChart3, ChevronDown, User, Building2, CreditCard, FileText, ChevronRight, Video, Instagram, Layers, MessageSquare, Key, Copy, Eye, EyeOff, ExternalLink, Phone, ShieldCheck, Sparkles, Share2, AlertCircle, Sliders, Loader2, UserPlus, UserX, ChevronLeft, Download, Printer } from "lucide-react";
 import { toast } from "@/lib/toast";
-import { cn } from "@/lib/utils";
+import { cn, formatDate, formatPersonName } from "@/lib/utils";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { DialogClose, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
@@ -994,9 +994,7 @@ const CalendarIssuesCell = ({
   const currentUserId = String((user as any)?._id || (user as any)?.id || "");
   const currentUserName = useMemo(() => {
     const personal = (user as any)?.personal_info || {};
-    const first = (personal.first_name || "").trim();
-    const last = (personal.last_name || "").trim();
-    const fullName = `${first} ${last}`.trim();
+    const fullName = formatPersonName(personal);
     return fullName || (user as any)?.name || (user as any)?.username || "Team Member";
   }, [user]);
 
@@ -1316,7 +1314,7 @@ const ThumbnailCell = ({
     try {
       const d = new Date(dStr);
       if (isNaN(d.getTime())) return null;
-      return format(d, "dd/MM/yyyy");
+      return formatDate(d);
     } catch {
       return null;
     }
@@ -7459,11 +7457,11 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                     {campaignDateRange === "Custom" && customDateRange?.from ? (
                                       customDateRange.to ? (
                                         <>
-                                          {format(customDateRange.from, "dd/MM/yyyy")} -{" "}
-                                          {format(customDateRange.to, "dd/MM/yyyy")}
+                                          {formatDate(customDateRange.from)} -{" "}
+                                          {formatDate(customDateRange.to)}
                                         </>
                                       ) : (
-                                        format(customDateRange.from, "dd/MM/yyyy")
+                                        formatDate(customDateRange.from)
                                       )
                                     ) : (
                                       campaignDateRange

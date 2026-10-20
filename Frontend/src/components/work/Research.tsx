@@ -3,7 +3,7 @@ import { X, Clock, Bookmark, Plus, Search, Pencil, Trash2, Link2, Users, History
 import { SearchInput } from "@/components/common/SearchInput";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "@/lib/toast";
-import { cn } from "@/lib/utils";
+import { cn, formatPersonName } from "@/lib/utils";
 import { SearchableSelect } from "@/components/ui/select";
 import { api } from "@/lib/api";
 import { useAuth } from "@/components/auth/AuthContext";
@@ -149,7 +149,7 @@ export function Research() {
           toList(empRes.value)
             .map((e: any) => {
               const personal = e.personal_info || {};
-              const name = personal.first_name ? `${personal.first_name} ${personal.last_name || ""}`.trim() : e.name || "Employee";
+              const name = personal.first_name ? formatPersonName(personal) : e.name || "Employee";
               return { value: String(e._id || e.id), label: name };
             })
             .filter((o: Option) => o.value !== currentUserId)

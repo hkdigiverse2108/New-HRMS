@@ -25,7 +25,7 @@ import { toast } from "@/lib/toast";
 import { useAuth } from "@/components/auth/AuthContext";
 import { useEmployeesContext } from "@/components/employees/EmployeeContext";
 import { SearchableSelect } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
+import { cn, formatName, formatPersonName } from "@/lib/utils";
 
 interface SystemModule {
   id: string;
@@ -93,7 +93,7 @@ export function AccessControl() {
     if (ctxEmployees && ctxEmployees.length > 0) {
       const empList: EmployeeItem[] = ctxEmployees.map((e: any) => ({
         id: String(e.id || e._id),
-        name: e.name || `${e.personal_info?.first_name || e.firstName || ""} ${e.personal_info?.last_name || e.lastName || ""}`.trim() || "Employee",
+        name: e.name || formatName({ first: e.personal_info?.first_name || e.firstName, last: e.personal_info?.last_name || e.lastName }) || "Employee",
         email: e.personal_info?.email_address || e.email || "",
         department: e.work_details?.department || e.department || "",
         designation: e.work_details?.designation || e.designation || "",
@@ -126,7 +126,7 @@ export function AccessControl() {
         const rawEmps = empRes?.data || empRes?.items || empRes || [];
         const empList: EmployeeItem[] = rawEmps.map((e: any) => ({
           id: String(e._id || e.id),
-          name: `${e.personal_info?.first_name || ""} ${e.personal_info?.last_name || ""}`.trim() || e.name || "Employee",
+          name: formatPersonName(e.personal_info) || e.name || "Employee",
           email: e.personal_info?.email_address || e.email || "",
           department: e.work_details?.department || "",
           designation: e.work_details?.designation || "",

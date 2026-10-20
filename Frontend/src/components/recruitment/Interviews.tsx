@@ -34,7 +34,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "@/lib/toast";
-import { cn } from "@/lib/utils";
+import { cn, formatPersonName } from "@/lib/utils";
 import { SearchInput } from "@/components/common/SearchInput";
 import { SearchableSelect } from "@/components/ui/select";
 import { api } from "@/lib/api";
@@ -352,7 +352,7 @@ export function Interviews({ setActive }: InterviewsProps = {}) {
           const empId = String(e.id || e._id || e.employee_id || "");
           const p = e.personal_info || {};
           const w = e.work_details || {};
-          const name = (e.name || [p.first_name, p.last_name].filter(Boolean).join(" ")).trim();
+          const name = (e.name || formatPersonName(p)).trim();
           if (name && !seenNames.has(name.toLowerCase())) {
             seenNames.add(name.toLowerCase());
             allInterviewers.push({

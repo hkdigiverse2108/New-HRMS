@@ -20,7 +20,7 @@ import { DialogClose, Dialog, DialogContent } from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/select";
 import { DateRangeFilter } from "@/components/common/DateRangeFilter";
 import { format as formatDateFns, parseISO } from "date-fns";
-import { cn } from "@/lib/utils";
+import { cn, formatPersonName } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { toast } from "@/lib/toast";
 import { useAuth } from "@/components/auth/AuthContext";
@@ -229,7 +229,7 @@ export function DailyProgress() {
     }
     const emps = pool.map((e: any) => {
       const p = e.personal_info || {};
-      const name = `${p.first_name || ""} ${p.last_name || ""}`.trim() || e.name || "Employee";
+      const name = formatPersonName(p) || e.name || "Employee";
       const id = String(e._id || e.id || "");
       return { label: name, value: id };
     }).filter((e: any) => e.value);

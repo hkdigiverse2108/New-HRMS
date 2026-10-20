@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState } from "r
 import { FAVICON_STORAGE_KEY, syncFaviconToServiceWorker } from "@/lib/favicon";
 import { api } from "@/lib/api";
 import { ensureGoogleFonts } from "@/lib/fonts";
+import { DATE_FORMAT_KEY, NAME_FORMAT_KEY, type DateFormatSetting, type NameFormatSetting } from "@/lib/utils";
 
 /** Branding saved company-wide via /settings/branding (shape matches the backend). */
 export interface Branding {
@@ -15,6 +16,8 @@ export interface Branding {
   company_name: string;
   logo_url: string;
   favicon_url: string;
+  date_format: DateFormatSetting;
+  name_format: NameFormatSetting;
 }
 
 interface ThemeContextType {
@@ -102,6 +105,8 @@ const DEFAULT_BRANDING: Branding = {
   company_name: "HR Suite",
   logo_url: "",
   favicon_url: "",
+  date_format: "MMM DD, YYYY",
+  name_format: "First Last",
 };
 
 // Only saved branding is cached for the next page load, never an unsaved preview
@@ -115,6 +120,8 @@ function cacheBranding(b: Branding) {
     localStorage.setItem("app-theme-radius", String(b.radius));
     localStorage.setItem("app-theme-font", b.font_family);
     localStorage.setItem("app-theme-name", b.company_name);
+    localStorage.setItem(DATE_FORMAT_KEY, b.date_format || "MMM DD, YYYY");
+    localStorage.setItem(NAME_FORMAT_KEY, b.name_format || "First Last");
     localStorage.setItem(FAVICON_STORAGE_KEY, b.favicon_url || "");
     // A large logo may not fit in localStorage, which is fine
     localStorage.setItem("app-theme-logo", b.logo_url || "");
@@ -174,6 +181,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       company_name: savedName || cached.company_name,
       logo_url: savedLogo || "",
       favicon_url: savedFavicon || "",
+      date_format: (localStorage.getItem(DATE_FORMAT_KEY) as DateFormatSetting) || cached.date_format,
+      name_format: (localStorage.getItem(NAME_FORMAT_KEY) as NameFormatSetting) || cached.name_format,
     };
     applyBranding(loaded);
     setSaved(loaded);
@@ -198,10 +207,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     api.get<Branding | null>("/settings/branding", { showLoader: false, showErrorToast: false, skipAuth: true })
       .then(b => {
         if (!b) return;
+        // Date/name formats are read straight from localStorage while rendering, so a format that
+        // someone else changed needs one reload to show up everywhere.
+        const formatsChanged =
+          (localStorage.getItem(DATE_FORMAT_KEY) || "MMM DD, YYYY") !== b.date_format ||
+          (localStorage.getItem(NAME_FORMAT_KEY) || "First Last") !== b.name_format;
         applyBranding(b);
         setSaved(b);
         cacheBranding(b);
         setBrandingSaved(true);
+        if (formatsChanged) window.location.reload();
       })
       .catch(() => {});
   }, []);

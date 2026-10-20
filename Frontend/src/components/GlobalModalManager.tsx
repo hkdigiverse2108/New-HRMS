@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { formatPersonName } from "@/lib/utils";
 import { X, Plus, ChevronDown, CalendarPlus, UserPlus, Briefcase, ListPlus } from "lucide-react";
 import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/select";
@@ -193,7 +194,7 @@ function ApplyLeaveModal({ open, onClose }: { open: boolean; onClose: () => void
         const mapped = rawList.map((emp: any) => {
           const personal = emp.personal_info || {};
           const work = emp.work_details || {};
-          const name = `${personal.first_name || ""} ${personal.last_name || ""}`.trim() || emp.name || "Employee";
+          const name = formatPersonName(personal) || emp.name || "Employee";
           return {
             id: String(emp.id || emp._id || ""),
             name,
