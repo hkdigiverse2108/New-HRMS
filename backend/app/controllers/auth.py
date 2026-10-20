@@ -12,7 +12,7 @@ import random
 import uuid
 from fastapi import BackgroundTasks
 from app.redis.service import redis_client
-from app.utils.email import send_otp_email
+from app.utils.email import send_otp_email, public_base_url
 
 # --- Schemas ---
 class Token(BaseModel):
@@ -345,7 +345,7 @@ async def get_me(current_employee: dict = Depends(get_current_employee)):
     }
 
 @router.post("/login")
-async def login_for_access_token(login_data: LoginRequest, background_tasks: BackgroundTasks):
+async def login_for_access_token(login_data: LoginRequest, background_tasks: BackgroundTasks, http_request: Request):
     print(f"\n[Auth] Login attempt for email: {login_data.email}")
     # Find employee by email
     employee = await EmployeeRepository.get_employee_by_email(login_data.email)
@@ -406,7 +406,7 @@ async def login_for_access_token(login_data: LoginRequest, background_tasks: Bac
     await EmployeeRepository.update_employee(employee["_id"], {"otp": otp})
     
     # Send OTP email
-    background_tasks.add_task(send_otp_email, login_data.email, otp)
+    background_tasks.add_task(send_otp_email, login_data.email, otp, base_url=public_base_url(http_request))
     
     return {"message": "OTP sent to your email. Please verify.", "email": login_data.email}
 
@@ -470,7 +470,7 @@ async def verify_otp(verify_data: VerifyOTPRequest):
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/forgot-password")
-async def forgot_password(request: ForgotPasswordRequest, background_tasks: BackgroundTasks):
+async def forgot_password(request: ForgotPasswordRequest, background_tasks: BackgroundTasks, http_request: Request):
     employee = await EmployeeRepository.get_employee_by_email(request.email)
     if not employee:
         return {"message": "If your email is registered, you will receive an OTP."}
@@ -483,7 +483,7 @@ async def forgot_password(request: ForgotPasswordRequest, background_tasks: Back
         print(f"Redis warning for forgot_otp: {e}")
     
     # Send OTP email
-    background_tasks.add_task(send_otp_email, request.email, otp)
+    background_tasks.add_task(send_otp_email, request.email, otp, base_url=public_base_url(http_request))
     return {"message": "If your email is registered, you will receive an OTP."}
 
 @router.post("/verify-forgot-password-otp")

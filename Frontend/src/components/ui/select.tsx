@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import * as SelectPrimitive from "@radix-ui/react-select";
-import { Check, ChevronDown, ChevronUp, Plus } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
 import {
   Command,
   CommandEmpty,
@@ -178,11 +178,16 @@ export interface SearchableSelectProps {
   value?: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  /** Placeholder for the search box; defaults to "Search <placeholder>...". */
+  searchPlaceholder?: string;
   emptyMessage?: string;
   className?: string;
   disabled?: boolean;
   /** Lets the user add a value that is not in the list: return the value to select, or null to reject it. */
   onCreate?: (input: string) => string | null;
+  /** Shows a remove button on each option for which `canDelete` (default: all) returns true. */
+  onDelete?: (value: string) => void;
+  canDelete?: (value: string) => boolean;
 }
 
 export function SearchableSelect({
@@ -190,10 +195,13 @@ export function SearchableSelect({
   value,
   onChange,
   placeholder = "Select...",
+  searchPlaceholder,
   emptyMessage = "No option found.",
   className,
   disabled = false,
   onCreate,
+  onDelete,
+  canDelete,
 }: SearchableSelectProps) {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
@@ -229,7 +237,7 @@ export function SearchableSelect({
         onWheel={(e) => e.stopPropagation()}
       >
         <Command>
-          <CommandInput placeholder={`Search ${placeholder.toLowerCase()}...`} value={search} onValueChange={setSearch} />
+          <CommandInput placeholder={searchPlaceholder ?? `Search ${placeholder.toLowerCase()}...`} value={search} onValueChange={setSearch} />
           <CommandList onWheel={(e) => { e.currentTarget.scrollTop += e.deltaY; e.stopPropagation(); }}>
             <CommandEmpty>{emptyMessage}</CommandEmpty>
             <CommandGroup>
@@ -248,7 +256,18 @@ export function SearchableSelect({
                       value === option.value ? "opacity-100" : "opacity-0"
                     )}
                   />
-                  {option.label}
+                  <span className="flex-1 truncate">{option.label}</span>
+                  {onDelete && (canDelete?.(option.value) ?? true) && (
+                    <button
+                      type="button"
+                      title={`Remove ${option.label}`}
+                      onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(option.value); }}
+                      className="ml-2 p-1 rounded-md text-muted-foreground hover:text-red-600 hover:bg-red-50 shrink-0"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </CommandItem>
               ))}
               {canCreate && (

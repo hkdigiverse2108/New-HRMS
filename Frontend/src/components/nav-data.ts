@@ -42,7 +42,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-export type NavChild = { title: string; url: string; badge?: number; icon?: LucideIcon };
+// hideInSidebar: page stays routable (and in permissions) but is not listed in the sidebar
+export type NavChild = { title: string; url: string; badge?: number; icon?: LucideIcon; hideInSidebar?: boolean };
 
 export type NavItem = {
   title: string;
@@ -150,9 +151,10 @@ export const navItems: NavItem[] = [
     icon: Landmark,
     children: [
       { title: "Transactions", url: "/finance/transactions" },
-      { title: "Plan", url: "/finance/plan" },
-      { title: "Summary", url: "/finance/summary" },
+      { title: "Plan", url: "/finance/plan", hideInSidebar: true },
+      { title: "Summary", url: "/finance/summary", hideInSidebar: true },
       { title: "Other Transactions", url: "/finance/clients" },
+      { title: "Finance Report", url: "/finance/report" },
     ],
   },
 

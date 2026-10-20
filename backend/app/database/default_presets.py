@@ -115,6 +115,7 @@ SYSTEM_MODULES: List[Dict[str, Any]] = [
     {"id": "/finance/plan", "name": "Financial Plan", "section": "Finance", "parent_id": "/finance"},
     {"id": "/finance/summary", "name": "Financial Summary", "section": "Finance", "parent_id": "/finance"},
     {"id": "/finance/clients", "name": "Other Transactions", "section": "Finance", "parent_id": "/finance"},
+    {"id": "/finance/report", "name": "Finance Report", "section": "Finance", "parent_id": "/finance"},
     {"id": "/finance/audit", "name": "Audit Logs", "section": "Finance", "parent_id": "/finance"},
 
     # 25. Employees (Direct Main Page - Employee List, sub-items removed per audio transcript 13)

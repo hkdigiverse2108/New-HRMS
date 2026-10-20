@@ -2,19 +2,31 @@ import smtplib
 from email.message import EmailMessage
 from app.config import settings
 
-def send_otp_email(to_email: str, otp: str):
+
+def public_base_url(request) -> str:
+    """Address the caller used to reach this backend (proxy headers first), so email links work on any host."""
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
+    return f"{proto.split(',')[0].strip()}://{host.split(',')[0].strip()}"
+
+
+def send_otp_email(to_email: str, otp: str, subject: str = "Your Login OTP for HK DigiVerse HRMS",
+                   heading: str = "Login Verification Code",
+                   intro: str = "We received a sign-in request for your <strong>HK DigiVerse HRMS</strong> account. Please use the 6-digit verification code below to login:",
+                   base_url: str = ""):
     if not settings.SMTP_USER or not settings.SMTP_PASS:
         print(f"Mock Email: To: {to_email}, OTP: {otp} (Configure SMTP to send real emails)")
         return
 
     msg = EmailMessage()
-    msg['Subject'] = 'Your Login OTP for HK DigiVerse HRMS'
+    # Code first in the subject: Gmail and phone mail apps then offer their own working "Copy code" button
+    msg['Subject'] = f"{otp} - {subject}"
     msg['From'] = settings.SENDER_EMAIL or settings.SMTP_USER
     msg['To'] = to_email
 
     plain_content = f"""Hello,
 
-Your One-Time Password (OTP) for login is: {otp}
+Your One-Time Password (OTP) is: {otp}
 
 This OTP is valid for 5 minutes. Do not share it with anyone.
 
@@ -28,7 +40,7 @@ HK DigiVerse HRMS Team
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login OTP for HK DigiVerse HRMS</title>
+  <title>{subject}</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b;">
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; padding: 40px 15px;">
@@ -43,7 +55,7 @@ HK DigiVerse HRMS Team
               <div style="display: inline-block; background-color: rgba(255, 255, 255, 0.22); border-radius: 9999px; padding: 6px 18px; margin-bottom: 12px; border: 1px solid rgba(255, 255, 255, 0.3);">
                 <span style="color: #ffffff; font-size: 13px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase;">HK DigiVerse HRMS</span>
               </div>
-              <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">Login Verification Code</h1>
+              <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">{heading}</h1>
             </td>
           </tr>
 
@@ -54,7 +66,7 @@ HK DigiVerse HRMS Team
                 Hello,
               </p>
               <p style="margin: 0 0 24px 0; font-size: 14px; line-height: 22px; color: #475569;">
-                We received a sign-in request for your <strong>HK DigiVerse HRMS</strong> account. Please use the 6-digit verification code below to login:
+                {intro}
               </p>
 
               <!-- OTP Display Box in HRMS Emerald Theme -->
@@ -67,20 +79,14 @@ HK DigiVerse HRMS Team
                     <div style="font-family: 'Consolas', 'Courier New', Courier, monospace; font-size: 40px; font-weight: 800; letter-spacing: 12px; color: #064e3b; padding-left: 12px; margin: 4px 0; user-select: all; -webkit-user-select: all; -moz-user-select: all;">
                       {otp}
                     </div>
-
-                    <!-- Copy Button in Email -->
+                    <!-- Display only: email apps block scripts and links are not used, so this does not copy -->
                     <div style="margin-top: 14px;">
-                      <button 
-                        type="button"
-                        onclick="navigator.clipboard.writeText('{otp}');"
-                        style="display: inline-block; background: linear-gradient(135deg, #059669 0%, #0d9488 100%); color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; font-weight: 700; padding: 9px 22px; border-radius: 9999px; border: none; cursor: pointer; text-decoration: none; box-shadow: 0 4px 12px rgba(5, 150, 105, 0.28); user-select: all; -webkit-user-select: all;"
-                      >
-                        📋 Copy OTP ({otp})
-                      </button>
+                      <span style="display: inline-block; background: linear-gradient(135deg, #059669 0%, #0d9488 100%); color: #ffffff; font-size: 13px; font-weight: 700; padding: 10px 24px; border-radius: 9999px; box-shadow: 0 4px 12px rgba(5, 150, 105, 0.28);">
+                        &#128203; Copy OTP
+                      </span>
                     </div>
-
                     <span style="display: block; font-size: 11px; color: #64748b; margin-top: 10px; font-weight: 500;">
-                      (Click button or double-tap code to copy)
+                      Or double-click / tap and hold the code to copy it
                     </span>
                   </td>
                 </tr>

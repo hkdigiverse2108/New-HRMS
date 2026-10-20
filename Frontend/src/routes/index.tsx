@@ -69,6 +69,10 @@ import { Transactions } from "@/components/finance/Transactions";
 import { FinancialPlan } from "@/components/finance/FinancialPlan";
 import { FinancialSummary } from "@/components/finance/FinancialSummary";
 import { OtherTransactions } from "@/components/finance/OtherTransactions";
+import { FinanceReport } from "@/components/finance/FinanceReport";
+import { FinanceOtpGate } from "@/components/finance/FinanceOtpGate";
+import { lockFinance } from "@/components/finance/financeUnlock";
+import { FinanceOtpDialog } from "@/components/admin/settings/FinanceOtpDialog";
 import { UserProfile } from "@/components/profile/UserProfile";
 import { GlobalModalProvider } from "@/components/GlobalModalContext";
 import { GlobalModalManager } from "@/components/GlobalModalManager";
@@ -183,6 +187,11 @@ export function Index() {
     }
   }, [user, active]);
 
+  // Leaving the Finance section locks it again; moving between Finance pages does not
+  useEffect(() => {
+    if (!active.split("?")[0]?.startsWith("/finance/")) lockFinance();
+  }, [active]);
+
   const [activeAction, setActiveAction] = useState<string | null>(null);
 
   const handleQuickAction = (label: string) => {
@@ -290,10 +299,15 @@ export function Index() {
                   {basePath === "/remarks" && <Remarks />}
 
                   {/* Finance */}
-                  {basePath === "/finance/transactions" && <Transactions />}
-                  {basePath === "/finance/plan" && <FinancialPlan />}
-                  {basePath === "/finance/summary" && <FinancialSummary />}
-                  {basePath === "/finance/clients" && <OtherTransactions />}
+                  {basePath.startsWith("/finance/") && (
+                    <FinanceOtpGate>
+                      {basePath === "/finance/transactions" && <Transactions />}
+                      {basePath === "/finance/plan" && <FinancialPlan />}
+                      {basePath === "/finance/summary" && <FinancialSummary />}
+                      {basePath === "/finance/clients" && <OtherTransactions />}
+                      {basePath === "/finance/report" && <FinanceReport />}
+                    </FinanceOtpGate>
+                  )}
                   {/* Invoices (5 Sub-Departments) */}
                   {(basePath === "/invoice" || basePath === "/invoice/all") && <AllInvoices setActive={setActive} />}
                   {basePath === "/invoice/ledger" && <InvoiceLedger />}
@@ -393,6 +407,7 @@ export function Index() {
                   </div>
                 </main>
                 <QuickActionModals activeAction={activeAction} onClose={() => setActiveAction(null)} />
+                <FinanceOtpDialog />
               </div>
             </SalesProvider>
           </EmployeeProvider>
