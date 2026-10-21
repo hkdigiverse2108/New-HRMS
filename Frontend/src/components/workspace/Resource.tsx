@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import { 
   Plus, 
   CheckCircle2, 
@@ -104,7 +105,7 @@ export default function ResourceManagementPage() {
   const { data, isLoading, refresh: apiRefresh, updateData } = useApi();
   const confirm = async (msg: any) => window.confirm(msg.title || "Confirm");
 
-  const [activeTab, setActiveTab] = useState<"overview" | "registry" | "categories" | "history">("overview");
+  const [activeTab, setActiveTab] = usePersistentState<"overview" | "registry" | "categories" | "history">("resource.tab", "overview");
   const [isAddingMode, setIsAddingMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);

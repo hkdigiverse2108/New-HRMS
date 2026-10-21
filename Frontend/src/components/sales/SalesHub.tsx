@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import { 
   LayoutDashboard, 
   Kanban, 
@@ -40,21 +40,16 @@ const SALES_TABS = [
 type SalesTabId = typeof SALES_TABS[number]["id"];
 
 export function SalesHub({ initialTab = "dashboard", setActive, onAction, isNew }: SalesHubProps) {
-  const [activeTab, setActiveTab] = useState<SalesTabId>(() => {
-    const valid = SALES_TABS.find(t => t.id === initialTab);
-    return valid ? (initialTab as SalesTabId) : "dashboard";
-  });
-
-  useEffect(() => {
-    if (initialTab && SALES_TABS.some(t => t.id === initialTab)) {
-      setActiveTab(initialTab as SalesTabId);
-    }
-  }, [initialTab]);
+  // Each route remounts the hub, so keying by initialTab restores the last tab only on refresh of the same route
+  const [activeTab, setActiveTab] = usePersistentState<SalesTabId>(
+    `salesHub.${initialTab}`,
+    SALES_TABS.some(t => t.id === initialTab) ? (initialTab as SalesTabId) : "dashboard"
+  );
 
   return (
     <div className="space-y-6">
       {/* Top Header & Integrated Sub-Navigation Tabs */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/80 pb-3">
+      <div className="flex flex-col 2xl:flex-row 2xl:items-center justify-between gap-3 sm:gap-4 border-b border-border/80 pb-3 min-w-0">
         <div>
           <h1 className="text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
             <span>🎯</span> Sales Hub
@@ -65,7 +60,7 @@ export function SalesHub({ initialTab = "dashboard", setActive, onAction, isNew 
         </div>
 
         {/* Tab Pills */}
-        <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 scrollbar-none bg-muted/60 p-1 rounded-xl border border-border/60">
+        <div className="flex items-center gap-1 overflow-x-auto max-w-full scrollbar-none bg-muted/60 p-1 rounded-xl border border-border/60">
           {SALES_TABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -75,7 +70,7 @@ export function SalesHub({ initialTab = "dashboard", setActive, onAction, isNew 
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all",
+                  "flex shrink-0 items-center gap-1.5 px-3 py-1.5 min-h-[40px] sm:min-h-0 rounded-lg text-xs font-semibold whitespace-nowrap transition-all",
                   isActive
                     ? "bg-card text-foreground shadow-xs border border-border/80 font-bold"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted/80"

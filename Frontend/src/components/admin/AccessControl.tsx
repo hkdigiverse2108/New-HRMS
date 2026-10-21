@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import { 
   Shield, 
   UserCheck, 
@@ -56,7 +57,7 @@ interface EmployeeItem {
 export function AccessControl() {
   const { user, refreshProfile } = useAuth();
   const { employees: ctxEmployees } = useEmployeesContext();
-  const [activeTab, setActiveTab] = useState<"departments" | "employees">("departments");
+  const [activeTab, setActiveTab] = usePersistentState<"departments" | "employees">("accessControl.tab", "departments");
   const [modules, setModules] = useState<SystemModule[]>([]);
   const [employees, setEmployees] = useState<EmployeeItem[]>([]);
   const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);

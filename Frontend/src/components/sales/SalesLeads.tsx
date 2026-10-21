@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from "react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import { TrendingUp, Target, Plus, Search, MoreHorizontal, Phone, Mail, Clock, Flame, X, Upload, Download, Users, ChevronDown, ChevronRight, Trash2, RefreshCw, MessageSquare } from "lucide-react";
 import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
@@ -108,7 +109,7 @@ export function SalesLeads({
     "Sales Rep";
 
   // Tab & Filters
-  const [activeTab, setActiveTab] = useState<string>("active");
+  const [activeTab, setActiveTab] = usePersistentState<string>("salesLeads.tab", "active");
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
@@ -711,9 +712,369 @@ export function SalesLeads({
       );
     }
 
+    const renderLeadCard = (lead: Lead) => {
+      const leadId = lead.id || lead._id || "";
+      const isSelected = selectedLeads.includes(leadId);
+      const isHot = !!lead.isHot;
+      const status = lead.status || lead.stage || "Lead";
+      const today = new Date().toISOString().split("T")[0] || "";
+      const nextDate = lead.nextFollowUpDate || lead.nextFollowUp;
+      const nextDateStr = nextDate ? nextDate.split("T")[0] || "" : "";
+      const isMissed = !!nextDateStr && nextDateStr < today;
+      const isDueToday = !!nextDateStr && nextDateStr === today;
+      const followUpList = (lead as any).followUps || (lead as any).follow_ups || [];
+      const income = lead.expectedIncome
+        ? lead.expectedIncome.startsWith("₹")
+          ? lead.expectedIncome
+          : `₹${lead.expectedIncome}`
+        : lead.budget
+          ? formatCurrency(lead.budget)
+          : "—";
+      const selectCls =
+        "h-9 w-full text-xs font-semibold border border-border bg-background px-2 rounded-lg cursor-pointer outline-none text-foreground focus:ring-1 focus:ring-primary";
+
+      return (
+        <div
+          key={leadId}
+          className={cn(
+            // Stacked when narrow, two columns from ~450px, one horizontal row from ~770px (sized by the list, not the viewport)
+            "min-w-0 rounded-2xl border bg-card p-3.5 shadow-xs space-y-3 @md:space-y-0 @md:grid @md:grid-cols-2 @md:gap-x-4 @md:gap-y-3 @md:items-start @3xl:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)_150px]",
+            isHot ? "border-orange-500/40 bg-orange-500/5" : "border-border",
+            isSelected && "ring-2 ring-emerald-500/50"
+          )}
+        >
+          {/* Column 1: who */}
+          <div className="min-w-0 space-y-3">
+          {/* Header: select, name, hot, actions */}
+          <div className="flex items-start gap-2.5">
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={() => toggleSelectRow(leadId)}
+              className="mt-1 rounded border-border text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer shrink-0"
+            />
+            <div className="min-w-0 flex-1">
+              {inlineEditing?.id === leadId && inlineEditing?.field === "company" ? (
+                <Input
+                  autoFocus
+                  defaultValue={lead.company}
+                  onBlur={(e) => handleInlineUpdate(leadId, "company", e.target.value)}
+                  className="h-8 text-sm font-bold"
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setSelectedLeadDrawer(lead)}
+                  className="block max-w-full truncate text-left text-sm font-bold text-foreground hover:text-emerald-600"
+                >
+                  {lead.company || lead.contact || "Unnamed lead"}
+                </button>
+              )}
+              <p className="truncate text-[11px] text-muted-foreground">
+                {[lead.contact && lead.contact !== lead.company ? lead.contact : "", lead.city || ""]
+                  .filter(Boolean)
+                  .join(" · ") || (lead.date || lead.createdAt?.split("T")[0] || "")}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleInlineUpdate(leadId, "isHot", !isHot)}
+              title={isHot ? "Hot Lead! Click to unmark" : "Mark as Hot Lead"}
+              className="-m-1.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg hover:bg-muted"
+            >
+              <Flame
+                className={cn(
+                  "w-4 h-4",
+                  isHot ? "text-orange-500 fill-orange-500" : "text-muted-foreground/40"
+                )}
+              />
+            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="-m-1.5 h-10 w-10 shrink-0 text-muted-foreground">
+                  <MoreHorizontal className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44 text-xs font-semibold">
+                <DropdownMenuItem onClick={() => setSelectedLeadDrawer(lead)}>View Details</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setInlineEditing({ id: leadId, field: "company" })}>
+                  Edit Name
+                </DropdownMenuItem>
+                {status !== "Client Won" && (
+                  <DropdownMenuItem onClick={() => setConvertingLead(lead)} className="text-emerald-600 font-bold">
+                    Convert to Client 🏆
+                  </DropdownMenuItem>
+                )}
+                <div className="h-px bg-border my-1" />
+                <DropdownMenuItem onClick={() => deleteLead(leadId)} className="text-rose-600 focus:text-rose-600">
+                  Delete Lead
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          {/* Contact */}
+          {(lead.phone || lead.email) && (
+            <div className="flex flex-wrap items-center gap-2">
+              {lead.phone && (
+                <>
+                  <a
+                    href={`tel:${lead.phone}`}
+                    className="inline-flex min-h-[40px] items-center gap-1.5 px-2.5 rounded-lg bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 font-mono font-black text-sm tracking-wide border border-emerald-500/20"
+                  >
+                    <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                    {lead.phone}
+                  </a>
+                  <button
+                    type="button"
+                    onClick={(e) => handleOpenWhatsApp(lead.phone || "", e)}
+                    title="Send WhatsApp message"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-emerald-600 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-950"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+              {lead.email && (
+                <a
+                  href={`mailto:${lead.email}`}
+                  className="flex min-w-0 max-w-full items-center gap-1 text-[11px] text-foreground/70 hover:text-emerald-600"
+                >
+                  <Mail className="w-3 h-3 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{lead.email}</span>
+                </a>
+              )}
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-1">
+            {Array.isArray(lead.assignedTo) && lead.assignedTo.length > 0 ? (
+              lead.assignedTo.map((name: string) => (
+                <Badge
+                  key={name}
+                  variant="secondary"
+                  className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold py-0.5 px-1.5"
+                >
+                  {name}
+                </Badge>
+              ))
+            ) : lead.owner ? (
+              <Badge variant="secondary" className="bg-muted text-muted-foreground text-[10px] font-medium">
+                {lead.owner}
+              </Badge>
+            ) : (
+              <span className="text-muted-foreground/60 italic text-[11px]">Unassigned</span>
+            )}
+          </div>
+          </div>
+
+          {/* Column 2: pipeline details */}
+          <div className="min-w-0 space-y-3">
+          {/* Status / Source / Category */}
+          <div className="grid grid-cols-2 @3xl:grid-cols-3 gap-2">
+            <div className="col-span-2 @3xl:col-span-1 space-y-1">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Status</p>
+              <select
+                value={availableStages.includes(status) ? status : availableStages[0] || "New Lead"}
+                onChange={(e) => onStatusSelect(lead, e.target.value)}
+                className={cn(selectCls, "font-bold", STAGE_COLORS[status] || "")}
+              >
+                {availableStages.map((st) => (
+                  <option key={st} value={st} className="bg-popover text-foreground font-semibold">
+                    {st}{st.toLowerCase().includes("won") ? " 🏆" : ""}
+                  </option>
+                ))}
+              </select>
+              {status === "On Hold" && lead.holdResumeDate && (
+                <p className="text-[10px] text-amber-600 font-bold">Resume: {lead.holdResumeDate}</p>
+              )}
+            </div>
+            <div className="min-w-0 space-y-1">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Source</p>
+              <select
+                value={availableSources.includes(lead.source as string) ? (lead.source as string) : "Others"}
+                onChange={(e) => handleInlineUpdate(leadId, "source", e.target.value)}
+                className={selectCls}
+              >
+                {Array.from(new Set([...availableSources, "Others"])).map((s) => (
+                  <option key={s} value={s} className="bg-popover text-foreground">{s}</option>
+                ))}
+              </select>
+            </div>
+            <div className="min-w-0 space-y-1">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Category</p>
+              <select
+                value={availableCategories.includes(lead.category as string) ? (lead.category as string) : "Others"}
+                onChange={(e) => handleInlineUpdate(leadId, "category", e.target.value)}
+                className={selectCls}
+              >
+                {Array.from(new Set([...availableCategories, "Others"])).map((c) => (
+                  <option key={c} value={c} className="bg-popover text-foreground">{c}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Income / Created / Assigned */}
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="min-w-0 rounded-xl bg-muted/30 px-2.5 py-2">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Expected</p>
+              {inlineEditing?.id === leadId && inlineEditing?.field === "expectedIncome" ? (
+                <Input
+                  autoFocus
+                  defaultValue={lead.expectedIncome || String(lead.budget || "")}
+                  onBlur={(e) => handleInlineUpdate(leadId, "expectedIncome", e.target.value)}
+                  className="mt-0.5 h-8 text-xs font-bold"
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setInlineEditing({ id: leadId, field: "expectedIncome" })}
+                  className="block max-w-full truncate text-left font-bold text-foreground"
+                >
+                  {income}
+                </button>
+              )}
+            </div>
+            <div className="min-w-0 rounded-xl bg-muted/30 px-2.5 py-2">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Created</p>
+              {inlineEditing?.id === leadId && inlineEditing?.field === "date" ? (
+                <Input
+                  type="date"
+                  autoFocus
+                  defaultValue={lead.date || lead.createdAt?.split("T")[0] || today}
+                  onBlur={(e) => handleInlineUpdate(leadId, "date", e.target.value)}
+                  className="mt-0.5 h-8 text-xs"
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setInlineEditing({ id: leadId, field: "date" })}
+                  className="block max-w-full truncate text-left font-semibold text-foreground"
+                >
+                  {lead.date || lead.createdAt?.split("T")[0] || "—"}
+                  <span className="block truncate text-[10px] font-normal text-muted-foreground">
+                    {lead.createdByUserName || "Admin"}
+                  </span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Remarks */}
+          {inlineEditing?.id === leadId && inlineEditing?.field === "remarks" ? (
+            <Input
+              autoFocus
+              defaultValue={lead.remarks}
+              onBlur={(e) => handleInlineUpdate(leadId, "remarks", e.target.value)}
+              className="h-9 text-xs"
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setInlineEditing({ id: leadId, field: "remarks" })}
+              className="block w-full rounded-lg px-2 py-1.5 text-left text-xs italic text-muted-foreground hover:bg-muted/60 line-clamp-2"
+            >
+              {lead.remarks ? `"${lead.remarks}"` : "Add remark"}
+            </button>
+          )}
+
+          </div>
+
+          {/* Column 3: follow-ups (full-width row in the two-column layout) */}
+          <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3 @md:col-span-2 @3xl:col-span-1 @3xl:flex-col @3xl:items-stretch @3xl:border-t-0 @3xl:pt-0">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setSelectedFollowUpLead(lead)}
+              className="h-10 flex-1 min-w-[140px] @3xl:flex-none @3xl:min-w-0text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 gap-1.5 rounded-lg"
+            >
+              <MessageSquare className="w-3.5 h-3.5 shrink-0" />
+              Follow-ups ({followUpList.length})
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => handleQuickCNR(lead)}
+              title="Record Call Not Received & set follow-up for tomorrow"
+              className="h-10 px-3 text-[11px] font-black text-amber-700 dark:text-amber-300 bg-amber-500/10 border-amber-500/30 rounded-lg"
+            >
+              CNR
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => handleQuickCallLater(lead)}
+              title="Client Busy - Remind in 2 hours"
+              className="h-10 px-3 text-[11px] font-bold text-blue-700 dark:text-blue-300 bg-blue-500/10 border-blue-500/30 rounded-lg"
+            >
+              Later
+            </Button>
+            {nextDateStr && (
+              <span
+                className={cn(
+                  "w-full text-[10px] font-bold uppercase",
+                  isMissed
+                    ? "text-rose-600 dark:text-rose-400"
+                    : isDueToday
+                      ? "text-amber-600 dark:text-amber-400"
+                      : "text-muted-foreground normal-case font-medium"
+                )}
+              >
+                {isMissed ? `Missed (${nextDateStr})` : isDueToday ? "Due Today" : `Next: ${nextDateStr}`}
+              </span>
+            )}
+          </div>
+        </div>
+      );
+    };
+
     return (
       <div className="space-y-3">
-        <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-xs">
+        {/* Card view: phones, tablets and small laptops (the table needs ~1020px) */}
+        <div className="xl:hidden space-y-3">
+          <label className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-3.5 py-2.5 text-xs font-semibold text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={isAllSelected}
+              onChange={toggleSelectAll}
+              className="rounded border-border text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+            />
+            Select all ({filtered.length})
+          </label>
+          {categoriesInUse.map((catName) => {
+            const catLeads = paginatedLeads.filter((l) => ((l.category as string) || "Others") === catName);
+            if (catLeads.length === 0) return null;
+            const isCollapsed = !!collapsedCategories[catName];
+            return (
+              <div key={catName} className="space-y-2.5">
+                <button
+                  type="button"
+                  onClick={() => toggleCategory(catName)}
+                  className="flex w-full items-center gap-2 rounded-xl bg-muted/40 px-3 py-2 text-left font-bold text-foreground/80"
+                >
+                  {isCollapsed ? (
+                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                  )}
+                  <span className="text-xs uppercase tracking-wider">{catName}</span>
+                  <Badge variant="secondary" className="text-[10px] h-5 px-2 bg-background font-bold border border-border">
+                    {catLeads.length}
+                  </Badge>
+                </button>
+                {!isCollapsed && (
+                  <div className="@container space-y-3">{catLeads.map(renderLeadCard)}</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="hidden xl:block overflow-x-auto rounded-2xl border border-border bg-card shadow-xs">
           <table className="w-full min-w-[1020px] text-left border-collapse text-xs">
             <thead>
               <tr className="bg-muted/50 border-b border-border text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
@@ -1174,7 +1535,7 @@ export function SalesLeads({
             </div>
 
             {totalPages > 1 && (
-              <div className="flex items-center gap-1">
+              <div className="flex flex-wrap items-center justify-center gap-1">
                 <Button
                   variant="outline"
                   size="sm"
@@ -1223,6 +1584,58 @@ export function SalesLeads({
     );
   };
 
+  // Achieved amount for a target: stored achievement or won leads in its period, whichever is higher
+  const getTargetProgress = (t: (typeof targets)[number]) => {
+    const empName = (t.employeeName || "").toLowerCase();
+    const dynamicAchieved = leads
+      .filter((l) => {
+        const isWon =
+          l.status === "Client Won" ||
+          l.status === "Won" ||
+          l.stage === "Client Won" ||
+          l.stage === "Won";
+        if (!isWon) return false;
+
+        const assignedArr = Array.isArray(l.assignedTo)
+          ? l.assignedTo
+          : [l.assignedTo || l.owner || ""];
+        const matchesEmp =
+          !empName ||
+          assignedArr.some((a: string) => String(a).toLowerCase().includes(empName)) ||
+          (l.owner && String(l.owner).toLowerCase().includes(empName));
+        if (!matchesEmp) return false;
+
+        if (t.type === "Monthly" && t.month && t.year) {
+          const closed = l.closedDate || l.date || l.createdAt;
+          if (closed) {
+            const d = new Date(closed);
+            const monthNames = [
+              "January", "February", "March", "April", "May", "June",
+              "July", "August", "September", "October", "November", "December"
+            ];
+            if (monthNames[d.getMonth()] !== t.month || d.getFullYear() !== Number(t.year)) {
+              return false;
+            }
+          }
+        }
+        return true;
+      })
+      .reduce((sum, l) => {
+        // Audio 8 Rule: Prioritize net_amount (excluding GST), fallback to deal_value
+        const val =
+          Number(l.netAmount ?? l.net_amount ?? l.dealValue ?? l.deal_value ?? l.budget) ||
+          parseFloat(String(l.expectedIncome || "").replace(/[^0-9.]/g, "")) ||
+          0;
+        return sum + val;
+      }, 0);
+
+    const achieved = t.currentAchievement
+      ? Math.max(t.currentAchievement, dynamicAchieved)
+      : dynamicAchieved;
+    const pct = t.targetAmount > 0 ? (achieved / t.targetAmount) * 100 : 0;
+    return { achieved, pct };
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Header */}
@@ -1263,18 +1676,18 @@ export function SalesLeads({
       </div>
 
       {/* KPI Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {stats.map((st, i) => (
           <Card key={i} className="border-border bg-card shadow-xs overflow-hidden">
-            <CardContent className="p-5 flex items-center justify-between">
-              <div className="space-y-1">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            <CardContent className="p-3.5 sm:p-5 flex items-start sm:items-center justify-between gap-2">
+              <div className="min-w-0 space-y-1">
+                <p className="truncate text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                   {st.title}
                 </p>
-                <p className="text-2xl font-black text-foreground">{st.value}</p>
-                <p className="text-[11px] font-semibold text-muted-foreground">{st.sub}</p>
+                <p className="truncate text-lg sm:text-2xl font-black text-foreground">{st.value}</p>
+                <p className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground line-clamp-2">{st.sub}</p>
               </div>
-              <div className={cn("p-3 rounded-2xl", st.bg)}>{st.icon}</div>
+              <div className={cn("hidden min-[400px]:block shrink-0 p-2.5 sm:p-3 rounded-2xl", st.bg)}>{st.icon}</div>
             </CardContent>
           </Card>
         ))}
@@ -1284,9 +1697,9 @@ export function SalesLeads({
       {activeTab !== "targets" && (
         <form
           onSubmit={handleQuickAdd}
-          className="bg-card p-3 rounded-2xl border border-border shadow-xs flex flex-wrap items-center gap-3"
+          className="bg-card p-3 rounded-2xl border border-border shadow-xs grid grid-cols-2 gap-2.5 sm:flex sm:flex-wrap sm:items-center sm:gap-3"
         >
-          <div className="flex-1 min-w-[200px]">
+          <div className="col-span-2 sm:col-span-1 sm:flex-1 sm:min-w-[200px]">
             <input
               type="text"
               placeholder="Company / Contact Name (Optional)..."
@@ -1295,7 +1708,7 @@ export function SalesLeads({
               className="w-full min-h-[44px] sm:min-h-0 text-xs font-semibold bg-muted/40 border border-border rounded-xl px-3 py-2 outline-none focus:border-emerald-500 focus:bg-background transition-all placeholder:text-muted-foreground text-foreground"
             />
           </div>
-          <div className="w-full sm:w-[200px]">
+          <div className="col-span-2 sm:col-span-1 w-full sm:w-[200px]">
             <input
               ref={phoneInputRef}
               type="tel"
@@ -1340,7 +1753,7 @@ export function SalesLeads({
           <Button
             type="submit"
             disabled={isQuickAdding || !quickAddPhone.trim()}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold px-4 w-full sm:w-auto justify-center min-h-[44px] sm:min-h-0 sm:h-9 rounded-xl gap-1.5 transition-all shadow-xs"
+            className="col-span-2 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold px-4 w-full sm:w-auto justify-center min-h-[44px] sm:min-h-0 sm:h-9 rounded-xl gap-1.5 transition-all shadow-xs"
           >
             <Plus className="w-3.5 h-3.5" />
             {isQuickAdding ? "Adding..." : "Quick Add"}
@@ -1355,9 +1768,9 @@ export function SalesLeads({
             <span className="font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-full">
               {selectedLeads.length} Selected
             </span>
-            <span className="text-muted-foreground">Select an operation to apply in bulk:</span>
+            <span className="hidden sm:inline text-muted-foreground">Select an operation to apply in bulk:</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               size="sm"
               onClick={() => setIsBulkAssignOpen(true)}
@@ -1387,9 +1800,9 @@ export function SalesLeads({
 
       {/* 5 Tabs & Filters */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 bg-card p-2.5 rounded-2xl border border-border shadow-xs">
+        <div className="flex flex-col 2xl:flex-row 2xl:items-center 2xl:justify-between gap-3 bg-card p-2.5 rounded-2xl border border-border shadow-xs min-w-0">
           {/* Tab buttons */}
-          <TabsList className="bg-muted/60 p-1 rounded-xl h-auto flex flex-nowrap overflow-x-auto max-w-full shrink-0">
+          <TabsList className="bg-muted/60 p-1 rounded-xl h-auto flex flex-nowrap justify-start overflow-x-auto max-w-full shrink-0 scrollbar-none">
             <TabsTrigger
               value="overdue"
               className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs px-3.5 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 whitespace-nowrap shrink-0 min-h-[44px] sm:min-h-0"
@@ -1426,7 +1839,7 @@ export function SalesLeads({
 
           {/* Search & Filters */}
           {activeTab !== "targets" && (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
               {/* Today Quick Toggle Pill */}
               <Button
                 type="button"
@@ -1434,7 +1847,7 @@ export function SalesLeads({
                 variant={dateFilter === "today" ? "default" : "outline"}
                 onClick={() => setDateFilter((prev) => (prev === "today" ? "all" : "today"))}
                 className={cn(
-                  "h-9 text-xs font-bold gap-1.5 px-3 rounded-xl transition-all",
+                  "min-h-[44px] sm:min-h-0 sm:h-9 text-xs font-bold gap-1.5 px-3 rounded-xl transition-all",
                   dateFilter === "today"
                     ? "bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs"
                     : "border-border text-foreground hover:bg-muted"
@@ -1445,13 +1858,13 @@ export function SalesLeads({
                 Today ({todayLeadsCount})
               </Button>
 
-              <div className="relative w-full sm:w-48">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-muted-foreground" />
+              <div className="relative col-span-2 order-first sm:order-none w-full sm:w-48">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   placeholder="Search leads..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9 h-9 text-xs bg-muted/30 border-border"
+                  className="pl-9 min-h-[44px] sm:min-h-0 sm:h-9 text-xs bg-muted/30 border-border"
                 />
               </div>
 
@@ -1539,7 +1952,7 @@ export function SalesLeads({
 
         {/* Tab 5: Targets & Performance */}
         <TabsContent value="targets" className="mt-0">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
             {/* Set Target Form */}
             <Card className="border-border bg-card shadow-xs">
               <CardHeader className="border-b border-border pb-4">
@@ -1547,7 +1960,7 @@ export function SalesLeads({
                   Set Sales Target
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-5 space-y-4">
+              <CardContent className="p-4 sm:p-5 space-y-4">
                 <form onSubmit={handleSetTarget} className="space-y-4">
                   <div className="space-y-1.5">
                     <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -1701,8 +2114,8 @@ export function SalesLeads({
             </Card>
 
             {/* Targets Performance Table */}
-            <Card className="lg:col-span-2 border-border bg-card shadow-xs overflow-hidden">
-              <CardHeader className="border-b border-border flex flex-row items-center justify-between pb-4">
+            <Card className="xl:col-span-2 min-w-0 border-border bg-card shadow-xs overflow-hidden">
+              <CardHeader className="border-b border-border flex flex-row flex-wrap items-center justify-between gap-2 pb-4">
                 <CardTitle className="text-sm font-bold text-foreground">
                   Performance & Leaderboard
                 </CardTitle>
@@ -1716,7 +2129,57 @@ export function SalesLeads({
                 </Button>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="overflow-x-auto">
+                <div className="md:hidden divide-y divide-border/60">
+                  {targets.length === 0 ? (
+                    <p className="py-10 px-4 text-center text-xs text-muted-foreground italic">
+                      No sales targets recorded yet. Use the form to set a target.
+                    </p>
+                  ) : (
+                    targets.map((t, idx) => {
+                      const { achieved, pct } = getTargetProgress(t);
+                      return (
+                        <div key={idx} className="p-4 space-y-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-9 h-9 shrink-0 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs">
+                              {(t.employeeName || "SR").substring(0, 2).toUpperCase()}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-bold text-foreground">{t.employeeName || "Sales Rep"}</p>
+                              <p className="truncate text-[10px] text-muted-foreground uppercase">
+                                {t.category || "Overall"} · {t.type === "Custom" ? `${t.startDate} - ${t.endDate}` : `${t.month} ${t.year}`}
+                              </p>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeleteTarget(t.id || t._id)}
+                              className="h-10 w-10 shrink-0 text-muted-foreground hover:text-rose-600"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          <div className="flex items-end justify-between gap-2 text-xs">
+                            <div>
+                              <p className="text-[10px] font-bold uppercase text-muted-foreground">Achieved / Target</p>
+                              <p className="font-bold">
+                                <span className="text-emerald-600">₹{achieved.toLocaleString()}</span>
+                                <span className="text-muted-foreground"> / ₹{Number(t.targetAmount || 0).toLocaleString()}</span>
+                              </p>
+                            </div>
+                            <span className="text-base font-extrabold text-foreground">{pct.toFixed(0)}%</span>
+                          </div>
+                          <div className="h-2 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className={cn("h-full rounded-full", pct >= 100 ? "bg-emerald-500" : "bg-blue-500")}
+                              style={{ width: `${Math.min(pct, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full min-w-[640px] text-left border-collapse text-xs">
                     <thead>
                       <tr className="bg-muted/50 border-b border-border text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
@@ -1738,53 +2201,7 @@ export function SalesLeads({
                         </tr>
                       ) : (
                         targets.map((t, idx) => {
-                          const empName = (t.employeeName || "").toLowerCase();
-                          const dynamicAchieved = leads
-                            .filter((l) => {
-                              const isWon =
-                                l.status === "Client Won" ||
-                                l.status === "Won" ||
-                                l.stage === "Client Won" ||
-                                l.stage === "Won";
-                              if (!isWon) return false;
-
-                              const assignedArr = Array.isArray(l.assignedTo)
-                                ? l.assignedTo
-                                : [l.assignedTo || l.owner || ""];
-                              const matchesEmp =
-                                !empName ||
-                                assignedArr.some((a: string) => String(a).toLowerCase().includes(empName)) ||
-                                (l.owner && String(l.owner).toLowerCase().includes(empName));
-                              if (!matchesEmp) return false;
-
-                              if (t.type === "Monthly" && t.month && t.year) {
-                                const closed = l.closedDate || l.date || l.createdAt;
-                                if (closed) {
-                                  const d = new Date(closed);
-                                  const monthNames = [
-                                    "January", "February", "March", "April", "May", "June",
-                                    "July", "August", "September", "October", "November", "December"
-                                  ];
-                                  if (monthNames[d.getMonth()] !== t.month || d.getFullYear() !== Number(t.year)) {
-                                    return false;
-                                  }
-                                }
-                              }
-                              return true;
-                            })
-                            .reduce((sum, l) => {
-                              // Audio 8 Rule: Prioritize net_amount (excluding GST), fallback to deal_value
-                              const val =
-                                Number(l.netAmount ?? l.net_amount ?? l.dealValue ?? l.deal_value ?? l.budget) ||
-                                parseFloat(String(l.expectedIncome || "").replace(/[^0-9.]/g, "")) ||
-                                0;
-                              return sum + val;
-                            }, 0);
-
-                          const achieved = t.currentAchievement
-                            ? Math.max(t.currentAchievement, dynamicAchieved)
-                            : dynamicAchieved;
-                          const pct = t.targetAmount > 0 ? (achieved / t.targetAmount) * 100 : 0;
+                          const { achieved, pct } = getTargetProgress(t);
                           return (
                             <tr key={idx} className="hover:bg-muted/40 transition-colors">
                               <td className="px-5 py-3.5">
@@ -1907,7 +2324,7 @@ export function SalesLeads({
         open={selectedLeadDrawer !== null}
         onOpenChange={(open) => !open && setSelectedLeadDrawer(null)}
       >
-        <SheetContent className="w-full max-w-full sm:max-w-md p-6 overflow-y-auto bg-card border-l border-border [&>button]:hidden shadow-2xl">
+        <SheetContent className="w-full max-w-full sm:max-w-md p-4 sm:p-6 overflow-y-auto bg-card border-l border-border [&>button]:hidden shadow-2xl">
           <button
             onClick={() => setSelectedLeadDrawer(null)}
             className="absolute right-4 top-4 rounded-lg p-1.5 hover:bg-muted text-muted-foreground"
@@ -1920,7 +2337,7 @@ export function SalesLeads({
                 <span className="text-[10px] font-bold tracking-widest text-emerald-600 uppercase bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                   {selectedLeadDrawer.status || selectedLeadDrawer.stage}
                 </span>
-                <h2 className="mt-2 text-xl font-black text-foreground">
+                <h2 className="mt-2 pr-10 text-xl font-black text-foreground break-words">
                   {selectedLeadDrawer.company || selectedLeadDrawer.contact}
                 </h2>
                 <p className="text-xs text-muted-foreground">
@@ -1928,14 +2345,14 @@ export function SalesLeads({
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 rounded-xl border border-border bg-muted/20">
+              <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-3">
+                <div className="min-w-0 p-3 rounded-xl border border-border bg-muted/20">
                   <p className="text-[10px] font-bold uppercase text-muted-foreground">Phone</p>
                   <p className="text-xs font-bold text-foreground mt-0.5">
                     {selectedLeadDrawer.phone || "—"}
                   </p>
                 </div>
-                <div className="p-3 rounded-xl border border-border bg-muted/20">
+                <div className="min-w-0 p-3 rounded-xl border border-border bg-muted/20">
                   <p className="text-[10px] font-bold uppercase text-muted-foreground">Email</p>
                   <p className="text-xs font-bold text-foreground mt-0.5 truncate">
                     {selectedLeadDrawer.email || "—"}

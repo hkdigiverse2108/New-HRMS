@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import { 
   ShieldAlert, 
   Activity, 
@@ -221,7 +222,7 @@ export function ActivityLogs() {
   const isAdmin = ["admin", "superadmin", "hr"].includes(userRole);
 
   // Filters State
-  const [activeCategory, setActiveCategory] = useState<string>("All");
+  const [activeCategory, setActiveCategory] = usePersistentState<string>("activityLogs.category", "All");
   const [severityFilter, setSeverityFilter] = useState<string>("All");
   const [userFilter, setUserFilter] = useState<string>("All");
   const [departmentFilter, setDepartmentFilter] = useState<string>("All");

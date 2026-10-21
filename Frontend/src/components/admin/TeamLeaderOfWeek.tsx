@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import { 
   Award, Plus, Calendar, Settings, Sparkles, ArrowUpDown, UserPlus, Play, Edit3, Save, Trash2 
 } from "lucide-react";
@@ -27,7 +28,7 @@ const MOCK_PARTICIPANTS = [
 
 export function TeamLeaderOfWeek() {
   const [selectedMeetingId, setSelectedMeetingId] = useState("1");
-  const [viewMode, setViewMode] = useState<"grouped" | "flat">("flat");
+  const [viewMode, setViewMode] = usePersistentState<"grouped" | "flat">("teamLeaderOfWeek.view", "flat");
   const [sortBy, setSortBy] = useState<"total" | "name">("total");
 
   const totalMaxMarks = MOCK_TOPICS.reduce((sum, t) => sum + t.maxMarks, 0);

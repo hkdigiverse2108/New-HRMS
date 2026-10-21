@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import {
   format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays,
   startOfWeek, endOfWeek, startOfMonth, endOfMonth,
@@ -70,7 +71,7 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
   const canViewTeam = canViewTeamCalendars(user?.role || (user as any)?.system_role);
   const selfId = String(user?.employee_id || user?.employeeId || user?.id || "");
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [view, setView] = useState<ViewType>("Month");
+  const [view, setView] = usePersistentState<ViewType>("schedule.view", "Month");
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(isNew || false);

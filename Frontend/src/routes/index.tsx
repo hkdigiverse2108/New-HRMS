@@ -146,6 +146,8 @@ export function Index() {
         } catch {}
       } else if (pathname !== "/" && pathname !== "/login") {
         try {
+          // Address bar is reset to '/', so remember this page for the next refresh
+          localStorage.setItem("activeSidebarTab", pathname + search);
           window.history.replaceState({}, '', '/');
         } catch {}
       }

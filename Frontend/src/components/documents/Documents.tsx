@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import { cn } from "@/lib/utils";
 import { 
   FileText, 
@@ -40,7 +41,7 @@ export function Documents({ setActive }: { setActive?: (path: string) => void })
     return true;
   });
 
-  const [activeTab, setActiveTab] = useState("submitted");
+  const [activeTab, setActiveTab] = usePersistentState("documents.tab", "submitted");
 
   return (
     <div className="w-full space-y-8 animate-in fade-in duration-500">

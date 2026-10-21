@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import { Search, X, Filter, LayoutGrid, List, MoreVertical, Phone, Mail, Plus, MapPin, Edit2, Trash2, Key, UserMinus, UserCheck, Shield, FileText, LogOut, Clock, Columns, Eye, EyeOff, Users, Zap, AlertTriangle } from "lucide-react";
 import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
@@ -94,7 +95,7 @@ useEffect(() => {
 }, [selfId, fetchEmployeeById]);
   const { departments } = useDepartments();
   const { canCreate, canUpdate, canDelete, isAdmin } = useModulePermissions("/employees/list");
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = usePersistentState<'grid' | 'list'>("employeeList.view", 'grid');
   const [searchQuery, setSearchQuery] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(isNew || false);
   const [selectedDept, setSelectedDept] = useState<string>("All");

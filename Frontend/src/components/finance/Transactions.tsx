@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import { Download, Plus, Wallet, Building2, Filter, ArrowDownLeft, ArrowUpRight, ArrowRight, Edit3, Trash2, X, Sparkles, Upload, CheckCircle2, Paperclip, LayoutGrid, Landmark } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -109,7 +110,7 @@ export function Transactions() {
   const [debtForm, setDebtForm] = useState(emptyDebtForm);
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeAccountTab, setActiveAccountTab] = useState<AccountTab>("overview");
+  const [activeAccountTab, setActiveAccountTab] = usePersistentState<AccountTab>("transactions.tab", "overview");
   // Bank tab account filter: "all" or a bank account id
   const [selectedBankId, setSelectedBankId] = useState("all");
   const [creditAccount, setCreditAccount] = useState("cash");

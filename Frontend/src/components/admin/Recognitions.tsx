@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import { 
   Trophy, Users, History, Settings, Edit, Play, CheckCircle2, Copy, Check, Plus 
 } from "lucide-react";
@@ -26,7 +27,7 @@ const MONTHS = [
 ];
 
 export function Recognitions() {
-  const [activeTab, setActiveTab] = useState<"criteria" | "leaderboard">("criteria");
+  const [activeTab, setActiveTab] = usePersistentState<"criteria" | "leaderboard">("recognitions.tab", "criteria");
   const [selectedMonth, setSelectedMonth] = useState<string>("August");
   const [selectedYear, setSelectedYear] = useState<string>("2025");
 

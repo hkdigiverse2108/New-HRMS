@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import {
   X, Plus, Filter, LayoutGrid, List as ListIcon, MoreHorizontal, Calendar, Clock,
   CheckCircle2, AlertCircle, Hourglass, ArrowRightLeft, RefreshCw, Zap, Trash2,
@@ -208,7 +209,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   const [categoryFilter, setCategoryFilter] = useState<string>("All");
 
   // Phase 2: TL / Head / Management My Tasks vs All Tasks + Dept & Person Filter
-  const [mainViewMode, setMainViewMode] = useState<"my_tasks" | "all_tasks">("all_tasks");
+  const [mainViewMode, setMainViewMode] = usePersistentState<"my_tasks" | "all_tasks">("tasks.view", "all_tasks");
   const [departmentFilter, setDepartmentFilter] = useState<string>("All");
   const [personFilter, setPersonFilter] = useState<string>("All");
 

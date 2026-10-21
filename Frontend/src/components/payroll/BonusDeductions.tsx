@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import { formatCurrency } from "./payroll-data";
 import { Plus, Gift, MinusCircle, Loader2, X, Check } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
@@ -106,7 +107,7 @@ export function BonusDeductions() {
   const role = String((user as any)?.role || (user as any)?.system_role || "").toLowerCase().trim();
   const canApprove = ["admin", "subadmin", "super admin", "superadmin"].includes(role);
 
-  const [activeTab, setActiveTab] = useState<"All" | "Bonuses" | "Deductions">("All");
+  const [activeTab, setActiveTab] = usePersistentState<"All" | "Bonuses" | "Deductions">("bonusDeductions.tab", "All");
   const [searchTerm, setSearchTerm] = useState("");
   const [sourceFilter, setSourceFilter] = useState("all");
   const [month, setMonth] = useState(currentMonth());

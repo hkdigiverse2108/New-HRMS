@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import { 
   X, Search, AlertTriangle, MessageSquareWarning, ShieldAlert, 
   Plus, IndianRupee, Trophy, Trash2, RefreshCw, Loader2, Calendar, Pencil, Save
@@ -103,7 +104,7 @@ export function Penalties() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Filters
-  const [activeTab, setActiveTab] = useState<"All" | RecordType>("All");
+  const [activeTab, setActiveTab] = usePersistentState<"All" | RecordType>("penalties.tab", "All");
   const [statusFilter, setStatusFilter] = useState<"All" | RecordStatus>("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedEmployeeFilter, setSelectedEmployeeFilter] = useState<string>("All");

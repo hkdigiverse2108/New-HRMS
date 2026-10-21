@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import { Vote, Trophy, Award } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Elections } from "./Elections";
@@ -18,13 +18,8 @@ const ELECTION_TABS = [
 type ElectionTabId = typeof ELECTION_TABS[number]["id"];
 
 export function ElectionsHub({ initialTab = "elections" }: ElectionsHubProps) {
-  const [activeTab, setActiveTab] = useState<ElectionTabId>(initialTab);
-
-  useEffect(() => {
-    if (initialTab) {
-      setActiveTab(initialTab);
-    }
-  }, [initialTab]);
+  // Each route remounts the hub, so keying by initialTab restores the last tab only on refresh of the same route
+  const [activeTab, setActiveTab] = usePersistentState<ElectionTabId>(`electionsHub.${initialTab}`, initialTab);
 
   return (
     <div className="space-y-6">

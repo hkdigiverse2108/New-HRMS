@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from "react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import { cn } from "@/lib/utils";
 import { DialogClose, Dialog, DialogContent } from "@/components/ui/dialog";
 import {
@@ -138,7 +139,7 @@ function ToggleSwitch({ active, onChange }: { active: boolean; onChange?: (newVa
 export function SalesSettings() {
   const { stages, setStages, leads, todayFollowUps, salesSettings, updateSalesSettings, fetchLeads, fetchSummary } = useSales();
   const { employees } = useEmployeesContext();
-  const [activeTab, setActiveTab] = useState<Tab>("Lead Categories");
+  const [activeTab, setActiveTab] = usePersistentState<Tab>("salesSettings.tab", "Lead Categories");
 
   // Assignment Rules & Eligible Owners State (Audio 7 & 8)
   const [assignmentRules, setAssignmentRules] = useState<any[]>(() => {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import { Check, X, Calendar, Clock, ChevronDown, CalendarDays, Activity, Plus, AlertCircle, RefreshCw, Upload, FileText, Trash2, Paperclip, Edit2, Eye, Users, User } from "lucide-react";
 import { DialogClose, Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -189,7 +190,7 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
 
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<LeaveStatus>("Pending");
+  const [activeTab, setActiveTab] = usePersistentState<LeaveStatus>("leaveRequests.tab", "Pending");
   const [pendingCount, setPendingCount] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddOpen, setIsAddOpen] = useState(isNew || false);

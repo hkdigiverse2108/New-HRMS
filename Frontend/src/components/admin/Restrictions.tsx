@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import { Shield, ShieldAlert, CheckCircle, Monitor, Send, ShieldCheck, AlertTriangle, Plus, Trash2, RefreshCw } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { moveToRecycleBin } from "@/lib/recycle-bin";
@@ -19,7 +20,7 @@ const mockAlerts = [
 ];
 
 export function Restrictions() {
-  const [activeTab, setActiveTab] = useState<"pcs" | "broadcast" | "alerts">("pcs");
+  const [activeTab, setActiveTab] = usePersistentState<"pcs" | "broadcast" | "alerts">("restrictions.tab", "pcs");
   const [searchQuery, setSearchQuery] = useState("");
   const [editingPc, setEditingPc] = useState<any>(null);
   

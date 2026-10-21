@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import { Layers, Briefcase, Building2 } from "lucide-react";
 import { DepartmentsManager } from "./DepartmentsManager";
 import { SubDepartmentsManager } from "./SubDepartmentsManager";
@@ -7,7 +8,7 @@ import { useDepartments } from "./DepartmentContext";
 import { cn } from "@/lib/utils";
 
 export function DepartmentDesignationManager({ hideHeader = false }: { hideHeader?: boolean } = {}) {
-  const [activeTab, setActiveTab] = useState<"sub_departments" | "designations" | "departments">("sub_departments");
+  const [activeTab, setActiveTab] = usePersistentState<"sub_departments" | "designations" | "departments">("departmentSetup.tab", "sub_departments");
   const [subDeptCountMap, setSubDeptCountMap] = useState<Record<string, number>>({});
   const { departments, refreshDepartments } = useDepartments();
 

@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import { X, Download, MoreHorizontal, Clock, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Coffee, Briefcase, Award, FileSpreadsheet, RefreshCw, Search, Check, Users, ChevronDown, RotateCcw } from "lucide-react";
 import { DateRange } from "react-day-picker";
 import { Calendar } from "@/components/ui/calendar";
@@ -132,7 +133,7 @@ export function AttendanceList() {
   const { employees } = useEmployeesContext();
   const { user } = useAuth();
 
-  const [activeView, setActiveView] = useState<"daily" | "eom">("daily");
+  const [activeView, setActiveView] = usePersistentState<"daily" | "eom">("attendance.view", "daily");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<AttendanceStatus | "All">("All");
   const userRole = String(user?.role || (user as any)?.system_role || "").toLowerCase().trim();

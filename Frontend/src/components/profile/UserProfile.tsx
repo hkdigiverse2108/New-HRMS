@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import { User, Briefcase, CreditCard, FileText, Mail, Phone, MapPin, Building, Calendar, Key, Shield, CheckCircle2, ChevronRight, Edit2, Eye, EyeOff, Lock, Bell, Camera, PenTool } from "lucide-react";
 import { cn, formatDate } from "@/lib/utils";
 import { useEmployeesContext } from "@/components/employees/EmployeeContext";
@@ -65,7 +66,7 @@ export function UserProfile() {
   const roleLower = String(authUser?.role || (authUser as any)?.work_details?.system_role || "").trim().toLowerCase();
   const isAdminOrHR = roleLower === "admin" || roleLower === "superadmin" || roleLower === "hr" || roleLower === "subadmin";
 
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [activeTab, setActiveTab] = usePersistentState<TabType>("profile.tab", 'overview');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);

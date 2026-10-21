@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import { Clock, FileText, ScrollText, ChevronDown, ChevronUp, Calendar, Users, Activity, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { DateRange } from "react-day-picker";
@@ -57,7 +58,7 @@ export function WorkLogs() {
   const [isLoading, setIsLoading] = useState(true);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [searchQuery, setSearchQuery] = useState("");
-  const [viewMode, setViewMode] = useState<"all" | "employee">("all");
+  const [viewMode, setViewMode] = usePersistentState<"all" | "employee">("workLogs.view", "all");
   const [expandedEmployee, setExpandedEmployee] = useState<string | null>(null);
 
   const start = dateRange?.from ? format(dateRange.from, "yyyy-MM-dd") : "";

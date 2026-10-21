@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import { 
   Search, 
   User as UserIcon,
@@ -151,10 +152,10 @@ export function DailyProgress() {
   const isReviewer = canReadProgress || canManageProgress;
 
   // Filter Group Tab: 'leaders_hr' (Team Leaders, Heads, HR - default for Admin) vs 'employees' (Regular Staff)
-  const [groupTab, setGroupTab] = useState<GroupTab>("leaders_hr");
+  const [groupTab, setGroupTab] = usePersistentState<GroupTab>("dailyProgress.groupTab", "leaders_hr");
   // Team Leader (not Admin/HR/Head): own report vs team members' reports
   const showLeaderTabs = isTeamLeader && !(isAdmin || isHr || isHead);
-  const [leaderView, setLeaderView] = useState<"team" | "my">("team");
+  const [leaderView, setLeaderView] = usePersistentState<"team" | "my">("dailyProgress.leaderView", "team");
 
   const [search, setSearch] = useState("");
   // Default = TODAY

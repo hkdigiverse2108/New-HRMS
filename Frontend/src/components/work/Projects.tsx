@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, Fragment } from "react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import { X, Search, Plus, Filter, Check, MoreHorizontal, LayoutGrid, List, Briefcase, Calendar, Clock, Star, Circle, Trash2, Edit2, Archive, ArchiveRestore, ArrowLeft, Users, IndianRupee, FolderGit2, CheckCircle2, Settings2, TrendingUp, MousePointerClick, Target, BarChart3, ChevronDown, User, Building2, CreditCard, FileText, ChevronRight, Video, Instagram, Layers, MessageSquare, Key, Copy, Eye, EyeOff, ExternalLink, Phone, ShieldCheck, Sparkles, Share2, AlertCircle, Sliders, Loader2, UserPlus, UserX, ChevronLeft, Download, Printer } from "lucide-react";
 import { toast } from "@/lib/toast";
 import { cn, formatDate, formatPersonName } from "@/lib/utils";
@@ -1848,7 +1849,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
   const [categories, setCategories] = useState<string[]>([...FIXED_DEPARTMENTS]);
 
-  const [activeTab, setActiveTab] = useState<string>(TABS[0] ?? "Active Projects");
+  const [activeTab, setActiveTab] = usePersistentState<string>("projects.tab", TABS[0] ?? "Active Projects");
   // K1: Brand Division lives outside the 4 tabs (toggle, so the feature stays).
   const [showBrandDivision, setShowBrandDivision] = useState(false);
   const selectTab = (tab: string) => {
