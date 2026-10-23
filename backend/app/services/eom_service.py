@@ -3,10 +3,31 @@ from bson import ObjectId
 import pytz
 import calendar
 from pymongo import UpdateOne
-from dateutil.parser import parse
 from app.database.db import get_database
 from app.redis.service import clear_pattern
 from app.repository.election import ElectionRepository as crud
+
+def parse_date_safely(val):
+    if not val:
+        return None
+    if isinstance(val, datetime):
+        return val
+    if isinstance(val, date):
+        return datetime(val.year, val.month, val.day)
+    s = str(val).strip()
+    if not s:
+        return None
+    try:
+        clean_s = s.replace("Z", "+00:00")
+        return datetime.fromisoformat(clean_s)
+    except Exception:
+        pass
+    for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%Y/%m/%d", "%b %d, %Y", "%d %b %Y"):
+        try:
+            return datetime.strptime(s.split("T")[0].split(" ")[0], fmt)
+        except Exception:
+            pass
+    return None
 
 IST = pytz.timezone('Asia/Kolkata')
 
@@ -727,12 +748,10 @@ async def get_eom_discipline_stats(month_year: str, max_score: float = 10.0):
             return True
         if f"-{month:02d}-{year:04d}" in s or f"/{month:02d}/{year:04d}" in s:
             return True
-        try:
-            from dateutil.parser import parse
-            dt = parse(s)
+        dt = parse_date_safely(s)
+        if dt:
             return dt.year == year and dt.month == month
-        except Exception:
-            return False
+        return False
 
     emp_penalty_map = {}
     for r in all_remarks:
@@ -798,12 +817,10 @@ async def get_eom_work_completion_stats(month_year: str, max_score: float = 10.0
             return True
         if f"-{month:02d}-{year:04d}" in s or f"/{month:02d}/{year:04d}" in s:
             return True
-        try:
-            from dateutil.parser import parse
-            dt = parse(s)
+        dt = parse_date_safely(s)
+        if dt:
             return dt.year == year and dt.month == month
-        except Exception:
-            return False
+        return False
 
     emp_date_ratings = {}
     for r in reports:
@@ -874,12 +891,10 @@ async def get_eom_work_dedication_stats(month_year: str, max_score: float = 10.0
             return True
         if f"-{month:02d}-{year:04d}" in s or f"/{month:02d}/{year:04d}" in s:
             return True
-        try:
-            from dateutil.parser import parse
-            dt = parse(s)
+        dt = parse_date_safely(s)
+        if dt:
             return dt.year == year and dt.month == month
-        except Exception:
-            return False
+        return False
 
     def parse_attendance_hours(r):
         sec = r.get("accumulatedWorkSeconds")
