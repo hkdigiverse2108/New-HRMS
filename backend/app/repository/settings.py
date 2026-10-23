@@ -12,13 +12,6 @@ class SettingsRepository:
 
     @classmethod
     async def get_settings(cls) -> Dict[str, Any]:
-        collection = await cls.get_collection()
-        doc = await collection.find_one({})
-        if doc:
-            doc["_id"] = str(doc["_id"])
-            return doc
-        
-        # Default document if not created yet
         default_doc = {
             "company_name": "Harikrushn DigiVerse LLP",
             "company_address": "FLAT-204, 2nd FLOOR, RS NO-67/1, WING-A, HARIKRUSHANA COMPLEX, OPP. BHAGAT NAGAR, VED, GURUKULROAD, KATARGAM, SURAT- 395004, Gujarat, INDIA...",
@@ -42,9 +35,19 @@ class SettingsRepository:
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow()
         }
-        res = await collection.insert_one(default_doc)
-        default_doc["_id"] = str(res.inserted_id)
-        return default_doc
+        try:
+            collection = await cls.get_collection()
+            doc = await collection.find_one({})
+            if doc:
+                doc["_id"] = str(doc["_id"])
+                return doc
+            
+            res = await collection.insert_one(default_doc)
+            default_doc["_id"] = str(res.inserted_id)
+            return default_doc
+        except Exception as e:
+            default_doc["_id"] = "default"
+            return default_doc
 
     @classmethod
     async def save_or_update_settings(cls, data: dict) -> Dict[str, Any]:

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { FAVICON_STORAGE_KEY, syncFaviconToServiceWorker } from "@/lib/favicon";
-import { api } from "@/lib/api";
+import { api, getAuthToken } from "@/lib/api";
 import { ensureGoogleFonts } from "@/lib/fonts";
 import { DATE_FORMAT_KEY, NAME_FORMAT_KEY, type DateFormatSetting, type NameFormatSetting } from "@/lib/utils";
 
@@ -201,24 +201,33 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setFaviconUrl(b.favicon_url || "");
   };
 
-  // localStorage above only paints the last-known theme quickly; the saved branding wins
+  // Only fetch company branding from server when authenticated; unauthenticated pages (like login) use cached/default branding
   const [brandingSaved, setBrandingSaved] = useState(false);
   useEffect(() => {
-    api.get<Branding | null>("/settings/branding", { showLoader: false, showErrorToast: false, skipAuth: true })
-      .then(b => {
-        if (!b) return;
-        // Date/name formats are read straight from localStorage while rendering, so a format that
-        // someone else changed needs one reload to show up everywhere.
-        const formatsChanged =
-          (localStorage.getItem(DATE_FORMAT_KEY) || "MMM DD, YYYY") !== b.date_format ||
-          (localStorage.getItem(NAME_FORMAT_KEY) || "First Last") !== b.name_format;
-        applyBranding(b);
-        setSaved(b);
-        cacheBranding(b);
-        setBrandingSaved(true);
-        if (formatsChanged) window.location.reload();
-      })
-      .catch(() => {});
+    const fetchBranding = () => {
+      const token = getAuthToken();
+      if (!token) return; // Do not call /settings/branding if user is not logged in
+
+      api.get<Branding | null>("/settings/branding", { showLoader: false, showErrorToast: false, skipAuth: true })
+        .then(b => {
+          if (!b) return;
+          const formatsChanged =
+            (localStorage.getItem(DATE_FORMAT_KEY) || "MMM DD, YYYY") !== b.date_format ||
+            (localStorage.getItem(NAME_FORMAT_KEY) || "First Last") !== b.name_format;
+          applyBranding(b);
+          setSaved(b);
+          cacheBranding(b);
+          setBrandingSaved(true);
+          if (formatsChanged) window.location.reload();
+        })
+        .catch(() => {});
+    };
+
+    fetchBranding();
+
+    const handleAuthChange = () => fetchBranding();
+    window.addEventListener("hrms:auth-changed", handleAuthChange);
+    return () => window.removeEventListener("hrms:auth-changed", handleAuthChange);
   }, []);
 
   const saveBranding = async (b: Branding) => {

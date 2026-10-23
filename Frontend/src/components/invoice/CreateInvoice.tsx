@@ -136,7 +136,7 @@ export function CreateInvoice({
   const [invoiceNumber, setInvoiceNumber] = useState<string>("");
   const [issueDate, setIssueDate] = useState<string>(() => {
     const today = new Date();
-    return today.toISOString().split("T")[0];
+    return today.toISOString().split("T")[0] || "";
   });
 
   // Fetch existing invoice if in Edit Mode

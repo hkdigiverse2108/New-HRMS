@@ -37,6 +37,43 @@ class Settings(BaseSettings):
     FRONTEND_SCHEDULE_URL: str = ""
     FRONTEND_URL: str = "http://localhost:7788"
 
+    # Social Automation Settings (Instagram / AI / Webhooks)
+    META_VERIFY_TOKEN: str = ""
+    META_APP_SECRET: str = ""
+    IG_GRAPH_BASE: str = "https://graph.instagram.com"
+    IG_GRAPH_BASE_URL: str = "https://graph.instagram.com"
+    IG_GRAPH_VERSION: str = "v21.0"
+    SOCIAL_ALLOW_SELF_COMMENTS: bool = False
+    SOCIAL_ENC_KEY: str = ""
+    TOKEN_ENCRYPTION_KEY: str = ""
+    INTERNAL_API_KEY: str = ""
+    N8N_WEBHOOK_SECRET: str = ""
+    INTERNAL_REQUIRE_SIGNATURE: bool = False
+    INTERNAL_ALLOW_REMOTE: bool = False
+    N8N_BASE_URL: str = ""
+    N8N_API_KEY: str = ""
+    SOCIAL_LOG_RETENTION_DAYS: int = 2
+    SOCIAL_LOG_FILE_ENABLED: bool = True
+    PUBLIC_BASE_URL: str = ""
+
+    # Social AI Providers
+    GEMINI_API_KEY: str = ""
+    GROQ_API_KEY_1: str = ""
+    GROQ_API_KEY_2: str = ""
+    GEMINI_SCRIPT_MODEL: str = "gemini-3.1-flash-lite"
+    GEMINI_VIDEO_MODEL: str = "gemini-3.5-flash-lite"
+    GEMINI_MEDIA_MODEL: str = "gemini-3.8-flash"
+    GROQ_TEXT_MODEL: str = "openai/gpt-oss-120b"
+    GROQ_VISION_MODEL: str = "qwen/qwen3.8-27b"
+
+    # Google Drive for Social Automation
+    GOOGLE_SERVICE_ACCOUNT_JSON: str = ""
+
+    # Telegram Adapters (Optional)
+    TELEGRAM_REEL_BOT_TOKEN: str = ""
+    TELEGRAM_CAPTION_BOT_TOKEN: str = ""
+    TELEGRAM_WEBHOOK_SECRET: str = ""
+
     class Config:
         env_file = [
             str(ROOT_DIR / ".env"),

@@ -39,6 +39,7 @@ import {
   Target,
   Trash2,
   Network,
+  Share2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -175,6 +176,23 @@ export const navItems: NavItem[] = [
 
   // 30. Settings
   { title: "Settings", url: "/settings", icon: Settings },
+
+  // 31. Social Automation
+  {
+    title: "Social Automation",
+    url: "/social",
+    icon: Share2,
+    children: [
+      { title: "Dashboard", url: "/social/dashboard" },
+      { title: "Accounts", url: "/social/accounts" },
+      { title: "Keywords", url: "/social/keywords" },
+      { title: "Activity", url: "/social/activity" },
+      { title: "Reel Scripts", url: "/social/scripts" },
+      { title: "Captions & SEO", url: "/social/captions" },
+      { title: "Brand Profiles", url: "/social/brands" },
+      { title: "Settings", url: "/social/settings" },
+    ],
+  },
 ];
 
 export const sectionOrder = [

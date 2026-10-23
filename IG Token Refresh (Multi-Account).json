@@ -1,0 +1,381 @@
+{
+  "name": "IG Token Refresh (Multi-Account)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 4
+            }
+          ]
+        }
+      },
+      "id": "c93bc17d-31e1-49dc-828b-e75d37793348",
+      "name": "Every Monday 04:00 IST",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -912,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "IG_Accounts"
+        },
+        "returnAll": true
+      },
+      "id": "939bcf71-9931-495a-b9de-ebdc96cc5ce6",
+      "name": "Get IG Accounts",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        -688,
+        224
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pick active accounts whose token refresh is due.\n// Due: updated_at missing/invalid OR age >= 50 days (Meta rule: token must be at least 24h old; 50 days is safe)\nconst DAYS = 50;\nconst now = Date.now();\nconst toBool = (v) => v === true || ['true', '1', 'yes', 'y'].includes(String(v ?? '').trim().toLowerCase());\n\nconst out = [];\nfor (const it of $input.all()) {\n  const r = it.json;\n  if (!r || !r.ig_account_id) continue;\n  if (!toBool(r.is_active)) continue;\n  if (!String(r.access_token ?? '').trim()) continue;\n\n  const t = Date.parse(r.updated_at || '');\n  const ageDays = Number.isFinite(t) ? (now - t) / 86400000 : null;\n  if (ageDays !== null && ageDays < DAYS) continue;          // not due yet\n\n  out.push({ json: {\n    ig_account_id: String(r.ig_account_id).trim(),\n    username: String(r.username ?? ''),\n    access_token: String(r.access_token).trim(),\n    age_days: ageDays === null ? null : Math.floor(ageDays),\n    reason: ageDays === null ? 'updated_at missing' : 'age >= ' + DAYS + ' days'\n  } });\n}\nreturn out;   // empty => nothing runs downstream"
+      },
+      "id": "ab813c16-8439-4bcd-a91c-59ed8ff55220",
+      "name": "Select Due Accounts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -464,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://graph.instagram.com/refresh_access_token",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "grant_type",
+              "value": "ig_refresh_token"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $json.access_token }}"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "id": "0f78972c-6e53-4e12-93c3-0cb61d63b46d",
+      "name": "Refresh Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -240,
+        224
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Refresh response -> update payload (the token is not repeated in logs/output beyond new_token)\nconst ctx = $('Select Due Accounts').item.json;\nconst newToken = String($json.access_token ?? '').trim();\nreturn { json: {\n  ig_account_id: ctx.ig_account_id,\n  username: ctx.username,\n  has_token: newToken !== '',\n  new_token: newToken,\n  updated_at: new Date().toISOString(),\n  expires_in: $json.expires_in ?? null,\n  error: newToken ? null : 'Refresh response did not contain an access_token'\n} };"
+      },
+      "id": "b6a225f6-2f2a-4125-b135-385eba946a89",
+      "name": "Build Update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -16,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ccc8b187-7f59-41a0-9925-c38c40c5582c",
+              "leftValue": "={{ $json.has_token }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1e5220ee-7800-44af-9702-747ea4b89817",
+      "name": "Token Received?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        208,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "IG_Accounts"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "ig_account_id",
+              "keyValue": "={{ $json.ig_account_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "access_token": "={{ $json.new_token }}",
+            "updated_at": "={{ $json.updated_at }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "access_token",
+              "displayName": "access_token",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "a724647f-c156-4097-9950-a53163efad94",
+      "name": "Update Account Row",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        432,
+        80
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {},
+      "id": "e4b7652d-0c43-4b62-993a-cd87fb426538",
+      "name": "Token Refreshed (check output)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        656,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Refresh/update failed: only build a log item - the IG_Accounts row is never deleted or modified (token masked)\nlet ctx = {};\nfor (const nm of ['Build Update', 'Select Due Accounts']) {\n  try { const j = $(nm).item.json; if (j && j.ig_account_id) { ctx = j; break; } } catch (e) {}\n}\nconst e = $json.error;\nconst msg = typeof e === 'string' ? e : ((e && (e.message || e.description)) || JSON.stringify($json)).toString();\nlet hint = 'Check the error field.';\nif (/190|expired|invalid|session|oauth/i.test(msg)) hint = 'Token expired/invalid: generate a new long-lived token in Meta for Developers and paste it into IG_Accounts manually.';\nelse if (/24|hour|minimum|too (new|recent)/i.test(msg)) hint = 'Token must be at least 24 hours old - it will be retried next Monday.';\nelse if (/rate|limit|613|\\b4\\b/i.test(msg)) hint = 'Rate limit - it will be retried next Monday.';\nreturn { json: {\n  refresh_failed: true,\n  ig_account_id: $json.ig_account_id || ctx.ig_account_id || null,\n  username: $json.username || ctx.username || null,\n  error: msg.replace(/access_token=[^&\\s\"]+/gi, 'access_token=***').slice(0, 400),\n  hint,\n  failed_at: new Date().toISOString()\n} };"
+      },
+      "id": "f3fb6cdb-2c1e-441f-b602-7f1fb70bbd11",
+      "name": "Format Failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        656,
+        272
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "bb7c933f-104b-4135-bfd7-f39a0ab3dc57",
+      "name": "Refresh Failed (check output)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        880,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "content": "**Token refresh**\n\n- Official endpoint: GET graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token\n- Due: updated_at missing or age >= 50 days\n- No IG username/password needed - it only uses the existing long-lived token in IG_Accounts\n- On failure the row stays untouched; add your notification node after 'Refresh Failed (check output)'\n- An expired token cannot be refreshed -> generate a new token in Meta for Developers and paste it into IG_Accounts manually",
+        "height": 260,
+        "width": 560
+      },
+      "id": "4d467200-a30c-4bfe-9d47-652c19ae23de",
+      "name": "Note d147",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -912,
+        -112
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every Monday 04:00 IST": {
+      "main": [
+        [
+          {
+            "node": "Get IG Accounts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get IG Accounts": {
+      "main": [
+        [
+          {
+            "node": "Select Due Accounts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Due Accounts": {
+      "main": [
+        [
+          {
+            "node": "Refresh Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Refresh Token": {
+      "main": [
+        [
+          {
+            "node": "Build Update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Update": {
+      "main": [
+        [
+          {
+            "node": "Token Received?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token Received?": {
+      "main": [
+        [
+          {
+            "node": "Update Account Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Account Row": {
+      "main": [
+        [
+          {
+            "node": "Token Refreshed (check output)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Failure": {
+      "main": [
+        [
+          {
+            "node": "Refresh Failed (check output)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "9ac17540-fb66-4f8e-98a2-fe0678cd1022",
+  "meta": {
+    "instanceId": "13616a3c0654f9f6a26fed623e9b351c389d3dc708b46279468690c822557569"
+  },
+  "nodeGroups": [],
+  "id": "hmjMOQ2vEbIcTV0M",
+  "tags": []
+}

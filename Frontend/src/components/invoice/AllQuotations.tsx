@@ -537,13 +537,14 @@ export function AllQuotations({
   };
 
   // Date Filtering Helper
-  const isQuotationInDateRange = (q: Quotation, range?: { from?: Date; to?: Date } | null) => {
+  const isQuotationInDateRange = (q: Quotation, range?: { from?: Date | undefined; to?: Date | undefined } | null) => {
     if (!range || !range.from) return true;
     if (!q.date) return false;
 
-    const parts = q.date.split("T")[0].split("-");
+    const dateStr = q.date.includes("T") ? (q.date.split("T")[0] || "") : q.date;
+    const parts = dateStr.split("-");
     let qTime: number;
-    if (parts.length === 3) {
+    if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
       const year = parseInt(parts[0], 10);
       const month = parseInt(parts[1], 10) - 1;
       const day = parseInt(parts[2], 10);

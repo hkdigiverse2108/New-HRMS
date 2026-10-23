@@ -43,6 +43,29 @@ class DesignationDBModel(BaseModel):
 async def setup_designation_indexes(db):
     try:
         collection = db["designations"]
+        # Backfill name from title if missing/null to prevent duplicate null key index errors
+        async for doc in collection.find({"$or": [{"name": {"$exists": False}}, {"name": None}, {"name": ""}]}):
+            title_val = doc.get("title")
+            if title_val and str(title_val).strip():
+                await collection.update_one(
+                    {"_id": doc["_id"]},
+                    {"$set": {"name": str(title_val).strip(), "title": str(title_val).strip()}}
+                )
+            else:
+                await collection.update_one(
+                    {"_id": doc["_id"]},
+                    {"$set": {"is_deleted": True}}
+                )
+
+        # Also sync title from name if missing
+        async for doc in collection.find({"$or": [{"title": {"$exists": False}}, {"title": None}, {"title": ""}]}):
+            name_val = doc.get("name")
+            if name_val and str(name_val).strip():
+                await collection.update_one(
+                    {"_id": doc["_id"]},
+                    {"$set": {"title": str(name_val).strip()}}
+                )
+
         await ensure_active_unique_index(collection, [("name", 1)])
         logger.info("Designation database indexes setup successfully.")
     except Exception as e:

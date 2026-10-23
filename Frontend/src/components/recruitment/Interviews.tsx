@@ -61,8 +61,8 @@ function formatTime12h(time24: string): string {
   if (!time24) return "";
   const parts = time24.split(":");
   if (parts.length < 2) return time24;
-  let hours = parseInt(parts[0], 10);
-  const minutes = parts[1];
+  let hours = parseInt(parts[0] || "0", 10);
+  const minutes = parts[1] || "00";
   if (isNaN(hours)) return time24;
   const ampm = hours >= 12 ? "PM" : "AM";
   hours = hours % 12;
@@ -77,8 +77,8 @@ function parseTimeTo24h(str?: string): { start: string; end: string } {
   }
   const rangeMatch = str.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?(?:\s*-\s*(\d{1,2}):(\d{2})\s*(AM|PM)?)?/i);
   if (rangeMatch) {
-    let h1 = parseInt(rangeMatch[1], 10);
-    const m1 = rangeMatch[2];
+    let h1 = parseInt(rangeMatch[1] || "0", 10);
+    const m1 = rangeMatch[2] || "00";
     const p1 = rangeMatch[3]?.toUpperCase();
 
     if (p1 === "PM" && h1 < 12) h1 += 12;
@@ -86,8 +86,8 @@ function parseTimeTo24h(str?: string): { start: string; end: string } {
     const s24 = `${String(h1).padStart(2, "0")}:${m1}`;
 
     if (rangeMatch[4] && rangeMatch[5]) {
-      let h2 = parseInt(rangeMatch[4], 10);
-      const m2 = rangeMatch[5];
+      let h2 = parseInt(rangeMatch[4] || "0", 10);
+      const m2 = rangeMatch[5] || "00";
       const p2 = rangeMatch[6]?.toUpperCase() || p1;
       if (p2 === "PM" && h2 < 12) h2 += 12;
       if (p2 === "AM" && h2 === 12) h2 = 0;
@@ -112,25 +112,25 @@ export interface InterviewStageData {
 export interface InterviewScheduleData {
   id: string;
   candidate_name: string;
-  candidate_email?: string;
+  candidate_email?: string | undefined;
   role_position: string;
-  hiring_id?: string | null;
-  referral_id?: string | null;
+  hiring_id?: string | null | undefined;
+  referral_id?: string | null | undefined;
   interview_stage_id: string;
   interview_stage_name: string;
-  date?: string;
-  time?: string;
-  interviewer_name?: string;
-  meet_link?: string;
-  resume_url?: string;
-  linkedin_profile?: string;
-  notes?: string;
+  date?: string | undefined;
+  time?: string | undefined;
+  interviewer_name?: string | undefined;
+  meet_link?: string | undefined;
+  resume_url?: string | undefined;
+  linkedin_profile?: string | undefined;
+  notes?: string | undefined;
   created_by?: {
-    employee_id?: string;
-    full_name?: string;
-    email?: string;
-  };
-  created_at?: string;
+    employee_id?: string | undefined;
+    full_name?: string | undefined;
+    email?: string | undefined;
+  } | undefined;
+  created_at?: string | undefined;
 }
 
 interface JobOpeningOption {
@@ -243,8 +243,8 @@ export function Interviews({ setActive }: InterviewsProps = {}) {
     let newEnd = formEndTime;
     const parts = val.split(":");
     if (parts.length === 2) {
-      const nextH = (parseInt(parts[0], 10) + 1) % 24;
-      newEnd = `${String(nextH).padStart(2, "0")}:${parts[1]}`;
+      const nextH = (parseInt(parts[0] || "0", 10) + 1) % 24;
+      newEnd = `${String(nextH).padStart(2, "0")}:${parts[1] || "00"}`;
       setFormEndTime(newEnd);
     }
     setFormTime(`${formatTime12h(val)} - ${formatTime12h(newEnd)}`);
@@ -414,10 +414,10 @@ export function Interviews({ setActive }: InterviewsProps = {}) {
   // Set default stage and job when modal opens
   useEffect(() => {
     if (isScheduleOpen && !editingSchedule) {
-      if (stages.length > 0 && !formStageId) {
+      if (stages.length > 0 && !formStageId && stages[0]) {
         setFormStageId(stages[0].id);
       }
-      if (jobOptions.length > 0 && !formRole) {
+      if (jobOptions.length > 0 && !formRole && jobOptions[0]) {
         setFormRole(jobOptions[0].job_title);
         setFormHiringId(jobOptions[0].id);
       }
@@ -501,7 +501,7 @@ export function Interviews({ setActive }: InterviewsProps = {}) {
 
       const cleanDate =
         !itemToEdit.date || itemToEdit.date.toLowerCase() === "tbd"
-          ? new Date().toISOString().split("T")[0]
+          ? (new Date().toISOString().split("T")[0] || "")
           : itemToEdit.date;
       setFormDate(cleanDate);
 
@@ -533,7 +533,7 @@ export function Interviews({ setActive }: InterviewsProps = {}) {
       setFormRole(defaultJob);
       setFormHiringId(defaultHiringId);
       setFormStageId(stages[0]?.id || "");
-      setFormDate(new Date().toISOString().split("T")[0]);
+      setFormDate(new Date().toISOString().split("T")[0] || "");
       setFormStartTime("11:00");
       setFormEndTime("12:00");
       setFormTime("11:00 AM - 12:00 PM");
@@ -773,7 +773,7 @@ export function Interviews({ setActive }: InterviewsProps = {}) {
         <div className="flex-1 overflow-x-auto min-w-0 pb-4">
           <div className="flex gap-4 sm:gap-5 min-w-max h-full items-start">
             {stages.map((stage, sIdx) => {
-              const theme = STAGE_THEMES[sIdx % STAGE_THEMES.length];
+              const theme = STAGE_THEMES[sIdx % STAGE_THEMES.length] || { badge: "", card: "", ring: "" };
               const stageCandidates = filteredSchedules.filter(
                 (c) => c.interview_stage_id === stage.id || c.interview_stage_name?.toLowerCase() === stage.name?.toLowerCase()
               );

@@ -54,12 +54,19 @@ from app.controllers.resource_inventory import router as resource_inventory_rout
 from app.controllers.seating import router as seating_router, global_seating_router
 from app.controllers.hiring import router as hiring_router
 from app.controllers.interview import router as interview_router
+from app.controllers.social_webhook import router as social_webhook_router
+from app.controllers.social import router as social_router
+from app.controllers.election import router as election_router
+from app.controllers.eom import router as eom_router
 from app.models.employee import setup_employee_indexes
 from app.models.department import setup_department_indexes
 from app.models.sub_department import setup_sub_department_indexes
 from app.models.designation import setup_designation_indexes
 from app.models.penalty import setup_penalty_indexes
+from app.models.social import setup_social_indexes
 from app.database.default_presets import init_database_presets_and_admin
+from app.database.seed_social_data import seed_social_defaults
+from app.services.social.scheduler import SocialScheduler
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -71,7 +78,10 @@ async def lifespan(app: FastAPI):
         await setup_sub_department_indexes(db.db)
         await setup_designation_indexes(db.db)
         await setup_penalty_indexes(db.db)
+        await setup_social_indexes(db.db)
         await init_database_presets_and_admin(db.db)
+        await seed_social_defaults(db.db)
+        SocialScheduler.start_scheduler()
         # Hot-path indexes for dashboard ONE-API (idempotent)
         try:
             await db.db["tasks"].create_index([("is_deleted", 1), ("status", 1)])
@@ -91,6 +101,7 @@ async def lifespan(app: FastAPI):
         print(f"[STARTUP WARNING] Database startup initialization notice: {e}")
     yield
     # Shutdown events
+    SocialScheduler.stop_scheduler()
     await close_mongo_connection()
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -194,6 +205,10 @@ app.include_router(seating_router)
 app.include_router(global_seating_router)
 app.include_router(hiring_router)
 app.include_router(interview_router)
+app.include_router(social_webhook_router)
+app.include_router(social_router)
+app.include_router(election_router)
+app.include_router(eom_router)
 
 from starlette.responses import Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -248,3 +263,5 @@ if __name__ == "__main__":
     import uvicorn
     from app.config import settings
     uvicorn.run("app.main:app", host="0.0.0.0", port=settings.PORT, reload=True)
+
+# reload trigger

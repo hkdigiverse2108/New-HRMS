@@ -74,6 +74,7 @@ import { FinanceOtpGate } from "@/components/finance/FinanceOtpGate";
 import { lockFinance } from "@/components/finance/financeUnlock";
 import { FinanceOtpDialog } from "@/components/admin/settings/FinanceOtpDialog";
 import { UserProfile } from "@/components/profile/UserProfile";
+import { SocialHub } from "@/components/social/SocialHub";
 import { GlobalModalProvider } from "@/components/GlobalModalContext";
 import { GlobalModalManager } from "@/components/GlobalModalManager";
 import { useAuth } from "@/components/auth/AuthContext";
@@ -365,8 +366,15 @@ export function Index() {
                   {/* User Profile */}
                   {basePath === "/profile" && <UserProfile />}
 
+                  {/* Social Automation Hub */}
+                  {basePath.startsWith("/social") && hasModulePermission(user, "/social", "read") && (
+                    <ModuleErrorBoundary moduleName="Social Automation">
+                      <SocialHub initialPath={active} setActive={setActive} />
+                    </ModuleErrorBoundary>
+                  )}
+
                   {/* Fallback original content for all other items */}
-                  {basePath !== "/dashboard" && basePath !== "/profile" && basePath !== "/access-control" && basePath !== "/schedule" && basePath !== "/work/logs" && basePath !== "/work/projects" && basePath !== "/tasks" && basePath !== "/chat" && basePath !== "/work/research" && basePath !== "/penalty" && basePath !== "/approvals/penalties" && basePath !== "/remarks" && basePath !== "/activity-logs" && basePath !== "/activity-tracker" && basePath !== "/restrictions" && basePath !== "/settings" && basePath !== "/recycle-bin" && basePath !== "/elections" && basePath !== "/recognitions" && basePath !== "/team-leader-of-the-week" && !basePath.startsWith("/ceo-dashboard") && !basePath.startsWith("/work/sales") && !basePath.startsWith("/payroll") && !basePath.startsWith("/employees") && !basePath.startsWith("/recruitment") && !basePath.startsWith("/workspace") && !basePath.startsWith("/approvals") && !basePath.startsWith("/invoice") && !basePath.startsWith("/reports") && !basePath.startsWith("/finance") && (
+                  {basePath !== "/dashboard" && basePath !== "/profile" && basePath !== "/access-control" && basePath !== "/schedule" && basePath !== "/work/logs" && basePath !== "/work/projects" && basePath !== "/tasks" && basePath !== "/chat" && basePath !== "/work/research" && basePath !== "/penalty" && basePath !== "/approvals/penalties" && basePath !== "/remarks" && basePath !== "/activity-logs" && basePath !== "/activity-tracker" && basePath !== "/restrictions" && basePath !== "/settings" && basePath !== "/recycle-bin" && basePath !== "/elections" && basePath !== "/recognitions" && basePath !== "/team-leader-of-the-week" && !basePath.startsWith("/ceo-dashboard") && !basePath.startsWith("/work/sales") && !basePath.startsWith("/payroll") && !basePath.startsWith("/employees") && !basePath.startsWith("/recruitment") && !basePath.startsWith("/workspace") && !basePath.startsWith("/approvals") && !basePath.startsWith("/invoice") && !basePath.startsWith("/reports") && !basePath.startsWith("/finance") && !basePath.startsWith("/social") && (
                     <>
                       <header className="mb-8 max-w-3xl">
                         <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">

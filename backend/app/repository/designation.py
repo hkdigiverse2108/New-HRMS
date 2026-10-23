@@ -15,6 +15,10 @@ class DesignationRepository:
     async def create(cls, data: dict):
         collection = await cls.get_collection()
         data["is_deleted"] = False
+        if "name" in data and not data.get("title"):
+            data["title"] = data["name"]
+        elif "title" in data and not data.get("name"):
+            data["name"] = data["title"]
         result = await collection.insert_one(data)
         data["_id"] = str(result.inserted_id)
         return data
@@ -27,6 +31,10 @@ class DesignationRepository:
         if limit is None or limit <= 0 or page is None:
             async for item in collection.find({"is_deleted": {"$ne": True}}):
                 item["_id"] = str(item["_id"])
+                if not item.get("name") and item.get("title"):
+                    item["name"] = item["title"]
+                if not item.get("title") and item.get("name"):
+                    item["title"] = item["name"]
                 items.append(item)
             return {
                 "data": items,
@@ -40,6 +48,10 @@ class DesignationRepository:
             skip = (p - 1) * limit
             async for item in collection.find({"is_deleted": {"$ne": True}}).skip(skip).limit(limit):
                 item["_id"] = str(item["_id"])
+                if not item.get("name") and item.get("title"):
+                    item["name"] = item["title"]
+                if not item.get("title") and item.get("name"):
+                    item["title"] = item["name"]
                 items.append(item)
             return {
                 "data": items,
@@ -56,6 +68,10 @@ class DesignationRepository:
             item = await collection.find_one({"_id": ObjectId(item_id), "is_deleted": {"$ne": True}})
             if item:
                 item["_id"] = str(item["_id"])
+                if not item.get("name") and item.get("title"):
+                    item["name"] = item["title"]
+                if not item.get("title") and item.get("name"):
+                    item["title"] = item["name"]
             return item
         except Exception:
             return None
@@ -64,6 +80,10 @@ class DesignationRepository:
     async def update(cls, item_id: str, update_data: dict):
         collection = await cls.get_collection()
         try:
+            if "name" in update_data and not update_data.get("title"):
+                update_data["title"] = update_data["name"]
+            elif "title" in update_data and not update_data.get("name"):
+                update_data["name"] = update_data["title"]
             await collection.update_one({"_id": ObjectId(item_id)}, {"$set": update_data})
             return await cls.get_by_id(item_id)
         except Exception:

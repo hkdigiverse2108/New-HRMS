@@ -312,14 +312,15 @@ export function AllInvoices({ setActive }: { setActive?: (path: string) => void 
     }
   };
 
-  const isInvoiceInDateRange = (inv: Invoice, range?: { from?: Date; to?: Date } | null) => {
+  const isInvoiceInDateRange = (inv: Invoice, range?: { from?: Date | undefined; to?: Date | undefined } | null) => {
     if (!range || !range.from) return true;
     if (!inv.date) return false;
 
     // Parse inv.date safely (supports YYYY-MM-DD or ISO string)
-    const parts = inv.date.split("T")[0].split("-");
+    const dateStr = inv.date.includes("T") ? (inv.date.split("T")[0] || "") : inv.date;
+    const parts = dateStr.split("-");
     let invTime: number;
-    if (parts.length === 3) {
+    if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
       const year = parseInt(parts[0], 10);
       const month = parseInt(parts[1], 10) - 1;
       const day = parseInt(parts[2], 10);

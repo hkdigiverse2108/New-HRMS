@@ -1,0 +1,800 @@
+{
+  "name": "IG Keyword Form (SM Team Helper)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "**Form Helper v2**\n\nmedia_id priority: form media_id -> post_link (Graph API /me/media, shortcode match, 500 recent posts) -> blank (all posts)\nToken and ig_account_id come only from IG_Accounts. Duplicate = same account + keyword + media_id (active) -> skip.\nUsername dropdown is static: add new accounts to the SM Form dropdown list manually.\nKeywords table: the desc (String) column is required.",
+        "height": 220,
+        "width": 560
+      },
+      "id": "a60b6382-ba99-4194-b105-8de0ad0ff267",
+      "name": "Note form",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        320,
+        1344
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "completionTitle": "Keyword was not added",
+        "completionMessage": "={{ typeof $json.error === 'string' ? $json.error : ($json.error?.message || 'Something went wrong') }}",
+        "options": {}
+      },
+      "id": "28f13855-d7a5-40f6-9f55-45784f82a6b0",
+      "name": "Form Error",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 1,
+      "position": [
+        3168,
+        1856
+      ],
+      "webhookId": "3bcc385d-02ee-4899-b40a-8705f197be95"
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "completionTitle": "Duplicate keyword – skipped",
+        "completionMessage": "={{ 'Keyword already exists for this post.\\n\\nKeyword: ' + $json.keyword + '\\nAccount: @' + $json.username + '\\nmedia_id: ' + ($json.media_id || 'all posts') + '\\n\\nNo new row was added.' }}",
+        "options": {}
+      },
+      "id": "93db90da-0b2d-4682-a20b-676659a86803",
+      "name": "Form Duplicate",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 1,
+      "position": [
+        2944,
+        1424
+      ],
+      "webhookId": "a248066d-3b20-4566-acde-4b042bad4606"
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "completionTitle": "Keyword added successfully",
+        "completionMessage": "={{ (() => { const r = $('Prepare Row').first().json; const m = r.media_id ? 'media_id: ' + r.media_id + (r.media_source === 'link' ? ' (resolved from post_link)' : ' (from form)') : 'Applies to all posts'; return 'Keyword \"' + r.keyword + '\" was added for @' + r.username + '. ' + m; })() }}",
+        "options": {}
+      },
+      "id": "b1fa7956-1005-44db-bcbe-386f860bebeb",
+      "name": "Form Success",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 1,
+      "position": [
+        3168,
+        1568
+      ],
+      "webhookId": "d2b629e2-df01-433d-b188-4fa845613947"
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Keywords"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ig_account_id": "={{ $json.ig_account_id }}",
+            "username": "={{ $json.username }}",
+            "keyword": "={{ $json.keyword }}",
+            "message": "={{ $json.message }}",
+            "comment_reply1": "={{ $json.comment_reply1 }}",
+            "comment_reply2": "={{ $json.comment_reply2 }}",
+            "comment_reply3": "={{ $json.comment_reply3 }}",
+            "media_id": "={{ $json.media_id }}",
+            "require_follow": "={{ $json.require_follow }}",
+            "desc": "={{ $json.desc }}",
+            "is_active": "={{ true }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "ig_account_id",
+              "displayName": "ig_account_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "username",
+              "displayName": "username",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "keyword",
+              "displayName": "keyword",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "message",
+              "displayName": "message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "comment_reply1",
+              "displayName": "comment_reply1",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "comment_reply2",
+              "displayName": "comment_reply2",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "comment_reply3",
+              "displayName": "comment_reply3",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "media_id",
+              "displayName": "media_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "require_follow",
+              "displayName": "require_follow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "is_active",
+              "displayName": "is_active",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "desc",
+              "displayName": "desc",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": true,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "48b9ac85-fcb1-45f3-9523-b182da4cf8ca",
+      "name": "Insert Keyword Row",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        2944,
+        1616
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c4a7c719-e710-4b6f-8918-cad6bc0938dd",
+              "leftValue": "={{ $json.is_duplicate }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "fdc9213e-313d-4595-b506-b90365fb3334",
+      "name": "Is Duplicate?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2720,
+        1520
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Duplicate check: same ig_account_id + same keyword (case-insensitive) + same media_id (blank = all posts), active rows\nconst row = $('Prepare Row').first().json;\nconst toBool = (v) => v === true || ['true', '1', 'yes', 'y'].includes(String(v ?? '').trim().toLowerCase());\nconst normKw = (s) => String(s ?? '').trim().replace(/\\s+/g, ' ').toUpperCase();\nconst cleanId = (s) => String(s ?? '').trim().replace(/^'+/, '').trim();\n\nconst dup = $input.all().map((i) => i.json).find((r) =>\n  r && r.keyword !== undefined && r.keyword !== null &&\n  String(r.ig_account_id ?? '').trim() === row.ig_account_id &&\n  toBool(r.is_active) &&\n  normKw(r.keyword) === normKw(row.keyword) &&\n  cleanId(r.media_id) === row.media_id\n);\n// Duplicate found => skip the insert (Form Duplicate page)\nreturn [{ json: { ...row, is_duplicate: Boolean(dup) } }];"
+      },
+      "id": "1cf5f278-3461-4671-b4fe-08cf1f27a6f8",
+      "name": "Check Duplicate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2496,
+        1520
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Keywords"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "ig_account_id",
+              "keyValue": "={{ $json.ig_account_id }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "7e2e9364-f361-435a-9dc1-896828011726",
+      "name": "Get Existing Keywords",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        2272,
+        1520
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// All paths (form media_id / link lookup / blank) merge here.\n// Strip the token and helper fields to build the final Keywords row.\nconst { access_token, shortcode, need_lookup, ok, ...row } = $json;\nreturn { json: row };"
+      },
+      "id": "a252a48f-4e3d-4c8e-a896-9cab5e4ac311",
+      "name": "Prepare Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2048,
+        1520
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "0dde18bd-97a2-41cd-9d28-99f20f9409a6",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "68e7b435-9e96-4b48-9911-460a3240ac1b",
+      "name": "Media Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1824,
+        1744
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Match the shortcode across the media list pages (one page per item) and extract the media_id\nconst ctx = $('Validate & Parse').first().json;\nconst target = ctx.shortcode;\nlet found = null, scanned = 0;\nfor (const it of $input.all()) {\n  for (const m of (it.json.data || [])) {\n    scanned++;\n    if (m.shortcode === target || String(m.permalink || '').includes('/' + target + '/')) { found = m; break; }\n  }\n  if (found) break;\n}\nif (!found) {\n  return [{ json: { ok: false, error: 'Could not resolve media_id: this post was not found in the ' + scanned + ' most recent media items of @' + ctx.username + '. Check the link / account, or enter the media_id directly.' } }];\n}\n// Pass the context on (token included - Prepare Row strips it) + resolved media_id\nreturn [{ json: { ...ctx, media_id: String(found.id), media_source: 'link' } }];"
+      },
+      "id": "62d8b612-3412-4dd8-918a-51a066fae0ee",
+      "name": "Pick Media ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        1744
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://graph.instagram.com/v21.0/me/media",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "id,shortcode,permalink"
+            },
+            {
+              "name": "limit",
+              "value": "50"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.access_token }}"
+            }
+          ]
+        },
+        "options": {
+          "pagination": {
+            "pagination": {
+              "paginationMode": "responseContainsNextURL",
+              "nextURL": "={{ $response.body.paging?.next }}",
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ !$response.body.paging?.next }}",
+              "limitPagesFetched": true,
+              "maxRequests": 10
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "id": "f9dc941f-fd3e-407a-9f0f-79fc280940e8",
+      "name": "Get Account Media List",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1376,
+        1856
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "0b027aaf-0c7e-4948-b3b3-919b1f9b1cb2",
+              "leftValue": "={{ $json.need_lookup }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "6c7ba26c-3eab-445b-bd6f-9676ee0fb7f4",
+      "name": "Need Media Lookup?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1152,
+        1664
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "64bbd5e4-90d3-4639-b3f6-541a2456d647",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f0e2fc1e-c256-4496-b1e6-809c415835e5",
+      "name": "Input OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        928,
+        1744
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// Validate & Parse\n// Input : IG_Accounts rows (Get IG Accounts) ; form data = $('SM Form')\n// Output: ok + account + media_id plan (form -> link -> blank)\n// ============================================================\nconst f = $('SM Form').first().json;\nconst clean = (v) => String(v ?? '').trim();\nconst toBool = (v) => v === true || ['true', '1', 'yes', 'y'].includes(String(v ?? '').trim().toLowerCase());\nconst fail = (error) => [{ json: { ok: false, error } }];\n\n// ---- 1) Account: username comes from the dropdown; everything else comes from IG_Accounts ----\nconst username = clean(f.username).replace(/^@/, '');\nif (!username) return fail('Please select an account (username).');\n\nconst rows = $input.all().map((i) => i.json).filter((r) => r && (r.username || r.ig_account_id));\nconst acc = rows.find((a) =>\n  String(a.username ?? '').replace(/^@/, '').trim().toLowerCase() === username.toLowerCase());\n\nif (!acc) return fail('Account not found in IG_Accounts: @' + username);\nif (!toBool(acc.is_active)) return fail('Account is inactive: @' + username + '. Set is_active = true in IG_Accounts first.');\nif (!clean(acc.ig_account_id)) return fail('ig_account_id is missing in IG_Accounts for @' + username + '.');\n\n// ig_account_id and access_token are NEVER taken from the form - only from IG_Accounts\nconst token = clean(acc.access_token);\nif (!token) return fail('access_token is missing in IG_Accounts for @' + username + '.');\n\nconst keyword = clean(f.keyword);\nconst message = clean(f.message);\nif (!keyword || !message) return fail('keyword and message are required.');\n\n// ---- 2) media_id priority: form media_id -> post_link (API) -> blank ----\nconst rawMedia = clean(f.media_id).replace(/^'+/, '').trim();   // strip leading apostrophe added by Sheets/Excel\nconst link = clean(f.post_link);\nconst looksValid = /^\\d{10,25}$/.test(rawMedia);                // Graph media IDs are numeric\n\nlet media_id = '', media_source = 'none', need_lookup = false, shortcode = '';\n\nif (rawMedia && looksValid) {\n  // (a) valid media_id in the form => use it directly, no API call\n  media_id = rawMedia; media_source = 'form';\n} else if (link) {\n  // (b) media_id blank (or invalid) + post_link => extract shortcode, resolve via API\n  // instagram.com/p/XXXX/ , /reel/XXXX/ , /reels/XXXX/ , /tv/XXXX/ , /<user>/reel/XXXX/\n  const m = link.match(/instagram\\.com\\/(?:[A-Za-z0-9_.]+\\/)?(?:p|reel|reels|tv)\\/([A-Za-z0-9_-]+)/i);\n  if (!m) return fail('Could not find a shortcode in the post link. Expected format: https://www.instagram.com/reel/XXXX/ or /p/XXXX/');\n  shortcode = m[1]; media_source = 'link'; need_lookup = true;\n} else if (rawMedia) {\n  // media_id was given but looks invalid and there is no link => do not silently turn it into \"all posts\"\n  return fail('media_id looks invalid (digits only, 10-25 characters). Enter a valid media_id or provide a post_link.');\n}\n// (c) both blank => media_id '' (all posts)\n\nconst rf = clean(f.require_follow).toLowerCase();\nreturn [{ json: {\n  ok: true,\n  ig_account_id: clean(acc.ig_account_id),\n  username: clean(acc.username).replace(/^@/, ''),\n  access_token: token,\n  keyword, message,\n  comment_reply1: clean(f.comment_reply1),\n  comment_reply2: clean(f.comment_reply2),\n  comment_reply3: clean(f.comment_reply3),\n  require_follow: rf === '' ? true : toBool(rf),     // default true\n  desc: clean(f.desc),                               // blank => ''\n  media_id, media_source, need_lookup, shortcode\n} }];"
+      },
+      "id": "7d955f97-b09a-4adb-bc3c-6989f3266890",
+      "name": "Validate & Parse",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        704,
+        1744
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "IG_Accounts"
+        },
+        "returnAll": true
+      },
+      "id": "c1f0671f-0d2c-407e-8965-913c1dda9210",
+      "name": "Get IG Accounts",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        480,
+        1744
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "formTitle": "SM Team Helper – Add Keyword",
+        "formDescription": "Add a new comment-to-DM keyword for one post. Provide the post_link; media_id is optional (if given, it is used instead of resolving the link). All other fields are required.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "username",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "aisetuerp"
+                  },
+                  {
+                    "option": "achiwoncse"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "keyword",
+              "placeholder": "e.g. GUIDE",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "message",
+              "fieldType": "textarea",
+              "placeholder": "Exact message to send in DM",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "post_link",
+              "placeholder": "https://www.instagram.com/reel/XXXX/ or /p/XXXX/",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "media_id",
+              "placeholder": "Digits only (optional). If blank, the post_link is used to find it"
+            },
+            {
+              "fieldLabel": "comment_reply1",
+              "placeholder": "Public reply 1",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "comment_reply2",
+              "placeholder": "Public reply 2"
+            },
+            {
+              "fieldLabel": "comment_reply3",
+              "placeholder": "Public reply 3"
+            },
+            {
+              "fieldLabel": "require_follow",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "true"
+                  },
+                  {
+                    "option": "false"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "desc",
+              "fieldType": "textarea",
+              "placeholder": "Notes / verification",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "efc68e7a-3cf6-4013-b6e2-21d9826b0ce0",
+      "name": "SM Form1",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        256,
+        1744
+      ],
+      "webhookId": "dd9b315a-5505-4cee-b3e7-00a37280745e"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Insert Keyword Row": {
+      "main": [
+        [
+          {
+            "node": "Form Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Form Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Duplicate?": {
+      "main": [
+        [
+          {
+            "node": "Form Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Insert Keyword Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Duplicate": {
+      "main": [
+        [
+          {
+            "node": "Is Duplicate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Existing Keywords": {
+      "main": [
+        [
+          {
+            "node": "Check Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Row": {
+      "main": [
+        [
+          {
+            "node": "Get Existing Keywords",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Media Found?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Form Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick Media ID": {
+      "main": [
+        [
+          {
+            "node": "Media Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Account Media List": {
+      "main": [
+        [
+          {
+            "node": "Pick Media ID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Form Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Need Media Lookup?": {
+      "main": [
+        [
+          {
+            "node": "Get Account Media List",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Input OK?": {
+      "main": [
+        [
+          {
+            "node": "Need Media Lookup?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Form Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Parse": {
+      "main": [
+        [
+          {
+            "node": "Input OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get IG Accounts": {
+      "main": [
+        [
+          {
+            "node": "Validate & Parse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SM Form1": {
+      "main": [
+        [
+          {
+            "node": "Get IG Accounts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "02cd5323-096c-415b-b7ef-91dceb8fca30",
+  "meta": {
+    "instanceId": "13616a3c0654f9f6a26fed623e9b351c389d3dc708b46279468690c822557569"
+  },
+  "nodeGroups": [],
+  "id": "mKnLf1oXsz5tX44h",
+  "tags": []
+}

@@ -1,0 +1,136 @@
+{
+  "name": "Pending DM Cleanup",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      },
+      "id": "a902b8ca-e40d-4ea7-a3f8-ecaee27518c5",
+      "name": "Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Pending_DMs"
+        },
+        "returnAll": true
+      },
+      "id": "05e5ef5d-971c-455c-b0f8-2a48cad68357",
+      "name": "Get All Pending DMs",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        224,
+        0
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter expired Pending_DMs rows (same TTL rule as the main workflow)\nconst DEFAULT_TTL = 10; // minutes\nconst now = Date.now();\nconst expired = [];\n\nfor (const item of $input.all()) {\n  const row = item.json;\n  if (!row?.igsid || !row?.created_at) continue;\n\n  const ttlMs = (Number(row.ttl_minutes) || DEFAULT_TTL) * 60 * 1000;\n  const created = Date.parse(row.created_at);\n\n  if (created && (now - created) >= ttlMs) {\n    expired.push({ json: { igsid: String(row.igsid) } });\n  }\n}\n\nreturn expired;"
+      },
+      "id": "3674df19-8ff7-429d-b082-1b979f68cf87",
+      "name": "Filter Expired",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Pending_DMs"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "igsid",
+              "keyValue": "={{ $json.igsid }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "37dc1208-db43-41c0-bb2d-352961525512",
+      "name": "Delete Expired Rows",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        672,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every 5 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Get All Pending DMs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All Pending DMs": {
+      "main": [
+        [
+          {
+            "node": "Filter Expired",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Expired": {
+      "main": [
+        [
+          {
+            "node": "Delete Expired Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "e7f6375e-0d8f-49a6-9f00-e5f04b6946a7",
+  "meta": {
+    "instanceId": "13616a3c0654f9f6a26fed623e9b351c389d3dc708b46279468690c822557569"
+  },
+  "nodeGroups": [],
+  "id": "iKfGqOgnS6TSHbfG",
+  "tags": []
+}

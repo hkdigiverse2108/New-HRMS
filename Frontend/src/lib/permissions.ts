@@ -62,6 +62,25 @@ const URL_ALIASES: Record<string, string[]> = {
   "/employees/org": ["/employees/org", "/employees"],
   "/activity-logs": ["/activity-logs", "/activity-tracker"],
   "/invoice": ["/invoice/all", "/invoice/ledger", "/invoice/create", "/invoice/proforma"],
+  "/social": [
+    "/social",
+    "/social/dashboard",
+    "/social/accounts",
+    "/social/keywords",
+    "/social/activity",
+    "/social/scripts",
+    "/social/captions",
+    "/social/brands",
+    "/social/settings",
+  ],
+  "/social/dashboard": ["/social/dashboard", "/social"],
+  "/social/accounts": ["/social/accounts", "/social"],
+  "/social/keywords": ["/social/keywords", "/social"],
+  "/social/activity": ["/social/activity", "/social"],
+  "/social/scripts": ["/social/scripts", "/social"],
+  "/social/captions": ["/social/captions", "/social"],
+  "/social/brands": ["/social/brands", "/social"],
+  "/social/settings": ["/social/settings", "/social"],
 };
 
 /**
@@ -121,9 +140,9 @@ export function hasModulePermission(
 
   const perms = user.permissions;
 
-  // Strict fallback: if no permissions are configured for the employee, profile view is permitted
+  // Strict fallback: if no permissions are configured for the employee, deny access (profile & dashboard are handled above)
   if (!perms || Object.keys(perms).length === 0) {
-    return action === "read";
+    return false;
   }
 
   // 1. Direct match on exact URL

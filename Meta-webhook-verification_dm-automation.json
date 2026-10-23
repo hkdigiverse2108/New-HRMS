@@ -1,0 +1,132 @@
+{
+  "name": "Meta-webhook-verification_dm-automation",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "meta-comments-hk",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "ef2ec585-1e1e-4833-9062-541897e9bf2c",
+      "name": "Meta Webhook - GET Verify1",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -208,
+        304
+      ],
+      "webhookId": "meta-comments-get"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "verify-token-condition",
+              "leftValue": "={{ $json.query['hub.verify_token'] }}",
+              "rightValue": "Tanish",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "9c0a8b26-1e3b-45f1-b49f-3c1cc3007947",
+      "name": "IF - Verify Token1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        16,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.query['hub.challenge'] }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "8e4a7248-402d-45fa-8bf6-e22eb7ccbd76",
+      "name": "Respond - Challenge1",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "Forbidden",
+        "options": {
+          "responseCode": 403
+        }
+      },
+      "id": "b26b04b2-80fe-48b6-8a5a-937bbd9b7cd3",
+      "name": "Respond - Forbidden",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        400
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Meta Webhook - GET Verify1": {
+      "main": [
+        [
+          {
+            "node": "IF - Verify Token1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Verify Token1": {
+      "main": [
+        [
+          {
+            "node": "Respond - Challenge1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond - Forbidden",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "13d8d8f9-880b-4d46-a3aa-793fbbfc91d8",
+  "meta": {
+    "instanceId": "13616a3c0654f9f6a26fed623e9b351c389d3dc708b46279468690c822557569"
+  },
+  "nodeGroups": [],
+  "id": "mqLLpR67lIVaOv5v",
+  "tags": []
+}

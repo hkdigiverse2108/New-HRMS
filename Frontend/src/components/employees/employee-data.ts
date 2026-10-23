@@ -64,6 +64,7 @@ export interface Employee {
   resignationDate?: string;
   hasEmployment?: boolean;
   employmentStartDate?: string;
+  contractStatus?: string;
   bondsHistory?: any[];
 
   // Security deposit tracking fields

@@ -69,7 +69,7 @@ const OTHER_COLOR = "#898781";
 // Donuts: biggest rows get a colour each, the rest fold into one grey "Other" slice
 const toSlices = (rows: [string, Totals][], type: "credit" | "debit"): Slice[] => {
   const limit = SERIES.length;
-  const data = rows.slice(0, limit).map(([name, v], i) => ({ name, value: v[type], count: v.count, color: SERIES[i] }));
+  const data = rows.slice(0, limit).map(([name, v], i) => ({ name, value: v[type], count: v.count, color: SERIES[i] ?? OTHER_COLOR }));
   const rest = rows.slice(limit);
   if (rest.length) data.push({ name: `Other (${rest.length})`, value: rest.reduce((s, [, v]) => s + v[type], 0), count: rest.reduce((s, [, v]) => s + v.count, 0), color: OTHER_COLOR });
   return data.filter((d) => d.value > 0);

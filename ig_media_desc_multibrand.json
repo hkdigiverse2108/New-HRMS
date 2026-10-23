@@ -1,0 +1,2073 @@
+{
+  "name": "ig_media_desc_multibrand",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "name": "Telegram Trigger1",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -4448,
+        1360
+      ],
+      "id": "c2272a15-9587-4992-8e3d-d7e0c17a28e5",
+      "webhookId": "0ab351e9-ebc1-4572-a434-dee4728c8e67",
+      "credentials": {
+        "telegramApi": {
+          "id": "JGd0kuRrvPmiG8qJ",
+          "name": "Telegram-tvp"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "G31yOzVM4Hum6pK6",
+          "mode": "list",
+          "cachedResultName": "Brand info",
+          "cachedResultUrl": "/projects/9KyAgilM8EJhMNPo/datatables/G31yOzVM4Hum6pK6"
+        },
+        "returnAll": true
+      },
+      "name": "Fetch Brands from Data Table",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        -4224,
+        1360
+      ],
+      "id": "4e4197e6-e361-42d6-832b-afc8f5d8f426"
+    },
+    {
+      "parameters": {
+        "jsCode": "const upd = $('Telegram Trigger1').first().json || {};\nconst msg = upd.message || {};\nconst rawText = String(msg.text || msg.caption || '');\n\nconst norm = s => String(s || '').toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu, ' ').trim();\nconst stripUrls = s => String(s || '').replace(/https?:\\/\\/\\S+/gi, ' ');\n\n// Single value: new lines become spaces, extra spaces and trailing commas are removed\nconst flat = v => String(v == null ? '' : v)\n  .replace(/\\r?\\n+/g, ' ')\n  .replace(/\\s+/g, ' ')\n  .replace(/^[\\s,]+|[\\s,]+$/g, '');\n\n// Comma separated list. Commas inside brackets \"( )\" and inside numbers like 50,000 do not split.\nconst splitList = val => {\n  const t = String(val == null ? '' : val).replace(/\\r?\\n+/g, ' ');\n  const out = [];\n  let depth = 0, cur = '';\n  for (let i = 0; i < t.length; i++) {\n    const ch = t[i];\n    if (ch === '(' || ch === '[') depth++;\n    if (ch === ')' || ch === ']') depth = Math.max(0, depth - 1);\n    const numComma = ch === ',' && /\\d/.test(t[i - 1] || '') && /\\d/.test(t[i + 1] || '');\n    if (ch === ',' && depth === 0 && !numComma) { out.push(cur); cur = ''; }\n    else cur += ch;\n  }\n  out.push(cur);\n  return out.map(x => x.replace(/\\s+/g, ' ').trim()).filter(Boolean);\n};\n\n// Hashtag list: separated by commas or spaces\nconst splitTags = val => String(val == null ? '' : val).split(/[\\s,]+/).map(x => x.trim()).filter(Boolean);\n\n// Data table column names are trimmed and lowercased (\"brand_id \" becomes \"brand_id\")\nconst rows = $('Fetch Brands from Data Table').all().map(it => {\n  const o = {};\n  for (const [k, v] of Object.entries(it.json || {})) o[String(k).trim().toLowerCase().replace(/\\s+/g, '_')] = v;\n  return o;\n}).filter(r => flat(r.brand_id) || flat(r.brand_name || r.bard_name || r.name));\n\nconst nameOf = r => flat(r.brand_name || r.bard_name || r.name);\n\n// \"/brand x\" or \"brand: x\" matches by id or name. Free text matches by name (and non-numeric ids).\nconst em = rawText.match(/\\/brand(?:@\\w+)?\\s+([^\\n]*)/i) || rawText.match(/\\bbrand\\s*:\\s*([^\\n]*)/i);\nconst useIds = !!em;\nconst phrase = ' ' + norm(stripUrls(em ? em[1] : rawText)) + ' ';\n\nlet r = null, best = 0;\nfor (const row of rows) {\n  const cands = [nameOf(row)];\n  const id = flat(row.brand_id);\n  if (id && (useIds || !/^\\d+$/.test(id))) cands.push(id);\n  for (const c of cands) {\n    const n = norm(c);\n    if (n && phrase.includes(' ' + n + ' ') && n.length > best) { r = row; best = n.length; }\n  }\n}\n\nconst x = r || {};\nconst BRAND = {\n  brand_id: flat(x.brand_id).toLowerCase(),\n  brand_name: nameOf(x),\n  namelink: flat(x.link || x.namelink || x.website),\n  instagram_handle: flat(x.ig_id || x.instagram_handle || x.ig_handle),\n  industry: flat(x.industry),\n  about: flat(x.about),\n  products_services: splitList(x.products_services),\n  usps: splitList(x.usps),\n  target_audience: flat(x.target_audience),\n  audience_age: flat(x.audience_age),\n  audience_interests: splitList(x.audience_interests),\n  city: flat(x.city),\n  state: flat(x.state),\n  country: flat(x.country),\n  service_area: flat(x.service_area),\n  goal: flat(x.goal),\n  tone: flat(x.tone),\n  caption_language: flat(x.caption_language) || 'English',\n  default_cta: flat(x.default_cta),\n  always_include_hashtags: splitTags(x.always_include_hashtags),\n  never_use_hashtags: splitTags(x.never_use_hashtags),\n  notes: flat(x.notes)\n};\n\nconst brand = {};\nfor (const [k, v] of Object.entries(BRAND)) {\n  if (Array.isArray(v) && v.length) brand[k] = v;\n  else if (typeof v === 'string' && v) brand[k] = v;\n}\n\nreturn [{ json: {\n  brand,\n  found: !!r,\n  available: rows.map(row => nameOf(row) || flat(row.brand_id)).filter(Boolean)\n} }];\n"
+      },
+      "name": "Brand Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4000,
+        1360
+      ],
+      "id": "085779b0-2fca-4dc1-b52b-0d8d5a38d293"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst upd = $('Telegram Trigger1').first().json || {};\nconst msg = upd.message;\nif (!msg || !msg.chat || (msg.from && msg.from.is_bot) || msg.chat.type !== 'private') return [];\n\nconst chatId = msg.chat.id;\nconst ALLOWED_CHAT_IDS = [7009284089, 841863295];\nconst COOLDOWN_SEC = 20;\n\nif (ALLOWED_CHAT_IDS.length && !ALLOWED_CHAT_IDS.includes(chatId)) return [];\n\nconst text = (msg.text || '').trim();\nconst caption = (msg.caption || '').trim();\n\n// LANGUAGE RULE:\n// Only lang:hinglish enables Hinglish descriptions.\n// Every other value, including missing language, defaults to English.\nconst incomingText = [text, caption].filter(Boolean).join('\\n');\nconst langMatch = incomingText.match(/\\blang\\s*:\\s*([a-z-]+)/i);\nconst descriptionLanguage =\n  langMatch && langMatch[1].toLowerCase() === 'hinglish'\n    ? 'hinglish'\n    : 'english';\n\n// Remove language directives so they do not become part of the\n// brand brief, script, or media-analysis instructions.\nconst cleanLanguageDirective = value =>\n  String(value || '')\n    .replace(/\\blang\\s*:\\s*[a-z-]+\\b/gi, ' ')\n    .replace(/[ \\t]{2,}/g, ' ')\n    .replace(/ *\\n */g, '\\n')\n    .trim();\n\nconst cleanText = cleanLanguageDirective(text);\nconst cleanCaption = cleanLanguageDirective(caption);\n\nconst store = $getWorkflowStaticData('global');\nstore.profiles = store.profiles || {};\nstore.last = store.last || {};\nconst profile = store.profiles[chatId] || '';\n\nlet brandMeta = {};\ntry { brandMeta = $('Brand Config').first().json || {}; } catch (e) { brandMeta = {}; }\nconst brandFound = !!brandMeta.found;\nconst brandList = (brandMeta.available || []).join(', ');\n\nconst esc = v => String(v == null ? '' : v)\n  .replace(/&/g, '&amp;')\n  .replace(/</g, '&lt;')\n  .replace(/>/g, '&gt;');\n\nconst reply = (t, extra = {}) => [{\n  json: {\n    action: 'reply',\n    chat_id: chatId,\n    text: t,\n    media: null,\n    mode: null,\n    answers: null,\n    drive: null,\n    ...extra,\n  }\n}];\n\nfunction detectMedia(m) {\n  if (!m) return null;\n\n  if (m.photo && m.photo.length) {\n    const p = m.photo[m.photo.length - 1];\n    return {\n      kind: 'image',\n      file_id: p.file_id,\n      mime: 'image/jpeg',\n      size: p.file_size || 0\n    };\n  }\n\n  if (m.video || m.animation || m.video_note) {\n    return { kind: 'video' };\n  }\n\n  if (m.document) {\n    const mt = m.document.mime_type || '';\n\n    if (mt.startsWith('image/')) {\n      return {\n        kind: 'image',\n        file_id: m.document.file_id,\n        mime: mt,\n        size: m.document.file_size || 0\n      };\n    }\n\n    if (mt.startsWith('video/')) {\n      return { kind: 'video' };\n    }\n  }\n\n  return null;\n}\n\nfunction analyze(mode, media, details, note = '', drive = null) {\n  if (!brandFound) {\n    return reply(\n      'Brand not found. Please send the brand name along with your post.\\n' +\n      'Available brands: ' + esc(brandList || 'none') +\n      '\\nExample:\\n<pre>achiwon https://drive.google.com/drive/folders/XXXX</pre>'\n    );\n  }\n\n  const now = Date.now();\n\n  if (now - (store.last[chatId] || 0) < COOLDOWN_SEC * 1000) {\n    return reply(\n      'Please wait about ' + COOLDOWN_SEC +\n      ' seconds before sending the next post.'\n    );\n  }\n\n  store.last[chatId] = now;\n\n  const msgText = mode === 'text'\n    ? 'Your script is being analysed. This usually takes 10 to 20 seconds.'\n    : mode === 'drive'\n      ? 'Your Drive folder is being downloaded and analysed. Images take about 1 to 3 minutes. A video can take a few minutes longer.'\n      : 'Your image is being analysed. This usually takes 15 to 30 seconds.';\n\n  return reply(\n    (note ? note + '\\n\\n' : '') + msgText,\n    {\n      action: 'analyze',\n      mode,\n      media,\n      drive,\n      answers: {\n        details: String(details || '').slice(0, 4000),\n        language: descriptionLanguage\n      }\n    }\n  );\n}\n\nconst cmd = text.startsWith('/')\n  ? text.split(/[\\s@]/)[0].toLowerCase()\n  : '';\n\nif (cmd === '/start' || cmd === '/help') {\n  return reply(\n    'Send a Google Drive folder link (images only, 1 video only, or images plus 1 video) or a single image together with the brand name.\\n' +\n    'Example: achiwon https://drive.google.com/drive/folders/XXXX\\n' +\n    'For reels: /reel achiwon followed by the script.\\n' +\n    'For Hinglish descriptions, include lang:hinglish.\\n' +\n    'Without that directive, descriptions are in English.\\n' +\n    'Available brands: ' + esc(brandList || 'none')\n  );\n}\n\n// Reel script: \"/reel ...\", \"reel ...\" (slash forgotten),\n// or any long plain-text message.\nconst DRIVE_RE_EARLY = /https?:\\/\\/drive\\.google\\.com\\//i;\nconst hasOwnMedia = !!detectMedia(msg);\nconst isReelCmd = cmd === '/reel' || /^reel\\b/i.test(text);\nconst isPlainScript =\n  !cmd &&\n  !hasOwnMedia &&\n  !DRIVE_RE_EARLY.test(text) &&\n  text.length >= 30;\n\nif (isReelCmd || isPlainScript) {\n  const body = cleanText.replace(/^\\/?reel(@\\w+)?/i, '').trim();\n\n  if (body.length < 30) {\n    return reply(\n      'Script is too short. Send it like:\\n' +\n      '<pre>/reel achiwon your script here</pre>'\n    );\n  }\n\n  return analyze(\n    'text',\n    null,\n    profile ? profile + '\\n' + body : body\n  );\n}\n\nconst ownMedia = detectMedia(msg);\nconst DRIVE_RE =\n  /https?:\\/\\/drive\\.google\\.com\\/(?:drive\\/(?:u\\/\\d+\\/)?folders\\/|file\\/d\\/)([A-Za-z0-9_-]{10,})\\S*/i;\n\nconst linkSource = text || caption;\nconst dm = DRIVE_RE.exec(linkSource);\n\nif (dm && !ownMedia) {\n  const kind = /\\/folders\\//i.test(dm[0]) ? 'folder' : 'file';\n\n  if (kind !== 'folder') {\n    return reply('Please send a Google Drive folder link (not a single file link).');\n  }\n\n  const extra = cleanLanguageDirective(\n    linkSource.replace(dm[0], '')\n  ).trim();\n\n  const details = profile\n    ? profile + (extra ? '\\n' + extra : '')\n    : extra;\n\n  return analyze(\n    'drive',\n    null,\n    details,\n    '',\n    { kind, id: dm[1] }\n  );\n}\n\nconst media = ownMedia || detectMedia(msg.reply_to_message);\n\nif (media) {\n  if (media.kind === 'video') {\n    return reply('Video direct analysis not supported. Use /reel.');\n  }\n\n  const extra = ownMedia ? cleanCaption : cleanText;\n  const details = profile\n    ? profile + (extra ? '\\n' + extra : '')\n    : extra;\n\n  return analyze('image', media, details);\n}\n\nreturn reply(\n  'Please send an image, Drive link, or /reel script.\\n' +\n  '(Received: ' +\n  (text ? text.length + ' characters of text' : 'no text or supported media') +\n  ')'\n);\n"
+      },
+      "name": "Session Manager1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3776,
+        1360
+      ],
+      "id": "608a58ad-91f0-4a89-8696-62d80ba0b03a"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "2d2eaa42-0000-4000-8000-7747fb242c13",
+              "leftValue": "={{ $('Session Manager1').first().json.text }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Has Reply?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -3552,
+        1360
+      ],
+      "id": "163f4996-0fa8-45ab-a14c-4e11a4a69f5b"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Session Manager1').first().json.chat_id }}",
+        "text": "={{ $('Session Manager1').first().json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_web_page_preview": true,
+          "parse_mode": "HTML"
+        }
+      },
+      "name": "Send Reply1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -3328,
+        1360
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "id": "931f830b-3ab3-44b8-80c4-5aa4095407ad",
+      "webhookId": "91bf7c0b-ba72-4e60-95ce-788f3b5926b2",
+      "credentials": {
+        "telegramApi": {
+          "id": "JGd0kuRrvPmiG8qJ",
+          "name": "Telegram-tvp"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "d6f0beaf-0000-4000-8000-a7621fbf081c",
+              "leftValue": "={{ $('Session Manager1').first().json.action }}",
+              "rightValue": "analyze",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Needs Analysis?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -3104,
+        1360
+      ],
+      "id": "bd97920e-180d-4e19-8801-315029c0c1a3"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cf4c556c-0000-4000-8000-7ba5466e879c",
+              "leftValue": "={{ $('Session Manager1').first().json.mode }}",
+              "rightValue": "drive",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Is Drive?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -2880,
+        1360
+      ],
+      "id": "98250e88-60f8-416d-9f30-b233c6f54b7d"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "2287a58c-0000-4000-8000-3ac365a1d154",
+              "leftValue": "={{ $('Session Manager1').first().json.drive.kind }}",
+              "rightValue": "folder",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Drive Is Folder?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -2656,
+        1168
+      ],
+      "id": "99f5e417-ac4d-4e05-a48e-d6ba184e703f"
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "searchMethod": "query",
+        "queryString": "={{ \"'\" + $('Session Manager1').first().json.drive.id + \"' in parents and trashed = false and (mimeType = 'image/jpeg' or mimeType = 'image/png' or mimeType contains 'video/')\" }}",
+        "filter": {},
+        "options": {
+          "fields": [
+            "id",
+            "name",
+            "mimeType",
+            "size",
+            "thumbnailLink"
+          ]
+        }
+      },
+      "name": "Drive List Files",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -2432,
+        1024
+      ],
+      "id": "8c294a3f-a5f3-46f6-a346-8cc546764f54",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "i7iX8e5045t0RvvD",
+          "name": "Google Drive THK"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "name": "Drive Download",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -1536,
+        1840
+      ],
+      "id": "61d02085-cd48-4b5a-9279-892a59ccbd72",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "i7iX8e5045t0RvvD",
+          "name": "Google Drive THK"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "resize",
+        "width": 1080,
+        "height": 1080,
+        "resizeOption": "onlyIfLarger",
+        "options": {
+          "format": "jpeg",
+          "quality": 80
+        }
+      },
+      "name": "Resize Image",
+      "type": "n8n-nodes-base.editImage",
+      "typeVersion": 1,
+      "position": [
+        -1312,
+        1920
+      ],
+      "id": "7b2047cb-cfb4-4b5e-a3b8-01e5b3aebe36",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const MAX_SLIDES = 8;\nconst MAX_IMAGE_BYTES = 2 * 1024 * 1024;\n\nconst safe = fn => { try { return fn(); } catch (e) { return null; } };\n// Only present on the Drive path. Telegram photos never pass through the classifier.\nconst cls = safe(() => $('Classify Drive Files').first().json) || {};\nconst selected = cls.images || [];\nconst overLimit = cls.images_over_limit || [];\nconst order = new Map(selected.map((f, i) => [f.name, i]));\n\nconst items = $input.all();\nconst entries = [];\nfor (let i = 0; i < items.length; i++) {\n  const it = items[i];\n  const bin = it.binary && it.binary.data;\n  const fileName = (bin && bin.fileName) || '';\n  const name = fileName || ('item ' + (i + 1));\n  entries.push({ i, bin, name, key: order.has(name) ? order.get(name) : 999 });\n}\n// keep the folder order (alphabetical)\nentries.sort((x, y) => (x.key - y.key) || (x.i - y.i));\n\nconst slides = [];\nconst skipped = [];\n\nfor (const e of entries) {\n  const kind = 'image';\n  if (!e.bin) { skipped.push({ name: e.name, kind, reason: 'file could not be read' }); continue; }\n  if (slides.length >= MAX_SLIDES) { skipped.push({ name: e.name, kind, reason: 'over the ' + MAX_SLIDES + '-item limit' }); continue; }\n  const buf = await this.helpers.getBinaryDataBuffer(e.i, 'data');\n  if (buf.length > MAX_IMAGE_BYTES) { skipped.push({ name: e.name, kind, reason: 'larger than 2 MB after resize' }); continue; }\n  const mime = e.bin.mimeType || 'image/jpeg';\n  slides.push({ slide_no: slides.length + 1, name: e.name, kind, mime, data_url: 'data:' + mime + ';base64,' + buf.toString('base64') });\n}\n\n// Images that were listed but not downloaded (folder has more than the limit)\nfor (const f of overLimit) {\n  skipped.push({ name: f.name, kind: 'image', reason: 'over the ' + MAX_SLIDES + '-item limit' });\n}\n\nreturn [{ json: { slides, skipped_items: skipped, counts: { total_items: slides.length + skipped.length } } }];\n"
+      },
+      "name": "Collect Drive Images",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1088,
+        1984
+      ],
+      "id": "3e616e54-67c7-487a-93b4-f2c5c947c911",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "ec707b5c-0000-4000-8000-4974770b538c",
+              "leftValue": "={{ !!$('Session Manager1').first().json.media }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Has Media File?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1760,
+        2928
+      ],
+      "id": "d8ea3c68-c898-4e2d-8330-be825be67057"
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $('Session Manager1').first().json.media.file_id }}",
+        "additionalFields": {}
+      },
+      "name": "Download Image",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -1536,
+        3024
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "id": "89e03695-af47-469b-9e79-d6e91589b5b0",
+      "webhookId": "37448ff0-e10c-4254-a5d3-472bc18ad097",
+      "credentials": {
+        "telegramApi": {
+          "id": "JGd0kuRrvPmiG8qJ",
+          "name": "Telegram-tvp"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "resize",
+        "width": 1080,
+        "height": 1080,
+        "resizeOption": "onlyIfLarger",
+        "options": {
+          "format": "jpeg",
+          "quality": 80
+        }
+      },
+      "name": "Resize Telegram Image",
+      "type": "n8n-nodes-base.editImage",
+      "typeVersion": 1,
+      "position": [
+        -1312,
+        3088
+      ],
+      "id": "e8a6dfd0-b588-44e8-8b8b-7a35e8f34b49",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst s = $('Session Manager1').first().json;\nconst item = $input.first();\nconst a = s.answers || {};\nconst isText = s.mode === 'text';\nconst brand = $('Brand Config').first()?.json?.brand || {};\n\nconst safeStr = v => v == null ? '' : String(v).trim();\n\nconst list = v => {\n  if (Array.isArray(v)) return v.map(safeStr).filter(Boolean);\n  if (typeof v === 'string') {\n    return v.split(/[,;\\n]/).map(x => x.trim()).filter(Boolean);\n  }\n  return [];\n};\n\nconst hasValue = v => {\n  if (Array.isArray(v)) return v.some(hasValue);\n  if (v && typeof v === 'object') return Object.values(v).some(hasValue);\n  return v !== null && v !== undefined && safeStr(v) !== '';\n};\n\nconst compactValue = v => {\n  if (Array.isArray(v)) return v.map(compactValue).filter(hasValue);\n  if (!v || typeof v !== 'object') return v;\n  return Object.fromEntries(\n    Object.entries(v)\n      .filter(([, value]) => hasValue(value))\n      .map(([key, value]) => [key, compactValue(value)])\n  );\n};\n\nconst jsonForPrompt = v => JSON.stringify(compactValue(v));\n\nconst brandContext = compactValue({\n  brand_name: brand.brand_name,\n  instagram_handle: brand.instagram_handle,\n  industry: brand.industry,\n  about: brand.about,\n  products_services: brand.products_services,\n  usps: brand.usps,\n  target_audience: brand.target_audience,\n  audience_age: brand.audience_age,\n  audience_interests: brand.audience_interests,\n  city: brand.city,\n  state: brand.state,\n  country: brand.country,\n  service_area: brand.service_area,\n  audience_geography: brand.audience_geography,\n  goal: brand.goal,\n  tone: brand.tone,\n  caption_language: brand.caption_language,\n  default_cta: brand.default_cta,\n  always_include_hashtags: list(brand.always_include_hashtags),\n  never_use_hashtags: list(brand.never_use_hashtags),\n  notes: brand.notes\n});\n\nconst media = compactValue({\n  phase1_done: item.json.phase1_done,\n  slides_ok: item.json.slides_ok,\n  video_analysis: item.json.video_analysis,\n  report: item.json.report\n});\n\nconst contentType =\n  safeStr(a.post_type || a.content_type || a.postType) ||\n  safeStr(a.content_goal || a.goal) ||\n  safeStr(brand.goal) ||\n  'social media post';\n\nconst SYSTEM_MEDIA = `\nYou are a social-media caption and organic-discovery specialist for multiple brands, industries and content formats.\n\nCORE PRIORITY\nMake the caption feel human and scroll-stopping first; SEO second. The caption must relate to the actual media, attract the right viewer and give them a reason to keep reading or engage. Match emotional intensity to the content; never force drama into calm or practical posts.\n\n1. SOURCE AND ACCURACY\nPrioritize actual image/video/slide analysis, then brand information and the user brief. Respect the post type, topic, language, audience, goal and brand voice. Never invent visual details, product features, ingredients, results, prices, statistics, offers, testimonials, credentials, personal experiences or claims. Do not describe unseen content as verified. Use only relevant brand facts.\n\n2. HOOK AND CURIOSITY\nThe opening must be specific to this post, not a reusable generic line. Find the strongest supported angle: an unexpected detail, meaningful contrast, relatable problem, overlooked point, surprising-but-true observation, practical payoff, common mistake, useful question or unresolved curiosity. Choose an angle the content can genuinely deliver on.\n\nGive viewers a reason to pause, read more or watch closely. Use a curiosity gap when appropriate and deliver its payoff. Avoid clickbait, bland introductions, generic questions, empty hype, obvious statements and repetitive hook formulas. Do not always start with a question or use the same hook style across posts.\n\nFor Reels, use the actual scene, action, demonstration, transformation or central idea. For images, use the strongest visible detail or message. For carousels, use the overall takeaway, a useful slide detail or a reason to explore the slides. Adapt to the real format.\n\n3. HUMAN-FEEL CHECKLIST\nBefore finalizing, internally check:\n- Does the first line make this specific post worth noticing?\n- Is there a clear curiosity, relevance, contrast or benefit?\n- Does it sound like a person speaking to one viewer?\n- Is the rhythm natural, with varied sentence lengths?\n- Is the wording concrete rather than vague or corporate?\n- Does the emotional tone fit the actual content?\n- Does every claim follow from the media, brief or brand facts?\n- Does the caption offer a clear takeaway or meaningful connection?\n- Does the ending/CTA feel natural rather than mechanically attached?\n- Do consecutive lines flow naturally into each other?\n- Does the caption avoid common AI patterns such as overly balanced paragraphs, repetitive sentence openings and overly formal transitions?\n\nImprove weak points before returning the result. Do not expose this checklist.\n\n4. HUMAN VOICE, FLOW AND STRUCTURE\nUse natural conversational language, personal pronouns and relatable wording when appropriate. Sensory language is allowed only when supported. Avoid corporate brochures, AI essays, motivational-poster language, forced emotions, filler, clichés, keyword stuffing and over-polished explanations.\n\nWrite with natural spoken flow. Each new line should continue the previous thought, not feel like a separate point. Prefer short-to-medium sentences that connect smoothly. Avoid starting consecutive lines with the same word or structure. Line breaks should create rhythm and breathing space, not chop the caption into disconnected statements.\n\nChoose the structure that fits the post: a short punchy caption, curiosity-led opening with payoff, relatable situation, practical insight, mini-story, concise explanation or another suitable format. These are options, not templates. Do not force a story, educational list, dramatic reveal or long explanation into every post. Keep length proportionate to the media and message. Use 0–2 relevant emojis only when they fit the brand voice.\n\n5. AUDIENCE AND CTA\nWrite for the brand's actual target audience, interests, age range and geography when provided. Prefer relevance over appealing to everyone. Use the requested language and brand tone. A CTA should support the post goal and invite a natural next step: reflect, save, share, comment, explore or buy only when relevant. Use the brand's default CTA when suitable; never force engagement bait.\n\n6. SEO KEYWORDS — EXACTLY 10\nReturn 10 distinct search phrases relevant to the actual post and brand. Aim for:\n- 3–4 specific topic, subject, product or service phrases.\n- 3–4 audience-intent, need, question or problem-aware phrases.\n- 2–3 broader but still relevant discovery phrases.\n\nThese ranges must total exactly 10. Use natural phrases a relevant viewer might search for, aligned with the actual media, brand and audience. Avoid near-duplicates, unrelated high-volume terms and unsupported claims. Do not mechanically repeat the same keyword pattern for every brand.\n\n7. HASHTAGS AND DISCOVERY\nReturn exactly 5 recommended hashtags and 10 additional hashtags in the required output fields. Mix specific niche/community tags, relevant subject or product tags, audience-interest tags and broader discovery tags where appropriate. Prefer tags that real accounts in the same niche actually use, when known. Never claim a tag is trending, viral or high-volume without verified research.\n\nPrioritize relevance to the post and intended audience, not popularity alone. Avoid irrelevant generic tag piles, misleading tags, duplicates across hashtag groups and forbidden tags. Respect required and prohibited brand hashtag lists. Include required tags where relevant and never use forbidden ones.\n\nLocation tags belong only in hashtags.location_tags and only when a specific city or state is supplied and genuinely relevant. Return an empty array when location tags are not justified. Never infer location from language, industry or audience alone. Never guarantee reach, views, virality or ranking.\n\n8. FINAL VALIDATION\nVerify before returning:\n- Caption is media-related, specific, curiosity-building where suitable, readable and human.\n- Lines connect smoothly; sentence openings and structure do not feel repetitive or mechanically balanced.\n- Emotional intensity fits the content.\n- Keywords contain exactly 10 distinct relevant phrases with the intended mix.\n- hashtags.recommended_5 contains exactly 5 hashtags.\n- hashtags.extra_pool contains exactly 10 additional hashtags.\n- hashtags.location_tags contains only justified location tags or an empty array.\n- Hashtags are correctly formatted, duplicates are removed and forbidden tags are excluded.\n- Brand tone, language, user brief and factual accuracy are respected.\n- JSON keys and nesting match the required schema exactly.\n\nOUTPUT CONTRACT\nReturn only one valid JSON object:\n{\n  \"caption\": \"string\",\n  \"keywords\": [\"10 keyword phrases\"],\n  \"hashtags\": {\n    \"recommended_5\": [\"5 hashtags\"],\n    \"extra_pool\": [\"10 hashtags\"],\n    \"location_tags\": []\n  }\n}\n\nDo not add Markdown, explanations or extra keys. Use the requested language; if unspecified, use brand.caption_language, then infer from the user brief.\n`.trim();\n\nconst promptData = compactValue({\n  task: 'Generate a final social-media caption and organic-discovery metadata.',\n  content_type: contentType,\n  requested_language:\n    safeStr(a.caption_language || a.language || brand.caption_language),\n  topic: a.topic,\n  reference: a.reference || a.reference_link || a.ref,\n  concept: a.concept,\n  instructions: a.instructions || a.additional_instructions,\n  content_goal: a.content_goal || a.goal || brand.goal,\n  brand: brandContext,\n  media_analysis: isText ? undefined : media,\n  text_content: isText\n    ? (a.text || a.content || item.json.text || item.json.content)\n    : undefined,\n  priorities: [\n    'Media-specific curiosity and viewer relevance',\n    'Human voice, smooth flow and natural line breaks',\n    'No forced drama, clickbait or generic AI patterns',\n    'Right-audience discovery through relevant keywords and hashtags',\n    'Truthful claims and brand consistency',\n    'Exact original JSON schema and item counts'\n  ]\n});\n\nconst body = {\n  model: 'openai/gpt-oss-120b',\n  temperature: 0.55,\n  max_completion_tokens: isText ? 3000 : 2500,\n  reasoning_effort: 'low',\n  response_format: { type: 'json_object' },\n  messages: [\n    { role: 'system', content: SYSTEM_MEDIA },\n    {\n      role: 'user',\n      content: jsonForPrompt(promptData)\n    }\n  ]\n};\n\nreturn {\n  phase: 'final',\n  body,\n  report: item.json.report || {},\n  _debug: {\n    mode: isText ? 'text' : 'media',\n    contentType,\n    promptVersion: 'human-discovery-v2-flow-optimized'\n  }\n};\n"
+      },
+      "name": "Build Groq Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2496,
+        400
+      ],
+      "id": "804b302d-bc7b-48ac-a0b7-06a50ac6b16b",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "name": "Groq Analyze1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2720,
+        256
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "id": "41d5dae9-41c7-43c3-9773-4b9555501990",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "4SheRGQzI33Kg7Zc",
+          "name": "groq_"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const s = $('Session Manager1').first().json;\nlet brand = {};\ntry { brand = $('Brand Config').first().json.brand || {}; } catch (e) { brand = {}; }\nconst res = $input.first().json;\n\nconst cand = res && res.choices && res.choices[0];\nlet raw = (cand && cand.message && cand.message.content) || '';\nraw = String(raw).replace(/<think>[\\s\\S]*?<\\/think>/gi, '').trim();\nif (!raw) throw new Error('USER: The model returned an empty response. Please try again.');\n\nlet d;\ntry {\n  const i = raw.indexOf('{');\n  const j = raw.lastIndexOf('}');\n  d = JSON.parse(i >= 0 && j > i ? raw.slice(i, j + 1) : raw);\n} catch (e) {\n  throw new Error('USER: The response could not be read. Please resend your request.');\n}\n\nconst esc = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst arr = v => (Array.isArray(v) ? v.filter(Boolean) : []);\n\n// ---------- Hashtags ----------\nconst cleanTag = t => String(t == null ? '' : t).trim().replace(/[^\\p{L}\\p{N}_#]/gu, '').replace(/^#+/, '');\nconst tag = t => { const c = cleanTag(t); return c ? '#' + c : ''; };\nconst blocked = new Set(arr(brand.never_use_hashtags).map(t => tag(t).toLowerCase()).filter(Boolean));\nconst seen = new Set();\nconst tags = list => arr(list).map(tag).filter(t => {\n  const k = t.toLowerCase();\n  if (!t || blocked.has(k) || seen.has(k)) return false;\n  seen.add(k);\n  return true;\n});\n\nconst f = d.final || d;\nconst h = f.hashtags || {};\n\n// brand tags are registered first so the model's tags cannot duplicate them\nconst branded = tags(brand.always_include_hashtags);\nconst recommended = tags(h.recommended_5);\nconst location = tags(h.location_tags);\nconst extra = tags(h.extra_pool);\n\n// ---------- Caption cleanup ----------\nconst websiteLink = String(brand.namelink || '').trim();\n\nlet caption = String(f.caption || '')\n  .replace(/^[ \\t]*[\\u2705\\u2714\\u2611]\\uFE0F?[ \\t]*/gmu, '• ')\n  .replace(/[\\u2705\\u2714\\u2611\\u274C\\u{1F680}\\u{1F525}\\u{1F4AF}]\\uFE0F?/gu, '')\n  .replace(/(?:https?:\\/\\/|www\\.)\\S+/gi, '')\n  .replace(/(^|\\s)#[\\p{L}\\p{N}_]+/gu, '$1')\n  .replace(/[ \\t]+\\n/g, '\\n')\n  .replace(/\\n{3,}/g, '\\n\\n')\n  .trim();\n\n// Website link: compulsory when available (fixed position, last line), nothing when not available\nif (caption && websiteLink) caption += '\\n\\nWebsite: ' + websiteLink;\n\nconst keywords = arr(f.keywords)\n  .map(k => String(k).toLowerCase().replace(/#/g, '').trim())\n  .filter((k, i, a) => k && a.indexOf(k) === i)\n  .slice(0, 10);\n\n// ---------- Message ----------\nconst fin = [];\n\n// ---------- Processing report (media runs only) ----------\nlet rep = null;\ntry { rep = $('Build Groq Request').first().json.report || null; } catch (e) { rep = null; }\nif (rep) {\n  const lines = [\n    '<b>Processing Report</b>',\n    'Processed: ' + rep.processed + ' of ' + rep.total + ' items'\n  ];\n  if (rep.images_ok > 0 || !rep.video_attempted) lines.push('• Images: ' + rep.images_ok + ' successful');\n  if (rep.video_attempted) lines.push('• Video (full analysis): ' + (rep.videos_ok || 0) + ' successful');\n  lines.push('• Failed / Skipped: ' + rep.failed_skipped);\n  if (rep.issues && rep.issues.length) {\n    lines.push('', '<b>Not included</b>');\n    rep.issues.slice(0, 10).forEach(x => lines.push('• ' + esc(x)));\n  }\n  fin.push(lines.join('\\n'));\n}\nif (caption) fin.push('<b>Caption</b>\\n<pre>' + esc(caption) + '</pre>');\nif (keywords.length) fin.push('<b>SEO Keywords</b>\\n' + keywords.map(esc).join(', '));\nif (branded.length) fin.push('<b>Brand Hashtags</b>\\n<code>' + branded.map(esc).join(' ') + '</code>');\nif (recommended.length) fin.push('<b>Recommended Hashtags</b>\\n<code>' + recommended.map(esc).join(' ') + '</code>');\nif (location.length) fin.push('<b>Location Hashtags</b>\\n<code>' + location.map(esc).join(' ') + '</code>');\nif (extra.length) fin.push('<b>Rotation Pool</b>\\n<code>' + extra.map(esc).join(' ') + '</code>');\n\nconst MAX = 3800;\nfunction chunk(blocks) {\n  const out = [];\n  let cur = '';\n  for (let b of blocks) {\n    if (b.length > MAX) b = b.replace(/<[^>]+>/g, '').slice(0, MAX - 20) + '…';\n    if (cur && (cur + '\\n\\n' + b).length > MAX) { out.push(cur); cur = b; }\n    else cur = cur ? cur + '\\n\\n' + b : b;\n  }\n  if (cur) out.push(cur);\n  return out;\n}\n\nreturn chunk(fin).map(t => ({ json: { chat_id: s.chat_id, text: t } }));\n"
+      },
+      "name": "Parse & Format1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2944,
+        112
+      ],
+      "id": "df448c8f-55c3-42bd-90a4-091ffc161c90",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_web_page_preview": true,
+          "parse_mode": "HTML"
+        }
+      },
+      "name": "Send Results1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3168,
+        1248
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "id": "062fe6f6-a4e0-46f4-a576-d13cb1216a66",
+      "webhookId": "ff2410db-a480-4f04-93d6-5e77cabdcc46",
+      "credentials": {
+        "telegramApi": {
+          "id": "JGd0kuRrvPmiG8qJ",
+          "name": "Telegram-tvp"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const s = $('Session Manager1').first().json;\nconst j = $input.first().json || {};\nconst raw = (j.error && (j.error.message || j.error.description)) || j.error || j.message || 'Unknown error';\nconst msg = String(typeof raw === 'string' ? raw : JSON.stringify(raw))\n  .replace(/Bearer\\s+[A-Za-z0-9._-]+/gi, 'Bearer ***')\n  .replace(/gsk_[A-Za-z0-9]+/g, '***');\nconst low = msg.toLowerCase();\nconst esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n\nlet text;\nconst u = msg.indexOf('USER: ');\nif (u >= 0) {\n  text = esc(msg.slice(u + 6).split('\\n')[0].slice(0, 300));\n} else {\n  let reason;\n  if (/tokens per minute|\\btpm\\b|tokens per day|\\btpd\\b|429|rate limit|too many requests|quota/.test(low)) {\n    reason = 'The service is receiving too many requests right now. Please try again in about a minute.';\n  } else if (/drive|folder|file not found|404/.test(low)) {\n    reason = 'The Drive link could not be read. Check the link and that the folder is shared with the connected Google account.';\n  } else if (/401|403|invalid api key|unauthori[sz]ed|forbidden|permission/.test(low)) {\n    reason = 'Access was denied. Please contact the administrator to review the credentials.';\n  } else if (/decommission|model_not_found|does not exist|no longer/.test(low)) {\n    reason = 'The configured AI model is currently unavailable. Please contact the administrator.';\n  } else if (/413|too large|payload/.test(low)) {\n    reason = 'The submitted content is too large. Please send smaller or compressed images.';\n  } else if (/\\b5\\d\\d\\b|overload|unavailable|timeout|timed out|etimedout|econn/.test(low)) {\n    reason = 'The service is temporarily unavailable. Please try again shortly.';\n  } else {\n    reason = 'An unexpected error occurred. Please try again.';\n  }\n  text = '<b>The analysis could not be completed</b>\\n' + reason + '\\n\\n<i>Reference: ' + esc(msg.slice(0, 120)) + '</i>';\n}\n\nreturn [{ json: { chat_id: s.chat_id, text } }];\n"
+      },
+      "name": "Build Error Message1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3168,
+        688
+      ],
+      "id": "87b9bc81-ddc0-43d9-a8ee-054fac20e332"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_web_page_preview": true,
+          "parse_mode": "HTML"
+        }
+      },
+      "name": "Send Error1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3392,
+        688
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "id": "b311239c-326a-46f0-a0b6-04e95e5d58b3",
+      "webhookId": "9900dff1-f603-429f-964e-135105eceedc",
+      "credentials": {
+        "telegramApi": {
+          "id": "JGd0kuRrvPmiG8qJ",
+          "name": "Telegram-tvp"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Drive folder classification\nOnly folder links are accepted. Right after Drive List Files the folder is classified:\n\nA  images only -> 3-level vision fallback (Groq > Gemini > Groq)\nB  1 video, no images -> Gemini File API (full video)\nC  2+ videos, no images -> error\nD  images + 1 video -> vision fallback for images, then Gemini File API for the video\nE  images + 2+ videos -> error\nEmpty folder -> error\n\nVideo path: upload start > download from Drive > upload bytes > poll until ACTIVE > generateContent(fileUri) > Build Groq Request.\nTip: set N8N_DEFAULT_BINARY_DATA_MODE=filesystem on the n8n instance so large videos stay on disk.",
+        "height": 380,
+        "width": 560,
+        "color": 5
+      },
+      "name": "Note - Folder Classification",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -2432,
+        720
+      ],
+      "id": "b4c5b406-8a4b-4b8b-a37e-62a2d7d1b0a8"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst VISION_MODEL = 'qwen/qwen3.8-27b';   // Level 1 and Level 3 (Groq)\nconst MAX_OUT_VISION = 1200;\n\nconst c = $input.first().json || {};\nconst slides = c.slides || [];\n\nif (!slides.length) {\n  const why = (c.skipped_items || [])\n    .slice(0, 3)\n    .map(x => x.name + ' (' + x.reason + ')')\n    .join('; ');\n\n  throw new Error('USER: No usable image or video keyframe was found. ' + why);\n}\n\nconst total = slides.length;\n\nconst SYSTEM_VISION =\n  'You are a meticulous visual observer for Instagram slides. Output JSON only.';\n\n// Language is passed by Session Manager1.\n// Only Hinglish is supported as a non-English description language.\n// Missing or any other value defaults to English.\nlet descriptionLanguage = 'english';\n\ntry {\n  const answers = $('Session Manager1').first().json.answers || {};\n  if (String(answers.language || '').toLowerCase() === 'hinglish') {\n    descriptionLanguage = 'hinglish';\n  }\n} catch (e) {\n  descriptionLanguage = 'english';\n}\n\nconst languageRule = descriptionLanguage === 'hinglish'\n  ? 'LANGUAGE RULE: Write the shows and key_message descriptions in natural, conversational Hinglish (Hindi expressed in Roman script, naturally mixed with common English words). Keep the wording clear and concise. The text_on_slide field must preserve the exact readable text as it appears in the image, in its original language and script. Do not translate, transliterate, or rewrite text_on_slide. If the text is unreadable, say so instead of guessing.'\n  : 'LANGUAGE RULE: Write the shows and key_message descriptions in English. The text_on_slide field must preserve the exact readable text as it appears in the image, in its original language and script. Do not translate, transliterate, or rewrite text_on_slide. If the text is unreadable, say so instead of guessing.';\n\nreturn slides.map(sl => {\n  const where = total === 1\n    ? 'This is the only visual of ONE Instagram post.'\n    : 'This is slide ' + sl.slide_no + ' of ' + total + ' from ONE Instagram carousel.';\n\n  const extra = sl.kind === 'video'\n    ? 'This image is a single keyframe taken from a video (reel). Describe only this frame and do not guess what happens in the rest of the video.'\n    : '';\n\n  const prompt = [\n    where,\n    extra,\n    languageRule,\n    'Describe ONLY what is visible. Read on-slide text exactly. If text is blurry or too small, say so instead of guessing.',\n    'Return ONLY one valid JSON object, no markdown fences, in exactly this shape:',\n    '{\"slides\":[{\"slide\":' + sl.slide_no + ',\"shows\":\"what the slide shows in one sentence\",\"text_on_slide\":\"exact legible text, or none\",\"key_message\":\"the single point this slide makes\"}]}'\n  ].filter(Boolean).join('\\n');\n\n  const body = {\n    model: VISION_MODEL,\n    messages: [\n      { role: 'system', content: SYSTEM_VISION },\n      {\n        role: 'user',\n        content: [\n          { type: 'text', text: prompt },\n          {\n            type: 'text',\n            text: 'Slide ' + sl.slide_no + ' (' + sl.kind + ', file: ' + sl.name + '):'\n          },\n          { type: 'image_url', image_url: { url: sl.data_url } }\n        ]\n      }\n    ],\n    temperature: 0.2,\n    max_completion_tokens: MAX_OUT_VISION,\n    response_format: { type: 'json_object' }\n  };\n\n  if (/^qwen\\//.test(VISION_MODEL)) {\n    body.reasoning_effort = 'none';\n  }\n\n  return {\n    json: {\n      slide_no: sl.slide_no,\n      name: sl.name,\n      kind: sl.kind,\n      mime: sl.mime,\n      vision_prompt: prompt,\n      groq_body: body\n    }\n  };\n});\n"
+      },
+      "name": "Prepare Slides",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -864,
+        2064
+      ],
+      "id": "9d701e2d-6d13-4093-b766-15a1356d4571",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "name": "Loop Slides",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -640,
+        2272
+      ],
+      "id": "c6c9e024-de11-4003-a197-4bbbc85e7b34"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.groq_body) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "name": "Groq Vision L1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -416,
+        2320
+      ],
+      "id": "0abfe243-ca0f-46a6-b8ba-55a607fe45bd",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "4SheRGQzI33Kg7Zc",
+          "name": "groq_"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Level 1: Groq vision result\nconst s = $('Loop Slides').item.json;\nconst clip = (v, n) => String(v == null ? '' : v).replace(/\\s+/g, ' ').slice(0, n || 160);\nconst errText = e => (typeof e === 'string' ? e : ((e && (e.message || e.description)) || JSON.stringify(e)));\n\nfunction toDescription(raw) {\n  try {\n    const a = raw.indexOf('{');\n    const z = raw.lastIndexOf('}');\n    const p = JSON.parse(a >= 0 && z > a ? raw.slice(a, z + 1) : raw);\n    const d = Array.isArray(p.slides) ? p.slides[0] : p;\n    if (d && (d.shows || d.text_on_slide || d.key_message)) {\n      return { desc: { slide: s.slide_no, kind: s.kind, shows: clip(d.shows, 400), text_on_slide: clip(d.text_on_slide || 'none', 600), key_message: clip(d.key_message, 300) } };\n    }\n    return { reason: 'no usable description in response' };\n  } catch (e) {\n    return { reason: 'response was not valid JSON' };\n  }\n}\n\nfunction extract(j) {\n  if (j.error) return { reason: 'request failed: ' + clip(errText(j.error)) };\n  const code = Number(j.statusCode);\n  if (!(code >= 200 && code < 300)) {\n    const b = j.body || {};\n    return { reason: 'HTTP ' + code + ': ' + clip((b.error && (b.error.message || b.error)) || JSON.stringify(b)) };\n  }\n  const c0 = j.body && j.body.choices && j.body.choices[0];\n  const raw = String((c0 && c0.message && c0.message.content) || '').replace(/<think>[\\s\\S]*?<\\/think>/gi, '').trim();\n  return raw ? { raw } : { reason: 'empty response' };\n}\n\nconst ex = extract($json || {});\nconst r = ex.raw ? toDescription(ex.raw) : { reason: ex.reason };\nconst trail = ([]).concat(r.desc ? [] : [{ level: 1, model: 'groq', reason: r.reason }]);\nreturn { json: {\n  slide_no: s.slide_no, name: s.name, kind: s.kind,\n  ok: !!r.desc, model: r.desc ? 'groq' : null, level: 1,\n  description: r.desc || null, reason: r.reason || '', trail\n} };\n"
+      },
+      "name": "Check L1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -192,
+        2320
+      ],
+      "id": "aee02c40-ad51-4a63-aef6-94368e9603fd"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "ab6cbebd-6d5a-4f7e-bcc4-52a70fe1cee5",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "L1 OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        32,
+        2320
+      ],
+      "id": "24af2b5a-df09-421d-8c26-98e0d617e29d"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Level 2 request: same prompt and same (already resized) image, Gemini format.\nconst GEMINI_MODEL = 'gemini-3.8-flash';\nconst s = $('Loop Slides').item.json;\nconst sys = s.groq_body.messages[0].content;\nconst url = s.groq_body.messages[1].content[2].image_url.url;\nconst b64 = url.slice(url.indexOf(',') + 1);\nconst body = {\n  systemInstruction: { parts: [{ text: sys }] },\n  contents: [{ role: 'user', parts: [\n    { text: s.vision_prompt },\n    { inlineData: { mimeType: s.mime || 'image/jpeg', data: b64 } }\n  ] }],\n  generationConfig: { temperature: 0.2, maxOutputTokens: 1200, responseMimeType: 'application/json' }\n};\nreturn { json: { slide_no: s.slide_no, gemini_model: GEMINI_MODEL, gemini_body: body } };\n"
+      },
+      "name": "Build Gemini Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        256,
+        2256
+      ],
+      "id": "e37e4770-94eb-4bad-81ba-fb0fa6e50a74"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://generativelanguage.googleapis.com/v1beta/models/' + $json.gemini_model + ':generateContent' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.gemini_body) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "name": "Gemini Vision L2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        2256
+      ],
+      "id": "f22c592b-834d-4576-b71b-f01ba8ff7ae0",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cG3RJg0DmX54uTKy",
+          "name": "Gemini"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Level 2: Gemini vision result\nconst s = $('Loop Slides').item.json;\nconst clip = (v, n) => String(v == null ? '' : v).replace(/\\s+/g, ' ').slice(0, n || 160);\nconst errText = e => (typeof e === 'string' ? e : ((e && (e.message || e.description)) || JSON.stringify(e)));\n\nfunction toDescription(raw) {\n  try {\n    const a = raw.indexOf('{');\n    const z = raw.lastIndexOf('}');\n    const p = JSON.parse(a >= 0 && z > a ? raw.slice(a, z + 1) : raw);\n    const d = Array.isArray(p.slides) ? p.slides[0] : p;\n    if (d && (d.shows || d.text_on_slide || d.key_message)) {\n      return { desc: { slide: s.slide_no, kind: s.kind, shows: clip(d.shows, 400), text_on_slide: clip(d.text_on_slide || 'none', 600), key_message: clip(d.key_message, 300) } };\n    }\n    return { reason: 'no usable description in response' };\n  } catch (e) {\n    return { reason: 'response was not valid JSON' };\n  }\n}\n\nfunction extract(j) {\n  if (j.error) return { reason: 'request failed: ' + clip(errText(j.error)) };\n  const code = Number(j.statusCode);\n  const b = j.body || {};\n  if (!(code >= 200 && code < 300)) {\n    return { reason: 'HTTP ' + code + ': ' + clip((b.error && (b.error.message || b.error)) || JSON.stringify(b)) };\n  }\n  const cand = b.candidates && b.candidates[0];\n  const raw = ((cand && cand.content && cand.content.parts) || []).map(p => p.text || '').join('').trim();\n  if (raw) return { raw };\n  const why = (b.promptFeedback && b.promptFeedback.blockReason) || (cand && cand.finishReason);\n  return { reason: 'empty response' + (why ? ' (' + why + ')' : '') };\n}\n\nconst ex = extract($json || {});\nconst r = ex.raw ? toDescription(ex.raw) : { reason: ex.reason };\nconst trail = ($('Check L1').item.json.trail || []).concat(r.desc ? [] : [{ level: 2, model: 'gemini', reason: r.reason }]);\nreturn { json: {\n  slide_no: s.slide_no, name: s.name, kind: s.kind,\n  ok: !!r.desc, model: r.desc ? 'gemini' : null, level: 2,\n  description: r.desc || null, reason: r.reason || '', trail\n} };\n"
+      },
+      "name": "Check L2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        704,
+        2256
+      ],
+      "id": "13e12f0b-51f6-4324-88ba-a3b565d04f01"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "d57c98dd-a1b5-4081-8856-b7eeadf5d7eb",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "L2 OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        928,
+        2256
+      ],
+      "id": "ab61ff19-ed3f-4e26-a110-75805044940c"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Loop Slides').item.json.groq_body) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "name": "Groq Vision L3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1376,
+        2176
+      ],
+      "id": "62e2ceed-89ad-4746-98b3-7050ffd64ef4",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nUMSkQmGSW5dtFhc",
+          "name": "groq_2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Level 3: Groq retry after the 10 second wait\nconst s = $('Loop Slides').item.json;\nconst clip = (v, n) => String(v == null ? '' : v).replace(/\\s+/g, ' ').slice(0, n || 160);\nconst errText = e => (typeof e === 'string' ? e : ((e && (e.message || e.description)) || JSON.stringify(e)));\n\nfunction toDescription(raw) {\n  try {\n    const a = raw.indexOf('{');\n    const z = raw.lastIndexOf('}');\n    const p = JSON.parse(a >= 0 && z > a ? raw.slice(a, z + 1) : raw);\n    const d = Array.isArray(p.slides) ? p.slides[0] : p;\n    if (d && (d.shows || d.text_on_slide || d.key_message)) {\n      return { desc: { slide: s.slide_no, kind: s.kind, shows: clip(d.shows, 400), text_on_slide: clip(d.text_on_slide || 'none', 600), key_message: clip(d.key_message, 300) } };\n    }\n    return { reason: 'no usable description in response' };\n  } catch (e) {\n    return { reason: 'response was not valid JSON' };\n  }\n}\n\nfunction extract(j) {\n  if (j.error) return { reason: 'request failed: ' + clip(errText(j.error)) };\n  const code = Number(j.statusCode);\n  if (!(code >= 200 && code < 300)) {\n    const b = j.body || {};\n    return { reason: 'HTTP ' + code + ': ' + clip((b.error && (b.error.message || b.error)) || JSON.stringify(b)) };\n  }\n  const c0 = j.body && j.body.choices && j.body.choices[0];\n  const raw = String((c0 && c0.message && c0.message.content) || '').replace(/<think>[\\s\\S]*?<\\/think>/gi, '').trim();\n  return raw ? { raw } : { reason: 'empty response' };\n}\n\nconst ex = extract($json || {});\nconst r = ex.raw ? toDescription(ex.raw) : { reason: ex.reason };\nconst trail = ($('Check L2').item.json.trail || []).concat(r.desc ? [] : [{ level: 3, model: 'groq', reason: r.reason }]);\nreturn { json: {\n  slide_no: s.slide_no, name: s.name, kind: s.kind,\n  ok: !!r.desc, model: r.desc ? 'groq' : null, level: 3,\n  description: r.desc || null, reason: r.reason || '', trail\n} };\n"
+      },
+      "name": "Check L3",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        2176
+      ],
+      "id": "52fa9150-e201-448c-b25d-d087ec9847e5"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// One normalised result per slide, whichever level finished it. Feeds the loop.\nconst j = $json;\nconst trail = j.trail || [];\nreturn { json: {\n  slide_no: j.slide_no, name: j.name, kind: j.kind,\n  ok: !!j.ok, model: j.ok ? j.model : null, level: j.level,\n  description: j.description || null,\n  reason: j.ok ? '' : trail.map(t => 'L' + t.level + ' ' + t.model + ': ' + t.reason).join(' | '),\n  trail\n} };\n"
+      },
+      "name": "Record Slide Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1824,
+        2352
+      ],
+      "id": "b390284f-663d-40a7-85d7-8b43ddb8ff2e"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Runs once, after the loop is done. Builds the report and the slide list for Phase 2.\nconst results = $input.all().map(i => i.json).filter(Boolean).sort((a, b) => a.slide_no - b.slide_no);\nconst prep = $('Collect Drive Images').first().json || {};\nconst skipped = prep.skipped_items || [];\nconst ok = results.filter(r => r.ok);\nconst bad = results.filter(r => !r.ok);\nconst cnt = (arr, fn) => arr.filter(fn).length;\nconst clip = (v, n) => String(v == null ? '' : v).replace(/\\s+/g, ' ').slice(0, n);\n\nconst report = {\n  total: results.length + skipped.length,\n  processed: ok.length,\n  images_ok: cnt(ok, r => r.kind !== 'video'),\n  videos_ok: cnt(ok, r => r.kind === 'video'),\n  failed_skipped: bad.length + skipped.length,\n  models: { groq: cnt(ok, r => r.model === 'groq'), gemini: cnt(ok, r => r.model === 'gemini') },\n  issues: bad.map(r => clip(r.name + ' (' + r.kind + '): failed after all 3 levels - ' + r.reason, 220))\n    .concat(skipped.map(x => clip(x.name + ' (' + x.kind + '): skipped - ' + x.reason, 160)))\n};\n\nif (!ok.length) {\n  throw new Error('USER: None of the ' + results.length + ' item(s) could be analysed after all fallback levels. Please try again in a minute.');\n}\n// Drive folders with exactly 1 video continue to the Gemini File API path; everything else goes straight to captioning.\nlet needsVideo = false;\ntry { needsVideo = !!$('Classify Drive Files').first().json.has_video; } catch (e) { needsVideo = false; }\nreturn [{ json: { phase1_done: true, needs_video: needsVideo, slides_ok: ok.map(r => r.description), report } }];\n"
+      },
+      "name": "Collect Slide Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -416,
+        1984
+      ],
+      "id": "e5be9e00-6b13-471f-82c9-14d450820ca9",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "amount": 1,
+        "unit": "minutes"
+      },
+      "name": "Wait 1m",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1152,
+        2176
+      ],
+      "id": "3b0c0388-c139-42ff-a1b6-9ceb9b912216",
+      "webhookId": "7c0423d3-6d4a-4c38-a4df-82c0c302d7db"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Runs right after \"Drive List Files\". Classifies the folder and decides the path.\n//   A  images only (1+)            -> 3-level vision fallback (Groq -> Gemini -> Groq)\n//   B  exactly 1 video, 0 images   -> Gemini File API (full video analysis)\n//   C  2+ videos, 0 images         -> error\n//   D  images + exactly 1 video    -> images via vision fallback, then the video via Gemini File API\n//   E  images + 2+ videos          -> error\n//   empty folder                   -> error\nconst MAX_IMAGES = 8;            // images sent to the vision loop (same limit as before)\nconst MULTI_VIDEO = 'error';     // 'error' = reject 2+ videos | 'first' = analyse the first video (A to Z by name) and report the rest as skipped\n\nconst files = $input.all().map(i => i.json).filter(f => f && f.id);\nconst mime = f => String(f.mimeType || '').toLowerCase();\nconst isVideo = f => mime(f).indexOf('video/') === 0;\nconst isImage = f => mime(f).indexOf('image/') === 0;\nconst byName = (a, b) => String(a.name).localeCompare(String(b.name), undefined, { numeric: true, sensitivity: 'base' });\nconst slim = f => ({ id: f.id, name: f.name, mimeType: f.mimeType, size: f.size });\n\nconst images = files.filter(isImage).sort(byName);\nlet videos = files.filter(isVideo).sort(byName);\n\nif (!images.length && !videos.length) {\n  throw new Error('USER: No images or videos found in this folder.');\n}\n\nlet videosIgnored = [];\nif (videos.length > 1) {\n  if (MULTI_VIDEO === 'first') {\n    videosIgnored = videos.slice(1).map(v => v.name);\n    videos = videos.slice(0, 1);\n  } else if (!images.length) {\n    throw new Error('USER: Please send only 1 video in the folder for full analysis. Found ' + videos.length + ' videos.');\n  } else {\n    throw new Error('USER: This folder has images and ' + videos.length + ' videos. Please keep only 1 video in the folder and send it again.');\n  }\n}\n\nconst caseId = images.length && videos.length ? 'D' : (images.length ? 'A' : 'B');\n\nreturn [{ json: {\n  case_id: caseId,\n  has_images: images.length > 0,\n  has_video: videos.length > 0,\n  image_count: images.length,\n  video_count: videos.length,\n  images: images.slice(0, MAX_IMAGES).map(slim),\n  images_over_limit: images.slice(MAX_IMAGES).map(slim),\n  video: videos.length ? slim(videos[0]) : null,\n  videos_ignored: videosIgnored\n} }];\n"
+      },
+      "id": "c813a202-72cb-410d-aa1a-f02c7142a16c",
+      "name": "Classify Drive Files",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2208,
+        1104
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "0e627f0f-1f50-4620-8147-e37ad79244cb",
+              "leftValue": "={{ $json.has_images }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "17cb1284-445a-4e81-a626-246086882767",
+      "name": "Has Images?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1984,
+        1168
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// One item per image so the existing download -> resize -> vision path runs unchanged.\nreturn ($input.first().json.images || []).map(f => ({ json: f }));\n"
+      },
+      "id": "5ba802b2-396c-466a-8a93-b886287ee810",
+      "name": "Expand Image Files",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1760,
+        1840
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "throw new Error('USER: Please send a Google Drive folder link (not a single file link).');\n"
+      },
+      "id": "fd2af8f9-652c-4d60-99a6-8740279b7ab4",
+      "name": "Reject Non-Folder",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2944,
+        2688
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "6f983571-d58c-4370-b95e-39d24b3e9543",
+              "leftValue": "={{ $json.needs_video === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d291deb7-1351-47d9-87f6-7554c36f63c5",
+      "name": "Video Also In Folder?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -192,
+        2064
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validates the single video from the classifier before anything is downloaded or uploaded.\nconst MAX_VIDEO_MB = 500;\nconst ALLOWED = ['video/mp4', 'video/mpeg', 'video/mpg', 'video/quicktime', 'video/x-msvideo', 'video/x-flv', 'video/webm', 'video/wmv', 'video/x-ms-wmv', 'video/3gpp'];\n\nconst cls = $('Classify Drive Files').first().json;\nconst v = cls.video;\nif (!v || !v.id) throw new Error('USER: No video was found in this folder.');\n\nconst mime = String(v.mimeType || '').toLowerCase();\nif (!ALLOWED.includes(mime)) {\n  throw new Error('USER: This video format (' + (mime || 'unknown') + ') is not supported. Please send MP4, MOV, WebM, AVI, MPEG, FLV, WMV or 3GPP.');\n}\nconst bytes = Number(v.size) || 0;\nif (!bytes) throw new Error('USER: The video size could not be read from Drive. Please try again.');\nif (bytes > MAX_VIDEO_MB * 1024 * 1024) {\n  throw new Error('USER: The video is too large (' + Math.round(bytes / 1048576) + ' MB). Please send a video under ' + MAX_VIDEO_MB + ' MB.');\n}\nreturn [{ json: { id: v.id, name: v.name, mime_type: mime, size_bytes: bytes } }];\n"
+      },
+      "id": "2a38a295-60ef-4761-8d10-a1db2c1508a5",
+      "name": "Prepare Video File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        32,
+        576
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/upload/v1beta/files",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Goog-Upload-Protocol",
+              "value": "resumable"
+            },
+            {
+              "name": "X-Goog-Upload-Command",
+              "value": "start"
+            },
+            {
+              "name": "X-Goog-Upload-Header-Content-Length",
+              "value": "={{ $json.size_bytes }}"
+            },
+            {
+              "name": "X-Goog-Upload-Header-Content-Type",
+              "value": "={{ $json.mime_type }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ file: { display_name: $json.name } }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "25496fb0-c957-47e6-87ce-6a5942320bd7",
+      "name": "Gemini Upload Start",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        256,
+        640
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cG3RJg0DmX54uTKy",
+          "name": "Gemini"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('Prepare Video File').first().json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "990cf191-62d3-40c6-8ab8-e0ecce46af72",
+      "name": "Download Video",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        480,
+        720
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "i7iX8e5045t0RvvD",
+          "name": "Google Drive THK"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Gemini Upload Start').first().json.headers['x-goog-upload-url'] }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Goog-Upload-Offset",
+              "value": "0"
+            },
+            {
+              "name": "X-Goog-Upload-Command",
+              "value": "upload, finalize"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "data",
+        "options": {
+          "timeout": 900000
+        }
+      },
+      "id": "57eb8e9e-cee9-4b3d-93f1-10f11df3d8ba",
+      "name": "Gemini Upload Bytes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        704,
+        784
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cG3RJg0DmX54uTKy",
+          "name": "Gemini"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "url": "=https://generativelanguage.googleapis.com/v1beta/{{ $('Gemini Upload Bytes').first().json.file.name }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "4ce2a054-8982-4cf0-a31e-99f932b12a0f",
+      "name": "Gemini Poll File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        928,
+        912
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cG3RJg0DmX54uTKy",
+          "name": "Gemini"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Polls until the uploaded file is ACTIVE. Runs once per poll, so $runIndex counts the polls.\nconst MAX_POLLS = 60;            // 60 polls x 5 seconds = 5 minutes\nconst f = $input.first().json || {};\nconst state = String(f.state || '').toUpperCase();\nconst attempt = $runIndex + 1;\n\nif (state === 'FAILED') {\n  throw new Error('USER: Gemini could not process this video file. Please re-export it as MP4 and try again.');\n}\nif (state !== 'ACTIVE' && attempt >= MAX_POLLS) {\n  throw new Error('USER: The video is taking too long to process. Please try a shorter video.');\n}\nreturn [{ json: { state, active: state === 'ACTIVE', attempt, file_name: f.name, file_uri: f.uri, mime: f.mimeType } }];\n"
+      },
+      "id": "78c645c0-0a50-4720-ba62-ee12570a24ad",
+      "name": "Check File State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1152,
+        928
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "a3e782b6-685f-4c42-b59d-241d447ca138",
+              "leftValue": "={{ $json.active }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d113b35e-cf3b-48a0-a64d-50d50dac9f83",
+      "name": "File ACTIVE?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1376,
+        1008
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "21967812-bb20-46ca-9a2f-9d8abe8ee5cd",
+      "name": "Wait 5s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1600,
+        1248
+      ],
+      "webhookId": "10611dde-b178-4916-ab4b-f032f57e1eb2"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n // Level \"video\": native Gemini analysis of the uploaded video (visuals, on-screen text and audio).\nconst GEMINI_MODEL = 'gemini-3.8-flash';\nconst MAX_OUT = 3000;\n\nconst chk = $input.first().json || {};\nconst up = ($('Gemini Upload Bytes').first().json || {}).file || {};\nconst prep = $('Prepare Video File').first().json;\n\nconst fileUri = chk.file_uri || up.uri;\nconst mimeType = chk.mime || up.mimeType || prep.mime_type;\n\nif (!fileUri) {\n  throw new Error('USER: The video upload did not return a file reference. Please try again.');\n}\n\n// Language is passed by Session Manager1.\n// Only Hinglish is supported as a non-English description language.\n// Missing or any other value defaults to English.\nlet descriptionLanguage = 'english';\n\ntry {\n  const answers = $('Session Manager1').first().json.answers || {};\n\n  if (String(answers.language || '').toLowerCase() === 'hinglish') {\n    descriptionLanguage = 'hinglish';\n  }\n} catch (e) {\n  descriptionLanguage = 'english';\n}\n\nconst languageRule = descriptionLanguage === 'hinglish'\n  ? 'LANGUAGE RULE: Write the video summary, scene descriptions (shows), spoken_content summary, key_message, and visual_style in natural, conversational Hinglish (Hindi expressed in Roman script, naturally mixed with common English words). Keep the descriptions clear and concise. Preserve text_on_screen exactly as it appears in the video, in its original language and script. Do not translate or transliterate on-screen text. For spoken_content, summarize the speech in Hinglish and identify the actual spoken language when it can be determined. If speech is unclear or absent, say so instead of guessing.'\n  : 'LANGUAGE RULE: Write the video summary, scene descriptions (shows), spoken_content summary, key_message, and visual_style in English. Preserve text_on_screen exactly as it appears in the video, in its original language and script. Do not translate or transliterate on-screen text. For spoken_content, summarize the speech in English and identify the actual spoken language when it can be determined. If speech is unclear or absent, say so instead of guessing.';\n\nconst SYSTEM =\n  'You are a meticulous video analyst for Instagram content. You describe only what you can actually see and hear. Output JSON only.';\n\nconst prompt = [\n  'Analyse this whole video (visuals, on-screen text and audio) from start to end.',\n  languageRule,\n  'Describe ONLY what is visible or audible. Read on-screen text exactly. If speech is unclear or there is none, say so instead of guessing.',\n  'Return ONLY one valid JSON object, no markdown fences, in exactly this shape:',\n  '{\"video\":{\"summary\":\"2 to 3 sentences on what happens from start to end\",\"scenes\":[{\"time\":\"approx m:ss\",\"shows\":\"what this part shows\"}],\"text_on_screen\":\"exact legible text, or none\",\"spoken_content\":\"short summary of what is said and the spoken language, or no speech\",\"key_message\":\"the single main point of the video\",\"visual_style\":\"setting, people, products and mood\"}}',\n  'Use at most 8 scenes.'\n].join('\\n');\n\nconst body = {\n  systemInstruction: { parts: [{ text: SYSTEM }] },\n  contents: [{\n    role: 'user',\n    parts: [\n      { fileData: { mimeType, fileUri } },\n      { text: prompt }\n    ]\n  }],\n  generationConfig: {\n    temperature: 0.2,\n    maxOutputTokens: MAX_OUT,\n    responseMimeType: 'application/json'\n  }\n};\n\nreturn [{\n  json: {\n    gemini_model: GEMINI_MODEL,\n    gemini_body: body\n  }\n}];\n"
+      },
+      "id": "3be85785-ca9c-45ed-ae63-b7f00023d01d",
+      "name": "Build Video Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        960
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://generativelanguage.googleapis.com/v1beta/models/' + $json.gemini_model + ':generateContent' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.gemini_body) }}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "38f72a7c-b1a4-4e5c-be4f-05b4ae83d415",
+      "name": "Gemini Video Analyze",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1824,
+        1056
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cG3RJg0DmX54uTKy",
+          "name": "Gemini"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parses the Gemini video analysis and merges it with the image results (if the folder also had images).\nconst clip = (v, n) => String(v == null ? '' : v).replace(/\\s+/g, ' ').trim().slice(0, n);\nconst cls = $('Classify Drive Files').first().json;\nconst res = $input.first().json || {};\n\nconst cand = res.candidates && res.candidates[0];\nconst raw = ((cand && cand.content && cand.content.parts) || []).filter(p => !p.thought).map(p => p.text || '').join('').trim();\nif (!raw) {\n  const why = (res.promptFeedback && res.promptFeedback.blockReason) || (cand && cand.finishReason);\n  throw new Error('USER: The video could not be analysed' + (why ? ' (' + why + ')' : '') + '. Please try a different video.');\n}\nlet p;\ntry {\n  const a = raw.indexOf('{'), z = raw.lastIndexOf('}');\n  p = JSON.parse(a >= 0 && z > a ? raw.slice(a, z + 1) : raw);\n} catch (e) {\n  throw new Error('USER: The video analysis could not be read. Please try again.');\n}\nconst v = p.video || p;\nconst video = {\n  summary: clip(v.summary, 700),\n  scenes: (Array.isArray(v.scenes) ? v.scenes : []).slice(0, 8).map(s => ({ time: clip(s && s.time, 12), shows: clip(s && s.shows, 200) })),\n  text_on_screen: clip(v.text_on_screen || 'none', 600),\n  spoken_content: clip(v.spoken_content || 'no speech', 700),\n  key_message: clip(v.key_message, 300),\n  visual_style: clip(v.visual_style, 300)\n};\nif (!video.summary && !video.key_message) throw new Error('USER: The video analysis was empty. Please try again.');\n\nlet prior = {};\nif (cls.has_images) prior = $('Collect Slide Results').first().json || {};\nconst base = prior.report || { total: 0, processed: 0, images_ok: 0, videos_ok: 0, failed_skipped: 0, models: {}, issues: [] };\nconst report = JSON.parse(JSON.stringify(base));\nreport.total += 1;\nreport.processed += 1;\nreport.videos_ok = 1;\nreport.video_attempted = true;\nreport.models = Object.assign({}, report.models, { gemini_file: 1 });\n(cls.videos_ignored || []).forEach(n => {\n  report.total += 1;\n  report.failed_skipped += 1;\n  report.issues.push(clip(n + ' (video): skipped - only 1 video is analysed per folder', 160));\n});\n\nreturn [{ json: { phase1_done: true, slides_ok: prior.slides_ok || [], video_analysis: video, report } }];\n"
+      },
+      "id": "08fe7804-eb0f-4fa6-aa75-d13eb11d8462",
+      "name": "Build Video Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2048,
+        1120
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Any failure in the video path lands here.\n//  - Video-only folder: the whole run fails, Build Error Message explains why.\n//  - Folder with images + 1 video: keep the image results and list the video under \"Not included\".\nconst clip = (v, n) => String(v == null ? '' : v).replace(/\\s+/g, ' ').trim().slice(0, n);\nconst cls = $('Classify Drive Files').first().json;\nconst j = $input.first().json || {};\nconst raw = (j.error && (j.error.message || j.error.description)) || j.error || j.message || 'Unknown error';\nconst msg = String(typeof raw === 'string' ? raw : JSON.stringify(raw));\n\nif (!cls.has_images) throw new Error(msg);\n\nconst prior = $('Collect Slide Results').first().json || {};\nconst report = JSON.parse(JSON.stringify(prior.report || { total: 0, processed: 0, images_ok: 0, videos_ok: 0, failed_skipped: 0, models: {}, issues: [] }));\nconst u = msg.indexOf('USER: ');\nconst why = u >= 0 ? msg.slice(u + 6).split('\\n')[0] : msg;\nreport.total += 1;\nreport.failed_skipped += 1;\nreport.video_attempted = true;\nreport.issues.push(clip(((cls.video && cls.video.name) || 'video') + ' (video): not analysed - ' + why, 200));\n(cls.videos_ignored || []).forEach(n => {\n  report.total += 1;\n  report.failed_skipped += 1;\n  report.issues.push(clip(n + ' (video): skipped - only 1 video is analysed per folder', 160));\n});\nreturn [{ json: { phase1_done: true, slides_ok: prior.slides_ok || [], video_analysis: null, report } }];\n"
+      },
+      "id": "5ce56b46-8416-4017-8f55-add8ac711d35",
+      "name": "Video Failed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2272,
+        624
+      ],
+      "onError": "continueErrorOutput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger1": {
+      "main": [
+        [
+          {
+            "node": "Fetch Brands from Data Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Brands from Data Table": {
+      "main": [
+        [
+          {
+            "node": "Brand Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Brand Config": {
+      "main": [
+        [
+          {
+            "node": "Session Manager1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Session Manager1": {
+      "main": [
+        [
+          {
+            "node": "Has Reply?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Reply?1": {
+      "main": [
+        [
+          {
+            "node": "Send Reply1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Reply1": {
+      "main": [
+        [
+          {
+            "node": "Needs Analysis?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Analysis?1": {
+      "main": [
+        [
+          {
+            "node": "Is Drive?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Drive?1": {
+      "main": [
+        [
+          {
+            "node": "Drive Is Folder?1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Has Media File?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Drive Is Folder?1": {
+      "main": [
+        [
+          {
+            "node": "Drive List Files",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject Non-Folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Drive List Files": {
+      "main": [
+        [
+          {
+            "node": "Classify Drive Files",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Error Message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Drive Download": {
+      "main": [
+        [
+          {
+            "node": "Resize Image",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Error Message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resize Image": {
+      "main": [
+        [
+          {
+            "node": "Collect Drive Images",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Error Message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Drive Images": {
+      "main": [
+        [
+          {
+            "node": "Prepare Slides",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Error Message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Media File?1": {
+      "main": [
+        [
+          {
+            "node": "Download Image",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Groq Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Image": {
+      "main": [
+        [
+          {
+            "node": "Resize Telegram Image",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Error Message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resize Telegram Image": {
+      "main": [
+        [
+          {
+            "node": "Collect Drive Images",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Error Message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Groq Request": {
+      "main": [
+        [
+          {
+            "node": "Groq Analyze1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Error Message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Analyze1": {
+      "main": [
+        [
+          {
+            "node": "Parse & Format1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Error Message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Format1": {
+      "main": [
+        [
+          {
+            "node": "Send Results1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Error Message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Error Message1": {
+      "main": [
+        [
+          {
+            "node": "Send Error1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Slides": {
+      "main": [
+        [
+          {
+            "node": "Loop Slides",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Error Message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Slides": {
+      "main": [
+        [
+          {
+            "node": "Collect Slide Results",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Groq Vision L1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Vision L1": {
+      "main": [
+        [
+          {
+            "node": "Check L1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check L1": {
+      "main": [
+        [
+          {
+            "node": "L1 OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "L1 OK?": {
+      "main": [
+        [
+          {
+            "node": "Record Slide Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Gemini Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Gemini Request": {
+      "main": [
+        [
+          {
+            "node": "Gemini Vision L2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Vision L2": {
+      "main": [
+        [
+          {
+            "node": "Check L2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check L2": {
+      "main": [
+        [
+          {
+            "node": "L2 OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "L2 OK?": {
+      "main": [
+        [
+          {
+            "node": "Record Slide Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait 1m",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Vision L3": {
+      "main": [
+        [
+          {
+            "node": "Check L3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check L3": {
+      "main": [
+        [
+          {
+            "node": "Record Slide Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record Slide Result": {
+      "main": [
+        [
+          {
+            "node": "Loop Slides",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Slide Results": {
+      "main": [
+        [
+          {
+            "node": "Video Also In Folder?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Error Message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 1m": {
+      "main": [
+        [
+          {
+            "node": "Groq Vision L3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reject Non-Folder": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Build Error Message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Drive Files": {
+      "main": [
+        [
+          {
+            "node": "Has Images?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Error Message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Images?": {
+      "main": [
+        [
+          {
+            "node": "Expand Image Files",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Video File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Expand Image Files": {
+      "main": [
+        [
+          {
+            "node": "Drive Download",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Video Also In Folder?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Video File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Groq Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Video File": {
+      "main": [
+        [
+          {
+            "node": "Gemini Upload Start",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Video Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Upload Start": {
+      "main": [
+        [
+          {
+            "node": "Download Video",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Video Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Video": {
+      "main": [
+        [
+          {
+            "node": "Gemini Upload Bytes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Video Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Upload Bytes": {
+      "main": [
+        [
+          {
+            "node": "Gemini Poll File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Video Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Poll File": {
+      "main": [
+        [
+          {
+            "node": "Check File State",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Video Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check File State": {
+      "main": [
+        [
+          {
+            "node": "File ACTIVE?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Video Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "File ACTIVE?": {
+      "main": [
+        [
+          {
+            "node": "Build Video Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait 5s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 5s": {
+      "main": [
+        [
+          {
+            "node": "Gemini Poll File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Video Request": {
+      "main": [
+        [
+          {
+            "node": "Gemini Video Analyze",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Video Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Video Analyze": {
+      "main": [
+        [
+          {
+            "node": "Build Video Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Video Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Video Result": {
+      "main": [
+        [
+          {
+            "node": "Build Groq Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Video Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Video Failed": {
+      "main": [
+        [
+          {
+            "node": "Build Groq Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Error Message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "8f24047f-3204-4e9f-a862-b9eb2403bcff",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "13616a3c0654f9f6a26fed623e9b351c389d3dc708b46279468690c822557569"
+  },
+  "nodeGroups": [],
+  "id": "XHZXpqrTXEDEekGL",
+  "tags": []
+}

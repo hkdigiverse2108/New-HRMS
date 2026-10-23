@@ -136,6 +136,17 @@ SYSTEM_MODULES: List[Dict[str, Any]] = [
     # 30. Settings
     {"id": "/settings", "name": "Settings", "section": "Admin", "is_parent": False},
 
+    # 31. Social Automation Hub
+    {"id": "/social", "name": "Social Automation", "section": "Work", "is_parent": True},
+    {"id": "/social/dashboard", "name": "Social Dashboard", "section": "Work", "parent_id": "/social"},
+    {"id": "/social/accounts", "name": "Social Accounts", "section": "Work", "parent_id": "/social"},
+    {"id": "/social/keywords", "name": "Social Keywords", "section": "Work", "parent_id": "/social"},
+    {"id": "/social/activity", "name": "Social Activity Logs", "section": "Work", "parent_id": "/social"},
+    {"id": "/social/scripts", "name": "Social Reel Scripts", "section": "Work", "parent_id": "/social"},
+    {"id": "/social/captions", "name": "Social Captions & SEO", "section": "Work", "parent_id": "/social"},
+    {"id": "/social/brands", "name": "Social Brand Profiles", "section": "Work", "parent_id": "/social"},
+    {"id": "/social/settings", "name": "Social Settings", "section": "Work", "parent_id": "/social"},
+
     # --- CEO Command Center (Preserved for CEO/Executive Roles) ---
     {"id": "/ceo-dashboard", "name": "CEO Overview", "section": "Command Center", "is_parent": False},
     {"id": "/ceo-dashboard/b2b", "name": "B2B Partnership", "section": "Command Center", "is_parent": True},
@@ -293,6 +304,20 @@ def normalize_and_expand_permissions(perms: Dict[str, dict]) -> Dict[str, dict]:
     # 9. Document Center & Generate
     if "/employees/documents" in expanded and "/employees/documents/generate" not in expanded:
         expanded["/employees/documents/generate"] = dict(expanded["/employees/documents"])
+
+    # 10. Social Automation Hub
+    social_sub_keys = [
+        "/social/dashboard", "/social/accounts", "/social/keywords",
+        "/social/activity", "/social/scripts", "/social/captions",
+        "/social/brands", "/social/settings"
+    ]
+    if "/social" in expanded:
+        soc_p = expanded["/social"]
+        for k in social_sub_keys:
+            if k not in expanded:
+                expanded[k] = dict(soc_p)
+    elif any(expanded.get(k, {}).get("read") or expanded.get(k, {}).get("all") for k in social_sub_keys):
+        expanded["/social"] = {"read": True}
 
     return expanded
 

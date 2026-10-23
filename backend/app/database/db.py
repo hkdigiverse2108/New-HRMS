@@ -29,6 +29,10 @@ async def close_mongo_connection():
         logger.error(f"Failed to close MongoDB connection: {e}")
 
 def get_database():
+    if db.db is None:
+        if db.client is None:
+            db.client = AsyncIOMotorClient(settings.MONGODB_URL)
+        db.db = db.client[settings.MONGODB_DB_NAME]
     return db.db
 
 def serialize_mongo_doc(data):

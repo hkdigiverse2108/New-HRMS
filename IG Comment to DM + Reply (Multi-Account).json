@@ -1,0 +1,1846 @@
+{
+  "name": "IG Comment to DM + Reply (Multi-Account)",
+  "nodes": [
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Gate bhejne ke baad: Data Table me kya store karna hai wo tay karo (store ya skip)\n// Actual write next nodes me hota hai (Store Pending? -> Upsert Pending Row)\nconst ctx = $('Build Follow Gate1').item.json;\n\n// Re-gate (user ne button dabaya par abhi follow nahi kiya): existing row ko mat chhedo (created_at / TTL reset nahi)\nif (ctx.flow !== 'comment') {\n  return { json: { store: false, note: 're-gate: existing pending row kept', igsid: ctx.igsid } };\n}\n// Test payload: fake data store mat karo\nif (ctx.is_test) {\n  return { json: { store: false, note: 'test payload - not stored' } };\n}\n\n// Private reply response me recipient_id aata hai. Wahi IGSID messaging webhook me sender.id hoga\nconst igsid = String($json.recipient_id || ctx.igsid);\n\nreturn {\n  json: {\n    store: true,\n    igsid,\n    message: String(ctx.message ?? ''),     // original sheet message (follow ke baad yehi jaayega)\n    keyword: String(ctx.keyword ?? ''),\n    comment_id: String(ctx.comment_id ?? ''),\n    media_id: String(ctx.media_id ?? ''),\n    username: String(ctx.username ?? ''),\n    created_at: new Date().toISOString(),\n    ttl_minutes: 10                         // follow karne ka time ~2-3 min => 10 min kaafi\n  }\n};"
+      },
+      "id": "a238e17d-cb31-4a2d-980a-175fc915a1ca",
+      "name": "Prepare Pending Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -896,
+        5008
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "3dc36f3f-d058-44bf-8def-5c9de4e54dba",
+              "leftValue": "={{ $json.store }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "80d0af53-8008-44eb-80f7-d796e7d57d0b",
+      "name": "Store Pending?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -640,
+        4976
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Pending_DMs"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "igsid",
+              "keyValue": "={{ $json.igsid }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "igsid": "={{ $json.igsid }}",
+            "message": "={{ $json.message }}",
+            "keyword": "={{ $json.keyword }}",
+            "comment_id": "={{ $json.comment_id }}",
+            "media_id": "={{ $json.media_id }}",
+            "username": "={{ $json.username }}",
+            "created_at": "={{ $json.created_at }}",
+            "ttl_minutes": "={{ $json.ttl_minutes }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "igsid",
+              "displayName": "igsid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "message",
+              "displayName": "message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "keyword",
+              "displayName": "keyword",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "comment_id",
+              "displayName": "comment_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "media_id",
+              "displayName": "media_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "username",
+              "displayName": "username",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "ttl_minutes",
+              "displayName": "ttl_minutes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "fb536e56-a74d-46aa-a9b0-a2336dcb20cc",
+      "name": "Upsert Pending Row",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        -416,
+        4912
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {},
+      "id": "b7255dda-2b43-4e83-b03c-0fa2fddffef2",
+      "name": "Pending Store Failed (check output)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -192,
+        4864
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Messaging webhook se \"I'm Following\" tap nikalo (pending lookup ab Data Table node karta hai)\n// Button template ka tap = postback event (ev.postback.payload). Purana quick_reply (ev.message.quick_reply.payload) bhi handle hota hai.\n// Har skip case me item aata hai (valid:false + skip_reason) taaki output me reason dikhe\nconst body = $input.first().json.body || {};\nconst PAYLOAD = 'IM_FOLLOWING';\n\n// FALLBACK: Instagram buttons sirf MOBILE APP me dikhte hain (instagram.com desktop par nahi).\n// Isliye user \"i am following\" jaisa text type kare to bhi wahi maana jaata hai. Band karna ho to false karo.\nconst ACCEPT_TYPED_TEXT = true;\nconst TYPED_OK = ['i am following', 'im following', 'following', 'followed', 'i followed', 'i have followed', 'followed you', 'followed us', 'done'];\nconst normText = (s) => String(s ?? '').toLowerCase().replace(/[^a-z\\s]/g, '').replace(/\\s+/g, ' ').trim();\n\n// Duplicate protection (Meta retries): sirf message ids yaad rakhne ke liye static data (pending data isme nahi hai)\nconst sd = $getWorkflowStaticData('global');\nsd.seenMsgs = sd.seenMsgs || {};\nconst now = Date.now();\nfor (const m of Object.keys(sd.seenMsgs)) {\n  if (now - sd.seenMsgs[m] > 24 * 3600 * 1000) delete sd.seenMsgs[m];   // 24h\n}\n\nconst out = [];\nconst skip = (reason, ev, entry) =>\n  out.push({ json: { valid: false, skip_reason: reason, igsid: String(ev?.sender?.id ?? ''), entry_id: String(entry?.id ?? '') } });\n\nfor (const entry of (body.entry || [])) {\n  for (const ev of (entry.messaging || [])) {\n    const msg = ev.message;\n    const pb = ev.postback;\n    if (!msg && !pb) { skip('not a message/postback event (read/etc)', ev, entry); continue; }\n    // Apne bheje messages ke echo ignore\n    if (msg?.is_echo || String(ev.sender?.id) === String(entry.id)) { skip('echo / own account message', ev, entry); continue; }\n\n    // Button tap (postback) / quick_reply payload, ya fallback me typed text\n    const isTyped = ACCEPT_TYPED_TEXT && !pb && !msg?.quick_reply && TYPED_OK.includes(normText(msg?.text));\n    const payload = pb?.payload ?? msg?.quick_reply?.payload ?? (isTyped ? PAYLOAD : undefined);\n    if (payload !== PAYLOAD) { skip('not an ' + PAYLOAD + ' tap / typed confirmation', ev, entry); continue; }\n\n    // Duplicate protection\n    const mid = String(pb?.mid || msg?.mid || '');\n    if (mid && sd.seenMsgs[mid]) { skip('duplicate event', ev, entry); continue; }\n    if (mid) sd.seenMsgs[mid] = now;\n\n    out.push({ json: { valid: true, igsid: String(ev.sender.id), entry_id: String(entry.id), mid, via: pb ? 'postback' : (isTyped ? 'typed_text' : 'quick_reply') } });\n  }\n}\n\nif (!out.length) out.push({ json: { valid: false, skip_reason: 'no messaging events in payload' } });\nreturn out;"
+      },
+      "id": "4a250a4b-7b4d-4072-b6b9-c252b360cce1",
+      "name": "Extract Quick Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3776,
+        5408
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "bd81ae1e-ce93-4a67-812f-f70c02a797bb",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "8eb86f82-6633-4e46-a94b-28c9d6c07a71",
+      "name": "Is Valid Tap?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -3552,
+        5408
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Pending_DMs"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "igsid",
+              "keyValue": "={{ $json.igsid }}"
+            }
+          ]
+        },
+        "limit": 1
+      },
+      "id": "962e5eff-7732-4682-8373-f6d7fe05d661",
+      "name": "Get Pending Row",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        -2656,
+        5264
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a61b1bff-c927-42ff-a669-0f068498e600",
+              "leftValue": "={{ $json.expired }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "04e7aaa7-ea86-43b5-b308-20b27956f0fd",
+      "name": "Expired?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1984,
+        5360
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Pending_DMs"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "igsid",
+              "keyValue": "={{ $json.igsid }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e8f43683-c2cb-4667-8dae-ac70bcf897f0",
+      "name": "Delete Expired Pending",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        -1760,
+        5264
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// DM fail hone par readable error + hint\nconst e = $input.first().json;\nconst raw = JSON.stringify(e);\nconst sub = (raw.match(/error_subcode\\W{1,6}(\\d+)/) || [])[1] || null;\nconst code = (raw.match(/(?:^|[^a-z_])code\\W{1,6}(\\d+)/i) || [])[1] || null;\n\nconst subHints = {\n  '2534025': 'Comment private reply ke liye invalid: fake/test comment_id, is comment pe pehle hi private reply ja chuki, apne hi account ka comment, 7 din se purana, ya reply-type (non top-level) comment.'\n};\nconst codeHints = {\n  '190': 'Access token expire/invalid hai. IG_Accounts me is account ka token check karo (Token Refresh workflow ka output dekho).',\n  '10': 'Permission missing: instagram_manage_messages (Advanced Access / App Review + app Live mode) check karo.',\n  '200': 'Permission missing: instagram_manage_messages check karo.',\n  '100': 'Invalid parameter: comment_id ya message check karo.',\n  '613': 'Rate limit lag gayi, thodi der baad try karo.',\n  '4': 'App rate limit lag gayi, thodi der baad try karo.'\n};\n\nlet ctx = {};\ntry {\n  const mk = $('Match Keyword').first().json;\n  ctx = { ig_account_id: mk.ig_account_id, comment_id: mk.comment_id, username: mk.username, keyword: mk.keyword };\n} catch (err) {}\n\nreturn [{\n  json: {\n    dm_failed: true,\n    ...ctx,\n    error_code: code,\n    error_subcode: sub,\n    hint: subHints[sub] || codeHints[code] || 'Error field dekh',\n    error: e.error || e\n  }\n}];"
+      },
+      "id": "520b983f-9edd-4046-83ca-92050e3eb8ac",
+      "name": "Format DM Error1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -832,
+        4784
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "meta-comments-hk",
+        "options": {}
+      },
+      "id": "7352174f-174f-4984-835b-fd7eaa27f035",
+      "name": "Meta Webhook - POST Events1",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -5120,
+        5200
+      ],
+      "webhookId": "meta-comments-post"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// Extract Instagram Comment\n// Har webhook event ko normalize karta hai. Skip hone par bhi item aata hai (valid:false + skip_reason)\n// ============================================================\nconst ALLOW_SELF_COMMENTS = false; // TESTING: apne hi IG account ke TOP-LEVEL comment se test karna ho to true karo, production me false\n\nconst body = $input.first().json.body || {};\n\n// Meta dashboard \"Test\" button ke payload me entry[] nahi hota ya entry.id = 0 hoti hai (fake comment_id) -> is_test flag lagta hai\nconst isTest =\n  !(Array.isArray(body.entry) && body.entry.length) ||\n  body.entry.every((e) => !e.id || String(e.id) === '0');\n\n// Duplicate protection: 24 ghante tak seen comment_ids yaad rakho\nconst sd = $getWorkflowStaticData('global');\nsd.seen = sd.seen || {};\nconst now = Date.now();\nfor (const id of Object.keys(sd.seen)) {\n  if (now - sd.seen[id] > 24 * 3600 * 1000) delete sd.seen[id];\n}\n\nlet entries = Array.isArray(body.entry) && body.entry.length ? body.entry : null;\nif (!entries) {\n  entries = body.value ? [{ id: '', changes: [{ field: body.field || 'comments', value: body.value }] }] : [];\n}\n\nconst out = [];\nconst skip = (reason, v, entry) =>\n  out.push({\n    json: {\n      valid: false,\n      skip_reason: reason,\n      comment_id: String(v?.id ?? ''),\n      comment_original: v?.text ?? '',\n      from_id: String(v?.from?.id ?? ''),\n      entry_id: String(entry?.id ?? ''),\n      parent_id: String(v?.parent_id ?? '')\n    }\n  });\n\nfor (const entry of entries) {\n  for (const change of (entry.changes || [])) {\n    const v = change.value;\n    if (change.field && change.field !== 'comments') { skip('field is \"' + change.field + '\", not comments', v, entry); continue; }\n    if (!v || !v.id) { skip('no comment id in payload', v, entry); continue; }\n    if (typeof v.text !== 'string' || !v.text.trim()) { skip('comment has no text', v, entry); continue; }\n\n    // --- Own-account detection ---\n    // entry.id = hamara IG account id. from.id ya from.self_ig_scoped_id uske barabar ho => comment hamare account ka hai\n    const entryId = String(entry?.id ?? '');\n    const hasRealEntry = entryId !== '' && entryId !== '0';\n    const fromId = String(v.from?.id ?? '');\n    const selfScopedId = String(v.from?.self_ig_scoped_id ?? '');\n    const isOwnAccount = hasRealEntry && (fromId === entryId || selfScopedId === entryId);\n\n    // 1) Hamare apne public replies (workflow khud bhejta hai): parent_id + self id => hamesha skip (ALLOW_SELF_COMMENTS se bhi nahi khulta)\n    if (v.parent_id && (isOwnAccount || selfScopedId !== '')) {\n      skip('own account reply (parent_id + self_ig_scoped_id / from.id === entry.id) - loop protection', v, entry);\n      continue;\n    }\n    // 2) Kisi bhi comment ka reply (non top-level) => skip (test payload ko chhodkar)\n    if (v.parent_id && !isTest) { skip('it is a reply to a comment (parent_id present)', v, entry); continue; }\n    // 3) Apne account ka top-level comment => skip (testing ke liye ALLOW_SELF_COMMENTS = true)\n    if (!ALLOW_SELF_COMMENTS && isOwnAccount) {\n      skip('comment is from your own account (entry.id == from.id). Testing ke liye ALLOW_SELF_COMMENTS = true karo', v, entry);\n      continue;\n    }\n\n    // --- Duplicate protection ---\n    const cid = String(v.id);\n    if (!isTest && sd.seen[cid]) { skip('duplicate event (already processed)', v, entry); continue; }\n    if (!isTest) sd.seen[cid] = now;\n\n    out.push({\n      json: {\n        valid: true,\n        is_test: isTest,\n        comment_id: cid,\n        comment_original: v.text,\n        username: v.from?.username || '',\n        instagram_user_id: v.from?.id || '',\n        media_id: String(v.media?.id || ''),\n        entry_id: entryId,                 // webhook entry.id = IG_Accounts.ig_account_id\n        timestamp: new Date().toISOString()\n      }\n    });\n  }\n}\n\nif (!out.length) {\n  out.push({ json: { valid: false, skip_reason: 'payload me koi comment change nahi mila', raw_body: JSON.stringify(body).slice(0, 1500) } });\n}\nreturn out;"
+      },
+      "id": "2e7d459a-df01-4704-8795-d0a0dcd167f4",
+      "name": "Extract Instagram Comment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4672,
+        4816
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// Match Keyword  (run once for all items)\n// Input: Keywords Data Table rows (is ig_account_id ke)\n// Columns: ig_account_id | username | keyword | message | comment_reply1-3 | media_id | require_follow | is_active\n// Rule: EXACT match only. Case-insensitive (DM = Dm = dm). Extra text/symbols/emoji => no match.\n// ============================================================\n\n// Normalize: invisible chars hatao, NBSP -> space, spaces collapse + trim, UPPERCASE.\n// Punctuation / emoji / extra words ko NAHI hatata (isliye \"*DM*\" ya \"dm please\" match nahi hoga)\nconst norm = (s) =>\n  String(s ?? '')\n    .normalize('NFKC')\n    .replace(/[\\u200B-\\u200D\\uFEFF]/g, '')\n    .replace(/\\s+/g, ' ')\n    .trim()\n    .toUpperCase();\n\n// media_id clean: spaces, zero-width chars aur leading apostrophe hata do. Blank => '' (matlab saare posts)\nconst cleanId = (s) =>\n  String(s ?? '').replace(/[\\u200B-\\u200D\\uFEFF]/g, '').trim().replace(/^'+/, '').trim();\n\n// Boolean ya string dono chalenge: true/'true'/1/yes/y => true. Baaki sab (blank bhi) => false\nconst toBool = (v) => v === true || ['true', '1', 'yes', 'y'].includes(String(v ?? '').trim().toLowerCase());\n\nconst allRows = $input.all().map((r) => r.json).filter((r) => r && r.keyword !== undefined && r.keyword !== null);\nconst ctxItems = $('Resolve Account').all().filter((i) => i.json.account_ok === true);\n\nconst results = [];\nfor (const item of ctxItems) {\n  const c = item.json;\n\n  // ---------- 1) Is account ke active rules ----------\n  const rules = [];\n  for (const row of allRows) {\n    if (String(row.ig_account_id ?? '').trim() !== c.ig_account_id) continue;   // safety: sirf isi account ke rules\n    if (!toBool(row.is_active)) continue;\n    const keyword = norm(row.keyword);\n    if (!keyword) continue;\n\n    // comment_reply1/2/3 (ya comment_reply_2, Comment Reply 2 jaise naam) - sirf non-empty\n    const replyKeys = Object.keys(row)\n      .filter((k) => /^comment[\\s_]?reply[\\s_]?\\d*$/i.test(k))\n      .sort();\n\n    rules.push({\n      keyword,\n      message: String(row.message ?? ''),\n      comment_replies: replyKeys.map((k) => String(row[k] ?? '').trim()).filter(Boolean),\n      reply_columns_found: replyKeys,             // debug: kaun se reply columns mile\n      media_id: cleanId(row.media_id),            // filled => sirf us post/reel pe, blank => saare posts\n      require_follow: toBool(row.require_follow)  // true => follow-gate\n    });\n  }\n  // Post-specific rule global (all posts) rule se pehle\n  rules.sort((a, b) => (b.media_id ? 1 : 0) - (a.media_id ? 1 : 0));\n\n  // ---------- 2) Comment ko EXACT match karo ----------\n  const commentNorm = norm(c.comment_original);\n  const commentMedia = cleanId(c.media_id);\n  const rule = rules.find((r) => commentNorm === r.keyword && (!r.media_id || r.media_id === commentMedia));\n\n  if (!rule) {\n    results.push({ json: { ...c, matched: false, skip_reason: 'no exact keyword match', comment_normalized: commentNorm, keywords_loaded: rules.length } });\n  } else if (!rule.message) {\n    results.push({ json: { ...c, matched: false, skip_reason: 'keyword matched but message empty in Keywords table', keyword: rule.keyword } });\n  } else {\n    results.push({\n      json: {\n        ...c,\n        matched: true,\n        keyword: rule.keyword,\n        rule_media_id: rule.media_id,\n        message: rule.message,\n        comment_replies: rule.comment_replies,\n        reply_count: rule.comment_replies.length,          // debug: kitne replies mile (1/2/3)\n        reply_columns_found: rule.reply_columns_found,     // debug: kaun se columns padhe gaye\n        require_follow: rule.require_follow\n      }\n    });\n  }\n}\nif (!results.length) results.push({ json: { matched: false, skip_reason: 'no active account context' } });\nreturn results;"
+      },
+      "id": "95a784bb-dab2-4d3f-8b16-767fa9b6665b",
+      "name": "Match Keyword",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3328,
+        4688
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v21.0/me/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ recipient: { comment_id: $json.comment_id }, message: { text: $json.message } }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "493ceb38-02e5-4617-89d7-3f879d06e7c4",
+      "name": "Send Instagram DM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1312,
+        4640
+      ],
+      "retryOnFail": false,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Matched comment ke liye PUBLIC reply text decide karo (hamesha bhejna hai)\n// Priority: Keywords table ke comment_reply1/2/3 me se random ek (sirf non-empty) -> sab khali ho to neeche ke default variants\nconst variants = [\n  'Check your DM 📩',\n  'Just sent you a DM 📩',\n  'Done! Check your inbox 📩',\n  'Sent! Have a look at your DMs 📩'\n];\nconst pool = Array.isArray($json.comment_replies)\n  ? $json.comment_replies.map((s) => String(s ?? '').trim()).filter(Boolean)\n  : [];\nconst list = pool.length ? pool : variants;\nconst reply = list[Math.floor(Math.random() * list.length)];\n\n// Poora Match item aage pass hota hai (access_token + account info bhi, baad ke HTTP nodes ko chahiye)\nreturn { json: { ...$json, reply_text: reply } };"
+      },
+      "id": "571557f3-6c2e-48e1-81eb-820061673c7a",
+      "name": "Build Comment Reply1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2880,
+        4640
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.instagram.com/v21.0/{{ $json.comment_id }}/replies",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ message: $json.reply_text }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "eb44f450-983c-448d-a56d-3df85f4c56e1",
+      "name": "Reply to Instagram Comment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2656,
+        4640
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {},
+      "id": "8086fa43-9afc-48a9-9d9f-2cdd2891680b",
+      "name": "Comment Replied (check output)1",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -2432,
+        4544
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Comment reply fail hone par readable error + hint\nconst e = $input.first().json;\nconst raw = JSON.stringify(e);\nconst sub = (raw.match(/error_subcode\\W{1,6}(\\d+)/) || [])[1] || null;\nconst code = (raw.match(/(?:^|[^a-z_])code\\W{1,6}(\\d+)/i) || [])[1] || null;\n\nconst codeHints = {\n  '190': 'Access token expire/invalid hai. IG_Accounts me is account ka token check karo (Token Refresh workflow ka output dekho).',\n  '10': 'Permission missing: instagram_manage_comments (Advanced Access / App Review + app Live mode) check karo.',\n  '200': 'Permission missing: instagram_manage_comments check karo.',\n  '100': 'Invalid parameter: comment delete ho gaya ho, ya comment_id / message galat ho sakta hai.',\n  '613': 'Rate limit lag gayi, thodi der baad try karo.',\n  '4': 'App rate limit lag gayi, thodi der baad try karo.'\n};\n\nlet ctx = {};\ntry {\n  const b = $('Build Comment Reply1').first().json;\n  ctx = { comment_id: b.comment_id, username: b.username, reply_text: b.reply_text };\n} catch (err) {}\n\n// NOTE: public reply fail hone par flow rukta nahi - DM / follow-gate phir bhi chalta hai\nreturn [{\n  json: {\n    comment_reply_failed: true,\n    ...ctx,\n    error_code: code,\n    error_subcode: sub,\n    hint: codeHints[code] || 'Error field dekh',\n    error: e.error || e\n  }\n}];"
+      },
+      "id": "e4c21167-7c5d-4728-a753-2e3599b4dc86",
+      "name": "Format Reply Error1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2432,
+        4928
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "e694f8fc-16b0-4e4a-b390-48843ce460a1",
+      "name": "Comment Reply Failed (check output)1",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -2208,
+        4928
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a9b8c7d6-0000-4000-8000-000000000005",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c44dac96-0415-4eb5-902b-2459673a5edf",
+      "name": "Valid Comment?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -4448,
+        4816
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "4dc17819-6a64-4447-8d99-9afc70468475",
+      "name": "Skipped (check skip_reason)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -3552,
+        4912
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1a2b3c4-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.matched }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "57da0385-1ea2-4ce3-a581-87c0bb993efc",
+      "name": "Is Matched?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -3104,
+        4688
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "35f631c1-a258-4723-befa-f57964a06a17",
+      "name": "DM Failed (check output)1",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -640,
+        4768
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "e4fe4636-5901-48a6-a814-74a1b4e3478b",
+      "name": "No Match (check output)1",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -2880,
+        4960
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "3edd511a-828a-4106-b6e2-d0214ee70077",
+              "leftValue": "={{ Array.isArray($json.body?.entry) && $json.body.entry.some(e => Array.isArray(e.messaging) && e.messaging.length > 0) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "cf2e635a-694d-41a7-9887-92c97bc7f4a5",
+      "name": "Is Messaging Event?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -4896,
+        5200
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Public reply ke baad clean DM context wapas banao (HTTP node ka response context mita deta hai)\n// Public reply fail ho ya success - dono case me flow yahin aata hai\nconst ctx = $('Build Comment Reply1').item.json;\n\nreturn {\n  json: {\n    ...ctx,\n    igsid: String(ctx.instagram_user_id || ''),   // commenter ka IGSID (comment webhook ka from.id)\n    public_reply_sent: !$json.error,\n    public_reply_id: $json.id || null\n  }\n};"
+      },
+      "id": "d6b96aff-34d3-4c48-b5fb-e9a4a7c4b4c3",
+      "name": "Restore DM Context1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2432,
+        4736
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "5dab98d3-7993-4716-aee6-e669a0de70bd",
+              "leftValue": "={{ $json.require_follow }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "367e5f6e-1a5d-4722-b2ca-d17d390b3324",
+      "name": "Require Follow?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -2208,
+        4736
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "1816a22b-7e7a-4aff-8809-201479ee79fa",
+      "name": "DM Sent (check output)1",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -944,
+        4528
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.instagram.com/v21.0/{{ $json.igsid }}?fields=is_user_follow_business",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.access_token }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "61d1e5c9-1860-4b59-a4b2-844ccb58239f",
+      "name": "Check Follow Status1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1984,
+        4832
+      ],
+      "retryOnFail": false,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Follow Status API ka result -> clean boolean. Success aur error dono outputs yahin aate hain.\n// Spec: \"Follows\" => normal DM. \"Not following / check fail / error\" => follow-gate.\nconst ctx = $('Restore DM Context1').item.json;\n\nconst following = $json.is_user_follow_business === true;   // sirf explicit true hi \"follows\" maana jaata hai\nconst errMsg = $json.error\n  ? String($json.error.message || JSON.stringify($json.error)).slice(0, 300)\n  : null;\n\nreturn {\n  json: {\n    ...ctx,\n    flow: 'comment',               // gate DM private reply (comment_id) se jaayega\n    is_following: following,\n    follow_check_error: errMsg     // null => API ne clean answer diya\n  }\n};"
+      },
+      "id": "db6cbad2-47c9-4643-8b87-7c65ccab5f31",
+      "name": "Evaluate Follow Result1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1760,
+        4832
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "02bdd176-740e-4b80-9a02-aff479690b66",
+              "leftValue": "={{ $json.is_following }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "34d49df1-366f-4e4a-9908-cb0afb477087",
+      "name": "Is Following?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1536,
+        4832
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Follow-gate message banata hai: BUTTON TEMPLATE (inline buttons, same bubble me).\n// Quick Reply chips Instagram ke \"Message Requests\" folder me render nahi hote (non-followers ke DMs wahin jaate hain),\n// isliye \"I'm Following\" ko postback button banaya hai - wo requests folder me bhi dikhta hai.\n// Dono flows yahin se guzarte hain: comment flow (private reply) aur recheck flow (IGSID se).\nconst GATE_USERNAME = String($json.account_username || '').replace(/^@/, '').trim();   // IG_Accounts.username\nif (!GATE_USERNAME) throw new Error('IG_Accounts.username missing - follow gate link nahi ban sakta');\nconst PROFILE_URL = 'https://instagram.com/' + GATE_USERNAME;\n\nconst text =\n  'You are not following us yet ❤️\\n\\n' +\n  'Please follow us first:\\n' +\n  PROFILE_URL + '\\n\\n' +\n  'Once you follow, tap the button below 👇';            // button template text limit: 640 chars\n\n// Private Reply (comment_id) SIRF pehle gate message ke liye. Re-gate (button dabane ke baad) IGSID se jaata hai.\nconst recipient = $json.flow === 'comment'\n  ? { comment_id: $json.comment_id }\n  : { id: $json.igsid };\n\nconst body = {\n  recipient,\n  message: {\n    attachment: {\n      type: 'template',\n      payload: {\n        template_type: 'button',\n        text,\n        buttons: [                                        // max 3 buttons, title max 20 chars\n          { type: 'web_url', url: PROFILE_URL, title: 'Visit Profile' },\n          { type: 'postback', title: \"I'm Following\", payload: 'IM_FOLLOWING' }\n        ]\n      }\n    }\n  }\n};\n\nreturn { json: { ...$json, gate_body: JSON.stringify(body) } };"
+      },
+      "id": "a6cdfc8e-f0e3-446c-ac06-e25eb326d425",
+      "name": "Build Follow Gate1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1312,
+        4928
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v21.0/me/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.gate_body }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "1e9a09ed-1a70-4c18-872e-059fc1cfd533",
+      "name": "Send Follow Gate1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1088,
+        4928
+      ],
+      "retryOnFail": false,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {},
+      "id": "3c5312ec-f21b-4805-ba99-a5cee5a33444",
+      "name": "Gate Sent (check output)1",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -192,
+        5072
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "21372892-89bf-47df-bdf4-20ccde5e7779",
+              "leftValue": "={{ $json.found }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "6671f543-960b-48c7-a84b-ab4307ca8118",
+      "name": "Pending Found?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -2208,
+        5264
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "2a001220-325f-498a-a1db-2b9ef1d3602d",
+      "name": "Ignored (check skip_reason)1",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -1536,
+        5488
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.instagram.com/v21.0/{{ $json.igsid }}?fields=is_user_follow_business",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.access_token }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "02624ae9-b1af-4048-a6af-7021ae939dd5",
+      "name": "Check Follow Status (Recheck)1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1984,
+        5072
+      ],
+      "retryOnFail": false,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Re-check follow result -> clean boolean (success + error dono outputs yahin aate hain)\nconst ctx = $('Evaluate Pending (TTL)').item.json;\n\nconst following = $json.is_user_follow_business === true;\nconst errMsg = $json.error\n  ? String($json.error.message || JSON.stringify($json.error)).slice(0, 300)\n  : null;\n\nreturn {\n  json: {\n    ...ctx,\n    flow: 'recheck',               // re-gate IGSID se jaayega (comment_id dubara use nahi ho sakta)\n    is_following: following,\n    follow_check_error: errMsg\n  }\n};"
+      },
+      "id": "1e2e2717-705c-4332-9d5b-8c09b0945100",
+      "name": "Evaluate Recheck Result1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1760,
+        5072
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "4d8a1535-35ac-4317-98ca-a115d1d12524",
+              "leftValue": "={{ $json.is_following }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "dfa30794-add4-428c-a0ef-09095e9e4078",
+      "name": "Still Following?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1536,
+        5072
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v21.0/me/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ recipient: { id: $json.igsid }, message: { text: $json.message } }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "1a1e4a2b-78a1-4870-8cd0-728baa7fe90e",
+      "name": "Send Pending Message1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1088,
+        5152
+      ],
+      "retryOnFail": false,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {},
+      "id": "7633f4c8-1626-4a48-847d-030e97cc920e",
+      "name": "Pending DM Sent (check output)1",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -640,
+        5200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Pending_DMs"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "igsid",
+              "keyValue": "={{ $('Evaluate Recheck Result1').item.json.igsid }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1e7d5721-17b0-4782-9043-7407c5a606a7",
+      "name": "Delete Pending1",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        -864,
+        5200
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Data Table \"Get Pending Row\" ke result + TTL check  (run once for all items)\n// Get node alwaysOutputData hai: row na mile to khali item aata hai (igsid field nahi hoti)\nconst DEFAULT_TTL_MINUTES = 10;\nconst now = Date.now();\n\n// Data Table se aayi rows -> igsid se map\nconst rows = {};\nfor (const r of $input.all()) {\n  if (r.json && r.json.igsid) rows[String(r.json.igsid)] = r.json;\n}\n\nconst out = [];\n// Resolve Tap Account: entry_id se mila account (token + username) - sirf valid account wale taps\nfor (const item of $('Resolve Tap Account').all().filter((i) => i.json.account_ok === true)) {\n  const { igsid, mid, entry_id, via, ig_account_id, account_username, access_token } = item.json;\n  const row = rows[igsid];\n  const acc = { ig_account_id, account_username, access_token };\n\n  // 1) row nahi mili -> ignore\n  if (!row) {\n    out.push({ json: { found: false, expired: false, igsid, skip_reason: 'no pending row for this IGSID - ignored' } });\n    continue;\n  }\n\n  // 2) TTL check: age >= ttl_minutes => expired (next nodes row delete karenge)\n  const ttlMs = (Number(row.ttl_minutes) || DEFAULT_TTL_MINUTES) * 60 * 1000;\n  const created = Date.parse(row.created_at);\n  if (!created || now - created >= ttlMs) {\n    out.push({ json: { found: false, expired: true, igsid, skip_reason: 'pending row expired - will be deleted' } });\n    continue;\n  }\n\n  // 3) mili aur valid: saari fields + account (token) aage pass\n  out.push({\n    json: {\n      found: true, expired: false,\n      igsid, mid, entry_id, via,\n      ...acc,\n      message: row.message, keyword: row.keyword, comment_id: row.comment_id,\n      media_id: row.media_id, username: row.username,\n      created_at: row.created_at, ttl_minutes: row.ttl_minutes\n    }\n  });\n}\n\nif (!out.length) out.push({ json: { found: false, expired: false, skip_reason: 'no valid tap to look up' } });\nreturn out;"
+      },
+      "id": "4eb215d4-3fc4-4222-828b-6cf72fe75ab6",
+      "name": "Evaluate Pending (TTL)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2432,
+        5264
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "IG_Accounts"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "ig_account_id",
+              "keyValue": "={{ $json.entry_id }}"
+            }
+          ]
+        },
+        "limit": 1
+      },
+      "id": "465081b0-cf2b-4a3f-b3c5-acc87fd041dc",
+      "name": "Get IG Account (Comment)",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        -4224,
+        4736
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const toBool = (v) => v === true || ['true', '1', 'yes', 'y'].includes(String(v ?? '').trim().toLowerCase());\n// IG_Accounts rows -> ig_account_id se map\nconst rows = {};\nfor (const r of $input.all()) {\n  if (r.json && r.json.ig_account_id) rows[String(r.json.ig_account_id).trim()] = r.json;\n}\nconst attach = (c) => {\n  const acc = rows[String(c.entry_id || '').trim()];\n  if (!acc) return { ...c, account_ok: false, skip_reason: 'IG_Accounts me entry.id ' + (c.entry_id || '(blank / test payload)') + ' nahi mila - skipped' };\n  if (!toBool(acc.is_active)) return { ...c, account_ok: false, skip_reason: 'account inactive (is_active = false) - skipped' };\n  const token = String(acc.access_token ?? '').trim();\n  if (!token) return { ...c, account_ok: false, skip_reason: 'IG_Accounts.access_token khali hai - skipped' };\n  return {\n    ...c,\n    account_ok: true,\n    ig_account_id: String(acc.ig_account_id).trim(),\n    account_username: String(acc.username ?? '').replace(/^@/, '').trim(),\n    access_token: token\n  };\n};\n\nconst out = $('Extract Instagram Comment').all().filter((i) => i.json.valid).map((i) => ({ json: attach(i.json) }));\nif (!out.length) out.push({ json: { account_ok: false, skip_reason: 'no valid comment to resolve' } });\nreturn out;"
+      },
+      "id": "7013b992-9a36-462a-be46-d8280cb43d9f",
+      "name": "Resolve Account",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4000,
+        4736
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "2548eba5-5b97-48c0-815e-5a8df818b239",
+              "leftValue": "={{ $json.account_ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "2a602c7e-f54a-436a-ad5c-c5990d8304be",
+      "name": "Account Active?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -3776,
+        4736
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Keywords"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "ig_account_id",
+              "keyValue": "={{ $json.ig_account_id }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "d4b80414-7c85-4956-bd64-8a59569cf565",
+      "name": "Get Keywords",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        -3552,
+        4688
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "IG_Accounts"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "ig_account_id",
+              "keyValue": "={{ $json.entry_id }}"
+            }
+          ]
+        },
+        "limit": 1
+      },
+      "id": "012c6d23-9471-431a-a4df-46e18c2fa87b",
+      "name": "Get IG Account (Tap)",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        -3328,
+        5344
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const toBool = (v) => v === true || ['true', '1', 'yes', 'y'].includes(String(v ?? '').trim().toLowerCase());\n// IG_Accounts rows -> ig_account_id se map\nconst rows = {};\nfor (const r of $input.all()) {\n  if (r.json && r.json.ig_account_id) rows[String(r.json.ig_account_id).trim()] = r.json;\n}\nconst attach = (c) => {\n  const acc = rows[String(c.entry_id || '').trim()];\n  if (!acc) return { ...c, account_ok: false, skip_reason: 'IG_Accounts me entry.id ' + (c.entry_id || '(blank / test payload)') + ' nahi mila - skipped' };\n  if (!toBool(acc.is_active)) return { ...c, account_ok: false, skip_reason: 'account inactive (is_active = false) - skipped' };\n  const token = String(acc.access_token ?? '').trim();\n  if (!token) return { ...c, account_ok: false, skip_reason: 'IG_Accounts.access_token khali hai - skipped' };\n  return {\n    ...c,\n    account_ok: true,\n    ig_account_id: String(acc.ig_account_id).trim(),\n    account_username: String(acc.username ?? '').replace(/^@/, '').trim(),\n    access_token: token\n  };\n};\n\nconst out = $('Extract Quick Reply').all().filter((i) => i.json.valid).map((i) => ({ json: attach(i.json) }));\nif (!out.length) out.push({ json: { account_ok: false, skip_reason: 'no valid tap to resolve' } });\nreturn out;"
+      },
+      "id": "d1f531bd-f622-49db-b5b7-62274b720401",
+      "name": "Resolve Tap Account",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3104,
+        5344
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "312145c5-fcdb-43eb-b89e-80f9ec1adb72",
+              "leftValue": "={{ $json.account_ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "82722501-7bbe-4811-9fb2-26e84f062f7b",
+      "name": "Tap Account OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -2880,
+        5344
+      ]
+    },
+    {
+      "parameters": {
+        "content": "**Multi-account setup**\n\n1. Data Tables: IG_Accounts, Keywords, Pending_DMs (names exact)\n2. IG_Accounts.ig_account_id = webhook entry.id\n3. Saare Instagram HTTP nodes: Authorization = Bearer {{ $json.access_token }} (static credential nahi)\n4. Pehle test payload / unknown account => skip (check Skipped node)\n5. Token refresh: alag 'IG Token Refresh' workflow",
+        "height": 260,
+        "width": 560
+      },
+      "id": "7453f316-3920-4489-bddd-e5822d90995d",
+      "name": "Note d295",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -4912,
+        4448
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Prepare Pending Row": {
+      "main": [
+        [
+          {
+            "node": "Store Pending?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Pending?": {
+      "main": [
+        [
+          {
+            "node": "Upsert Pending Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gate Sent (check output)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Pending Row": {
+      "main": [
+        [
+          {
+            "node": "Gate Sent (check output)1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pending Store Failed (check output)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Quick Reply": {
+      "main": [
+        [
+          {
+            "node": "Is Valid Tap?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid Tap?": {
+      "main": [
+        [
+          {
+            "node": "Get IG Account (Tap)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignored (check skip_reason)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Pending Row": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Pending (TTL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Expired?": {
+      "main": [
+        [
+          {
+            "node": "Delete Expired Pending",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignored (check skip_reason)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Expired Pending": {
+      "main": [
+        [
+          {
+            "node": "Ignored (check skip_reason)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format DM Error1": {
+      "main": [
+        [
+          {
+            "node": "DM Failed (check output)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Meta Webhook - POST Events1": {
+      "main": [
+        [
+          {
+            "node": "Is Messaging Event?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Instagram Comment": {
+      "main": [
+        [
+          {
+            "node": "Valid Comment?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Match Keyword": {
+      "main": [
+        [
+          {
+            "node": "Is Matched?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Instagram DM": {
+      "main": [
+        [
+          {
+            "node": "DM Sent (check output)1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format DM Error1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Comment Reply1": {
+      "main": [
+        [
+          {
+            "node": "Reply to Instagram Comment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply to Instagram Comment": {
+      "main": [
+        [
+          {
+            "node": "Comment Replied (check output)1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Restore DM Context1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Reply Error1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Restore DM Context1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Reply Error1": {
+      "main": [
+        [
+          {
+            "node": "Comment Reply Failed (check output)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid Comment?": {
+      "main": [
+        [
+          {
+            "node": "Get IG Account (Comment)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skipped (check skip_reason)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Matched?1": {
+      "main": [
+        [
+          {
+            "node": "Build Comment Reply1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Match (check output)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Messaging Event?1": {
+      "main": [
+        [
+          {
+            "node": "Extract Quick Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract Instagram Comment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore DM Context1": {
+      "main": [
+        [
+          {
+            "node": "Require Follow?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Require Follow?1": {
+      "main": [
+        [
+          {
+            "node": "Check Follow Status1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Instagram DM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Follow Status1": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Follow Result1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Evaluate Follow Result1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate Follow Result1": {
+      "main": [
+        [
+          {
+            "node": "Is Following?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Following?1": {
+      "main": [
+        [
+          {
+            "node": "Send Instagram DM",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Follow Gate1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Follow Gate1": {
+      "main": [
+        [
+          {
+            "node": "Send Follow Gate1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Follow Gate1": {
+      "main": [
+        [
+          {
+            "node": "Prepare Pending Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format DM Error1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pending Found?1": {
+      "main": [
+        [
+          {
+            "node": "Check Follow Status (Recheck)1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Expired?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Follow Status (Recheck)1": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Recheck Result1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Evaluate Recheck Result1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate Recheck Result1": {
+      "main": [
+        [
+          {
+            "node": "Still Following?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Still Following?1": {
+      "main": [
+        [
+          {
+            "node": "Send Pending Message1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Follow Gate1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Pending Message1": {
+      "main": [
+        [
+          {
+            "node": "Delete Pending1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format DM Error1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Pending1": {
+      "main": [
+        [
+          {
+            "node": "Pending DM Sent (check output)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate Pending (TTL)": {
+      "main": [
+        [
+          {
+            "node": "Pending Found?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get IG Account (Comment)": {
+      "main": [
+        [
+          {
+            "node": "Resolve Account",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Account": {
+      "main": [
+        [
+          {
+            "node": "Account Active?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Account Active?": {
+      "main": [
+        [
+          {
+            "node": "Get Keywords",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skipped (check skip_reason)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Keywords": {
+      "main": [
+        [
+          {
+            "node": "Match Keyword",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get IG Account (Tap)": {
+      "main": [
+        [
+          {
+            "node": "Resolve Tap Account",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Tap Account": {
+      "main": [
+        [
+          {
+            "node": "Tap Account OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tap Account OK?": {
+      "main": [
+        [
+          {
+            "node": "Get Pending Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignored (check skip_reason)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "timezone": "Asia/Kolkata",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "bed884e3-736d-4076-a5f0-abdaa3f8de04",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "13616a3c0654f9f6a26fed623e9b351c389d3dc708b46279468690c822557569"
+  },
+  "nodeGroups": [],
+  "id": "AY8miqpopqh14P8V",
+  "tags": []
+}

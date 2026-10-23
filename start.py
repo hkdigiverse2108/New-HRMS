@@ -311,6 +311,17 @@ def main():
     # Pre-clean: ensure ports are free before starting
     free_ports(backend_port, frontend_port)
 
+    # Automatic fallback if port is locked by Windows kernel/zombie process
+    if is_port_in_use(backend_port):
+        orig_port = backend_port
+        candidate = 8001
+        while is_port_in_use(candidate) and candidate < 8020:
+            candidate += 1
+        backend_port = candidate
+        if vite_api_url and f":{orig_port}" in vite_api_url:
+            vite_api_url = vite_api_url.replace(f":{orig_port}", f":{backend_port}")
+        print(f"\033[93m[PORT AUTO-FALLBACK] Port {orig_port} was locked. Automatically using port {backend_port}!\033[0m")
+
     processes = []
     popen_kwargs = {}
     if os.name != "nt":

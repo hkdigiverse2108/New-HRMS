@@ -98,6 +98,13 @@ export interface JobOpening {
     resume_url?: string;
     why_good_fit?: string;
     created_at?: string;
+    linkedin_profile?: string;
+    referred_by?: {
+      employee_id?: string;
+      full_name?: string;
+      email?: string;
+      department?: string;
+    };
   }>;
   created_at?: string;
   updated_at?: string;
@@ -1601,7 +1608,7 @@ export function Hirings({ setActive }: HiringsProps = {}) {
                       {visibleReferrals.map((ref, idx) => {
                         const rawResume = ref.resume_url || (ref as any).resume || (ref as any).file_url || (ref as any).url;
                         const fullResumeUrl = getFullResumeUrl(rawResume);
-                        const refId = ref.id || ref._id;
+                        const refId = String(ref.id || ref._id || idx);
 
                         const refEmpId = String(ref.referred_by?.employee_id || (ref as any)?.employee_id || "").trim();
                         const refEmail = String(ref.referred_by?.email || "").trim().toLowerCase();

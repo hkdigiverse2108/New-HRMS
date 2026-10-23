@@ -13,12 +13,14 @@ export const getAuthToken = (): string | null => {
 export const setAuthToken = (token: string): void => {
   if (typeof window === "undefined") return;
   localStorage.setItem(TOKEN_STORAGE_KEY, token);
+  window.dispatchEvent(new Event("hrms:auth-changed"));
 };
 
 export const removeAuthToken = (): void => {
   if (typeof window === "undefined") return;
   localStorage.removeItem(TOKEN_STORAGE_KEY);
   localStorage.removeItem(USER_STORAGE_KEY);
+  window.dispatchEvent(new Event("hrms:auth-changed"));
 };
 
 export const getStoredUser = (): any => {
