@@ -100,7 +100,7 @@ function mapBackendToEmployee(be: any): Employee {
     securityDepositExempt: be.security_deposit_exempt ?? be.securityDepositExempt ?? false,
     securityDepositDirectPayments: be.security_deposit_direct_payments || be.securityDepositDirectPayments || [],
     targetSecurityDeposit: be.target_security_deposit || be.targetSecurityDeposit || be.deposit_details?.deposit_amount,
-    depositAmount: be.deposit_details?.amount_paid || be.deposit_details?.deposit_amount || be.depositAmount,
+    depositAmount: be.deposit_details?.deposit_amount || be.target_security_deposit || be.depositAmount,
     depositPaid: be.deposit_details?.amount_paid || be.depositPaid || 0,
     depositStatus: be.deposit_details?.status || be.depositStatus || "Pending",
     depositPaymentDate: be.deposit_details?.payment_date ? String(be.deposit_details.payment_date) : (be.depositPaymentDate || ""),

@@ -102,6 +102,11 @@ class DepositDetails(BaseModel):
     payment_date: Optional[date] = None
     payment_mode: Optional[str] = None  # "Cash", "UPI", "Bank Transfer", "Cheque"
     remarks: Optional[str] = None
+    refund_amount: Optional[float] = 0.0
+    refund_date: Optional[date] = None
+    refund_remarks: Optional[str] = None
+
+    model_config = ConfigDict(extra="allow")
 
 class EmployeeCreate(BaseModel):
     employee_id: Optional[str] = None

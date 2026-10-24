@@ -109,6 +109,32 @@ async def bulk_add_content_items(
         await clear_pattern("tasks:*")
     return created_items
 
+@router.post("/{project_id}/content/batch", response_model=List[ContentItemResponse], status_code=status.HTTP_201_CREATED)
+async def batch_create_content_items(
+    project_id: str,
+    items: List[ContentItemCreate],
+    current_user: dict = Depends(get_current_employee)
+):
+    if not items:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No content items provided in batch")
+        
+    created_items = []
+    user_id = str(current_user.get("_id") or current_user.get("id"))
+    for item_data in items:
+        if item_data.project_id != project_id:
+            item_data.project_id = project_id
+        created = await ContentService.create_content(project_id, item_data, user_id)
+        if created:
+            item = await ContentService.get_content_by_id(created["_id"])
+            if item:
+                created_items.append(item)
+                
+    if created_items:
+        await clear_pattern(f"content:{project_id}:*")
+        await clear_pattern("projects:*")
+        await clear_pattern("tasks:*")
+    return created_items
+
 @router.get("/{project_id}/content", response_model=ContentCalendarResponse)
 async def get_all_content_items(
     project_id: str,

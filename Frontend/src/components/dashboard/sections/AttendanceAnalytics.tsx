@@ -27,6 +27,9 @@ export function AttendanceAnalytics() {
     const weeks = [];
     let currentDay = 1;
 
+    const dailyMap = data?.attendance_heatmap?.daily || {};
+    const totalEmp = data?.attendance_heatmap?.total_employees || 0;
+
     for (let w = 0; w < 6; w++) {
       const days = [];
       for (let d = 0; d < 7; d++) {
@@ -37,10 +40,28 @@ export function AttendanceAnalytics() {
           // empty days after the last day
           days.push({ val: 0, date: "" });
         } else {
-          // actual days
-          const isWeekend = (d === 5 || d === 6); // Sat=5, Sun=6
-          const val = isWeekend ? 0 : Math.floor(Math.random() * 4) + 1;
-          days.push({ val, date: currentDay });
+          // actual days with dynamic data from backend
+          const dayInfo = dailyMap[String(currentDay)] || null;
+          const presentCount = dayInfo?.present ?? 0;
+          const pct = dayInfo?.pct ?? (totalEmp > 0 ? Math.round((presentCount / totalEmp) * 100) : 0);
+          
+          let val = dayInfo?.level ?? 0;
+          if (dayInfo?.level === undefined) {
+            if (pct > 75) val = 4;
+            else if (pct > 50) val = 3;
+            else if (pct > 25) val = 2;
+            else if (pct > 0) val = 1;
+            else val = 0;
+          }
+
+          days.push({
+            val,
+            date: currentDay,
+            present: presentCount,
+            total: totalEmp,
+            pct,
+            fullDate: dayInfo?.date || `${year}-${String(month + 1).padStart(2, "0")}-${String(currentDay).padStart(2, "0")}`
+          });
           currentDay++;
         }
       }
@@ -186,30 +207,45 @@ export function AttendanceAnalytics() {
               {/* Calendar Grid */}
               {heatmap.map((week, w) => (
                 <div key={w} className="flex gap-2">
-                  {week.map((day, d) => (
+                  {week.map((day: any, d) => (
                     <div
                       key={d}
-                      className={`flex-1 h-10 flex items-center justify-center rounded-lg text-[12px] font-medium transition-all cursor-default ${!day.date ? 'opacity-0' : 'hover:scale-[1.02]'} ${
-                        day.val === 0 ? 'bg-muted/50 text-muted-foreground' :
-                        day.val === 1 ? 'bg-emerald-100 text-emerald-800' :
-                        day.val === 2 ? 'bg-emerald-300 text-emerald-900' :
-                        day.val === 3 ? 'bg-emerald-500 text-white' : 'bg-emerald-700 text-white'
+                      title={day.date ? `${day.fullDate}: ${day.present} / ${day.total} Present (${day.pct}%) • Quartile Level ${day.val}` : ""}
+                      className={`flex-1 h-11 flex flex-col items-center justify-center rounded-xl text-[12px] font-bold transition-all ${!day.date ? 'opacity-0 pointer-events-none' : 'hover:scale-105 cursor-pointer shadow-2xs'} ${
+                        day.val === 0 ? 'bg-muted/30 text-muted-foreground border border-border/40' :
+                        day.val === 1 ? 'bg-emerald-100 text-emerald-800 border border-emerald-200/60' :
+                        day.val === 2 ? 'bg-emerald-300 text-emerald-950 border border-emerald-400/60' :
+                        day.val === 3 ? 'bg-emerald-500 text-white shadow-xs' : 'bg-emerald-700 text-white shadow-xs'
                       }`}
                     >
-                      {day.date}
+                      <span className="leading-tight">{day.date}</span>
+                      {day.date && day.total > 0 && day.present > 0 && (
+                        <span className={`text-[9px] font-black leading-none mt-0.5 ${day.val >= 3 ? 'text-white/90' : 'text-emerald-900'}`}>
+                          {day.present}
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>
               ))}
             </div>
           </div>
-          <div className="flex justify-end items-center gap-2 mt-4 text-[10px] text-muted-foreground">
-            <span>Low</span>
-            <div className="w-3 h-3 rounded-sm bg-emerald-100"></div>
-            <div className="w-3 h-3 rounded-sm bg-emerald-300"></div>
-            <div className="w-3 h-3 rounded-sm bg-emerald-500"></div>
-            <div className="w-3 h-3 rounded-sm bg-emerald-700"></div>
-            <span>High</span>
+          <div className="flex flex-wrap justify-between items-center gap-3 mt-4 text-[11px] text-muted-foreground pt-3 border-t border-border/40">
+            <span className="text-[11px] font-medium text-muted-foreground">
+              Quartile Formula: 4 colors (25% each) based on daily present employee percentage
+            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider">0%</span>
+              <div className="w-3.5 h-3.5 rounded-md bg-muted/30 border border-border/40" title="0% (No check-ins)"></div>
+              <span className="text-[10px] font-bold uppercase tracking-wider ml-1">1-25%</span>
+              <div className="w-3.5 h-3.5 rounded-md bg-emerald-100 border border-emerald-200" title="1-25% Presence"></div>
+              <span className="text-[10px] font-bold uppercase tracking-wider ml-1">26-50%</span>
+              <div className="w-3.5 h-3.5 rounded-md bg-emerald-300 border border-emerald-400" title="26-50% Presence"></div>
+              <span className="text-[10px] font-bold uppercase tracking-wider ml-1">51-75%</span>
+              <div className="w-3.5 h-3.5 rounded-md bg-emerald-500" title="51-75% Presence"></div>
+              <span className="text-[10px] font-bold uppercase tracking-wider ml-1">76-100%</span>
+              <div className="w-3.5 h-3.5 rounded-md bg-emerald-700" title="76-100% Presence"></div>
+            </div>
           </div>
         </div>
         </div>

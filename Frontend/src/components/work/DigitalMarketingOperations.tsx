@@ -181,8 +181,8 @@ export const DigitalMarketingOperations: React.FC<DigitalMarketingOperationsProp
     try {
       setLoading(true);
       const [statsRes, campsRes] = await Promise.allSettled([
-        api.get<any[]>(`/projects/${projectId}/marketing-stats`, { showLoader: false }),
-        api.get<string[]>(`/projects/${projectId}/marketing-campaigns`, { showLoader: false }),
+        api.get<any[]>(`/projects/${projectId}/marketing-stats`, { showLoader: false, showErrorToast: false }),
+        api.get<string[]>(`/projects/${projectId}/marketing-campaigns`, { showLoader: false, showErrorToast: false }),
       ]);
 
       if (statsRes.status === "fulfilled" && Array.isArray(statsRes.value)) {

@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { Search, PenTool, CheckCircle2, Clock, Eye, UserCheck, Image as ImageIcon, X, Building2, RefreshCw } from "lucide-react";
+import { Search, PenTool, CheckCircle2, Clock, Eye, UserCheck, Image as ImageIcon, X, Building2, RefreshCw, Trash2 } from "lucide-react";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { useEmployeesContext } from "@/components/employees/EmployeeContext";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Employee } from "@/components/employees/employee-data";
 import { useAuth } from "@/components/auth/AuthContext";
+import { api } from "@/lib/api";
+import { toast } from "@/lib/toast";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
 
 export function EmployeeSignatures() {
   const { employees, refreshEmployees } = useEmployeesContext();
@@ -17,6 +20,54 @@ export function EmployeeSignatures() {
 
   // Preview modal state
   const [previewSigEmp, setPreviewSigEmp] = useState<{ name: string; id: string; signatureUrl: string } | null>(null);
+
+  // Delete signature state
+  const [sigToDelete, setSigToDelete] = useState<Employee | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const isAdminOrHr =
+    authUser?.role === "Admin" ||
+    Boolean((authUser as any)?.is_superuser) ||
+    (authUser as any)?.department?.toLowerCase() === "hr" ||
+    (authUser as any)?.designation?.toLowerCase().includes("hr");
+
+  const handleDeleteSignature = async () => {
+    if (!sigToDelete) return;
+    setIsDeleting(true);
+    try {
+      await api.delete(`/employees/${sigToDelete.id}/signature`);
+      if (typeof window !== "undefined") {
+        localStorage.removeItem(`user_signature_${sigToDelete.id}`);
+        if (sigToDelete.employeeId) {
+          localStorage.removeItem(`user_signature_${sigToDelete.employeeId}`);
+        }
+        if (sigToDelete.email) {
+          localStorage.removeItem(`user_signature_${sigToDelete.email}`);
+        }
+        if (
+          authUser &&
+          (sigToDelete.id === authUser.id || sigToDelete.employeeId === (authUser as any).employee_id)
+        ) {
+          localStorage.removeItem("user_signature_current");
+        }
+      }
+      toast.success(`Signature for ${sigToDelete.name} has been deleted.`);
+      const deletedId = sigToDelete.id;
+      const deletedEmpId = sigToDelete.employeeId;
+      setSigToDelete(null);
+      if (previewSigEmp && (previewSigEmp.id === deletedId || previewSigEmp.id === deletedEmpId)) {
+        setPreviewSigEmp(null);
+      }
+      if (refreshEmployees) {
+        await refreshEmployees();
+      }
+    } catch (error: any) {
+      console.error("Failed to delete signature:", error);
+      toast.error(error?.response?.data?.detail || "Failed to delete signature. Please try again.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // Auto refresh employee signatures on mount & poll
   const handleRefresh = async () => {
@@ -317,24 +368,37 @@ export function EmployeeSignatures() {
                         )}
                       </td>
 
-                      {/* Actions Column (View Signature ONLY - No Add Signature Option Here) */}
+                      {/* Actions Column */}
                       <td className="p-4">
                         <div className="flex justify-end items-center gap-2">
                           {hasSig && sigUrl ? (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setPreviewSigEmp({
-                                  name: emp.name,
-                                  id: emp.employeeId || emp.id,
-                                  signatureUrl: sigUrl,
-                                })
-                              }
-                              className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs rounded-xl transition-colors flex items-center gap-1.5 shadow-xs"
-                              title="View Full Signature"
-                            >
-                              <Eye className="w-3.5 h-3.5" /> View Signature
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setPreviewSigEmp({
+                                    name: emp.name,
+                                    id: emp.employeeId || emp.id,
+                                    signatureUrl: sigUrl,
+                                  })
+                                }
+                                className="px-3.5 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs rounded-xl transition-colors flex items-center gap-1.5 shadow-xs"
+                                title="View Full Signature"
+                              >
+                                <Eye className="w-3.5 h-3.5" /> View Signature
+                              </button>
+
+                              {isAdminOrHr && (
+                                <button
+                                  type="button"
+                                  onClick={() => setSigToDelete(emp)}
+                                  className="p-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 border border-rose-500/20 font-bold text-xs rounded-xl transition-colors flex items-center justify-center shadow-xs"
+                                  title="Delete Signature"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </>
                           ) : (
                             <span className="text-xs text-muted-foreground italic">Pending Profile Add</span>
                           )}
@@ -374,16 +438,44 @@ export function EmployeeSignatures() {
               Official digital signature added by employee from profile.
             </p>
           </div>
-          <div className="px-6 py-3 border-t border-border/60 bg-card flex justify-end">
+          <div className="px-6 py-3 border-t border-border/60 bg-card flex justify-between items-center">
+            {isAdminOrHr && previewSigEmp && (
+              <button
+                type="button"
+                onClick={() => {
+                  const targetEmp = employees.find(
+                    (e) => e.id === previewSigEmp.id || e.employeeId === previewSigEmp.id
+                  );
+                  if (targetEmp) {
+                    setSigToDelete(targetEmp);
+                  }
+                }}
+                className="px-3.5 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 border border-rose-500/20 font-bold text-xs rounded-xl transition-colors flex items-center gap-1.5 shadow-xs"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Delete Signature
+              </button>
+            )}
             <button
               onClick={() => setPreviewSigEmp(null)}
-              className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs rounded-xl transition-colors"
+              className="ml-auto px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs rounded-xl transition-colors"
             >
               Close
             </button>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Confirmation Modal for Signature Deletion */}
+      <ConfirmModal
+        isOpen={!!sigToDelete}
+        onClose={() => setSigToDelete(null)}
+        onConfirm={handleDeleteSignature}
+        title="Delete Digital Signature"
+        description="Are you sure you want to delete this employee's digital signature? The employee will need to upload or draw their signature again."
+        itemName={sigToDelete?.name}
+        confirmText={isDeleting ? "Deleting..." : "Delete Signature"}
+        variant="destructive"
+      />
     </div>
   );
 }

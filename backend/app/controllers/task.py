@@ -190,7 +190,11 @@ async def get_all_tasks(
     
     is_admin_or_hr = role in ["Admin", "Subadmin", "HR"] or str(user_dept or "").strip().upper() == "HR"
     
-    if not is_admin_or_hr:
+    # Strict "My Tasks" handling: ONLY tasks where assigned_to == current employee
+    if view == "me" or view == "my_tasks":
+        assigned_to = emp_id
+        involved_emp_id = None
+    elif not is_admin_or_hr:
         desig_lower = str(designation or "").lower()
         is_leader = "team leader" in desig_lower or "head" in desig_lower
         
@@ -204,8 +208,6 @@ async def get_all_tasks(
             team_employee_ids = [str(e["_id"]) for e in dept_emps.get("data", [])]
         else:
             involved_emp_id = emp_id
-    elif view == "me":
-        involved_emp_id = emp_id
 
     # If department filter is explicitly requested
     if department and department != "All":
@@ -263,19 +265,61 @@ async def get_deleted_tasks(
 @router.get("/stats")
 async def get_task_stats(
     target_date: Optional[str] = Query(None, description="Target reference date (YYYY-MM-DD)"),
+    view: Optional[str] = Query("all", description="View scope ('me', 'all')"),
+    assigned_to: Optional[str] = Query(None, description="Filter by assigned_to employee ID"),
+    assigned_by: Optional[str] = Query(None, description="Filter by assigned_by employee ID"),
+    department: Optional[str] = Query(None, description="Filter by department"),
+    task_category: Optional[str] = Query(None, description="Filter by task category"),
+    priority: Optional[str] = Query(None, description="Filter by priority"),
+    search: Optional[str] = Query(None, description="Search term"),
     current_user: dict = Depends(get_current_employee)
 ):
     role = current_user.get("work_details", {}).get("system_role", "Employee")
-    involved_emp_id = None
-    if role not in ["Admin", "Subadmin", "HR"]:
-        involved_emp_id = str(current_user.get("_id") or current_user.get("id"))
+    designation = current_user.get("work_details", {}).get("designation", "")
+    user_dept = current_user.get("work_details", {}).get("department", "")
+    emp_id = str(current_user.get("_id") or current_user.get("id"))
     
-    cache_key = f"tasks:stats:{involved_emp_id or 'all'}:{target_date or 'today'}"
+    involved_emp_id = None
+    team_employee_ids = None
+    is_admin_or_hr = role in ["Admin", "Subadmin", "HR"] or str(user_dept or "").strip().upper() == "HR"
+
+    if view == "me" or view == "my_tasks":
+        assigned_to = emp_id
+        involved_emp_id = None
+    elif not is_admin_or_hr:
+        desig_lower = str(designation or "").lower()
+        is_leader = "team leader" in desig_lower or "head" in desig_lower
+        if is_leader:
+            from app.repository.employee import EmployeeRepository
+            dept_emps = await EmployeeRepository.get_all_employees(department=user_dept, limit=1000)
+            team_employee_ids = [str(e["_id"]) for e in dept_emps.get("data", [])]
+        else:
+            involved_emp_id = emp_id
+
+    if department and department != "All":
+        from app.repository.employee import EmployeeRepository
+        dept_emps = await EmployeeRepository.get_all_employees(department=department, limit=1000)
+        dept_emp_ids = [str(e["_id"]) for e in dept_emps.get("data", [])]
+        if team_employee_ids is not None:
+            team_employee_ids = list(set(team_employee_ids).intersection(set(dept_emp_ids)))
+        else:
+            team_employee_ids = dept_emp_ids
+    
+    cache_key = f"tasks:stats:{involved_emp_id or 'all'}:{target_date or 'today'}:{assigned_to or 'all'}:{assigned_by or 'all'}:{task_category or 'all'}:{priority or 'all'}:{search or ''}"
     cached = await get_cache(cache_key)
     if cached is not None:
         return cached
 
-    result = await TaskService.get_task_stats(involved_emp_id, target_date)
+    result = await TaskService.get_task_stats(
+        involved_emp_id=involved_emp_id,
+        target_date=target_date,
+        assigned_to=assigned_to,
+        assigned_by=assigned_by,
+        team_employee_ids=team_employee_ids,
+        task_category=task_category,
+        priority=priority,
+        search=search
+    )
     await set_cache(cache_key, result, ttl=60)
     return result
 

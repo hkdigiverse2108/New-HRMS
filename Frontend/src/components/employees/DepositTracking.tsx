@@ -2,22 +2,16 @@ import React, { useState, useMemo } from "react";
 import { 
   ShieldCheck, 
   IndianRupee, 
-  FileText, 
   Search, 
-  Filter, 
-  CheckCircle2, 
   Clock, 
-  AlertCircle, 
   Edit2, 
-  Eye, 
-  Download, 
   Users, 
   GraduationCap, 
   Briefcase,
   X,
-  Calendar,
-  CreditCard,
-  Check
+  RotateCcw,
+  CheckCircle2,
+  AlertCircle
 } from "lucide-react";
 import { useEmployeesContext } from "./EmployeeContext";
 import { Employee } from "./employee-data";
@@ -26,40 +20,27 @@ import { toast } from "@/lib/toast";
 import { api } from "@/lib/api";
 import { getAvatarUrl, handleAvatarError } from "@/lib/config";
 
-const REQUIRED_DOCUMENTS_LIST = [
-  "10th Marksheet",
-  "12th Marksheet",
-  "Degree Certificate",
-  "Aadhar Card",
-  "PAN Card",
-  "Experience Letter",
-  "Relieving Letter",
-  "3 Months Payslip",
-  "Passport Size Photo",
-  "Bank Passbook / Cancelled Cheque"
-];
-
 export function DepositTracking() {
   const { employees, updateEmployee } = useEmployeesContext();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<"All" | "Intern" | "Employee">("All");
   const [statusFilter, setStatusFilter] = useState<string>("All");
-  const [docFilter, setDocFilter] = useState<"All" | "Complete" | "Incomplete">("All");
 
   // Modal states
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
-  const [isDocModalOpen, setIsDocModalOpen] = useState(false);
 
   // Form states for deposit update
   const [editDepositType, setEditDepositType] = useState<"Intern" | "Employee">("Employee");
   const [editAmountPaid, setEditAmountPaid] = useState<number>(0);
   const [editPaymentMode, setEditPaymentMode] = useState<string>("UPI");
   const [editPaymentDate, setEditPaymentDate] = useState<string>("");
-  const [editStatus, setEditStatus] = useState<string>("Pending");
   const [editRemarks, setEditRemarks] = useState<string>("");
-  const [editSelectedDocs, setEditSelectedDocs] = useState<string[]>([]);
+  const [editIsRefunded, setEditIsRefunded] = useState<boolean>(false);
+  const [editRefundAmount, setEditRefundAmount] = useState<number>(0);
+  const [editRefundDate, setEditRefundDate] = useState<string>("");
+  const [editRefundRemarks, setEditRefundRemarks] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
 
   // Helper to determine if employee is intern
@@ -71,12 +52,14 @@ export function DepositTracking() {
   };
 
   const getTargetDeposit = (emp: Employee) => {
-    if (emp.depositAmount) return emp.depositAmount;
+    if (emp.depositAmount && Number(emp.depositAmount) > 0) return Number(emp.depositAmount);
     return isIntern(emp) ? 2000 : 10000;
   };
 
-  const getDepositStatus = (emp: Employee) => {
-    if (emp.depositStatus) return emp.depositStatus;
+  const getDepositStatus = (emp: Employee): "Paid" | "Partial" | "Pending" | "Refunded" => {
+    if (emp.depositStatus === "Refunded" || (emp as any).deposit_details?.status === "Refunded" || (emp as any).deposit_details?.refund_date) {
+      return "Refunded";
+    }
     const target = getTargetDeposit(emp);
     const paid = emp.depositPaid || 0;
     if (paid >= target && target > 0) return "Paid";
@@ -84,92 +67,65 @@ export function DepositTracking() {
     return "Pending";
   };
 
-  // Open modal with employee data
-  const handleOpenDepositModal = (emp: Employee) => {
-    setSelectedEmp(emp);
-    const intern = isIntern(emp);
-    setEditDepositType(intern ? "Intern" : "Employee");
-    setEditAmountPaid(emp.depositPaid || 0);
-    setEditPaymentMode(emp.depositPaymentDate ? "UPI" : "Cash");
-    setEditPaymentDate(emp.depositPaymentDate || new Date().toISOString().split("T")[0] || "");
-    setEditStatus(getDepositStatus(emp));
-    setEditRemarks(emp.depositRemarks || "");
-    setEditSelectedDocs(emp.requiredDocuments || []);
-    setIsDepositModalOpen(true);
-  };
-
-  const handleOpenDocModal = (emp: Employee) => {
-    setSelectedEmp(emp);
-    setEditSelectedDocs(emp.requiredDocuments || []);
-    setIsDocModalOpen(true);
-  };
-
-  // Save deposit & doc changes
-  const handleSaveDeposit = async () => {
-    if (!selectedEmp) return;
-    setIsSaving(true);
-    const targetAmount = editDepositType === "Intern" ? 2000 : 10000;
-    
-    // Auto align status if paid in full
-    let finalStatus = editStatus;
-    if (editAmountPaid >= targetAmount && editStatus === "Pending") {
-      finalStatus = "Paid";
-    } else if (editAmountPaid > 0 && editAmountPaid < targetAmount && editStatus === "Pending") {
-      finalStatus = "Partial";
-    }
-
-    const payload = {
-      depositAmount: targetAmount,
-      depositPaid: editAmountPaid,
-      depositStatus: finalStatus as any,
-      depositPaymentDate: editPaymentDate,
-      depositRemarks: editRemarks,
-      requiredDocuments: editSelectedDocs,
-    };
-
-    try {
-      await updateEmployee(selectedEmp.id, payload);
-      // Sync to backend deposit_details
-      try {
-        await api.put(`/employees/${selectedEmp.id}`, {
-          deposit_details: {
-            deposit_type: editDepositType,
-            deposit_amount: targetAmount,
-            amount_paid: editAmountPaid,
-            status: finalStatus,
-            payment_date: editPaymentDate || undefined,
-            payment_mode: editPaymentMode,
-            remarks: editRemarks,
-          },
-          document_checklist: {
-            marksheet_10th: editSelectedDocs.includes("10th Marksheet"),
-            marksheet_12th: editSelectedDocs.includes("12th Marksheet"),
-            degree_certificate: editSelectedDocs.includes("Degree Certificate"),
-            aadhar_card: editSelectedDocs.includes("Aadhar Card"),
-            pan_card: editSelectedDocs.includes("PAN Card"),
-            experience_letter: editSelectedDocs.includes("Experience Letter"),
-            relieving_letter: editSelectedDocs.includes("Relieving Letter"),
-            payslip_3_months: editSelectedDocs.includes("3 Months Payslip"),
-            passport_size_photo: editSelectedDocs.includes("Passport Size Photo"),
-            bank_passbook_or_cheque: editSelectedDocs.includes("Bank Passbook / Cancelled Cheque"),
-          }
-        }, { showErrorToast: false });
-      } catch (err) {
-        console.warn("Backend deposit update sync notice:", err);
-      }
-      toast.success("Deposit & documents updated successfully!");
-      setIsDepositModalOpen(false);
-      setIsDocModalOpen(false);
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to update deposit record");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  // Filtered employees list
-  const filteredEmployees = useMemo(() => {
+  // Filter out Admins and Inactive/Deleted employees
+  const validEmployees = useMemo(() => {
     return employees.filter(emp => {
+      const role = String(emp.role || (emp as any).system_role || (emp as any).work_details?.system_role || "").toLowerCase();
+      const isAdm = role.includes("admin") || Boolean((emp as any).is_superuser);
+      const isInactive = Boolean(
+        (emp as any).is_delete ||
+        (emp as any).is_block ||
+        emp.status === "Inactive" ||
+        (emp as any).work_details?.is_delete ||
+        (emp as any).work_details?.is_block
+      );
+      return !isAdm && !isInactive;
+    });
+  }, [employees]);
+
+  // Aggregate Metrics (4 Specific KPIs requested)
+  const stats = useMemo(() => {
+    let totalTarget = 0;
+    let totalCollected = 0;
+    let totalPending = 0;
+    let paidCount = 0;
+    let internCount = 0;
+    let fullTimeCount = 0;
+
+    validEmployees.forEach(emp => {
+      const intern = isIntern(emp);
+      if (intern) internCount++; else fullTimeCount++;
+      const target = getTargetDeposit(emp);
+      const paid = emp.depositPaid || 0;
+      const st = getDepositStatus(emp);
+
+      if (st === "Refunded") {
+        const refundedAmt = Number((emp as any).deposit_details?.refund_amount || paid);
+        totalCollected += Math.max(0, paid - refundedAmt);
+      } else {
+        totalTarget += target;
+        totalCollected += paid;
+        totalPending += Math.max(0, target - paid);
+        if (paid >= target && target > 0) {
+          paidCount++;
+        }
+      }
+    });
+
+    return {
+      totalTarget,
+      totalCollected,
+      totalPending,
+      paidCount,
+      totalCandidates: validEmployees.length,
+      internCount,
+      fullTimeCount,
+    };
+  }, [validEmployees]);
+
+  // Filtered employees list for Table
+  const filteredEmployees = useMemo(() => {
+    return validEmployees.filter(emp => {
       // 1. Search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -187,53 +143,95 @@ export function DepositTracking() {
 
       // 3. Deposit status filter
       const st = getDepositStatus(emp);
-      if (statusFilter !== "All" && st !== statusFilter) return false;
-
-      // 4. Docs filter
-      const docCount = (emp.requiredDocuments || []).length;
-      if (docFilter === "Complete" && docCount < REQUIRED_DOCUMENTS_LIST.length) return false;
-      if (docFilter === "Incomplete" && docCount >= REQUIRED_DOCUMENTS_LIST.length) return false;
+      if (statusFilter !== "All") {
+        if (statusFilter === "Paid" && st !== "Paid") return false;
+        if (statusFilter === "Partial" && st !== "Partial") return false;
+        if (statusFilter === "Pending" && (st === "Paid" || st === "Refunded")) return false;
+        if (statusFilter === "Refunded" && st !== "Refunded") return false;
+      }
 
       return true;
     });
-  }, [employees, searchQuery, typeFilter, statusFilter, docFilter]);
+  }, [validEmployees, searchQuery, typeFilter, statusFilter]);
 
-  // Aggregate Metrics
-  const stats = useMemo(() => {
-    let totalTarget = 0;
-    let totalCollected = 0;
-    let totalPending = 0;
-    let internCount = 0;
-    let fullTimeCount = 0;
-    let fullySubmittedDocs = 0;
+  // Open modal with employee data
+  const handleOpenDepositModal = (emp: Employee) => {
+    setSelectedEmp(emp);
+    const intern = isIntern(emp);
+    setEditDepositType(intern ? "Intern" : "Employee");
+    setEditAmountPaid(emp.depositPaid || 0);
+    setEditPaymentMode(emp.depositPaymentDate ? "UPI" : "Cash");
+    setEditPaymentDate(emp.depositPaymentDate || new Date().toISOString().split("T")[0] || "");
+    setEditRemarks(emp.depositRemarks || "");
 
-    employees.forEach(emp => {
-      const intern = isIntern(emp);
-      if (intern) internCount++; else fullTimeCount++;
-      const target = getTargetDeposit(emp);
-      const paid = emp.depositPaid || 0;
-      totalTarget += target;
-      totalCollected += paid;
-      totalPending += Math.max(0, target - paid);
-      if ((emp.requiredDocuments || []).length >= REQUIRED_DOCUMENTS_LIST.length) {
-        fullySubmittedDocs++;
-      }
-    });
+    const isRefund = emp.depositStatus === "Refunded" || (emp as any).deposit_details?.status === "Refunded";
+    setEditIsRefunded(Boolean(isRefund));
+    setEditRefundAmount(Number((emp as any).deposit_details?.refund_amount || emp.depositPaid || 0));
+    setEditRefundDate(String((emp as any).deposit_details?.refund_date || new Date().toISOString().split("T")[0]));
+    setEditRefundRemarks(String((emp as any).deposit_details?.refund_remarks || ""));
 
-    return {
-      totalTarget,
-      totalCollected,
-      totalPending,
-      internCount,
-      fullTimeCount,
-      fullySubmittedDocs,
-      completionRate: employees.length > 0 ? Math.round((fullySubmittedDocs / employees.length) * 100) : 0
+    setIsDepositModalOpen(true);
+  };
+
+  // Save deposit changes
+  const handleSaveDeposit = async () => {
+    if (!selectedEmp) return;
+    setIsSaving(true);
+    const targetAmount = editDepositType === "Intern" ? 2000 : 10000;
+    
+    // Auto status determination
+    let finalStatus: "Paid" | "Partial" | "Pending" | "Refunded" = "Pending";
+    if (editIsRefunded) {
+      finalStatus = "Refunded";
+    } else if (editAmountPaid >= targetAmount && targetAmount > 0) {
+      finalStatus = "Paid";
+    } else if (editAmountPaid > 0) {
+      finalStatus = "Partial";
+    } else {
+      finalStatus = "Pending";
+    }
+
+    const payload = {
+      depositAmount: targetAmount,
+      depositPaid: editAmountPaid,
+      depositStatus: finalStatus,
+      depositPaymentDate: editPaymentDate,
+      depositRemarks: editRemarks,
     };
-  }, [employees]);
+
+    try {
+      await updateEmployee(selectedEmp.id, payload);
+      // Sync to backend deposit_details
+      try {
+        await api.put(`/employees/${selectedEmp.id}`, {
+          deposit_details: {
+            deposit_type: editDepositType,
+            deposit_amount: targetAmount,
+            amount_paid: editAmountPaid,
+            status: finalStatus,
+            payment_date: editPaymentDate || undefined,
+            payment_mode: editPaymentMode,
+            remarks: editRemarks,
+            refund_amount: editIsRefunded ? editRefundAmount : 0,
+            refund_date: editIsRefunded ? (editRefundDate || undefined) : null,
+            refund_remarks: editIsRefunded ? editRefundRemarks : null,
+          }
+        }, { showErrorToast: false });
+      } catch (err) {
+        console.warn("Backend deposit update sync notice:", err);
+      }
+      toast.success("Security deposit updated successfully!");
+      setIsDepositModalOpen(false);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update deposit record");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div className="w-full space-y-6 animate-in fade-in duration-300 pb-20">
-      {/* Header Banner */}
+      {/* Header Banner (Cleaned - Removed Document references) */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-card p-6 md:p-8 rounded-[2.5rem] border border-border/60 shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl -z-0 pointer-events-none" />
         <div className="relative z-10">
@@ -243,19 +241,35 @@ export function DepositTracking() {
             </div>
             <div>
               <h1 className="text-2xl md:text-3xl font-black text-foreground tracking-tight">
-                Candidate Deposits & Documents
+                Security Deposit Tracking
               </h1>
               <p className="text-xs md:text-sm text-muted-foreground mt-1">
-                Track onboarding security deposits (₹2,000 for Interns, ₹10,000 for Employees) and required verification documents.
+                Track onboarding security deposits (₹2,000 for Interns, ₹10,000 for Full-Time), collections, remaining balances and refunds.
               </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* KPI Stats Cards */}
+      {/* 4 KPIs Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Collected */}
+        {/* KPI 1: Total Deposit Value */}
+        <div className="bg-card border border-border/60 rounded-3xl p-5 shadow-sm space-y-2 relative overflow-hidden group hover:border-primary/40 transition-all">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total Deposit Value</span>
+            <div className="p-2 rounded-xl bg-primary/10 text-primary">
+              <ShieldCheck className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-2xl font-black text-foreground font-mono">
+            ₹{stats.totalTarget.toLocaleString("en-IN")}
+          </div>
+          <div className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
+            <span>Target value for active candidates</span>
+          </div>
+        </div>
+
+        {/* KPI 2: Total Collected */}
         <div className="bg-card border border-border/60 rounded-3xl p-5 shadow-sm space-y-2 relative overflow-hidden group hover:border-emerald-500/40 transition-all">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Collected Deposits</span>
@@ -267,11 +281,11 @@ export function DepositTracking() {
             ₹{stats.totalCollected.toLocaleString("en-IN")}
           </div>
           <div className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
-            <span>Collected from team</span>
+            <span>Total collected from team</span>
           </div>
         </div>
 
-        {/* Total Pending */}
+        {/* KPI 3: Total Pending */}
         <div className="bg-card border border-border/60 rounded-3xl p-5 shadow-sm space-y-2 relative overflow-hidden group hover:border-amber-500/40 transition-all">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Pending Deposits</span>
@@ -283,41 +297,25 @@ export function DepositTracking() {
             ₹{stats.totalPending.toLocaleString("en-IN")}
           </div>
           <div className="text-[11px] font-semibold text-amber-600 flex items-center gap-1">
-            <span>Awaiting full settlement</span>
+            <span>Remaining balance to collect</span>
           </div>
         </div>
 
-        {/* Candidates Count */}
+        {/* KPI 4: Employee Breakdown */}
         <div className="bg-card border border-border/60 rounded-3xl p-5 shadow-sm space-y-2 relative overflow-hidden group hover:border-blue-500/40 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Candidates Breakdown</span>
+            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Employee Breakdown</span>
             <div className="p-2 rounded-xl bg-blue-500/10 text-blue-600">
               <Users className="w-4 h-4" />
             </div>
           </div>
           <div className="text-2xl font-black text-foreground">
-            {employees.length} <span className="text-xs font-normal text-muted-foreground">Total</span>
+            {stats.paidCount} / {stats.totalCandidates} <span className="text-xs font-normal text-muted-foreground">Paid</span>
           </div>
           <div className="text-[11px] font-semibold text-blue-600 flex items-center gap-2">
             <span>{stats.internCount} Interns (₹2k)</span>
             <span>•</span>
             <span>{stats.fullTimeCount} Full-Time (₹10k)</span>
-          </div>
-        </div>
-
-        {/* Documents Compliance Rate */}
-        <div className="bg-card border border-border/60 rounded-3xl p-5 shadow-sm space-y-2 relative overflow-hidden group hover:border-purple-500/40 transition-all">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Docs Completed</span>
-            <div className="p-2 rounded-xl bg-purple-500/10 text-purple-600">
-              <FileText className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-2xl font-black text-foreground font-mono">
-            {stats.completionRate}%
-          </div>
-          <div className="text-[11px] font-semibold text-purple-600 flex items-center gap-1">
-            <span>{stats.fullySubmittedDocs} of {employees.length} full verification</span>
           </div>
         </div>
       </div>
@@ -349,7 +347,7 @@ export function DepositTracking() {
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                {t === "All" ? "All Types" : t === "Intern" ? "🎓 Interns" : "💼 Employees"}
+                {t === "All" ? "All Types" : t === "Intern" ? "🎓 Interns" : "💼 Full-Time"}
               </button>
             ))}
           </div>
@@ -360,27 +358,16 @@ export function DepositTracking() {
             onChange={(e) => setStatusFilter(e.target.value)}
             className="min-h-[44px] sm:min-h-0 sm:h-9 px-3 bg-muted/30 border border-border/60 rounded-xl text-xs font-bold text-foreground focus:outline-none"
           >
-            <option value="All">All Deposit Statuses</option>
+            <option value="All">All Statuses</option>
             <option value="Paid">Paid</option>
             <option value="Partial">Partial</option>
             <option value="Pending">Pending</option>
             <option value="Refunded">Refunded</option>
           </select>
-
-          {/* Docs Filter */}
-          <select
-            value={docFilter}
-            onChange={(e) => setDocFilter(e.target.value as any)}
-            className="min-h-[44px] sm:min-h-0 sm:h-9 px-3 bg-muted/30 border border-border/60 rounded-xl text-xs font-bold text-foreground focus:outline-none"
-          >
-            <option value="All">All Documents Status</option>
-            <option value="Complete">Complete (10/10)</option>
-            <option value="Incomplete">Incomplete</option>
-          </select>
         </div>
       </div>
 
-      {/* Main Table */}
+      {/* Main Table (Document Checklist Column REMOVED, Remaining Column ADDED) */}
       <div className="bg-card border border-border/60 rounded-[2.5rem] shadow-sm overflow-hidden">
         {filteredEmployees.length === 0 ? (
           <div className="text-center py-20 text-muted-foreground space-y-2">
@@ -393,12 +380,12 @@ export function DepositTracking() {
               <thead>
                 <tr className="border-b border-border/50 text-muted-foreground font-black uppercase tracking-wider bg-muted/20">
                   <th className="py-4 px-6">Candidate / Employee</th>
-                  <th className="py-4 px-4">Designation & Role</th>
+                  <th className="py-4 px-4">Designation & Department</th>
                   <th className="py-4 px-4 text-center">Type</th>
                   <th className="py-4 px-4 text-right">Standard Deposit</th>
                   <th className="py-4 px-4 text-right">Amount Paid</th>
+                  <th className="py-4 px-4 text-right">Remaining Balance</th>
                   <th className="py-4 px-4 text-center">Deposit Status</th>
-                  <th className="py-4 px-4 text-center">Documents Checklist</th>
                   <th className="py-4 px-6 text-center">Actions</th>
                 </tr>
               </thead>
@@ -408,8 +395,7 @@ export function DepositTracking() {
                   const targetDeposit = getTargetDeposit(emp);
                   const paid = emp.depositPaid || 0;
                   const st = getDepositStatus(emp);
-                  const docsCount = (emp.requiredDocuments || []).length;
-                  const isDocsComplete = docsCount >= REQUIRED_DOCUMENTS_LIST.length;
+                  const remaining = st === "Refunded" ? 0 : Math.max(0, targetDeposit - paid);
 
                   return (
                     <tr key={emp.id} className="hover:bg-muted/30 transition-colors group">
@@ -433,7 +419,7 @@ export function DepositTracking() {
                         </div>
                       </td>
 
-                      {/* Designation */}
+                      {/* Designation & Department */}
                       <td className="py-3.5 px-4">
                         <div className="font-bold text-foreground">{emp.designation || emp.role || "Employee"}</div>
                         <div className="text-[11px] text-muted-foreground">{emp.department || "General"}</div>
@@ -450,11 +436,11 @@ export function DepositTracking() {
                           )}
                         >
                           {intern ? <GraduationCap className="w-3 h-3" /> : <Briefcase className="w-3 h-3" />}
-                          {intern ? "Intern" : "Full-Time"}
+                          {intern ? "Intern (₹2k)" : "Full-Time (₹10k)"}
                         </span>
                       </td>
 
-                      {/* Target Deposit */}
+                      {/* Standard Deposit */}
                       <td className="py-3.5 px-4 text-right font-black text-foreground font-mono text-sm">
                         ₹{targetDeposit.toLocaleString("en-IN")}
                       </td>
@@ -471,7 +457,22 @@ export function DepositTracking() {
                         )}
                       </td>
 
-                      {/* Status */}
+                      {/* Remaining Balance (Explicitly Added) */}
+                      <td className="py-3.5 px-4 text-right font-black font-mono text-sm">
+                        {st === "Refunded" ? (
+                          <span className="text-blue-600 text-xs font-bold">₹0 (Refunded)</span>
+                        ) : remaining === 0 ? (
+                          <span className="text-emerald-600 font-bold inline-flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> ₹0
+                          </span>
+                        ) : (
+                          <span className="text-rose-600 font-black inline-flex items-center gap-1">
+                            <AlertCircle className="w-3.5 h-3.5" /> ₹{remaining.toLocaleString("en-IN")}
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Deposit Status (Auto Status) */}
                       <td className="py-3.5 px-4 text-center">
                         <span
                           className={cn(
@@ -486,44 +487,12 @@ export function DepositTracking() {
                         </span>
                       </td>
 
-                      {/* Documents Checklist Progress */}
-                      <td className="py-3.5 px-4 text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenDocModal(emp)}
-                          className="hover:scale-105 transition-transform"
-                          title="Click to view/edit document checklist"
-                        >
-                          <div className="flex flex-col items-center gap-1">
-                            <span
-                              className={cn(
-                                "text-xs font-bold",
-                                isDocsComplete ? "text-emerald-600 font-extrabold" : "text-foreground"
-                              )}
-                            >
-                              {docsCount} / {REQUIRED_DOCUMENTS_LIST.length} Docs
-                            </span>
-                            <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden border border-border/40">
-                              <div
-                                className={cn(
-                                  "h-full rounded-full transition-all",
-                                  isDocsComplete ? "bg-emerald-500" : "bg-primary"
-                                )}
-                                style={{
-                                  width: `${Math.min(100, Math.round((docsCount / REQUIRED_DOCUMENTS_LIST.length) * 100))}%`
-                                }}
-                              />
-                            </div>
-                          </div>
-                        </button>
-                      </td>
-
                       {/* Actions */}
                       <td className="py-3.5 px-6 text-center">
                         <button
                           onClick={() => handleOpenDepositModal(emp)}
                           className="px-3 py-1.5 min-h-[44px] sm:min-h-0 inline-flex items-center gap-1.5 bg-primary/10 hover:bg-primary/20 text-primary font-bold text-xs rounded-xl transition-colors"
-                          title="Update Deposit & Documents"
+                          title="Manage Deposit & Refund"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                           <span>Manage</span>
@@ -538,7 +507,7 @@ export function DepositTracking() {
         )}
       </div>
 
-      {/* Modal 1: Update Deposit & Docs */}
+      {/* Modal: Update Deposit Details & Refund (Document Checklist REMOVED) */}
       {isDepositModalOpen && selectedEmp && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-card w-[calc(100vw-32px)] sm:w-full max-w-lg rounded-2xl sm:rounded-[2.5rem] border border-border/60 shadow-2xl overflow-hidden flex flex-col max-h-[90dvh]">
@@ -597,7 +566,7 @@ export function DepositTracking() {
                 </div>
               </div>
 
-              {/* Amount Paid & Status */}
+              {/* Amount Paid & Live Remaining Calculation */}
               <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
                 <div>
                   <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
@@ -614,18 +583,21 @@ export function DepositTracking() {
 
                 <div>
                   <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
-                    Deposit Status
+                    Remaining to Collect
                   </label>
-                  <select
-                    value={editStatus}
-                    onChange={(e) => setEditStatus(e.target.value)}
-                    className="w-full px-3 py-2 bg-muted/30 border border-border/50 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    <option value="Paid">Paid</option>
-                    <option value="Partial">Partial</option>
-                    <option value="Pending">Pending</option>
-                    <option value="Refunded">Refunded</option>
-                  </select>
+                  <div className="px-3 py-2 bg-muted/20 border border-border/50 rounded-xl text-xs font-black font-mono">
+                    {editIsRefunded ? (
+                      <span className="text-blue-600">₹0 (Refunded)</span>
+                    ) : (() => {
+                      const tgt = editDepositType === "Intern" ? 2000 : 10000;
+                      const rem = Math.max(0, tgt - editAmountPaid);
+                      return rem === 0 ? (
+                        <span className="text-emerald-600">₹0 (Paid in Full)</span>
+                      ) : (
+                        <span className="text-rose-600">₹{rem.toLocaleString("en-IN")} Pending</span>
+                      );
+                    })()}
+                  </div>
                 </div>
               </div>
 
@@ -674,42 +646,68 @@ export function DepositTracking() {
                 />
               </div>
 
-              {/* Documents Checklist */}
-              <div className="pt-3 border-t border-border/50">
-                <div className="flex justify-between items-center mb-2">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                    Required Documents Checklist ({editSelectedDocs.length}/{REQUIRED_DOCUMENTS_LIST.length})
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setEditSelectedDocs([...REQUIRED_DOCUMENTS_LIST])}
-                    className="text-[11px] font-bold text-primary hover:underline"
-                  >
-                    Select All
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 gap-2 bg-muted/20 p-3 rounded-2xl border border-border/40">
-                  {REQUIRED_DOCUMENTS_LIST.map((doc) => {
-                    const isChecked = editSelectedDocs.includes(doc);
-                    return (
-                      <label key={doc} className="flex items-center gap-2 cursor-pointer text-xs font-semibold p-1">
+              {/* Refund Section */}
+              <div className="pt-3 border-t border-border/50 space-y-3">
+                <label className="flex items-center gap-2 cursor-pointer p-2.5 rounded-xl border border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={editIsRefunded}
+                    onChange={(e) => {
+                      setEditIsRefunded(e.target.checked);
+                      if (e.target.checked && editRefundAmount <= 0) {
+                        setEditRefundAmount(editAmountPaid);
+                        setEditRefundDate(new Date().toISOString().split("T")[0] || "");
+                      }
+                    }}
+                    className="rounded border-border text-blue-600 focus:ring-blue-500 w-4 h-4"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-foreground block">Process Deposit Refund</span>
+                    <span className="text-[10px] text-muted-foreground">Mark this deposit as refunded to candidate upon departure or policy clearance</span>
+                  </div>
+                </label>
+
+                {editIsRefunded && (
+                  <div className="p-3 bg-muted/30 rounded-2xl border border-border/40 space-y-3 animate-in fade-in duration-200">
+                    <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
+                          Refunded Amount (₹)
+                        </label>
                         <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setEditSelectedDocs([...editSelectedDocs, doc]);
-                            } else {
-                              setEditSelectedDocs(editSelectedDocs.filter((d) => d !== doc));
-                            }
-                          }}
-                          className="rounded border-border text-primary focus:ring-primary w-4 h-4"
+                          type="number"
+                          min="0"
+                          value={editRefundAmount}
+                          onChange={(e) => setEditRefundAmount(parseFloat(e.target.value) || 0)}
+                          className="w-full px-3 py-2 bg-background border border-border/50 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-primary font-mono"
                         />
-                        <span className={isChecked ? "text-foreground font-bold" : "text-muted-foreground"}>{doc}</span>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
+                          Refund Date
+                        </label>
+                        <input
+                          type="date"
+                          value={editRefundDate}
+                          onChange={(e) => setEditRefundDate(e.target.value)}
+                          className="w-full px-3 py-2 bg-background border border-border/50 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
+                        Refund Remarks / Reference ID
                       </label>
-                    );
-                  })}
-                </div>
+                      <input
+                        type="text"
+                        value={editRefundRemarks}
+                        onChange={(e) => setEditRefundRemarks(e.target.value)}
+                        placeholder="e.g. Returned via UPI Ref #123456 after completion of tenure"
+                        className="w-full px-3 py-2 bg-background border border-border/50 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -726,93 +724,6 @@ export function DepositTracking() {
                 className="px-5 py-2 bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm rounded-xl transition-all shadow-sm flex items-center gap-1.5"
               >
                 {isSaving ? "Saving..." : "Save Deposit Details"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal 2: Quick Documents Checklist View/Edit */}
-      {isDocModalOpen && selectedEmp && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-card w-[calc(100vw-32px)] sm:w-full max-w-md rounded-2xl sm:rounded-[2.5rem] border border-border/60 shadow-2xl overflow-hidden flex flex-col max-h-[90dvh]">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-border/50">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-primary/10 text-primary rounded-xl">
-                  <FileText className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-foreground">Documents: {selectedEmp.name}</h3>
-                  <p className="text-[11px] text-muted-foreground">Required onboarding verification checklist</p>
-                </div>
-              </div>
-              <button onClick={() => setIsDocModalOpen(false)} className="p-2 text-muted-foreground hover:bg-muted rounded-full transition-colors">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-3 max-h-[60vh] overflow-y-auto">
-              <div className="flex justify-between items-center pb-2 border-b border-border/40">
-                <span className="text-xs font-bold text-muted-foreground">Submitted: {editSelectedDocs.length} / {REQUIRED_DOCUMENTS_LIST.length}</span>
-                <button
-                  type="button"
-                  onClick={() => setEditSelectedDocs([...REQUIRED_DOCUMENTS_LIST])}
-                  className="text-[11px] font-bold text-primary hover:underline"
-                >
-                  Mark All Complete
-                </button>
-              </div>
-
-              <div className="space-y-2">
-                {REQUIRED_DOCUMENTS_LIST.map((doc) => {
-                  const isChecked = editSelectedDocs.includes(doc);
-                  return (
-                    <label
-                      key={doc}
-                      className={cn(
-                        "flex items-center justify-between p-3 rounded-xl border text-xs font-bold cursor-pointer transition-all",
-                        isChecked
-                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-300"
-                          : "bg-muted/20 border-border/40 text-muted-foreground hover:bg-muted/40"
-                      )}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setEditSelectedDocs([...editSelectedDocs, doc]);
-                            } else {
-                              setEditSelectedDocs(editSelectedDocs.filter((d) => d !== doc));
-                            }
-                          }}
-                          className="rounded border-border text-emerald-600 focus:ring-emerald-500 w-4 h-4"
-                        />
-                        <span>{doc}</span>
-                      </div>
-                      <span className={cn("text-[10px]", isChecked ? "text-emerald-600" : "text-muted-foreground/60")}>
-                        {isChecked ? "Submitted ✅" : "Pending ⏳"}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="px-6 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
-              <button
-                onClick={() => setIsDocModalOpen(false)}
-                className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveDeposit}
-                disabled={isSaving}
-                className="px-5 py-2 bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm rounded-xl transition-all shadow-sm"
-              >
-                {isSaving ? "Saving..." : "Save Checklist"}
               </button>
             </div>
           </div>

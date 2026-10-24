@@ -37,8 +37,8 @@ export function CompanyHealth() {
     { label: "Running Projects", emoji: "📂", value: String(h.running_projects ?? 0), chartColor: "#3b82f6" },
     { label: "Pending Tasks", emoji: "📌", value: String(h.pending_tasks ?? 0), chartColor: "#f59e0b" },
     { label: "Monthly Revenue", emoji: "💰", value: fmtLakh(h.monthly_revenue), chartColor: "#00A56C" },
-    { label: "Monthly Expense", emoji: "💸", value: "—", chartColor: "#e11d48" },
-    { label: "Net Profit", emoji: "📈", value: "—", chartColor: "#00A56C" },
+    { label: "Monthly Expense", emoji: "💸", value: fmtLakh(h.monthly_expense), chartColor: "#e11d48" },
+    { label: "Net Profit", emoji: "📈", value: fmtLakh(h.net_profit), chartColor: "#00A56C" },
   ];
 
   return (

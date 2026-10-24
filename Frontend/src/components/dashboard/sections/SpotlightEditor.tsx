@@ -4,7 +4,7 @@ import { DialogClose,  Dialog, DialogContent, DialogHeader, DialogTitle, DialogT
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { cn } from "@/lib/utils";
 import { moveToRecycleBin } from "@/lib/recycle-bin";
-import { EMPLOYEES } from "@/components/employees/employee-data";
+import { useEmployeesContext } from "@/components/employees/EmployeeContext";
 import { SparklesCelebration } from "../../common/SparklesCelebration";
 import { BADGE_PRESETS, CELEBRATION_PRESETS } from "./spotlight-constants";
 import { SearchableSelect } from "@/components/ui/select";
@@ -23,6 +23,7 @@ interface SpotlightEditorProps {
 }
 
 export function SpotlightEditor({ spotlights, setSpotlights }: SpotlightEditorProps) {
+  const { employees } = useEmployeesContext();
   const [isOpen, setIsOpen] = useState(false);
   
   // Form state
@@ -183,13 +184,13 @@ export function SpotlightEditor({ spotlights, setSpotlights }: SpotlightEditorPr
                   onChange={(val) => {
                     const selectedName = val;
                     setNewName(selectedName);
-                    const emp = EMPLOYEES.find(emp => emp.name === selectedName);
+                    const emp = employees.find(emp => emp.name === selectedName);
                     if (emp) {
-                      setNewRole(emp.role);
-                      if (emp.avatar) setNewImage(emp.avatar);
+                      setNewRole(emp.role || "Team Member");
+                      if (emp.avatar || emp.profile_photo) setNewImage(emp.avatar || emp.profile_photo || "");
                     }
                   }}
-                  options={EMPLOYEES.map((emp) => ({ label: emp.name, value: emp.name }))}
+                  options={employees.map((emp) => ({ label: emp.name, value: emp.name }))}
                   placeholder="Select Employee"
                   className="w-full h-[42px] px-4 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none pr-10"
                 />

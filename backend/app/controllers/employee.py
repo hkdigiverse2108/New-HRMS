@@ -460,3 +460,31 @@ async def summon_employee_to_meeting(
         "message": f"Urgent meeting summon sent to employee {employee_id}",
         "summon_event": summon_event
     }
+
+@router.delete("/{employee_id}/signature")
+async def delete_employee_signature(employee_id: str, current_user: dict = Depends(get_current_employee)):
+    """Allows Admin or HR to delete/reset an employee signature."""
+    requester_id = str(current_user.get("_id") or current_user.get("id") or "")
+    work_info = current_user.get("work_details") or {}
+    role = work_info.get("system_role", "Employee")
+    dept = str(work_info.get("department") or "").strip().lower()
+    is_admin = role == "Admin" or bool(current_user.get("is_superuser"))
+    is_hr = dept == "hr" or "hr" in str(work_info.get("designation") or "").lower()
+    is_self = requester_id == str(employee_id)
+
+    if not (is_admin or is_hr or is_self):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied to delete employee signature."
+        )
+
+    await EmployeeRepository.update_employee(employee_id, {
+        "signature": "",
+        "signature_url": "",
+        "personal_info.signature": "",
+        "personal_info.signature_url": ""
+    })
+
+    await delete_cache(f"employee:{employee_id}")
+    await clear_pattern("employees:list:*")
+    return {"status": "success", "message": "Employee signature deleted successfully."}

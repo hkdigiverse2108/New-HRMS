@@ -80,3 +80,231 @@ async def get_eom_latest(current_user: dict = Depends(get_current_employee)):
     except Exception:
         pass
     return {"winners": out}
+
+
+# ==================== SPOTLIGHT PERSISTENCE ====================
+
+class SpotlightItem(BaseModel):
+    id: Optional[str] = None
+    name: str
+    role: Optional[str] = "Employee of the Month"
+    image: Optional[str] = None
+    ringStyle: Optional[str] = "none"
+    popperStyle: Optional[str] = "none"
+    model_config = {"extra": "allow"}
+
+
+class SpotlightsListIn(BaseModel):
+    spotlights: List[SpotlightItem]
+
+
+@router.get("/spotlights")
+async def get_spotlights():
+    from app.database.db import get_database
+    db = get_database()
+    doc = await db["dashboard_spotlights"].find_one({"key": "active_spotlights"})
+    if doc and "items" in doc and doc["items"]:
+        return {"spotlights": doc["items"]}
+
+    defaults = [
+        {"name": "Prince", "role": "Employee of the Month", "image": "/prince.jpg", "ringStyle": "gold", "popperStyle": "confetti"},
+        {"name": "Aarav Mehta", "role": "Top Closer · Sales", "ringStyle": "emerald"},
+        {"name": "Neha Patel", "role": "Creative Star · Design", "image": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=800&auto=format&fit=crop&q=80", "ringStyle": "neon"}
+    ]
+    return {"spotlights": defaults}
+
+
+@router.put("/spotlights")
+async def update_spotlights(data: SpotlightsListIn, current_user: dict = Depends(get_current_employee)):
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+    from app.database.db import get_database
+    from datetime import datetime
+    db = get_database()
+    items = [s.model_dump() for s in data.spotlights]
+    await db["dashboard_spotlights"].update_one(
+        {"key": "active_spotlights"},
+        {"$set": {"key": "active_spotlights", "items": items, "updated_at": datetime.utcnow()}},
+        upsert=True
+    )
+    return {"status": "success", "spotlights": items}
+
+
+# ==================== DAILY MOTIVATION ====================
+
+class MotivationIn(BaseModel):
+    quote: str
+    author: Optional[str] = "Daily Mindset"
+    date: Optional[str] = None  # YYYY-MM-DD or None for general pool
+    color: Optional[str] = None
+
+
+@router.get("/motivation")
+async def get_motivation():
+    from app.database.db import get_database
+    from datetime import date
+    db = get_database()
+    today_str = date.today().isoformat()
+
+    quote_today = await db["dashboard_motivation"].find_one({"date": today_str})
+    if quote_today:
+        quote_today["_id"] = str(quote_today["_id"])
+        all_quotes = []
+        cursor = db["dashboard_motivation"].find().sort("created_at", -1).limit(50)
+        async for q in cursor:
+            q["_id"] = str(q["_id"])
+            all_quotes.append(q)
+        return {"current": quote_today, "quotes": all_quotes}
+
+    all_quotes = []
+    cursor = db["dashboard_motivation"].find().sort("created_at", -1).limit(50)
+    async for q in cursor:
+        q["_id"] = str(q["_id"])
+        all_quotes.append(q)
+
+    if all_quotes:
+        current = all_quotes[0]
+    else:
+        current = {
+            "quote": "Discipline compounds faster than talent. Show up, ship, repeat.",
+            "author": "Daily Mindset",
+            "date": today_str
+        }
+
+    return {"current": current, "quotes": all_quotes}
+
+
+@router.post("/motivation")
+async def add_motivation(data: MotivationIn, current_user: dict = Depends(get_current_employee)):
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+    from app.database.db import get_database
+    from datetime import datetime
+    db = get_database()
+    doc = {
+        "quote": data.quote.strip(),
+        "author": data.author.strip() if data.author else "Daily Mindset",
+        "date": data.date,
+        "color": data.color,
+        "created_at": datetime.utcnow()
+    }
+    res = await db["dashboard_motivation"].insert_one(doc)
+    doc["_id"] = str(res.inserted_id)
+    return doc
+
+
+@router.put("/motivation/{quote_id}")
+async def update_motivation(quote_id: str, data: MotivationIn, current_user: dict = Depends(get_current_employee)):
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+    from app.database.db import get_database
+    from datetime import datetime
+    from bson import ObjectId
+    db = get_database()
+    update_data = {
+        "quote": data.quote.strip(),
+        "author": data.author.strip() if data.author else "Daily Mindset",
+        "date": data.date,
+        "color": data.color,
+        "updated_at": datetime.utcnow()
+    }
+    oid = ObjectId(quote_id) if ObjectId.is_valid(quote_id) else quote_id
+    await db["dashboard_motivation"].update_one({"_id": oid}, {"$set": update_data})
+    return {"status": "success", "quote_id": quote_id}
+
+
+@router.delete("/motivation/{quote_id}")
+async def delete_motivation(quote_id: str, current_user: dict = Depends(get_current_employee)):
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+    from app.database.db import get_database
+    from bson import ObjectId
+    db = get_database()
+    oid = ObjectId(quote_id) if ObjectId.is_valid(quote_id) else quote_id
+    await db["dashboard_motivation"].delete_one({"_id": oid})
+    return {"status": "success", "deleted_id": quote_id}
+
+
+# ==================== COMPANY NEWS ====================
+
+class NewsIn(BaseModel):
+    title: str
+    desc: str
+    date: Optional[str] = None
+    priority: Optional[int] = 0
+
+
+@router.get("/news")
+async def get_company_news():
+    from app.database.db import get_database
+    db = get_database()
+    news_items = []
+    cursor = db["company_news"].find({"is_deleted": {"$ne": True}}).sort([("priority", -1), ("created_at", -1)]).limit(50)
+    async for n in cursor:
+        n["_id"] = str(n["_id"])
+        news_items.append(n)
+
+    if not news_items:
+        defaults = [
+            {"title": "HK DigiVerse crosses 60 active clients", "desc": "A new milestone driven by the Sales and Delivery teams.", "date": "Recent"},
+            {"title": "Appraisal cycle starts 05 August", "desc": "Managers must submit review drafts before 03 August.", "date": "Important"},
+            {"title": "Revised hybrid work policy", "desc": "Minimum 3 office days per week from this month.", "date": "Notice"}
+        ]
+        return {"news": defaults}
+    return {"news": news_items}
+
+
+@router.post("/news")
+async def create_company_news(data: NewsIn, current_user: dict = Depends(get_current_employee)):
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+    from app.database.db import get_database
+    from datetime import datetime
+    db = get_database()
+    doc = {
+        "title": data.title.strip(),
+        "desc": data.desc.strip(),
+        "date": data.date or datetime.utcnow().strftime("%d %b"),
+        "priority": data.priority or 0,
+        "is_deleted": False,
+        "created_at": datetime.utcnow()
+    }
+    res = await db["company_news"].insert_one(doc)
+    doc["_id"] = str(res.inserted_id)
+    return doc
+
+
+@router.put("/news/{news_id}")
+async def update_company_news(news_id: str, data: NewsIn, current_user: dict = Depends(get_current_employee)):
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+    from app.database.db import get_database
+    from datetime import datetime
+    from bson import ObjectId
+    db = get_database()
+    oid = ObjectId(news_id) if ObjectId.is_valid(news_id) else news_id
+    await db["company_news"].update_one(
+        {"_id": oid},
+        {"$set": {
+            "title": data.title.strip(),
+            "desc": data.desc.strip(),
+            "date": data.date,
+            "priority": data.priority or 0,
+            "updated_at": datetime.utcnow()
+        }}
+    )
+    return {"status": "success", "news_id": news_id}
+
+
+@router.delete("/news/{news_id}")
+async def delete_company_news(news_id: str, current_user: dict = Depends(get_current_employee)):
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+    from app.database.db import get_database
+    from datetime import datetime
+    from bson import ObjectId
+    db = get_database()
+    oid = ObjectId(news_id) if ObjectId.is_valid(news_id) else news_id
+    await db["company_news"].update_one({"_id": oid}, {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}})
+    return {"status": "success", "deleted_id": news_id}
+

@@ -7,24 +7,49 @@ import { SpotlightEditor, SpotlightEmployee } from "./SpotlightEditor";
 import { BADGE_PRESETS } from "./spotlight-constants";
 import { SparklesCelebration } from "../../common/SparklesCelebration";
 import { useDashboardOverview } from "@/hooks/useDashboardOverview";
+import { useAuth } from "@/components/auth/AuthContext";
+import { isUserAdmin } from "@/lib/permissions";
+import { api } from "@/lib/api";
 
 export function EmployeePerformance() {
+  const { user } = useAuth();
+  const canManageSpotlight = isUserAdmin(user);
   const [currentSpotlight, setCurrentSpotlight] = useState(0);
   const [spotlights, setSpotlightsState] = useState<SpotlightEmployee[]>([]);
 
   useEffect(() => {
-    const saved = localStorage.getItem("dashboard-spotlights");
-    if (saved) {
-      setSpotlightsState(JSON.parse(saved));
-    } else {
-      setSpotlightsState(SPOTLIGHT_EMPLOYEES);
-    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get<any>("/dashboard/spotlights", { showErrorToast: false });
+        if (!cancelled && res?.spotlights && Array.isArray(res.spotlights)) {
+          setSpotlightsState(res.spotlights);
+          return;
+        }
+      } catch {
+        // Fallback
+      }
+      const saved = localStorage.getItem("dashboard-spotlights");
+      if (!cancelled) {
+        if (saved) {
+          setSpotlightsState(JSON.parse(saved));
+        } else {
+          setSpotlightsState(SPOTLIGHT_EMPLOYEES);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
-  const setSpotlights = (data: SpotlightEmployee[]) => {
+  const setSpotlights = async (data: SpotlightEmployee[]) => {
     setSpotlightsState(data);
     localStorage.setItem("dashboard-spotlights", JSON.stringify(data));
     setCurrentSpotlight(0);
+    try {
+      await api.put("/dashboard/spotlights", { spotlights: data }, { showErrorToast: false });
+    } catch (err) {
+      console.warn("Failed to persist spotlights to DB:", err);
+    }
   };
 
   useEffect(() => {
@@ -37,12 +62,16 @@ export function EmployeePerformance() {
 
   const spotlight = spotlights[currentSpotlight] || spotlights[0];
 
-  // Top-5 live: Employee-of-Month winners (Audio PDF). Empty = admin has not set EOM yet.
   const { data } = useDashboardOverview();
-  const eomWinners: any[] = (data?.eom?.winners || []).slice(0, 5);
-  const eomLabel = eomWinners.length > 0 && eomWinners[0]?.month
-    ? new Date(eomWinners[0].year, eomWinners[0].month - 1, 1).toLocaleString("default", { month: "long", year: "numeric" })
+  const topWinners: any[] = (data?.top_performers && data.top_performers.length > 0)
+    ? data.top_performers
+    : ((data?.eom?.winners || []).slice(0, 5));
+  const eomLabel = topWinners.length > 0 && topWinners[0]?.month
+    ? new Date(topWinners[0].year, topWinners[0].month - 1, 1).toLocaleString("default", { month: "long", year: "numeric" })
     : "";
+  const needsAttentionList: any[] = (data?.needs_attention && data.needs_attention.length > 0)
+    ? data.needs_attention
+    : NEEDS_ATTENTION;
 
   return (
     <div className="mb-12">
@@ -56,22 +85,22 @@ export function EmployeePerformance() {
               {eomLabel ? `Employee of the Month • ${eomLabel}` : "Employee of the Month wise"}
             </p>
           </div>
-          {eomWinners.length === 0 ? (
+          {topWinners.length === 0 ? (
             <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-3 py-6 text-center">
-              EOM winners are not set.<br />Admin will set them on the dashboard.
+              Top performers data is calculating...
             </p>
           ) : (
           <div className="space-y-3">
-            {eomWinners.map((emp: any, i: number) => (
+            {topWinners.map((emp: any, i: number) => (
               <div key={i} className="flex items-center justify-between p-3 rounded-2xl bg-muted/50 border border-border/50">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white font-bold text-[11px] text-muted-foreground shadow-sm shrink-0">
                     {i === 0 ? <Trophy className="h-3 w-3 text-amber-500" /> : emp.rank || i + 1}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-[13px] font-bold text-foreground leading-tight truncate">{emp.employee_name || "Employee"}</p>
+                    <p className="text-[13px] font-bold text-foreground leading-tight truncate">{emp.name || emp.employee_name || "Employee"}</p>
                     <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                      <Star className="h-3 w-3 text-amber-500" /> {emp.score_pct || 0}%
+                      <Star className="h-3 w-3 text-amber-500" /> {emp.score ?? emp.score_pct ?? 0}%
                     </p>
                   </div>
                 </div>
@@ -93,7 +122,9 @@ export function EmployeePerformance() {
             backgroundPosition: "center"
           } : undefined}
         >
-          <SpotlightEditor spotlights={spotlights} setSpotlights={setSpotlights} />
+          {canManageSpotlight && (
+            <SpotlightEditor spotlights={spotlights} setSpotlights={setSpotlights} />
+          )}
           
           {(spotlight && 'image' in spotlight && spotlight.image) && (
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/10 z-0" />
@@ -149,11 +180,11 @@ export function EmployeePerformance() {
           <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm">
             <h3 className="font-bold text-foreground mb-6">Needs Attention</h3>
             <div className="space-y-6">
-              {NEEDS_ATTENTION.map((emp, i) => (
+              {needsAttentionList.map((emp, i) => (
                 <div key={i}>
                   <div className="flex justify-between items-center mb-2">
-                    <p className="text-[14px] text-foreground">{emp.name}</p>
-                    <p className="text-[12px] text-rose-500">{emp.score}%</p>
+                    <p className="text-[14px] text-foreground font-bold">{emp.name}</p>
+                    <p className="text-[12px] text-rose-500 font-bold">{emp.score}%</p>
                   </div>
                   <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden mb-1">
                     <div 
@@ -161,7 +192,7 @@ export function EmployeePerformance() {
                       style={{ width: `${emp.score}%` }}
                     ></div>
                   </div>
-                  <p className="text-[12px] text-muted-foreground">{emp.dept}</p>
+                  <p className="text-[11px] text-muted-foreground">{emp.dept}</p>
                 </div>
               ))}
             </div>

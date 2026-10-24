@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo, useCallback, Fragment } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "react";
+import * as XLSX from "xlsx";
 import { usePersistentState } from "@/hooks/usePersistentState";
-import { X, Search, Plus, Filter, Check, MoreHorizontal, LayoutGrid, List, Briefcase, Calendar, Clock, Star, Circle, Trash2, Edit2, Archive, ArchiveRestore, ArrowLeft, Users, IndianRupee, FolderGit2, CheckCircle2, Settings2, TrendingUp, MousePointerClick, Target, BarChart3, ChevronDown, User, Building2, CreditCard, FileText, ChevronRight, Video, Instagram, Layers, MessageSquare, Key, Copy, Eye, EyeOff, ExternalLink, Phone, ShieldCheck, Sparkles, Share2, AlertCircle, Sliders, Loader2, UserPlus, UserX, ChevronLeft, Download, Printer } from "lucide-react";
+import { X, Search, Plus, Filter, Check, MoreHorizontal, LayoutGrid, List, Briefcase, Calendar, Clock, Star, Circle, Trash2, Edit2, Archive, ArchiveRestore, ArrowLeft, Users, IndianRupee, FolderGit2, CheckCircle2, Settings2, TrendingUp, MousePointerClick, Target, BarChart3, ChevronDown, User, Building2, CreditCard, FileText, ChevronRight, Video, Instagram, Layers, MessageSquare, Key, Copy, Eye, EyeOff, ExternalLink, Phone, ShieldCheck, Sparkles, Share2, AlertCircle, Sliders, Loader2, UserPlus, UserX, ChevronLeft, Download, Printer, Upload, FileSpreadsheet } from "lucide-react";
 import { toast } from "@/lib/toast";
 import { cn, formatDate, formatPersonName } from "@/lib/utils";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -186,6 +187,8 @@ interface CalendarItem {
     role?: string | undefined;
     author?: string | undefined;
     isClientIssue?: boolean | undefined;
+    isPending?: boolean | undefined;
+    issueType?: "client_issue" | "pending" | "normal" | undefined;
     taskId?: string | undefined;
   }[] | undefined;
 }
@@ -226,14 +229,16 @@ export const mapBackendContentToCalendarItem = (item: any): CalendarItem => {
     remark: item.remark || "",
     issues: (item.issues || []).map((iss: any, idx: number) =>
       typeof iss === 'string'
-        ? { id: `iss-${idx}`, text: iss, timestamp: "", role: "Shoot", author: "Team", isClientIssue: true }
+        ? { id: `iss-${idx}`, text: iss, timestamp: "", role: "Shoot", author: "Team", isClientIssue: true, isPending: false, issueType: "client_issue" }
         : {
           id: iss.id || `iss-${idx}`,
           text: iss.text || "",
           timestamp: iss.timestamp || "",
           role: iss.role || "Shoot",
           author: iss.author || "Team",
-          isClientIssue: iss.isClientIssue !== false,
+          isClientIssue: iss.isClientIssue !== false && !iss.isPending,
+          isPending: Boolean(iss.isPending),
+          issueType: iss.issueType || (iss.isPending ? "pending" : (iss.isClientIssue !== false ? "client_issue" : "normal")),
           taskId: iss.taskId || iss.task_id || undefined,
         }
     ),
@@ -1000,9 +1005,21 @@ const CalendarIssuesCell = ({
   }, [user]);
 
   const [newIssueText, setNewIssueText] = useState("");
-  const [selectedRole, setSelectedRole] = useState("Shoot");
-  const [isClientIssue, setIsClientIssue] = useState(true);
+  const [selectedRole, setSelectedRole] = useState("Scripting");
+  const [issueType, setIssueType] = useState<"client_issue" | "pending" | "normal">("client_issue");
   const issuesList = item.issues || [];
+
+  // 8 Creative Stages per audio specification
+  const CREATIVE_STAGES = [
+    "Scripting",
+    "Shoot",
+    "Brand Person",
+    "Caption",
+    "Thumbnail",
+    "Editing",
+    "Post Graphics",
+    "Posting"
+  ] as const;
 
   // Issue 1: Only show remarks/issues authored by the current person
   const myIssuesList = useMemo(() => {
@@ -1017,6 +1034,20 @@ const CalendarIssuesCell = ({
     });
   }, [issuesList, currentUserId, currentUserName]);
 
+  const getAssigneeForRole = (role: string) => {
+    const r = role.toLowerCase();
+    if (r.includes("shoot") && (item as any).shoot_by) return (item as any).shoot_by;
+    if (r.includes("edit") && (item as any).editing_by) return (item as any).editing_by;
+    if (r.includes("script") && (item as any).script_by) return (item as any).script_by;
+    if (r.includes("thumbnail") && (item as any).thumbnail_by) return (item as any).thumbnail_by;
+    if (r.includes("post graphic") && (item as any).graphics_by) return (item as any).graphics_by;
+    if (r.includes("caption") && (item as any).caption_by) return (item as any).caption_by;
+    if (r.includes("brand") && item.brand_person) return item.brand_person;
+    if (item.brand_person) return item.brand_person;
+    if (Array.isArray(item.assignedTo) && item.assignedTo[0]) return item.assignedTo[0];
+    return currentUserId;
+  };
+
   const handleAddIssue = async () => {
     if (!newIssueText.trim()) return;
     const now = new Date();
@@ -1027,27 +1058,28 @@ const CalendarIssuesCell = ({
 
     let createdTaskId: string | undefined = undefined;
 
-    // Automatically create a Task in Task Management if Client Issue is checked
-    if (isClientIssue) {
+    // Automatically create a Task in Task Management if Client Issue or Pending is selected
+    if (issueType !== "normal") {
       try {
         const ideaTitle = item.topic || "Content Idea";
+        const isClient = issueType === "client_issue";
         const taskPayload = {
-          title: `[Client Issue] ${ideaTitle}: ${cleanText}`,
-          description: `Client Issue reported from Content Calendar (${project.name || project.title || 'Project'} - ${ideaTitle})\nRole/Phase: ${selectedRole}\nAdded by: ${currentUserName}\nRemark: "${cleanText}"`,
-          priority: "High",
+          title: `[${isClient ? 'Client Issue' : 'Pending'}] ${ideaTitle} (${selectedRole}): ${cleanText}`,
+          description: `${isClient ? 'Client Issue' : 'Pending Task'} reported from Content Calendar (${project.name || project.title || 'Project'} - ${ideaTitle})\nRole/Phase: ${selectedRole}\nAdded by: ${currentUserName}\nRemark: "${cleanText}"`,
+          priority: isClient ? "High" : "Medium",
           status: "Todo",
-          task_category: "Client Issue",
+          task_category: isClient ? "Client Issue" : "Pending",
           due_date: todayYMD,
           project_id: project.id,
           content_item_id: item.id,
-          assigned_to: item.brand_person || (Array.isArray(item.assignedTo) && item.assignedTo[0] ? item.assignedTo[0] : currentUserId) || currentUserId,
+          assigned_to: getAssigneeForRole(selectedRole),
         };
         const res: any = await api.post("/tasks", taskPayload, { showErrorToast: false });
         if (res?._id || res?.id) {
           createdTaskId = String(res._id || res.id);
         }
       } catch (err) {
-        console.warn("Could not create Client Issue task:", err);
+        console.warn("Could not create Task for Content Calendar issue:", err);
       }
     }
 
@@ -1057,7 +1089,9 @@ const CalendarIssuesCell = ({
       role: selectedRole,
       author: currentUserName,
       authorId: currentUserId,
-      isClientIssue: isClientIssue,
+      isClientIssue: issueType === "client_issue",
+      isPending: issueType === "pending",
+      issueType: issueType,
       taskId: createdTaskId,
       timestamp: dateStr
     };
@@ -1067,7 +1101,7 @@ const CalendarIssuesCell = ({
       x.id === item.id ? { ...x, issues: updatedIssues } : x
     );
     setProjects(projects.map(p => p.id === project.id ? { ...p, contentCalendar: updatedCalendar } : p));
-    onLogActivity("Logged Issue", `Added ${isClientIssue ? 'Client Issue' : 'Remark'} (${selectedRole}) "${cleanText}" on content idea "${item.topic || 'Untitled'}" by ${currentUserName}`);
+    onLogActivity("Logged Issue", `Added ${issueType === 'client_issue' ? 'Client Issue' : issueType === 'pending' ? 'Pending Issue' : 'Remark'} (${selectedRole}) "${cleanText}" on content idea "${item.topic || 'Untitled'}" by ${currentUserName}`);
     setNewIssueText("");
 
     if (project.id && item.id) {
@@ -1077,41 +1111,62 @@ const CalendarIssuesCell = ({
     }
   };
 
-  const handleToggleClientIssue = async (issueId: string) => {
+  const handleUpdateIssueType = async (issueId: string, nextType: "client_issue" | "pending" | "normal") => {
     const targetIssue = issuesList.find(i => i.id === issueId);
     if (!targetIssue) return;
-    const willBeClientIssue = !targetIssue.isClientIssue;
 
     let newTaskId = targetIssue.taskId;
-    if (willBeClientIssue && !newTaskId) {
+
+    // Delete existing task if switching to normal
+    if (nextType === "normal" && newTaskId) {
+      api.delete(`/tasks/${newTaskId}`, { showErrorToast: false }).catch(() => {});
+      newTaskId = undefined;
+    } else if (nextType !== "normal") {
       try {
         const now = new Date();
         const todayYMD = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
         const ideaTitle = item.topic || "Content Idea";
-        const res: any = await api.post("/tasks", {
-          title: `[Client Issue] ${ideaTitle}: ${targetIssue.text}`,
-          description: `Client Issue reported from Content Calendar (${project.name || project.title || 'Project'} - ${ideaTitle})\nRole/Phase: ${targetIssue.role}\nAdded by: ${currentUserName}\nRemark: "${targetIssue.text}"`,
-          priority: "High",
-          status: "Todo",
-          task_category: "Client Issue",
-          due_date: todayYMD,
-          project_id: project.id,
-          content_item_id: item.id,
-          assigned_to: item.brand_person || (Array.isArray(item.assignedTo) && item.assignedTo[0] ? item.assignedTo[0] : currentUserId) || currentUserId,
-        }, { showErrorToast: false });
-        if (res?._id || res?.id) {
-          newTaskId = String(res._id || res.id);
+        const isClient = nextType === "client_issue";
+
+        if (newTaskId) {
+          // Update existing task
+          await api.put(`/tasks/${newTaskId}`, {
+            title: `[${isClient ? 'Client Issue' : 'Pending'}] ${ideaTitle} (${targetIssue.role || 'Creative'}): ${targetIssue.text}`,
+            task_category: isClient ? "Client Issue" : "Pending",
+            priority: isClient ? "High" : "Medium",
+          }, { showErrorToast: false });
+        } else {
+          // Create new task
+          const res: any = await api.post("/tasks", {
+            title: `[${isClient ? 'Client Issue' : 'Pending'}] ${ideaTitle} (${targetIssue.role || 'Creative'}): ${targetIssue.text}`,
+            description: `${isClient ? 'Client Issue' : 'Pending Task'} reported from Content Calendar (${project.name || project.title || 'Project'} - ${ideaTitle})\nRole/Phase: ${targetIssue.role}\nAdded by: ${currentUserName}\nRemark: "${targetIssue.text}"`,
+            priority: isClient ? "High" : "Medium",
+            status: "Todo",
+            task_category: isClient ? "Client Issue" : "Pending",
+            due_date: todayYMD,
+            project_id: project.id,
+            content_item_id: item.id,
+            assigned_to: getAssigneeForRole(targetIssue.role || "Scripting"),
+          }, { showErrorToast: false });
+          if (res?._id || res?.id) {
+            newTaskId = String(res._id || res.id);
+          }
         }
       } catch (err) {
-        console.warn("Could not create Client Issue task on toggle:", err);
+        console.warn("Could not update task on issue status change:", err);
       }
-    } else if (!willBeClientIssue && newTaskId) {
-      api.delete(`/tasks/${newTaskId}`, { showErrorToast: false }).catch(() => {});
-      newTaskId = undefined;
     }
 
     const updatedIssues = issuesList.map(iss =>
-      iss.id === issueId ? { ...iss, isClientIssue: willBeClientIssue, taskId: newTaskId } : iss
+      iss.id === issueId
+        ? {
+            ...iss,
+            isClientIssue: nextType === "client_issue",
+            isPending: nextType === "pending",
+            issueType: nextType,
+            taskId: newTaskId
+          }
+        : iss
     );
     const updatedCalendar = projectCalendar.map((x: any) =>
       x.id === item.id ? { ...x, issues: updatedIssues } : x
@@ -1145,7 +1200,8 @@ const CalendarIssuesCell = ({
     }
   };
 
-  const activeClientIssues = myIssuesList.filter(i => i.isClientIssue !== false);
+  const activeClientIssues = myIssuesList.filter(i => i.isClientIssue === true || (i.isClientIssue !== false && !i.isPending));
+  const activePendingIssues = myIssuesList.filter(i => i.isPending === true);
 
   return (
     <Popover>
@@ -1154,18 +1210,22 @@ const CalendarIssuesCell = ({
           "mx-auto px-2.5 py-1 rounded-full text-[10px] font-semibold tracking-wider block text-center cursor-pointer transition-all border shadow-xs",
           activeClientIssues.length > 0
             ? "bg-rose-500/10 text-rose-600 border-rose-500/30 hover:bg-rose-500/20"
-            : myIssuesList.length > 0
+            : activePendingIssues.length > 0
               ? "bg-amber-500/10 text-amber-600 border-amber-500/30 hover:bg-amber-500/20"
-              : "bg-muted/60 text-muted-foreground hover:bg-muted border-border/40"
+              : myIssuesList.length > 0
+                ? "bg-blue-500/10 text-blue-600 border-blue-500/30 hover:bg-blue-500/20"
+                : "bg-muted/60 text-muted-foreground hover:bg-muted border-border/40"
         )}>
           {activeClientIssues.length > 0
             ? `⚠️ ${activeClientIssues.length} Client Issue${activeClientIssues.length > 1 ? 's' : ''}`
-            : myIssuesList.length > 0
-              ? `💬 ${myIssuesList.length} Remark${myIssuesList.length > 1 ? 's' : ''}`
-              : "+ Remark"}
+            : activePendingIssues.length > 0
+              ? `⏳ ${activePendingIssues.length} Pending`
+              : myIssuesList.length > 0
+                ? `💬 ${myIssuesList.length} Remark${myIssuesList.length > 1 ? 's' : ''}`
+                : "+ Remark"}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-[320px] p-4 bg-card border border-border rounded-2xl shadow-xl z-50 text-left" align="center">
+      <PopoverContent className="w-[340px] p-4 bg-card border border-border rounded-2xl shadow-xl z-50 text-left" align="center">
         <div className="space-y-3">
           <div className="flex justify-between items-center border-b border-border/40 pb-2">
             <div>
@@ -1178,86 +1238,155 @@ const CalendarIssuesCell = ({
             {myIssuesList.length === 0 ? (
               <p className="text-[10px] text-muted-foreground italic font-medium py-2 text-center">No remarks added by you yet.</p>
             ) : (
-              myIssuesList.map((issue) => (
-                <div
-                  key={issue.id}
-                  className={cn(
-                    "p-2.5 rounded-xl border flex flex-col gap-1.5 transition-all",
-                    issue.isClientIssue !== false
-                      ? "bg-rose-500/5 border-rose-500/20 text-rose-700 dark:text-rose-400"
-                      : "bg-muted/40 border-border/50 text-foreground"
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-1">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
-                        {issue.role || "Task"}
-                      </span>
-                      {issue.author && (
-                        <span className="text-[10px] font-semibold text-foreground/80">
-                          {issue.author}
+              myIssuesList.map((issue) => {
+                const isClient = issue.isClientIssue === true || (issue.isClientIssue !== false && !issue.isPending);
+                const isPend = issue.isPending === true;
+                const currentType = isClient ? "client_issue" : isPend ? "pending" : "normal";
+
+                return (
+                  <div
+                    key={issue.id}
+                    className={cn(
+                      "p-2.5 rounded-xl border flex flex-col gap-1.5 transition-all",
+                      isClient
+                        ? "bg-rose-500/5 border-rose-500/20 text-rose-700 dark:text-rose-400"
+                        : isPend
+                          ? "bg-amber-500/5 border-amber-500/20 text-amber-700 dark:text-amber-400"
+                          : "bg-muted/40 border-border/50 text-foreground"
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                          {issue.role || "Task"}
                         </span>
-                      )}
+                        {issue.author && (
+                          <span className="text-[10px] font-semibold text-foreground/80">
+                            {issue.author}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[9px] text-muted-foreground font-mono">{issue.timestamp}</span>
+                        <button
+                          onClick={() => handleRemoveIssue(issue.id)}
+                          className="p-1 text-muted-foreground hover:text-rose-600 transition-colors"
+                          title="Delete issue"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[9px] text-muted-foreground font-mono">{issue.timestamp}</span>
-                      <button
-                        onClick={() => handleRemoveIssue(issue.id)}
-                        className="p-1 text-muted-foreground hover:text-rose-600 transition-colors"
-                        title="Delete issue"
-                      >
-                        ✕
-                      </button>
+
+                    <p className="text-[11px] font-medium leading-relaxed">{issue.text}</p>
+
+                    <div className="pt-1.5 border-t border-border/30 flex items-center justify-between gap-1 text-[10px]">
+                      <span className="text-muted-foreground font-bold">Status:</span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateIssueType(issue.id, "client_issue")}
+                          className={cn(
+                            "px-2 py-0.5 rounded-md font-bold transition-all text-[9px]",
+                            currentType === "client_issue"
+                              ? "bg-rose-600 text-white shadow-xs"
+                              : "bg-muted/60 text-muted-foreground hover:bg-muted"
+                          )}
+                        >
+                          Client Issue
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateIssueType(issue.id, "pending")}
+                          className={cn(
+                            "px-2 py-0.5 rounded-md font-bold transition-all text-[9px]",
+                            currentType === "pending"
+                              ? "bg-amber-600 text-white shadow-xs"
+                              : "bg-muted/60 text-muted-foreground hover:bg-muted"
+                          )}
+                        >
+                          Pending
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateIssueType(issue.id, "normal")}
+                          className={cn(
+                            "px-2 py-0.5 rounded-md font-bold transition-all text-[9px]",
+                            currentType === "normal"
+                              ? "bg-slate-600 text-white shadow-xs"
+                              : "bg-muted/60 text-muted-foreground hover:bg-muted"
+                          )}
+                        >
+                          Normal
+                        </button>
+                      </div>
                     </div>
                   </div>
-
-                  <p className="text-[11px] font-medium leading-relaxed">{issue.text}</p>
-
-                  <div className="pt-1 border-t border-border/30 flex items-center justify-between text-[10px]">
-                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={issue.isClientIssue !== false}
-                        onChange={() => handleToggleClientIssue(issue.id)}
-                        className="rounded border-border text-rose-600 focus:ring-rose-500 w-3 h-3"
-                      />
-                      <span className={cn("font-semibold", issue.isClientIssue !== false ? "text-rose-600 font-bold" : "text-muted-foreground")}>
-                        {issue.isClientIssue !== false ? "Client Issue (Pending)" : "Resolved / Normal"}
-                      </span>
-                    </label>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 
           <div className="pt-2 border-t border-border/40 space-y-2">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Target Phase/Role</label>
-                <Select value={selectedRole} onValueChange={(val) => setSelectedRole(val)}>
-                  <SelectTrigger className="w-full h-8 px-2 bg-muted/40 border border-border/50 rounded-lg text-xs font-semibold shadow-xs">
-                    <SelectValue placeholder="Role" />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
-                    {["Shoot", "Scripting", "Editing", "Thumbnail", "Posting"].map(r => (
-                      <SelectItem key={r} value={r} className="text-xs font-semibold rounded-lg cursor-pointer">
-                        {r}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col justify-end">
-                <label className="flex items-center gap-1.5 text-xs font-semibold cursor-pointer pb-1.5 select-none text-rose-600">
-                  <input
-                    type="checkbox"
-                    checked={isClientIssue}
-                    onChange={(e) => setIsClientIssue(e.target.checked)}
-                    className="rounded border-border text-rose-600 focus:ring-rose-500 w-3.5 h-3.5"
-                  />
-                  <span>Client Issue</span>
-                </label>
+            <div>
+              <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
+                Target Creative Stage (8 Stages)
+              </label>
+              <Select value={selectedRole} onValueChange={(val) => setSelectedRole(val)}>
+                <SelectTrigger className="w-full h-8 px-2 bg-muted/40 border border-border/50 rounded-lg text-xs font-semibold shadow-xs">
+                  <SelectValue placeholder="Role" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                  {CREATIVE_STAGES.map(r => (
+                    <SelectItem key={r} value={r} className="text-xs font-semibold rounded-lg cursor-pointer">
+                      {r}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
+                Issue Category (Mutually Exclusive)
+              </label>
+              <div className="grid grid-cols-3 gap-1 bg-muted/30 p-1 rounded-xl border border-border/50">
+                <button
+                  type="button"
+                  onClick={() => setIssueType("client_issue")}
+                  className={cn(
+                    "py-1 rounded-lg text-[10px] font-bold transition-all text-center",
+                    issueType === "client_issue"
+                      ? "bg-rose-500 text-white shadow-xs"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Client Issue
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIssueType("pending")}
+                  className={cn(
+                    "py-1 rounded-lg text-[10px] font-bold transition-all text-center",
+                    issueType === "pending"
+                      ? "bg-amber-500 text-white shadow-xs"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Pending
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIssueType("normal")}
+                  className={cn(
+                    "py-1 rounded-lg text-[10px] font-bold transition-all text-center",
+                    issueType === "normal"
+                      ? "bg-slate-600 text-white shadow-xs"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Normal Note
+                </button>
               </div>
             </div>
 
@@ -1272,7 +1401,7 @@ const CalendarIssuesCell = ({
               onClick={handleAddIssue}
               className="w-full py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs rounded-xl transition-colors shadow-xs"
             >
-              Add Remark
+              Add Remark / Issue
             </button>
           </div>
         </div>
@@ -1954,11 +2083,17 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     return false;
   }, [user, employees, projects]);
 
-  // Transcript: In assignment list, admin sees all employees, but admin themselves are excluded so only workers are assigned
+  // Audio requirement: Admins can also be assigned roles like Brand Person or Scripting, so include active admins in assignment list
   const assignableEmployees = useMemo(() => {
     return employees.filter(emp => {
-      const roleLower = String(emp.role || (emp as any)?.work_details?.system_role || "").toLowerCase().trim();
-      return roleLower !== "admin" && roleLower !== "superadmin";
+      const isInactive = Boolean(
+        (emp as any)?.is_delete ||
+        (emp as any)?.is_block ||
+        emp.status === "Inactive" ||
+        (emp as any)?.work_details?.is_delete ||
+        (emp as any)?.work_details?.is_block
+      );
+      return !isInactive;
     });
   }, [employees]);
 
@@ -2011,8 +2146,12 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   // Feature 3: Pending Brands Modal
   const [isPendingBrandsModalOpen, setIsPendingBrandsModalOpen] = useState(false);
 
-  // Feature 4: Monthly Target vs Completed Content KPI
+  // Feature 4: Monthly Target vs Completed Content KPI + Custom Date Range
   const [calendarMonthFilter, setCalendarMonthFilter] = useState<string>("Current");
+  const [ccCustomStartDate, setCcCustomStartDate] = useState<string>("");
+  const [ccCustomEndDate, setCcCustomEndDate] = useState<string>("");
+  const [isUploadingCCExcel, setIsUploadingCCExcel] = useState(false);
+  const excelFileInputRef = useRef<HTMLInputElement>(null);
   const [isEditTargetsModalOpen, setIsEditTargetsModalOpen] = useState(false);
   const [targetsForm, setTargetsForm] = useState<{ post: number; reel: number }>({ post: 8, reel: 8 });
   // K18: CC status (month approval) — inline section, overlap rule sathe
@@ -4629,6 +4768,13 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         if (!item.postingDate) return false;
         return item.postingDate.startsWith(currentYearMonth);
       });
+    } else if (calendarMonthFilter === "Custom") {
+      filteredCal = calendar.filter(item => {
+        if (!item.postingDate) return false;
+        if (ccCustomStartDate && item.postingDate < ccCustomStartDate) return false;
+        if (ccCustomEndDate && item.postingDate > ccCustomEndDate) return false;
+        return true;
+      });
     } else if (calendarMonthFilter !== "All") {
       filteredCal = calendar.filter(item => {
         if (!item.postingDate) return false;
@@ -4654,7 +4800,270 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       totalTarget: targetPosts + targetReels,
       totalCompleted: completedPosts + completedReels
     };
-  }, [currentProject, calendarMonthFilter]);
+  }, [currentProject, calendarMonthFilter, ccCustomStartDate, ccCustomEndDate]);
+
+  const handleDownloadCCTemplate = (projectName?: string) => {
+    const headers = [
+      "Scheduled Date* (YYYY-MM-DD)",
+      "Content Type (Post/Reel/Story/Carousel)",
+      "Topic Title",
+      "Topic Description/Concept",
+      "Reference Link",
+      "Brand Person",
+      "Script Date (YYYY-MM-DD)",
+      "Script Link",
+      "Shoot Date (YYYY-MM-DD)",
+      "Shoot Link",
+      "Editing Date (YYYY-MM-DD)",
+      "Editing/Reel Link",
+      "Thumbnail Date (YYYY-MM-DD)",
+      "Thumbnail Link",
+      "Caption Date (YYYY-MM-DD)",
+      "Caption Text",
+      "Instagram Link"
+    ];
+
+    const todayStr = format(new Date(), "yyyy-MM-dd");
+    const futureStr = format(new Date(Date.now() + 86400000 * 2), "yyyy-MM-dd");
+
+    const dummyRows = [
+      {
+        "Scheduled Date* (YYYY-MM-DD)": todayStr,
+        "Content Type (Post/Reel/Story/Carousel)": "Reel",
+        "Topic Title": "Product Launch Teaser & Key Highlights",
+        "Topic Description/Concept": "Dynamic 30-sec showcase of top product features with upbeat music",
+        "Reference Link": "https://instagram.com/reel/sample123",
+        "Brand Person": "",
+        "Script Date (YYYY-MM-DD)": "", // Left blank to demonstrate auto-calculation
+        "Script Link": "",
+        "Shoot Date (YYYY-MM-DD)": "",
+        "Shoot Link": "",
+        "Editing Date (YYYY-MM-DD)": "",
+        "Editing/Reel Link": "",
+        "Thumbnail Date (YYYY-MM-DD)": "",
+        "Thumbnail Link": "",
+        "Caption Date (YYYY-MM-DD)": "",
+        "Caption Text": "Transform your daily routine! Launching now. Check link in bio. #trending",
+        "Instagram Link": ""
+      },
+      {
+        "Scheduled Date* (YYYY-MM-DD)": futureStr,
+        "Content Type (Post/Reel/Story/Carousel)": "Post",
+        "Topic Title": "Client Testimonial & Case Study",
+        "Topic Description/Concept": "Carousel graphics showcasing customer reviews and satisfaction scores",
+        "Reference Link": "",
+        "Brand Person": "",
+        "Script Date (YYYY-MM-DD)": "",
+        "Script Link": "",
+        "Shoot Date (YYYY-MM-DD)": "",
+        "Shoot Link": "",
+        "Editing Date (YYYY-MM-DD)": "",
+        "Editing/Reel Link": "",
+        "Thumbnail Date (YYYY-MM-DD)": "",
+        "Thumbnail Link": "",
+        "Caption Date (YYYY-MM-DD)": "",
+        "Caption Text": "Real people, real results! Swipe to read genuine experiences from our community.",
+        "Instagram Link": ""
+      }
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(dummyRows, { header: headers });
+    worksheet["!cols"] = [
+      { wch: 28 }, // Scheduled Date
+      { wch: 38 }, // Content Type
+      { wch: 35 }, // Topic Title
+      { wch: 48 }, // Description
+      { wch: 32 }, // Reference Link
+      { wch: 22 }, // Brand Person
+      { wch: 24 }, // Script Date
+      { wch: 32 }, // Script Link
+      { wch: 24 }, // Shoot Date
+      { wch: 32 }, // Shoot Link
+      { wch: 24 }, // Editing Date
+      { wch: 32 }, // Editing Link
+      { wch: 26 }, // Thumbnail Date
+      { wch: 32 }, // Thumbnail Link
+      { wch: 26 }, // Caption Date
+      { wch: 50 }, // Caption Text
+      { wch: 32 }, // Instagram Link
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Content Calendar");
+    const cleanName = (projectName || "Project").replace(/[^a-zA-Z0-9_-]/g, "_");
+    XLSX.writeFile(workbook, `${cleanName}_Content_Calendar_Template.xlsx`);
+    toast.success("Content Calendar Dummy Template downloaded successfully!");
+  };
+
+  const handleUploadCCExcel = async (e: React.ChangeEvent<HTMLInputElement>, project: any) => {
+    const file = e.target.files?.[0];
+    if (!file || !project?.id) return;
+    e.target.value = "";
+
+    try {
+      setIsUploadingCCExcel(true);
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data, { type: "array", cellDates: true });
+      const firstSheetName = workbook.SheetNames[0];
+      if (!firstSheetName) {
+        toast.error("Excel sheet is empty!");
+        return;
+      }
+      const sheet = workbook.Sheets[firstSheetName];
+      if (!sheet) {
+        toast.error("Excel sheet could not be loaded!");
+        return;
+      }
+      const rawRows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+      if (!rawRows || rawRows.length === 0) {
+        toast.error("No data rows found in the uploaded file!");
+        return;
+      }
+
+      const getVal = (row: any, candidates: string[]) => {
+        const rowKeys = Object.keys(row);
+        for (const cand of candidates) {
+          const normCand = cand.toLowerCase().replace(/[^a-z0-9]/g, "");
+          const foundKey = rowKeys.find(k => k.trim().toLowerCase().replace(/[^a-z0-9]/g, "") === normCand);
+          if (foundKey && row[foundKey] !== undefined && String(row[foundKey]).trim() !== "") {
+            return row[foundKey];
+          }
+        }
+        return "";
+      };
+
+      const parseDateStr = (raw: any): string => {
+        if (!raw) return "";
+        if (raw instanceof Date && !isNaN(raw.getTime())) {
+          return format(raw, "yyyy-MM-dd");
+        }
+        const s = String(raw).trim();
+        if (!s) return "";
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+        const ddmmyyyy = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})/);
+        if (ddmmyyyy) {
+          const [, d, m, y] = ddmmyyyy;
+          return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+        }
+        const parsed = new Date(s);
+        if (!isNaN(parsed.getTime())) return format(parsed, "yyyy-MM-dd");
+        return "";
+      };
+
+      const payloadItems: any[] = [];
+
+      for (let i = 0; i < rawRows.length; i++) {
+        const row = rawRows[i];
+        const hasAnyVal = Object.values(row).some(v => String(v).trim() !== "");
+        if (!hasAnyVal) continue;
+
+        const rawScheduled = getVal(row, ["scheduleddate", "scheduled_date", "scheduled", "postingdate", "posting_date", "schedule_date", "date"]);
+        const parsedScheduleDate = parseDateStr(rawScheduled);
+
+        // Mandatory Scheduled Date check per requirement
+        if (!parsedScheduleDate) {
+          toast.error(`Row ${i + 2}: Scheduled Date is required! Cannot upload without Scheduled Date.`);
+          return;
+        }
+
+        const rawType = String(getVal(row, ["contenttype", "type", "format"])).trim();
+        let contentType = "Post";
+        if (/reel/i.test(rawType)) contentType = "Reel";
+        else if (/story/i.test(rawType)) contentType = "Story";
+        else if (/carousel/i.test(rawType)) contentType = "Carousel";
+        else if (/post/i.test(rawType)) contentType = "Post";
+
+        const topicTitle = String(getVal(row, ["topictitle", "topic", "title"])).trim() || "Untitled Idea";
+        const topicDesc = String(getVal(row, ["topicdescriptionconcept", "topicdescription", "description", "concept"])).trim();
+        const referenceLink = String(getVal(row, ["referencelink", "reference", "ref"])).trim();
+        const brandPersonRaw = String(getVal(row, ["brandperson", "brand", "person", "brand_person"])).trim();
+
+        let matchedBrandPerson = brandPersonRaw;
+        if (brandPersonRaw) {
+          const emp = employees.find(e => {
+            const personal = (e as any)?.personal_info || {};
+            const full = `${personal.first_name || ""} ${personal.last_name || ""}`.trim().toLowerCase();
+            const uname = String((e as any)?.name || (e as any)?.username || "").toLowerCase();
+            const target = brandPersonRaw.toLowerCase();
+            return full === target || uname === target || String(e.id || (e as any)._id) === target;
+          });
+          if (emp) matchedBrandPerson = String(emp.id || (emp as any)._id);
+        }
+
+        const scriptDate = parseDateStr(getVal(row, ["scriptdate", "script_date"]));
+        const scriptLink = String(getVal(row, ["scriptlink", "script_link", "script"])).trim();
+
+        const shootDate = parseDateStr(getVal(row, ["shootdate", "shoot_date"]));
+        const shootLink = String(getVal(row, ["shootlink", "shoot_link", "shoot"])).trim();
+
+        const editingDate = parseDateStr(getVal(row, ["editingdate", "editing_date", "editdate"]));
+        const editingLink = String(getVal(row, ["editingreellink", "editinglink", "reellink", "edit_link"])).trim();
+
+        const thumbnailDate = parseDateStr(getVal(row, ["thumbnaildate", "thumbnail_date"]));
+        const thumbnailLink = String(getVal(row, ["thumbnaillink", "thumbnail_link", "thumbnail"])).trim();
+
+        const captionDate = parseDateStr(getVal(row, ["captiondate", "caption_date"]));
+        const captionText = String(getVal(row, ["captiontext", "caption"])).trim();
+
+        const igLink = String(getVal(row, ["instagramlink", "instagram", "iglink", "postinglinkofig"])).trim();
+
+        payloadItems.push({
+          project_id: project.id,
+          schedule_date: parsedScheduleDate,
+          content_type: contentType,
+          topic_title: topicTitle,
+          topic_description: topicDesc || undefined,
+          reference_link: referenceLink || undefined,
+          brand_person: matchedBrandPerson || undefined,
+          script: {
+            date: scriptDate || undefined,
+            link: scriptLink || undefined
+          },
+          shoot: {
+            date: shootDate || undefined,
+            link: shootLink || undefined
+          },
+          editing: {
+            date: editingDate || undefined,
+            link: editingLink || undefined
+          },
+          thumbnail: {
+            date: thumbnailDate || undefined,
+            link: thumbnailLink || undefined
+          },
+          caption_date: captionDate || undefined,
+          caption_text: captionText || undefined,
+          instagram_link: igLink || undefined,
+          approval_status: "In Progress"
+        });
+      }
+
+      if (payloadItems.length === 0) {
+        toast.error("No valid items to upload.");
+        return;
+      }
+
+      const res: any = await api.post(`/projects/${project.id}/content/batch`, payloadItems);
+      if (Array.isArray(res)) {
+        const newCalendarItems = res.map(mapBackendContentToCalendarItem);
+        const currentCalendar = project.contentCalendar || [];
+        // Insert new entries without overwriting existing entries so multiple posts/reels can coexist on the same date
+        const updatedCalendar = [...currentCalendar, ...newCalendarItems];
+
+        setProjects(projects.map(p => p.id === project.id ? { ...p, contentCalendar: updatedCalendar, modules: syncSocialMediaTasksForProject(p, updatedCalendar) } : p));
+        logProjectActivity(project.id, "Excel Bulk Upload", `Uploaded ${res.length} content items from Excel file "${file.name}"`);
+        toast.success(`Successfully uploaded ${res.length} content items!`);
+      } else {
+        toast.error("Failed to import content items.");
+      }
+    } catch (err: any) {
+      console.error("Error during CC Excel upload:", err);
+      toast.error(err?.message || "Failed to process Excel file.");
+    } finally {
+      setIsUploadingCCExcel(false);
+    }
+  };
 
   const renderSmmModals = () => {
     const activeProj = assigningProject || currentProject;
@@ -5870,16 +6279,6 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     <MessageSquare className="w-3.5 h-3.5" /> Set WhatsApp
                   </button>
                 )}
-                {!isMarketingCategory(project.category) && (
-                  <button
-                    type="button"
-                    onClick={() => document.getElementById("finance-section")?.scrollIntoView({ behavior: "smooth", block: "start" })}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-card hover:bg-muted border border-border/60 text-foreground font-bold text-xs rounded-full transition-colors shadow-sm"
-                    title="Go to Finance & follow-ups"
-                  >
-                    ➦ Followups
-                  </button>
-                )}
                 <button
                   type="button"
                   onClick={() => { setProjectSubTab("logs"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
@@ -5899,225 +6298,6 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     <span className="px-1.5 py-0.5 bg-amber-500/10 text-amber-600 rounded-full text-[10px] font-black">{(project.credentials || []).length}</span>
                   )}
                 </button>
-              </div>
-            )}
-
-            {/* Top Summary (Hidden for Digital Marketing) */}
-            {!isMarketingCategory(project.category) && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm">
-                  {(() => {
-                    const wp = getWorkProgress(project);
-                    const dp = getDateProgress(project.startDate, project.endDate);
-                    const pct = wp.pct;
-                    return (
-                      <>
-                        <div className="flex justify-between items-end mb-2">
-                          <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
-                            Task Progress
-                          </span>
-                          <span className="text-3xl font-black text-foreground font-mono">{pct}%</span>
-                        </div>
-                        <p className="text-[11px] font-bold text-emerald-600">
-                          {wp.total > 0 ? `${wp.completed} / ${wp.total} tasks completed` : "No tasks added yet"}
-                          {dp && <span className="text-muted-foreground font-normal ml-1">({dp.elapsed}/{dp.total} days elapsed)</span>}
-                        </p>
-                        <div className="h-2 w-full bg-muted/60 rounded-full overflow-hidden mt-4">
-                          <div
-                            className={cn("h-full rounded-full transition-all duration-1000 ease-out", getProgressColor(project.status))}
-                            style={{ width: `${pct}%` }}
-                          ></div>
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-
-                {/* F3: Revenue total instead of Budget (transcript: budget is not needed) */}
-                <div className="bg-card border border-border/60 rounded-3xl p-6 flex items-center gap-5 shadow-sm">
-                  <button
-                    type="button"
-                    onClick={() => { setRevenueForm({ date: "", revenue: "", editId: "" }); setIsRevenueOpen(true); }}
-                    className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0 hover:bg-emerald-500/20 transition-colors"
-                    title="Revenue log kholo"
-                  >
-                    <IndianRupee className="w-6 h-6" />
-                  </button>
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Total Revenue</p>
-                    <h3 className="text-3xl font-black text-emerald-600 font-mono">₹{revenueTotal.toLocaleString("en-IN")}</h3>
-                  </div>
-                </div>
-
-                <div className="bg-card border border-border/60 rounded-3xl p-6 flex items-center gap-5 shadow-sm">
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center shrink-0">
-                    <Calendar className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Timeline</p>
-                    <h3 className="text-sm font-black text-foreground">{safeFormat(project.startDate, "dd/MM/yyyy")} - {safeFormat(project.endDate, "dd/MM/yyyy")}</h3>
-                    {(() => {
-                      const dp = getDateProgress(project.startDate, project.endDate);
-                      return dp ? (
-                        <p className="text-[11px] font-bold text-primary mt-1">{dp.total} days • {dp.elapsed} elapsed</p>
-                      ) : null;
-                    })()}
-                    {/* Renewals: month-wise periods (reporting mate) */}
-                    {(project.dateRanges || []).length > 1 && (
-                      <div className="mt-2 space-y-1 border-t border-border/40 pt-2">
-                        {project.dateRanges!.map((r, i) => (
-                          <p key={i} className="text-[10px] font-bold text-muted-foreground font-mono">
-                            #{i + 1} {safeFormat(r.start_date, "dd/MM/yyyy")} → {safeFormat(r.end_date, "dd/MM/yyyy")}
-                            {i === project.dateRanges!.length - 1 && <span className="text-emerald-600 ml-1">• current</span>}
-                          </p>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* K10: Finance & Payments — date, amount, work period, next reminder + followups (Dynamic permission) */}
-            {!isMarketingCategory(project.category) && canUserAccessFinance(project) && (
-              <div id="finance-section" className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm scroll-mt-4">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
-                      <IndianRupee className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-black text-foreground">Finance & Payments</h3>
-                      <p className="text-[11px] text-muted-foreground font-medium">
-                        Total received: ₹{((project.payments || []).reduce((s, e) => s + (Number(e.amount) || 0), 0)).toLocaleString("en-IN")} • {(project.payments || []).length} entries
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsPayFormOpen(v => !v)}
-                    className="px-4 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/90 transition-all shadow-sm"
-                  >
-                    {isPayFormOpen ? "Close" : "+ Add Payment"}
-                  </button>
-                </div>
-
-                {/* Payment entries */}
-                <div className="space-y-2 mb-4">
-                  {(project.payments || []).length === 0 && (
-                    <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-3 text-center">No payment entries yet.</p>
-                  )}
-                  {(project.payments || []).map(e => (
-                    <div key={e.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 rounded-2xl border border-border/40 bg-muted/20 text-xs">
-                      <span className="font-mono font-bold text-foreground">{e.date || "—"}</span>
-                      <span className="font-black text-emerald-600 font-mono">₹{(Number(e.amount) || 0).toLocaleString("en-IN")}</span>
-                      {(e.work_from || e.work_to) && (
-                        <span className="font-semibold text-muted-foreground">Work: {e.work_from || ""}{e.work_from && e.work_to ? " → " : ""}{e.work_to || ""}</span>
-                      )}
-                      {e.next_reminder && (
-                        <span className="font-bold text-amber-600">Next: {e.next_reminder}</span>
-                      )}
-                      {e.note && <span className="text-muted-foreground truncate max-w-[220px]" title={e.note}>{e.note}</span>}
-                      <button type="button" onClick={() => handleDeletePayment(project, e.id)} className="ml-auto p-1 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors" title="Delete entry">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Add payment form */}
-                {isPayFormOpen && (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 rounded-2xl bg-muted/30 border border-border/40 mb-4">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase">Date *</label>
-                      <DatePicker value={payForm.date} onChange={(val) => setPayForm({ ...payForm, date: val })} placeholder="Select date" className="w-full h-10 bg-background border-border rounded-xl text-xs" />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase">Amount *</label>
-                      <input type="number" min="0" value={payForm.amount} onChange={e => setPayForm({ ...payForm, amount: e.target.value })} placeholder="e.g. 50000" className="w-full px-3 h-10 bg-background border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20" />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase">Work From</label>
-                      <DatePicker value={payForm.work_from} onChange={(val) => setPayForm({ ...payForm, work_from: val })} placeholder="Select date" className="w-full h-10 bg-background border-border rounded-xl text-xs" />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase">Work To</label>
-                      <DatePicker value={payForm.work_to} onChange={(val) => setPayForm({ ...payForm, work_to: val })} placeholder="Select date" className="w-full h-10 bg-background border-border rounded-xl text-xs" />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase">Next Reminder</label>
-                      <DatePicker value={payForm.next_reminder} onChange={(val) => setPayForm({ ...payForm, next_reminder: val })} placeholder="Select date" className="w-full h-10 bg-background border-border rounded-xl text-xs" />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase">Responsibility (auto-task)</label>
-                      <Select
-                        value={payForm.ownerId || "none"}
-                        onValueChange={(val) => setPayForm({ ...payForm, ownerId: val === "none" ? "" : val })}
-                      >
-                        <SelectTrigger className="w-full h-10 px-3 bg-background border border-border rounded-xl text-xs font-medium shadow-xs">
-                          <SelectValue placeholder="Select Responsibility..." />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300] max-h-56">
-                          <SelectItem value="none" className="text-xs font-semibold text-muted-foreground rounded-lg cursor-pointer">
-                            Select...
-                          </SelectItem>
-                          {(assignableEmployees || []).map(emp => (
-                            <SelectItem key={emp.id} value={emp.id} className="text-xs font-semibold rounded-lg cursor-pointer">
-                              {emp.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1 col-span-2 md:col-span-1">
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase">Note</label>
-                      <input type="text" value={payForm.note} onChange={e => setPayForm({ ...payForm, note: e.target.value })} placeholder="Optional" className="w-full px-3 h-10 bg-background border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20" />
-                    </div>
-                    <div className="flex items-end col-span-2 md:col-span-1">
-                      <button type="button" onClick={() => handleSavePayment(project, client.name)} className="w-full h-10 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs rounded-xl transition-colors shadow-sm">
-                        Save Payment
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Followups: recent + quick add (text + next date) */}
-                <div className="border-t border-border/40 pt-4">
-                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Followups {projectFollowups.length > 0 && `(${projectFollowups.length})`}</p>
-                  <div className="space-y-1.5 mb-3 max-h-32 overflow-y-auto pr-1">
-                    {projectFollowups.length === 0 && (
-                      <p className="text-[11px] text-muted-foreground/60 font-medium">No follow-ups yet.</p>
-                    )}
-                    {projectFollowups.slice(0, 5).map((f: any, i: number) => {
-                      const rawDate = f.created_at ? String(f.created_at).split("T")[0] : "";
-                      const formattedDate = rawDate ? rawDate.split("-").reverse().join("/") : "";
-                      return (
-                        <p key={f.id || i} className="text-xs text-foreground bg-muted/30 border border-border/30 rounded-xl px-3 py-1.5 flex items-center justify-between">
-                          <span className="font-bold">{f.text}</span>
-                          {formattedDate && <span className="text-muted-foreground font-mono text-[10px] ml-2 shrink-0">{formattedDate}</span>}
-                        </p>
-                      );
-                    })}
-                  </div>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <input
-                      type="text"
-                      value={followupText}
-                      onChange={e => setFollowupText(e.target.value)}
-                      placeholder="Enter follow-up text..."
-                      className="flex-1 px-3 h-10 bg-background border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
-                    />
-                    <DatePicker
-                      value={followupNextDate}
-                      onChange={(val) => setFollowupNextDate(val)}
-                      placeholder="Next date"
-                      className="h-10 bg-background border-border rounded-xl text-xs font-medium sm:w-[160px]"
-                    />
-                    <button type="button" onClick={() => handleAddFollowup(project)} className="px-4 h-10 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/90 transition-colors shrink-0">
-                      + Followup
-                    </button>
-                  </div>
-                </div>
               </div>
             )}
 
@@ -6330,6 +6510,10 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     if (calendarStatusFilter !== "All" && item.status !== calendarStatusFilter) return false;
                     if (calendarMonthFilter === "Current") {
                       if (!item.postingDate || !item.postingDate.startsWith(currentYearMonth)) return false;
+                    } else if (calendarMonthFilter === "Custom") {
+                      if (!item.postingDate) return false;
+                      if (ccCustomStartDate && item.postingDate < ccCustomStartDate) return false;
+                      if (ccCustomEndDate && item.postingDate > ccCustomEndDate) return false;
                     } else if (calendarMonthFilter !== "All") {
                       if (!item.postingDate || !item.postingDate.startsWith(calendarMonthFilter)) return false;
                     }
@@ -6566,119 +6750,10 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                               </div>
                             );
                           })()}
-                          {/* K18: CC status inline (month approval + overlap months + update) */}
-                          {(() => {
-                            const now = new Date();
-                            const ck = /^\d{4}-\d{2}$/.test(calendarMonthFilter)
-                              ? calendarMonthFilter
-                              : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-                            const [yy, mm] = ck.split("-").map(Number);
-                            const ap = ccApprovals[ck];
-                            const chipCls =
-                              ap?.status === "Approved by Client"
-                                ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
-                                : ap?.status === "Rejected"
-                                  ? "bg-rose-500/10 text-rose-500 border-rose-500/30"
-                                  : ap?.status === "Changes Requested"
-                                    ? "bg-amber-500/10 text-amber-600 border-amber-500/30"
-                                    : "bg-muted text-muted-foreground border-border/50";
-                            // overlap months (range ma avta months — Sept approved + new pending banne dekhay)
-                            const f = customDateRange?.from ? new Date(customDateRange.from) : null;
-                            const t = customDateRange?.to ? new Date(customDateRange.to) : null;
-                            const overlapKeys: string[] = [];
-                            if (f && t && !isNaN(f.getTime()) && !isNaN(t.getTime())) {
-                              const cur = new Date(f.getFullYear(), f.getMonth(), 1);
-                              const last = new Date(t.getFullYear(), t.getMonth(), 1);
-                              let g = 0;
-                              while (cur <= last && g < 13) {
-                                const k = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}`;
-                                if (!overlapKeys.includes(k)) overlapKeys.push(k);
-                                cur.setMonth(cur.getMonth() + 1);
-                                g++;
-                              }
-                            }
-                            return (
-                              <div className="flex flex-col gap-2 px-4 py-3 bg-card/80 border border-border/60 rounded-2xl shadow-sm">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="text-[11px] font-black text-muted-foreground uppercase tracking-widest">CC Status:</span>
-                                  <span className={cn("px-2.5 py-1 rounded-full text-[11px] font-black border", chipCls)}>
-                                    {ck} • {ap?.status || "Pending"}
-                                  </span>
-                                  {overlapKeys.filter(k => k !== ck).map(k => (
-                                    <span key={k} className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-muted text-muted-foreground border border-border/40">
-                                      {k} • {ccApprovals[k]?.status || "—"}
-                                    </span>
-                                  ))}
-                                </div>
-                                <div className="flex flex-col sm:flex-row gap-2 items-center">
-                                  <Select
-                                    value={ccStatusDraft}
-                                    onValueChange={(val) => setCcStatusDraft(val)}
-                                  >
-                                    <SelectTrigger className="h-9 min-w-[170px] w-auto px-3 bg-background border border-border/60 rounded-xl text-xs font-bold shadow-xs">
-                                      <SelectValue placeholder="Select Status" />
-                                    </SelectTrigger>
-                                    <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
-                                      {["Pending", "Approved by Client", "Changes Requested", "Rejected"].map(s => (
-                                        <SelectItem key={s} value={s} className="text-xs font-semibold rounded-lg cursor-pointer">
-                                          {s}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                  {ccStatusDraft !== "Approved by Client" && (
-                                    <input
-                                      type="text"
-                                      value={ccReasonDraft}
-                                      onChange={e => setCcReasonDraft(e.target.value)}
-                                      placeholder="Reason compulsory..."
-                                      className="flex-1 w-full sm:w-auto px-3 h-9 bg-background border border-border/60 rounded-xl text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary"
-                                    />
-                                  )}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSaveCcStatus(project.id, (mm as number), (yy as number))}
-                                    className="h-9 px-4 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/90 transition-colors shrink-0"
-                                  >
-                                    Save
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })()}
                           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4">
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                              <div>
-                                <h2 className="text-base sm:text-lg lg:text-xl font-bold tracking-tight">Content Calendar</h2>
-                                <p className="text-xs text-muted-foreground mt-0.5">Plan, schedule, and track content approval pipeline</p>
-                              </div>
-                              <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/5 border border-primary/20 rounded-xl shadow-xs text-xs self-start sm:self-auto">
-                                <span className="font-extrabold text-foreground flex items-center gap-1 shrink-0">
-                                  <span>📅</span> CC Creator:
-                                </span>
-                                <Select
-                                  value={project.creativeTeam?.cc_creator || "none"}
-                                  onValueChange={async (newEmpId) => {
-                                    const val = newEmpId === "none" ? "" : newEmpId;
-                                    const updatedTeam = { ...(project.creativeTeam || {}), cc_creator: val };
-                                    await handleSaveCreativeTeam(project.id, updatedTeam);
-                                  }}
-                                >
-                                  <SelectTrigger className="h-7 min-w-[150px] max-w-[200px] bg-background border-border/60 rounded-lg text-xs font-bold text-primary shadow-xs">
-                                    <SelectValue placeholder="Select CC Creator..." />
-                                  </SelectTrigger>
-                                  <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300] max-h-64">
-                                    <SelectItem value="none" className="text-xs font-semibold text-muted-foreground rounded-lg cursor-pointer">
-                                      Select CC Creator...
-                                    </SelectItem>
-                                    {assignableEmployees.map(emp => (
-                                      <SelectItem key={emp.id} value={emp.id} className="text-xs font-semibold rounded-lg cursor-pointer">
-                                        {emp.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
+                            <div>
+                              <h2 className="text-base sm:text-lg lg:text-xl font-bold tracking-tight">Content Calendar</h2>
+                              <p className="text-xs text-muted-foreground mt-0.5">Plan, schedule, and track content approval pipeline</p>
                             </div>
                             <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar w-full lg:w-auto py-0.5 shrink-0">
                               <button
@@ -6778,6 +6853,42 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                 <span className="whitespace-nowrap">Export PDF</span>
                               </button>
                               <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDownloadCCTemplate(project.name);
+                                }}
+                                className="h-8 px-2.5 bg-card/90 hover:bg-muted border border-border/60 rounded-xl text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap shadow-sm cursor-pointer"
+                                title="Download Content Calendar Dummy Excel Template"
+                              >
+                                <FileSpreadsheet className="w-3.5 h-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                <span className="whitespace-nowrap">Download CC Template</span>
+                              </button>
+                              <button
+                                type="button"
+                                disabled={isUploadingCCExcel}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  excelFileInputRef.current?.click();
+                                }}
+                                className="h-8 px-2.5 bg-card/90 hover:bg-muted border border-border/60 rounded-xl text-xs font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap shadow-sm cursor-pointer disabled:opacity-50"
+                                title="Upload Content Calendar from Excel file"
+                              >
+                                {isUploadingCCExcel ? (
+                                  <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin text-blue-600" />
+                                ) : (
+                                  <Upload className="w-3.5 h-3.5 shrink-0 text-blue-600 dark:text-blue-400" />
+                                )}
+                                <span className="whitespace-nowrap">{isUploadingCCExcel ? "Uploading..." : "Upload CC Excel"}</span>
+                              </button>
+                              <input
+                                type="file"
+                                ref={excelFileInputRef}
+                                accept=".xlsx,.xls,.csv"
+                                className="hidden"
+                                onChange={(e) => handleUploadCCExcel(e, project)}
+                              />
+                              <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   const today = new Date().toISOString().split('T')[0] || "";
@@ -6849,6 +6960,28 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                       {projectCalendar.filter(i => i.postingDate && i.postingDate.startsWith(currentYearMonth)).length}
                                     </span>
                                   </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setCalendarMonthFilter("Custom")}
+                                    className={cn(
+                                      "px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5",
+                                      calendarMonthFilter === "Custom"
+                                        ? "bg-primary text-primary-foreground shadow-sm"
+                                        : "bg-background/80 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/50"
+                                    )}
+                                  >
+                                    <span>Custom Range</span>
+                                    {calendarMonthFilter === "Custom" && (ccCustomStartDate || ccCustomEndDate) && (
+                                      <span className={cn("px-1.5 py-0.2 rounded-full text-[10px]", calendarMonthFilter === "Custom" ? "bg-white/20 text-white" : "bg-muted text-foreground/70")}>
+                                        {projectCalendar.filter(i => {
+                                          if (!i.postingDate) return false;
+                                          if (ccCustomStartDate && i.postingDate < ccCustomStartDate) return false;
+                                          if (ccCustomEndDate && i.postingDate > ccCustomEndDate) return false;
+                                          return true;
+                                        }).length}
+                                      </span>
+                                    )}
+                                  </button>
                                   {dynamicMonthsList.map(m => {
                                     const count = projectCalendar.filter(i => i.postingDate && i.postingDate.startsWith(m.value)).length;
                                     const isSelected = calendarMonthFilter === m.value;
@@ -6872,6 +7005,49 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                     );
                                   })}
                                 </div>
+                                {calendarMonthFilter === "Custom" && (
+                                  <div className="flex flex-wrap items-center gap-3 px-5 py-2.5 bg-muted/40 border-b border-border/40 text-xs">
+                                    <span className="font-bold text-foreground flex items-center gap-1.5">
+                                      <Calendar className="w-3.5 h-3.5 text-primary" />
+                                      Custom Content Cycle (e.g. 15th to 15th):
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      <label className="text-[10px] font-bold uppercase text-muted-foreground">From:</label>
+                                      <input
+                                        type="date"
+                                        value={ccCustomStartDate}
+                                        onChange={(e) => setCcCustomStartDate(e.target.value)}
+                                        className="h-8 px-2.5 rounded-xl bg-background border border-border/60 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary shadow-xs"
+                                      />
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <label className="text-[10px] font-bold uppercase text-muted-foreground">To:</label>
+                                      <input
+                                        type="date"
+                                        value={ccCustomEndDate}
+                                        onChange={(e) => setCcCustomEndDate(e.target.value)}
+                                        className="h-8 px-2.5 rounded-xl bg-background border border-border/60 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary shadow-xs"
+                                      />
+                                    </div>
+                                    {(ccCustomStartDate || ccCustomEndDate) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setCcCustomStartDate("");
+                                          setCcCustomEndDate("");
+                                        }}
+                                        className="text-[11px] font-bold text-muted-foreground hover:text-foreground px-2 py-1 rounded-lg hover:bg-muted"
+                                      >
+                                        Clear Dates
+                                      </button>
+                                    )}
+                                    <span className="text-[11px] font-medium text-muted-foreground ml-auto">
+                                      {ccCustomStartDate && ccCustomEndDate
+                                        ? `${formatDate(ccCustomStartDate)} to ${formatDate(ccCustomEndDate)}`
+                                        : "Pick start and end dates to filter items"}
+                                    </span>
+                                  </div>
+                                )}
                                 {filteredCalendar.length === 0 ? (
                                   <div className="text-center py-16 text-sm text-muted-foreground font-medium">
                                     No calendar items found matching the filters.

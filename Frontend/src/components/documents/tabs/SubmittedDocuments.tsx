@@ -125,10 +125,14 @@ export function SubmittedDocuments() {
 
       const mappedDocs: SubmittedDocItem[] = rawDocs.map((d: any) => {
         const emp = employees.find(e => String(e.id) === String(d.employee_id) || String(e.employeeId) === String(d.employee_code));
+        const resolvedName = (emp?.name && emp.name !== "Employee")
+          ? emp.name
+          : ((d.employee_name && d.employee_name !== "Employee") ? d.employee_name : (emp?.name || d.employee_name || "Employee"));
+
         return {
           id: String(d._id || d.id),
           employeeId: String(d.employee_id || emp?.id || ""),
-          employeeName: d.employee_name || emp?.name || "Employee",
+          employeeName: resolvedName,
           employeeCode: d.employee_code || emp?.employeeId || "",
           designation: emp?.designation || emp?.role || "Employee",
           avatar: emp?.avatar || emp?.profile_photo || "",
@@ -306,10 +310,16 @@ export function SubmittedDocuments() {
         if (doc.isDeposit) {
           const { isCollectedOrExempt } = getDepositInfo(doc);
           if (statusFilter === "Accepted") matchesStatus = isCollectedOrExempt;
-          else if (statusFilter === "Pending to Submit") matchesStatus = !isCollectedOrExempt;
+          else if (statusFilter === "Pending to Submit" || statusFilter === "Pending") matchesStatus = !isCollectedOrExempt;
           else matchesStatus = false;
         } else {
-          matchesStatus = doc.status === statusFilter;
+          if (statusFilter === "Pending to Submit" || statusFilter === "Pending") {
+            matchesStatus = doc.status === "Pending to Submit" || doc.status === "Pending Review";
+          } else if (statusFilter === "Rejected") {
+            matchesStatus = doc.status === "Rejected" || doc.status === "Returned to Employee";
+          } else {
+            matchesStatus = doc.status === statusFilter;
+          }
         }
       }
 
@@ -319,22 +329,34 @@ export function SubmittedDocuments() {
 
   const { items: sortedDocs, requestSort, sortConfig } = useSortableData(filteredDocs);
 
-  // Financial KPIs for Deposit
-  const depositKPIs = useMemo(() => {
-    let totalTarget = 0;
-    let totalCollected = 0;
+  // Document Center KPIs (Total, Pending, Accepted, Rejected / Returned)
+  const docKPIs = useMemo(() => {
     let pendingCount = 0;
-    let completedCount = 0;
+    let acceptedCount = 0;
+    let rejectedCount = 0;
 
-    allCombinedDocs.filter(d => d.isDeposit).forEach(doc => {
-      const info = getDepositInfo(doc);
-      totalTarget += info.target;
-      totalCollected += Math.min(info.collected, info.target);
-      if (info.isCollectedOrExempt) completedCount++;
-      else pendingCount++;
+    allCombinedDocs.forEach(d => {
+      if (d.isDeposit) {
+        const { isCollectedOrExempt } = getDepositInfo(d);
+        if (isCollectedOrExempt) acceptedCount++;
+        else pendingCount++;
+      } else {
+        if (d.status === "Accepted") {
+          acceptedCount++;
+        } else if (d.status === "Rejected" || d.status === "Returned to Employee") {
+          rejectedCount++;
+        } else {
+          pendingCount++;
+        }
+      }
     });
 
-    return { totalTarget, totalCollected, pendingCount, completedCount };
+    return {
+      total: allCombinedDocs.length,
+      pendingCount,
+      acceptedCount,
+      rejectedCount
+    };
   }, [allCombinedDocs, employees]);
 
   // Handle Submit Document (Create Record)
@@ -570,54 +592,90 @@ export function SubmittedDocuments() {
 
   return (
     <div className="space-y-6">
-      {/* Top Financial & Document KPIs */}
+      {/* Top Document Status KPIs with Click-to-Filter */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-card border border-border/50 rounded-2xl p-5 shadow-sm">
+        {/* KPI 1: Total Documents */}
+        <div 
+          onClick={() => setStatusFilter("all")}
+          className={cn(
+            "bg-card border rounded-2xl p-5 shadow-sm cursor-pointer transition-all hover:shadow-md group",
+            statusFilter === "all" ? "border-primary ring-2 ring-primary/20 bg-primary/5" : "border-border/50 hover:border-border"
+          )}
+        >
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total Documents</span>
             <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-600 flex items-center justify-center font-bold">
               <FileText className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-black text-foreground mt-2">{allCombinedDocs.length}</div>
-          <p className="text-[11px] text-muted-foreground mt-1 font-medium">Across all team members</p>
-        </div>
-
-        <div className="bg-card border border-border/50 rounded-2xl p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Deposits Completed</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold">
-              <ShieldCheck className="w-4 h-4" />
-            </div>
+          <div className="text-2xl font-black text-foreground mt-2">{docKPIs.total}</div>
+          <div className="flex items-center justify-between mt-1">
+            <p className="text-[11px] text-muted-foreground font-medium">Across all candidates</p>
+            <span className="text-[10px] font-bold text-primary group-hover:underline">View All</span>
           </div>
-          <div className="text-2xl font-black text-emerald-600 mt-2">{depositKPIs.completedCount}</div>
-          <p className="text-[11px] text-muted-foreground mt-1 font-medium">Fully collected or exempt</p>
         </div>
 
-        <div className="bg-card border border-border/50 rounded-2xl p-5 shadow-sm">
+        {/* KPI 2: Pending Documents */}
+        <div 
+          onClick={() => setStatusFilter("Pending to Submit")}
+          className={cn(
+            "bg-card border rounded-2xl p-5 shadow-sm cursor-pointer transition-all hover:shadow-md group",
+            (statusFilter === "Pending to Submit" || statusFilter === "Pending") ? "border-amber-500 ring-2 ring-amber-500/20 bg-amber-500/5" : "border-border/50 hover:border-amber-500/40"
+          )}
+        >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-amber-600 uppercase tracking-wider">Deposits Pending</span>
+            <span className="text-xs font-bold text-amber-600 uppercase tracking-wider">Pending Documents</span>
             <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold">
               <Clock className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-black text-amber-600 mt-2">{depositKPIs.pendingCount}</div>
-          <p className="text-[11px] text-muted-foreground mt-1 font-medium">Pending or partial payments</p>
+          <div className="text-2xl font-black text-amber-600 mt-2">{docKPIs.pendingCount}</div>
+          <div className="flex items-center justify-between mt-1">
+            <p className="text-[11px] text-muted-foreground font-medium">Awaiting upload or review</p>
+            <span className="text-[10px] font-bold text-amber-600 group-hover:underline">Filter Pending</span>
+          </div>
         </div>
 
-        <div className="bg-card border border-border/50 rounded-2xl p-5 shadow-sm">
+        {/* KPI 3: Accepted Documents */}
+        <div 
+          onClick={() => setStatusFilter("Accepted")}
+          className={cn(
+            "bg-card border rounded-2xl p-5 shadow-sm cursor-pointer transition-all hover:shadow-md group",
+            statusFilter === "Accepted" ? "border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-500/5" : "border-border/50 hover:border-emerald-500/40"
+          )}
+        >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-primary uppercase tracking-wider">Financial Collection</span>
-            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold">
-              <IndianRupee className="w-4 h-4" />
+            <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Accepted Documents</span>
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold">
+              <CheckCircle2 className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-black text-foreground mt-2">
-            ₹{depositKPIs.totalCollected.toLocaleString("en-IN")}
+          <div className="text-2xl font-black text-emerald-600 mt-2">{docKPIs.acceptedCount}</div>
+          <div className="flex items-center justify-between mt-1">
+            <p className="text-[11px] text-muted-foreground font-medium">Verified & approved</p>
+            <span className="text-[10px] font-bold text-emerald-600 group-hover:underline">Filter Accepted</span>
           </div>
-          <p className="text-[11px] text-muted-foreground mt-1 font-medium">
-            Target: ₹{depositKPIs.totalTarget.toLocaleString("en-IN")}
-          </p>
+        </div>
+
+        {/* KPI 4: Rejected / Returned Documents */}
+        <div 
+          onClick={() => setStatusFilter("Rejected")}
+          className={cn(
+            "bg-card border rounded-2xl p-5 shadow-sm cursor-pointer transition-all hover:shadow-md group",
+            statusFilter === "Rejected" ? "border-rose-500 ring-2 ring-rose-500/20 bg-rose-500/5" : "border-border/50 hover:border-rose-500/40"
+          )}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-rose-600 uppercase tracking-wider">Rejected / Returned</span>
+            <div className="w-8 h-8 rounded-lg bg-rose-500/10 text-rose-600 flex items-center justify-center font-bold">
+              <AlertCircle className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-2xl font-black text-rose-600 mt-2">{docKPIs.rejectedCount}</div>
+          <div className="flex items-center justify-between mt-1">
+            <p className="text-[11px] text-muted-foreground font-medium">Requires re-submission</p>
+            <span className="text-[10px] font-bold text-rose-600 group-hover:underline">Filter Rejected</span>
+          </div>
         </div>
       </div>
 

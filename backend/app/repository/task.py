@@ -147,10 +147,18 @@ class TaskRepository:
                         }
                     ]
                 })
-            elif tf in ["overdue", "pending"]:
+            elif tf == "overdue":
                 and_conditions.append({
                     "due_date": {"$lt": start_of_today},
                     "status": {"$nin": ["completed", "done"]}
+                })
+            elif tf == "pending":
+                and_conditions.append({
+                    "$or": [
+                        {"task_category": "Pending"},
+                        {"title": {"$regex": "^\\[pending\\]", "$options": "i"}},
+                        {"is_pending_issue": True}
+                    ]
                 })
             elif tf == "upcoming":
                 and_conditions.append({
@@ -243,7 +251,17 @@ class TaskRepository:
             return False
 
     @classmethod
-    async def get_stats(cls, involved_emp_id: Optional[str] = None, target_date: Optional[str] = None):
+    async def get_stats(
+        cls, 
+        involved_emp_id: Optional[str] = None, 
+        target_date: Optional[str] = None,
+        assigned_to: Optional[str] = None,
+        assigned_by: Optional[str] = None,
+        team_employee_ids: Optional[list[str]] = None,
+        task_category: Optional[str] = None,
+        priority: Optional[str] = None,
+        search: Optional[str] = None
+    ):
         collection = await cls.get_collection()
         base_query = {"is_deleted": False}
         if involved_emp_id:
@@ -256,6 +274,19 @@ class TaskRepository:
                 {"transfer_history.from_employee": involved_emp_id},
             ]
         
+        if assigned_to:
+            base_query["assigned_to"] = assigned_to
+        if assigned_by:
+            base_query["assigned_by"] = assigned_by
+        if team_employee_ids is not None:
+            base_query["assigned_to"] = {"$in": team_employee_ids}
+        if task_category and task_category != "All":
+            base_query["task_category"] = task_category
+        if priority and priority != "All":
+            base_query["priority"] = priority.lower()
+        if search and search.strip():
+            base_query["title"] = {"$regex": search.strip(), "$options": "i"}
+        
         if target_date:
             try:
                 ref_date = datetime.strptime(target_date.strip(), "%Y-%m-%d")
@@ -267,7 +298,7 @@ class TaskRepository:
         start_of_today = datetime(ref_date.year, ref_date.month, ref_date.day)
         end_of_today = datetime(ref_date.year, ref_date.month, ref_date.day, 23, 59, 59, 999999)
 
-        # Single round-trip facet (was 8 sequential counts ~900ms cold)
+        # Single round-trip facet with filter-wise KPIs
         facet_res = await collection.aggregate([
             {"$match": base_query},
             {"$facet": {
@@ -279,7 +310,8 @@ class TaskRepository:
                 "today": [{"$match": {"due_date": {"$gte": start_of_today, "$lte": end_of_today}}}, {"$count": "n"}],
                 "overdue": [{"$match": {"due_date": {"$lt": start_of_today}, "status": {"$nin": ["completed", "done"]}}}, {"$count": "n"}],
                 "upcoming": [{"$match": {"due_date": {"$gt": end_of_today}, "status": {"$nin": ["completed", "done"]}}}, {"$count": "n"}],
-                "client_issue": [{"$match": {"$or": [{"task_category": "Client Issue"}, {"title": {"$regex": "^\\[client issue\\]", "$options": "i"}}, {"is_client_issue": True}]}}, {"$count": "n"}]
+                "client_issue": [{"$match": {"$or": [{"task_category": "Client Issue"}, {"title": {"$regex": "^\\[client issue\\]", "$options": "i"}}, {"is_client_issue": True}]}}, {"$count": "n"}],
+                "pending": [{"$match": {"$or": [{"task_category": "Pending"}, {"title": {"$regex": "^\\[pending\\]", "$options": "i"}}, {"is_pending_issue": True}]}}, {"$count": "n"}]
             }},
         ]).to_list(length=1)
 
@@ -299,7 +331,8 @@ class TaskRepository:
             "today": _n("today"),
             "overdue": _n("overdue"),
             "upcoming": _n("upcoming"),
-            "client_issue": _n("client_issue")
+            "client_issue": _n("client_issue"),
+            "pending": _n("pending")
         }
         
     @classmethod

@@ -58,8 +58,13 @@ class SubmittedDocumentService:
                 detail=f"This document type '{doc_name}' has already been added for this employee. Duplicate entry is not allowed."
             )
 
-        contact = employee.get("contact_info", {}) or {}
-        emp_name = str(contact.get("full_name") or employee.get("full_name") or "Employee").strip()
+        personal = employee.get("personal_info", {}) or {}
+        first_name = personal.get("first_name", "") or ""
+        last_name = personal.get("last_name", "") or ""
+        emp_name = f"{first_name} {last_name}".strip()
+        if not emp_name:
+            contact = employee.get("contact_info", {}) or {}
+            emp_name = str(contact.get("full_name") or employee.get("full_name") or employee.get("name") or "Employee").strip()
         emp_code = str(employee.get("employee_code") or employee.get("employee_id") or str(employee["_id"])[:6]).strip()
 
         rel_path, web_url = None, None

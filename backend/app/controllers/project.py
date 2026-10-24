@@ -274,10 +274,25 @@ async def get_marketing_summary(
 
     summary = await ProjectService.get_marketing_summary(project_id, campaign_name=campaign_name, start_date=start_date, end_date=end_date, preset=preset)
     if summary is None:
-        summary = MarketingSummaryResponse(
-            total_reach=0, total_impressions=0, total_leads=0, total_revenue=0.0, total_spend=0.0, cost_per_metric=0.0,
-            reach_growth_pct=0.0, impressions_growth_pct=0.0, leads_growth_pct=0.0, revenue_growth_pct=0.0, spend_growth_pct=0.0, cpl_growth_pct=0.0
-        )
+        summary = {
+            "project_name": "Digital Marketing Project",
+            "timeline": {"start_date": None, "end_date": None},
+            "filters": {
+                "campaign_name": campaign_name or "All Campaigns",
+                "preset": preset,
+                "start_date": str(start_date) if start_date else None,
+                "end_date": str(end_date) if end_date else None
+            },
+            "kpis": {
+                "reach": {"value": 0.0, "formatted": "0", "growth_pct": 0.0},
+                "leads": {"value": 0.0, "formatted": "0", "growth_pct": 0.0},
+                "cost_per_lead": {"value": 0.0, "formatted": "₹0.00", "growth_pct": 0.0},
+                "amount_spent": {"value": 0.0, "formatted": "₹0.00", "growth_pct": 0.0},
+                "impressions": {"value": 0.0, "formatted": "0", "growth_pct": 0.0},
+                "revenue": {"value": 0.0, "formatted": "₹0.00", "growth_pct": 0.0}
+            },
+            "top_campaigns": []
+        }
     await set_cache(cache_key, summary, ttl=60)
     return summary
 

@@ -695,8 +695,17 @@ class TaskService:
         return res
 
     @staticmethod
-    async def get_task_stats(involved_emp_id: Optional[str] = None, target_date: Optional[str] = None):
-        cache_key = f"tasks:stats:{involved_emp_id or 'all'}:{target_date or 'today'}"
+    async def get_task_stats(
+        involved_emp_id: Optional[str] = None, 
+        target_date: Optional[str] = None,
+        assigned_to: Optional[str] = None,
+        assigned_by: Optional[str] = None,
+        team_employee_ids: Optional[list[str]] = None,
+        task_category: Optional[str] = None,
+        priority: Optional[str] = None,
+        search: Optional[str] = None
+    ):
+        cache_key = f"tasks:stats:{involved_emp_id or 'all'}:{target_date or 'today'}:{assigned_to or 'all'}:{assigned_by or 'all'}:{task_category or 'all'}:{priority or 'all'}:{search or ''}"
         cached = await get_cache(cache_key)
         if cached is not None:
             return cached
@@ -704,7 +713,16 @@ class TaskService:
         # Heavy recurring generation only on cache miss (was running on every call)
         await TaskService.process_recurring_tasks()
 
-        stats = await TaskRepository.get_stats(involved_emp_id, target_date)
+        stats = await TaskRepository.get_stats(
+            involved_emp_id=involved_emp_id, 
+            target_date=target_date,
+            assigned_to=assigned_to,
+            assigned_by=assigned_by,
+            team_employee_ids=team_employee_ids,
+            task_category=task_category,
+            priority=priority,
+            search=search
+        )
         await set_cache(cache_key, stats, ttl=60)
         return stats
 

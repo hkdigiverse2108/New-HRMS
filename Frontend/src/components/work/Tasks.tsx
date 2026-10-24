@@ -23,7 +23,7 @@ import { hasModulePermission, isUserAdmin } from "@/lib/permissions";
 type TaskStatus = "Todo" | "In Progress" | "In Review" | "Done";
 type Priority = "High" | "Medium" | "Low";
 type ScopeFilter = "all" | "my_tasks" | "assigned_by_me" | "transfers";
-type TimeframeFilter = "all" | "today" | "overdue" | "client_issue" | "upcoming";
+type TimeframeFilter = "all" | "today" | "overdue" | "client_issue" | "pending" | "upcoming";
 
 interface BackendTask {
   _id: string;
@@ -172,6 +172,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     overdue: 0,
     upcoming: 0,
     client_issue: 0,
+    pending: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [employees, setEmployees] = useState<Array<{ id: string; name: string; avatar: string; role?: string; department?: string }>>([]);
@@ -208,10 +209,11 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   // K15: category filter (transcript — category field)
   const [categoryFilter, setCategoryFilter] = useState<string>("All");
 
-  // Phase 2: TL / Head / Management My Tasks vs All Tasks + Dept & Person Filter
+  // Phase 3: TL / Head / Management My Tasks vs All Tasks + Dept & Dual Filters (Assigned To & Assigned By)
   const [mainViewMode, setMainViewMode] = usePersistentState<"my_tasks" | "all_tasks">("tasks.view", "all_tasks");
   const [departmentFilter, setDepartmentFilter] = useState<string>("All");
-  const [personFilter, setPersonFilter] = useState<string>("All");
+  const [assignedToFilter, setAssignedToFilter] = useState<string>("All");
+  const [assignedByFilter, setAssignedByFilter] = useState<string>("All");
 
   // Reset page to 1 whenever any filter changes
   useEffect(() => {
@@ -221,7 +223,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     mainViewMode,
     scopeFilter,
     departmentFilter,
-    personFilter,
+    assignedToFilter,
+    assignedByFilter,
     statusFilter,
     priorityFilter,
     timeframeFilter,
@@ -229,7 +232,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   ]);
 
   const taskCategories = useMemo(() => {
-    const defaultCategories = ["All", "General", "Development", "Design", "Marketing", "SMM", "Content Calendar", "Client Issue", "Sales", "Operations"];
+    const defaultCategories = ["All", "General", "Development", "Design", "Marketing", "SMM", "Content Calendar", "Client Issue", "Pending", "Sales", "Operations"];
     const s = new Set<string>(defaultCategories);
     tasks.forEach(t => { if (t.taskCategory) s.add(t.taskCategory); });
     return Array.from(s);
@@ -396,8 +399,12 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
         params.append("department", departmentFilter);
       }
 
-      if (personFilter && personFilter !== "All") {
-        params.append("assigned_to", personFilter);
+      if (assignedToFilter && assignedToFilter !== "All") {
+        params.append("assigned_to", assignedToFilter);
+      }
+
+      if (assignedByFilter && assignedByFilter !== "All") {
+        params.append("assigned_by", assignedByFilter);
       }
 
       if (debouncedSearch.trim()) {
@@ -414,9 +421,38 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
       const queryString = params.toString();
 
+      // Dynamic Filter-Wise Stats Calculation
+      const statsParams = new URLSearchParams();
+      statsParams.append("target_date", todayDateStr);
+      if (mainViewMode === "my_tasks" || scopeFilter === "my_tasks") {
+        statsParams.append("view", "me");
+      } else if (scopeFilter === "assigned_by_me") {
+        statsParams.append("assigned_by", currentUserId || "");
+      } else {
+        statsParams.append("view", "all");
+      }
+      if (departmentFilter && departmentFilter !== "All") {
+        statsParams.append("department", departmentFilter);
+      }
+      if (assignedToFilter && assignedToFilter !== "All") {
+        statsParams.append("assigned_to", assignedToFilter);
+      }
+      if (assignedByFilter && assignedByFilter !== "All") {
+        statsParams.append("assigned_by", assignedByFilter);
+      }
+      if (categoryFilter && categoryFilter !== "All") {
+        statsParams.append("task_category", categoryFilter);
+      }
+      if (priorityFilter && priorityFilter !== "All") {
+        statsParams.append("priority", priorityFilter.toLowerCase());
+      }
+      if (debouncedSearch.trim()) {
+        statsParams.append("search", debouncedSearch.trim());
+      }
+
       const [tasksRes, statsRes] = await Promise.allSettled([
         api.get<{ data?: BackendTask[]; total?: number }>(`/tasks?${queryString}`, { showLoader: false }),
-        api.get<any>(`/tasks/stats?target_date=${todayDateStr}`, { showLoader: false }),
+        api.get<any>(`/tasks/stats?${statsParams.toString()}`, { showLoader: false }),
       ]);
 
       if (tasksRes.status === "fulfilled" && tasksRes.value) {
@@ -494,6 +530,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
           overdue: statsRes.value.overdue || 0,
           upcoming: statsRes.value.upcoming || 0,
           client_issue: statsRes.value.client_issue || 0,
+          pending: statsRes.value.pending || 0,
         });
       }
     } catch (e) {
@@ -510,7 +547,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     priorityFilter,
     categoryFilter,
     departmentFilter,
-    personFilter,
+    assignedToFilter,
+    assignedByFilter,
     debouncedSearch,
     mainViewMode,
     scopeFilter,
@@ -1158,7 +1196,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
       </div>
 
       {/* Top KPI Cards (Interactive Filters) */}
-      <div className="grid grid-cols-2 min-[460px]:grid-cols-3 sm:grid-cols-6 gap-2.5 sm:gap-3 shrink-0">
+      <div className="grid grid-cols-2 min-[460px]:grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 sm:gap-3 shrink-0">
         {[
           {
             label: "Total Tasks",
@@ -1192,6 +1230,17 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
             },
             color: "border-rose-500/20 bg-rose-500/5 text-rose-700 dark:text-rose-400",
             icon: AlertCircle,
+          },
+          {
+            label: "Pending",
+            count: displayStats.pending || 0,
+            isActive: timeframeFilter === "pending",
+            onClick: () => {
+              setTimeframeFilter("pending");
+              setStatusFilter("All");
+            },
+            color: "border-amber-500/20 bg-amber-500/5 text-amber-700 dark:text-amber-400",
+            icon: Clock,
           },
           {
             label: "Upcoming Work",
@@ -1337,21 +1386,37 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
               </div>
             )}
 
-            {/* Person Filter (Visible for Head / Admin and Team Leader, NOT other employees) */}
+            {/* Dual Filters: Assigned To AND Assigned By (Visible for Head / Admin and Team Leader) */}
             {mainViewMode === "all_tasks" && (isHead || isTeamLeader) && (
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-bold text-muted-foreground uppercase">Person:</span>
-                <SearchableSelect
-                  value={personFilter}
-                  onChange={(val) => setPersonFilter(val)}
-                  options={[
-                    { label: "All Members", value: "All" },
-                    ...(isTeamLeader ? teamLeaderEmployees : employees).map(e => ({ label: e.name, value: e.id }))
-                  ]}
-                  placeholder="Person"
-                  className="w-[145px] h-[32px] text-xs font-semibold"
-                />
-              </div>
+              <>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase whitespace-nowrap">Assigned To:</span>
+                  <SearchableSelect
+                    value={assignedToFilter}
+                    onChange={(val) => setAssignedToFilter(val)}
+                    options={[
+                      { label: "All Assignees", value: "All" },
+                      ...(isTeamLeader ? teamLeaderEmployees : employees).map(e => ({ label: e.name, value: e.id }))
+                    ]}
+                    placeholder="Assignee"
+                    className="w-[140px] h-[32px] text-xs font-semibold"
+                  />
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase whitespace-nowrap">Assigned By:</span>
+                  <SearchableSelect
+                    value={assignedByFilter}
+                    onChange={(val) => setAssignedByFilter(val)}
+                    options={[
+                      { label: "All Assigners", value: "All" },
+                      ...employees.map(e => ({ label: e.name, value: e.id }))
+                    ]}
+                    placeholder="Assigner"
+                    className="w-[140px] h-[32px] text-xs font-semibold"
+                  />
+                </div>
+              </>
             )}
 
             {/* Priority Filter (Visible to all, including other employees) */}
@@ -1384,7 +1449,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
             )}
           </div>
 
-          {(statusFilter !== "All" || priorityFilter !== "All" || timeframeFilter !== "today" || scopeFilter !== "all" || categoryFilter !== "All" || departmentFilter !== "All" || personFilter !== "All" || mainViewMode !== "all_tasks") && (
+          {(statusFilter !== "All" || priorityFilter !== "All" || timeframeFilter !== "today" || scopeFilter !== "all" || categoryFilter !== "All" || departmentFilter !== "All" || assignedToFilter !== "All" || assignedByFilter !== "All" || mainViewMode !== "all_tasks") && (
             <button
               onClick={() => {
                 setStatusFilter("All");
@@ -1393,7 +1458,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                 setScopeFilter("all");
                 setCategoryFilter("All");
                 setDepartmentFilter("All");
-                setPersonFilter("All");
+                setAssignedToFilter("All");
+                setAssignedByFilter("All");
                 setMainViewMode("all_tasks");
                 setSearchQuery("");
               }}

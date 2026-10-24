@@ -72,10 +72,10 @@ class RemarkService:
         cursor = db["remarks"].aggregate(pipeline)
         
         unique_submitted = 0
-        total_rating = 0
+        total_rating = 0.0
         async for doc in cursor:
             unique_submitted += 1
-            total_rating += doc.get("avg_rating", 0)
+            total_rating += float(doc.get("avg_rating") or 0)
             
         avg_satisfaction = round(total_rating / unique_submitted, 1) if unique_submitted > 0 else 0.0
         
