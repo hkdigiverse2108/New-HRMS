@@ -32,6 +32,8 @@ import { ReelScriptsTab } from "./scripts/ReelScriptsTab";
 import { CaptionsTab } from "./captions/CaptionsTab";
 import { BrandsTab } from "./brands/BrandsTab";
 import { SocialSettingsTab } from "./settings/SocialSettingsTab";
+import { useAuth } from "@/components/auth/AuthContext";
+import { isUserAdmin, hasModulePermission } from "@/lib/permissions";
 
 interface SocialHubProps {
   initialPath?: string | undefined;
@@ -48,23 +50,39 @@ type TabKey =
   | "brands"
   | "settings";
 
-const TAB_CONFIG: { key: TabKey; label: string; icon: React.ElementType }[] = [
-  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { key: "accounts", label: "Accounts", icon: Instagram },
-  { key: "keywords", label: "Keywords", icon: Sparkles },
-  { key: "activity", label: "Activity", icon: Activity },
-  { key: "scripts", label: "Reel Scripts", icon: Film },
-  { key: "captions", label: "Captions & SEO", icon: MessageSquare },
-  { key: "brands", label: "Brand Profiles", icon: Building2 },
-  { key: "settings", label: "Settings", icon: Settings2 },
+const TAB_CONFIG: { key: TabKey; label: string; icon: React.ElementType; url: string }[] = [
+  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, url: "/social/dashboard" },
+  { key: "accounts", label: "Accounts", icon: Instagram, url: "/social/accounts" },
+  { key: "keywords", label: "Keywords", icon: Sparkles, url: "/social/keywords" },
+  { key: "activity", label: "Activity", icon: Activity, url: "/social/activity" },
+  { key: "scripts", label: "Reel Scripts", icon: Film, url: "/social/scripts" },
+  { key: "captions", label: "Captions & SEO", icon: MessageSquare, url: "/social/captions" },
+  { key: "brands", label: "Brand Profiles", icon: Building2, url: "/social/brands" },
+  { key: "settings", label: "Settings", icon: Settings2, url: "/social/settings" },
 ];
 
 export const SocialHub: React.FC<SocialHubProps> = ({ initialPath, setActive }) => {
+  const { user } = useAuth();
+  const isAdmin = isUserAdmin(user);
+
+  // Filter tabs dynamically based on user's permissions
+  let visibleTabs = TAB_CONFIG.filter((tab) => {
+    if (isAdmin) return true;
+    return hasModulePermission(user, tab.url, "read");
+  });
+
+  if (visibleTabs.length === 0 && (isAdmin || hasModulePermission(user, "/social", "read"))) {
+    const firstTab = TAB_CONFIG[0];
+    if (firstTab) {
+      visibleTabs = [firstTab];
+    }
+  }
+
   const getTabFromPath = (path?: string): TabKey => {
-    if (!path) return "dashboard";
+    if (!path) return visibleTabs[0]?.key || "dashboard";
     const segment = path.replace("/social", "").replace(/^\//, "").split("/")[0]?.toLowerCase();
-    const found = TAB_CONFIG.find((t) => t.key === segment);
-    return found ? found.key : "dashboard";
+    const found = visibleTabs.find((t) => t.key === segment);
+    return found ? found.key : (visibleTabs[0]?.key || "dashboard");
   };
 
   const [activeTab, setActiveTab] = useState<TabKey>(() => getTabFromPath(initialPath));
@@ -75,8 +93,17 @@ export const SocialHub: React.FC<SocialHubProps> = ({ initialPath, setActive }) 
     }
   }, [initialPath]);
 
+  useEffect(() => {
+    if (visibleTabs.length > 0 && !visibleTabs.some((t) => t.key === activeTab)) {
+      const firstTab = visibleTabs[0];
+      if (firstTab) {
+        setActiveTab(firstTab.key);
+      }
+    }
+  }, [visibleTabs, activeTab]);
+
   const handleTabChange = (key: string) => {
-    const validKey = (TAB_CONFIG.some((t) => t.key === key) ? key : "dashboard") as TabKey;
+    const validKey = (visibleTabs.some((t) => t.key === key) ? key : (visibleTabs[0]?.key || "dashboard")) as TabKey;
     setActiveTab(validKey);
     const targetUrl = validKey === "dashboard" ? "/social" : `/social/${validKey}`;
     if (setActive) {
@@ -202,34 +229,36 @@ export const SocialHub: React.FC<SocialHubProps> = ({ initialPath, setActive }) 
         </button>
       </div>
 
-      {/* Modern Tabs Navigation Bar */}
-      <div className="border-b border-border">
-        <nav className="flex space-x-1 sm:space-x-2 overflow-x-auto pb-px" aria-label="Tabs">
-          {TAB_CONFIG.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.key;
-            return (
-              <button
-                key={tab.key}
-                onClick={() => handleTabChange(tab.key)}
-                className={`flex items-center gap-2 py-3 px-3.5 border-b-2 font-bold text-xs whitespace-nowrap transition-all outline-none ${
-                  isActive
-                    ? "border-primary text-primary"
-                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30"
-                }`}
-              >
-                <Icon className={`w-4 h-4 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
-                {tab.label}
-                {tab.key === "activity" && pendingDms.length > 0 && (
-                  <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-purple-500/20 text-purple-500 font-extrabold">
-                    {pendingDms.length}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </nav>
-      </div>
+      {/* Modern Tabs Navigation Bar: ONLY show if user has access to MORE THAN 1 tab */}
+      {visibleTabs.length > 1 && (
+        <div className="border-b border-border">
+          <nav className="flex space-x-1 sm:space-x-2 overflow-x-auto pb-px" aria-label="Tabs">
+            {visibleTabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => handleTabChange(tab.key)}
+                  className={`flex items-center gap-2 py-3 px-3.5 border-b-2 font-bold text-xs whitespace-nowrap transition-all outline-none ${
+                    isActive
+                      ? "border-primary text-primary"
+                      : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30"
+                  }`}
+                >
+                  <Icon className={`w-4 h-4 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
+                  {tab.label}
+                  {tab.key === "activity" && pendingDms.length > 0 && (
+                    <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-purple-500/20 text-purple-500 font-extrabold">
+                      {pendingDms.length}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+      )}
 
       {/* Main Tab Panels */}
       {initialLoading ? (
@@ -241,14 +270,14 @@ export const SocialHub: React.FC<SocialHubProps> = ({ initialPath, setActive }) 
         </div>
       ) : (
         <div className="animate-in fade-in duration-200">
-          {activeTab === "dashboard" && (
+          {activeTab === "dashboard" && visibleTabs.some((t) => t.key === "dashboard") && (
             <SocialDashboard
               overview={overview}
               onNavigateTab={handleTabChange}
             />
           )}
 
-          {activeTab === "accounts" && (
+          {activeTab === "accounts" && visibleTabs.some((t) => t.key === "accounts") && (
             <AccountsTab
               accounts={accounts}
               brands={brands}
@@ -276,7 +305,7 @@ export const SocialHub: React.FC<SocialHubProps> = ({ initialPath, setActive }) 
             />
           )}
 
-          {activeTab === "keywords" && (
+          {activeTab === "keywords" && visibleTabs.some((t) => t.key === "keywords") && (
             <KeywordsTab
               keywords={keywords}
               accounts={accounts}
@@ -303,7 +332,7 @@ export const SocialHub: React.FC<SocialHubProps> = ({ initialPath, setActive }) 
             />
           )}
 
-          {activeTab === "activity" && (
+          {activeTab === "activity" && visibleTabs.some((t) => t.key === "activity") && (
             <ActivityTab
               logs={logs}
               totalLogs={totalLogs}
@@ -342,7 +371,7 @@ export const SocialHub: React.FC<SocialHubProps> = ({ initialPath, setActive }) 
             />
           )}
 
-          {activeTab === "scripts" && (
+          {activeTab === "scripts" && visibleTabs.some((t) => t.key === "scripts") && (
             <ReelScriptsTab
               scripts={scripts}
               brands={brands}
@@ -371,7 +400,7 @@ export const SocialHub: React.FC<SocialHubProps> = ({ initialPath, setActive }) 
             />
           )}
 
-          {activeTab === "captions" && (
+          {activeTab === "captions" && visibleTabs.some((t) => t.key === "captions") && (
             <CaptionsTab
               brands={brands}
               isLoading={api.loading}
@@ -379,7 +408,7 @@ export const SocialHub: React.FC<SocialHubProps> = ({ initialPath, setActive }) 
             />
           )}
 
-          {activeTab === "brands" && (
+          {activeTab === "brands" && visibleTabs.some((t) => t.key === "brands") && (
             <BrandsTab
               brands={brands}
               isLoading={api.loading}
@@ -399,7 +428,7 @@ export const SocialHub: React.FC<SocialHubProps> = ({ initialPath, setActive }) 
             />
           )}
 
-          {activeTab === "settings" && (
+          {activeTab === "settings" && visibleTabs.some((t) => t.key === "settings") && (
             <SocialSettingsTab
               settings={settingsData}
               isLoading={api.loading}

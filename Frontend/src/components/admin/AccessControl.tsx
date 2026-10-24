@@ -79,14 +79,27 @@ export function AccessControl() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Track open/collapsed parent accordion groups
-  const [collapsedParents, setCollapsedParents] = useState<Record<string, boolean>>({});
+  // Track open/collapsed parent accordion groups (default: all collapsed/off)
+  const [expandedParents, setExpandedParents] = useState<Record<string, boolean>>({});
 
   const toggleParentCollapse = (parentId: string) => {
-    setCollapsedParents(prev => ({
+    setExpandedParents(prev => ({
       ...prev,
       [parentId]: !prev[parentId]
     }));
+  };
+
+  const toggleAllAccordion = () => {
+    const anyExpanded = filteredParents.some(p => Boolean(expandedParents[p.id]));
+    if (anyExpanded) {
+      setExpandedParents({});
+    } else {
+      const all: Record<string, boolean> = {};
+      filteredParents.forEach(p => {
+        all[p.id] = true;
+      });
+      setExpandedParents(all);
+    }
   };
 
   // Sync employees from EmployeeContext when available
@@ -296,6 +309,22 @@ export function AccessControl() {
             ...parentCur,
             read: true,
           };
+        }
+      } else if (mod?.parent_id && !updated.read) {
+        // If child read is turned OFF, check if ANY other child of this parent still has active access
+        const otherChildren = modules.filter(m => m.parent_id === mod.parent_id && m.id !== moduleId);
+        const hasOtherChildActive = otherChildren.some(c => {
+          const cp = prev[c.id];
+          return cp && (cp.read || cp.create || cp.update || cp.delete || cp.all);
+        });
+        if (!hasOtherChildActive) {
+          const parentCur = prev[mod.parent_id];
+          if (parentCur && !parentCur.all) {
+            parentUpdates[mod.parent_id] = {
+              ...parentCur,
+              read: false,
+            };
+          }
         }
       }
 
@@ -668,7 +697,19 @@ export function AccessControl() {
           <table className="w-full text-left border-collapse min-w-[760px]">
             <thead>
               <tr className="bg-muted/40 border-b border-border/60 text-muted-foreground font-bold text-xs uppercase tracking-wider">
-                <th className="p-4 pl-6 w-[340px]">Module / Sub-Item (Dropdown)</th>
+                <th className="p-4 pl-6 w-[340px]">
+                  <div className="flex items-center justify-between gap-2">
+                    <span>Module / Sub-Item (Dropdown)</span>
+                    <button
+                      type="button"
+                      onClick={toggleAllAccordion}
+                      className="text-[11px] font-bold normal-case px-2.5 py-1 rounded-lg border border-border/80 bg-background hover:bg-muted text-foreground transition-all shrink-0 shadow-xs"
+                      title={filteredParents.some(p => expandedParents[p.id]) ? "Collapse all sub-items" : "Expand all sub-items"}
+                    >
+                      {filteredParents.some(p => expandedParents[p.id]) ? "Collapse All" : "Expand All"}
+                    </button>
+                  </div>
+                </th>
                 <th className="p-4 w-[140px]">Section</th>
                 <th className="p-4 text-center w-[90px]">View (Read)</th>
                 <th className="p-4 text-center w-[90px]">Add (Create)</th>
@@ -679,7 +720,7 @@ export function AccessControl() {
             </thead>
             <tbody className="divide-y divide-border/50 text-sm font-medium">
               {filteredParents.map(parent => {
-                const isParentCollapsed = Boolean(collapsedParents[parent.id]);
+                const isParentExpanded = Boolean(expandedParents[parent.id]);
                 const children = modules.filter(m => m.parent_id === parent.id);
                 const hasChildren = children.length > 0;
                 const parentPerm = permissions[parent.id] || { read: false, create: false, update: false, delete: false, all: false };
@@ -692,11 +733,12 @@ export function AccessControl() {
                         <div className="flex items-center gap-2">
                           {hasChildren ? (
                             <button
+                              type="button"
                               onClick={() => toggleParentCollapse(parent.id)}
                               className="p-1 hover:bg-muted rounded-md text-muted-foreground transition-transform shrink-0"
-                              title={isParentCollapsed ? "Expand sub-items" : "Collapse sub-items"}
+                              title={isParentExpanded ? "Collapse sub-items" : "Expand sub-items"}
                             >
-                              {isParentCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                              {isParentExpanded ? <ChevronDown className="w-4 h-4 text-primary" /> : <ChevronRight className="w-4 h-4" />}
                             </button>
                           ) : (
                             <span className="w-6 shrink-0" />
@@ -792,7 +834,7 @@ export function AccessControl() {
                     </tr>
 
                     {/* Sub-Items (Dropdown Children Rows) */}
-                    {hasChildren && !isParentCollapsed && (
+                    {hasChildren && isParentExpanded && (
                       children.map(child => {
                         const childPerm = permissions[child.id] || { read: false, create: false, update: false, delete: false, all: false };
                         return (

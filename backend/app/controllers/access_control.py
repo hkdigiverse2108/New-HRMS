@@ -236,11 +236,10 @@ async def create_or_update_user_permission(item: UserAccessControlCreate):
     emp_id = str(item_data["employee_id"]).strip()
     await delete_cache(f"user_permission:{emp_id}")
     await delete_cache(f"user_perms_resolved:{emp_id}")
-    await set_cache(f"user_permission:{emp_id}", created_item)
     
     # Broadcast live update to employee
     await broadcast_permission_update(employee_id=emp_id)
-    return created_item
+    return await get_user_permission(emp_id)
 
 # ==========================================
 # Real-Time SSE Stream Endpoint
@@ -362,38 +361,48 @@ async def get_user_permission(employee_id: str):
         await set_cache(cache_key, res)
         return res
 
-    # 2. Check if employee has custom permissions explicitly configured
+    # 2. Fetch Department Preset as baseline
+    preset, inherited_desc = await PresetPermissionRepository.get_preset_for_employee(system_role, department)
+    if preset and "module_permissions" in preset:
+        base_perms = {k: dict(v) if isinstance(v, dict) else v for k, v in preset["module_permissions"].items()}
+    else:
+        base_perms = {k: dict(v) if isinstance(v, dict) else v for k, v in get_default_permissions_for_department(department).items()}
+
+    # 3. Check if employee has custom permissions explicitly configured
     item = await UserPermissionRepository.get_user_permission(employee_id)
     if item and item.get("is_custom") is True and item.get("module_permissions") is not None:
+        custom_perms = item.get("module_permissions", {})
+        merged_perms = dict(base_perms)
+        for mod_id, flags in custom_perms.items():
+            if not isinstance(flags, dict):
+                continue
+            if mod_id not in merged_perms:
+                merged_perms[mod_id] = dict(flags)
+            else:
+                base_p = merged_perms[mod_id] if isinstance(merged_perms[mod_id], dict) else {}
+                merged_flags = dict(base_p)
+                for action in ["read", "create", "update", "delete", "all"]:
+                    merged_flags[action] = bool(flags.get(action) or base_p.get(action))
+                merged_perms[mod_id] = merged_flags
+
         res = {
             "_id": str(item["_id"]),
             "employee_id": employee_id,
-            "module_permissions": normalize_and_expand_permissions(item.get("module_permissions", {})),
+            "module_permissions": normalize_and_expand_permissions(merged_perms),
             "is_custom": True,
             "inherited_from": None
         }
         await set_cache(cache_key, res)
         return res
 
-    # 3. Inherit dynamically from Department Preset
-    preset, inherited_desc = await PresetPermissionRepository.get_preset_for_employee(system_role, department)
-    
-    if preset and "module_permissions" in preset:
-        res = {
-            "_id": "",
-            "employee_id": employee_id,
-            "module_permissions": normalize_and_expand_permissions(preset["module_permissions"]),
-            "is_custom": False,
-            "inherited_from": inherited_desc
-        }
-    else:
-        res = {
-            "_id": "",
-            "employee_id": employee_id,
-            "module_permissions": normalize_and_expand_permissions(get_default_permissions_for_department(department)),
-            "is_custom": False,
-            "inherited_from": f"Default Department Permissions ({department})"
-        }
+    # 4. Standard inheritance from Department Preset
+    res = {
+        "_id": "",
+        "employee_id": employee_id,
+        "module_permissions": normalize_and_expand_permissions(base_perms),
+        "is_custom": False,
+        "inherited_from": inherited_desc or f"Default Department Permissions ({department})"
+    }
 
     await set_cache(cache_key, res)
     return res

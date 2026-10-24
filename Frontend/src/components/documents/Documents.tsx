@@ -56,25 +56,27 @@ export function Documents({ setActive }: { setActive?: (path: string) => void })
         </div>
       </div>
 
-      <div className="flex overflow-x-auto pb-2 scrollbar-none border-b border-border/50">
-        <div className="flex gap-2">
-          {visibleTabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                "flex items-center gap-2 px-5 py-3 min-h-[44px] text-sm font-bold rounded-t-xl transition-all border-b-2 whitespace-nowrap shrink-0",
-                activeTab === tab.id
-                  ? "bg-primary/5 text-primary border-primary"
-                  : "text-muted-foreground border-transparent hover:text-foreground hover:bg-muted/50"
-              )}
-            >
-              <tab.icon className={cn("w-4 h-4", activeTab === tab.id ? "text-primary" : "text-muted-foreground/70")} />
-              {tab.label}
-            </button>
-          ))}
+      {visibleTabs.length > 1 && (
+        <div className="flex overflow-x-auto pb-2 scrollbar-none border-b border-border/50">
+          <div className="flex gap-2">
+            {visibleTabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={cn(
+                  "flex items-center gap-2 px-5 py-3 min-h-[44px] text-sm font-bold rounded-t-xl transition-all border-b-2 whitespace-nowrap shrink-0",
+                  activeTab === tab.id
+                    ? "bg-primary/5 text-primary border-primary"
+                    : "text-muted-foreground border-transparent hover:text-foreground hover:bg-muted/50"
+                )}
+              >
+                <tab.icon className={cn("w-4 h-4", activeTab === tab.id ? "text-primary" : "text-muted-foreground/70")} />
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="mt-8">
         {activeTab === "submitted" && <SubmittedDocuments />}

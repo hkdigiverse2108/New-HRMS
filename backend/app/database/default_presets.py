@@ -146,27 +146,6 @@ SYSTEM_MODULES: List[Dict[str, Any]] = [
     {"id": "/social/captions", "name": "Social Captions & SEO", "section": "Work", "parent_id": "/social"},
     {"id": "/social/brands", "name": "Social Brand Profiles", "section": "Work", "parent_id": "/social"},
     {"id": "/social/settings", "name": "Social Settings", "section": "Work", "parent_id": "/social"},
-
-    # --- CEO Command Center (Preserved for CEO/Executive Roles) ---
-    {"id": "/ceo-dashboard", "name": "CEO Overview", "section": "Command Center", "is_parent": False},
-    {"id": "/ceo-dashboard/b2b", "name": "B2B Partnership", "section": "Command Center", "is_parent": True},
-    {"id": "/ceo-dashboard/b2b/partners", "name": "B2B Partners", "section": "Command Center", "parent_id": "/ceo-dashboard/b2b"},
-    {"id": "/ceo-dashboard/b2b/leads", "name": "B2B Leads", "section": "Command Center", "parent_id": "/ceo-dashboard/b2b"},
-    {"id": "/ceo-dashboard/b2b/opportunities", "name": "B2B Opportunities", "section": "Command Center", "parent_id": "/ceo-dashboard/b2b"},
-    {"id": "/ceo-dashboard/b2b/deals", "name": "B2B Deals", "section": "Command Center", "parent_id": "/ceo-dashboard/b2b"},
-    {"id": "/ceo-dashboard/b2b/invoices", "name": "B2B Invoices", "section": "Command Center", "parent_id": "/ceo-dashboard/b2b"},
-    {"id": "/ceo-dashboard/b2b/commission", "name": "B2B Commission", "section": "Command Center", "parent_id": "/ceo-dashboard/b2b"},
-    {"id": "/ceo-dashboard/b2b/settlement", "name": "Monthly Settlement", "section": "Command Center", "parent_id": "/ceo-dashboard/b2b"},
-    {"id": "/ceo-dashboard/b2b/performance", "name": "Partner Performance", "section": "Command Center", "parent_id": "/ceo-dashboard/b2b"},
-    {"id": "/ceo-dashboard/collaboration", "name": "Tech Collaboration", "section": "Command Center", "is_parent": False},
-    {"id": "/ceo-dashboard/franchise", "name": "Franchise", "section": "Command Center", "is_parent": False},
-    {"id": "/ceo-dashboard/reports", "name": "CEO Reports", "section": "Command Center", "is_parent": False},
-    {"id": "/ceo-dashboard/settings", "name": "CEO Settings", "section": "Command Center", "is_parent": False},
-
-    # --- Legacy Preserved Aliases ---
-    {"id": "/approvals", "name": "Approvals Hub (Legacy)", "section": "Overview", "is_parent": False},
-    {"id": "/reports", "name": "Reports & Analytics (Legacy)", "section": "Overview", "is_parent": False},
-    {"id": "/restrictions", "name": "Restrictions", "section": "Admin", "is_parent": False},
 ]
 
 def make_perm(read=False, create=False, update=False, delete=False, all_perm=False) -> dict:
@@ -181,6 +160,7 @@ def get_admin_full_permissions() -> Dict[str, dict]:
 # ==============================================================================
 # PERMISSION NORMALIZER & COMPATIBILITY EXPANDER
 # Ensures old database permissions seamlessly grant access to new structure
+# Expands parent permissions to children and child permissions to parents.
 # ==============================================================================
 def normalize_and_expand_permissions(perms: Dict[str, dict]) -> Dict[str, dict]:
     """
@@ -200,12 +180,8 @@ def normalize_and_expand_permissions(perms: Dict[str, dict]) -> Dict[str, dict]:
         ("/penalty", "/penalties"),
         ("/employees/leave-requests", "/leaves"),
         ("/employees/attendance", "/attendance"),
-        ("/recruitment/hirings", "/recruitment"),
-        ("/workspace/resource", "/recruitment/hirings"),
-        ("/workspace/resource", "/recruitment"),
         ("/activity-logs", "/activity-tracker"),
         ("/employees/list", "/employees"),
-        ("/employees/org", "/employees"),
         ("/employees/org", "/employees/departments-setup"),
     ]
 
@@ -226,7 +202,9 @@ def normalize_and_expand_permissions(perms: Dict[str, dict]) -> Dict[str, dict]:
     sales_has_create = any(expanded.get(k, {}).get("create") or expanded.get(k, {}).get("all") for k in sales_sub_keys)
     sales_has_update = any(expanded.get(k, {}).get("update") or expanded.get(k, {}).get("all") for k in sales_sub_keys)
     sales_has_delete = any(expanded.get(k, {}).get("delete") or expanded.get(k, {}).get("all") for k in sales_sub_keys)
-    sales_has_all = any(expanded.get(k, {}).get("all") for k in sales_sub_keys)
+    parent_explicit_sales_all = bool(perms.get("/work/sales", {}).get("all"))
+    all_children_sales_all = len(sales_sub_keys) > 0 and all(expanded.get(k, {}).get("all") for k in sales_sub_keys)
+    sales_has_all = parent_explicit_sales_all or all_children_sales_all
 
     if sales_has_read or sales_has_all:
         if "/work/sales" not in expanded:
@@ -237,25 +215,41 @@ def normalize_and_expand_permissions(perms: Dict[str, dict]) -> Dict[str, dict]:
             curr["create"] = curr.get("create") or sales_has_create
             curr["update"] = curr.get("update") or sales_has_update
             curr["delete"] = curr.get("delete") or sales_has_delete
-            curr["all"] = curr.get("all") or sales_has_all
+            curr["all"] = sales_has_all
             expanded["/work/sales"] = curr
 
-    if "/work/sales" in expanded:
+    if parent_explicit_sales_all:
         parent_p = expanded["/work/sales"]
         for k in sales_sub_keys:
             if k not in expanded:
                 expanded[k] = dict(parent_p)
 
     # 3. Election Hub: Unified main page
-    election_sub_keys = ["/elections", "/elections/list", "/recognitions", "/team-leader-of-the-week"]
-    election_has_read = any(expanded.get(k, {}).get("read") or expanded.get(k, {}).get("all") for k in election_sub_keys)
-    election_has_all = any(expanded.get(k, {}).get("all") for k in election_sub_keys)
+    election_sub_keys = ["/elections/list", "/recognitions", "/team-leader-of-the-week"]
+    election_has_read = any(expanded.get(k, {}).get("read") or expanded.get(k, {}).get("all") for k in (election_sub_keys + ["/elections"]))
+    parent_explicit_election_all = bool(perms.get("/elections", {}).get("all"))
+    all_children_election_all = all(expanded.get(k, {}).get("all") for k in election_sub_keys)
+    election_has_all = parent_explicit_election_all or all_children_election_all
+
+    # Synchronize /elections and /elections/list for legacy presets that only had /elections
+    if "/elections/list" not in expanded and "/recognitions" not in expanded and "/team-leader-of-the-week" not in expanded:
+        elec_list_p = expanded.get("/elections")
+        if elec_list_p and (elec_list_p.get("read") or elec_list_p.get("all")):
+            expanded["/elections/list"] = dict(elec_list_p)
+
     if election_has_read or election_has_all:
         if "/elections" not in expanded:
             expanded["/elections"] = {"read": True, "all": election_has_all}
+        else:
+            curr = dict(expanded["/elections"])
+            curr["read"] = True
+            curr["all"] = election_has_all
+            expanded["/elections"] = curr
+
+    if parent_explicit_election_all:
         for k in election_sub_keys:
             if k not in expanded:
-                expanded[k] = {"read": True, "all": election_has_all}
+                expanded[k] = {"read": True, "create": True, "update": True, "delete": True, "all": True}
 
     # 4. Invoices (5 Sub-Departments)
     invoice_sub_keys = [
@@ -311,13 +305,25 @@ def normalize_and_expand_permissions(perms: Dict[str, dict]) -> Dict[str, dict]:
         "/social/activity", "/social/scripts", "/social/captions",
         "/social/brands", "/social/settings"
     ]
-    if "/social" in expanded:
+    soc_has_read = any(expanded.get(k, {}).get("read") or expanded.get(k, {}).get("all") for k in (social_sub_keys + ["/social"]))
+    parent_explicit_soc_all = bool(perms.get("/social", {}).get("all"))
+    all_children_soc_all = all(expanded.get(k, {}).get("all") for k in social_sub_keys)
+    soc_has_all = parent_explicit_soc_all or all_children_soc_all
+
+    if soc_has_read or soc_has_all:
+        if "/social" not in expanded:
+            expanded["/social"] = {"read": True, "all": soc_has_all}
+        else:
+            curr = dict(expanded["/social"])
+            curr["read"] = True
+            curr["all"] = soc_has_all
+            expanded["/social"] = curr
+
+    if parent_explicit_soc_all:
         soc_p = expanded["/social"]
         for k in social_sub_keys:
             if k not in expanded:
                 expanded[k] = dict(soc_p)
-    elif any(expanded.get(k, {}).get("read") or expanded.get(k, {}).get("all") for k in social_sub_keys):
-        expanded["/social"] = {"read": True}
 
     return expanded
 
@@ -381,8 +387,12 @@ DEFAULT_HR_PERMISSIONS: Dict[str, dict] = {
 }
 
 # Default permissions for Development Department
+# Default permissions for Development Department (core modules matching design)
 DEFAULT_DEVELOPMENT_PERMISSIONS: Dict[str, dict] = {
     "/dashboard": make_perm(read=True),
+    "/dashboard#time-tracker": make_perm(all_perm=True),
+    "/dashboard#today-schedule": make_perm(all_perm=True),
+    "/dashboard#tasks-clients": make_perm(all_perm=True),
     "/employees/attendance": make_perm(read=True, create=True),
     "/employees/leave-requests": make_perm(read=True, create=True),
     "/schedule": make_perm(read=True),
@@ -390,14 +400,7 @@ DEFAULT_DEVELOPMENT_PERMISSIONS: Dict[str, dict] = {
     "/work/projects": make_perm(read=True, create=True, update=True),
     "/chat": make_perm(read=True, create=True),
     "/work/logs": make_perm(read=True, create=True, update=True),
-    "/work/research": make_perm(read=True),
     "/approvals/daily-progress": make_perm(read=True, create=True),
-    "/penalty": make_perm(read=True),
-    "/remarks": make_perm(read=True),
-    "/workspace/gallery": make_perm(read=True),
-    "/workspace/seating": make_perm(read=True),
-    "/employees/documents": make_perm(read=True),
-    "/elections": make_perm(read=True),
 }
 
 # Default permissions for Python Department

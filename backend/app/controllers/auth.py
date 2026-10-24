@@ -213,18 +213,33 @@ async def resolve_effective_permissions_for_employee(employee: dict) -> dict:
     if cached_perms:
         return cached_perms
 
-    # 1. Check Custom Manual Permissions (Employee-wise: if is_custom is explicitly True)
+    # 1. Base permissions from Department Preset
+    preset, _ = await PresetPermissionRepository.get_preset_for_employee(role, dept)
+    if preset and "module_permissions" in preset:
+        base_perms = {k: dict(v) if isinstance(v, dict) else v for k, v in preset["module_permissions"].items()}
+    else:
+        from app.database.default_presets import get_default_permissions_for_department
+        base_perms = {k: dict(v) if isinstance(v, dict) else v for k, v in get_default_permissions_for_department(dept).items()}
+
+    # 2. Check Custom Manual Permissions (Employee-wise: if is_custom is explicitly True)
     user_perm_doc = await UserPermissionRepository.get_user_permission(emp_id)
     if user_perm_doc and user_perm_doc.get("is_custom") is True and user_perm_doc.get("module_permissions") is not None:
-        perms = user_perm_doc["module_permissions"]
+        custom_perms = user_perm_doc["module_permissions"]
+        merged_perms = dict(base_perms)
+        for mod_id, flags in custom_perms.items():
+            if not isinstance(flags, dict):
+                continue
+            if mod_id not in merged_perms:
+                merged_perms[mod_id] = dict(flags)
+            else:
+                base_p = merged_perms[mod_id] if isinstance(merged_perms[mod_id], dict) else {}
+                merged_flags = dict(base_p)
+                for action in ["read", "create", "update", "delete", "all"]:
+                    merged_flags[action] = bool(flags.get(action) or base_p.get(action))
+                merged_perms[mod_id] = merged_flags
+        perms = merged_perms
     else:
-        # 2. Inherit dynamically from Department Preset
-        preset, _ = await PresetPermissionRepository.get_preset_for_employee(role, dept)
-        if preset and "module_permissions" in preset:
-            perms = preset["module_permissions"]
-        else:
-            from app.database.default_presets import get_default_permissions_for_department
-            perms = get_default_permissions_for_department(dept)
+        perms = base_perms
 
     # Normalize & expand legacy keys for 100% backward compatibility
     from app.database.default_presets import normalize_and_expand_permissions

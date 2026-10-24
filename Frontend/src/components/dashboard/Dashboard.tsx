@@ -22,32 +22,30 @@ export function Dashboard({ setActive, onAction }: { setActive?: (url: string) =
     if (isUserAdmin(user)) return true;
     const perms = (user as any).permissions as Record<string, any> | undefined;
     if (!perms || Object.keys(perms).length === 0) {
-      return hasModulePermission(user, "/dashboard", "read");
+      return false;
     }
 
-    // Direct explicit grant
-    if (perms[`/dashboard#${key}`]?.read || perms[`/dashboard#${key}`]?.all) return true;
+    // Direct explicit grant for section
+    const sectionKey = `/dashboard#${key}`;
+    if (perms[sectionKey] !== undefined) {
+      return Boolean(perms[sectionKey]?.read || perms[sectionKey]?.all);
+    }
+
+    // Calendar widget is tied to today-schedule
+    if (key === "calendar-widget") {
+      const todaySched = perms["/dashboard#today-schedule"];
+      if (todaySched !== undefined) {
+        return Boolean(todaySched?.read || todaySched?.all);
+      }
+    }
+
+    // If full access on parent /dashboard
     if (perms["/dashboard"]?.all) return true;
 
-    // Check if any specific dashboard subsection was explicitly granted true
-    const hasAnyExplicitTrueSection = Object.keys(perms).some(
-      k => k.startsWith("/dashboard#") && Boolean(perms[k]?.read || perms[k]?.all)
-    );
-
-    // If no subsection was explicitly enabled as true, but base dashboard read is granted:
-    // Allow standard core employee/developer sections and hide sensitive finance/management sections
-    if (!hasAnyExplicitTrueSection && hasModulePermission(user, "/dashboard", "read")) {
-      const defaultGeneralSections = [
-        "time-tracker",
-        "today-schedule",
-        "calendar-widget",
-        "project-delivery",
-        "tasks-clients",
-        "attendance-analytics",
-        "hr-news",
-        "notifications"
-      ];
-      return defaultGeneralSections.includes(key);
+    // Strict fallback ONLY when NO /dashboard# keys exist in perms at all (legacy users)
+    const hasAnyDashboardSubKey = Object.keys(perms).some(k => k.startsWith("/dashboard#"));
+    if (!hasAnyDashboardSubKey && hasModulePermission(user, "/dashboard", "read")) {
+      return key === "time-tracker" || key === "today-schedule" || key === "calendar-widget";
     }
 
     return false;

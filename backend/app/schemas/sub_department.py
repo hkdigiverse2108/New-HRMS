@@ -3,18 +3,21 @@ from typing import Optional
 
 class SubDepartmentCreate(BaseModel):
     name: str
-    department_id: str
+    department_id: Optional[str] = None
+    department: Optional[str] = None
     department_name: Optional[str] = None
 
 class SubDepartmentUpdate(BaseModel):
     name: Optional[str] = None
     department_id: Optional[str] = None
+    department: Optional[str] = None
     department_name: Optional[str] = None
 
 class SubDepartmentOut(BaseModel):
     id: str = Field(..., alias="_id")
     name: str
-    department_id: str
+    department_id: Optional[str] = None
     department_name: Optional[str] = None
+    department: Optional[str] = None
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")

@@ -24,6 +24,9 @@ const GROUP_PARENT_MODULES = new Set([
   "/payroll",
   "/finance",
   "/invoice",
+  "/work/sales",
+  "/elections",
+  "/social",
 ]);
 
 const URL_ALIASES: Record<string, string[]> = {
@@ -37,13 +40,8 @@ const URL_ALIASES: Record<string, string[]> = {
     "/work/sales/reports",
     "/work/sales/settings",
   ],
-  "/elections": [
-    "/recognitions",
-    "/team-leader-of-the-week",
-    "/elections",
-  ],
-  "/recognitions": ["/elections", "/recognitions"],
-  "/team-leader-of-the-week": ["/elections", "/team-leader-of-the-week"],
+  "/elections": ["/elections"],
+  "/elections/list": ["/elections/list"],
   "/employees/documents": ["/documents", "/employees/documents"],
   "/employees/documents/generate": ["/documents/generate", "/employees/documents/generate"],
   "/recruitment/interviews": ["/recruitment", "/recruitment/interviews", "/interviews"],
@@ -73,14 +71,14 @@ const URL_ALIASES: Record<string, string[]> = {
     "/social/brands",
     "/social/settings",
   ],
-  "/social/dashboard": ["/social/dashboard", "/social"],
-  "/social/accounts": ["/social/accounts", "/social"],
-  "/social/keywords": ["/social/keywords", "/social"],
-  "/social/activity": ["/social/activity", "/social"],
-  "/social/scripts": ["/social/scripts", "/social"],
-  "/social/captions": ["/social/captions", "/social"],
-  "/social/brands": ["/social/brands", "/social"],
-  "/social/settings": ["/social/settings", "/social"],
+  "/social/dashboard": ["/social/dashboard"],
+  "/social/accounts": ["/social/accounts"],
+  "/social/keywords": ["/social/keywords"],
+  "/social/activity": ["/social/activity"],
+  "/social/scripts": ["/social/scripts"],
+  "/social/captions": ["/social/captions"],
+  "/social/brands": ["/social/brands"],
+  "/social/settings": ["/social/settings"],
 };
 
 /**
@@ -120,24 +118,6 @@ export function hasModulePermission(
     return true;
   }
 
-  // Every employee can open Payslips — the API returns only their own unless they are Admin / HR
-  if (cleanUrl === "/payroll/payslips" && (action === "read" || action === "all")) {
-    return true;
-  }
-
-  // Hirings & Recruitment read is accessible for ALL authenticated users (all users can view jobs, interviews, and refer candidates)
-  if (
-    (cleanUrl === "/recruitment/hirings" ||
-      cleanUrl === "/hirings" ||
-      cleanUrl === "/recruitment/interviews" ||
-      cleanUrl === "/recruitment" ||
-      cleanUrl.startsWith("/recruitment/hirings") ||
-      cleanUrl.startsWith("/hirings")) &&
-    (action === "read" || action === "all")
-  ) {
-    return true;
-  }
-
   const perms = user.permissions;
 
   // Strict fallback: if no permissions are configured for the employee, deny access (profile & dashboard are handled above)
@@ -170,14 +150,20 @@ export function hasModulePermission(
     }
   }
 
-  // 1c. Unified module fuzzy check (Sales & Elections)
-  if (cleanUrl.startsWith("/work/sales") && (action === "read" || action === "all")) {
+  // 1c. Unified module parent check (Sales, Elections & Social)
+  // If accessing top-level main page ("/work/sales", "/elections", "/social"),
+  // allow access if user has read/all on parent OR on ANY child sub-module.
+  if (cleanUrl === "/work/sales" && (action === "read" || action === "all")) {
     const hasAnySales = Object.keys(perms).some(k => k.startsWith("/work/sales") && Boolean(perms[k]?.all || perms[k]?.read));
     if (hasAnySales) return true;
   }
-  if (cleanUrl.startsWith("/elections") && (action === "read" || action === "all")) {
-    const hasAnyElection = Object.keys(perms).some(k => (k === "/elections" || k === "/recognitions" || k === "/team-leader-of-the-week") && Boolean(perms[k]?.all || perms[k]?.read));
+  if (cleanUrl === "/elections" && (action === "read" || action === "all")) {
+    const hasAnyElection = Object.keys(perms).some(k => (k === "/elections" || k === "/elections/list" || k === "/recognitions" || k === "/team-leader-of-the-week") && Boolean(perms[k]?.all || perms[k]?.read));
     if (hasAnyElection) return true;
+  }
+  if (cleanUrl === "/social" && (action === "read" || action === "all")) {
+    const hasAnySocial = Object.keys(perms).some(k => k.startsWith("/social") && Boolean(perms[k]?.all || perms[k]?.read));
+    if (hasAnySocial) return true;
   }
 
   // 2. Dynamic hierarchical prefix matching (for dynamic sub-routes like "/tasks/123" or "/work/projects/edit/456")

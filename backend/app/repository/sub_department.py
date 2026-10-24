@@ -20,14 +20,25 @@ class SubDepartmentRepository:
         return data
 
     @classmethod
+    def _format_doc(cls, item: dict) -> dict:
+        if not item:
+            return item
+        item["_id"] = str(item["_id"])
+        dept_name = str(item.get("department_name") or item.get("department") or "").strip()
+        dept_id = str(item.get("department_id") or dept_name).strip()
+        item["department_id"] = dept_id
+        item["department_name"] = dept_name
+        item["department"] = dept_name
+        return item
+
+    @classmethod
     async def get_all(cls, page: Optional[int] = None, limit: Optional[int] = None):
         collection = await cls.get_collection()
         total = await collection.count_documents({"is_deleted": {"$ne": True}})
         items = []
         if limit is None or limit <= 0 or page is None:
             async for item in collection.find({"is_deleted": {"$ne": True}}):
-                item["_id"] = str(item["_id"])
-                items.append(item)
+                items.append(cls._format_doc(item))
             return {
                 "data": items,
                 "total": total,
@@ -39,8 +50,7 @@ class SubDepartmentRepository:
             p = page
             skip = (p - 1) * limit
             async for item in collection.find({"is_deleted": {"$ne": True}}).skip(skip).limit(limit):
-                item["_id"] = str(item["_id"])
-                items.append(item)
+                items.append(cls._format_doc(item))
             return {
                 "data": items,
                 "total": total,
@@ -54,9 +64,7 @@ class SubDepartmentRepository:
         collection = await cls.get_collection()
         try:
             item = await collection.find_one({"_id": ObjectId(item_id), "is_deleted": {"$ne": True}})
-            if item:
-                item["_id"] = str(item["_id"])
-            return item
+            return cls._format_doc(item)
         except Exception:
             return None
 
@@ -91,8 +99,7 @@ class SubDepartmentRepository:
         items = []
         if limit is None or limit <= 0 or page is None:
             async for item in collection.find(query):
-                item["_id"] = str(item["_id"])
-                items.append(item)
+                items.append(cls._format_doc(item))
             return {
                 "data": items,
                 "total": total,
@@ -104,8 +111,7 @@ class SubDepartmentRepository:
             p = page
             skip = (p - 1) * limit
             async for item in collection.find(query).skip(skip).limit(limit):
-                item["_id"] = str(item["_id"])
-                items.append(item)
+                items.append(cls._format_doc(item))
             return {
                 "data": items,
                 "total": total,
