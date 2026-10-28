@@ -38,6 +38,32 @@ interface ReelScriptsTabProps {
   onDeleteScript: (id: string) => Promise<void>;
 }
 
+// Defensive helper: safely extract string from strings, numbers, or LLM-produced objects (e.g. { text: "..." })
+const toText = (val: any): string => {
+  if (val === null || val === undefined) return "";
+  if (typeof val === "string") return val;
+  if (typeof val === "number" || typeof val === "boolean") return String(val);
+  if (typeof val === "object") {
+    if (typeof val.text === "string") return val.text;
+    if (typeof val.cta === "string") return val.cta;
+    if (typeof val.action === "string") return val.action;
+    if (typeof val.words === "string") return val.words;
+    if (typeof val.spoken_words === "string") return val.spoken_words;
+    if (typeof val.value === "string") return val.value;
+    if (typeof val.notes === "string") return val.notes;
+    if (typeof val.content === "string") return val.content;
+    if (typeof val.message === "string") return val.message;
+    if (Array.isArray(val)) return val.map(toText).filter(Boolean).join(", ");
+    try {
+      const parts = Object.values(val).map(toText).filter(Boolean);
+      if (parts.length > 0) return parts.join(" ");
+    } catch {
+      // fallback
+    }
+  }
+  return String(val);
+};
+
 export const ReelScriptsTab: React.FC<ReelScriptsTabProps> = ({
   scripts,
   brands,
@@ -136,31 +162,31 @@ export const ReelScriptsTab: React.FC<ReelScriptsTabProps> = ({
     const hooks = Array.isArray(activeScript.hooks) ? activeScript.hooks : [];
     const hook = hooks[selectedHookIndex] || hooks[0];
     const scenes = Array.isArray(activeScript.scenes) ? activeScript.scenes : [];
-    const ctas = Array.isArray(activeScript.ctas) ? activeScript.ctas : [];
-    const text = `🎬 PROJECT: ${activeScript.title || activeScript.topic} (${activeScript.target_duration_sec || 60}s)
+    const ctas = Array.isArray(activeScript.ctas) ? activeScript.ctas.map(toText).filter(Boolean) : [];
+    const text = `🎬 PROJECT: ${toText(activeScript.title) || toText(activeScript.topic)} (${activeScript.target_duration_sec || 60}s)
 ${activeScript.brand_name ? `BRAND: ${activeScript.brand_name}` : ""}
 
 🪝 SELECTED OPENING HOOK:
-Visual: ${hook?.visual_action || "Look at camera"}
-Spoken: "${hook?.spoken_words || (typeof hook === "string" ? hook : "")}"
-On-screen: [${hook?.on_screen_text || ""}]
+Visual: ${toText(hook?.visual_action) || "Look at camera"}
+Spoken: "${toText(hook?.spoken_words || (hook as any)?.text || (typeof hook === "string" ? hook : ""))}"
+On-screen: [${toText(hook?.on_screen_text)}]
 
 📜 SCENE BY SCENE:
 ${scenes
   .map(
-    (s, idx) =>
-      `Scene ${s.scene_number || idx + 1} (${s.duration_sec || 5}s):
-Visual: ${s.visual_action || ""}
-Narration: "${s.spoken_words || ""}"
-Text Overlay: [${s.on_screen_text || ""}]`
+    (s: any, idx: number) =>
+      `Scene ${s?.scene_number || idx + 1} (${s?.duration_sec || 5}s):
+Visual: ${toText(s?.visual_action)}
+Narration: "${toText(s?.spoken_words || s?.text)}"
+Text Overlay: [${toText(s?.on_screen_text)}]`
   )
   .join("\n\n")}
 
 📣 CALL TO ACTION:
-${ctas.map((c, i) => `${i + 1}. ${c}`).join("\n")}
+${ctas.map((c, i) => `${i + 1}. ${toText(c)}`).join("\n")}
 
 💡 PRODUCTION NOTES:
-${activeScript.production_notes || "None"}`;
+${toText(activeScript.production_notes) || "None"}`;
 
     navigator.clipboard.writeText(text);
     setCopied(true);
@@ -360,14 +386,30 @@ ${activeScript.production_notes || "None"}`;
               {/* Hook Variants Carousel / Tabs */}
               {(() => {
                 const safeHooks = Array.isArray(activeScript.hooks)
-                  ? activeScript.hooks.map((h: any, idx: number) =>
-                      typeof h === "string"
-                        ? { hook_number: idx + 1, visual_action: "Camera direct angle", spoken_words: h, on_screen_text: "" }
-                        : h
-                    )
+                  ? activeScript.hooks.map((h: any, idx: number) => {
+                      if (typeof h === "string") {
+                        return { hook_number: idx + 1, visual_action: "Camera direct angle", spoken_words: h, on_screen_text: "" };
+                      }
+                      return {
+                        hook_number: h?.hook_number ?? idx + 1,
+                        visual_action: toText(h?.visual_action || "Look at camera"),
+                        spoken_words: toText(h?.spoken_words || h?.text || ""),
+                        on_screen_text: toText(h?.on_screen_text || ""),
+                      };
+                    })
                   : [];
-                const safeScenes = Array.isArray(activeScript.scenes) ? activeScript.scenes : [];
-                const safeCtas = Array.isArray(activeScript.ctas) ? activeScript.ctas : [];
+                const safeScenes = Array.isArray(activeScript.scenes)
+                  ? activeScript.scenes.map((s: any, idx: number) => ({
+                      scene_number: s?.scene_number ?? idx + 1,
+                      duration_sec: s?.duration_sec ?? 5,
+                      visual_action: toText(s?.visual_action || ""),
+                      spoken_words: toText(s?.spoken_words || s?.text || ""),
+                      on_screen_text: toText(s?.on_screen_text || ""),
+                    }))
+                  : [];
+                const safeCtas = Array.isArray(activeScript.ctas)
+                  ? activeScript.ctas.map((c: any) => toText(c)).filter(Boolean)
+                  : [];
                 const currentHook = safeHooks[selectedHookIndex] || safeHooks[0];
 
                 return (
@@ -402,7 +444,7 @@ ${activeScript.production_notes || "None"}`;
                                 {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-primary" />}
                               </div>
                               <p className="text-[11px] text-foreground line-clamp-2 italic">
-                                "{h?.spoken_words || (typeof h === "string" ? h : "")}"
+                                "{toText(h?.spoken_words)}"
                               </p>
                             </button>
                           );
@@ -414,17 +456,17 @@ ${activeScript.production_notes || "None"}`;
                         <div className="mt-3 p-3.5 rounded-xl bg-muted/40 border border-border text-xs space-y-1.5">
                           <div>
                             <span className="font-semibold text-muted-foreground">Visual Action: </span>
-                            <span className="text-foreground">{currentHook.visual_action || "Look at camera"}</span>
+                            <span className="text-foreground">{toText(currentHook.visual_action) || "Look at camera"}</span>
                           </div>
                           <div>
                             <span className="font-semibold text-muted-foreground">Spoken: </span>
-                            <span className="text-foreground font-bold">"{currentHook.spoken_words || ""}"</span>
+                            <span className="text-foreground font-bold">"{toText(currentHook.spoken_words)}"</span>
                           </div>
                           {currentHook.on_screen_text && (
                             <div>
                               <span className="font-semibold text-muted-foreground">Overlay Text: </span>
                               <span className="px-1.5 py-0.5 rounded bg-card border font-mono text-[10px]">
-                                {currentHook.on_screen_text}
+                                {toText(currentHook.on_screen_text)}
                               </span>
                             </div>
                           )}
@@ -502,7 +544,7 @@ ${activeScript.production_notes || "None"}`;
                           {safeCtas.map((cta, i) => (
                             <li key={i} className="flex items-start gap-1.5">
                               <span className="text-primary font-bold">{i + 1}.</span>
-                              <span>{cta}</span>
+                              <span>{toText(cta)}</span>
                             </li>
                           ))}
                         </ul>
@@ -513,7 +555,7 @@ ${activeScript.production_notes || "None"}`;
                           Production Notes
                         </h5>
                         <p className="text-xs text-foreground leading-relaxed">
-                          {activeScript.production_notes || "Use bright lighting, punchy B-roll cuts on every 2.5 seconds."}
+                          {toText(activeScript.production_notes) || "Use bright lighting, punchy B-roll cuts on every 2.5 seconds."}
                         </p>
                       </div>
                     </div>

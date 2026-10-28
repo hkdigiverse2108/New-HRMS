@@ -109,6 +109,29 @@ class DailyProgressService:
         return None
 
     @staticmethod
+    def _get_rank_level(emp: dict) -> int:
+        w = emp.get("work_details", {})
+        desig = str(w.get("designation") or emp.get("designation") or "").strip().lower()
+        role = str(w.get("system_role") or emp.get("role") or "").strip().lower()
+        dept = str(w.get("department") or emp.get("department") or "").strip().lower()
+        
+        if role in ["admin", "superadmin", "subadmin"]:
+            return 6
+        if dept == "hr" or "hr" in desig or role == "hr":
+            return 6
+        if "head" in desig or "head" in role:
+            return 5
+        if "team leader" in desig or "tl" in desig or "lead" in desig or "manager" in desig:
+            return 4
+        if "senior" in desig:
+            return 3
+        if "junior" in desig:
+            return 2
+        if "intern" in desig:
+            return 1
+        return 2
+
+    @staticmethod
     async def _get_scoped_employees(current_user: dict, group_filter: Optional[str] = None) -> List[dict]:
         from app.repository.employee import EmployeeRepository
         emp_res = await EmployeeRepository.get_all_employees(exclude_role="Admin")
@@ -118,56 +141,69 @@ class DailyProgressService:
         all_emps = [e for e in raw_emps if DailyProgressService._is_active_emp(e)]
 
         uid = str(current_user.get("_id") or current_user.get("id"))
-        is_admin = DailyProgressService._is_admin(current_user)
-        is_hr = DailyProgressService._is_hr(current_user)
-        is_head = DailyProgressService._is_head(current_user)
-        is_tl = DailyProgressService._is_team_leader(current_user)
+        user_rank = DailyProgressService._get_rank_level(current_user)
+        user_dept = str(current_user.get("work_details", {}).get("department") or "").strip().lower()
 
         target = []
         for e in all_emps:
             eid = str(e.get("_id") or e.get("id"))
             w = e.get("work_details", {})
-            role = str(w.get("system_role") or e.get("role") or "").strip().lower()
-            if role == "admin":
+            e_role = str(w.get("system_role") or e.get("role") or "").strip().lower()
+            if e_role in ["admin", "superadmin"]:
                 continue
 
+            e_rank = DailyProgressService._get_rank_level(e)
+            e_dept = str(w.get("department") or "").strip().lower()
             is_l_hr = DailyProgressService._is_leader_or_hr(e)
 
-            if is_admin or is_hr:
+            # 1. Admin & HR (Rank 6): sees everyone
+            if user_rank >= 6:
                 if group_filter == "employees" and is_l_hr:
                     continue
                 if group_filter == "leaders_hr" and not is_l_hr:
                     continue
                 target.append(e)
-            elif is_head:
-                user_dept = str(current_user.get("work_details", {}).get("department") or "").strip().lower()
-                e_dept = str(w.get("department") or "").strip().lower()
-                # Head manages own department, excludes own report
-                if e_dept != user_dept or eid == uid:
+
+            # 2. Head (Rank 5): sees all TLs (Rank 4) and all team members (Rank 1, 2, 3) across departments
+            elif user_rank == 5:
+                if eid == uid:
                     continue
-                if group_filter == "employees" and is_l_hr:
-                    continue
-                if group_filter == "leaders_hr" and not is_l_hr:
-                    continue
-                target.append(e)
-            elif is_tl:
-                # Team Leader: own report plus team members (no other TL/Head/HR)
+                if e_rank < 5:
+                    if group_filter == "employees" and is_l_hr:
+                        continue
+                    if group_filter == "leaders_hr" and not is_l_hr:
+                        continue
+                    target.append(e)
+
+            # 3. Team Leader (Rank 4): sees own report + Seniors, Juniors, Interns in their team (Rank 1, 2, 3)
+            elif user_rank == 4:
                 if eid == uid:
                     target.append(e)
                     continue
-                if is_l_hr:
+                if e_rank < 4:
+                    if not user_dept or e_dept == user_dept:
+                        target.append(e)
+
+            # 4. Senior (Rank 3): sees own report + Juniors & Interns in their team (Rank 1, 2)
+            elif user_rank == 3:
+                if eid == uid:
+                    target.append(e)
                     continue
-                user_dept = str(current_user.get("work_details", {}).get("department") or "").strip().lower()
-                user_sub = str(current_user.get("work_details", {}).get("sub_department") or "").strip().lower()
-                e_dept = str(w.get("department") or "").strip().lower()
-                e_sub = str(w.get("sub_department") or "").strip().lower()
-                if user_sub and e_sub != user_sub:
+                if e_rank < 3:
+                    if not user_dept or e_dept == user_dept:
+                        target.append(e)
+
+            # 5. Junior (Rank 2): sees own report + Interns in their team (Rank 1)
+            elif user_rank == 2:
+                if eid == uid:
+                    target.append(e)
                     continue
-                if e_dept != user_dept:
-                    continue
-                target.append(e)
+                if e_rank < 2:
+                    if not user_dept or e_dept == user_dept:
+                        target.append(e)
+
+            # 6. Intern (Rank 1): only self
             else:
-                # Regular employee: self only
                 if eid == uid:
                     target.append(e)
 

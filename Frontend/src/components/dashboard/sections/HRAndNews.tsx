@@ -335,7 +335,7 @@ export function HRAndNews() {
     return results.length > 0 ? results.slice(0, 6) : HR_UPDATES.joining;
   }, [dashboardData, employees]);
 
-  // Dynamic Interviews
+  // Dynamic Interviews from live backend data
   const dynamicInterviews = useMemo(() => {
     const fromApi = dashboardData?.hr_updates?.interviews;
     if (fromApi && fromApi.length > 0) {
@@ -344,14 +344,14 @@ export function HRAndNews() {
         time: `${item.date} • ${item.time}`,
       }));
     }
-    return HR_UPDATES.interviews;
+    return [];
   }, [dashboardData]);
 
-  // Dynamic Probation Ending
+  // Dynamic Probation Ending from live backend data
   const dynamicProbations = useMemo(() => {
     const fromApi = dashboardData?.hr_updates?.probations;
     if (fromApi && fromApi.length > 0) return fromApi;
-    return HR_UPDATES.probation;
+    return [];
   }, [dashboardData]);
 
   // Dynamic Exits / Last Working Date

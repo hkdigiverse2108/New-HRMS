@@ -159,7 +159,7 @@ async function apiRequest<T = any>(endpoint: string, options: RequestOptions = {
 
   const execute = async (): Promise<T> => {
     const controller = new AbortController();
-    const timeoutDuration = options.timeout ?? (rest.body instanceof FormData ? 120000 : 15000);
+    const timeoutDuration = options.timeout ?? (rest.body instanceof FormData ? 120000 : 35000);
     const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
     try {
       const response = await fetch(url, {

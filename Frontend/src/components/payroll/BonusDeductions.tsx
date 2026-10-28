@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { formatCurrency } from "./payroll-data";
-import { Plus, Gift, MinusCircle, Loader2, X, Check } from "lucide-react";
+import { Plus, Gift, MinusCircle, Loader2, X, Check, ShieldAlert } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { SearchInput } from "@/components/common/SearchInput";
 import { cn, formatDate } from "@/lib/utils";
@@ -104,8 +104,14 @@ const emptyForm = (month: string) => ({
 
 export function BonusDeductions() {
   const { user } = useAuth();
-  const role = String((user as any)?.role || (user as any)?.system_role || "").toLowerCase().trim();
-  const canApprove = ["admin", "subadmin", "super admin", "superadmin"].includes(role);
+  const anyUser = user as any;
+  const role = String(anyUser?.role || anyUser?.system_role || anyUser?.work_details?.system_role || "").toLowerCase().trim();
+  const userDept = String(anyUser?.department || anyUser?.work_details?.department || "").toLowerCase().trim();
+  const userDesig = String(anyUser?.designation || anyUser?.work_details?.designation || "").toLowerCase().trim();
+
+  const isHrOrAdmin = ["admin", "superadmin", "subadmin", "director", "ceo", "hr"].includes(role) ||
+    userDept === "hr" || userDesig.includes("hr");
+  const canApprove = isHrOrAdmin;
 
   const [activeTab, setActiveTab] = usePersistentState<"All" | "Bonuses" | "Deductions">("bonusDeductions.tab", "All");
   const [searchTerm, setSearchTerm] = useState("");
@@ -141,7 +147,19 @@ export function BonusDeductions() {
 
   const filteredEntries = useMemo(() => {
     const q = searchTerm.toLowerCase();
+    const currentName = String(user?.name || "").trim().toLowerCase();
+    const currentId = String(user?.id || anyUser?._id || anyUser?.employee_id || "").trim();
+
     return (data?.entries ?? []).filter(entry => {
+      // Non-HR/Admin users only see their own personal deductions and bonuses
+      if (!isHrOrAdmin) {
+        const appTo = (entry.appliedTo || "").toLowerCase();
+        const appSub = (entry.appliedToSub || "").toLowerCase();
+        const isPersonal = (currentName && appTo.includes(currentName)) ||
+                           (currentId && (appSub.includes(currentId) || entry.id.includes(currentId)));
+        if (!isPersonal) return false;
+      }
+
       const matchesTab =
         activeTab === "All" ||
         (activeTab === "Bonuses" && entry.type === "Bonus") ||
@@ -154,7 +172,7 @@ export function BonusDeductions() {
         entry.ref.toLowerCase().includes(q);
       return matchesTab && matchesSource && matchesSearch;
     });
-  }, [data, activeTab, sourceFilter, searchTerm]);
+  }, [data, activeTab, sourceFilter, searchTerm, isHrOrAdmin, user]);
 
   const { items: sortedEntries, requestSort, sortConfig } = useSortableData(filteredEntries);
 
@@ -238,9 +256,28 @@ export function BonusDeductions() {
     }
   };
 
-  const summary = data?.summary;
+  const summary = isHrOrAdmin ? data?.summary : {
+    total_bonus: filteredEntries.filter(e => e.type === "Bonus").reduce((acc, e) => acc + (e.total_amount || e.amount || 0), 0),
+    total_deduction: filteredEntries.filter(e => e.type === "Deduction").reduce((acc, e) => acc + (e.total_amount || e.amount || 0), 0),
+    entries_count: filteredEntries.length,
+    pending_count: filteredEntries.filter(e => e.state === "Pending").length,
+  };
   const shortMonth = monthLabel(month).split(" ")[0];
   const headerCls = "py-4 px-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest";
+
+  if (!isHrOrAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[420px] p-8 text-center bg-card rounded-3xl border border-border/70 shadow-sm max-w-xl mx-auto my-12 animate-in fade-in">
+        <div className="w-14 h-14 rounded-2xl bg-rose-500/10 text-rose-600 flex items-center justify-center mb-4 border border-rose-500/20">
+          <ShieldAlert className="w-7 h-7" />
+        </div>
+        <h2 className="text-xl font-black text-foreground mb-2">Access Restricted</h2>
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          Bonus & Deductions and Payroll records are confidential and accessible only to Admin and HR personnel. Heads and other employees are not authorized to view or manage these records.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-[1400px]">
@@ -258,12 +295,14 @@ export function BonusDeductions() {
             onChange={e => e.target.value && setMonth(e.target.value)}
             className="h-[38px] sm:h-auto px-3 py-2 rounded-lg border border-border/80 bg-white text-[13px] font-semibold text-foreground/80 shadow-sm outline-none focus:border-emerald-500"
           />
-          <button
-            onClick={openAdd}
-            className="flex flex-1 sm:flex-none items-center justify-center gap-2 bg-primary hover:bg-[#00925e] text-primary-foreground px-4 sm:px-5 py-2 min-h-[44px] sm:min-h-0 rounded-lg text-[13px] font-bold shadow-sm transition-colors shrink-0"
-          >
-            <Plus className="h-4 w-4" /> Add Deduction
-          </button>
+          {isHrOrAdmin && (
+            <button
+              onClick={openAdd}
+              className="flex flex-1 sm:flex-none items-center justify-center gap-2 bg-primary hover:bg-[#00925e] text-primary-foreground px-4 sm:px-5 py-2 min-h-[44px] sm:min-h-0 rounded-lg text-[13px] font-bold shadow-sm transition-colors shrink-0"
+            >
+              <Plus className="h-4 w-4" /> Add Deduction
+            </button>
+          )}
         </div>
       </div>
 

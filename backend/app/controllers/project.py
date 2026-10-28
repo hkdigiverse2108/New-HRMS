@@ -188,18 +188,24 @@ async def delete_project(project_id: str, current_user: dict = Depends(get_curre
 
 @router.post("/{project_id}/archive", response_model=ProjectResponse, response_model_exclude_none=True)
 async def archive_project(project_id: str, status: Optional[bool] = Query(None), current_user: dict = Depends(get_current_employee)):
+    role = str(current_user.get("work_details", {}).get("system_role") or current_user.get("role") or "").strip().lower()
+    if role not in ["admin", "superadmin", "subadmin"]:
+        raise HTTPException(status_code=403, detail="Only administration can archive or unarchive projects.")
     item = await ProjectService.get_project_by_id(project_id)
     if not item or item.get("is_deleted"):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        raise HTTPException(status_code=404, detail="Project not found")
     archive_status = True if status is None else status
     success = await ProjectService.archive_project(project_id, status=archive_status)
     if not success:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to archive project")
+        raise HTTPException(status_code=400, detail="Failed to archive project")
     await clear_pattern("projects:*")
     return await ProjectService.get_project_by_id(project_id)
 
 @router.post("/{project_id}/unarchive", response_model=ProjectResponse, response_model_exclude_none=True)
 async def unarchive_project(project_id: str, current_user: dict = Depends(get_current_employee)):
+    role = str(current_user.get("work_details", {}).get("system_role") or current_user.get("role") or "").strip().lower()
+    if role not in ["admin", "superadmin", "subadmin"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only administration can archive or unarchive projects.")
     item = await ProjectService.get_project_by_id(project_id)
     if not item or item.get("is_deleted"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")

@@ -31,8 +31,10 @@ class EomMonthIn(BaseModel):
 
 
 def _is_admin(user: dict) -> bool:
-    role = str(user.get("work_details", {}).get("system_role", "")).lower()
-    return role in ("admin", "super admin", "superadmin") or str(user.get("_id") or user.get("id")) == "default-admin-id"
+    role = str(user.get("work_details", {}).get("system_role") or user.get("role") or "").lower()
+    dept = str(user.get("work_details", {}).get("department") or user.get("department") or "").lower()
+    desig = str(user.get("work_details", {}).get("designation") or user.get("designation") or "").lower()
+    return role in ("admin", "super admin", "superadmin", "subadmin", "hr", "director", "ceo") or dept == "hr" or "hr" in desig or str(user.get("_id") or user.get("id")) == "default-admin-id" or bool(user.get("is_superuser"))
 
 
 @router.post("/eom", status_code=status.HTTP_201_CREATED)
@@ -237,20 +239,26 @@ class NewsIn(BaseModel):
 @router.get("/news")
 async def get_company_news():
     from app.database.db import get_database
+    from datetime import datetime
     db = get_database()
     news_items = []
+    
+    total_docs = await db["company_news"].count_documents({})
+    if total_docs == 0:
+        # Seed defaults with real ObjectIds once so they can be edited or permanently deleted
+        defaults = [
+            {"title": "HK DigiVerse crosses 60 active clients", "desc": "A new milestone driven by the Sales and Delivery teams.", "date": "Recent", "priority": 1, "is_deleted": False, "created_at": datetime.utcnow()},
+            {"title": "Appraisal cycle starts 05 August", "desc": "Managers must submit review drafts before 03 August.", "date": "Important", "priority": 2, "is_deleted": False, "created_at": datetime.utcnow()},
+            {"title": "Revised hybrid work policy", "desc": "Minimum 3 office days per week from this month.", "date": "Notice", "priority": 3, "is_deleted": False, "created_at": datetime.utcnow()}
+        ]
+        await db["company_news"].insert_many(defaults)
+
     cursor = db["company_news"].find({"is_deleted": {"$ne": True}}).sort([("priority", -1), ("created_at", -1)]).limit(50)
     async for n in cursor:
         n["_id"] = str(n["_id"])
+        n["id"] = str(n["_id"])
         news_items.append(n)
 
-    if not news_items:
-        defaults = [
-            {"title": "HK DigiVerse crosses 60 active clients", "desc": "A new milestone driven by the Sales and Delivery teams.", "date": "Recent"},
-            {"title": "Appraisal cycle starts 05 August", "desc": "Managers must submit review drafts before 03 August.", "date": "Important"},
-            {"title": "Revised hybrid work policy", "desc": "Minimum 3 office days per week from this month.", "date": "Notice"}
-        ]
-        return {"news": defaults}
     return {"news": news_items}
 
 

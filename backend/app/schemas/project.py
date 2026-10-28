@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union
 from datetime import datetime, date
 from enum import Enum
 
@@ -174,6 +174,7 @@ class CreativeTeam(BaseModel):
     posting_publisher: Optional[str] = None
     caption: Optional[str] = None
     thumbnail: Optional[str] = None
+    other: Optional[Union[str, list[str]]] = None
     model_config = ConfigDict(extra="allow")
 
 class SocialMediaCredential(BaseModel):

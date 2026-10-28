@@ -115,16 +115,21 @@ export function useSocialApi() {
 
   // Keywords
   const getKeywords = useCallback(
-    async (params?: { ig_account_id?: string | undefined; scope?: string | undefined } | undefined) => {
+    async (params?: { ig_account_id?: string | undefined; scope?: string | undefined; sync_n8n?: boolean } | undefined) => {
       const sp = new URLSearchParams();
       if (params?.ig_account_id) sp.set("ig_account_id", params.ig_account_id);
       if (params?.scope) sp.set("scope", params.scope);
+      if (params?.sync_n8n !== undefined) sp.set("sync_n8n", String(params.sync_n8n));
       const query = sp.toString() ? `?${sp.toString()}` : "";
       const res = await request<any>(`/keywords${query}`);
       if (Array.isArray(res)) return res as SocialKeyword[];
       if (res && Array.isArray(res.items)) return res.items as SocialKeyword[];
       return [] as SocialKeyword[];
     },
+    [request]
+  );
+  const syncKeywords = useCallback(
+    () => request<{ ok: boolean; total_n8n: number; inserted: number; updated: number; pushed_to_n8n?: number }>("/keywords/sync", { method: "POST" }),
     [request]
   );
   const createKeyword = useCallback(
@@ -281,6 +286,7 @@ export function useSocialApi() {
     getAccountMedia,
     syncAccountMedia,
     getKeywords,
+    syncKeywords,
     createKeyword,
     updateKeyword,
     toggleKeyword,

@@ -222,7 +222,7 @@ export const SocialSettingsTab: React.FC<SocialSettingsTabProps> = ({
                 </span>
               </div>
               <p className="mt-1 text-[11px] text-muted-foreground font-mono">
-                Model: {settings?.config?.DEFAULT_GEMINI_MODEL || "gemini-2.5-flash"}
+                Model: {settings?.config?.DEFAULT_GEMINI_MODEL || "gemini-3.1-flash-lite"}
               </p>
               {testResults["gemini"] && (
                 <div

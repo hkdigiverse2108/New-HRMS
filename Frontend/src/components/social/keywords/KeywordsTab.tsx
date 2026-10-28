@@ -17,6 +17,9 @@ import {
   ExternalLink,
   MessageSquare,
   ArrowRight,
+  X,
+  AlertTriangle,
+  Loader2,
 } from "lucide-react";
 import type { SocialAccount, SocialKeyword } from "../types";
 import { KeywordFormModal } from "./KeywordFormModal";
@@ -31,6 +34,7 @@ interface KeywordsTabProps {
   accounts: SocialAccount[];
   isLoading: boolean;
   onRefresh: () => Promise<void>;
+  onSyncKeywords?: () => Promise<{ ok: boolean; total_n8n: number; inserted: number; updated: number; pushed_to_n8n?: number }>;
   onCreateKeyword: (data: Partial<SocialKeyword>) => Promise<void>;
   onUpdateKeyword: (id: string, data: Partial<SocialKeyword>) => Promise<void>;
   onToggleKeyword: (id: string) => Promise<void>;
@@ -48,6 +52,7 @@ export const KeywordsTab: React.FC<KeywordsTabProps> = ({
   accounts,
   isLoading,
   onRefresh,
+  onSyncKeywords,
   onCreateKeyword,
   onUpdateKeyword,
   onToggleKeyword,
@@ -58,10 +63,14 @@ export const KeywordsTab: React.FC<KeywordsTabProps> = ({
   const [scopeFilter, setScopeFilter] = useState<string>("ALL");
   const [search, setSearch] = useState("");
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date } | undefined>();
+  const [isSyncing, setIsSyncing] = useState(false);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
   const [editingKeyword, setEditingKeyword] = useState<SocialKeyword | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SocialKeyword | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const safeKeywords = Array.isArray(keywords) ? keywords : [];
   const filtered = safeKeywords.filter((k) => {
@@ -94,10 +103,19 @@ export const KeywordsTab: React.FC<KeywordsTabProps> = ({
   const followGateCount = safeKeywords.filter((k) => k.require_follow).length;
   const specificCount = safeKeywords.filter((k) => k.scope === "SPECIFIC_POSTS").length;
 
-  const handleDelete = async (id: string, kw: string) => {
-    if (confirm(`Delete rule for keyword "${kw}"?`)) {
-      await onDeleteKeyword(id);
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      setIsDeleting(true);
+      setDeleteError(null);
+      await onDeleteKeyword(deleteTarget.id);
       await onRefresh();
+      setDeleteTarget(null);
+    } catch (err: any) {
+      console.error("Failed to delete keyword rule:", err);
+      setDeleteError(err?.message || "Failed to delete keyword rule. Please try again.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -113,6 +131,21 @@ export const KeywordsTab: React.FC<KeywordsTabProps> = ({
     }
     await onRefresh();
     return count;
+  };
+
+  const handleSync = async () => {
+    try {
+      setIsSyncing(true);
+      if (onSyncKeywords) {
+        await onSyncKeywords();
+      } else {
+        await onRefresh();
+      }
+    } catch (e) {
+      console.error("Failed to sync n8n keywords:", e);
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   return (
@@ -220,6 +253,16 @@ export const KeywordsTab: React.FC<KeywordsTabProps> = ({
             title="Refresh list"
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+          </button>
+
+          <button
+            onClick={handleSync}
+            disabled={isSyncing || isLoading}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border border-border text-foreground hover:bg-muted disabled:opacity-50 transition-colors"
+            title="Sync bidirectionally with live n8n Data Table"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-blue-500 ${isSyncing ? "animate-spin" : ""}`} />
+            {isSyncing ? "Syncing n8n..." : "Sync n8n"}
           </button>
 
           <button
@@ -393,8 +436,11 @@ export const KeywordsTab: React.FC<KeywordsTabProps> = ({
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      onClick={() => handleDelete(k.id, k.keyword)}
-                      className="p-1.5 rounded-lg text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10"
+                      onClick={() => {
+                        setDeleteError(null);
+                        setDeleteTarget(k);
+                      }}
+                      className="p-1.5 rounded-lg text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer"
                       title="Delete Rule"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -442,6 +488,111 @@ export const KeywordsTab: React.FC<KeywordsTabProps> = ({
         onClose={() => setIsCsvModalOpen(false)}
         onImport={handleBulkImport}
       />
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div
+            className="bg-card border border-border/80 rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 animate-in zoom-in-95 duration-200"
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="flex items-start gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-rose-500/15 border border-rose-500/25 text-rose-500 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base font-bold text-foreground">Delete Keyword Rule</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Are you sure you want to delete this automation rule? This action cannot be undone.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => {
+                  if (!isDeleting) setDeleteTarget(null);
+                }}
+                className="text-muted-foreground hover:text-foreground p-1 rounded-lg hover:bg-muted transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Target details card */}
+            <div className="p-3.5 rounded-xl bg-muted/40 border border-border/60 space-y-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-2.5 py-1 rounded-lg bg-primary/10 border border-primary/20 text-primary font-black text-xs tracking-wide">
+                  #{deleteTarget.keyword}
+                </span>
+                <span className="text-xs font-semibold text-muted-foreground">
+                  @{accounts.find((a) => a.ig_account_id === deleteTarget.ig_account_id || a.id === deleteTarget.ig_account_id)?.username || deleteTarget.username || deleteTarget.ig_account_id}
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted border border-border text-muted-foreground font-medium">
+                  {deleteTarget.scope === "SPECIFIC_POSTS" ? "Specific Reel/Post" : "All Posts"}
+                </span>
+              </div>
+
+              {deleteTarget.desc && (
+                <p className="text-xs text-foreground font-medium line-clamp-1">
+                  {deleteTarget.desc}
+                </p>
+              )}
+
+              {deleteTarget.message && (
+                <div className="text-[11px] text-muted-foreground bg-background/60 p-2 rounded-lg border border-border/40">
+                  <span className="font-semibold text-foreground/80">Private DM: </span>
+                  <span className="italic line-clamp-2">"{deleteTarget.message}"</span>
+                </div>
+              )}
+            </div>
+
+            {/* Warning note */}
+            <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-300 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>
+                Comments containing <strong>"{deleteTarget.keyword}"</strong> will no longer trigger automatic DMs or public replies on Instagram.
+              </span>
+            </div>
+
+            {deleteError && (
+              <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-500">
+                {deleteError}
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setDeleteTarget(null)}
+                className="px-4 py-2 rounded-xl border border-border bg-card hover:bg-muted text-xs font-semibold text-foreground transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={confirmDelete}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white text-xs font-bold shadow-md shadow-rose-600/20 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Rule</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

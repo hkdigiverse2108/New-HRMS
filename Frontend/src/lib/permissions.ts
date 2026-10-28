@@ -225,6 +225,15 @@ export function filterNavigationForUser(
           return null;
         }
 
+        // Payroll is strictly for HR & Admin
+        const roleLower = String(user?.role || (user as any)?.system_role || (user as any)?.work_details?.system_role || "").toLowerCase().trim();
+        const deptLower = String((user as any)?.department || (user as any)?.work_details?.department || "").toLowerCase().trim();
+        const desigLower = String((user as any)?.designation || (user as any)?.work_details?.designation || "").toLowerCase().trim();
+        const isHRorAdmin = ["admin", "superadmin", "subadmin", "director", "ceo", "hr"].includes(roleLower) || deptLower === "hr" || desigLower.includes("hr");
+        if ((item.title === "Payroll" || item.url === "/payroll") && !isHRorAdmin && !hasModulePermission(user, "/payroll", "read")) {
+          return null;
+        }
+
         const allowedChildren = item.children.filter((child) =>
           hasModulePermission(user, child.url, "read")
         );

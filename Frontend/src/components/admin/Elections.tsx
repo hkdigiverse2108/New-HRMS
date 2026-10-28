@@ -1387,8 +1387,8 @@ export function Elections() {
                                         isWinnerInRound
                                           ? "bg-amber-500/10 border-amber-500/40 shadow-xs ring-1 ring-amber-500/30"
                                           : isEliminatedInRound
-                                          ? "bg-muted/30 border-border/40 opacity-60"
-                                          : "bg-muted/10 border-border/70 hover:border-border"
+                                            ? "bg-muted/30 border-border/40 opacity-60"
+                                            : "bg-muted/10 border-border/70 hover:border-border"
                                       )}
                                     >
                                       <div className="flex items-center justify-between gap-3">

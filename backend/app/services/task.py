@@ -1,4 +1,5 @@
-from typing import Optional
+import asyncio
+from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime, date
 from fastapi import HTTPException
 from app.repository.task import TaskRepository
@@ -7,6 +8,97 @@ from app.schemas.task import TaskCreate, TaskUpdate, TaskQuickAssign
 from app.redis.service import get_cache, set_cache, delete_cache, clear_pattern, make_list_key
 
 class TaskService:
+    @staticmethod
+    async def _batch_prefetch(items: list[dict]) -> tuple[dict, dict, dict]:
+        """Pre-fetch all employees, projects, and clients for the given tasks in 3 batch queries."""
+        from app.database.db import get_database
+        from bson import ObjectId
+        db = get_database()
+
+        emp_cache: Dict[str, dict] = {}
+        proj_cache: Dict[str, dict] = {}
+        client_cache: Dict[str, dict] = {}
+        if not items or db is None:
+            return emp_cache, proj_cache, client_cache
+
+        emp_ids = set()
+        proj_ids = set()
+
+        for item in items:
+            for f in ["assigned_to", "assigned_by", "created_by", "approved_by"]:
+                val = item.get(f)
+                if val and str(val).strip().lower() not in ["system", "default-admin-id", "unknown", "none"]:
+                    emp_ids.add(str(val).strip())
+            tr = item.get("transfer_request")
+            if isinstance(tr, dict):
+                if tr.get("requested_to"): emp_ids.add(str(tr["requested_to"]).strip())
+                if tr.get("requested_by"): emp_ids.add(str(tr["requested_by"]).strip())
+            for hist in (item.get("transfer_history") or []):
+                if isinstance(hist, dict):
+                    if hist.get("from_employee"): emp_ids.add(str(hist["from_employee"]).strip())
+                    if hist.get("to_employee"): emp_ids.add(str(hist["to_employee"]).strip())
+            for act in (item.get("activity_history") or []):
+                if isinstance(act, dict) and act.get("performed_by"):
+                    emp_ids.add(str(act["performed_by"]).strip())
+            pid = item.get("project_id")
+            if pid and str(pid).strip():
+                proj_ids.add(str(pid).strip())
+
+        # 1. Batch fetch employees in ONE single database query
+        if emp_ids:
+            obj_ids = [ObjectId(sid) for sid in emp_ids if ObjectId.is_valid(sid)]
+            str_ids = list(emp_ids)
+            query = {"$or": [{"_id": {"$in": obj_ids}}, {"id": {"$in": str_ids}}]} if obj_ids else {"id": {"$in": str_ids}}
+            try:
+                cursor = db["employees"].find(query)
+                async for emp in cursor:
+                    eid_str = str(emp.get("_id") or emp.get("id"))
+                    personal = emp.get("personal_info", {})
+                    first = (personal.get("first_name") or "").strip()
+                    last = (personal.get("last_name") or "").strip()
+                    name = f"{first} {last}".strip() or emp.get("name") or "Employee"
+                    entry = {"employee_name": name}
+                    emp_cache[eid_str] = entry
+                    if emp.get("id"):
+                        emp_cache[str(emp["id"])] = entry
+            except Exception:
+                pass
+
+        # 2. Batch fetch projects in ONE single database query
+        client_ids = set()
+        if proj_ids:
+            obj_ids = [ObjectId(sid) for sid in proj_ids if ObjectId.is_valid(sid)]
+            str_ids = list(proj_ids)
+            query = {"$or": [{"_id": {"$in": obj_ids}}, {"id": {"$in": str_ids}}]} if obj_ids else {"id": {"$in": str_ids}}
+            try:
+                cursor = db["projects"].find(query)
+                async for proj in cursor:
+                    pid_str = str(proj.get("_id") or proj.get("id"))
+                    proj_cache[pid_str] = proj
+                    if proj.get("id"):
+                        proj_cache[str(proj["id"])] = proj
+                    cid = proj.get("client_id")
+                    if cid and str(cid).strip():
+                        client_ids.add(str(cid).strip())
+            except Exception:
+                pass
+
+        # 3. Batch fetch clients in ONE single database query
+        if client_ids:
+            obj_ids = [ObjectId(sid) for sid in client_ids if ObjectId.is_valid(sid)]
+            str_ids = list(client_ids)
+            query = {"$or": [{"_id": {"$in": obj_ids}}, {"id": {"$in": str_ids}}]} if obj_ids else {"id": {"$in": str_ids}}
+            try:
+                cursor = db["clients"].find(query)
+                async for cl in cursor:
+                    cid_str = str(cl.get("_id") or cl.get("id"))
+                    client_cache[cid_str] = cl
+                    if cl.get("id"):
+                        client_cache[str(cl["id"])] = cl
+            except Exception:
+                pass
+
+        return emp_cache, proj_cache, client_cache
     @staticmethod
     async def _populate_user_details(item: dict, emp_cache: dict, proj_cache: Optional[dict] = None, client_cache: Optional[dict] = None, content_cache: Optional[dict] = None):
         async def get_details(emp_id):
@@ -358,8 +450,11 @@ class TaskService:
         if cached is not None:
             return cached
 
-        # Run recurring tasks processing only on cache miss
-        await TaskService.process_recurring_tasks()
+        # Run recurring tasks processing in the background (non-blocking) with throttle
+        last_rec = await get_cache("tasks:last_recurring_run")
+        if not last_rec:
+            await set_cache("tasks:last_recurring_run", "1", ttl=1800)
+            asyncio.create_task(TaskService.process_recurring_tasks())
 
         result = await TaskRepository.get_all(
             is_deleted, 
@@ -384,11 +479,10 @@ class TaskService:
             team_employee_ids
         )
         
-        emp_cache = {}
-        proj_cache = {}
-        client_cache = {}
+        items = result.get("data", [])
+        emp_cache, proj_cache, client_cache = await TaskService._batch_prefetch(items)
         content_cache = {}
-        for item in result.get("data", []):
+        for item in items:
             await TaskService._populate_user_details(item, emp_cache, proj_cache, client_cache, content_cache)
             
         await set_cache(cache_key, result, ttl=300)

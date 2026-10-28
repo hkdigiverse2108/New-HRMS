@@ -58,8 +58,11 @@ class Settings(BaseSettings):
 
     # Social AI Providers
     GEMINI_API_KEY: str = ""
+    GROQ_API_KEY: str = ""
     GROQ_API_KEY_1: str = ""
     GROQ_API_KEY_2: str = ""
+    DEFAULT_GEMINI_MODEL: str = "gemini-3.1-flash-lite"
+    DEFAULT_GROQ_MODEL: str = "openai/gpt-oss-120b"
     GEMINI_SCRIPT_MODEL: str = "gemini-3.1-flash-lite"
     GEMINI_VIDEO_MODEL: str = "gemini-3.5-flash-lite"
     GEMINI_MEDIA_MODEL: str = "gemini-3.8-flash"

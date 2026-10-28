@@ -213,7 +213,39 @@ class ClientService:
     async def archive_client(client_id: str, status: bool = True):
         res = await ClientRepository.archive(client_id, status)
         if res:
-            await clear_pattern("clients:list:*")
+            try:
+                from app.database.db import get_database
+                from bson import ObjectId
+                db = get_database()
+                c_query = {"$or": [{"client_id": str(client_id)}]}
+                if ObjectId.is_valid(str(client_id)):
+                    c_query["$or"].append({"client_id": ObjectId(str(client_id))})
+
+                # Find all projects belonging to this client
+                proj_cursor = db["projects"].find(c_query)
+                proj_list = await proj_cursor.to_list(1000)
+                proj_ids = [str(p["_id"]) for p in proj_list]
+                proj_obj_ids = [p["_id"] for p in proj_list]
+
+                # Cascade archive/unarchive to projects
+                await db["projects"].update_many(
+                    c_query,
+                    {"$set": {"is_archived": bool(status), "updated_at": datetime.utcnow()}}
+                )
+
+                # Cascade archive/unarchive to all tasks of these projects
+                if proj_ids:
+                    t_query = {"$or": [
+                        {"project_id": {"$in": proj_ids}},
+                        {"project_id": {"$in": proj_obj_ids}}
+                    ]}
+                    await db["tasks"].update_many(t_query, {"$set": {"is_archived": bool(status)}})
+                    await clear_pattern("tasks:*")
+            except Exception:
+                pass
+
+            await clear_pattern("clients:*")
+            await clear_pattern("projects:*")
             await delete_cache(f"client:{client_id}")
         return res
 

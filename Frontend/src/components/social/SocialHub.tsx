@@ -311,8 +311,14 @@ export const SocialHub: React.FC<SocialHubProps> = ({ initialPath, setActive }) 
               accounts={accounts}
               isLoading={api.loading}
               onRefresh={async () => {
+                const kws = await api.getKeywords({ sync_n8n: true });
+                setKeywords(kws);
+              }}
+              onSyncKeywords={async () => {
+                const res = await api.syncKeywords();
                 const kws = await api.getKeywords();
                 setKeywords(kws);
+                return res;
               }}
               onCreateKeyword={async (data) => {
                 await api.createKeyword(data);

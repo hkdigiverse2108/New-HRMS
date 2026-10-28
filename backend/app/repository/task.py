@@ -70,7 +70,7 @@ class TaskRepository:
         team_employee_ids: Optional[list[str]] = None
     ):
         collection = await cls.get_collection()
-        and_conditions = [{"is_deleted": is_deleted}]
+        and_conditions = [{"is_deleted": is_deleted}, {"is_archived": {"$ne": True}}]
         
         if involved_emp_id:
             and_conditions.append({
@@ -263,7 +263,7 @@ class TaskRepository:
         search: Optional[str] = None
     ):
         collection = await cls.get_collection()
-        base_query = {"is_deleted": False}
+        base_query = {"is_deleted": False, "is_archived": {"$ne": True}}
         if involved_emp_id:
             base_query["$or"] = [
                 {"assigned_to": involved_emp_id},

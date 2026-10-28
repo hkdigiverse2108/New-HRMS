@@ -793,7 +793,7 @@ export const ExecutivePerformanceReportModal: React.FC<ExecutivePerformanceRepor
 
   return (
     <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
-      <DialogContent className="max-w-5xl w-[96vw] max-h-[94vh] bg-background border-border/60 rounded-3xl p-0 overflow-y-auto shadow-2xl print:border-none print:shadow-none print:max-w-full print:w-full print:m-0 print:p-0 relative">
+      <DialogContent className="max-w-5xl w-[98vw] sm:w-[96vw] max-h-[96vh] sm:max-h-[94vh] bg-background border-border/60 rounded-2xl sm:rounded-3xl p-0 overflow-y-auto shadow-2xl print:border-none print:shadow-none print:max-w-full print:w-full print:m-0 print:p-0 relative">
         {/* Full Modal Loading Overlay while preparing Print preview to completely block multiple clicks */}
         {isPrinting && (
           <div className="absolute inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex flex-col items-center justify-center p-6 rounded-3xl animate-in fade-in duration-200">
@@ -815,18 +815,27 @@ export const ExecutivePerformanceReportModal: React.FC<ExecutivePerformanceRepor
         )}
         
         {/* NON-PRINT CONTROLS BAR */}
-        <aside className="sticky top-0 z-40 bg-slate-900 border-b border-slate-800 text-white p-3.5 print:hidden flex flex-wrap items-center justify-between gap-2.5 shadow-md">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-primary text-primary-foreground flex items-center justify-center font-black text-xs shrink-0">
-              OT
+        <aside className="sticky top-0 z-40 bg-slate-900 border-b border-slate-800 text-white p-3 sm:p-3.5 print:hidden flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 shadow-md">
+          <div className="flex items-center justify-between sm:justify-start gap-2.5">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-primary text-primary-foreground flex items-center justify-center font-black text-xs shrink-0">
+                OT
+              </div>
+              <div>
+                <h2 className="text-sm font-black text-white">Executive Client Performance Intelligence</h2>
+                <p className="text-[11px] text-slate-400">Dynamic Multi-Category Retainer Reconciliation</p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-sm font-black text-white">Executive Client Performance Intelligence</h2>
-              <p className="text-[11px] text-slate-400">Dynamic Multi-Category Retainer Reconciliation</p>
-            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="sm:hidden p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs">
             {/* Category Retainer Multi-Select Toggles */}
             <div className="flex items-center gap-1 bg-slate-800 border border-slate-700 p-1 rounded-xl">
               <span className="text-[10px] font-bold text-slate-400 px-1 uppercase">Scope:</span>

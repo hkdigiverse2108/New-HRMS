@@ -419,9 +419,70 @@ async def get_account_media(
     if not items and username:
         items = await SocialMediaRepository.get_by_username(username, limit=limit)
 
+    for it in (items or []):
+        sc = it.get("shortcode")
+        if not sc and it.get("permalink"):
+            parts = [p for p in str(it["permalink"]).split("/") if p]
+            if parts:
+                sc = parts[-1]
+                it["shortcode"] = sc
+        if sc:
+            it["proxy_url"] = f"/social/media/proxy?shortcode={sc}"
+        elif it.get("thumbnail_url") or it.get("media_url"):
+            import urllib.parse
+            raw_u = it.get("thumbnail_url") or it.get("media_url")
+            it["proxy_url"] = f"/social/media/proxy?url={urllib.parse.quote(str(raw_u))}"
+
     result = {"items": items or [], "total": len(items or [])}
     await set_cache(cache_key, result, ttl=300)
     return result
+
+
+@router.get("/media/proxy")
+async def proxy_media_thumbnail(
+    url: Optional[str] = Query(None),
+    shortcode: Optional[str] = Query(None),
+):
+    """
+    Proxies and streams Instagram media thumbnails to prevent broken images caused by expired Meta CDN URLs or CORS.
+    Priority:
+    1. If shortcode is provided: fetches fresh thumbnail from https://www.instagram.com/p/{shortcode}/media/?size=m
+    2. If url is provided: fetches from URL. If 403 (expired signature), falls back to shortcode.
+    """
+    candidates = []
+    if shortcode:
+        clean_sc = str(shortcode).strip()
+        candidates.append(f"https://www.instagram.com/p/{clean_sc}/media/?size=m")
+    if url:
+        candidates.append(str(url).strip())
+
+    if not candidates:
+        raise HTTPException(400, "Either url or shortcode query parameter is required")
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+    }
+
+    async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+        for target in candidates:
+            try:
+                res = await client.get(target, headers=headers)
+                if res.status_code == 200 and len(res.content) > 500:
+                    content_type = res.headers.get("content-type") or "image/jpeg"
+                    return Response(
+                        content=res.content,
+                        media_type=content_type,
+                        headers={
+                            "Cache-Control": "public, max-age=86400",
+                            "Access-Control-Allow-Origin": "*",
+                        }
+                    )
+            except Exception as e:
+                logger.debug(f"Media proxy failed for {target}: {e}")
+                continue
+
+    raise HTTPException(404, "Thumbnail image could not be retrieved")
 
 
 @router.post("/accounts/{account_id}/sync-media")
@@ -551,17 +612,176 @@ async def delete_account(
 # =========================================================================
 # 3. KEYWORDS MANAGEMENT
 # =========================================================================
+
+_last_n8n_keywords_sync: float = 0.0
+
+async def sync_keywords_from_n8n_table() -> dict:
+    """Bi-directional sync between n8n 'Keywords' Data Table (table_id: 200EsLvhIlNU9amn) and MongoDB."""
+    global _last_n8n_keywords_sync
+    try:
+        n8n_base = (getattr(settings, "N8N_BASE_URL", "") or "").rstrip("/")
+        n8n_key = getattr(settings, "N8N_API_KEY", "")
+        if not n8n_base or not n8n_key:
+            return {"ok": False, "message": "N8N_BASE_URL or N8N_API_KEY is not configured", "inserted": 0, "updated": 0}
+
+        table_id = "200EsLvhIlNU9amn"
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            headers = {"X-N8N-API-KEY": n8n_key}
+            res = await client.get(f"{n8n_base}/api/v1/data-tables/{table_id}/rows", headers=headers)
+            if res.status_code != 200:
+                logger.warning(f"Failed to fetch n8n Keywords table: {res.status_code} {res.text}")
+                return {"ok": False, "message": f"n8n returned status {res.status_code}", "inserted": 0, "updated": 0}
+
+            n8n_rows = res.json().get("data", [])
+            inserted = 0
+            updated = 0
+            n8n_keys = set()
+
+            col = await SocialKeywordRepository.get_collection()
+
+            for row in n8n_rows:
+                kw = str(row.get("keyword") or "").strip()
+                kw_norm = norm(kw)
+                if not kw_norm:
+                    continue
+                ig_account_id = str(row.get("ig_account_id") or "").strip()
+                username = str(row.get("username") or "").strip().lstrip("@")
+                media_id = clean_id(row.get("media_id") or "")
+                n8n_keys.add((ig_account_id, kw_norm, media_id))
+
+                msg = str(row.get("message") or "")
+                r1 = str(row.get("comment_reply1") or "")
+                r2 = str(row.get("comment_reply2") or "")
+                r3 = str(row.get("comment_reply3") or "")
+                desc = str(row.get("desc") or "")
+                rf = to_bool(row.get("require_follow", True))
+                act = to_bool(row.get("is_active", True))
+                scope = "SPECIFIC_POSTS" if media_id else "ALL_POSTS"
+
+                existing = await col.find_one({
+                    "ig_account_id": ig_account_id,
+                    "keyword_norm": kw_norm,
+                    "media_id": media_id
+                })
+
+                now = datetime.utcnow()
+                if existing:
+                    await col.update_one(
+                        {"_id": existing["_id"]},
+                        {"$set": {
+                            "message": msg,
+                            "comment_reply1": r1,
+                            "comment_reply2": r2,
+                            "comment_reply3": r3,
+                            "desc": desc or existing.get("desc", ""),
+                            "require_follow": rf,
+                            "is_active": act,
+                            "scope": scope,
+                            "username": username or existing.get("username", ""),
+                            "updated_at": now
+                        }}
+                    )
+                    updated += 1
+                else:
+                    doc = {
+                        "ig_account_id": ig_account_id,
+                        "username": username,
+                        "keyword": kw,
+                        "keyword_norm": kw_norm,
+                        "scope": scope,
+                        "message": msg,
+                        "post_link": "",
+                        "media_url": "",
+                        "media_id": media_id,
+                        "media_source": "form" if media_id else "none",
+                        "comment_reply1": r1,
+                        "comment_reply2": r2,
+                        "comment_reply3": r3,
+                        "require_follow": rf,
+                        "desc": desc or f"Automation for {kw}",
+                        "is_active": act,
+                        "hit_count": 0,
+                        "last_hit_at": None,
+                        "created_at": now,
+                        "updated_at": now,
+                        "created_by": "n8n_sync"
+                    }
+                    await col.insert_one(doc)
+                    inserted += 1
+
+            # Push any MongoDB keywords missing in n8n into n8n table
+            pushed_to_n8n = 0
+            mongo_docs = await col.find({}).to_list(200)
+            for m_doc in mongo_docs:
+                m_kw = str(m_doc.get("keyword") or "").strip().upper()
+                m_kw_norm = norm(m_kw)
+                m_ig_id = str(m_doc.get("ig_account_id") or "").strip()
+                m_mid = clean_id(m_doc.get("media_id") or "")
+                if (m_ig_id, m_kw_norm, m_mid) not in n8n_keys:
+                    n8n_row_payload = {
+                        "ig_account_id": m_ig_id,
+                        "username": str(m_doc.get("username") or ""),
+                        "keyword": m_kw,
+                        "desc": str(m_doc.get("desc") or f"Automation for {m_kw}"),
+                        "message": str(m_doc.get("message") or ""),
+                        "comment_reply1": str(m_doc.get("comment_reply1") or ""),
+                        "comment_reply2": str(m_doc.get("comment_reply2") or ""),
+                        "comment_reply3": str(m_doc.get("comment_reply3") or ""),
+                        "media_id": m_mid,
+                        "require_follow": "true" if m_doc.get("require_follow", True) else "false",
+                        "is_active": "true" if m_doc.get("is_active", True) else "false",
+                    }
+                    try:
+                        p_res = await client.post(
+                            f"{n8n_base}/api/v1/data-tables/{table_id}/rows",
+                            headers={"X-N8N-API-KEY": n8n_key, "Content-Type": "application/json"},
+                            json={"data": [n8n_row_payload]}
+                        )
+                        if p_res.status_code == 200:
+                            pushed_to_n8n += 1
+                    except Exception as pe:
+                        logger.warning(f"Error pushing mongo keyword {m_kw} to n8n: {pe}")
+
+            _last_n8n_keywords_sync = time.time()
+            await clear_pattern("social:keywords:*")
+            await clear_pattern("social:overview:*")
+
+            return {
+                "ok": True,
+                "total_n8n": len(n8n_rows),
+                "inserted": inserted,
+                "updated": updated,
+                "pushed_to_n8n": pushed_to_n8n
+            }
+    except Exception as e:
+        logger.warning(f"Failed to sync keywords from n8n Data Table: {e}")
+        return {"ok": False, "message": str(e), "inserted": 0, "updated": 0}
+
+
+@router.post("/keywords/sync")
+async def sync_keywords_endpoint(emp: dict = Depends(require_social("/social/keywords", "read"))):
+    """Manually triggers bidirectional sync between n8n Keywords Data Table and HRMS database."""
+    res = await sync_keywords_from_n8n_table()
+    return res
+
+
 @router.get("/keywords")
 async def list_keywords(
     ig_account_id: Optional[str] = Query(None),
     q: Optional[str] = Query(None),
     media_id: Optional[str] = Query(None),
     is_active: Optional[bool] = Query(None),
+    sync_n8n: Optional[bool] = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=200),
     emp: dict = Depends(require_social("/social/keywords", "read"))
 ):
-    """List keyword rules with optional search and account filtering."""
+    """List keyword rules with optional search, account filtering, and automatic live n8n sync."""
+    global _last_n8n_keywords_sync
+    # Auto-sync from live n8n if requested or if > 60s has passed
+    if sync_n8n is True or (sync_n8n is None and (time.time() - _last_n8n_keywords_sync > 60.0)):
+        await sync_keywords_from_n8n_table()
+
     skip = (page - 1) * limit
     rules, total = await SocialKeywordRepository.get_all(
         ig_account_id=ig_account_id,
@@ -1098,15 +1318,15 @@ async def get_effective_settings(emp: dict = Depends(require_social("/social/set
         meta_verify_token_configured=bool(getattr(settings, "META_VERIFY_TOKEN", "")),
         meta_app_secret_configured=bool(getattr(settings, "META_APP_SECRET", "")),
         models={
-            "GEMINI_SCRIPT_MODEL": stored.get("GEMINI_SCRIPT_MODEL") or getattr(settings, "GEMINI_SCRIPT_MODEL", "gemini-3.1-flash-lite"),
-            "GEMINI_VIDEO_MODEL": stored.get("GEMINI_VIDEO_MODEL") or getattr(settings, "GEMINI_VIDEO_MODEL", "gemini-3.5-flash-lite"),
-            "GEMINI_MEDIA_MODEL": stored.get("GEMINI_MEDIA_MODEL") or getattr(settings, "GEMINI_MEDIA_MODEL", "gemini-3.8-flash"),
-            "GROQ_TEXT_MODEL": stored.get("GROQ_TEXT_MODEL") or getattr(settings, "GROQ_TEXT_MODEL", "openai/gpt-oss-120b"),
-            "GROQ_VISION_MODEL": stored.get("GROQ_VISION_MODEL") or getattr(settings, "GROQ_VISION_MODEL", "qwen/qwen3.8-27b"),
+            "GEMINI_SCRIPT_MODEL": stored.get("GEMINI_SCRIPT_MODEL") or stored.get("gemini_script_model") or getattr(settings, "GEMINI_SCRIPT_MODEL", "gemini-3.1-flash-lite"),
+            "GEMINI_VIDEO_MODEL": stored.get("GEMINI_VIDEO_MODEL") or stored.get("gemini_video_model") or getattr(settings, "GEMINI_VIDEO_MODEL", "gemini-3.5-flash-lite"),
+            "GEMINI_MEDIA_MODEL": stored.get("GEMINI_MEDIA_MODEL") or stored.get("gemini_media_model") or getattr(settings, "GEMINI_MEDIA_MODEL", "gemini-3.8-flash"),
+            "GROQ_TEXT_MODEL": stored.get("GROQ_TEXT_MODEL") or stored.get("groq_text_model") or getattr(settings, "GROQ_TEXT_MODEL", "openai/gpt-oss-120b"),
+            "GROQ_VISION_MODEL": stored.get("GROQ_VISION_MODEL") or stored.get("groq_vision_model") or getattr(settings, "GROQ_VISION_MODEL", "qwen/qwen3.8-27b"),
         },
         key_configured={
             "gemini": bool(getattr(settings, "GEMINI_API_KEY", "")),
-            "groq1": bool(getattr(settings, "GROQ_API_KEY_1", "")),
+            "groq1": bool(getattr(settings, "GROQ_API_KEY_1", "") or getattr(settings, "GROQ_API_KEY", "")),
             "groq2": bool(getattr(settings, "GROQ_API_KEY_2", "")),
             "drive": bool(getattr(settings, "GOOGLE_SERVICE_ACCOUNT_JSON", "")),
             "telegram_reel": bool(getattr(settings, "TELEGRAM_REEL_BOT_TOKEN", "")),
@@ -1174,6 +1394,8 @@ async def test_provider_connection(
         try:
             import httpx
             model = getattr(settings, "GEMINI_SCRIPT_MODEL", "gemini-3.1-flash-lite")
+            if "gemini-2.5" in model:
+                model = "gemini-3.1-flash-lite"
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
             headers = {"x-goog-api-key": key, "Content-Type": "application/json"}
             payload = {"contents": [{"parts": [{"text": "Reply with 'OK'"}]}]}
@@ -1187,9 +1409,9 @@ async def test_provider_connection(
             return ProviderTestResponse(ok=False, message=f"Gemini test exception: {e}")
 
     elif prov == "groq":
-        key = getattr(settings, "GROQ_API_KEY_1", "")
+        key = getattr(settings, "GROQ_API_KEY_1", "") or getattr(settings, "GROQ_API_KEY", "")
         if not key:
-            return ProviderTestResponse(ok=False, message="GROQ_API_KEY_1 is not configured in .env")
+            return ProviderTestResponse(ok=False, message="GROQ_API_KEY or GROQ_API_KEY_1 is not configured in .env")
         try:
             import httpx
             url = "https://api.groq.com/openai/v1/chat/completions"

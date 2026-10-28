@@ -295,7 +295,11 @@ export const KeywordFormModal: React.FC<KeywordFormModalProps> = ({
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => setScope("ALL_POSTS")}
+                onClick={() => {
+                  setScope("ALL_POSTS");
+                  setMediaId("");
+                  setMediaUrl("");
+                }}
                 className={cn(
                   "p-3 rounded-xl border text-left transition-all cursor-pointer select-none",
                   scope === "ALL_POSTS"
@@ -328,119 +332,179 @@ export const KeywordFormModal: React.FC<KeywordFormModalProps> = ({
                   <span>Specific Reel / Post</span>
                   {scope === "SPECIFIC_POSTS" && <Check className="w-3.5 h-3.5 text-primary ml-auto" />}
                 </div>
-                <div className="text-[11px] opacity-80 mt-0.5">High priority rule for target content</div>
+                <div className="text-[11px] opacity-80 mt-0.5">Target a specific Reel or Post ID</div>
               </button>
             </div>
           </div>
 
-          {/* Specific Reel / Post Selector - Requirement 1 Implementation */}
+          {/* Specific Reel / Post Selector (Modeled after ig-saas-full: clean Post ID input + reliable post selector) */}
           {scope === "SPECIFIC_POSTS" && (
             <div className="p-4 rounded-2xl border border-primary/20 bg-primary/5 space-y-3.5">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
-                    <SlidersHorizontal className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-foreground">Select Reel or Post</h4>
-                    <p className="text-[11px] text-muted-foreground">
-                      Choose which reel or post triggers this automation
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {mediaItems.length > 0 && (
-                    <span className="text-[11px] font-medium text-muted-foreground hidden sm:inline">
-                      {filteredMedia.length} of {mediaItems.length} items
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => loadAccountMedia(igAccountId, true)}
-                    disabled={loadingMedia}
-                    title="Sync latest reels & posts from Instagram"
-                    className="p-1.5 rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex items-center gap-1.5 text-[11px] font-medium"
-                  >
-                    <RefreshCw className={cn("w-3.5 h-3.5", loadingMedia && "animate-spin text-primary")} />
-                    <span className="hidden sm:inline">Sync Live</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowManualInputs(!showManualInputs)}
-                    className="text-[11px] font-semibold text-primary hover:underline cursor-pointer"
-                  >
-                    {showManualInputs ? "Hide Manual ID" : "Manual ID Input"}
-                  </button>
-                </div>
-              </div>
-
-              {/* Filter & Search Bar */}
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1">
-                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    type="text"
-                    value={mediaSearch}
-                    onChange={(e) => setMediaSearch(e.target.value)}
-                    placeholder="Search reels & posts by caption or ID..."
-                    className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-border bg-background focus:ring-1 focus:ring-primary outline-none"
-                  />
-                  {mediaSearch && (
-                    <button
-                      type="button"
-                      onClick={() => setMediaSearch("")}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-
-                {/* Scope filter: ALL vs REEL vs POST */}
-                <div className="flex items-center p-0.5 rounded-xl bg-card border border-border">
-                  {(["ALL", "REEL", "POST"] as const).map((filter) => (
-                    <button
-                      key={filter}
-                      type="button"
-                      onClick={() => setMediaTypeFilter(filter)}
-                      className={cn(
-                        "px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all",
-                        mediaTypeFilter === filter
-                          ? "bg-primary text-primary-foreground shadow-xs"
-                          : "text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      {filter === "ALL" ? "All" : filter === "REEL" ? "Reels" : "Posts"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Media List */}
-              {loadingMedia ? (
-                <div className="p-8 text-center bg-card/60 rounded-xl border border-border">
-                  <Loader2 className="w-5 h-5 animate-spin mx-auto text-primary mb-2" />
-                  <p className="text-xs text-muted-foreground">Fetching reels and posts from Instagram...</p>
-                </div>
-              ) : filteredMedia.length === 0 ? (
-                <div className="p-6 text-center bg-card/60 rounded-xl border border-border">
-                  <p className="text-xs text-muted-foreground">
-                    {mediaItems.length === 0
-                      ? "No reels or posts found for this account. Use manual input below."
-                      : "No matching reels or posts found for your search."}
+                <div>
+                  <h4 className="text-xs font-bold text-foreground">Post ID or Instagram Link</h4>
+                  <p className="text-[11px] text-muted-foreground">
+                    Enter the Post ID directly or paste the Instagram Reel / Post URL
                   </p>
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  <div className="max-h-84 overflow-y-auto pr-1 scrollbar-thin">
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowManualInputs(!showManualInputs);
+                    if (mediaItems.length === 0 && igAccountId) {
+                      loadAccountMedia(igAccountId);
+                    }
+                  }}
+                  className="text-xs font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                  <span>{showManualInputs ? "Hide recent posts" : "Browse recent posts"}</span>
+                </button>
+              </div>
+
+              {/* Direct Post ID & Link Input matching ig-saas-full */}
+              <div className="space-y-1.5">
+                <div className="relative">
+                  <Link2 className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    type="text"
+                    value={mediaId || mediaUrl}
+                    onChange={(e) => {
+                      const val = e.target.value.trim();
+                      if (val.includes("instagram.com")) {
+                        setMediaUrl(val);
+                        const match = val.match(/\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)/);
+                        if (match && match[1]) {
+                          const sc = match[1];
+                          const matched = mediaItems.find((it) => it.shortcode === sc || (it.permalink && it.permalink.includes(sc)));
+                          if (matched) {
+                            setMediaId(matched.id);
+                          } else {
+                            setMediaId(sc);
+                          }
+                        } else {
+                          setMediaId(val);
+                        }
+                      } else {
+                        setMediaId(val);
+                        if (!val) setMediaUrl("");
+                      }
+                    }}
+                    placeholder="e.g. 18052519070623054 or paste https://www.instagram.com/reel/Cxxxxxx/"
+                    className="w-full pl-10 pr-10 py-2.5 text-xs rounded-xl border border-border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none font-mono"
+                  />
+                  {(mediaId || mediaUrl) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMediaId("");
+                        setMediaUrl("");
+                      }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded cursor-pointer"
+                      title="Clear Post ID"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                <div className="text-[11px] text-muted-foreground flex items-center justify-between">
+                  <span>Enter the Instagram Media ID (e.g. 180123...) or paste full post link</span>
+                  {mediaId && <span className="font-mono text-primary font-bold text-[10px]">ID: {mediaId}</span>}
+                </div>
+              </div>
+
+              {/* Selected Post Preview Card */}
+              {selectedMediaItem && (
+                <div className="p-3 rounded-xl bg-card border border-primary/30 flex items-center justify-between shadow-xs">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className={cn(
+                      "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border",
+                      selectedMediaItem.type === "REEL"
+                        ? "bg-purple-500/10 border-purple-500/20 text-purple-500"
+                        : "bg-sky-500/10 border-sky-500/20 text-sky-500"
+                    )}>
+                      {selectedMediaItem.type === "REEL" ? <Film className="w-4 h-4" /> : <ImageIcon className="w-4 h-4" />}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-muted text-foreground border border-border">
+                          {selectedMediaItem.type}
+                        </span>
+                        {selectedMediaItem.shortcode && (
+                          <span className="text-[11px] font-mono font-bold text-primary">
+                            #{selectedMediaItem.shortcode}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-foreground font-medium truncate mt-0.5">
+                        {selectedMediaItem.caption || `Post ID: ${selectedMediaItem.id}`}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMediaId("");
+                      setMediaUrl("");
+                    }}
+                    className="text-xs text-muted-foreground hover:text-rose-500 font-semibold px-2 py-1 rounded hover:bg-muted shrink-0 ml-2 cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
+
+              {/* Collapsible Recent Posts List (Clean cards, no broken images) */}
+              {showManualInputs && (
+                <div className="pt-2 border-t border-border/60 space-y-2.5 animate-in fade-in duration-150">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="relative flex-1">
+                      <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                      <input
+                        type="text"
+                        value={mediaSearch}
+                        onChange={(e) => setMediaSearch(e.target.value)}
+                        placeholder="Search recent posts by caption or ID..."
+                        className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-border bg-background focus:ring-1 focus:ring-primary outline-none"
+                      />
+                    </div>
+                    <div className="flex items-center p-0.5 rounded-xl bg-card border border-border shrink-0">
+                      {(["ALL", "REEL", "POST"] as const).map((filter) => (
+                        <button
+                          key={filter}
+                          type="button"
+                          onClick={() => setMediaTypeFilter(filter)}
+                          className={cn(
+                            "px-2 py-1 text-[11px] font-bold rounded-lg transition-all",
+                            mediaTypeFilter === filter
+                              ? "bg-primary text-primary-foreground shadow-xs"
+                              : "text-muted-foreground hover:text-foreground"
+                          )}
+                        >
+                          {filter === "ALL" ? "All" : filter === "REEL" ? "Reels" : "Posts"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {loadingMedia ? (
+                    <div className="p-6 text-center bg-card/60 rounded-xl border border-border">
+                      <Loader2 className="w-4 h-4 animate-spin mx-auto text-primary mb-1.5" />
+                      <p className="text-xs text-muted-foreground">Fetching reels and posts from Instagram...</p>
+                    </div>
+                  ) : filteredMedia.length === 0 ? (
+                    <div className="p-4 text-center bg-card/60 rounded-xl border border-border">
+                      <p className="text-xs text-muted-foreground">
+                        {mediaItems.length === 0
+                          ? "No posts found for this account. Enter the Post ID directly above."
+                          : "No matching posts found for your search."}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
                       {filteredMedia.slice(0, visibleCount).map((item) => {
                         const isSelected = mediaId === item.id;
                         const isReel = item.type === "REEL";
-                        const rawType = (item.media_type || "").toLowerCase().replace(/_/g, " ");
-                        const badgeLabel = rawType === "carousel album" ? "carousel album" : (rawType === "video" || isReel) ? "video" : "image";
-                        const thumbUrl = item.thumbnail_url || item.media_url || "";
 
                         return (
                           <div
@@ -449,151 +513,82 @@ export const KeywordFormModal: React.FC<KeywordFormModalProps> = ({
                               setMediaId(item.id);
                               setMediaUrl(item.permalink || "");
                             }}
-                            title={item.caption || `Media ID: ${item.id}`}
                             className={cn(
-                              "relative aspect-square rounded-2xl overflow-hidden border-2 cursor-pointer select-none group transition-all duration-200 shadow-2xs bg-muted/60",
+                              "p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between gap-3 group select-none",
                               isSelected
-                                ? "border-primary ring-3 ring-primary/30 shadow-md scale-[1.02] z-10"
-                                : "border-border/70 hover:border-primary/50 hover:shadow-sm"
+                                ? "border-primary bg-primary/10 shadow-xs"
+                                : "border-border/60 bg-card/60 hover:bg-muted/60 hover:border-border"
                             )}
                           >
-                            {/* Real Instagram Image Thumbnail with no-referrer so Meta CDN loads */}
-                            {thumbUrl ? (
-                              <img
-                                src={thumbUrl}
-                                alt={item.caption || "Instagram media"}
-                                referrerPolicy="no-referrer"
-                                loading="lazy"
-                                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center bg-muted/80">
-                                {isReel ? (
-                                  <Film className="w-8 h-8 text-purple-500/60" />
-                                ) : (
-                                  <ImageIcon className="w-8 h-8 text-sky-500/60" />
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div
+                                className={cn(
+                                  "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border",
+                                  isReel
+                                    ? "bg-purple-500/10 border-purple-500/20 text-purple-500"
+                                    : "bg-sky-500/10 border-sky-500/20 text-sky-500"
                                 )}
+                              >
+                                {isReel ? <Film className="w-4 h-4" /> : <ImageIcon className="w-4 h-4" />}
                               </div>
-                            )}
-
-                            {/* Instagram-style Bottom Center Badge (carousel album, video, image) */}
-                            <div className="absolute inset-x-0 bottom-1.5 flex justify-center pointer-events-none z-10 px-1">
-                              <span className="px-2.5 py-0.5 rounded-md bg-black/75 backdrop-blur-xs text-white text-[10px] font-medium tracking-wide shadow-xs border border-white/10 lowercase truncate">
-                                {badgeLabel}
-                              </span>
+                              <div className="min-w-0">
+                                <p className="text-xs font-medium text-foreground line-clamp-1 leading-snug">
+                                  {item.caption || `Post #${item.id.slice(-6)}`}
+                                </p>
+                                <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
+                                  <span className="font-mono font-semibold uppercase">{item.type}</span>
+                                  {item.shortcode && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="font-mono">#{item.shortcode}</span>
+                                    </>
+                                  )}
+                                  <span>•</span>
+                                  <span>ID: {item.id}</span>
+                                </div>
+                              </div>
                             </div>
 
-                            {/* Selection Checkmark Badge on Top-Left */}
-                            {isSelected && (
-                              <div className="absolute top-1.5 left-1.5 w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md ring-2 ring-background z-20 animate-in zoom-in-50 duration-150">
-                                <Check className="w-3 h-3 stroke-[3]" />
-                              </div>
-                            )}
-
-                            {/* Subtle Top-Right External Link on Hover */}
-                            {item.permalink && (
-                              <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {item.permalink && (
                                 <a
                                   href={item.permalink}
                                   target="_blank"
                                   rel="noreferrer"
                                   onClick={(e) => e.stopPropagation()}
-                                  className="p-1 rounded-md bg-black/70 text-white hover:text-primary transition-colors flex items-center"
+                                  className="p-1 rounded-md text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
                                   title="Open on Instagram"
                                 >
-                                  <ExternalLink className="w-3 h-3" />
+                                  <ExternalLink className="w-3.5 h-3.5" />
                                 </a>
-                              </div>
-                            )}
+                              )}
+                              <button
+                                type="button"
+                                className={cn(
+                                  "px-2.5 py-1 rounded-lg text-xs font-bold transition-all",
+                                  isSelected
+                                    ? "bg-primary text-primary-foreground"
+                                    : "bg-muted text-muted-foreground group-hover:bg-primary/20 group-hover:text-primary"
+                                )}
+                              >
+                                {isSelected ? "Selected" : "Select"}
+                              </button>
+                            </div>
                           </div>
                         );
                       })}
-                    </div>
-                  </div>
 
-                  {/* Load Older Posts Button matching ig-platform */}
-                  {filteredMedia.length > visibleCount && (
-                    <div className="pt-1">
-                      <button
-                        type="button"
-                        onClick={() => setVisibleCount((prev) => prev + 24)}
-                        className="w-full py-2 px-4 rounded-xl border border-border bg-card hover:bg-muted text-xs font-semibold text-foreground transition-all cursor-pointer shadow-xs hover:border-primary/50 flex items-center justify-center gap-2"
-                      >
-                        <span>Load older posts</span>
-                        <span className="text-[11px] text-muted-foreground font-normal">
-                          ({filteredMedia.length - visibleCount} more available)
-                        </span>
-                      </button>
+                      {filteredMedia.length > visibleCount && (
+                        <button
+                          type="button"
+                          onClick={() => setVisibleCount((prev) => prev + 24)}
+                          className="w-full py-1.5 text-[11px] font-semibold text-primary hover:underline text-center cursor-pointer"
+                        >
+                          Load more posts ({filteredMedia.length - visibleCount} remaining)
+                        </button>
+                      )}
                     </div>
                   )}
-                </div>
-              )}
-
-              {/* Selected Media Notification Bar */}
-              {selectedMediaItem && (
-                <div className="p-2.5 rounded-xl bg-card border border-primary/30 flex items-center justify-between text-xs shadow-xs">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    {(selectedMediaItem.thumbnail_url || selectedMediaItem.media_url) && (
-                      <img
-                        src={selectedMediaItem.thumbnail_url || selectedMediaItem.media_url || ""}
-                        alt="thumbnail"
-                        referrerPolicy="no-referrer"
-                        className="w-7 h-7 rounded-lg object-cover shrink-0 border border-border"
-                      />
-                    )}
-                    <span
-                      className={cn(
-                        "px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase border flex items-center gap-1 shrink-0",
-                        selectedMediaItem.type === "REEL"
-                          ? "bg-purple-500/15 text-purple-600 dark:text-purple-300 border-purple-500/30"
-                          : "bg-sky-500/15 text-sky-600 dark:text-sky-300 border-sky-500/30"
-                      )}
-                    >
-                      {selectedMediaItem.type === "REEL" ? <Film className="w-2.5 h-2.5" /> : <ImageIcon className="w-2.5 h-2.5" />}
-                      {selectedMediaItem.type}
-                    </span>
-                    <span className="font-semibold text-foreground truncate">
-                      {selectedMediaItem.caption || `ID: ${selectedMediaItem.id}`}
-                    </span>
-                  </div>
-                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 shrink-0 ml-2">
-                    ✓ Selected
-                  </span>
-                </div>
-              )}
-
-              {/* Manual ID / URL Override Section */}
-              {showManualInputs && (
-                <div className="pt-2 border-t border-border/80 space-y-2.5 animate-in fade-in duration-150">
-                  <div className="text-[11px] font-bold text-foreground">
-                    Manual Media ID & URL Override:
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-[10px] font-semibold text-muted-foreground mb-1">
-                        Media ID
-                      </label>
-                      <input
-                        type="text"
-                        value={mediaId}
-                        onChange={(e) => setMediaId(e.target.value)}
-                        placeholder="e.g. 18012345678901234"
-                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-border bg-background focus:ring-1 focus:ring-primary outline-none font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-semibold text-muted-foreground mb-1">
-                        Media URL (Optional reference)
-                      </label>
-                      <input
-                        type="text"
-                        value={mediaUrl}
-                        onChange={(e) => setMediaUrl(e.target.value)}
-                        placeholder="https://www.instagram.com/reel/Cxxxxxx/"
-                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-border bg-background focus:ring-1 focus:ring-primary outline-none"
-                      />
-                    </div>
-                  </div>
                 </div>
               )}
             </div>

@@ -24,6 +24,7 @@ export interface SocialMediaItem {
   timestamp?: string | null | undefined;
   thumbnail_url?: string | null | undefined;
   shortcode?: string | null | undefined;
+  proxy_url?: string | null | undefined;
 }
 
 export interface SocialKeyword {
@@ -180,6 +181,7 @@ export interface SocialSettingsData {
     GROQ_API_KEY_2_SET: boolean;
     DEFAULT_GEMINI_MODEL: string;
     DEFAULT_GROQ_MODEL: string;
+    GEMINI_SCRIPT_MODEL?: string;
   };
   retention_days: number;
   allow_self_comments: boolean;

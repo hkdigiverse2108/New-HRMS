@@ -75,6 +75,11 @@ interface BackendTask {
   content_item_details?: any;
   content_item_id?: string;
   task_category?: string;
+  sub_category?: string;
+  creative_details?: any;
+  reason_for_pending?: string;
+  module_id?: string;
+  phase?: string;
   department?: string;
   is_deleted?: boolean;
 }
@@ -105,6 +110,11 @@ interface TaskItem {
   isProjectTask?: boolean | undefined;
   // K15: category + auto/manual (auto = content-synced, delete nai thay)
   taskCategory: string;
+  subCategory?: string | undefined;
+  creativeDetails?: any;
+  reasonForPending?: string | undefined;
+  moduleId?: string | undefined;
+  phase?: string | undefined;
   contentItemId: string;
   isAuto: boolean;
   isTransferred: boolean;
@@ -208,12 +218,37 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   const [timeframeFilter, setTimeframeFilter] = useState<TimeframeFilter>("today");
   // K15: category filter (transcript — category field)
   const [categoryFilter, setCategoryFilter] = useState<string>("All");
+  const [subCategoryFilter, setSubCategoryFilter] = useState<string>("All");
 
-  // Phase 3: TL / Head / Management My Tasks vs All Tasks + Dept & Dual Filters (Assigned To & Assigned By)
-  const [mainViewMode, setMainViewMode] = usePersistentState<"my_tasks" | "all_tasks">("tasks.view", "all_tasks");
+  const CREATIVE_SUBCATEGORIES = useMemo(() => [
+    "Script",
+    "Shoot",
+    "Caption",
+    "Thumbnail",
+    "Editing",
+    "Approval",
+    "Posting"
+  ], []);
+
+  // Strict My Tasks vs All Tasks Access: Regular staff (Senior, Junior, Intern) are locked to My Tasks
+  const canViewAllTasks = isAdminOrHR || isHead || isTeamLeader;
+  const [savedViewMode, setSavedViewMode] = usePersistentState<"my_tasks" | "all_tasks">("tasks.view", canViewAllTasks ? "all_tasks" : "my_tasks");
+  const mainViewMode = canViewAllTasks ? savedViewMode : "my_tasks";
+  const setMainViewMode = (mode: "my_tasks" | "all_tasks") => {
+    if (canViewAllTasks) {
+      setSavedViewMode(mode);
+    }
+  };
+
   const [departmentFilter, setDepartmentFilter] = useState<string>("All");
   const [assignedToFilter, setAssignedToFilter] = useState<string>("All");
   const [assignedByFilter, setAssignedByFilter] = useState<string>("All");
+
+  const isCreativeScope = useMemo(() => {
+    const dLower = (userDepartment || "").toLowerCase();
+    const desigLower = (userDesignation || "").toLowerCase();
+    return dLower.includes("creative") || desigLower.includes("creative") || categoryFilter === "Creative" || tasks.some(t => t.taskCategory === "Creative" || t.subCategory);
+  }, [userDepartment, userDesignation, categoryFilter, tasks]);
 
   // Reset page to 1 whenever any filter changes
   useEffect(() => {
@@ -229,6 +264,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     priorityFilter,
     timeframeFilter,
     categoryFilter,
+    subCategoryFilter,
   ]);
 
   const taskCategories = useMemo(() => {
@@ -243,6 +279,12 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [taskFormTitle, setTaskFormTitle] = useState("");
   const [taskFormDesc, setTaskFormDesc] = useState("");
+  const [taskFormCategory, setTaskFormCategory] = useState("General");
+  const [taskFormSubCategory, setTaskFormSubCategory] = useState("Script");
+  const [taskFormCreativeRef, setTaskFormCreativeRef] = useState("");
+  const [taskFormCreativeDrive, setTaskFormCreativeDrive] = useState("");
+  const [taskFormCreativeType, setTaskFormCreativeType] = useState("Reel");
+  const [taskFormCreativeScript, setTaskFormCreativeScript] = useState("");
   const [taskFormPriority, setTaskFormPriority] = useState<Priority>("Medium");
   const [taskFormDueDate, setTaskFormDueDate] = useState("");
   const [taskFormAssignee, setTaskFormAssignee] = useState("");
@@ -259,6 +301,12 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
       setEditingTaskId(null);
       setTaskFormTitle("");
       setTaskFormDesc("");
+      setTaskFormCategory("General");
+      setTaskFormSubCategory("Script");
+      setTaskFormCreativeRef("");
+      setTaskFormCreativeDrive("");
+      setTaskFormCreativeType("Reel");
+      setTaskFormCreativeScript("");
       setTaskFormPriority("Medium");
       setTaskFormDueDate(format(new Date(), "yyyy-MM-dd"));
       setTaskFormAssignee(currentUserId || employees[0]?.id || "");
@@ -273,6 +321,12 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
       setEditingTaskId(null);
       setTaskFormTitle("");
       setTaskFormDesc("");
+      setTaskFormCategory("General");
+      setTaskFormSubCategory("Script");
+      setTaskFormCreativeRef("");
+      setTaskFormCreativeDrive("");
+      setTaskFormCreativeType("Reel");
+      setTaskFormCreativeScript("");
       setTaskFormPriority("Medium");
       setTaskFormDueDate(format(new Date(), "yyyy-MM-dd"));
       setTaskFormAssignee(currentUserId || employees[0]?.id || "");
@@ -508,6 +562,11 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
             isProjectTask: !!t.project_details || t.task_category === "SMM",
             // K15
             taskCategory: t.task_category || "General",
+            subCategory: t.sub_category,
+            creativeDetails: t.creative_details,
+            reasonForPending: t.reason_for_pending,
+            moduleId: t.module_id,
+            phase: t.phase,
             contentItemId: String(t.content_item_id || t.content_item_details?._id || t.content_item_details?.id || ""),
             isAuto: Boolean(t.content_item_id || t.content_item_details?._id) || t.task_category === "Content Calendar" || t.task_category === "SMM" || Boolean((t as any).is_auto),
             isTransferred: Boolean(t.transfer_history && t.transfer_history.length > 0) || Boolean(t.transfer_request?.status === "transferred" || t.transfer_request?.status === "accepted"),
@@ -601,7 +660,10 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   const clientIssuesCount = stats.client_issue || 0;
 
   // Tasks are dynamically queried, filtered, and paginated (25 per page) from the backend directly
-  const filteredTasks = tasks;
+  const filteredTasks = useMemo(() => {
+    if (subCategoryFilter === "All") return tasks;
+    return tasks.filter(t => (t.subCategory || "").toLowerCase() === subCategoryFilter.toLowerCase());
+  }, [tasks, subCategoryFilter]);
   const { items: sortedTasks, requestSort, sortConfig } = useSortableData(filteredTasks);
 
   const totalPages = Math.max(1, Math.ceil(totalServerTasks / pageSize));
@@ -731,7 +793,18 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
         due_date: taskFormDueDate,
         assigned_to: taskFormAssignee,
         recurrence: taskFormRecurrence,
+        task_category: taskFormCategory,
       };
+
+      if (taskFormCategory === "Creative") {
+        payload.sub_category = taskFormSubCategory;
+        payload.creative_details = {
+          reference_link: taskFormCreativeRef.trim() || undefined,
+          drive_link: taskFormCreativeDrive.trim() || undefined,
+          content_type: taskFormCreativeType,
+          script: taskFormCreativeScript.trim() || undefined,
+        };
+      }
 
       const isSelf = taskFormAssignee === currentUserId;
 
@@ -964,6 +1037,12 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     setEditingTaskId(task.id);
     setTaskFormTitle(task.title);
     setTaskFormDesc(task.description);
+    setTaskFormCategory(task.taskCategory || "General");
+    setTaskFormSubCategory(task.subCategory || "Script");
+    setTaskFormCreativeRef(task.creativeDetails?.reference_link || "");
+    setTaskFormCreativeDrive(task.creativeDetails?.drive_link || "");
+    setTaskFormCreativeType(task.creativeDetails?.content_type || "Reel");
+    setTaskFormCreativeScript(task.creativeDetails?.script || "");
     setTaskFormPriority(task.priority);
     setTaskFormDueDate(task.dueDate);
     setTaskFormAssignee(task.assignedToId);
@@ -1318,21 +1397,23 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
             >
               <span>👤 My Tasks</span>
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMainViewMode("all_tasks");
-                setScopeFilter("all");
-              }}
-              className={cn(
-                "px-3.5 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5",
-                mainViewMode === "all_tasks"
-                  ? "bg-background text-primary shadow-sm ring-1 ring-border/60"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <span>👥 All Tasks</span>
-            </button>
+            {canViewAllTasks && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMainViewMode("all_tasks");
+                  setScopeFilter("all");
+                }}
+                className={cn(
+                  "px-3.5 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5",
+                  mainViewMode === "all_tasks"
+                    ? "bg-background text-primary shadow-sm ring-1 ring-border/60"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <span>👥 All Tasks</span>
+              </button>
+            )}
           </div>
 
           {/* Sub-Tabs when in All Tasks Mode */}
@@ -1449,7 +1530,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
             )}
           </div>
 
-          {(statusFilter !== "All" || priorityFilter !== "All" || timeframeFilter !== "today" || scopeFilter !== "all" || categoryFilter !== "All" || departmentFilter !== "All" || assignedToFilter !== "All" || assignedByFilter !== "All" || mainViewMode !== "all_tasks") && (
+          {(statusFilter !== "All" || priorityFilter !== "All" || timeframeFilter !== "today" || scopeFilter !== "all" || categoryFilter !== "All" || subCategoryFilter !== "All" || departmentFilter !== "All" || assignedToFilter !== "All" || assignedByFilter !== "All" || (canViewAllTasks && mainViewMode !== "all_tasks")) && (
             <button
               onClick={() => {
                 setStatusFilter("All");
@@ -1457,18 +1538,73 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                 setTimeframeFilter("today");
                 setScopeFilter("all");
                 setCategoryFilter("All");
+                setSubCategoryFilter("All");
                 setDepartmentFilter("All");
                 setAssignedToFilter("All");
                 setAssignedByFilter("All");
-                setMainViewMode("all_tasks");
+                if (canViewAllTasks) setMainViewMode("all_tasks");
                 setSearchQuery("");
               }}
-              className="text-xs font-bold text-primary hover:underline px-2 ml-auto"
+              className="text-xs font-bold text-primary hover:underline px-2 ml-auto cursor-pointer"
             >
               Reset Filters
             </button>
           )}
         </div>
+
+        {/* Creative Subcategory Filters (Script, Shoot, Caption, Thumbnail, Editing, Approval, Posting) */}
+        {isCreativeScope && (
+          <div className="flex items-center gap-1.5 overflow-x-auto py-1 custom-scrollbar border-t border-border/40 pt-2">
+            <span className="text-[10px] font-black uppercase tracking-wider text-primary shrink-0 mr-1 flex items-center gap-1">
+              <span>🎬</span>
+              <span>Subcategories:</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setSubCategoryFilter("All")}
+              className={cn(
+                "px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer",
+                subCategoryFilter === "All"
+                  ? "bg-primary text-primary-foreground shadow-xs"
+                  : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground border border-border/40"
+              )}
+            >
+              <span>All</span>
+              <span className={cn(
+                "px-1.5 py-0.2 rounded-full text-[9px] font-black",
+                subCategoryFilter === "All" ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+              )}>
+                {tasks.length}
+              </span>
+            </button>
+            {CREATIVE_SUBCATEGORIES.map((sc) => {
+              const count = tasks.filter(t => (t.subCategory || "").toLowerCase() === sc.toLowerCase()).length;
+              return (
+                <button
+                  key={sc}
+                  type="button"
+                  onClick={() => setSubCategoryFilter(sc)}
+                  className={cn(
+                    "px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer",
+                    subCategoryFilter.toLowerCase() === sc.toLowerCase()
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground border border-border/40"
+                  )}
+                >
+                  <span>{sc}</span>
+                  <span className={cn(
+                    "px-1.5 py-0.2 rounded-full text-[9px] font-black",
+                    subCategoryFilter.toLowerCase() === sc.toLowerCase()
+                      ? "bg-white/20 text-white"
+                      : "bg-muted text-muted-foreground"
+                  )}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Centered loading overlay */}
@@ -2173,22 +2309,145 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
               />
             </div>
 
+            {/* Category & Subcategory */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
-                  Priority
+                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-wider block">
+                  Category
                 </label>
                 <SearchableSelect
-                  value={taskFormPriority}
-                  onChange={(val) => setTaskFormPriority(val as Priority)}
+                  value={taskFormCategory}
+                  onChange={(val) => setTaskFormCategory(val)}
                   options={[
-                    { label: "High", value: "High" },
-                    { label: "Medium", value: "Medium" },
-                    { label: "Low", value: "Low" },
+                    { label: "General", value: "General" },
+                    { label: "Creative", value: "Creative" },
+                    { label: "Development", value: "Development" },
+                    { label: "Digital Marketing", value: "Digital Marketing" },
                   ]}
-                  className="w-full h-[38px] text-xs font-bold"
+                  className="w-full h-[38px] text-xs font-semibold"
                 />
               </div>
+
+              {taskFormCategory === "Creative" ? (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-pink-600 uppercase tracking-wider block flex items-center justify-between">
+                    <span>Subcategory</span>
+                    <span className="text-[9px] font-bold text-muted-foreground">(7 Stages)</span>
+                  </label>
+                  <SearchableSelect
+                    value={taskFormSubCategory}
+                    onChange={(val) => setTaskFormSubCategory(val)}
+                    options={[
+                      { label: "1. Script", value: "Script" },
+                      { label: "2. Shoot", value: "Shoot" },
+                      { label: "3. Caption", value: "Caption" },
+                      { label: "4. Thumbnail", value: "Thumbnail" },
+                      { label: "5. Editing", value: "Editing" },
+                      { label: "6. Approval", value: "Approval" },
+                      { label: "7. Posting", value: "Posting" },
+                    ]}
+                    className="w-full h-[38px] text-xs font-bold border-pink-500/30"
+                  />
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
+                    Priority
+                  </label>
+                  <SearchableSelect
+                    value={taskFormPriority}
+                    onChange={(val) => setTaskFormPriority(val as Priority)}
+                    options={[
+                      { label: "High", value: "High" },
+                      { label: "Medium", value: "Medium" },
+                      { label: "Low", value: "Low" },
+                    ]}
+                    className="w-full h-[38px] text-xs font-bold"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Creative Production Details from old-HRMS */}
+            {taskFormCategory === "Creative" && (
+              <div className="p-3.5 bg-pink-500/5 border border-pink-500/20 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black text-pink-600 uppercase tracking-wider">
+                    🎨 Creative Production Details
+                  </span>
+                  <div className="flex items-center gap-1">
+                    {(["Reel", "Post", "Carousel", "Story"] as const).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setTaskFormCreativeType(t)}
+                        className={cn(
+                          "px-2 py-0.5 rounded text-[10px] font-bold transition-all",
+                          taskFormCreativeType === t
+                            ? "bg-pink-600 text-white shadow-xs"
+                            : "bg-muted text-muted-foreground hover:bg-muted/80"
+                        )}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-muted-foreground uppercase">Reference / Benchmark Link</label>
+                    <input
+                      type="url"
+                      placeholder="https://instagram.com/p/... or youtube link"
+                      value={taskFormCreativeRef}
+                      onChange={(e) => setTaskFormCreativeRef(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-card border border-border/60 rounded-xl text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-muted-foreground uppercase">Drive / Assets Link</label>
+                    <input
+                      type="url"
+                      placeholder="https://drive.google.com/..."
+                      value={taskFormCreativeDrive}
+                      onChange={(e) => setTaskFormCreativeDrive(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-card border border-border/60 rounded-xl text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-muted-foreground uppercase">Script / Caption Draft</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Enter hook, script outline, audio reference, or caption draft..."
+                    value={taskFormCreativeScript}
+                    onChange={(e) => setTaskFormCreativeScript(e.target.value)}
+                    className="w-full px-2.5 py-1.5 bg-card border border-border/60 rounded-xl text-xs resize-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {taskFormCategory === "Creative" && (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
+                    Priority
+                  </label>
+                  <SearchableSelect
+                    value={taskFormPriority}
+                    onChange={(val) => setTaskFormPriority(val as Priority)}
+                    options={[
+                      { label: "High", value: "High" },
+                      { label: "Medium", value: "Medium" },
+                      { label: "Low", value: "Low" },
+                    ]}
+                    className="w-full h-[38px] text-xs font-bold"
+                  />
+                </div>
+              )}
 
               <div className="space-y-1">
                 <div className="flex items-center justify-between">

@@ -466,10 +466,12 @@ async def delete_employee_signature(employee_id: str, current_user: dict = Depen
     """Allows Admin or HR to delete/reset an employee signature."""
     requester_id = str(current_user.get("_id") or current_user.get("id") or "")
     work_info = current_user.get("work_details") or {}
-    role = work_info.get("system_role", "Employee")
-    dept = str(work_info.get("department") or "").strip().lower()
-    is_admin = role == "Admin" or bool(current_user.get("is_superuser"))
-    is_hr = dept == "hr" or "hr" in str(work_info.get("designation") or "").lower()
+    role = str(work_info.get("system_role") or current_user.get("role") or "").strip().lower()
+    dept = str(work_info.get("department") or current_user.get("department") or "").strip().lower()
+    desig = str(work_info.get("designation") or current_user.get("designation") or "").strip().lower()
+    
+    is_admin = role in ["admin", "superadmin", "super admin", "subadmin", "director", "ceo"] or bool(current_user.get("is_superuser"))
+    is_hr = dept == "hr" or "hr" in desig or role == "hr"
     is_self = requester_id == str(employee_id)
 
     if not (is_admin or is_hr or is_self):
@@ -478,13 +480,25 @@ async def delete_employee_signature(employee_id: str, current_user: dict = Depen
             detail="Permission denied to delete employee signature."
         )
 
-    await EmployeeRepository.update_employee(employee_id, {
-        "signature": "",
-        "signature_url": "",
-        "personal_info.signature": "",
-        "personal_info.signature_url": ""
-    })
+    from app.database.db import get_database
+    from bson import ObjectId
+    db = get_database()
+    if db is not None:
+        query = {"_id": ObjectId(str(employee_id))} if ObjectId.is_valid(str(employee_id)) else {
+            "$or": [{"work_details.employee_id": str(employee_id)}, {"employee_id": str(employee_id)}]
+        }
+        await db["employees"].update_one(query, {
+            "$unset": {
+                "signature": "",
+                "signature_url": "",
+                "personal_info.signature": "",
+                "personal_info.signature_url": "",
+                "bank_and_docs.signature": "",
+                "bank_and_docs.signature_url": ""
+            }
+        })
 
     await delete_cache(f"employee:{employee_id}")
     await clear_pattern("employees:list:*")
+    await clear_pattern("employees:*")
     return {"status": "success", "message": "Employee signature deleted successfully."}

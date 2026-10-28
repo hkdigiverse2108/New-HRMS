@@ -56,11 +56,14 @@ class TaskBase(BaseModel):
         return str(v).strip()
     
     # Optional fields
-    task_category: Optional[str] = Field(default="General", description="Category of the task (e.g. General, SMM, Development)")
+    task_category: Optional[str] = Field(default="General", description="Category of the task (e.g. General, Creative, Development, Digital Marketing)")
+    sub_category: Optional[str] = Field(default=None, description="Subcategory for Creative: Script, Shoot, Caption, Thumbnail, Editing, Approval, Posting")
+    creative_details: Optional[dict] = Field(default=None, description="Detailed creative fields (references, script, drive link, etc.)")
     content_item_id: Optional[str] = None
     project_id: Optional[str] = None
     creative_role: Optional[str] = None
-    
+    module_id: Optional[str] = None
+    phase: Optional[str] = None
     transfer_request: Optional[TaskTransferRequest] = None
     transfer_history: list[TaskTransferHistory] = Field(default_factory=list)
     recurrence: Optional[str] = Field(default="none", description="Recurrence frequency: none, daily, weekly, monthly")
@@ -120,7 +123,13 @@ class TaskUpdate(BaseModel):
     approved_by: Optional[str] = None
     approved_at: Optional[datetime] = None
     review_rejected_reason: Optional[str] = None
-    assigned_by: Optional[str] = None
+    task_category: Optional[str] = None
+    sub_category: Optional[str] = None
+    creative_details: Optional[dict] = None
+    reason_for_pending: Optional[str] = None
+    module_id: Optional[str] = None
+    phase: Optional[str] = None
+    project_id: Optional[str] = None
     activity_history: Optional[list[dict]] = None
     history_assigned_to: Optional[str] = None
     history_assigned_by: Optional[str] = None

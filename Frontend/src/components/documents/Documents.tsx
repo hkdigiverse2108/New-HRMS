@@ -35,13 +35,18 @@ export function Documents({ setActive }: { setActive?: (path: string) => void })
   const isAdminOrHR = isUserAdmin(user) || ["admin", "subadmin", "superadmin", "hr", "hr manager"].some(r => userRole.includes(r)) || userDept === "hr";
 
   const visibleTabs = TABS.filter(tab => {
-    if (tab.id === "types" || tab.id === "templates") {
+    if (["types", "templates", "contracts", "signatures"].includes(tab.id)) {
       return isAdminOrHR;
     }
     return true;
   });
 
   const [activeTab, setActiveTab] = usePersistentState("documents.tab", "submitted");
+
+  // Fallback to submitted if non-admin somehow has an admin tab selected
+  const currentTab = !isAdminOrHR && ["types", "templates", "contracts", "signatures"].includes(activeTab)
+    ? "submitted"
+    : activeTab;
 
   return (
     <div className="w-full space-y-8 animate-in fade-in duration-500">
@@ -65,12 +70,12 @@ export function Documents({ setActive }: { setActive?: (path: string) => void })
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
                   "flex items-center gap-2 px-5 py-3 min-h-[44px] text-sm font-bold rounded-t-xl transition-all border-b-2 whitespace-nowrap shrink-0",
-                  activeTab === tab.id
+                  currentTab === tab.id
                     ? "bg-primary/5 text-primary border-primary"
                     : "text-muted-foreground border-transparent hover:text-foreground hover:bg-muted/50"
                 )}
               >
-                <tab.icon className={cn("w-4 h-4", activeTab === tab.id ? "text-primary" : "text-muted-foreground/70")} />
+                <tab.icon className={cn("w-4 h-4", currentTab === tab.id ? "text-primary" : "text-muted-foreground/70")} />
                 {tab.label}
               </button>
             ))}
@@ -79,12 +84,12 @@ export function Documents({ setActive }: { setActive?: (path: string) => void })
       )}
 
       <div className="mt-8">
-        {activeTab === "submitted" && <SubmittedDocuments />}
-        {activeTab === "requests" && <OfficialLetters onNavigate={setActive} />}
-        {activeTab === "types" && <DocumentTypes />}
-        {activeTab === "templates" && <DocumentTemplates />}
-        {activeTab === "contracts" && <VerifyContracts />}
-        {activeTab === "signatures" && <EmployeeSignatures />}
+        {currentTab === "submitted" && <SubmittedDocuments />}
+        {currentTab === "requests" && <OfficialLetters onNavigate={setActive} />}
+        {currentTab === "types" && isAdminOrHR && <DocumentTypes />}
+        {currentTab === "templates" && isAdminOrHR && <DocumentTemplates />}
+        {currentTab === "contracts" && isAdminOrHR && <VerifyContracts />}
+        {currentTab === "signatures" && isAdminOrHR && <EmployeeSignatures />}
       </div>
     </div>
   );

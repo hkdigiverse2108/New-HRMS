@@ -146,15 +146,25 @@ export function DailyProgress() {
   const isHr = userDept === "hr" || userDesig.includes("hr") || userRole === "hr";
   const isHead = userDesig.includes("head") || userRole.includes("head");
   const isTeamLeader = userDesig.includes("team leader") || userDesig.includes("tl") || userRole.includes("team leader");
+  const isSenior = userDesig.includes("senior") || userDesig.includes("sr.") || userDesig.includes("sr ");
+  const isJunior = userDesig.includes("junior") || userDesig.includes("jr.") || userDesig.includes("jr ");
+  const isHierarchicalReviewer = isTeamLeader || isSenior || isJunior;
 
-  const canReadProgress = isAdmin || isHr || isHead || isTeamLeader || hasModulePermission(user, "/approvals/daily-progress", "read") || hasModulePermission(user, "/daily-progress", "read");
-  const canManageProgress = isAdmin || isHr || isHead || isTeamLeader || hasModulePermission(user, "/approvals/daily-progress", "update") || hasModulePermission(user, "/daily-progress", "update") || hasModulePermission(user, "/approvals/daily-progress", "all");
+  const currentUserId = String(user?.id || anyUser?._id || anyUser?.employee_id || "");
+  const isOwnReport = (rec?: DailyRecord | null) => {
+    if (!rec) return false;
+    const eid = String(rec.employee_id || "");
+    return eid === currentUserId || eid === String(user?.id) || eid === String(anyUser?._id) || eid === String(anyUser?.employee_id);
+  };
+
+  const canReadProgress = isAdmin || isHr || isHead || isHierarchicalReviewer || hasModulePermission(user, "/approvals/daily-progress", "read") || hasModulePermission(user, "/daily-progress", "read");
+  const canManageProgress = isAdmin || isHr || isHead || isHierarchicalReviewer || hasModulePermission(user, "/approvals/daily-progress", "update") || hasModulePermission(user, "/daily-progress", "update") || hasModulePermission(user, "/approvals/daily-progress", "all");
   const isReviewer = canReadProgress || canManageProgress;
 
   // Filter Group Tab: 'leaders_hr' (Team Leaders, Heads, HR - default for Admin) vs 'employees' (Regular Staff)
   const [groupTab, setGroupTab] = usePersistentState<GroupTab>("dailyProgress.groupTab", "leaders_hr");
-  // Team Leader (not Admin/HR/Head): own report vs team members' reports
-  const showLeaderTabs = isTeamLeader && !(isAdmin || isHr || isHead);
+  // Reviewer (TL, Senior, Junior - not Admin/HR/Head): own report vs subordinates' reports
+  const showLeaderTabs = isHierarchicalReviewer && !(isAdmin || isHr || isHead);
   const [leaderView, setLeaderView] = usePersistentState<"team" | "my">("dailyProgress.leaderView", "team");
 
   const [search, setSearch] = useState("");
@@ -362,8 +372,8 @@ export function DailyProgress() {
       toast.error("Cannot approve: Employee is on leave for this date.");
       return;
     }
-    if (selectedRecord.employee_id === user?.id) {
-      toast.error("You cannot approve your own daily progress report.");
+    if (isOwnReport(selectedRecord)) {
+      toast.error("You cannot approve your own daily progress report. An Admin or another Head must verify it.");
       return;
     }
     if (currentRating === 0 || !currentRemarks.trim()) {
@@ -441,11 +451,13 @@ export function DailyProgress() {
           </p>
         </div>
 
-        {/* Team Leader Badge indicator */}
-        {isTeamLeader && !isAdmin && !isHr && !isHead && (
+        {/* Hierarchical Reviewer Badge indicator */}
+        {isHierarchicalReviewer && !isAdmin && !isHr && !isHead && (
           <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-xl text-primary text-xs font-black">
             <Users className="w-4 h-4" />
-            <span>Team Leader View: Team Members Only</span>
+            <span>
+              {isTeamLeader ? "Team Leader View: Team Members" : isSenior ? "Senior View: Juniors & Interns" : "Junior View: Interns"}
+            </span>
           </div>
         )}
       </div>
@@ -748,7 +760,7 @@ export function DailyProgress() {
                   record.verificationStatus === "Pending"
                     ? (record.onLeave
                         ? "bg-sky-500/10 hover:bg-sky-500/20 text-sky-700 dark:text-sky-400 border border-sky-500/20"
-                        : record.employee_id === user?.id
+                        : isOwnReport(record)
                           ? "bg-muted text-muted-foreground hover:bg-muted/80"
                           : "bg-primary/10 hover:bg-primary/20 text-primary")
                     : "bg-muted/50 hover:bg-muted text-foreground"
@@ -757,8 +769,8 @@ export function DailyProgress() {
                 {record.verificationStatus === "Pending"
                   ? (record.onLeave
                       ? "On Leave (View)"
-                      : record.employee_id === user?.id
-                        ? "Self Report"
+                      : isOwnReport(record)
+                        ? "Self Report (View)"
                         : "Verify & Rate")
                   : "View Details"}
               </button>
@@ -852,7 +864,7 @@ export function DailyProgress() {
               {/* Rating & Verification Section */}
               <div className="bg-muted/10 p-6 rounded-2xl border border-border/50 flex flex-col space-y-5">
                 {/* Self Report Warning */}
-                {selectedRecord && selectedRecord.employee_id === user?.id && (
+                {isOwnReport(selectedRecord) && (
                   <div className="bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 p-3.5 rounded-xl text-xs font-bold flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
                     <span>You cannot approve your own daily progress report. An Admin or another Head must verify it.</span>
@@ -1013,13 +1025,13 @@ export function DailyProgress() {
                   currentRating === 0 ||
                   !currentRemarks.trim() ||
                   isSubmitting ||
-                  (selectedRecord?.employee_id === user?.id) ||
+                  isOwnReport(selectedRecord) ||
                   Boolean(selectedRecord?.onLeave)
                 }
                 title={
                   selectedRecord?.onLeave
                     ? "Cannot approve: Employee is on leave for this date"
-                    : selectedRecord?.employee_id === user?.id
+                    : isOwnReport(selectedRecord)
                       ? "You cannot approve your own report"
                       : currentRating === 0
                         ? "KRA-KPI Rating is required"

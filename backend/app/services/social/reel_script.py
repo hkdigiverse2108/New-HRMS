@@ -100,17 +100,36 @@ Please generate the complete script in the required JSON structure.
             )
             raise RuntimeError(f"Script generation failed: {str(e)}")
 
+        def _norm_str(v: Any) -> str:
+            if v is None:
+                return ""
+            if isinstance(v, str):
+                return v.strip()
+            if isinstance(v, dict):
+                return str(v.get("text") or v.get("cta") or v.get("value") or v.get("notes") or v.get("spoken_words") or "").strip()
+            return str(v).strip()
+
+        def _norm_ctas(raw: Any) -> List[str]:
+            if not isinstance(raw, list):
+                return []
+            res = []
+            for item in raw:
+                s = _norm_str(item)
+                if s:
+                    res.append(s)
+            return res
+
         # Store script in database
         script_doc = {
-            "title": result_json.get("title") or topic[:40],
+            "title": _norm_str(result_json.get("title")) or topic[:40],
             "topic": topic,
             "brand_id": brand_id,
             "brand_name": brand.get("name") if brand else None,
             "target_duration_sec": result_json.get("target_duration_sec") or duration,
             "hooks": result_json.get("hooks", []),
             "scenes": result_json.get("scenes", []),
-            "ctas": result_json.get("ctas", []),
-            "production_notes": result_json.get("production_notes", ""),
+            "ctas": _norm_ctas(result_json.get("ctas", [])),
+            "production_notes": _norm_str(result_json.get("production_notes", "")),
             "status": "draft",
             "revision_count": 1,
             "is_favorited": False,
@@ -173,13 +192,32 @@ Please output the complete revised JSON script.
             logger.exception("Failed to revise reel script: %s", e)
             raise RuntimeError(f"Script revision failed: {str(e)}")
 
+        def _norm_str(v: Any) -> str:
+            if v is None:
+                return ""
+            if isinstance(v, str):
+                return v.strip()
+            if isinstance(v, dict):
+                return str(v.get("text") or v.get("cta") or v.get("value") or v.get("notes") or v.get("spoken_words") or "").strip()
+            return str(v).strip()
+
+        def _norm_ctas(raw: Any) -> List[str]:
+            if not isinstance(raw, list):
+                return []
+            res = []
+            for item in raw:
+                s = _norm_str(item)
+                if s:
+                    res.append(s)
+            return res
+
         updated_fields = {
-            "title": result_json.get("title") or prev.get("title"),
+            "title": _norm_str(result_json.get("title")) or prev.get("title"),
             "target_duration_sec": result_json.get("target_duration_sec") or prev.get("target_duration_sec"),
             "hooks": result_json.get("hooks", prev.get("hooks")),
             "scenes": result_json.get("scenes", prev.get("scenes")),
-            "ctas": result_json.get("ctas", prev.get("ctas")),
-            "production_notes": result_json.get("production_notes", prev.get("production_notes")),
+            "ctas": _norm_ctas(result_json.get("ctas", prev.get("ctas"))),
+            "production_notes": _norm_str(result_json.get("production_notes", prev.get("production_notes"))),
             "revision_count": int(prev.get("revision_count", 1)) + 1,
             "last_feedback": feedback,
             "updated_at": datetime.now(timezone.utc).isoformat(),

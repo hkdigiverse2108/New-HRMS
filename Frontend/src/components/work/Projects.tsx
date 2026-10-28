@@ -17,6 +17,7 @@ import { api } from "@/lib/api";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useEmployeesContext } from "@/components/employees/EmployeeContext";
 import { useAuth } from "@/components/auth/AuthContext";
+import { useModulePermissions } from "@/hooks/useModulePermissions";
 import { DigitalMarketingOperations, MarketingRecord } from "./DigitalMarketingOperations";
 
 import { ClientFinanceModal } from "./ClientFinanceModal";
@@ -143,6 +144,7 @@ interface Project {
       phase?: string | undefined;
     }[];
   }[] | undefined;
+  custom_statuses?: string[] | undefined;
   is_archived?: boolean | undefined;
   marketing_assignees?: string[] | undefined;
   marketing_assignees_details?: any[] | undefined;
@@ -338,6 +340,7 @@ export const CREATIVE_ROLES = [
   { key: "caption", label: "Caption & Copy", icon: "✍️", desc: "Copywriting & Hashtags" },
   { key: "posting_publisher", label: "Posting / Publisher", icon: "📢", desc: "Social Media Live Posting" },
   { key: "finance", label: "Finance & Accounts", icon: "💰", desc: "Client Invoicing, Payment Tracking & Follow-ups" },
+  { key: "other", label: "Other Team Members", icon: "👥", desc: "Additional team members with project access" },
 ] as const;
 
 export type FixedDepartment = typeof FIXED_DEPARTMENTS[number];
@@ -1967,6 +1970,32 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           return { ...project, modules: updatedModules };
         }
       }
+      if (isDevCategory(project.category)) {
+        const modules = [...(project.modules || [])];
+        if (modules.length === 0) {
+          modules.push({
+            id: `dev-mod-${project.id}`,
+            name: "Core Features & Architecture",
+            status: "in-progress",
+            priority: "high",
+            tasks: [
+              { id: `dt-${project.id}-1`, title: "Setup Project Repository & CI/CD Pipeline", status: "completed", phase: "Architecture", assignedToName: "Alex" },
+              { id: `dt-${project.id}-2`, title: "JWT Authentication & Session Management", status: "completed", phase: "Backend", assignedToName: "Mike" },
+              { id: `dt-${project.id}-3`, title: "Responsive Dashboard Layout & Navigation", status: "in-progress", phase: "Frontend", assignedToName: "Sarah" },
+              { id: `dt-${project.id}-4`, title: "REST API Endpoint Integration & Validation", status: "in-progress", phase: "Backend", assignedToName: "Mike" },
+              { id: `dt-${project.id}-5`, title: "Payment Gateway Integration", status: "pending", reasonForPending: "Awaiting Client API Credentials", phase: "Integration", assignedToName: "Alex" },
+              { id: `dt-${project.id}-6`, title: "Fix Mobile View Overflow & Table Padding", status: "bugs", phase: "QA", assignedToName: "Sarah" },
+              { id: `dt-${project.id}-7`, title: "Unit & Integration Test Suite Execution", status: "todo", phase: "Testing", assignedToName: "David" }
+            ]
+          });
+          updated = true;
+          return {
+            ...project,
+            modules,
+            custom_statuses: project.custom_statuses || ["To Do", "In Progress", "Bugs", "On Hold", "Pending", "Completed"]
+          };
+        }
+      }
       return project;
     });
 
@@ -2029,6 +2058,79 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
     return false;
   }, [user, employees]);
+
+  const projectPerms = useModulePermissions("/work/projects");
+  const clientPerms = useModulePermissions("/work/clients");
+
+  const isHead = useMemo(() => {
+    const desig = String(user?.designation || (user as any)?.work_details?.designation || "").toLowerCase();
+    const role = String(user?.role || (user as any)?.system_role || "").toLowerCase();
+    return desig.includes("head") || role.includes("head");
+  }, [user]);
+
+  const isTl = useMemo(() => {
+    const desig = String(user?.designation || (user as any)?.work_details?.designation || "").toLowerCase();
+    const role = String(user?.role || (user as any)?.system_role || "").toLowerCase();
+    return !isHead && (desig.includes("lead") || desig.includes("tl") || desig.includes("manager") || role.includes("lead"));
+  }, [user, isHead]);
+
+  const canCreateProject = isAdminOrHr || isHead || isTl || projectPerms.canCreate;
+  const canCreateClient = isAdminOrHr || isHead || isTl || clientPerms.canCreate;
+
+  const [tlProjectScope, setTlProjectScope] = useState<"all" | "my">("my");
+
+  const isUserAssignedToProject = useCallback((project: Project): boolean => {
+    if (isAdminOrHr || isHead) return true;
+    const currentId = String(user?.id || (user as any)?._id || (user as any)?.employee_id || (user as any)?.employeeId || "").trim();
+    const currentName = String(user?.name || "").trim().toLowerCase();
+
+    // Check team array
+    if (project.team && project.team.some(m => {
+      const mName = String(m.name || "").trim().toLowerCase();
+      return mName && (mName === currentName || currentName.includes(mName));
+    })) return true;
+
+    // Check creativeTeam (including other roles and multi-select assignees)
+    if (project.creativeTeam) {
+      const roles = Object.values(project.creativeTeam);
+      if (roles.some((val: any) => {
+        if (!val) return false;
+        if (Array.isArray(val)) {
+          return val.some(v => {
+            const str = String(v || "").toLowerCase().trim();
+            return str && (str === currentId.toLowerCase() || str === currentName || str.includes(currentName));
+          });
+        }
+        const str = String(val || "").toLowerCase().trim();
+        if (str.includes(",")) {
+          return str.split(",").map(s => s.trim()).some(s => s === currentId.toLowerCase() || s === currentName);
+        }
+        return str && (str === currentId.toLowerCase() || str === currentName || str.includes(currentName));
+      })) return true;
+    }
+
+    // Check marketing_assignees
+    if (project.marketing_assignees && project.marketing_assignees.some(id => String(id) === currentId)) return true;
+
+    // Check finance_assignees
+    if (project.finance_assignees && project.finance_assignees.some(id => String(id) === currentId)) return true;
+
+    // Check module tasks assignedToName
+    if (project.modules && project.modules.some(m => m.tasks && m.tasks.some(t => {
+      const tAssigned = String(t.assignedToName || "").trim().toLowerCase();
+      return tAssigned && (tAssigned === currentName || currentName.includes(tAssigned));
+    }))) return true;
+
+    return false;
+  }, [user, isAdminOrHr, isHead]);
+
+  const isUserAssignedToClient = useCallback((client: Client): boolean => {
+    if (isAdminOrHr || isHead) return true;
+    if (isTl && tlProjectScope === "all") return true;
+    const currentId = String(user?.id || (user as any)?._id || (user as any)?.employee_id || (user as any)?.employeeId || "").trim();
+    if (client.assignedEmployeeId && String(client.assignedEmployeeId) === currentId) return true;
+    return projects.some(p => p.clientId === client.id && isUserAssignedToProject(p));
+  }, [user, isAdminOrHr, isHead, isTl, tlProjectScope, projects, isUserAssignedToProject]);
 
   // K10 / Transcript [27:01]: Dynamic Finance Access
   // Admin has full access; employees only if assigned to Finance role in the project
@@ -2112,6 +2214,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     caption: "",
     posting_publisher: "",
     finance: "",
+    other: "",
   });
   const [assigningMarketingAssignees, setAssigningMarketingAssignees] = useState<string[]>([]);
   const [assigningFinanceAssignees, setAssigningFinanceAssignees] = useState<string[]>([]);
@@ -2120,6 +2223,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
   const openAssignTeamModal = (proj: Project) => {
     setAssigningProject(proj);
+    const existingOther = proj.creativeTeam?.["other"];
+    const otherVal = Array.isArray(existingOther) ? existingOther.join(",") : (existingOther || "");
     setCreativeTeamForm({
       cc_creator: proj.creativeTeam?.["cc_creator"] || "",
       scripting: proj.creativeTeam?.["scripting"] || "",
@@ -2131,6 +2236,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       caption: proj.creativeTeam?.["caption"] || "",
       posting_publisher: proj.creativeTeam?.["posting_publisher"] || "",
       finance: proj.creativeTeam?.["finance"] || "",
+      other: otherVal,
     });
     setAssigningMarketingAssignees(proj.marketing_assignees || []);
     const existingFin = (proj as any).finance_assignees || (proj.creativeTeam?.finance ? proj.creativeTeam.finance.split(",").map((x: string) => x.trim()).filter(Boolean) : []);
@@ -3012,7 +3118,29 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   const [editingModuleTask, setEditingModuleTask] = useState<any>(null);
   const [isModuleTaskModalOpen, setIsModuleTaskModalOpen] = useState(false);
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
+  const [draggingOverCol, setDraggingOverCol] = useState<string | null>(null);
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [isPresetsModalOpen, setIsPresetsModalOpen] = useState(false);
+  // Add Status Column Modal State (UI-wise replacement for window.prompt)
+  const [isAddStatusColumnModalOpen, setIsAddStatusColumnModalOpen] = useState(false);
+  const [newStatusColumnName, setNewStatusColumnName] = useState("");
+  const [statusColumnError, setStatusColumnError] = useState("");
+
+  // Task Move Reason Modal State (UI-wise replacement for window.prompt)
+  const [taskReasonModal, setTaskReasonModal] = useState<{
+    isOpen: boolean;
+    taskId: string;
+    taskTitle: string;
+    targetStatus: string;
+    reason: string;
+    fromStatus?: string;
+  }>({
+    isOpen: false,
+    taskId: "",
+    taskTitle: "",
+    targetStatus: "",
+    reason: "",
+  });
   const [isAddMilestoneModalOpen, setIsAddMilestoneModalOpen] = useState(false);
   const [editingMilestone, setEditingMilestone] = useState<any>(null);
   const [milestoneForm, setMilestoneForm] = useState({
@@ -3231,6 +3359,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   // Task 24: CC Custom PDF Export States
   const [isPdfExportModalOpen, setIsPdfExportModalOpen] = useState(false);
   const [pdfMonthFilter, setPdfMonthFilter] = useState<string>("Current");
+  const [pdfCustomStartDate, setPdfCustomStartDate] = useState<string>("");
+  const [pdfCustomEndDate, setPdfCustomEndDate] = useState<string>("");
   const [pdfOrientation, setPdfOrientation] = useState<"portrait" | "landscape">("portrait");
   const [isExportingCcPdf, setIsExportingCcPdf] = useState(false);
   const [pdfSelectedColumns, setPdfSelectedColumns] = useState<string[]>([
@@ -3331,19 +3461,38 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     let ccMonthLabel = "All Months";
     let items = allItems;
 
-    const chosenFilter = pdfMonthFilter || calendarMonthFilter || "Current";
+    const chosenFilter = (pdfMonthFilter || calendarMonthFilter || "Current").trim();
+    const isCustom = chosenFilter.toLowerCase() === "custom";
 
-    if (chosenFilter === "Current") {
-      const mItems = allItems.filter(i => i.postingDate && i.postingDate.startsWith(currentYearMonth));
-      if (mItems.length > 0) {
-        items = mItems;
+    if (isCustom) {
+      const customStart = pdfCustomStartDate || ccCustomStartDate;
+      const customEnd = pdfCustomEndDate || ccCustomEndDate;
+      if (!customStart && !customEnd) {
+        toast.error("Please select a start date or end date for custom export");
+        return;
       }
+      const start = customStart ? new Date(customStart + "T00:00:00").getTime() : 0;
+      const end = customEnd ? new Date(customEnd + "T23:59:59").getTime() : Infinity;
+      const mItems = allItems.filter(i => {
+        if (!i.postingDate) return false;
+        const itemTime = new Date(i.postingDate).getTime();
+        return itemTime >= start && itemTime <= end;
+      });
+      if (mItems.length === 0) {
+        toast.error("No content calendar items found in the selected date range");
+        return;
+      }
+      items = mItems;
+      const sLabel = customStart ? formatDayMonthYear(customStart) : "Start";
+      const eLabel = customEnd ? formatDayMonthYear(customEnd) : "End";
+      ccMonthLabel = `${sLabel} to ${eLabel}`;
+    } else if (chosenFilter === "Current") {
+      const mItems = allItems.filter(i => i.postingDate && i.postingDate.startsWith(currentYearMonth));
+      items = mItems;
       ccMonthLabel = format(now, "MMMM yyyy");
     } else if (chosenFilter && chosenFilter !== "All" && /^\d{4}-\d{2}$/.test(chosenFilter)) {
       const mItems = allItems.filter(i => i.postingDate && i.postingDate.startsWith(chosenFilter));
-      if (mItems.length > 0) {
-        items = mItems;
-      }
+      items = mItems;
       const parts = chosenFilter.split("-").map(Number);
       const yy = parts[0] ?? now.getFullYear();
       const mm = parts[1] ?? (now.getMonth() + 1);
@@ -4509,6 +4658,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   }, [projects, clients, categories, activeTab, isProjectTabActive]);
 
   const filteredClients = clients.filter(client => {
+    if (!isUserAssignedToClient(client)) return false;
     if (activeTab === "Active Clients" && client.status !== "Active") return false;
     if (activeTab === "Archived Clients" && client.status !== "Archived") return false;
     if (searchQuery && !client.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
@@ -4532,6 +4682,13 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   // Projects landing lists backed by is_archived flag (Completed projects stay in active view if not archived)
   // On Hold sorted last
   const filteredProjects = projects.filter(project => {
+    if (!(isAdminOrHr || isHead)) {
+      if (isTl && tlProjectScope === "my") {
+        if (!isUserAssignedToProject(project)) return false;
+      } else if (!isTl) {
+        if (!isUserAssignedToProject(project)) return false;
+      }
+    }
     if (activeTab === "Active Projects" && project.is_archived) return false;
     if (activeTab === "Archived Projects" && !project.is_archived) return false;
     if (searchQuery && !`${project.name} ${clients.find(c => c.id === project.clientId)?.name || ""}`.toLowerCase().includes(searchQuery.toLowerCase())) return false;
@@ -4547,6 +4704,13 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   // Consolidate duplicate projects under the same client/brand in the UI landing grid (Issue 6)
   const groupedProjects = useMemo(() => {
     const matchedProjects = projects.filter(project => {
+      if (!(isAdminOrHr || isHead)) {
+        if (isTl && tlProjectScope === "my") {
+          if (!isUserAssignedToProject(project)) return false;
+        } else if (!isTl) {
+          if (!isUserAssignedToProject(project)) return false;
+        }
+      }
       if (activeTab === "Active Projects" && project.is_archived) return false;
       if (activeTab === "Archived Projects" && !project.is_archived) return false;
       const projClient = clients.find(c => c.id === project.clientId);
@@ -5247,9 +5411,13 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                     {CREATIVE_ROLES.map(role => {
+                      const isOtherRole = role.key === "other";
+                      const otherIds = isOtherRole ? (creativeTeamForm["other"] || "").split(",").map(x => x.trim()).filter(Boolean) : [];
+                      const otherEmps = isOtherRole ? otherIds.map(id => employees.find(e => String(e.id) === String(id) || String((e as any)._id) === String(id))).filter(Boolean) as any[] : [];
+
                       const selectedEmpId = creativeTeamForm[role.key] || "";
                       const selectedEmp = employees.find(e => String(e.id) === String(selectedEmpId) || String((e as any)._id) === String(selectedEmpId));
-                      const isAssigned = !!selectedEmp;
+                      const isAssigned = isOtherRole ? otherEmps.length > 0 : !!selectedEmp;
 
                       return (
                         <div
@@ -5296,7 +5464,30 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                       : "bg-muted/40 border-dashed border-border/80 hover:border-border text-muted-foreground hover:bg-muted/60"
                                   )}
                                 >
-                                  {selectedEmp ? (
+                                  {isOtherRole ? (
+                                    otherEmps.length > 0 ? (
+                                      <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
+                                        <div className="flex -space-x-1.5 overflow-hidden shrink-0">
+                                          {otherEmps.slice(0, 3).map((e, idx) => (
+                                            <UserAvatar key={idx} name={e.name} avatar={e.avatar} size="w-6 h-6" />
+                                          ))}
+                                        </div>
+                                        <span className="font-bold text-foreground text-xs truncate min-w-0 text-left">
+                                          {otherEmps.map(e => e.name).join(", ")}
+                                        </span>
+                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/10 text-primary shrink-0">
+                                          {otherEmps.length}
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-2 min-w-0 flex-1 text-muted-foreground">
+                                        <div className="w-6 h-6 rounded-full bg-muted border border-dashed border-border/80 flex items-center justify-center shrink-0">
+                                          <Users className="w-3 h-3 text-muted-foreground/60" />
+                                        </div>
+                                        <span className="text-xs truncate">-- Multi-Select Other Members --</span>
+                                      </div>
+                                    )
+                                  ) : selectedEmp ? (
                                     <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
                                       <UserAvatar name={selectedEmp.name} avatar={selectedEmp.avatar} size="w-6 h-6" />
                                       <span className="font-bold text-foreground text-xs truncate min-w-0 text-left">
@@ -5369,87 +5560,152 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                   </div>
                                 </div>
 
-                                <div className="max-h-56 overflow-y-auto p-1.5 space-y-0.5">
-                                  {/* Option: Unassign */}
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setCreativeTeamForm(prev => ({ ...prev, [role.key]: "" }));
-                                      setOpenRoleId(null);
-                                      setRoleSearchQuery("");
-                                    }}
-                                    className={cn(
-                                      "w-full px-2.5 py-2 rounded-xl text-left text-xs font-semibold flex items-center justify-between gap-2 transition-all cursor-pointer",
-                                      !selectedEmpId
-                                        ? "bg-primary/10 text-primary"
-                                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                {isOtherRole ? (
+                                  <div className="max-h-56 overflow-y-auto p-1.5 space-y-0.5">
+                                    {otherIds.length > 0 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setCreativeTeamForm(prev => ({ ...prev, [role.key]: "" }));
+                                        }}
+                                        className="w-full px-2.5 py-1.5 mb-1 rounded-lg text-left text-xs font-semibold text-rose-500 hover:bg-rose-500/10 flex items-center gap-2 transition-all cursor-pointer"
+                                      >
+                                        <X className="w-3 h-3" />
+                                        <span>Clear all selections</span>
+                                      </button>
                                     )}
-                                  >
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      <div className="w-6 h-6 rounded-full bg-muted/60 border border-dashed border-border flex items-center justify-center shrink-0">
-                                        <X className="w-3 h-3 text-muted-foreground" />
-                                      </div>
-                                      <span>-- Unassigned --</span>
-                                    </div>
-                                    {!selectedEmpId && <Check className="w-3.5 h-3.5 text-primary shrink-0" />}
-                                  </button>
-
-                                  {/* Filtered Employees (Excluding Admin users from workers list) */}
-                                  {assignableEmployees
-                                    .filter(emp => {
-                                      if (!roleSearchQuery.trim()) return true;
-                                      const q = roleSearchQuery.toLowerCase();
-                                      return (
-                                        emp.name.toLowerCase().includes(q) ||
-                                        (emp.department && emp.department.toLowerCase().includes(q)) ||
-                                        (emp.role && emp.role.toLowerCase().includes(q))
-                                      );
-                                    })
-                                    .map(emp => {
-                                      const isSelected = String(emp.id) === String(selectedEmpId) || String((emp as any)._id) === String(selectedEmpId);
-                                      return (
-                                        <button
-                                          key={emp.id}
-                                          type="button"
-                                          onClick={() => {
-                                            setCreativeTeamForm(prev => ({ ...prev, [role.key]: emp.id }));
-                                            setOpenRoleId(null);
-                                            setRoleSearchQuery("");
-                                          }}
-                                          className={cn(
-                                            "w-full px-2.5 py-2 rounded-xl text-left text-xs font-semibold flex items-center justify-between gap-2 transition-all cursor-pointer",
-                                            isSelected
-                                              ? "bg-primary/10 text-primary font-bold"
-                                              : "text-foreground hover:bg-muted/80"
-                                          )}
-                                        >
-                                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                            <UserAvatar name={emp.name} avatar={emp.avatar} size="w-6 h-6" />
-                                            <div className="min-w-0 flex-1">
-                                              <span className="block truncate font-bold text-xs">{emp.name}</span>
-                                              <div className="flex items-center gap-1.5 mt-0.5">
+                                    {assignableEmployees
+                                      .filter(emp => {
+                                        if (!roleSearchQuery.trim()) return true;
+                                        const q = roleSearchQuery.toLowerCase();
+                                        return (
+                                          emp.name.toLowerCase().includes(q) ||
+                                          (emp.department && emp.department.toLowerCase().includes(q))
+                                        );
+                                      })
+                                      .map(emp => {
+                                        const empIdStr = String(emp.id || (emp as any)._id);
+                                        const isSelected = otherIds.includes(empIdStr);
+                                        return (
+                                          <button
+                                            key={empIdStr}
+                                            type="button"
+                                            onClick={() => {
+                                              const nextIds = isSelected
+                                                ? otherIds.filter(id => id !== empIdStr)
+                                                : [...otherIds, empIdStr];
+                                              setCreativeTeamForm(prev => ({ ...prev, [role.key]: nextIds.join(",") }));
+                                            }}
+                                            className={cn(
+                                              "w-full px-2.5 py-2 rounded-xl text-left text-xs font-semibold flex items-center justify-between gap-2 transition-all cursor-pointer",
+                                              isSelected
+                                                ? "bg-primary/10 text-primary font-bold"
+                                                : "text-foreground hover:bg-muted/80"
+                                            )}
+                                          >
+                                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                              <UserAvatar name={emp.name} avatar={emp.avatar} size="w-6 h-6" />
+                                              <div className="min-w-0 flex-1">
+                                                <span className="block truncate font-bold text-xs">{emp.name}</span>
                                                 {emp.department && (
-                                                  <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-muted text-muted-foreground">
+                                                  <span className="text-[9px] font-semibold text-muted-foreground">
                                                     {emp.department}
-                                                  </span>
-                                                )}
-                                                {emp.role && (
-                                                  <span className="text-[9px] text-muted-foreground/70 truncate">
-                                                    {emp.role}
                                                   </span>
                                                 )}
                                               </div>
                                             </div>
-                                          </div>
-                                          {isSelected && (
-                                            <div className="w-4 h-4 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0">
-                                              <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                            {isSelected && (
+                                              <div className="w-4 h-4 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0">
+                                                <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                              </div>
+                                            )}
+                                          </button>
+                                        );
+                                      })}
+                                  </div>
+                                ) : (
+                                  <div className="max-h-56 overflow-y-auto p-1.5 space-y-0.5">
+                                    {/* Option: Unassign */}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setCreativeTeamForm(prev => ({ ...prev, [role.key]: "" }));
+                                        setOpenRoleId(null);
+                                        setRoleSearchQuery("");
+                                      }}
+                                      className={cn(
+                                        "w-full px-2.5 py-2 rounded-xl text-left text-xs font-semibold flex items-center justify-between gap-2 transition-all cursor-pointer",
+                                        !selectedEmpId
+                                          ? "bg-primary/10 text-primary"
+                                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                      )}
+                                    >
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <div className="w-6 h-6 rounded-full bg-muted/60 border border-dashed border-border flex items-center justify-center shrink-0">
+                                          <X className="w-3 h-3 text-muted-foreground" />
+                                        </div>
+                                        <span>-- Unassigned --</span>
+                                      </div>
+                                      {!selectedEmpId && <Check className="w-3.5 h-3.5 text-primary shrink-0" />}
+                                    </button>
+
+                                    {/* Filtered Employees (Excluding Admin users from workers list) */}
+                                    {assignableEmployees
+                                      .filter(emp => {
+                                        if (!roleSearchQuery.trim()) return true;
+                                        const q = roleSearchQuery.toLowerCase();
+                                        return (
+                                          emp.name.toLowerCase().includes(q) ||
+                                          (emp.department && emp.department.toLowerCase().includes(q)) ||
+                                          (emp.role && emp.role.toLowerCase().includes(q))
+                                        );
+                                      })
+                                      .map(emp => {
+                                        const isSelected = String(emp.id) === String(selectedEmpId) || String((emp as any)._id) === String(selectedEmpId);
+                                        return (
+                                          <button
+                                            key={emp.id}
+                                            type="button"
+                                            onClick={() => {
+                                              setCreativeTeamForm(prev => ({ ...prev, [role.key]: emp.id }));
+                                              setOpenRoleId(null);
+                                              setRoleSearchQuery("");
+                                            }}
+                                            className={cn(
+                                              "w-full px-2.5 py-2 rounded-xl text-left text-xs font-semibold flex items-center justify-between gap-2 transition-all cursor-pointer",
+                                              isSelected
+                                                ? "bg-primary/10 text-primary font-bold"
+                                                : "text-foreground hover:bg-muted/80"
+                                            )}
+                                          >
+                                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                              <UserAvatar name={emp.name} avatar={emp.avatar} size="w-6 h-6" />
+                                              <div className="min-w-0 flex-1">
+                                                <span className="block truncate font-bold text-xs">{emp.name}</span>
+                                                <div className="flex items-center gap-1.5 mt-0.5">
+                                                  {emp.department && (
+                                                    <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-muted text-muted-foreground">
+                                                      {emp.department}
+                                                    </span>
+                                                  )}
+                                                  {emp.role && (
+                                                    <span className="text-[9px] text-muted-foreground/70 truncate">
+                                                      {emp.role}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              </div>
                                             </div>
-                                          )}
-                                        </button>
-                                      );
-                                    })}
-                                </div>
+                                            {isSelected && (
+                                              <div className="w-4 h-4 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0">
+                                                <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                              </div>
+                                            )}
+                                          </button>
+                                        );
+                                      })}
+                                  </div>
+                                )}
                               </PopoverContent>
                             </Popover>
                           </div>
@@ -6195,8 +6451,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   </button>
                 )}
 
-                {/* Team Assignment button (Creative Team or Marketing Team - restricted to Admin & HR for Marketing) */}
-                {(!isMarketingCategory(project.category) || isAdminOrHr) && (
+                {/* Team Assignment button (Creative Team or Marketing Team - restricted to Admin & HR for Marketing, hidden on Dev) */}
+                {!isDevCategory(project.category) && (!isMarketingCategory(project.category) || isAdminOrHr) && (
                   <button
                     type="button"
                     onClick={() => openAssignTeamModal(project)}
@@ -6230,29 +6486,31 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   <span className="hidden sm:inline">Edit</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => handleArchiveProject(project, !project.is_archived)}
-                  className={cn(
-                    "flex items-center gap-2 px-3.5 py-2 font-bold text-xs rounded-xl transition-all shadow-sm border",
-                    project.is_archived
-                      ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-emerald-500/20"
-                      : "bg-muted text-muted-foreground border-border/50 hover:bg-amber-500/10 hover:text-amber-600 hover:border-amber-500/20"
-                  )}
-                  title={project.is_archived ? "Restore project to Active" : "Archive project"}
-                >
-                  {project.is_archived ? (
-                    <>
-                      <ArchiveRestore className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Unarchive</span>
-                    </>
-                  ) : (
-                    <>
-                      <Archive className="w-3.5 h-3.5" />
-                      <span>Archive</span>
-                    </>
-                  )}
-                </button>
+                {isAdminOrHr && (
+                  <button
+                    type="button"
+                    onClick={() => handleArchiveProject(project, !project.is_archived)}
+                    className={cn(
+                      "flex items-center gap-2 px-3.5 py-2 font-bold text-xs rounded-xl transition-all shadow-sm border",
+                      project.is_archived
+                        ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-emerald-500/20"
+                        : "bg-muted text-muted-foreground border-border/50 hover:bg-amber-500/10 hover:text-amber-600 hover:border-amber-500/20"
+                    )}
+                    title={project.is_archived ? "Restore project to Active" : "Archive project"}
+                  >
+                    {project.is_archived ? (
+                      <>
+                        <ArchiveRestore className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Unarchive</span>
+                      </>
+                    ) : (
+                      <>
+                        <Archive className="w-3.5 h-3.5" />
+                        <span>Archive</span>
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -6301,8 +6559,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               </div>
             )}
 
-            {/* Creative Team Allocation Strip (only for Creative/Social projects) */}
-            {!isMarketingCategory(project.category) && (
+            {/* Creative Team Allocation Strip (only for Creative/Social projects, hidden on Dev projects) */}
+            {!isMarketingCategory(project.category) && !isDevCategory(project.category) && (
               <div className="bg-card/70 border border-border/50 rounded-2xl p-4 shadow-sm backdrop-blur-md">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 pb-2 border-b border-border/40">
                   <div className="flex items-center gap-2">
@@ -6328,6 +6586,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         approval_qc: project.creativeTeam?.["approval_qc"] || "",
                         caption: project.creativeTeam?.["caption"] || "",
                         posting_publisher: project.creativeTeam?.["posting_publisher"] || "",
+                        finance: project.creativeTeam?.["finance"] || "",
+                        other: Array.isArray(project.creativeTeam?.["other"]) ? project.creativeTeam?.["other"].join(",") : (project.creativeTeam?.["other"] || ""),
                       });
                       setIsAssignCreativeTeamModalOpen(true);
                     }}
@@ -6336,13 +6596,35 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     <Edit2 className="w-3 h-3" /> Reassign Roles
                   </button>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-11 gap-2.5">
                   {CREATIVE_ROLES.map(role => {
                     const assignedId = project.creativeTeam?.[role.key];
                     const detail = project.creativeTeamDetails?.[role.key];
-                    const emp = assignedId ? employees.find(e => String(e.id) === String(assignedId) || String((e as any)._id) === String(assignedId)) : null;
-                    const memberName = emp?.name || detail?.employee_name || (assignedId ? "Assigned" : "Unassigned");
-                    const isAssigned = !!assignedId || !!detail?.employee_name;
+                    let memberName = "";
+                    let isAssigned = false;
+                    let displayAvatar: string | undefined = undefined;
+
+                    if (role.key === "other") {
+                      const ids = Array.isArray(assignedId) ? assignedId : String(assignedId || "").split(",").map(x => x.trim()).filter(Boolean);
+                      if (ids.length > 0) {
+                        isAssigned = true;
+                        const emps = ids.map(id => employees.find(e => String(e.id) === String(id) || String((e as any)._id) === String(id))).filter(Boolean);
+                        if (emps.length === 1) {
+                          memberName = emps[0]?.name || "1 Member";
+                          displayAvatar = emps[0]?.avatar;
+                        } else {
+                          memberName = `${emps[0]?.name || "Member"} +${emps.length - 1}`;
+                          displayAvatar = emps[0]?.avatar;
+                        }
+                      } else {
+                        memberName = "Unassigned";
+                      }
+                    } else {
+                      const emp = assignedId ? employees.find(e => String(e.id) === String(assignedId) || String((e as any)._id) === String(assignedId)) : null;
+                      memberName = emp?.name || detail?.employee_name || (assignedId ? "Assigned" : "Unassigned");
+                      isAssigned = !!assignedId || !!detail?.employee_name;
+                      displayAvatar = emp?.avatar;
+                    }
 
                     return (
                       <div
@@ -6359,6 +6641,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                             approval_qc: project.creativeTeam?.["approval_qc"] || "",
                             caption: project.creativeTeam?.["caption"] || "",
                             posting_publisher: project.creativeTeam?.["posting_publisher"] || "",
+                            finance: project.creativeTeam?.["finance"] || "",
+                            other: Array.isArray(project.creativeTeam?.["other"]) ? project.creativeTeam?.["other"].join(",") : (project.creativeTeam?.["other"] || ""),
                           });
                           setOpenRoleId(role.key);
                           setIsAssignCreativeTeamModalOpen(true);
@@ -6378,7 +6662,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         </div>
                         <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
                           {isAssigned && (
-                            <UserAvatar name={memberName} avatar={emp?.avatar} size="w-5 h-5" />
+                            <UserAvatar name={memberName} avatar={displayAvatar} size="w-5 h-5" />
                           )}
                           <span className={cn("text-xs font-black truncate min-w-0", isAssigned ? "text-foreground group-hover:text-primary transition-colors" : "text-muted-foreground/60 italic text-[11px]")}>
                             {memberName}
@@ -6843,7 +7127,12 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setPdfMonthFilter(calendarMonthFilter);
+                                  const norm = calendarMonthFilter.toLowerCase() === "custom" ? "custom" : calendarMonthFilter;
+                                  setPdfMonthFilter(norm);
+                                  if (norm === "custom") {
+                                    setPdfCustomStartDate(ccCustomStartDate);
+                                    setPdfCustomEndDate(ccCustomEndDate);
+                                  }
                                   setIsPdfExportModalOpen(true);
                                 }}
                                 className="h-8 px-2.5 bg-card/90 hover:bg-muted border border-border/60 rounded-xl text-xs font-semibold text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-all shrink-0 whitespace-nowrap shadow-sm"
@@ -8046,19 +8335,189 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                           toast.success("Task deleted");
                         };
 
+                        // Project-wise custom statuses (or default fallback)
+                        const projectStatuses: string[] = (project.custom_statuses && project.custom_statuses.length > 0)
+                          ? project.custom_statuses
+                          : ["To Do", "In Progress", "Bugs", "On Hold", "Pending", "Completed"];
+
+                        const getStatusMeta = (status: string) => {
+                          const s = status.toLowerCase();
+                          if (s.includes("todo") || s.includes("to do") || s.includes("backlog")) {
+                            return { color: "text-slate-600 dark:text-slate-400", bg: "bg-slate-500/5", border: "border-slate-500/20", icon: "📋" };
+                          }
+                          if (s.includes("progress") || s.includes("dev") || s.includes("doing")) {
+                            return { color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-500/5", border: "border-blue-500/20", icon: "⚡" };
+                          }
+                          if (s.includes("bug") || s.includes("issue") || s.includes("fix")) {
+                            return { color: "text-rose-600 dark:text-rose-400", bg: "bg-rose-500/5", border: "border-rose-500/20", icon: "🐛" };
+                          }
+                          if (s.includes("hold")) {
+                            return { color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-500/5", border: "border-amber-500/20", icon: "⏸️" };
+                          }
+                          if (s.includes("pending")) {
+                            return { color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-500/5", border: "border-purple-500/20", icon: "⏳" };
+                          }
+                          if (s.includes("complete") || s.includes("done")) {
+                            return { color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-500/5", border: "border-emerald-500/20", icon: "✅" };
+                          }
+                          if (s.includes("review") || s.includes("qa") || s.includes("test")) {
+                            return { color: "text-cyan-600 dark:text-cyan-400", bg: "bg-cyan-500/5", border: "border-cyan-500/20", icon: "🔍" };
+                          }
+                          return { color: "text-indigo-600 dark:text-indigo-400", bg: "bg-indigo-500/5", border: "border-indigo-500/20", icon: "📌" };
+                        };
+
+                        const handleAddStatusColumn = () => {
+                          setNewStatusColumnName("");
+                          setStatusColumnError("");
+                          setIsAddStatusColumnModalOpen(true);
+                        };
+
+                        const handleConfirmAddStatusColumn = (nameToUse?: string) => {
+                          const trimmed = (nameToUse !== undefined ? nameToUse : newStatusColumnName).trim();
+                          if (!trimmed) {
+                            setStatusColumnError("Please enter a status column name");
+                            return;
+                          }
+                          if (projectStatuses.some(s => s.toLowerCase() === trimmed.toLowerCase())) {
+                            setStatusColumnError(`Status column "${trimmed}" already exists in this project!`);
+                            return;
+                          }
+                          const updated = [...projectStatuses, trimmed];
+                          const updatedProjects = projects.map(p => p.id === project.id ? { ...p, custom_statuses: updated } : p);
+                          setProjects(updatedProjects);
+                          try {
+                            localStorage.setItem("hrms_projects", JSON.stringify(updatedProjects));
+                            api.put(`/projects/${project.id}`, { custom_statuses: updated });
+                          } catch (e) {
+                            console.warn(e);
+                          }
+                          toast.success(`Added status column "${trimmed}" to this project!`);
+                          setIsAddStatusColumnModalOpen(false);
+                          setNewStatusColumnName("");
+                          setStatusColumnError("");
+                        };
+
+                        const handleDeleteStatusColumn = (colName: string) => {
+                          if (projectStatuses.length <= 1) {
+                            toast.error("Project must have at least one status column");
+                            return;
+                          }
+                          setConfirmModalState({
+                            isOpen: true,
+                            title: "Remove Status Column",
+                            description: `Are you sure you want to remove the status column "${colName}" from this project? Any tasks currently in this column should be moved or updated.`,
+                            itemName: colName,
+                            action: () => {
+                              const updated = projectStatuses.filter(s => s.toLowerCase() !== colName.toLowerCase());
+                              const updatedProjects = projects.map(p => p.id === project.id ? { ...p, custom_statuses: updated } : p);
+                              setProjects(updatedProjects);
+                              try {
+                                localStorage.setItem("hrms_projects", JSON.stringify(updatedProjects));
+                                api.put(`/projects/${project.id}`, { custom_statuses: updated });
+                              } catch (e) {
+                                console.warn(e);
+                              }
+                              toast.success(`Removed column "${colName}"`);
+                            }
+                          });
+                        };
+
                         const handleMoveTask = (taskId: string, direction: 'left' | 'right') => {
                           if (!activeModule) return;
                           const task = activeModule.tasks.find(t => t.id === taskId);
                           if (!task) return;
 
-                          const statusFlow: ("todo" | "in-progress" | "bugs" | "onhold" | "pending" | "completed")[] = ["todo", "in-progress", "bugs", "onhold", "pending", "completed"];
-                          const currIdx = statusFlow.indexOf(task.status);
-                          let nextIdx = currIdx + (direction === 'right' ? 1 : -1);
-                          if (nextIdx < 0 || nextIdx >= statusFlow.length) return;
+                          const currIdx = projectStatuses.findIndex(st => matchTaskStatus(task.status, st));
+                          const nextIdx = currIdx + (direction === 'right' ? 1 : -1);
+                          if (nextIdx < 0 || nextIdx >= projectStatuses.length) return;
+                          const targetStatus = projectStatuses[nextIdx];
+                          if (!targetStatus) return;
 
-                          const updatedTasks = activeModule.tasks.map(t => t.id === taskId ? { ...t, status: statusFlow[nextIdx] as any } : t);
+                          const targetLower = targetStatus.toLowerCase();
+                          if (targetLower.includes("pending") || targetLower.includes("hold")) {
+                            setTaskReasonModal({
+                              isOpen: true,
+                              taskId: task.id,
+                              taskTitle: task.title,
+                              targetStatus,
+                              reason: task.reasonForPending || "",
+                            });
+                            return;
+                          }
+
+                          const updatedTasks = activeModule.tasks.map(t => t.id === taskId ? { ...t, status: targetStatus as any, reasonForPending: task.reasonForPending } : t);
                           const updatedModules: NonNullable<Project['modules']> = projectModules.map(m => m.id === activeModule.id ? { ...m, tasks: updatedTasks } : m);
-                          saveProjectModules(project.id, updatedModules, "Moved Task", `Moved task "${task.title}" to ${statusFlow[nextIdx]}`);
+                          saveProjectModules(project.id, updatedModules, "Moved Task", `Moved task "${task.title}" to ${targetStatus}`);
+                        };
+
+                        const handleDropTaskOnStatus = (e: React.DragEvent, targetStatus: string) => {
+                          e.preventDefault();
+                          setDraggingOverCol(null);
+                          setDraggedTaskId(null);
+                          try {
+                            const raw = e.dataTransfer.getData("application/json");
+                            if (!raw) return;
+                            const { taskId, fromStatus } = JSON.parse(raw);
+                            if (!taskId || !activeModule) return;
+                            if (fromStatus && fromStatus.toLowerCase() === targetStatus.toLowerCase()) return;
+
+                            const task = activeModule.tasks.find(t => t.id === taskId);
+                            if (!task) return;
+
+                            const targetLower = targetStatus.toLowerCase();
+                            if (targetLower.includes("pending") || targetLower.includes("hold")) {
+                              setTaskReasonModal({
+                                isOpen: true,
+                                taskId: task.id,
+                                taskTitle: task.title,
+                                targetStatus,
+                                reason: task.reasonForPending || "",
+                                fromStatus,
+                              });
+                              return;
+                            }
+
+                            const updatedTasks = activeModule.tasks.map(t => t.id === taskId ? { ...t, status: targetStatus as any, reasonForPending: task.reasonForPending } : t);
+                            const updatedModules: NonNullable<Project['modules']> = projectModules.map(m => m.id === activeModule.id ? { ...m, tasks: updatedTasks } : m);
+                            saveProjectModules(project.id, updatedModules, "Moved Task", `Dragged task "${task.title}" from ${fromStatus || task.status} to ${targetStatus}`);
+                            toast.success(`Task moved to ${targetStatus}`);
+                          } catch (err) {
+                            console.error("Drop error:", err);
+                          }
+                        };
+
+                        const handleConfirmTaskReason = (e?: React.FormEvent) => {
+                          if (e) e.preventDefault();
+                          if (!activeModule || !taskReasonModal.taskId) return;
+                          const reasonToSave = taskReasonModal.reason.trim() || undefined;
+                          const updatedTasks = activeModule.tasks.map(t =>
+                            t.id === taskReasonModal.taskId
+                              ? { ...t, status: taskReasonModal.targetStatus as any, reasonForPending: reasonToSave }
+                              : t
+                          );
+                          const updatedModules: NonNullable<Project['modules']> = projectModules.map(m =>
+                            m.id === activeModule.id ? { ...m, tasks: updatedTasks } : m
+                          );
+                          saveProjectModules(
+                            project.id,
+                            updatedModules,
+                            "Moved Task",
+                            `Moved task "${taskReasonModal.taskTitle}" ${taskReasonModal.fromStatus ? `from ${taskReasonModal.fromStatus} ` : ""}to ${taskReasonModal.targetStatus}`
+                          );
+                          toast.success(`Task moved to ${taskReasonModal.targetStatus}`);
+                          setTaskReasonModal({ isOpen: false, taskId: "", taskTitle: "", targetStatus: "", reason: "" });
+                        };
+
+                        const matchTaskStatus = (taskStatus: string, colStatus: string) => {
+                          const normTask = (taskStatus || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+                          const normCol = (colStatus || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+                          if (normTask === normCol) return true;
+                          if ((normCol === "todo" || normCol === "notstarted") && (normTask === "todo" || normTask === "notstarted")) return true;
+                          if ((normCol === "inprogress" || normCol === "doing") && (normTask === "inprogress" || normTask === "doing")) return true;
+                          if ((normCol === "completed" || normCol === "done") && (normTask === "completed" || normTask === "done")) return true;
+                          if ((normCol === "onhold" || normCol === "hold") && (normTask === "onhold" || normTask === "hold")) return true;
+                          if (normCol === "bugs" && (normTask === "bugs" || normTask === "bug")) return true;
+                          return false;
                         };
 
                         return (
@@ -8067,10 +8526,20 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                               <div>
                                 <h2 className="text-xl font-bold tracking-tight">Module-wise Kanban</h2>
-                                <p className="text-xs text-muted-foreground mt-1">Manage project components and developer boards</p>
+                                <p className="text-xs text-muted-foreground mt-1">Drag and drop tasks across project status columns</p>
                               </div>
 
                               <div className="flex gap-2 shrink-0">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleAddStatusColumn();
+                                  }}
+                                  className="px-3 py-1.5 bg-card hover:bg-muted text-foreground text-xs font-bold rounded-xl flex items-center gap-1.5 border border-border/60 transition-colors shadow-sm"
+                                  title="Add custom status column for this project"
+                                >
+                                  <Plus className="w-3.5 h-3.5 text-primary" /> Add Column
+                                </button>
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -8172,108 +8641,173 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                   })}
                                 </div>
 
-                                {/* Kanban Grid */}
+                                {/* Drag-and-Drop Kanban Board */}
                                 {activeModule && (
                                   <div className="flex gap-4 overflow-x-auto pb-4 w-full snap-x">
-                                    {([
-                                      { status: "todo" as const, title: "To Do", color: "text-slate-500", bg: "bg-slate-500/5" },
-                                      { status: "in-progress" as const, title: "In Progress", color: "text-blue-500", bg: "bg-blue-500/5" },
-                                      { status: "bugs" as const, title: "Bugs", color: "text-rose-500", bg: "bg-rose-500/5" },
-                                      { status: "onhold" as const, title: "On Hold", color: "text-amber-500", bg: "bg-amber-500/5" },
-                                      { status: "pending" as const, title: "Pending", color: "text-purple-500", bg: "bg-purple-500/5" },
-                                      { status: "completed" as any, title: "Completed", color: "text-emerald-500", bg: "bg-emerald-500/5" },
-                                    ]).map((col) => {
-                                      const colTasks = activeModule.tasks.filter(t => t.status === col.status);
-                                      const isAdding = inlineEdit?.id === activeModule!.id && inlineEdit?.field === col.status;
+                                    {projectStatuses.map((statusName) => {
+                                      const meta = getStatusMeta(statusName);
+                                      const colTasks = activeModule.tasks.filter(t => matchTaskStatus(t.status, statusName));
+                                      const isDropTarget = draggingOverCol === statusName;
 
                                       return (
-                                        <div key={col.status} className={cn("space-y-3 p-4 rounded-[2rem] border border-border/40 flex flex-col min-w-[280px] max-w-[300px] w-full shrink-0 snap-align-start", col.bg)}>
-                                          <h4 className={cn("font-extrabold text-xs uppercase tracking-widest mb-4 flex items-center justify-between", col.color)}>
-                                            {col.title} <span className="bg-background border border-border/20 px-2 py-0.5 rounded-md text-foreground font-mono text-[10px]">{colTasks.length}</span>
-                                          </h4>
-
-                                          <div className="space-y-2.5 flex-1 overflow-y-auto max-h-[350px]">
-                                            {colTasks.map((t) => (
-                                              <div
-                                                key={t.id}
-                                                onClick={() => {
-                                                  setEditingModuleTask({ ...t });
-                                                  setIsModuleTaskModalOpen(true);
+                                        <div
+                                          key={statusName}
+                                          onDragOver={(e) => {
+                                            e.preventDefault();
+                                            e.dataTransfer.dropEffect = "move";
+                                            if (draggingOverCol !== statusName) setDraggingOverCol(statusName);
+                                          }}
+                                          onDragLeave={(e) => {
+                                            if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                                              setDraggingOverCol(null);
+                                            }
+                                          }}
+                                          onDrop={(e) => handleDropTaskOnStatus(e, statusName)}
+                                          className={cn(
+                                            "space-y-3 p-4 rounded-[2rem] border transition-all duration-200 flex flex-col min-w-[280px] max-w-[300px] w-full shrink-0 snap-align-start",
+                                            meta.bg,
+                                            isDropTarget
+                                              ? "border-primary ring-2 ring-primary/30 shadow-lg scale-[1.01]"
+                                              : meta.border
+                                          )}
+                                        >
+                                          <div className="flex items-center justify-between mb-2">
+                                            <h4 className={cn("font-extrabold text-xs uppercase tracking-widest flex items-center gap-1.5", meta.color)}>
+                                              <span>{meta.icon}</span>
+                                              <span>{statusName}</span>
+                                              <span className="bg-background border border-border/20 px-2 py-0.5 rounded-md text-foreground font-mono text-[10px] ml-1">
+                                                {colTasks.length}
+                                              </span>
+                                            </h4>
+                                            {projectStatuses.length > 1 && (
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleDeleteStatusColumn(statusName);
                                                 }}
-                                                className="bg-card border border-border/60 p-4 rounded-2xl shadow-sm hover:shadow-md hover:border-primary/20 transition-all group relative flex flex-col justify-between min-h-[110px] cursor-pointer"
+                                                className="p-1 text-muted-foreground hover:text-rose-500 rounded-lg transition-colors opacity-40 hover:opacity-100"
+                                                title={`Remove "${statusName}" column`}
                                               >
-                                                <div>
-                                                  <div className="flex flex-wrap gap-1 mb-2">
-                                                    {t.phase && (
-                                                      <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 uppercase tracking-wide">
-                                                        {t.phase}
-                                                      </span>
-                                                    )}
-                                                    {t.dueDate && (
-                                                      <span className="text-[9px] font-black text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                                                        📅 {t.dueDate}
-                                                      </span>
-                                                    )}
-                                                  </div>
+                                                <X className="w-3.5 h-3.5" />
+                                              </button>
+                                            )}
+                                          </div>
 
-                                                  <p className="font-bold text-sm text-foreground break-words pr-6 leading-snug">{t.title}</p>
-
-                                                  {/* Pending Reason Alert */}
-                                                  {(t.status === 'onhold' || t.status === 'pending') && t.reasonForPending && (
-                                                    <div className="mt-2 flex items-start gap-1 bg-amber-500/10 border border-amber-500/20 rounded-lg p-1.5">
-                                                      <span className="text-[9px] font-medium text-amber-700 leading-normal break-words">
-                                                        ⚠️ {t.reasonForPending}
-                                                      </span>
-                                                    </div>
+                                          <div className="space-y-2.5 flex-1 overflow-y-auto max-h-[380px] min-h-[80px]">
+                                            {colTasks.map((t) => {
+                                              const isBeingDragged = draggedTaskId === t.id;
+                                              return (
+                                                <div
+                                                  key={t.id}
+                                                  draggable={true}
+                                                  onDragStart={(e) => {
+                                                    e.dataTransfer.setData("application/json", JSON.stringify({ taskId: t.id, fromStatus: t.status }));
+                                                    e.dataTransfer.effectAllowed = "move";
+                                                    setDraggedTaskId(t.id);
+                                                  }}
+                                                  onDragEnd={() => {
+                                                    setDraggedTaskId(null);
+                                                    setDraggingOverCol(null);
+                                                  }}
+                                                  onClick={() => {
+                                                    setEditingModuleTask({ ...t });
+                                                    setIsModuleTaskModalOpen(true);
+                                                  }}
+                                                  className={cn(
+                                                    "bg-card border border-border/60 p-4 rounded-2xl shadow-sm hover:shadow-md hover:border-primary/40 transition-all group relative flex flex-col justify-between min-h-[110px] cursor-grab active:cursor-grabbing select-none",
+                                                    isBeingDragged ? "opacity-30 scale-95 border-dashed border-primary" : ""
                                                   )}
-                                                </div>
-
-                                                <div className="flex justify-between items-center mt-4 pt-3 border-t border-border/20">
-                                                  <div className="flex items-center gap-1.5 max-w-[120px] truncate">
-                                                    <div className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-black shrink-0 border border-primary/20">
-                                                      {(t.assignedToName || "U").charAt(0).toUpperCase()}
-                                                    </div>
-                                                    <span className="text-[11px] font-bold text-muted-foreground truncate">{t.assignedToName || "Unassigned"}</span>
-                                                  </div>
-
-                                                  <div className="flex gap-1 items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <div className="flex gap-0.5 mr-1">
-                                                      {col.status !== "todo" && (
-                                                        <button onClick={(e) => { e.stopPropagation(); handleMoveTask(t.id, 'left'); }} className="p-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground text-[9px] font-bold">←</button>
+                                                >
+                                                  <div>
+                                                    <div className="flex flex-wrap gap-1 mb-2">
+                                                      {t.phase && (
+                                                        <span className="text-[9px] font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 uppercase tracking-wide">
+                                                          {t.phase}
+                                                        </span>
                                                       )}
-                                                      {col.status !== "completed" && (
-                                                        <button onClick={(e) => { e.stopPropagation(); handleMoveTask(t.id, 'right'); }} className="p-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground text-[9px] font-bold">→</button>
+                                                      {t.dueDate && (
+                                                        <span className="text-[9px] font-black text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                                                          📅 {t.dueDate}
+                                                        </span>
                                                       )}
                                                     </div>
 
-                                                    <button
-                                                      onClick={(e) => { e.stopPropagation(); handleDeleteTask(t.id); }}
-                                                      className="text-rose-500 hover:text-rose-600 transition-colors p-1 rounded hover:bg-rose-500/10"
-                                                      title="Delete task"
-                                                    >
-                                                      <Trash2 className="w-3.5 h-3.5" />
-                                                    </button>
+                                                    <p className="font-bold text-sm text-foreground break-words pr-6 leading-snug">{t.title}</p>
+
+                                                    {/* Pending / On Hold Reason Alert */}
+                                                    {t.reasonForPending && (
+                                                      <div className="mt-2 flex items-start gap-1 bg-amber-500/10 border border-amber-500/20 rounded-lg p-1.5">
+                                                        <span className="text-[9px] font-medium text-amber-700 dark:text-amber-300 leading-normal break-words">
+                                                          ⚠️ {t.reasonForPending}
+                                                        </span>
+                                                      </div>
+                                                    )}
+                                                  </div>
+
+                                                  <div className="flex justify-between items-center mt-4 pt-3 border-t border-border/20">
+                                                    <div className="flex items-center gap-1.5 max-w-[120px] truncate">
+                                                      <div className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-black shrink-0 border border-primary/20">
+                                                        {(t.assignedToName || "U").charAt(0).toUpperCase()}
+                                                      </div>
+                                                      <span className="text-[11px] font-bold text-muted-foreground truncate">{t.assignedToName || "Unassigned"}</span>
+                                                    </div>
+
+                                                    <div className="flex gap-1 items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                      <div className="flex gap-0.5 mr-1">
+                                                        {statusName !== projectStatuses[0] && (
+                                                          <button
+                                                            type="button"
+                                                            onClick={(e) => { e.stopPropagation(); handleMoveTask(t.id, 'left'); }}
+                                                            className="p-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground text-[9px] font-bold"
+                                                            title="Move left"
+                                                          >
+                                                            ←
+                                                          </button>
+                                                        )}
+                                                        {statusName !== projectStatuses[projectStatuses.length - 1] && (
+                                                          <button
+                                                            type="button"
+                                                            onClick={(e) => { e.stopPropagation(); handleMoveTask(t.id, 'right'); }}
+                                                            className="p-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground text-[9px] font-bold"
+                                                            title="Move right"
+                                                          >
+                                                            →
+                                                          </button>
+                                                        )}
+                                                      </div>
+
+                                                      <button
+                                                        type="button"
+                                                        onClick={(e) => { e.stopPropagation(); handleDeleteTask(t.id); }}
+                                                        className="text-rose-500 hover:text-rose-600 transition-colors p-1 rounded hover:bg-rose-500/10"
+                                                        title="Delete task"
+                                                      >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                      </button>
+                                                    </div>
                                                   </div>
                                                 </div>
-                                              </div>
-                                            ))}
+                                              );
+                                            })}
 
                                             {colTasks.length === 0 && (
                                               <div className="py-8 text-center text-xs font-semibold text-muted-foreground/40 border-2 border-dashed border-border/20 rounded-2xl">
-                                                No tasks
+                                                Drop tasks here
                                               </div>
                                             )}
                                           </div>
 
                                           {/* Add Task Control */}
                                           <button
+                                            type="button"
                                             onClick={() => {
                                               setAddTaskForm({
                                                 title: "",
                                                 phase: "",
                                                 dueDate: "",
                                                 assignedToName: "",
-                                                status: col.status,
+                                                status: statusName as any,
                                                 reasonForPending: ""
                                               });
                                               setIsAddTaskModalOpen(true);
@@ -8285,9 +8819,254 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                         </div>
                                       );
                                     })}
+
+                                    {/* Quick Add Status Column Card */}
+                                    <button
+                                      type="button"
+                                      onClick={handleAddStatusColumn}
+                                      className="min-w-[160px] h-[120px] rounded-[2rem] border-2 border-dashed border-border/60 hover:border-primary/50 bg-muted/20 hover:bg-primary/5 flex flex-col items-center justify-center gap-2 text-muted-foreground hover:text-primary transition-all shrink-0 cursor-pointer"
+                                    >
+                                      <Plus className="w-5 h-5" />
+                                      <span className="text-xs font-bold">Add Column</span>
+                                    </button>
                                   </div>
                                 )}
                               </>
+                            )}
+
+                            {/* UI-wise Add Status Column Modal */}
+                            {isAddStatusColumnModalOpen && (
+                              <div
+                                className="fixed inset-0 z-[200] flex items-center justify-center animate-in fade-in duration-200 p-4"
+                                onClick={() => {
+                                  setIsAddStatusColumnModalOpen(false);
+                                  setStatusColumnError("");
+                                }}
+                              >
+                                <div className="absolute inset-0 bg-black/80 backdrop-blur-xs" />
+                                <div
+                                  className="relative z-10 w-full max-w-[480px] bg-card border border-border/70 rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {/* Header */}
+                                  <div className="flex items-center justify-between px-6 py-5 border-b border-border/50 bg-muted/30 shrink-0">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-10 h-10 rounded-2xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center shrink-0">
+                                        <Plus className="w-5 h-5" />
+                                      </div>
+                                      <div>
+                                        <h2 className="text-base font-black tracking-tight text-foreground">Add Status Column</h2>
+                                        <p className="text-xs text-muted-foreground mt-0.5">Create a workflow column for this project</p>
+                                      </div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setIsAddStatusColumnModalOpen(false);
+                                        setStatusColumnError("");
+                                      }}
+                                      className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors cursor-pointer"
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  </div>
+
+                                  {/* Form */}
+                                  <form
+                                    onSubmit={(e) => {
+                                      e.preventDefault();
+                                      handleConfirmAddStatusColumn();
+                                    }}
+                                    className="p-6 space-y-4"
+                                  >
+                                    <div>
+                                      <label className="text-xs font-bold text-foreground block mb-1.5">
+                                        Column Name <span className="text-rose-500">*</span>
+                                      </label>
+                                      <input
+                                        type="text"
+                                        autoFocus
+                                        placeholder="e.g. Code Review, QA Testing, Staging, Ready to Deploy"
+                                        value={newStatusColumnName}
+                                        onChange={(e) => {
+                                          setNewStatusColumnName(e.target.value);
+                                          if (statusColumnError) setStatusColumnError("");
+                                        }}
+                                        className={cn(
+                                          "w-full px-3.5 py-2.5 bg-background border rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 transition-all",
+                                          statusColumnError
+                                            ? "border-rose-500 focus:ring-rose-500/20"
+                                            : "border-border/80 focus:ring-primary/20 focus:border-primary"
+                                        )}
+                                      />
+                                      {statusColumnError && (
+                                        <p className="text-[11px] font-bold text-rose-500 mt-1.5 flex items-center gap-1">
+                                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                          {statusColumnError}
+                                        </p>
+                                      )}
+                                    </div>
+
+                                    {/* Quick Suggestions Chips */}
+                                    <div className="space-y-2 pt-1">
+                                      <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">
+                                        Quick Suggestions
+                                      </label>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {[
+                                          { name: "Code Review", icon: "🔍" },
+                                          { name: "QA Testing", icon: "🧪" },
+                                          { name: "Staging", icon: "🚀" },
+                                          { name: "Client Review", icon: "👀" },
+                                          { name: "Blocked", icon: "🚫" },
+                                          { name: "Ready to Deploy", icon: "✨" },
+                                        ].map((item) => {
+                                          const alreadyExists = projectStatuses.some(s => s.toLowerCase() === item.name.toLowerCase());
+                                          return (
+                                            <button
+                                              key={item.name}
+                                              type="button"
+                                              disabled={alreadyExists}
+                                              onClick={() => {
+                                                setNewStatusColumnName(item.name);
+                                                if (statusColumnError) setStatusColumnError("");
+                                              }}
+                                              className={cn(
+                                                "px-2.5 py-1 text-xs font-bold rounded-lg border transition-all flex items-center gap-1 cursor-pointer",
+                                                alreadyExists
+                                                  ? "opacity-40 cursor-not-allowed border-border/40 bg-muted/30 text-muted-foreground"
+                                                  : newStatusColumnName === item.name
+                                                    ? "border-primary bg-primary/10 text-primary"
+                                                    : "border-border/70 hover:border-primary/50 hover:bg-muted/50 text-foreground"
+                                              )}
+                                            >
+                                              <span>{item.icon}</span>
+                                              <span>{item.name}</span>
+                                              {alreadyExists && <span className="text-[9px] text-muted-foreground">(Added)</span>}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+
+                                    {/* Current Columns Preview */}
+                                    <div className="pt-2 border-t border-border/40">
+                                      <label className="text-[11px] font-bold text-muted-foreground block mb-2">
+                                        Current Project Columns ({projectStatuses.length})
+                                      </label>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {projectStatuses.map((col) => {
+                                          const meta = getStatusMeta(col);
+                                          return (
+                                            <span
+                                              key={col}
+                                              className={cn(
+                                                "px-2 py-0.5 rounded-md text-[10px] font-bold border flex items-center gap-1",
+                                                meta.bg,
+                                                meta.color,
+                                                meta.border
+                                              )}
+                                            >
+                                              <span>{meta.icon}</span>
+                                              <span>{col}</span>
+                                            </span>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+
+                                    {/* Modal Actions */}
+                                    <div className="pt-4 border-t border-border/50 flex justify-end gap-2.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setIsAddStatusColumnModalOpen(false);
+                                          setStatusColumnError("");
+                                        }}
+                                        className="px-4 py-2 rounded-xl text-xs font-bold text-muted-foreground hover:bg-muted transition-colors cursor-pointer"
+                                      >
+                                        Cancel
+                                      </button>
+                                      <button
+                                        type="submit"
+                                        className="px-4 py-2 bg-primary text-primary-foreground text-xs font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all flex items-center gap-1.5 cursor-pointer"
+                                      >
+                                        <Plus className="w-3.5 h-3.5" />
+                                        <span>Add Column</span>
+                                      </button>
+                                    </div>
+                                  </form>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* UI-wise Move Task Reason Modal (for Pending / On Hold) */}
+                            {taskReasonModal.isOpen && (
+                              <div
+                                className="fixed inset-0 z-[200] flex items-center justify-center animate-in fade-in duration-200 p-4"
+                                onClick={() => setTaskReasonModal({ isOpen: false, taskId: "", taskTitle: "", targetStatus: "", reason: "" })}
+                              >
+                                <div className="absolute inset-0 bg-black/80 backdrop-blur-xs" />
+                                <div
+                                  className="relative z-10 w-full max-w-[450px] bg-card border border-border/70 rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <div className="flex items-center justify-between px-6 py-5 border-b border-border/50 bg-muted/30 shrink-0">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
+                                        <Clock className="w-5 h-5" />
+                                      </div>
+                                      <div>
+                                        <h2 className="text-base font-black tracking-tight text-foreground">
+                                          Reason for {taskReasonModal.targetStatus}
+                                        </h2>
+                                        <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-[280px]">
+                                          {taskReasonModal.taskTitle}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => setTaskReasonModal({ isOpen: false, taskId: "", taskTitle: "", targetStatus: "", reason: "" })}
+                                      className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors cursor-pointer"
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  </div>
+
+                                  <form onSubmit={handleConfirmTaskReason} className="p-6 space-y-4">
+                                    <div>
+                                      <label className="text-xs font-bold text-foreground block mb-1.5">
+                                        Why is this task moving to {taskReasonModal.targetStatus}?
+                                      </label>
+                                      <textarea
+                                        autoFocus
+                                        rows={3}
+                                        placeholder="e.g. Waiting for client API credentials, blocked on third-party webhook approval, design revision pending..."
+                                        value={taskReasonModal.reason}
+                                        onChange={(e) => setTaskReasonModal(prev => ({ ...prev, reason: e.target.value }))}
+                                        className="w-full px-3.5 py-2.5 bg-background border border-border/80 focus:border-primary focus:ring-2 focus:ring-primary/20 rounded-xl text-xs font-medium focus:outline-none transition-all resize-none"
+                                      />
+                                    </div>
+
+                                    <div className="flex justify-end gap-2.5 pt-2 border-t border-border/40">
+                                      <button
+                                        type="button"
+                                        onClick={() => setTaskReasonModal({ isOpen: false, taskId: "", taskTitle: "", targetStatus: "", reason: "" })}
+                                        className="px-4 py-2 rounded-xl text-xs font-bold text-muted-foreground hover:bg-muted transition-colors cursor-pointer"
+                                      >
+                                        Cancel
+                                      </button>
+                                      <button
+                                        type="submit"
+                                        className="px-4 py-2 bg-primary text-primary-foreground text-xs font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all cursor-pointer"
+                                      >
+                                        Move Task
+                                      </button>
+                                    </div>
+                                  </form>
+                                </div>
+                              </div>
                             )}
                           </div>
                         );
@@ -8717,6 +9496,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
                           <SelectItem value="Current" className="text-xs font-semibold">Current Month ({format(new Date(), "MMM yyyy")})</SelectItem>
                           <SelectItem value="All" className="text-xs font-semibold">All Months</SelectItem>
+                          <SelectItem value="custom" className="text-xs font-semibold">📅 Custom Date Range</SelectItem>
                           {(() => {
                             const currentProj = projects.find(p => p.id === selectedProjectId);
                             if (!currentProj) return null;
@@ -8726,6 +9506,28 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                           })()}
                         </SelectContent>
                       </Select>
+                      {pdfMonthFilter === "custom" && (
+                        <div className="pt-2 grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase">Start Date</label>
+                            <input
+                              type="date"
+                              value={pdfCustomStartDate}
+                              onChange={(e) => setPdfCustomStartDate(e.target.value)}
+                              className="w-full h-8 px-2 rounded-lg border border-border bg-background text-xs font-medium focus:ring-1 focus:ring-primary"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase">End Date</label>
+                            <input
+                              type="date"
+                              value={pdfCustomEndDate}
+                              onChange={(e) => setPdfCustomEndDate(e.target.value)}
+                              className="w-full h-8 px-2 rounded-lg border border-border bg-background text-xs font-medium focus:ring-1 focus:ring-primary"
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-1.5 pb-2 border-b border-border/40">
@@ -10525,9 +11327,12 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                               <SelectValue placeholder="Status" />
                             </SelectTrigger>
                             <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
-                              {["todo", "in-progress", "bugs", "onhold", "pending", "completed"].map(st => (
+                              {((currentSelectedProject.custom_statuses && currentSelectedProject.custom_statuses.length > 0)
+                                ? currentSelectedProject.custom_statuses
+                                : ["To Do", "In Progress", "Bugs", "On Hold", "Pending", "Completed"]
+                              ).map(st => (
                                 <SelectItem key={st} value={st} className="text-xs font-semibold rounded-lg cursor-pointer">
-                                  {st === "todo" ? "To Do" : st === "in-progress" ? "In Progress" : st.charAt(0).toUpperCase() + st.slice(1)}
+                                  {st}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -10865,9 +11670,12 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                               <SelectValue placeholder="Status" />
                             </SelectTrigger>
                             <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
-                              {["todo", "in-progress", "bugs", "onhold", "pending", "completed"].map(st => (
+                              {((currentSelectedProject.custom_statuses && currentSelectedProject.custom_statuses.length > 0)
+                                ? currentSelectedProject.custom_statuses
+                                : ["To Do", "In Progress", "Bugs", "On Hold", "Pending", "Completed"]
+                              ).map(st => (
                                 <SelectItem key={st} value={st} className="text-xs font-semibold rounded-lg cursor-pointer">
-                                  {st === "todo" ? "To Do" : st === "in-progress" ? "In Progress" : st.charAt(0).toUpperCase() + st.slice(1)}
+                                  {st}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -11830,10 +12638,12 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
-              <button onClick={() => setIsNewProjectModalOpen(true)} className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground font-bold text-sm rounded-xl hover:bg-primary/90 transition-all shadow-sm">
-                <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">New Project</span>
-              </button>
+              {canCreateProject && (
+                <button onClick={() => setIsNewProjectModalOpen(true)} className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground font-bold text-sm rounded-xl hover:bg-primary/90 transition-all shadow-sm">
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline">New Project</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -13108,17 +13918,49 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             )}
           </button>
 
+          {/* TL Scope Switcher */}
+          {isTl && !isAdminOrHr && (
+            <div className="flex items-center gap-1 p-1 bg-muted/60 border border-border/50 rounded-xl text-xs font-bold shadow-xs">
+              <button
+                type="button"
+                onClick={() => setTlProjectScope("my")}
+                className={cn(
+                  "px-2.5 py-1 rounded-lg transition-all",
+                  tlProjectScope === "my"
+                    ? "bg-primary text-primary-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                My Projects
+              </button>
+              <button
+                type="button"
+                onClick={() => setTlProjectScope("all")}
+                className={cn(
+                  "px-2.5 py-1 rounded-lg transition-all",
+                  tlProjectScope === "all"
+                    ? "bg-primary text-primary-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                All Projects
+              </button>
+            </div>
+          )}
+
           {/* K9: project tabs par New Project + New Client baju-bajuma */}
-          {PROJECT_TABS.includes(activeTab) && !showBrandDivision && (
+          {canCreateProject && PROJECT_TABS.includes(activeTab) && !showBrandDivision && (
             <button onClick={() => { setLandingProjectClientId(""); setIsLandingProjectOpen(true); }} className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground font-bold text-sm rounded-xl hover:bg-primary/90 transition-all shadow-sm">
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">New Project</span>
             </button>
           )}
-          <button onClick={() => setIsNewClientModalOpen(true)} className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground font-bold text-sm rounded-xl hover:bg-primary/90 transition-all shadow-sm">
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">New Client</span>
-          </button>
+          {canCreateClient && (
+            <button onClick={() => setIsNewClientModalOpen(true)} className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground font-bold text-sm rounded-xl hover:bg-primary/90 transition-all shadow-sm">
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">New Client</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -13448,21 +14290,23 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       <Clock className="w-3.5 h-3.5" />
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleArchiveProject(group.primaryProject, !group.primaryProject.is_archived);
-                      }}
-                      className="p-1.5 rounded-lg border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
-                      title={group.primaryProject.is_archived ? "Restore to Active" : "Archive Project"}
-                    >
-                      {group.primaryProject.is_archived ? (
-                        <ArchiveRestore className="w-3.5 h-3.5 text-primary" />
-                      ) : (
-                        <Archive className="w-3.5 h-3.5 text-muted-foreground hover:text-amber-500" />
-                      )}
-                    </button>
+                    {isAdminOrHr && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleArchiveProject(group.primaryProject, !group.primaryProject.is_archived);
+                        }}
+                        className="p-1.5 rounded-lg border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+                        title={group.primaryProject.is_archived ? "Restore to Active" : "Archive Project"}
+                      >
+                        {group.primaryProject.is_archived ? (
+                          <ArchiveRestore className="w-3.5 h-3.5 text-primary" />
+                        ) : (
+                          <Archive className="w-3.5 h-3.5 text-muted-foreground hover:text-amber-500" />
+                        )}
+                      </button>
+                    )}
                     <span className={cn("px-2.5 py-1 rounded-full text-[11px] font-black border shrink-0", group.statusStyle)}>
                       {group.status}
                     </span>
@@ -13781,29 +14625,33 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       >
                         <Edit2 className="w-4 h-4 mr-2" /> Edit Client
                       </DropdownMenuItem>
-                      <DropdownMenuSeparator className="bg-border/50" />
-                      {client.status === 'Archived' ? (
-                        <DropdownMenuItem
-                          onSelect={() => {
-                            setTimeout(() => {
-                              unarchiveClient(client);
-                            }, 100);
-                          }}
-                          className="rounded-xl cursor-pointer py-2.5 focus:bg-emerald-500/10 focus:text-emerald-600 font-medium text-emerald-600 transition-colors"
-                        >
-                          <ArchiveRestore className="w-4 h-4 mr-2" /> Unarchive Client
-                        </DropdownMenuItem>
-                      ) : (
-                        <DropdownMenuItem
-                          onSelect={() => {
-                            setTimeout(() => {
-                              archiveClient(client);
-                            }, 100);
-                          }}
-                          className="rounded-xl cursor-pointer py-2.5 focus:bg-amber-500/10 focus:text-amber-600 font-medium text-amber-600 transition-colors"
-                        >
-                          <Archive className="w-4 h-4 mr-2" /> Archive Client
-                        </DropdownMenuItem>
+                      {isAdminOrHr && (
+                        <>
+                          <DropdownMenuSeparator className="bg-border/50" />
+                          {client.status === 'Archived' ? (
+                            <DropdownMenuItem
+                              onSelect={() => {
+                                setTimeout(() => {
+                                  unarchiveClient(client);
+                                }, 100);
+                              }}
+                              className="rounded-xl cursor-pointer py-2.5 focus:bg-emerald-500/10 focus:text-emerald-600 font-medium text-emerald-600 transition-colors"
+                            >
+                              <ArchiveRestore className="w-4 h-4 mr-2" /> Unarchive Client
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem
+                              onSelect={() => {
+                                setTimeout(() => {
+                                  archiveClient(client);
+                                }, 100);
+                              }}
+                              className="rounded-xl cursor-pointer py-2.5 focus:bg-amber-500/10 focus:text-amber-600 font-medium text-amber-600 transition-colors"
+                            >
+                              <Archive className="w-4 h-4 mr-2" /> Archive Client
+                            </DropdownMenuItem>
+                          )}
+                        </>
                       )}
                       <DropdownMenuItem
                         onSelect={() => {

@@ -49,7 +49,21 @@ class ProjectService:
         details = {}
         for role, emp_id in team_dict.items():
             if emp_id:
-                details[role] = await get_emp_name(emp_id)
+                if isinstance(emp_id, list):
+                    resolved_list = []
+                    for e in emp_id:
+                        res = await get_emp_name(e)
+                        if res: resolved_list.append(res)
+                    details[role] = resolved_list
+                elif isinstance(emp_id, str) and "," in emp_id:
+                    resolved_list = []
+                    for e in emp_id.split(","):
+                        if e.strip():
+                            res = await get_emp_name(e.strip())
+                            if res: resolved_list.append(res)
+                    details[role] = resolved_list
+                else:
+                    details[role] = await get_emp_name(emp_id)
             
         item["creative_team_details"] = details
 
@@ -1287,6 +1301,17 @@ class ProjectService:
     async def archive_project(project_id: str, status: bool = True):
         res = await ProjectRepository.archive(project_id, status)
         if res:
+            try:
+                from app.database.db import get_database
+                from bson import ObjectId
+                db = get_database()
+                p_query = {"$or": [{"project_id": str(project_id)}]}
+                if ObjectId.is_valid(str(project_id)):
+                    p_query["$or"].append({"project_id": ObjectId(str(project_id))})
+                await db["tasks"].update_many(p_query, {"$set": {"is_archived": bool(status)}})
+                await clear_pattern("tasks:*")
+            except Exception:
+                pass
             await clear_pattern("projects:*")
             await delete_cache(f"project:{project_id}")
         return res

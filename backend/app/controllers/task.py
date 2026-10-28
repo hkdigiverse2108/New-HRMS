@@ -207,7 +207,9 @@ async def get_all_tasks(
             dept_emps = await EmployeeRepository.get_all_employees(department=user_dept, limit=1000)
             team_employee_ids = [str(e["_id"]) for e in dept_emps.get("data", [])]
         else:
-            involved_emp_id = emp_id
+            # Regular staff (Senior, Junior, Intern) are strictly restricted to My Tasks
+            assigned_to = emp_id
+            involved_emp_id = None
 
     # If department filter is explicitly requested
     if department and department != "All":
@@ -294,7 +296,9 @@ async def get_task_stats(
             dept_emps = await EmployeeRepository.get_all_employees(department=user_dept, limit=1000)
             team_employee_ids = [str(e["_id"]) for e in dept_emps.get("data", [])]
         else:
-            involved_emp_id = emp_id
+            # Regular staff (Senior, Junior, Intern) are strictly restricted to My Tasks
+            assigned_to = emp_id
+            involved_emp_id = None
 
     if department and department != "All":
         from app.repository.employee import EmployeeRepository

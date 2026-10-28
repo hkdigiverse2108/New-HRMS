@@ -933,7 +933,7 @@ export const DigitalMarketingOperations: React.FC<DigitalMarketingOperationsProp
 
         {/* Table Content */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
+          <table className="w-full text-left text-xs border-collapse min-w-[750px]">
             <thead>
               <tr className="bg-muted/30 text-muted-foreground font-black uppercase tracking-wider border-b border-border/50 text-[10px]">
                 <th className="py-3 px-4">Date</th>
@@ -1417,7 +1417,7 @@ export const DigitalMarketingOperations: React.FC<DigitalMarketingOperationsProp
 
           {/* Scrollable table container */}
           <div className="flex-1 overflow-auto">
-            <table className="w-full text-left text-xs border-collapse">
+            <table className="w-full text-left text-xs border-collapse min-w-[750px]">
               <thead className="sticky top-0 bg-muted/90 backdrop-blur-md text-muted-foreground font-black uppercase text-[10px] tracking-wider border-b border-border/60 z-10 shadow-xs">
                 <tr>
                   <th className="py-3 px-4">Date</th>

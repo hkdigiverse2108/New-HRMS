@@ -53,30 +53,64 @@ class LlmClient:
         """Loads API keys from database with fallback to settings (.env)."""
         db_settings = await SocialSettingsRepository.get_effective_settings()
         
-        gemini_key = db_settings.get("GEMINI_API_KEY")
+        gemini_key = db_settings.get("GEMINI_API_KEY") or db_settings.get("gemini_api_key")
         if gemini_key:
             gemini_key = decrypt_social_token(gemini_key)
         if not gemini_key:
             gemini_key = getattr(settings, "GEMINI_API_KEY", "") or ""
 
-        groq_1 = db_settings.get("GROQ_API_KEY_1")
+        groq_1 = (
+            db_settings.get("GROQ_API_KEY_1")
+            or db_settings.get("groq_api_key_1")
+            or db_settings.get("GROQ_API_KEY")
+            or db_settings.get("groq_api_key")
+        )
         if groq_1:
             groq_1 = decrypt_social_token(groq_1)
         if not groq_1:
-            groq_1 = getattr(settings, "GROQ_API_KEY_1", "") or ""
+            groq_1 = (
+                getattr(settings, "GROQ_API_KEY_1", "")
+                or getattr(settings, "GROQ_API_KEY", "")
+                or ""
+            )
 
-        groq_2 = db_settings.get("GROQ_API_KEY_2")
+        groq_2 = db_settings.get("GROQ_API_KEY_2") or db_settings.get("groq_api_key_2")
         if groq_2:
             groq_2 = decrypt_social_token(groq_2)
         if not groq_2:
             groq_2 = getattr(settings, "GROQ_API_KEY_2", "") or ""
 
+        # Safe model resolution with guards against deprecated models
+        gemini_model = (
+            db_settings.get("GEMINI_SCRIPT_MODEL")
+            or db_settings.get("gemini_script_model")
+            or db_settings.get("DEFAULT_GEMINI_MODEL")
+            or db_settings.get("default_gemini_model")
+            or getattr(settings, "DEFAULT_GEMINI_MODEL", "")
+            or getattr(settings, "GEMINI_SCRIPT_MODEL", "")
+            or "gemini-3.1-flash-lite"
+        )
+        if "gemini-2.5" in gemini_model:
+            gemini_model = "gemini-3.1-flash-lite"
+
+        groq_model = (
+            db_settings.get("GROQ_TEXT_MODEL")
+            or db_settings.get("groq_text_model")
+            or db_settings.get("DEFAULT_GROQ_MODEL")
+            or db_settings.get("default_groq_model")
+            or getattr(settings, "DEFAULT_GROQ_MODEL", "")
+            or getattr(settings, "GROQ_TEXT_MODEL", "")
+            or "openai/gpt-oss-120b"
+        )
+        if "llama-3.3-70b-versatile" in groq_model:
+            groq_model = "openai/gpt-oss-120b"
+
         return {
             "gemini_api_key": gemini_key,
             "groq_api_key_1": groq_1,
             "groq_api_key_2": groq_2,
-            "gemini_model": db_settings.get("DEFAULT_GEMINI_MODEL") or getattr(settings, "DEFAULT_GEMINI_MODEL", "gemini-2.5-flash"),
-            "groq_model": db_settings.get("DEFAULT_GROQ_MODEL") or getattr(settings, "DEFAULT_GROQ_MODEL", "llama-3.3-70b-versatile"),
+            "gemini_model": gemini_model,
+            "groq_model": groq_model,
         }
 
     @classmethod

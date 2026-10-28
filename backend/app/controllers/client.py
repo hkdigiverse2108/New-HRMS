@@ -103,6 +103,10 @@ async def archive_client(
     status: Optional[bool] = Query(None), 
     current_user: dict = Depends(get_current_employee)
 ):
+    role = str(current_user.get("work_details", {}).get("system_role") or current_user.get("role") or "").strip().lower()
+    if role not in ["admin", "superadmin", "subadmin"]:
+        raise HTTPException(status_code=403, detail="Only administration can archive or unarchive clients.")
+
     item = await ClientService.get_client_by_id(client_id)
     if not item or item.get("is_deleted"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Client not found")
@@ -117,6 +121,10 @@ async def archive_client(
 
 @router.post("/{client_id}/unarchive", response_model=ClientResponse, response_model_exclude_none=True)
 async def unarchive_client(client_id: str, current_user: dict = Depends(get_current_employee)):
+    role = str(current_user.get("work_details", {}).get("system_role") or current_user.get("role") or "").strip().lower()
+    if role not in ["admin", "superadmin", "subadmin"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only administration can archive or unarchive clients.")
+
     item = await ClientService.get_client_by_id(client_id)
     if not item or item.get("is_deleted"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Client not found")
