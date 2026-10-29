@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { HR_UPDATES, COMPANY_NEWS } from "../dashboard-data";
+import { HR_UPDATES } from "../dashboard-data";
 import {
   Gift,
   Award,
@@ -84,6 +84,15 @@ export function HRAndNews() {
   const { user } = useAuth();
   const { data: dashboardData } = useDashboardOverview();
   const isAdmin = isUserAdmin(user);
+  // Mirrors backend `_is_admin` in controllers/dashboard.py so HR-type roles can manage news too
+  const canManageNews = (() => {
+    if (isAdmin) return true;
+    const u: any = user || {};
+    const role = String(u.role || u.system_role || u.work_details?.system_role || "").toLowerCase().trim();
+    const dept = String(u.department || u.work_details?.department || "").toLowerCase().trim();
+    const desig = String(u.designation || u.work_details?.designation || "").toLowerCase();
+    return ["subadmin", "sub-admin", "sub admin", "hr", "director", "ceo"].includes(role) || dept === "hr" || desig.includes("hr");
+  })();
 
   // ==================== COMPANY NEWS STATE ====================
   const [newsList, setNewsList] = useState<NewsItem[]>([]);
@@ -102,9 +111,8 @@ export function HRAndNews() {
         return;
       }
     } catch {
-      // Fallback
+      // Keep whatever is already shown; never fall back to hardcoded news
     }
-    setNewsList(COMPANY_NEWS as any[]);
   };
 
   useEffect(() => {
@@ -160,6 +168,7 @@ export function HRAndNews() {
   const handleDeleteNews = async (item: NewsItem) => {
     const id = item._id || item.id;
     if (!id) return;
+    if (!window.confirm(`Delete news "${item.title}"?`)) return;
     try {
       await api.delete(`/dashboard/news/${id}`);
       toast.success("News deleted");
@@ -339,10 +348,17 @@ export function HRAndNews() {
   const dynamicInterviews = useMemo(() => {
     const fromApi = dashboardData?.hr_updates?.interviews;
     if (fromApi && fromApi.length > 0) {
-      return fromApi.map((item: any) => ({
-        role: `${item.name} (${item.role})`,
-        time: `${item.date} • ${item.time}`,
-      }));
+      return fromApi.map((item: any) => {
+        const d = /^\d{4}-\d{2}-\d{2}/.test(item.date || "") ? new Date(`${item.date.slice(0, 10)}T00:00:00`) : null;
+        const dateLabel = d && !isNaN(d.getTime())
+          ? d.toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short" })
+          : item.date;
+        return {
+          role: `${item.name} (${item.role})`,
+          fullName: [item.name, item.role && `(${item.role})`, item.interviewer && `• Interviewer: ${item.interviewer}`].filter(Boolean).join(" "),
+          time: [dateLabel, item.time].filter(Boolean).join(" • "),
+        };
+      });
     }
     return [];
   }, [dashboardData]);
@@ -471,10 +487,10 @@ export function HRAndNews() {
                 {dynamicInterviews.length === 0 ? (
                   <p className="text-xs text-muted-foreground italic p-2">No interviews scheduled this week.</p>
                 ) : (
-                  <ul className="space-y-2">
+                  <ul className="space-y-2 max-h-56 overflow-y-auto pr-1">
                     {dynamicInterviews.map((item: any, i: number) => (
                       <li key={i} className="flex justify-between items-center text-[11px] p-1.5 rounded-xl hover:bg-muted/40 transition-colors">
-                        <span className="font-semibold text-foreground/90 truncate mr-2">{item.role}</span>
+                        <span className="font-semibold text-foreground/90 truncate mr-2 cursor-default" title={item.fullName || item.role}>{item.role}</span>
                         <span className="text-muted-foreground font-medium shrink-0">{item.time}</span>
                       </li>
                     ))}
@@ -576,13 +592,32 @@ export function HRAndNews() {
                   <h3 className="text-[13px] font-bold text-foreground">Probation Ending</h3>
                 </div>
                 {dynamicProbations.length === 0 ? (
-                  <p className="text-xs text-muted-foreground italic p-2">No probations ending this month.</p>
+                  <p className="text-xs text-muted-foreground italic p-2">No employees in probation.</p>
                 ) : (
-                  <ul className="space-y-2">
+                  <ul className="space-y-2 max-h-56 overflow-y-auto pr-1">
                     {dynamicProbations.map((item: any, i: number) => (
                       <li key={i} className="flex justify-between items-center text-[11px] p-1.5 rounded-xl hover:bg-muted/40 transition-colors">
-                        <span className="font-semibold text-foreground/90">{item.name}</span>
-                        <span className="text-muted-foreground font-medium">{item.date}</span>
+                        <div className="min-w-0 pr-2">
+                          <span className="font-semibold text-foreground/90 truncate block">{item.name}</span>
+                          <p className="text-[10px] text-muted-foreground truncate">{item.role}</p>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-muted-foreground font-medium">{item.date}</span>
+                          {typeof item.days_left === "number" && (
+                            <span
+                              className={cn(
+                                "px-1.5 py-0.5 rounded-md text-[9px] font-black",
+                                item.days_left === 0
+                                  ? "bg-rose-500 text-white animate-pulse"
+                                  : item.days_left <= 7
+                                  ? "bg-amber-100 text-amber-800"
+                                  : "bg-muted text-muted-foreground"
+                              )}
+                            >
+                              {item.days_left === 0 ? "Today" : `In ${item.days_left}d`}
+                            </span>
+                          )}
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -602,7 +637,7 @@ export function HRAndNews() {
               <Megaphone className="w-3.5 h-3.5 text-primary" />
               Latest Announcements
             </span>
-            {isAdmin && (
+            {canManageNews && (
               <button
                 type="button"
                 onClick={handleOpenAddNews}
@@ -638,8 +673,8 @@ export function HRAndNews() {
                       <p className="text-[12px] text-muted-foreground leading-relaxed">{news.desc}</p>
                     </div>
 
-                    {isAdmin && (
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {canManageNews && (
+                      <div className="flex items-center gap-1 shrink-0">
                         <button
                           type="button"
                           onClick={() => handleOpenEditNews(news)}

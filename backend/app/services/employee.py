@@ -113,8 +113,8 @@ class EmployeeService:
 
             new_phone = p_info.get("phone_number")
             if new_phone:
-                existing_phone = await EmployeeRepository.get_employee_by_phone(str(new_phone))
-                if existing_phone and str(existing_phone.get("_id")) != str(employee_id):
+                existing_phone = await EmployeeRepository.get_employee_by_phone(str(new_phone), exclude_id=str(employee_id))
+                if existing_phone:
                     raise HTTPException(status_code=400, detail="An employee with this phone number already exists.")
 
         # If photo is updated, sync profile_photo

@@ -1,7 +1,7 @@
 """Dashboard ONE-API aggregation (fast: single round-trip, parallel DB reads, Redis 60s cache)."""
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
 from bson import ObjectId
@@ -578,10 +578,17 @@ class DashboardService:
 
             interviews = []
             try:
+                # Current week (Mon-Sun); interview dates are stored as ISO YYYY-MM-DD strings
+                now_local = datetime.now()
+                week_start = (now_local - timedelta(days=now_local.weekday())).date()
+                week_end = week_start + timedelta(days=6)
                 cur = db["interview_schedules"].find(
-                    {"is_deleted": {"$ne": True}, "date": {"$regex": f"^{prefix}"}},
+                    {
+                        "is_deleted": {"$ne": True},
+                        "date": {"$gte": week_start.isoformat(), "$lte": week_end.isoformat()}
+                    },
                     {"candidate_name": 1, "role_position": 1, "date": 1, "time": 1, "interviewer_name": 1}
-                ).sort("date", 1).limit(6)
+                ).sort("date", 1).limit(50)
                 async for item in cur:
                     interviews.append({
                         "name": item.get("candidate_name") or "Candidate",
@@ -642,13 +649,21 @@ class DashboardService:
                                 "date": f"{jd:02d} {month_abbrs[jm-1]}",
                                 "diff_days": diff_days
                             })
+                    except Exception:
+                        pass
 
-                        if 2 <= (today_dt.year * 12 + today_dt.month - (jy * 12 + jm)) <= 6:
-                            prob_end = datetime(jy, jm, jd) + timedelta(days=90)
+                prob_end_str = str(b.get("probation_end_date") or "")
+                if b.get("has_probation") and len(prob_end_str) >= 10:
+                    try:
+                        py, pm, pd = int(prob_end_str[:4]), int(prob_end_str[5:7]), int(prob_end_str[8:10])
+                        days_left = (datetime(py, pm, pd).date() - today_dt.date()).days
+                        if days_left >= 0:
                             probations.append({
                                 "name": fname,
                                 "role": role,
-                                "date": f"{prob_end.day:02d} {month_abbrs[prob_end.month-1]}"
+                                "date": f"{pd:02d} {month_abbrs[pm-1]}",
+                                "raw_date": prob_end_str[:10],
+                                "days_left": days_left
                             })
                     except Exception:
                         pass
@@ -669,12 +684,13 @@ class DashboardService:
 
             anniversaries.sort(key=lambda x: (abs(x["month"] - today_dt.month), abs(x["day"] - today_dt.day)))
             new_joinings.sort(key=lambda x: x.get("diff_days", 99))
+            probations.sort(key=lambda x: x["days_left"])
 
             return {
                 "interviews": interviews,
                 "anniversaries": anniversaries[:6],
                 "new_joinings": new_joinings[:6],
-                "probations": probations[:6],
+                "probations": probations,
                 "exits": exits[:6]
             }
 

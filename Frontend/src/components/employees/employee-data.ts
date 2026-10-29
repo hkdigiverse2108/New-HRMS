@@ -9,6 +9,8 @@ export interface Employee {
   email: string;
   phone: string;
   joinDate: string;
+  hasProbation?: boolean;
+  probationEndDate?: string;
   avatar: string;
   profile_photo?: string;
   performanceScore: number; // Out of 100

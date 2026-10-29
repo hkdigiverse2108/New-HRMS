@@ -90,6 +90,8 @@ class BondAndExit(BaseModel):
     notice_period_start_date: Optional[date] = None
     has_resigned: bool = False
     resignation_date: Optional[date] = None
+    has_probation: bool = False
+    probation_end_date: Optional[date] = None
     has_employment: bool = False
     employment_start_date: Optional[date] = None
     contract_status: Optional[str] = "Verified"

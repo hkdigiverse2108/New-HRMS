@@ -124,6 +124,8 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
     noticePeriodStartDate: "",
     hasResignation: false,
     resignationDate: "",
+    hasProbation: false,
+    probationEndDate: "",
     hasEmployment: false,
     employmentStartDate: "",
     activelyUsingHRMS: true
@@ -228,6 +230,8 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
         noticePeriodStartDate: "",
         hasResignation: false,
         resignationDate: "",
+        hasProbation: false,
+        probationEndDate: "",
         hasEmployment: false,
         employmentStartDate: "",
         activelyUsingHRMS: true,
@@ -1075,6 +1079,33 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                             onChange={(val) => handleInputChange('bondEndDate', val)}
                             placeholder="Select bond end date"
                             className="bg-background"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Probation Period */}
+                  <div className="p-5 rounded-2xl border border-border/60 bg-muted/30 space-y-5">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.hasProbation || false}
+                        onChange={(e) => handleInputChange('hasProbation', e.target.checked)}
+                        className="w-5 h-5 rounded border-border text-primary focus:ring-primary accent-primary"
+                      />
+                      <span className="font-bold">Probation Period</span>
+                    </label>
+
+                    {formData.hasProbation && (
+                      <div className="animate-in fade-in zoom-in-95 duration-200 pt-4 border-t border-border/50">
+                        <div className="space-y-2">
+                          <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Probation End Date</label>
+                          <DatePicker
+                            value={formData.probationEndDate || ''}
+                            onChange={(val) => handleInputChange('probationEndDate', val)}
+                            placeholder="Select probation end date"
+                            className="w-full md:w-1/2 bg-background"
                           />
                         </div>
                       </div>

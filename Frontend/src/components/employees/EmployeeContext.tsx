@@ -91,6 +91,8 @@ function mapBackendToEmployee(be: any): Employee {
     noticePeriodStartDate: e.notice_period_start_date ? String(e.notice_period_start_date) : (be.noticePeriodStartDate || ""),
     hasResignation: !!e.has_resigned,
     resignationDate: e.resignation_date ? String(e.resignation_date) : (be.resignationDate || ""),
+    hasProbation: !!e.has_probation,
+    probationEndDate: e.probation_end_date ? String(e.probation_end_date) : "",
     hasEmployment: !!e.has_employment || !!be.hasEmployment,
     employmentStartDate: e.employment_start_date ? String(e.employment_start_date) : (be.employmentStartDate || ""),
     contractStatus: (e.contract_status || be.contract_status || be.contractStatus || "Pending") as any,
@@ -181,6 +183,8 @@ function mapEmployeeToBackendPayload(fe: Partial<Employee>) {
       notice_period_start_date: fe.noticePeriodStartDate || null,
       has_resigned: !!fe.hasResignation,
       resignation_date: fe.resignationDate || null,
+      has_probation: !!fe.hasProbation,
+      probation_end_date: fe.hasProbation ? (fe.probationEndDate || null) : null,
       has_employment: !!fe.hasEmployment,
       employment_start_date: fe.employmentStartDate || null,
       contract_status: (fe as any).contractStatus || "Verified"

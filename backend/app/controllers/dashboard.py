@@ -229,6 +229,12 @@ async def delete_motivation(quote_id: str, current_user: dict = Depends(get_curr
 
 # ==================== COMPANY NEWS ====================
 
+# Atlas cluster is at its collection limit, so news lives in the existing `counters` utility
+# collection (only ever accessed by _id elsewhere), separated by `kind`.
+NEWS_COLLECTION = "counters"
+NEWS_KIND = "company_news"
+
+
 class NewsIn(BaseModel):
     title: str
     desc: str
@@ -243,17 +249,7 @@ async def get_company_news():
     db = get_database()
     news_items = []
     
-    total_docs = await db["company_news"].count_documents({})
-    if total_docs == 0:
-        # Seed defaults with real ObjectIds once so they can be edited or permanently deleted
-        defaults = [
-            {"title": "HK DigiVerse crosses 60 active clients", "desc": "A new milestone driven by the Sales and Delivery teams.", "date": "Recent", "priority": 1, "is_deleted": False, "created_at": datetime.utcnow()},
-            {"title": "Appraisal cycle starts 05 August", "desc": "Managers must submit review drafts before 03 August.", "date": "Important", "priority": 2, "is_deleted": False, "created_at": datetime.utcnow()},
-            {"title": "Revised hybrid work policy", "desc": "Minimum 3 office days per week from this month.", "date": "Notice", "priority": 3, "is_deleted": False, "created_at": datetime.utcnow()}
-        ]
-        await db["company_news"].insert_many(defaults)
-
-    cursor = db["company_news"].find({"is_deleted": {"$ne": True}}).sort([("priority", -1), ("created_at", -1)]).limit(50)
+    cursor = db[NEWS_COLLECTION].find({"kind": NEWS_KIND, "is_deleted": {"$ne": True}}).sort([("priority", -1), ("created_at", -1)]).limit(50)
     async for n in cursor:
         n["_id"] = str(n["_id"])
         n["id"] = str(n["_id"])
@@ -270,6 +266,7 @@ async def create_company_news(data: NewsIn, current_user: dict = Depends(get_cur
     from datetime import datetime
     db = get_database()
     doc = {
+        "kind": NEWS_KIND,
         "title": data.title.strip(),
         "desc": data.desc.strip(),
         "date": data.date or datetime.utcnow().strftime("%d %b"),
@@ -277,7 +274,7 @@ async def create_company_news(data: NewsIn, current_user: dict = Depends(get_cur
         "is_deleted": False,
         "created_at": datetime.utcnow()
     }
-    res = await db["company_news"].insert_one(doc)
+    res = await db[NEWS_COLLECTION].insert_one(doc)
     doc["_id"] = str(res.inserted_id)
     return doc
 
@@ -291,8 +288,8 @@ async def update_company_news(news_id: str, data: NewsIn, current_user: dict = D
     from bson import ObjectId
     db = get_database()
     oid = ObjectId(news_id) if ObjectId.is_valid(news_id) else news_id
-    await db["company_news"].update_one(
-        {"_id": oid},
+    await db[NEWS_COLLECTION].update_one(
+        {"_id": oid, "kind": NEWS_KIND},
         {"$set": {
             "title": data.title.strip(),
             "desc": data.desc.strip(),
@@ -313,6 +310,6 @@ async def delete_company_news(news_id: str, current_user: dict = Depends(get_cur
     from bson import ObjectId
     db = get_database()
     oid = ObjectId(news_id) if ObjectId.is_valid(news_id) else news_id
-    await db["company_news"].update_one({"_id": oid}, {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}})
+    await db[NEWS_COLLECTION].update_one({"_id": oid, "kind": NEWS_KIND}, {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}})
     return {"status": "success", "deleted_id": news_id}
 

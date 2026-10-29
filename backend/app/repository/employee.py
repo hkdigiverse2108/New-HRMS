@@ -231,7 +231,7 @@ class EmployeeRepository:
         return employee
 
     @classmethod
-    async def get_employee_by_phone(cls, phone: str):
+    async def get_employee_by_phone(cls, phone: str, exclude_id: str = None):
         if not phone or not str(phone).strip():
             return None
         collection = await cls.get_collection()
@@ -245,9 +245,15 @@ class EmployeeRepository:
         regex_raw = re.compile(f"^{re.escape(raw_phone)}$", re.IGNORECASE)
         regex_digits = re.compile(f"{re.escape(last_digits)}$")
 
+        conditions = [{"work_details.is_delete": {"$ne": True}}]
+        if exclude_id:
+            try:
+                conditions.append({"_id": {"$ne": ObjectId(str(exclude_id))}})
+            except Exception:
+                pass
         employee = await collection.find_one({
             "$and": [
-                {"work_details.is_delete": {"$ne": True}},
+                *conditions,
                 {
                     "$or": [
                         {"personal_info.phone_number": regex_raw},
