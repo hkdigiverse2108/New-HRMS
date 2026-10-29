@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { WEEKLY_ATTENDANCE } from "../dashboard-data";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { useDashboardOverview } from "@/hooks/useDashboardOverview";
 
@@ -11,6 +10,11 @@ export function AttendanceAnalytics() {
   const { data } = useDashboardOverview(currentMonthDate.getMonth() + 1, currentMonthDate.getFullYear());
   const leaders: any[] = data?.penalty_leaderboard?.top_by_violations || [];
   const wfh = data?.wfh || { total: 0, count: 0, names: [], pct: 0 };
+  // Live current-week (Mon-Sat) attendance from the backend
+  const weeklyAttendance: any[] = data?.weekly_attendance || [];
+  const weeklyMax = Math.max(0, ...weeklyAttendance.map((d) => Math.max(d.present || 0, d.late || 0, d.wfh || 0, d.absent || 0)));
+  const weeklyTop = Math.max(4, Math.ceil(weeklyMax / 4) * 4);
+  const weeklyTicks = [0, 1, 2, 3, 4].map((i) => (weeklyTop / 4) * i);
 
   const generateHeatmap = () => {
     const year = currentMonthDate.getFullYear();
@@ -85,10 +89,10 @@ export function AttendanceAnalytics() {
           </div>
           <div className="h-[250px] mt-4 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={WEEKLY_ATTENDANCE} margin={{ top: 10, right: 0, left: -20, bottom: 0 }} barGap={2}>
+              <BarChart data={weeklyAttendance}margin={{ top: 10, right: 0, left: -20, bottom: 0 }} barGap={2}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.5} />
                 <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} ticks={[0, 40, 80, 120, 160]} domain={[0, 160]} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} ticks={weeklyTicks} domain={[0, weeklyTop]} allowDecimals={false} />
                 <Tooltip
                   contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', borderRadius: '12px', color: 'var(--foreground)', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                   itemStyle={{ fontWeight: 'bold' }}

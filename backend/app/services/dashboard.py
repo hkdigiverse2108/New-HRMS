@@ -521,6 +521,64 @@ class DashboardService:
                 logger.warning(f"Sales block dashboard failure: {e}")
                 return {}
 
+        async def weekly_attendance_block():
+            # Current week Mon-Sat: present / late / WFH / absent per day, straight from attendance records
+            from datetime import date as _date, timedelta as _td
+            db = get_database()
+            today = _date.today()
+            monday = today - _td(days=today.weekday())
+            days = [monday + _td(days=i) for i in range(6)]
+            ds_list = [d.isoformat() for d in days]
+
+            emp_filter = {"work_details.is_delete": {"$ne": True}}
+            total_emp = await db["employees"].count_documents(emp_filter)
+            wfh_modes = ["WFH", "Work From Home", "Remote", "wfh"]
+            wfh_ids: set = set()
+            async for e in db["employees"].find(
+                {**emp_filter, "work_details.work_mode": {"$in": wfh_modes}}, {"_id": 1}
+            ):
+                wfh_ids.add(str(e["_id"]))
+
+            present_by_day = {ds: set() for ds in ds_list}
+            late_by_day = {ds: set() for ds in ds_list}
+            async for doc in db["attendance"].find(
+                {"date": {"$in": ds_list}, "status": {"$in": ["Present", "Half Day", "Late", "Logged", "Active", "On Break"]}},
+                {"date": 1, "employee_id": 1, "is_late": 1, "status": 1},
+            ):
+                eid = str(doc.get("employee_id") or "")
+                ds = doc.get("date")
+                if not eid or ds not in present_by_day:
+                    continue
+                present_by_day[ds].add(eid)
+                if doc.get("is_late") or doc.get("status") == "Late":
+                    late_by_day[ds].add(eid)
+
+            leave_docs = []
+            async for lv in db["leave_requests"].find(
+                {"status": "Approved", "start_date": {"$lte": ds_list[-1]}, "end_date": {"$gte": ds_list[0]}, "is_deleted": {"$ne": True}},
+                {"employee_id": 1, "start_date": 1, "end_date": 1},
+            ):
+                leave_docs.append(lv)
+
+            out = []
+            for d, ds in zip(days, ds_list):
+                present_ids = present_by_day[ds]
+                on_leave = {
+                    str(lv["employee_id"]) for lv in leave_docs
+                    if lv.get("employee_id") and str(lv.get("start_date"))[:10] <= ds <= str(lv.get("end_date"))[:10]
+                }
+                # Future days have no attendance yet, so nothing is counted as absent
+                absent = max(0, total_emp - len(present_ids | on_leave)) if d <= today else 0
+                out.append({
+                    "day": d.strftime("%a"),
+                    "date": ds,
+                    "present": len(present_ids),
+                    "late": len(late_by_day[ds]),
+                    "wfh": len(present_ids & wfh_ids),
+                    "absent": absent,
+                })
+            return out
+
         async def attendance_heatmap_block():
             db = get_database()
             emp_count = await db["employees"].count_documents({"work_details.is_delete": {"$ne": True}})
@@ -764,6 +822,7 @@ class DashboardService:
             safe(attendance_heatmap_block(), {"daily": {}, "total_employees": 0}),
             safe(hr_updates_block(), {"interviews": [], "anniversaries": [], "new_joinings": [], "probations": [], "exits": []}),
             safe(performance_and_attention_block(), {"top_performers": [], "needs_attention": []}),
+            safe(weekly_attendance_block(), []),
         )
 
         payload = {
@@ -785,6 +844,7 @@ class DashboardService:
             "departments": results[13] or [],
             "sales": results[14] or {},
             "attendance_heatmap": results[15] or {},
+            "weekly_attendance": results[18] or [],
             "hr_updates": results[16] or {},
             "top_performers": (results[17] or {}).get("top_performers", []),
             "needs_attention": (results[17] or {}).get("needs_attention", []),
