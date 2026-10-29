@@ -441,10 +441,10 @@ export function DailyProgress() {
         : "bg-amber-500/10 text-amber-600 border-amber-500/20";
 
   return (
-    <div className="w-full space-y-8 animate-in fade-in duration-500">
+    <div className="w-full space-y-5 sm:space-y-8 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3 sm:gap-4">
+        <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground flex items-center gap-2">
             <Activity className="w-6 h-6 sm:w-8 sm:h-8 text-primary shrink-0" />
             Daily Progress Hub
@@ -466,24 +466,24 @@ export function DailyProgress() {
       </div>
 
       {/* Stats Bar */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="bg-card border border-border/50 rounded-2xl p-6 shadow-sm">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+        <div className="bg-card border border-border/50 rounded-2xl p-4 sm:p-6 shadow-sm">
           <div className="text-muted-foreground font-bold text-xs uppercase tracking-wider mb-1">Total Reports</div>
-          <div className="text-4xl font-black">{filteredRecords.length}</div>
+          <div className="text-3xl sm:text-4xl font-black">{filteredRecords.length}</div>
         </div>
         <div
-          className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-6 shadow-sm cursor-pointer hover:bg-amber-500/10 transition-colors group"
+          className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-4 sm:p-6 shadow-sm cursor-pointer hover:bg-amber-500/10 transition-colors group"
           onClick={() => setPendingListModalOpen(true)}
         >
           <div className="text-amber-600 font-bold text-xs uppercase tracking-wider mb-1 flex items-center justify-between">
             Pending Verification
             <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] bg-amber-500/20 px-2 py-0.5 rounded-md">View All</span>
           </div>
-          <div className="text-4xl font-black text-amber-700">{pendingCount}</div>
+          <div className="text-3xl sm:text-4xl font-black text-amber-700">{pendingCount}</div>
         </div>
-        <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-6 shadow-sm">
+        <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 sm:p-6 shadow-sm">
           <div className="text-emerald-600 font-bold text-xs uppercase tracking-wider mb-1">Avg Rating</div>
-          <div className="text-4xl font-black text-emerald-700 flex items-end gap-2">
+          <div className="text-3xl sm:text-4xl font-black text-emerald-700 flex items-end gap-2">
             {avgRating} <Star className="w-6 h-6 text-emerald-500 mb-1 fill-emerald-500" />
           </div>
         </div>
@@ -491,13 +491,13 @@ export function DailyProgress() {
 
       {/* Top Category Filter Tabs for Admin, HR & Heads */}
       {(isAdmin || isHr || isHead) && (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-1.5 bg-card/60 border border-border/40 rounded-2xl">
-          <div className="flex items-center gap-1.5 p-1 bg-muted/40 rounded-xl w-full sm:w-auto">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-1.5 bg-card/60 border border-border/40 rounded-2xl">
+          <div className="flex items-center gap-1.5 p-1 bg-muted/40 rounded-xl w-full lg:w-auto">
             <button
               type="button"
               onClick={() => setGroupTab("leaders_hr")}
               className={cn(
-                "flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-xs font-black transition-all cursor-pointer",
+                "flex-1 lg:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-5 py-2.5 rounded-lg text-[11px] sm:text-xs font-black whitespace-nowrap transition-all cursor-pointer",
                 groupTab === "leaders_hr"
                   ? "bg-card text-foreground shadow-sm border border-border/60"
                   : "text-muted-foreground hover:text-foreground hover:bg-card/50"
@@ -517,7 +517,7 @@ export function DailyProgress() {
               type="button"
               onClick={() => setGroupTab("employees")}
               className={cn(
-                "flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-xs font-black transition-all cursor-pointer",
+                "flex-1 lg:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-5 py-2.5 rounded-lg text-[11px] sm:text-xs font-black whitespace-nowrap transition-all cursor-pointer",
                 groupTab === "employees"
                   ? "bg-card text-foreground shadow-sm border border-border/60"
                   : "text-muted-foreground hover:text-foreground hover:bg-card/50"
@@ -534,7 +534,7 @@ export function DailyProgress() {
             </button>
           </div>
 
-          <div className="text-xs text-muted-foreground font-medium px-2 hidden sm:block">
+          <div className="text-xs text-muted-foreground font-medium px-2 hidden lg:block">
             {groupTab === "employees"
               ? "Showing staff (Excludes HR, Heads, Team Leaders)"
               : "Showing Team Leaders, Department Heads & HR"}
@@ -544,8 +544,8 @@ export function DailyProgress() {
 
       {/* My / Team tabs for Team Leaders */}
       {showLeaderTabs && (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-1.5 bg-card/60 border border-border/40 rounded-2xl">
-          <div className="flex items-center gap-1.5 p-1 bg-muted/40 rounded-xl w-full sm:w-auto">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-1.5 bg-card/60 border border-border/40 rounded-2xl">
+          <div className="flex items-center gap-1.5 p-1 bg-muted/40 rounded-xl w-full lg:w-auto">
             {([
               { key: "my", label: "My Progress", icon: <UserIcon className="w-4 h-4 text-amber-500" />, count: myProgressCount },
               { key: "team", label: "Team Progress", icon: <Users className="w-4 h-4 text-primary" />, count: teamProgressCount },
@@ -555,7 +555,7 @@ export function DailyProgress() {
                 type="button"
                 onClick={() => { setLeaderView(tab.key); setEmployeeFilter("All"); }}
                 className={cn(
-                  "flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-xs font-black transition-all cursor-pointer",
+                  "flex-1 lg:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-5 py-2.5 rounded-lg text-[11px] sm:text-xs font-black whitespace-nowrap transition-all cursor-pointer",
                   leaderView === tab.key
                     ? "bg-card text-foreground shadow-sm border border-border/60"
                     : "text-muted-foreground hover:text-foreground hover:bg-card/50"
@@ -573,16 +573,16 @@ export function DailyProgress() {
             ))}
           </div>
 
-          <div className="text-xs text-muted-foreground font-medium px-2 hidden sm:block">
+          <div className="text-xs text-muted-foreground font-medium px-2 hidden lg:block">
             {leaderView === "my" ? "Showing your own daily progress" : "Showing your team members' daily progress"}
           </div>
         </div>
       )}
 
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-card border border-border/50 p-4 rounded-2xl shadow-sm">
+      <div className="flex flex-col xl:flex-row gap-3 sm:gap-4 justify-between items-stretch xl:items-center bg-card border border-border/50 p-3 sm:p-4 rounded-2xl shadow-sm">
         {canFilterEmployees ? (
-          <div className="relative w-full sm:max-w-md">
+          <div className="relative w-full xl:max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               type="text"
@@ -593,14 +593,14 @@ export function DailyProgress() {
             />
           </div>
         ) : (
-          <div className="hidden sm:block" />
+          <div className="hidden xl:block" />
         )}
-        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+        <div className="grid grid-cols-2 lg:grid-cols-4 xl:flex xl:flex-wrap items-center gap-2 w-full xl:w-auto">
           {canFilterEmployees && (
             <>
               {/* "My Progress" only has the leader's own report, so no employee filter there */}
               {!(showLeaderTabs && leaderView === "my") && (
-                <div className="relative w-full sm:w-[170px]">
+                <div className="relative min-w-0 xl:w-[170px]">
                   <SearchableSelect
                     value={employeeFilter}
                     onChange={(val) => setEmployeeFilter(val)}
@@ -610,7 +610,7 @@ export function DailyProgress() {
                 </div>
               )}
               {(isAdmin || isHr) && (
-                <div className="relative w-full sm:w-[190px]">
+                <div className="relative min-w-0 xl:w-[190px]">
                   <SearchableSelect
                     value={departmentFilter}
                     onChange={(val) => setDepartmentFilter(val)}
@@ -626,9 +626,9 @@ export function DailyProgress() {
             value={dateRangeValue}
             onChange={handleDateRangeChange}
             placeholder="Select date / range"
-            className="w-full sm:w-auto"
+            className="w-full min-w-0 xl:w-auto"
           />
-          <div className="relative w-full sm:w-auto">
+          <div className="relative min-w-0">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />
             <SearchableSelect
               value={statusFilter}
@@ -639,7 +639,7 @@ export function DailyProgress() {
                 { label: "Verified", value: "Verified" },
                 { label: "Rejected", value: "Rejected" },
               ]}
-              className="w-[180px] h-[42px] pl-9 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-bold cursor-pointer"
+              className="w-full xl:w-[180px] h-[42px] pl-9 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-bold cursor-pointer"
             />
           </div>
         </div>
@@ -652,20 +652,20 @@ export function DailyProgress() {
           <p className="text-sm font-medium">Loading reports...</p>
         </div>
       ) : (
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-3 sm:gap-4 grid-cols-1 md:grid-cols-2 2xl:grid-cols-3">
         {filteredRecords.map((record) => (
           <div key={record.id} className="bg-card border border-border/50 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all group flex flex-col">
 
             {/* Header info */}
-            <div className="p-5 border-b border-border/50 bg-muted/10">
-              <div className="flex justify-between items-start mb-3">
-                <div className="flex items-center gap-3">
+            <div className="p-4 sm:p-5 border-b border-border/50 bg-muted/10">
+              <div className="flex justify-between items-start gap-2 mb-3">
+                <div className="flex items-center gap-3 min-w-0">
                   <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 font-bold text-lg">
                     {record.employeeName.charAt(0)}
                   </div>
-                  <div>
-                    <div className="font-bold text-foreground leading-tight">{record.employeeName}</div>
-                    <div className="flex items-center gap-1.5 mt-0.5">
+                  <div className="min-w-0">
+                    <div className="font-bold text-foreground leading-tight truncate">{record.employeeName}</div>
+                    <div className="flex flex-wrap items-center gap-x-1.5 mt-0.5">
                       <span className="text-xs text-muted-foreground">{record.department}</span>
                       {record.designation && (
                         <>
@@ -683,7 +683,7 @@ export function DailyProgress() {
                     </div>
                   </div>
                 </div>
-                <div className="flex flex-col items-end gap-1.5">
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
                   <span className={cn(
                     "inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase border",
                     statusStyle(record.verificationStatus)
@@ -704,7 +704,7 @@ export function DailyProgress() {
             </div>
 
             {/* Task Summary */}
-            <div className="p-5 flex-grow space-y-4">
+            <div className="p-4 sm:p-5 flex-grow space-y-4">
               <div>
                 <div className="flex items-center gap-2 mb-2 text-sm font-bold text-emerald-600">
                   <CheckCircle2 className="w-4 h-4" />
@@ -747,7 +747,7 @@ export function DailyProgress() {
             </div>
 
             {/* Actions / Rating Footer */}
-            <div className="p-4 border-t border-border/50 bg-muted/10 flex items-center justify-between">
+            <div className="p-3 sm:p-4 border-t border-border/50 bg-muted/10 flex flex-wrap items-center justify-between gap-2">
               {record.verificationStatus === "Verified" ? (
                 renderStarDisplay(record.rating || 0)
               ) : record.verificationStatus === "Rejected" ? (
@@ -763,7 +763,7 @@ export function DailyProgress() {
               <button
                 onClick={() => handleOpenVerify(record)}
                 className={cn(
-                  "px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-2",
+                  "px-3 sm:px-4 py-2 text-xs font-bold rounded-lg whitespace-nowrap transition-colors flex items-center gap-2",
                   record.verificationStatus === "Pending"
                     ? (record.onLeave
                         ? "bg-sky-500/10 hover:bg-sky-500/20 text-sky-700 dark:text-sky-400 border border-sky-500/20"
@@ -797,19 +797,19 @@ export function DailyProgress() {
         <DialogContent className="w-[calc(100vw-16px)] sm:w-full sm:max-w-3xl max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
 
           {/* Modal Header */}
-          <div className="flex items-center justify-between p-6 border-b border-border/50 shrink-0">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xl">
+          <div className="flex items-start justify-between gap-3 p-4 sm:p-6 border-b border-border/50 shrink-0">
+            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-lg sm:text-xl shrink-0">
                 {selectedRecord?.employeeName.charAt(0)}
               </div>
-              <div>
-                <h2 className="text-xl font-bold">{selectedRecord?.employeeName}</h2>
-                <p className="text-sm text-muted-foreground">
+              <div className="min-w-0">
+                <h2 className="text-lg sm:text-xl font-bold truncate">{selectedRecord?.employeeName}</h2>
+                <p className="text-xs sm:text-sm text-muted-foreground">
                   {selectedRecord?.department}{selectedRecord?.designation ? ` • ${selectedRecord.designation}` : ""} • {selectedRecord?.date}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap justify-end items-center gap-2 shrink-0">
               {selectedRecord?.onLeave && (
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase border bg-sky-500/10 text-sky-600 border-sky-500/20">
                   <Palmtree className="w-3.5 h-3.5" /> On Leave
@@ -824,8 +824,8 @@ export function DailyProgress() {
           </div>
 
           {/* Modal Body */}
-          <div className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[70vh]">
-            <div className="grid md:grid-cols-2 gap-6">
+          <div className="p-4 sm:p-6 md:p-8 space-y-6 overflow-y-auto max-h-[70vh]">
+            <div className="grid lg:grid-cols-2 gap-5 sm:gap-6">
 
               {/* Tasks List */}
               <div className="space-y-6">
@@ -869,7 +869,7 @@ export function DailyProgress() {
               </div>
 
               {/* Rating & Verification Section */}
-              <div className="bg-muted/10 p-6 rounded-2xl border border-border/50 flex flex-col space-y-5">
+              <div className="bg-muted/10 p-4 sm:p-6 rounded-2xl border border-border/50 flex flex-col space-y-5">
                 {/* Self Report Warning */}
                 {isOwnReport(selectedRecord) && (
                   <div className="bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 p-3.5 rounded-xl text-xs font-bold flex items-center gap-2">
@@ -1003,8 +1003,8 @@ export function DailyProgress() {
 
           {/* Modal Footer */}
           {canManageProgress && (
-          <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-between gap-3 mt-auto shrink-0">
-            <div>
+          <div className="px-4 sm:px-6 md:px-8 py-3 sm:py-4 md:py-6 bg-muted/30 border-t border-border/50 flex flex-col-reverse sm:flex-row sm:justify-between gap-2 sm:gap-3 mt-auto shrink-0">
+            <div className="[&>button]:w-full sm:[&>button]:w-auto [&>button]:justify-center">
               {selectedRecord && selectedRecord.verificationStatus !== "Pending" && (
                 <button
                   onClick={handleReset}
@@ -1016,7 +1016,7 @@ export function DailyProgress() {
                 </button>
               )}
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 [&>button]:w-full sm:[&>button]:w-auto [&>button]:justify-center">
               {(!selectedRecord || selectedRecord.verificationStatus === "Pending") && (
                 <button
                   onClick={handleReject}

@@ -222,13 +222,13 @@ export function DateRangeFilter({
               className="p-0 w-full flex justify-center"
             />
 
-            <div className="flex items-center justify-between pt-2.5 mt-2 border-t border-border/50 text-xs gap-2 min-w-0">
-              <span className="text-muted-foreground text-[10px] sm:text-[11px] truncate flex-1 min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pt-2.5 mt-2 border-t border-border/50 text-xs gap-2 sm:gap-3 min-w-0">
+              <span className="text-muted-foreground text-[11px] text-center sm:text-left truncate sm:flex-1 min-w-0">
                 {internalRange?.from && internalRange?.to
                   ? `${formatDate(internalRange.from)} - ${formatDate(internalRange.to)}`
                   : "Select start and end date"}
               </span>
-              <div className="flex items-center gap-1.5 shrink-0">
+              <div className="flex items-center gap-2 sm:gap-1.5 w-full sm:w-auto shrink-0">
                 {hasRange && (
                   <Button
                     variant="ghost"
@@ -237,7 +237,7 @@ export function DateRangeFilter({
                       setInternalRange(undefined);
                       onChange?.(undefined);
                     }}
-                    className="h-7 px-2 text-[11px] sm:text-xs text-muted-foreground hover:text-foreground"
+                    className="flex-1 sm:flex-none h-9 sm:h-7 px-3 sm:px-2 text-xs text-muted-foreground hover:text-foreground border border-border/60 sm:border-0"
                   >
                     Reset
                   </Button>
@@ -245,7 +245,7 @@ export function DateRangeFilter({
                 <Button
                   size="sm"
                   onClick={() => setIsOpen(false)}
-                  className="h-7 px-2.5 sm:px-3 text-[11px] sm:text-xs font-bold rounded-lg"
+                  className="flex-1 sm:flex-none h-9 sm:h-7 px-4 sm:px-3 text-xs font-bold rounded-lg"
                 >
                   Done
                 </Button>

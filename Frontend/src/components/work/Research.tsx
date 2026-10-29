@@ -260,24 +260,25 @@ export function Research() {
   const employeeName = (id: string) => employees.find(o => o.value === id)?.label || "Employee";
 
   return (
-    <div className="space-y-5 min-h-[calc(100vh-4rem)] h-auto lg:h-[calc(100vh-4rem)] flex flex-col overflow-hidden pb-0 animate-in fade-in duration-300">
+    <div className="space-y-5 min-h-[calc(100vh-4rem)] h-auto xl:h-[calc(100vh-4rem)] flex flex-col xl:overflow-hidden pb-6 xl:pb-0 animate-in fade-in duration-300">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0">
-        <div>
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 shrink-0">
+        <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">Knowledge & Research Hub</h1>
           <p className="text-xs text-muted-foreground mt-1 font-semibold">Capture research, key concepts and references, and share them with your team</p>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
+        <div className="flex items-center gap-2 sm:gap-3 w-full xl:w-auto">
           <SearchInput
             placeholder="Search title, notes, concepts..."
             value={searchQuery}
             onChange={setSearchQuery}
-            containerClassName="flex-1 sm:flex-none sm:w-64 md:w-72 min-w-0"
+            className="h-10 py-0 bg-white border-border/70"
+            containerClassName="flex-1 min-w-0 xl:flex-none xl:w-72"
           />
           <button
             onClick={openCreate}
-            className="px-3 sm:px-4 py-2 bg-primary hover:bg-primary/95 text-primary-foreground font-bold text-xs rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 shrink-0"
+            className="h-10 px-3 sm:px-4 whitespace-nowrap bg-primary hover:bg-primary/95 text-primary-foreground font-bold text-xs rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 shrink-0"
           >
             <Plus className="w-4 h-4" />
             <span>New Research</span>
@@ -287,7 +288,8 @@ export function Research() {
 
       <div className="flex-1 flex flex-col min-h-0">
         {/* Filters */}
-        <div className="flex items-center gap-2 overflow-x-auto p-1 pb-4 -mx-1 scrollbar-hide shrink-0">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 p-1 pb-4 -mx-1 shrink-0">
+          <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide min-w-0">
           {SCOPES.map(s => (
             <button
               key={s.key}
@@ -302,8 +304,8 @@ export function Research() {
               {s.label}
             </button>
           ))}
-          <div className="flex-1" />
-          <div className="w-48 shrink-0">
+          </div>
+          <div className="w-full sm:w-48 sm:ml-auto shrink-0">
             <SearchableSelect
               value={projectFilter}
               onChange={setProjectFilter}
@@ -314,20 +316,20 @@ export function Research() {
         </div>
 
         {/* Grid */}
-        <div className="flex-1 overflow-y-auto pr-2 pb-10">
+        <div className="flex-1 xl:overflow-y-auto xl:pr-2 pb-10">
           {loading ? (
             <div className="flex items-center justify-center h-64 text-muted-foreground">
               <Loader2 className="w-6 h-6 animate-spin" />
             </div>
           ) : visibleItems.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4 sm:gap-5">
               {visibleItems.map(item => {
                 const bookmarked = bookmarks.includes(item.id);
                 return (
                   <div
                     key={item.id}
                     onClick={() => setSelected(item)}
-                    className="group bg-white border border-border rounded-2xl p-5 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/20 transition-all duration-300 flex flex-col cursor-pointer"
+                    className="group bg-white border border-border rounded-2xl p-4 sm:p-5 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/20 transition-all duration-300 flex flex-col cursor-pointer"
                   >
                     <div className="flex justify-between items-start mb-3 gap-2">
                       <div className="flex flex-wrap gap-1.5 min-w-0">
@@ -347,7 +349,7 @@ export function Research() {
                       </button>
                     </div>
 
-                    <h3 className="text-lg font-bold text-foreground mb-2 leading-tight group-hover:text-primary transition-colors line-clamp-2">
+                    <h3 className="text-base sm:text-lg font-bold text-foreground mb-2 leading-tight group-hover:text-primary transition-colors line-clamp-2">
                       {item.title}
                     </h3>
                     <p className="text-sm text-muted-foreground line-clamp-2 mb-4 flex-1">
@@ -547,7 +549,7 @@ export function Research() {
         <DialogContent className="w-[calc(100vw-16px)] sm:max-w-[720px] p-0 overflow-hidden rounded-2xl sm:rounded-[2.5rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card flex flex-col max-h-[90dvh] min-h-[400px]">
           {selected && (
             <>
-              <div className="px-6 sm:px-8 py-6 border-b border-border/50 bg-muted/30 flex items-start justify-between gap-4 shrink-0">
+              <div className="px-4 sm:px-8 py-4 sm:py-6 border-b border-border/50 bg-muted/30 flex items-start justify-between gap-3 sm:gap-4 shrink-0">
                 <div className="space-y-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     {selected.project_details?.project_name && (
@@ -561,7 +563,7 @@ export function Research() {
                   </div>
                   <h2 className="text-xl md:text-2xl font-black tracking-tight text-foreground leading-tight break-words">{selected.title}</h2>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex flex-wrap justify-end items-center gap-1 shrink-0">
                   {selected.can_edit && (
                     <button onClick={() => openEdit(selected)} title="Edit" className="p-2 text-muted-foreground hover:text-primary hover:bg-muted rounded-full transition-colors">
                       <Pencil className="w-4 h-4" />
@@ -578,7 +580,7 @@ export function Research() {
                 </div>
               </div>
 
-              <div className="px-6 sm:px-8 py-4 bg-muted/10 border-b border-border/40 flex items-center justify-between gap-4 shrink-0">
+              <div className="px-4 sm:px-8 py-3 sm:py-4 bg-muted/10 border-b border-border/40 flex items-center justify-between gap-3 sm:gap-4 shrink-0">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <img src={avatarFor(selected.employee_details)} alt="" className="w-8 h-8 rounded-full border border-border/50" />
                   <div className="min-w-0">
@@ -598,7 +600,7 @@ export function Research() {
                 )}
               </div>
 
-              <div className="p-6 sm:p-8 overflow-y-auto flex-1 space-y-6 text-left">
+              <div className="p-4 sm:p-8 overflow-y-auto flex-1 space-y-6 text-left">
                 <div className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap font-medium break-words">
                   {selected.description || "No notes added for this research."}
                 </div>
@@ -633,7 +635,7 @@ export function Research() {
                     </h4>
                     <div className="space-y-1.5">
                       {[...selected.history].reverse().map((h, idx) => (
-                        <div key={idx} className="flex items-start justify-between gap-3 text-xs">
+                        <div key={idx} className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-0.5 sm:gap-3 text-xs">
                           <span className="text-foreground/80">
                             <span className="font-bold">{h.employee_details?.employee_name || "Someone"}</span>{" "}
                             {h.changes_summary || h.action}

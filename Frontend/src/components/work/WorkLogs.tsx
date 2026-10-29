@@ -10,6 +10,7 @@ import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { DateRangeFilter } from "@/components/common/DateRangeFilter";
 import { SearchInput } from "@/components/common/SearchInput";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 /** One task segment: from punch-in / Change Active Task until the next task, punch-out or now. */
 type WorkLog = {
@@ -54,6 +55,7 @@ const fmtDuration = (seconds: number) => {
 const REFRESH_MS = 60_000; // keeps the running task's time live
 
 export function WorkLogs() {
+  const isMobile = useIsMobile();
   const [data, setData] = useState<TimelineResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
@@ -134,8 +136,8 @@ export function WorkLogs() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+        <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
             {isAdminOrHR ? "All Employees Work Logs" : "My Work Logs"}
           </h1>
@@ -147,14 +149,15 @@ export function WorkLogs() {
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto shrink-0">
+        <div className="flex flex-row items-center gap-2 sm:gap-3 w-full xl:w-auto xl:shrink-0">
           <SearchInput
             value={searchQuery}
             onChange={setSearchQuery}
-            placeholder={isAdminOrHR ? "Search employee, project or task..." : "Search project or task..."}
-            containerClassName="w-full sm:w-60"
+            placeholder={isMobile ? "Search..." : isAdminOrHR ? "Search employee, project or task..." : "Search project or task..."}
+            className="h-10 py-0 bg-white border-border/70"
+            containerClassName="flex-1 min-w-0 sm:max-w-md xl:flex-none xl:w-72"
           />
-          <DateRangeFilter value={dateRange} onChange={setDateRange} className="w-full sm:w-auto" />
+          <DateRangeFilter value={dateRange} onChange={setDateRange} placeholder={isMobile ? "Date range" : "Pick a date range"} className="h-10 py-0 shrink-0 max-w-[55%] sm:max-w-none sm:w-auto" />
         </div>
       </div>
 

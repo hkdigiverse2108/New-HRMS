@@ -12833,7 +12833,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           {/* Projects Grid for this Client */}
           <div>
             <h2 className="text-xl font-bold tracking-tight mb-4">Projects</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4 sm:gap-6">
               {clientProjects.map((project) => (
                 <div
                   key={project.id}
@@ -13908,12 +13908,12 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     <div className="w-full space-y-6 animate-in fade-in duration-500">
 
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-black tracking-tight text-foreground bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-transparent">
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-transparent">
             {showBrandDivision ? "Brand Division" : PROJECT_TABS.includes(activeTab) ? "Projects" : "Clients"}
           </h1>
-          <p className="text-muted-foreground mt-1">
+          <p className="text-sm sm:text-base text-muted-foreground mt-1">
             {showBrandDivision
               ? "Team members and their assigned brands."
               : PROJECT_TABS.includes(activeTab)
@@ -13921,8 +13921,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 : "Manage your clients and view their projects."}
           </p>
         </div>
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <div className="relative flex-1 md:w-64">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3 w-full xl:w-auto">
+          <div className="relative col-span-2 sm:col-auto w-full sm:flex-1 sm:min-w-[200px] xl:flex-none xl:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               type="text"
@@ -13934,9 +13934,9 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2 px-4 py-2.5 bg-card border border-border/60 text-foreground font-bold text-sm rounded-xl hover:bg-muted/80 transition-all shadow-sm">
+              <button className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 w-full sm:w-auto whitespace-nowrap shrink-0 bg-card border border-border/60 text-foreground font-bold text-sm rounded-xl hover:bg-muted/80 transition-all shadow-sm">
                 <Filter className="w-4 h-4 text-muted-foreground" />
-                <span className="hidden sm:inline">Filter & Sort</span>
+                <span>Filter & Sort</span>
                 {clientFilterCategories.length > 0 && (
                   <span className="w-2 h-2 rounded-full bg-primary ml-1"></span>
                 )}
@@ -14034,11 +14034,11 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           <button
             type="button"
             onClick={() => setIsPendingBrandsModalOpen(true)}
-            className="flex items-center gap-2 px-3.5 py-2.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-bold text-sm rounded-xl transition-all shadow-sm relative group"
+            className="flex items-center justify-center gap-2 px-3 sm:px-3.5 py-2.5 w-full sm:w-auto whitespace-nowrap shrink-0 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-bold text-sm rounded-xl transition-all shadow-sm relative group"
             title="Brands awaiting Creative Team assignment"
           >
             <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
-            <span className="hidden sm:inline">Pending Brands</span>
+            <span>Pending Brands</span>
             {pendingProjects.length > 0 && (
               <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-xs font-black shadow-sm">
                 {pendingProjects.length}
@@ -14048,12 +14048,12 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
           {/* My Projects / All Projects switcher (Admin, HR, Head, Team Leader) */}
           {canSeeAllProjects && (
-            <div className="flex items-center gap-1 p-1 bg-muted/60 border border-border/50 rounded-xl text-sm font-bold shadow-xs">
+            <div className="order-last sm:order-none col-span-2 sm:col-auto flex items-center gap-1 p-1 bg-muted/60 border border-border/50 rounded-xl text-sm font-bold shadow-xs sm:shrink-0">
               <button
                 type="button"
                 onClick={() => setProjectScope("my")}
                 className={cn(
-                  "px-3.5 py-2 rounded-lg transition-all",
+                  "flex-1 sm:flex-none px-3 sm:px-3.5 py-2 rounded-lg whitespace-nowrap text-center transition-all",
                   projectScope === "my"
                     ? "bg-primary text-primary-foreground shadow-xs"
                     : "text-muted-foreground hover:text-foreground"
@@ -14065,7 +14065,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 type="button"
                 onClick={() => setProjectScope("all")}
                 className={cn(
-                  "px-3.5 py-2 rounded-lg transition-all",
+                  "flex-1 sm:flex-none px-3 sm:px-3.5 py-2 rounded-lg whitespace-nowrap text-center transition-all",
                   projectScope === "all"
                     ? "bg-primary text-primary-foreground shadow-xs"
                     : "text-muted-foreground hover:text-foreground"
@@ -14078,24 +14078,24 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
           {/* K9: project tabs par New Project + New Client baju-bajuma */}
           {canCreateProject && PROJECT_TABS.includes(activeTab) && !showBrandDivision && (
-            <button onClick={() => { setLandingProjectClientId(""); setIsLandingProjectOpen(true); }} className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground font-bold text-sm rounded-xl hover:bg-primary/90 transition-all shadow-sm">
+            <button onClick={() => { setLandingProjectClientId(""); setIsLandingProjectOpen(true); }} className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 w-full sm:w-auto whitespace-nowrap shrink-0 bg-primary text-primary-foreground font-bold text-sm rounded-xl hover:bg-primary/90 transition-all shadow-sm">
               <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">New Project</span>
+              <span>New Project</span>
             </button>
           )}
           {canCreateClient && (
-            <button onClick={() => setIsNewClientModalOpen(true)} className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground font-bold text-sm rounded-xl hover:bg-primary/90 transition-all shadow-sm">
+            <button onClick={() => setIsNewClientModalOpen(true)} className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 w-full sm:w-auto whitespace-nowrap shrink-0 bg-primary text-primary-foreground font-bold text-sm rounded-xl hover:bg-primary/90 transition-all shadow-sm">
               <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">New Client</span>
+              <span>New Client</span>
             </button>
           )}
         </div>
       </div>
 
       {/* Category KPIs */}
-      <div className="flex flex-wrap gap-4 pt-4 pb-2">
+      <div className="flex flex-wrap gap-3 sm:gap-4 pt-2 sm:pt-4 pb-2">
         {categoryStats.map((stat, i) => (
-          <div key={i} className="flex-1 min-w-[150px] bg-card border border-border/60 rounded-3xl p-5 shadow-sm flex flex-col justify-center transition-all hover:shadow-lg hover:-translate-y-1 relative overflow-hidden group">
+          <div key={i} className="flex-1 min-w-[140px] bg-card border border-border/60 rounded-3xl p-4 sm:p-5 shadow-sm flex flex-col justify-center transition-all hover:shadow-lg hover:-translate-y-1 relative overflow-hidden group">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary/50 to-primary/20 opacity-0 group-hover:opacity-100 transition-opacity" />
             <div className="absolute -right-4 -bottom-4 w-16 h-16 bg-primary/5 rounded-full blur-2xl group-hover:bg-primary/10 transition-colors" />
             <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-2 truncate relative z-10" title={stat.category}>{stat.category}</p>
@@ -14242,11 +14242,11 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           </div>
 
           {/* Members Brand Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4 sm:gap-6">
             {brandDivisionData.map((item) => (
               <div
                 key={item.employee.id}
-                className="bg-card border border-border/60 rounded-[2rem] p-6 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between"
+                className="bg-card border border-border/60 rounded-[2rem] p-4 sm:p-6 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between"
               >
                 <div>
                   {/* Member Header */}
@@ -14355,7 +14355,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         </div>
       ) : PROJECT_TABS.includes(activeTab) ? (
         /* K1: Projects Grid (Active / Archived) - Merged by client/brand in UI (Issue 6) */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4 sm:gap-6 pt-2 items-start">
           {groupedProjects.map((group) => {
             const dp = getDateProgress(group.startDate, group.endDate);
             return (
@@ -14368,15 +14368,15 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   }
                   setSelectedProjectId(group.primaryProject.id);
                 }}
-                className="group bg-card border border-border/60 rounded-[2rem] p-6 shadow-sm hover:shadow-2xl hover:shadow-primary/5 hover:-translate-y-1 hover:border-primary/30 transition-all duration-300 relative flex flex-col cursor-pointer"
+                className="group bg-card border border-border/60 rounded-[2rem] p-4 sm:p-6 shadow-sm hover:shadow-2xl hover:shadow-primary/5 hover:-translate-y-1 hover:border-primary/30 transition-all duration-300 relative flex flex-col cursor-pointer"
               >
                 {/* Background Accent */}
                 <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-primary/[0.03] to-transparent rounded-t-[2rem] pointer-events-none transition-opacity opacity-0 group-hover:opacity-100"></div>
 
-                <div className="flex justify-between items-start mb-5 relative z-10">
+                <div className="flex justify-between items-start gap-2 mb-5 relative z-10">
                   {/* K5: highlighted logo */}
                   <BrandLogo src={group.client?.logo} alt={group.displayName} size="w-20 h-20" />
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex flex-wrap justify-end items-center gap-1.5">
                     {/* Dynamic Finance button (K10 / Audio transcript [27:01]) */}
                     {canUserAccessFinance(group) && (
                       <button
@@ -14672,7 +14672,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         </div>
       ) : (
         /* Clients Grid */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4 sm:gap-6 pt-2">
           {filteredClients.map((client) => (
             <div
               key={client.id}
@@ -14684,7 +14684,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 setSelectedClientId(client.id);
                 setSelectedProjectId(null);
               }}
-              className="group bg-card border border-border/60 rounded-[2rem] p-6 shadow-sm hover:shadow-2xl hover:shadow-primary/5 hover:-translate-y-1 hover:border-primary/30 transition-all duration-300 relative flex flex-col cursor-pointer"
+              className="group bg-card border border-border/60 rounded-[2rem] p-4 sm:p-6 shadow-sm hover:shadow-2xl hover:shadow-primary/5 hover:-translate-y-1 hover:border-primary/30 transition-all duration-300 relative flex flex-col cursor-pointer"
             >
               {/* Background Accent */}
               <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-primary/[0.03] to-transparent rounded-t-[2rem] pointer-events-none transition-opacity opacity-0 group-hover:opacity-100"></div>

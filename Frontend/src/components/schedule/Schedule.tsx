@@ -74,6 +74,8 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
   const [view, setView] = usePersistentState<ViewType>("schedule.view", "Month");
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  // Phone/tablet only: the calendars panel is collapsed until opened from the header
+  const [showPanel, setShowPanel] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(isNew || false);
   const [selectedDateForCreate, setSelectedDateForCreate] = useState<Date>(new Date());
   const [editingEvent, setEditingEvent] = useState<ScheduleEvent | null>(null);
@@ -468,9 +470,9 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
   };
 
   return (
-    <div className="flex flex-col min-h-[calc(100dvh-4rem)] lg:h-[calc(100vh-4rem)] lg:min-h-0 lg:overflow-hidden bg-white rounded-2xl border border-border shadow-sm">
+    <div className="flex flex-col min-h-[calc(100dvh-4rem)] xl:h-[calc(100vh-4rem)] xl:min-h-0 xl:overflow-hidden bg-white rounded-2xl border border-border shadow-sm">
       {/* Header */}
-      <header className="flex flex-col md:flex-row md:items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-border gap-3">
+      <header className="flex flex-col xl:flex-row xl:items-center justify-between px-3 sm:px-6 py-3 sm:py-4 border-b border-border gap-3">
         <div className="flex flex-wrap items-center gap-2 sm:gap-4">
           <div className="flex items-center gap-2">
             <div className="p-2 bg-primary rounded-lg text-primary-foreground">
@@ -481,7 +483,7 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
 
           <div className="h-6 w-px bg-slate-200 mx-1 sm:mx-2 hidden min-[400px]:block"></div>
 
-          <button onClick={today} className="px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-semibold border border-border rounded-md hover:bg-muted/50 transition-colors">
+          <button onClick={today} className="px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-semibold whitespace-nowrap border border-border rounded-md hover:bg-muted/50 transition-colors">
             Today
           </button>
 
@@ -502,18 +504,18 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
           </button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3 justify-between sm:justify-end w-full md:w-auto">
-          <div className="relative">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 justify-start xl:justify-end w-full xl:w-auto">
+          <div className="relative flex-1 sm:flex-none min-w-[150px]">
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Search events…"
-              className="h-8 w-40 sm:w-48 rounded-lg border border-border bg-white pl-8 pr-2 text-xs outline-none focus:ring-2 focus:ring-primary/20"
+              className="h-8 w-full sm:w-48 rounded-lg border border-border bg-white pl-8 pr-2 text-xs outline-none focus:ring-2 focus:ring-primary/20"
             />
           </div>
 
-          <div className="flex items-center gap-1 bg-muted p-1 rounded-lg">
+          <div className="flex items-center gap-1 bg-muted p-1 rounded-lg shrink-0">
             {(["Month", "Week", "Day"] as ViewType[]).map(v => (
               <button
                 key={v}
@@ -554,7 +556,7 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
                 onClick={handleGoogleCalendarLogin}
                 disabled={isConnectingGoogle}
                 title="Sign in with Google — syncs YOUR Google account's calendar"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg border border-border bg-white hover:bg-muted text-foreground transition-all shadow-sm"
+                className="flex items-center gap-1.5 px-3 py-1.5 whitespace-nowrap text-xs sm:text-sm font-semibold rounded-lg border border-border bg-white hover:bg-muted text-foreground transition-all shadow-sm"
               >
                 <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -579,7 +581,7 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
             <button
               type="button"
               onClick={() => setIsHolidaysMasterOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-850 text-xs sm:text-sm font-semibold rounded-lg transition-colors shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 whitespace-nowrap shrink-0 bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-850 text-xs sm:text-sm font-semibold rounded-lg transition-colors shadow-sm"
               title="View & manage holidays and company leaves"
             >
               <span>🎉 Holidays Master</span>
@@ -590,18 +592,28 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
           )}
 
           <button
+            type="button"
+            onClick={() => setShowPanel((v) => !v)}
+            aria-expanded={showPanel}
+            className="xl:hidden flex items-center gap-1.5 px-3 py-1.5 whitespace-nowrap shrink-0 text-xs sm:text-sm font-semibold rounded-lg border border-border bg-white hover:bg-muted text-foreground transition-colors shadow-sm"
+          >
+            Calendars <ChevronDown className={cn("w-4 h-4 transition-transform", showPanel && "rotate-180")} />
+          </button>
+
+          <button
             onClick={() => openCreate(currentDate)}
-            className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 bg-primary text-primary-foreground text-xs sm:text-sm font-semibold rounded-lg hover:bg-primary transition-colors shadow-sm">
+            className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 whitespace-nowrap shrink-0 bg-primary text-primary-foreground text-xs sm:text-sm font-semibold rounded-lg hover:bg-primary transition-colors shadow-sm">
             <Plus className="w-4 h-4" /> Create
           </button>
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        <aside className="w-72 border-r border-border hidden lg:flex flex-col shrink-0 bg-muted/20 select-none">
+      <div className="flex flex-col xl:flex-row flex-1 xl:overflow-hidden">
+        {/* Sidebar: below the calendar on phone/tablet, left panel on desktop */}
+        <aside className={cn("order-first xl:order-none w-full xl:w-72 border-b xl:border-b-0 xl:border-r border-border xl:flex flex-col shrink-0 bg-muted/20 select-none max-h-[70dvh] overflow-y-auto xl:max-h-none xl:overflow-visible", showPanel ? "flex" : "hidden")}>
           {/* Pinned / Stuck Mini Calendar at top (never scrolls out of view) */}
           <div className="shrink-0 p-3.5 border-b border-border/80 bg-white flex justify-center">
+            <div className="w-full max-w-sm xl:max-w-none">
             <MiniCalendar
               mode="single"
               selected={currentDate}
@@ -620,10 +632,11 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
                 day: "group/day relative flex-1 aspect-square h-auto select-none p-0 text-center flex items-center justify-center",
               }}
             />
+            </div>
           </div>
 
           {/* Scrollable Categories & Team Calendars below */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-6 hide-scrollbar">
+          <div className="flex-1 xl:overflow-y-auto p-4 space-y-6 hide-scrollbar">
             <div className="space-y-4">
               <div className="flex items-center justify-between group cursor-pointer">
                 <h3 className="text-sm font-bold text-foreground">My Calendars</h3>
@@ -714,14 +727,14 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
         </aside>
 
         {/* Main Calendar Area */}
-        <main className={cn("flex-1 flex flex-col bg-white min-w-0", view === "Month" ? "overflow-y-auto lg:overflow-hidden" : "overflow-y-auto")}>
+        <main className={cn("flex-1 flex flex-col bg-white min-w-0", view === "Month" ? "overflow-y-auto xl:overflow-hidden" : "overflow-y-auto")}>
           {isLoading && (
             <div className="px-4 py-1.5 text-[11px] text-muted-foreground border-b border-border bg-muted/30">
               Loading schedule…
             </div>
           )}
           {view === "Month" && (
-            <div className="flex-1 flex flex-col min-h-[500px] lg:min-h-0 overflow-x-auto min-w-0 h-full">
+            <div className="flex-1 flex flex-col min-h-[500px] xl:min-h-0 overflow-x-auto min-w-0 h-full">
               <div className="min-w-[600px] flex-1 flex flex-col h-full">
                 {/* Days Header */}
                 <div className="grid grid-cols-7 border-b border-border">

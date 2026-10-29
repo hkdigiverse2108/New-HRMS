@@ -1153,9 +1153,9 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   return (
     <div className="relative space-y-5 min-h-[calc(100vh-4rem)] flex flex-col pb-12 animate-in fade-in duration-300">
       {/* Header Section */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0">
-        <div>
-          <div className="flex items-center gap-2">
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 shrink-0">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">Task Management</h1>
             <span className="bg-primary/10 text-primary border border-primary/20 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
               Redis Live
@@ -1166,12 +1166,13 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 w-full xl:w-auto">
           <SearchInput
             placeholder="Search tasks, assignees..."
             value={searchQuery}
             onChange={setSearchQuery}
-            containerClassName="w-full sm:w-60 md:w-64 shrink-0"
+            className="h-[38px] py-0 bg-background"
+            containerClassName="w-full sm:flex-1 sm:min-w-[200px] xl:flex-none xl:w-64"
           />
 
           {/* Quick Assign Button */}
@@ -1187,14 +1188,14 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
             }}
           >
             <DialogTrigger asChild>
-              <button className="h-[38px] px-3.5 bg-muted/60 border border-border hover:bg-muted text-foreground text-xs font-bold rounded-xl flex items-center gap-2 transition-colors shadow-sm shrink-0">
+              <button className="h-[38px] flex-1 sm:flex-none justify-center px-3.5 whitespace-nowrap bg-muted/60 border border-border hover:bg-muted text-foreground text-xs font-bold rounded-xl flex items-center gap-2 transition-colors shadow-sm shrink-0">
                 <Zap className="w-4 h-4 text-amber-500" />
                 <span>Quick Assign</span>
               </button>
             </DialogTrigger>
             <DialogContent className="w-[calc(100vw-16px)] sm:w-full max-w-[820px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card flex flex-col max-h-[90dvh]">
-              <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 bg-muted/30 shrink-0">
-                <div>
+              <div className="flex items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-border/50 bg-muted/30 shrink-0">
+                <div className="min-w-0">
                   <h2 className="text-base sm:text-lg font-black tracking-tight">Quick Bulk Task Assign</h2>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Rapidly assign action items to multiple team members. Press Enter in the title to add another row.
@@ -1207,9 +1208,9 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                 </DialogClose>
               </div>
 
-              <div className="p-6 space-y-3 overflow-y-auto max-h-[55vh]">
+              <div className="p-4 sm:p-6 space-y-3 overflow-y-auto max-h-[55vh]">
                 {/* F9: brand default — badha titles "Brand - work" thashe */}
-                <div className="flex items-center gap-3 pb-2 border-b border-border/40">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pb-2 border-b border-border/40">
                   <span className="text-[10px] font-black text-muted-foreground uppercase tracking-wider whitespace-nowrap">Brand:</span>
                   <SearchableSelect
                     value={quickBrand}
@@ -1219,13 +1220,13 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                       ...brandClients.map(c => ({ label: c.name, value: c.name })),
                     ]}
                     placeholder="Select brand (optional)"
-                    className="flex-1 h-[36px] text-xs font-semibold"
+                    className="flex-1 min-w-[160px] h-[36px] text-xs font-semibold"
                   />
                   {quickBrand && (
                     <span className="text-[10px] font-bold text-primary whitespace-nowrap">→ "{quickBrand} - ..."</span>
                   )}
                 </div>
-                <div className="grid grid-cols-12 gap-3 pb-2 border-b border-border/40 text-[10px] font-black text-muted-foreground uppercase tracking-wider">
+                <div className="hidden sm:grid grid-cols-12 gap-3 pb-2 border-b border-border/40 text-[10px] font-black text-muted-foreground uppercase tracking-wider">
                   <div className="col-span-5">Task Title *</div>
                   <div className="col-span-4">Assignee *</div>
                   <div className="col-span-2">Due Date *</div>
@@ -1233,8 +1234,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                 </div>
 
                 {quickTasks.map((qt, idx) => (
-                  <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-                    <div className="col-span-5">
+                  <div key={idx} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center p-2.5 sm:p-0 rounded-xl border border-border/40 sm:border-0 bg-muted/20 sm:bg-transparent">
+                    <div className="sm:col-span-5">
                       <input
                         id={`qt-title-${idx}`}
                         type="text"
@@ -1245,7 +1246,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                         className="w-full px-3 py-2 bg-muted/40 border border-border/60 rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </div>
-                    <div className="col-span-4">
+                    <div className="sm:col-span-4">
                       <SearchableSelect
                         value={qt.assignee}
                         onChange={(val) => updateQuickField(idx, "assignee", val)}
@@ -1254,7 +1255,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                         className="w-full h-[36px] text-xs font-semibold"
                       />
                     </div>
-                    <div className="col-span-2">
+                    <div className="sm:col-span-2">
                       <DatePicker
                         value={qt.dueDate}
                         onChange={(val) => updateQuickField(idx, "dueDate", val)}
@@ -1262,7 +1263,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                         className="h-[36px] text-xs font-bold"
                       />
                     </div>
-                    <div className="col-span-1 flex justify-center">
+                    <div className="sm:col-span-1 flex justify-end sm:justify-center">
                       <button
                         type="button"
                         onClick={() => removeQuickRow(idx)}
@@ -1284,7 +1285,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                 </button>
               </div>
 
-              <div className="px-6 py-4 border-t border-border/50 bg-muted/30 flex items-center justify-between shrink-0">
+              <div className="px-4 sm:px-6 py-4 border-t border-border/50 bg-muted/30 flex flex-wrap items-center justify-between gap-3 shrink-0">
                 <span className="text-xs text-muted-foreground font-semibold">
                   {quickTasks.filter((t) => t.title.trim()).length} task(s) ready to create
                 </span>
@@ -1323,7 +1324,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
               setFormErrors({});
               setIsNewTaskOpen(true);
             }}
-            className="h-[38px] px-4 bg-primary hover:bg-primary/95 text-primary-foreground text-xs font-bold rounded-xl flex items-center gap-2 transition-colors shadow-sm shrink-0"
+            className="h-[38px] flex-1 sm:flex-none justify-center px-4 whitespace-nowrap bg-primary hover:bg-primary/95 text-primary-foreground text-xs font-bold rounded-xl flex items-center gap-2 transition-colors shadow-sm shrink-0"
           >
             <Plus className="w-4 h-4" />
             <span>New Task</span>
@@ -1356,7 +1357,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
       </div>
 
       {/* Top KPI Cards (Interactive Filters) */}
-      <div className="grid grid-cols-2 min-[460px]:grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 sm:gap-3 shrink-0">
+      <div className="grid grid-cols-2 min-[460px]:grid-cols-3 md:grid-cols-4 xl:grid-cols-7 gap-2.5 sm:gap-3 shrink-0">
         {[
           {
             label: "Total Tasks",
@@ -1443,13 +1444,13 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
               type="button"
               onClick={kpi.onClick}
               className={cn(
-                "p-3.5 rounded-2xl border flex flex-col text-left transition-all duration-200 shadow-sm relative overflow-hidden group",
+                "p-3 sm:p-3.5 min-w-0 rounded-2xl border flex flex-col text-left transition-all duration-200 shadow-sm relative overflow-hidden group",
                 kpi.color,
                 kpi.isActive ? "ring-2 ring-primary/50 scale-[1.02] shadow-md" : "opacity-80 hover:opacity-100 hover:scale-[1.01]"
               )}
             >
               <div className="flex items-center justify-between w-full">
-                <span className="text-[10px] font-black uppercase tracking-wider">{kpi.label}</span>
+                <span className="text-[10px] font-black uppercase tracking-wider truncate">{kpi.label}</span>
                 <Icon className="w-4 h-4 opacity-60 group-hover:opacity-100 transition-opacity" />
               </div>
               <span className="text-xl font-black mt-2 leading-none">{kpi.count}</span>
@@ -1471,7 +1472,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                 setScopeFilter("my_tasks");
               }}
               className={cn(
-                "px-3.5 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5",
+                "px-3.5 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 whitespace-nowrap",
                 mainViewMode === "my_tasks"
                   ? "bg-background text-primary shadow-sm ring-1 ring-border/60"
                   : "text-muted-foreground hover:text-foreground"
@@ -1487,7 +1488,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                   setScopeFilter("all");
                 }}
                 className={cn(
-                  "px-3.5 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5",
+                  "px-3.5 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 whitespace-nowrap",
                   mainViewMode === "all_tasks"
                     ? "bg-background text-primary shadow-sm ring-1 ring-border/60"
                     : "text-muted-foreground hover:text-foreground"
@@ -1534,17 +1535,17 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
         {/* Filters Row: Department & Person (in All Tasks mode), Priority, Category, Reset */}
         <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1.5 border-t border-border/40">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-end sm:items-center gap-2 w-full sm:w-auto">
             {/* Department Filter (Visible only for Head / Admin, NOT Team Leader and NOT other employees) */}
             {mainViewMode === "all_tasks" && isHead && (
-              <div className="flex items-center gap-1.5">
+              <div className="flex flex-col items-stretch sm:flex-row sm:items-center gap-1 sm:gap-1.5 min-w-0">
                 <span className="text-[10px] font-bold text-muted-foreground uppercase">Dept:</span>
                 <SearchableSelect
                   value={departmentFilter}
                   onChange={(val) => setDepartmentFilter(val)}
                   options={departmentList.map(d => ({ label: d, value: d }))}
                   placeholder="Department"
-                  className="w-[125px] h-[32px] text-xs font-semibold"
+                  className="w-full sm:w-[125px] h-[32px] text-xs font-semibold"
                 />
               </div>
             )}
@@ -1552,7 +1553,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
             {/* Dual Filters: Assigned To AND Assigned By (Visible for Head / Admin and Team Leader) */}
             {mainViewMode === "all_tasks" && (isHead || isTeamLeader) && (
               <>
-                <div className="flex items-center gap-1.5">
+                <div className="flex flex-col items-stretch sm:flex-row sm:items-center gap-1 sm:gap-1.5 min-w-0">
                   <span className="text-[10px] font-bold text-muted-foreground uppercase whitespace-nowrap">Assigned To:</span>
                   <SearchableSelect
                     value={assignedToFilter}
@@ -1562,11 +1563,11 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                       ...(isTeamLeader ? teamLeaderEmployees : employees).map(e => ({ label: e.name, value: e.id }))
                     ]}
                     placeholder="Assignee"
-                    className="w-[140px] h-[32px] text-xs font-semibold"
+                    className="w-full sm:w-[140px] h-[32px] text-xs font-semibold"
                   />
                 </div>
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex flex-col items-stretch sm:flex-row sm:items-center gap-1 sm:gap-1.5 min-w-0">
                   <span className="text-[10px] font-bold text-muted-foreground uppercase whitespace-nowrap">Assigned By:</span>
                   <SearchableSelect
                     value={assignedByFilter}
@@ -1576,14 +1577,14 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                       ...employees.map(e => ({ label: e.name, value: e.id }))
                     ]}
                     placeholder="Assigner"
-                    className="w-[140px] h-[32px] text-xs font-semibold"
+                    className="w-full sm:w-[140px] h-[32px] text-xs font-semibold"
                   />
                 </div>
               </>
             )}
 
             {/* Priority Filter (Visible to all, including other employees) */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex flex-col items-stretch sm:flex-row sm:items-center gap-1 sm:gap-1.5 min-w-0">
               <span className="text-[10px] font-bold text-muted-foreground uppercase">Priority:</span>
               <SearchableSelect
                 value={priorityFilter}
@@ -1594,45 +1595,45 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                   { label: "Medium", value: "Medium" },
                   { label: "Low", value: "Low" },
                 ]}
-                className="w-[100px] h-[32px] text-xs font-semibold"
+                className="w-full sm:w-[100px] h-[32px] text-xs font-semibold"
               />
             </div>
 
             {/* Category Filter (visible to everyone, including employees on My Tasks) */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex flex-col items-stretch sm:flex-row sm:items-center gap-1 sm:gap-1.5 min-w-0">
                 <span className="text-[10px] font-bold text-muted-foreground uppercase">Category:</span>
                 <SearchableSelect
                   value={categoryFilter}
                   onChange={(val) => setCategoryFilter(val)}
                   options={taskCategories.map(c => ({ label: c, value: c }))}
-                  className="w-[120px] h-[32px] text-xs font-semibold"
+                  className="w-full sm:w-[120px] h-[32px] text-xs font-semibold"
                 />
               </div>
 
             {/* Stage filter: Creative only */}
             {showCreativeFilters && (
-              <div className="flex items-center gap-1.5">
+              <div className="flex flex-col items-stretch sm:flex-row sm:items-center gap-1 sm:gap-1.5 min-w-0">
                 <span className="text-[10px] font-bold text-muted-foreground uppercase">Stage:</span>
                 <SearchableSelect
                   value={subCategoryFilter}
                   onChange={(val) => setSubCategoryFilter(val)}
                   options={STAGE_OPTIONS}
                   placeholder="All Stages"
-                  className="w-[150px] h-[32px] text-xs font-semibold"
+                  className="w-full sm:w-[150px] h-[32px] text-xs font-semibold"
                 />
               </div>
             )}
 
             {/* Project filter: any selected department, lists that department's projects */}
             {showProjectFilter && (
-              <div className="flex items-center gap-1.5">
+              <div className="col-span-2 sm:col-span-1 flex flex-col items-stretch sm:flex-row sm:items-center gap-1 sm:gap-1.5 min-w-0">
                 <span className="text-[10px] font-bold text-muted-foreground uppercase">Project:</span>
                 <SearchableSelect
                   value={projectFilter}
                   onChange={(val) => setProjectFilter(val)}
                   options={[{ label: "All Projects", value: "All" }, ...projectOptions]}
                   placeholder="All Projects"
-                  className="w-[240px] h-[32px] text-xs font-semibold"
+                  className="w-full sm:w-[240px] h-[32px] text-xs font-semibold"
                 />
               </div>
             )}
@@ -1654,7 +1655,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                 if (canViewAllTasks) setMainViewMode("all_tasks");
                 setSearchQuery("");
               }}
-              className="text-xs font-bold text-primary hover:underline px-2 ml-auto cursor-pointer"
+              className="text-xs font-bold text-primary hover:underline px-2 py-1 ml-auto cursor-pointer"
             >
               Reset Filters
             </button>
@@ -1738,7 +1739,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
               return (
                 <div
                   key={col.status}
-                  className="w-80 flex flex-col bg-muted/20 rounded-[2rem] border border-border/50 shrink-0 overflow-hidden"
+                  className="w-[85vw] max-w-80 sm:w-80 flex flex-col bg-muted/20 rounded-[2rem] border border-border/50 shrink-0 overflow-hidden"
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => {
                     e.preventDefault();
