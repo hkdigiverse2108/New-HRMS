@@ -25,6 +25,32 @@ def _month_bounds(month: Optional[int], year: Optional[int]):
     return m, y, start, end
 
 
+async def get_previous_month_eom() -> Dict[str, Any]:
+    """Previous calendar month's Employee-of-the-Month result (read-only).
+
+    Returns {"period": {...}, "board": [entries sorted by rank], "max_total": float}.
+    Board is empty when that month has no EOM criteria/scores yet.
+    """
+    db = get_database()
+    today = datetime.now()
+    py, pm = (today.year - 1, 12) if today.month == 1 else (today.year, today.month - 1)
+    month_year = f"{py:04d}-{pm:02d}"
+    period = {"month": pm, "year": py, "label": datetime(py, pm, 1).strftime("%B %Y")}
+    out: Dict[str, Any] = {"period": period, "board": [], "max_total": 100.0}
+    try:
+        # Read-only guard: calculate_eom_leaderboard would otherwise create default criteria
+        if await db["eom_criteria"].count_documents({"month_year": month_year}, limit=1):
+            from app.services import eom_service
+            res = await eom_service.calculate_eom_leaderboard(month_year)
+            board = res.get("leaderboard") or []
+            if any(float(e.get("totalScore") or 0) > 0 for e in board):
+                out["board"] = board
+                out["max_total"] = sum(float(c.get("maxScore") or 0) for c in res.get("criteria") or []) or 100.0
+    except Exception as exc:
+        logger.warning("Previous month EOM lookup failed: %s", exc)
+    return out
+
+
 class DashboardService:
     @staticmethod
     async def get_overview(user_id: str, month: Optional[int] = None, year: Optional[int] = None) -> Dict[str, Any]:
@@ -695,79 +721,28 @@ class DashboardService:
             }
 
         async def performance_and_attention_block():
-            db = get_database()
-            top_performers = []
-            try:
-                cursor = db["eom_winners"].find({"month": m, "year": y}).sort("rank", 1).limit(5)
-                async for doc in cursor:
-                    top_performers.append({
-                        "name": doc.get("employee_name") or "Employee",
-                        "score": doc.get("score_pct") or 90,
-                        "rank": doc.get("rank") or 1,
-                    })
-            except Exception:
-                pass
+            """Top 5 / bottom 3 from the PREVIOUS calendar month's Employee-of-the-Month result."""
+            eom = await get_previous_month_eom()
+            period, board, max_total = eom["period"], eom["board"], eom["max_total"]
 
-            if not top_performers:
-                try:
-                    cursor = db["eom_winners"].find({}).sort([("year", -1), ("month", -1), ("rank", 1)]).limit(5)
-                    async for doc in cursor:
-                        top_performers.append({
-                            "name": doc.get("employee_name") or "Employee",
-                            "score": doc.get("score_pct") or 90,
-                            "rank": doc.get("rank") or 1,
-                        })
-                except Exception:
-                    pass
+            def pct(entry):
+                return round(float(entry.get("totalScore") or 0) / max_total * 100)
 
-            if not top_performers:
-                top_performers = [
-                    {"name": "Riya Shah", "score": 96, "rank": 1},
-                    {"name": "Aarav Mehta", "score": 92, "rank": 2},
-                    {"name": "Neha Patel", "score": 89, "rank": 3},
-                    {"name": "Karan Joshi", "score": 88, "rank": 4},
-                    {"name": "Ishita Rao", "score": 85, "rank": 5},
-                ]
-
-            needs_attention = []
-            try:
-                pipeline = [
-                    {"$match": {"is_active": True}},
-                    {"$group": {
-                        "_id": "$employee_id",
-                        "employee_name": {"$first": "$employee_name"},
-                        "total_penalties": {"$sum": 1},
-                        "total_amount": {"$sum": "$amount"}
-                    }},
-                    {"$sort": {"total_penalties": -1}},
-                    {"$limit": 3}
-                ]
-                async for pdoc in db["employee_penalties"].aggregate(pipeline):
-                    pen_count = pdoc.get("total_penalties", 1)
-                    calc_score = max(40, 75 - (pen_count * 8))
-                    needs_attention.append({
-                        "name": pdoc.get("employee_name") or "Employee",
-                        "dept": "Penalized",
-                        "score": calc_score
-                    })
-            except Exception:
-                pass
-
-            if len(needs_attention) < 3:
-                fallbacks = [
-                    {"name": "Manav Desai", "dept": "Sales", "score": 54},
-                    {"name": "Priya Nair", "dept": "Creative", "score": 58},
-                    {"name": "Dev Trivedi", "dept": "Development", "score": 61},
-                ]
-                for fb in fallbacks:
-                    if len(needs_attention) >= 3:
-                        break
-                    if not any(n["name"] == fb["name"] for n in needs_attention):
-                        needs_attention.append(fb)
-
+            top = board[:5]
+            top_performers = [
+                {"name": e.get("name") or "Employee", "score": pct(e), "rank": e.get("rank"),
+                 "month": period["month"], "year": period["year"]}
+                for e in top
+            ]
+            # Bottom 3, lowest first, never repeating someone already in the top 5
+            needs_attention = [
+                {"name": e.get("name") or "Employee", "dept": e.get("department") or "General", "score": pct(e)}
+                for e in reversed(board[len(top):][-3:])
+            ]
             return {
-                "top_performers": top_performers[:5],
-                "needs_attention": needs_attention[:3]
+                "top_performers": top_performers,
+                "needs_attention": needs_attention,
+                "performance_period": period,
             }
 
         results = await asyncio.gather(
@@ -813,6 +788,7 @@ class DashboardService:
             "hr_updates": results[16] or {},
             "top_performers": (results[17] or {}).get("top_performers", []),
             "needs_attention": (results[17] or {}).get("needs_attention", []),
+            "performance_period": (results[17] or {}).get("performance_period", {}),
         }
         # cross-block reuse (no extra queries)
         try:

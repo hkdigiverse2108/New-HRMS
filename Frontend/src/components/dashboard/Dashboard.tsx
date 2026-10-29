@@ -13,6 +13,7 @@ import { SalesOverview } from "./sections/SalesOverview";
 import { FinanceOverview } from "./sections/FinanceOverview";
 import { TasksAndClients } from "./sections/TasksAndClients";
 import { HRAndNews } from "./sections/HRAndNews";
+import { SpotlightCelebrations } from "./sections/SpotlightCelebrations";
 import { CalendarWidget } from "./sections/CalendarWidget";
 
 export function Dashboard({ setActive, onAction }: { setActive?: (url: string) => void, onAction?: (action: string) => void }) {
@@ -53,6 +54,7 @@ export function Dashboard({ setActive, onAction }: { setActive?: (url: string) =
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 pb-24">
+      <SpotlightCelebrations />
       {/* SECTION 01: Header (always) */}
       <DashboardHeader setActive={setActive} onAction={onAction} />
 

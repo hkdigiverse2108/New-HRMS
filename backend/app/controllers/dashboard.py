@@ -100,20 +100,52 @@ class SpotlightsListIn(BaseModel):
     spotlights: List[SpotlightItem]
 
 
+SPOTLIGHT_KEY = "active_spotlights"
+
+
 @router.get("/spotlights")
 async def get_spotlights():
+    """Auto spotlight = previous month's Employee of the Month winner (with photo),
+    followed by any spotlights an admin added manually."""
     from app.database.db import get_database
+    from app.services.dashboard import get_previous_month_eom
+    from bson import ObjectId
     db = get_database()
-    doc = await db["dashboard_spotlights"].find_one({"key": "active_spotlights"})
-    if doc and "items" in doc and doc["items"]:
-        return {"spotlights": doc["items"]}
 
-    defaults = [
-        {"name": "Prince", "role": "Employee of the Month", "image": "/prince.jpg", "ringStyle": "gold", "popperStyle": "confetti"},
-        {"name": "Aarav Mehta", "role": "Top Closer · Sales", "ringStyle": "emerald"},
-        {"name": "Neha Patel", "role": "Creative Star · Design", "image": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=800&auto=format&fit=crop&q=80", "ringStyle": "neon"}
-    ]
-    return {"spotlights": defaults}
+    manual = []
+    doc = await db[NEWS_COLLECTION].find_one({"kind": "dashboard_spotlights", "key": SPOTLIGHT_KEY})
+    if doc and doc.get("items"):
+        manual = [i for i in doc["items"] if not i.get("auto")]
+
+    spotlights = []
+    eom = await get_previous_month_eom()
+    if eom["board"]:
+        winner = eom["board"][0]
+        photo = ""
+        dept = winner.get("department") or ""
+        try:
+            emp = await db["employees"].find_one({"_id": ObjectId(str(winner.get("employeeId")))})
+            if emp:
+                pi = emp.get("personal_info") or {}
+                photo = pi.get("profile_photo") or emp.get("profile_photo") or emp.get("avatar") or ""
+                dept = (emp.get("work_details") or {}).get("department") or dept
+        except Exception:
+            pass
+        label = eom["period"]["label"]
+        item = {
+            "name": winner.get("name") or "Employee",
+            "role": f"Employee of the Month · {label}",
+            "ringStyle": "gold",
+            "popperStyle": "none",
+            "auto": True,
+        }
+        if photo:
+            item["image"] = photo
+        spotlights.append(item)
+
+    winner_name = spotlights[0]["name"].strip().lower() if spotlights else None
+    spotlights += [i for i in manual if str(i.get("name", "")).strip().lower() != winner_name]
+    return {"spotlights": spotlights}
 
 
 @router.put("/spotlights")
@@ -123,10 +155,11 @@ async def update_spotlights(data: SpotlightsListIn, current_user: dict = Depends
     from app.database.db import get_database
     from datetime import datetime
     db = get_database()
-    items = [s.model_dump() for s in data.spotlights]
-    await db["dashboard_spotlights"].update_one(
-        {"key": "active_spotlights"},
-        {"$set": {"key": "active_spotlights", "items": items, "updated_at": datetime.utcnow()}},
+    # The auto EOM winner is recomputed on every load, so never persist it
+    items = [s.model_dump() for s in data.spotlights if not (s.model_dump().get("auto"))]
+    await db[NEWS_COLLECTION].update_one(
+        {"kind": "dashboard_spotlights", "key": SPOTLIGHT_KEY},
+        {"$set": {"kind": "dashboard_spotlights", "key": SPOTLIGHT_KEY, "items": items, "updated_at": datetime.utcnow()}},
         upsert=True
     )
     return {"status": "success", "spotlights": items}

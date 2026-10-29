@@ -1,11 +1,9 @@
 import { useState, useEffect } from "react";
 import { Sparkles, Trophy, Star } from "lucide-react";
-import { NEEDS_ATTENTION, SPOTLIGHT_EMPLOYEES } from "../dashboard-data";
 import { cn } from "@/lib/utils";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { SpotlightEditor, SpotlightEmployee } from "./SpotlightEditor";
 import { BADGE_PRESETS } from "./spotlight-constants";
-import { SparklesCelebration } from "../../common/SparklesCelebration";
 import { useDashboardOverview } from "@/hooks/useDashboardOverview";
 import { useAuth } from "@/components/auth/AuthContext";
 import { isUserAdmin } from "@/lib/permissions";
@@ -27,15 +25,7 @@ export function EmployeePerformance() {
           return;
         }
       } catch {
-        // Fallback
-      }
-      const saved = localStorage.getItem("dashboard-spotlights");
-      if (!cancelled) {
-        if (saved) {
-          setSpotlightsState(JSON.parse(saved));
-        } else {
-          setSpotlightsState(SPOTLIGHT_EMPLOYEES);
-        }
+        // No hardcoded fallback: spotlight is driven by the previous month's Employee of the Month
       }
     })();
     return () => { cancelled = true; };
@@ -43,10 +33,11 @@ export function EmployeePerformance() {
 
   const setSpotlights = async (data: SpotlightEmployee[]) => {
     setSpotlightsState(data);
-    localStorage.setItem("dashboard-spotlights", JSON.stringify(data));
     setCurrentSpotlight(0);
     try {
       await api.put("/dashboard/spotlights", { spotlights: data }, { showErrorToast: false });
+      const res = await api.get<any>("/dashboard/spotlights", { showErrorToast: false });
+      if (res?.spotlights && Array.isArray(res.spotlights)) setSpotlightsState(res.spotlights);
     } catch (err) {
       console.warn("Failed to persist spotlights to DB:", err);
     }
@@ -63,15 +54,10 @@ export function EmployeePerformance() {
   const spotlight = spotlights[currentSpotlight] || spotlights[0];
 
   const { data } = useDashboardOverview();
-  const topWinners: any[] = (data?.top_performers && data.top_performers.length > 0)
-    ? data.top_performers
-    : ((data?.eom?.winners || []).slice(0, 5));
-  const eomLabel = topWinners.length > 0 && topWinners[0]?.month
-    ? new Date(topWinners[0].year, topWinners[0].month - 1, 1).toLocaleString("default", { month: "long", year: "numeric" })
-    : "";
-  const needsAttentionList: any[] = (data?.needs_attention && data.needs_attention.length > 0)
-    ? data.needs_attention
-    : NEEDS_ATTENTION;
+  // Both lists come from the previous month's Employee-of-the-Month result (backend decides the month)
+  const topWinners: any[] = data?.top_performers || [];
+  const needsAttentionList: any[] = data?.needs_attention || [];
+  const eomLabel: string = data?.performance_period?.label || "";
 
   return (
     <div className="mb-12">
@@ -87,7 +73,7 @@ export function EmployeePerformance() {
           </div>
           {topWinners.length === 0 ? (
             <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-3 py-6 text-center">
-              Top performers data is calculating...
+              {eomLabel ? `No Employee of the Month result for ${eomLabel} yet.` : "No Employee of the Month result yet."}
             </p>
           ) : (
           <div className="space-y-3">
@@ -146,11 +132,6 @@ export function EmployeePerformance() {
               </div>
             </h3>
             <div className="min-h-[80px] relative">
-              {spotlight && 'popperStyle' in spotlight && spotlight.popperStyle !== "none" && spotlight.popperStyle && (
-                <div className="fixed inset-0 z-[100] pointer-events-none">
-                  <SparklesCelebration key={spotlight.name} trigger={true} effectStyle={spotlight.popperStyle} />
-                </div>
-              )}
               {spotlight && 'image' in spotlight && spotlight.image && (
                 <div 
                   key={`avatar-${spotlight.name}`}
@@ -165,7 +146,7 @@ export function EmployeePerformance() {
                 </div>
               )}
               <p className={cn("text-2xl sm:text-3xl font-black mb-1 break-words leading-tight animate-in fade-in slide-in-from-right-4 duration-500", (spotlight && 'image' in spotlight && spotlight.image) ? "text-white" : "text-white")} key={`name-${spotlight?.name}`}>
-                {spotlight?.name}
+                {spotlight?.name || "No spotlight yet"}
               </p>
               <p className={cn("text-sm animate-in fade-in slide-in-from-right-4 duration-500 delay-75", (spotlight && 'image' in spotlight && spotlight.image) ? "text-white/80" : "text-white/80")} key={`role-${spotlight?.role}`}>
                 {spotlight?.role}
@@ -178,7 +159,15 @@ export function EmployeePerformance() {
         <div className="flex flex-col gap-6">
           {/* Needs Attention */}
           <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm">
-            <h3 className="font-bold text-foreground mb-6">Needs Attention</h3>
+            <h3 className="font-bold text-foreground">Needs Attention</h3>
+            <p className="text-[11px] text-muted-foreground mb-6">
+              {eomLabel ? `Lowest 3 • Employee of the Month • ${eomLabel}` : "Lowest 3 • Employee of the Month"}
+            </p>
+            {needsAttentionList.length === 0 && (
+              <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-3 py-6 text-center">
+                No data for {eomLabel || "last month"} yet.
+              </p>
+            )}
             <div className="space-y-6">
               {needsAttentionList.map((emp, i) => (
                 <div key={i}>

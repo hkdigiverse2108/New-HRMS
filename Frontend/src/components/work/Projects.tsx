@@ -3363,6 +3363,10 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   const [pdfCustomEndDate, setPdfCustomEndDate] = useState<string>("");
   const [pdfOrientation, setPdfOrientation] = useState<"portrait" | "landscape">("portrait");
   const [isExportingCcPdf, setIsExportingCcPdf] = useState(false);
+  // Empty array / "All" = no filtering on that field
+  const [pdfStatusFilter, setPdfStatusFilter] = useState<string[]>([]);
+  const [pdfTypeFilter, setPdfTypeFilter] = useState<string[]>([]);
+  const [pdfBrandFilter, setPdfBrandFilter] = useState<string>("All");
   const [pdfSelectedColumns, setPdfSelectedColumns] = useState<string[]>([
     "Schedule",
     "Type",
@@ -3486,6 +3490,43 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       const sLabel = customStart ? formatDayMonthYear(customStart) : "Start";
       const eLabel = customEnd ? formatDayMonthYear(customEnd) : "End";
       ccMonthLabel = `${sLabel} to ${eLabel}`;
+    } else if (["thisWeek", "lastWeek", "last7", "last15", "last30", "lastMonth"].includes(chosenFilter)) {
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+      const mondayOfThisWeek = addDays(startOfToday, -((startOfToday.getDay() + 6) % 7));
+      let rangeStart = startOfToday;
+      let rangeEnd = startOfToday;
+      let rangeName = "";
+      if (chosenFilter === "thisWeek") {
+        rangeStart = mondayOfThisWeek; rangeEnd = addDays(mondayOfThisWeek, 6); rangeName = "This Week";
+      } else if (chosenFilter === "lastWeek") {
+        rangeStart = addDays(mondayOfThisWeek, -7); rangeEnd = addDays(mondayOfThisWeek, -1); rangeName = "Last Week";
+      } else if (chosenFilter === "last7") {
+        rangeStart = addDays(startOfToday, -6); rangeEnd = startOfToday; rangeName = "Last 7 Days";
+      } else if (chosenFilter === "last15") {
+        rangeStart = addDays(startOfToday, -14); rangeEnd = startOfToday; rangeName = "Last 15 Days";
+      } else if (chosenFilter === "last30") {
+        rangeStart = addDays(startOfToday, -29); rangeEnd = startOfToday; rangeName = "Last 30 Days";
+      } else {
+        rangeStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        rangeEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+        rangeName = format(rangeStart, "MMMM yyyy");
+      }
+      const toYmd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const startYmd = toYmd(rangeStart);
+      const endYmd = toYmd(rangeEnd);
+      const mItems = allItems.filter(i => {
+        const d = (i.postingDate || "").slice(0, 10);
+        return d && d >= startYmd && d <= endYmd;
+      });
+      if (mItems.length === 0) {
+        toast.error(`No content calendar items found for ${rangeName} (${formatDayMonthYear(startYmd)} to ${formatDayMonthYear(endYmd)})`);
+        return;
+      }
+      items = mItems;
+      ccMonthLabel = chosenFilter === "lastMonth"
+        ? rangeName
+        : `${rangeName} (${formatDayMonthYear(startYmd)} to ${formatDayMonthYear(endYmd)})`;
     } else if (chosenFilter === "Current") {
       const mItems = allItems.filter(i => i.postingDate && i.postingDate.startsWith(currentYearMonth));
       items = mItems;
@@ -3526,6 +3567,26 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       } else {
         ccMonthLabel = "All Months";
       }
+    }
+
+    const ccBrandName = (i: any) => String(i.brand_person_details?.employee_name || i.brand_person || "").trim();
+    const hasExtraFilter = pdfStatusFilter.length > 0 || pdfTypeFilter.length > 0 || pdfBrandFilter !== "All";
+    if (hasExtraFilter) {
+      items = items.filter((i: any) =>
+        (pdfStatusFilter.length === 0 || pdfStatusFilter.includes(i.status || "To Do")) &&
+        (pdfTypeFilter.length === 0 || pdfTypeFilter.includes(i.type || "Post")) &&
+        (pdfBrandFilter === "All" || ccBrandName(i) === pdfBrandFilter)
+      );
+      if (items.length === 0) {
+        toast.error("No content calendar items match the selected filters");
+        return;
+      }
+      const parts = [
+        pdfStatusFilter.length ? pdfStatusFilter.join("/") : "",
+        pdfTypeFilter.length ? pdfTypeFilter.join("/") : "",
+        pdfBrandFilter !== "All" ? pdfBrandFilter : "",
+      ].filter(Boolean);
+      ccMonthLabel = `${ccMonthLabel} (${parts.join(", ")})`;
     }
 
     const isPortrait = pdfOrientation === "portrait";
@@ -7127,7 +7188,10 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  const norm = calendarMonthFilter.toLowerCase() === "custom" ? "custom" : calendarMonthFilter;
+                                  // Only offer values that exist in the export dropdown; anything else defaults to the current month
+                                  const norm = calendarMonthFilter.toLowerCase() === "custom"
+                                    ? "custom"
+                                    : calendarMonthFilter === "All" ? "All" : "Current";
                                   setPdfMonthFilter(norm);
                                   if (norm === "custom") {
                                     setPdfCustomStartDate(ccCustomStartDate);
@@ -9468,7 +9532,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
             return (
               <div className="fixed inset-0 z-[200] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-                <div className="bg-card w-full max-w-md rounded-[2rem] border border-border/60 shadow-2xl overflow-hidden flex flex-col">
+                <div className="bg-card w-full max-w-md rounded-[2rem] border border-border/60 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
                   <div className="flex items-center justify-between px-6 py-5 border-b border-border/50">
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-primary/10 text-primary rounded-xl">
@@ -9484,7 +9548,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     </button>
                   </div>
 
-                  <div className="p-6 space-y-4">
+                  <div className="p-6 space-y-4 overflow-y-auto min-h-0">
                     <div className="space-y-1.5 pb-2 border-b border-border/40">
                       <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
                         Calendar Month
@@ -9495,15 +9559,14 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         </SelectTrigger>
                         <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
                           <SelectItem value="Current" className="text-xs font-semibold">Current Month ({format(new Date(), "MMM yyyy")})</SelectItem>
+                          <SelectItem value="lastMonth" className="text-xs font-semibold">Last Month ({format(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1), "MMM yyyy")})</SelectItem>
+                          <SelectItem value="thisWeek" className="text-xs font-semibold">This Week</SelectItem>
+                          <SelectItem value="lastWeek" className="text-xs font-semibold">Last Week</SelectItem>
+                          <SelectItem value="last7" className="text-xs font-semibold">Last 7 Days</SelectItem>
+                          <SelectItem value="last15" className="text-xs font-semibold">Last 15 Days</SelectItem>
+                          <SelectItem value="last30" className="text-xs font-semibold">Last 30 Days</SelectItem>
                           <SelectItem value="All" className="text-xs font-semibold">All Months</SelectItem>
                           <SelectItem value="custom" className="text-xs font-semibold">📅 Custom Date Range</SelectItem>
-                          {(() => {
-                            const currentProj = projects.find(p => p.id === selectedProjectId);
-                            if (!currentProj) return null;
-                            return getProjectMonths(currentProj.startDate, currentProj.endDate).months.map(m => (
-                              <SelectItem key={m.value} value={m.value} className="text-xs font-semibold">{m.label}</SelectItem>
-                            ));
-                          })()}
                         </SelectContent>
                       </Select>
                       {pdfMonthFilter === "custom" && (
@@ -9529,6 +9592,74 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         </div>
                       )}
                     </div>
+
+                    {(() => {
+                      const cal = projects.find(p => p.id === selectedProjectId)?.contentCalendar || [];
+                      const uniq = (arr: string[]) => Array.from(new Set(arr.filter(Boolean))).sort();
+                      const statusOpts = uniq(cal.map((i: any) => i.status || "To Do"));
+                      const typeOpts = uniq(cal.map((i: any) => i.type || "Post"));
+                      const brandOpts = uniq(cal.map((i: any) => String(i.brand_person_details?.employee_name || i.brand_person || "").trim()));
+                      const toggle = (list: string[], set: (v: string[]) => void, v: string) =>
+                        set(list.includes(v) ? list.filter(x => x !== v) : [...list, v]);
+                      const chip = (active: boolean) => cn(
+                        "px-2.5 py-1 rounded-full border text-[11px] font-bold transition-all",
+                        active ? "bg-primary/10 border-primary text-primary" : "bg-muted/20 border-border/40 text-muted-foreground hover:bg-muted/40"
+                      );
+                      const anyActive = pdfStatusFilter.length > 0 || pdfTypeFilter.length > 0 || pdfBrandFilter !== "All";
+                      return (
+                        <div className="space-y-3 pb-3 border-b border-border/40">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Filters</span>
+                            {anyActive && (
+                              <button
+                                type="button"
+                                onClick={() => { setPdfStatusFilter([]); setPdfTypeFilter([]); setPdfBrandFilter("All"); }}
+                                className="text-[11px] font-bold text-primary hover:underline"
+                              >
+                                Clear filters
+                              </button>
+                            )}
+                          </div>
+                          {statusOpts.length > 0 && (
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase">Status</label>
+                              <div className="flex flex-wrap gap-1.5">
+                                {statusOpts.map(s => (
+                                  <button key={s} type="button" onClick={() => toggle(pdfStatusFilter, setPdfStatusFilter, s)} className={chip(pdfStatusFilter.includes(s))}>{s}</button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {typeOpts.length > 0 && (
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase">Content Type</label>
+                              <div className="flex flex-wrap gap-1.5">
+                                {typeOpts.map(t => (
+                                  <button key={t} type="button" onClick={() => toggle(pdfTypeFilter, setPdfTypeFilter, t)} className={chip(pdfTypeFilter.includes(t))}>{t}</button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {brandOpts.length > 0 && (
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase">Brand Person</label>
+                              <Select value={pdfBrandFilter} onValueChange={(val) => setPdfBrandFilter(val)}>
+                                <SelectTrigger className="h-9 w-full bg-background border border-border/60 rounded-xl text-xs font-bold">
+                                  <SelectValue placeholder="All" />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                                  <SelectItem value="All" className="text-xs font-semibold">All Brand Persons</SelectItem>
+                                  {brandOpts.map(b => (
+                                    <SelectItem key={b} value={b} className="text-xs font-semibold">{b}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
+                          <p className="text-[10px] text-muted-foreground">Leave a filter empty to include all. Filters apply on top of the selected month.</p>
+                        </div>
+                      );
+                    })()}
 
                     <div className="space-y-1.5 pb-2 border-b border-border/40">
                       <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
