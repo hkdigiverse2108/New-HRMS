@@ -161,6 +161,8 @@ export function DailyProgress() {
   const canReadProgress = isAdmin || isHr || isHead || isHierarchicalReviewer || hasModulePermission(user, "/approvals/daily-progress", "read") || hasModulePermission(user, "/daily-progress", "read");
   const canManageProgress = isAdmin || isHr || isHead || isHierarchicalReviewer || hasModulePermission(user, "/approvals/daily-progress", "update") || hasModulePermission(user, "/daily-progress", "update") || hasModulePermission(user, "/approvals/daily-progress", "all");
   const isReviewer = canReadProgress || canManageProgress;
+  // Only roles that can see other people's reports get the employee / department filters
+  const canFilterEmployees = isAdmin || isHr || isHead || isHierarchicalReviewer;
 
   // Filter Group Tab: 'leaders_hr' (Team Leaders, Heads, HR - default for Admin) vs 'employees' (Regular Staff)
   const [groupTab, setGroupTab] = usePersistentState<GroupTab>("dailyProgress.groupTab", "leaders_hr");
@@ -579,18 +581,22 @@ export function DailyProgress() {
 
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-card border border-border/50 p-4 rounded-2xl shadow-sm">
-        <div className="relative w-full sm:max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search employee names..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium"
-          />
-        </div>
+        {canFilterEmployees ? (
+          <div className="relative w-full sm:max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search employee names..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium"
+            />
+          </div>
+        ) : (
+          <div className="hidden sm:block" />
+        )}
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-          {isReviewer && (
+          {canFilterEmployees && (
             <>
               {/* "My Progress" only has the leader's own report, so no employee filter there */}
               {!(showLeaderTabs && leaderView === "my") && (
