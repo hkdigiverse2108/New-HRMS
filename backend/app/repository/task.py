@@ -122,7 +122,27 @@ class TaskRepository:
             and_conditions.append({"task_category": task_category})
         if sub_category and sub_category != "All":
             import re as _re
-            and_conditions.append({"sub_category": {"$regex": f"^{_re.escape(sub_category.strip())}$", "$options": "i"}})
+            stage = sub_category.strip()
+            # Manual tasks store the stage in `sub_category`; Content-Calendar synced tasks store it in `creative_role`
+            stage_roles = {
+                "script": ["scripting"],
+                "scripting": ["scripting"],
+                "shoot": ["shoot_videography"],
+                "editing": ["reel_editing"],
+                "thumbnail": ["thumbnail"],
+                "caption": ["caption"],
+                "approval": ["approval_qc"],
+                "posting": ["posting_publisher"],
+                "post/graphics": ["post_graphics"],
+                "post graphics": ["post_graphics"],
+                "graphics": ["post_graphics"],
+                "brand person": ["brand_person"],
+            }
+            stage_or = [{"sub_category": {"$regex": f"^{_re.escape(stage)}$", "$options": "i"}}]
+            roles = stage_roles.get(stage.lower())
+            if roles:
+                stage_or.append({"creative_role": {"$in": roles}})
+            and_conditions.append({"$or": stage_or})
             
         if search and search.strip():
             and_conditions.append({"title": {"$regex": search.strip(), "$options": "i"}})

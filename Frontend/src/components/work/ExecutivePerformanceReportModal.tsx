@@ -793,7 +793,7 @@ export const ExecutivePerformanceReportModal: React.FC<ExecutivePerformanceRepor
 
   return (
     <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
-      <DialogContent className="max-w-5xl w-[98vw] sm:w-[96vw] max-h-[96vh] sm:max-h-[94vh] bg-background border-border/60 rounded-2xl sm:rounded-3xl p-0 overflow-y-auto shadow-2xl print:border-none print:shadow-none print:max-w-full print:w-full print:m-0 print:p-0 relative">
+      <DialogContent className="max-w-5xl w-[98vw] sm:w-[96vw] max-h-[96vh] sm:max-h-[94vh] bg-background border-border/60 rounded-2xl sm:rounded-3xl p-0 overflow-y-auto shadow-2xl print:border-none print:shadow-none print:max-w-full print:w-full print:m-0 print:p-0 [&>button.absolute]:hidden">
         {/* Full Modal Loading Overlay while preparing Print preview to completely block multiple clicks */}
         {isPrinting && (
           <div className="absolute inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex flex-col items-center justify-center p-6 rounded-3xl animate-in fade-in duration-200">
@@ -829,9 +829,10 @@ export const ExecutivePerformanceReportModal: React.FC<ExecutivePerformanceRepor
             <button
               type="button"
               onClick={onClose}
-              className="sm:hidden p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition"
+              aria-label="Close report"
+              className="sm:hidden h-8 w-8 shrink-0 flex items-center justify-center text-slate-300 bg-slate-800 border border-slate-700 hover:text-white hover:bg-rose-600 rounded-xl transition"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
 
@@ -992,9 +993,11 @@ export const ExecutivePerformanceReportModal: React.FC<ExecutivePerformanceRepor
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition cursor-pointer"
+              aria-label="Close report"
+              title="Close"
+              className="h-8 w-8 shrink-0 hidden sm:flex items-center justify-center text-slate-300 bg-slate-800 border border-slate-700 hover:text-white hover:bg-rose-600 hover:border-rose-500 rounded-xl transition cursor-pointer"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
         </aside>

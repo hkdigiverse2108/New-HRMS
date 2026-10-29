@@ -160,14 +160,17 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   const currentUserId = String(anyUser?._id || anyUser?.id || "");
   const userRole = String(anyUser?.role || anyUser?.work_details?.system_role || "Employee").toLowerCase();
   const userDepartment = String(anyUser?.work_details?.department || anyUser?.department || "").trim();
-  const isAdminOrHR = isUserAdmin(user) || userRole === "admin" || userRole === "superadmin" || userRole === "hr" || userRole === "subadmin" || (userDepartment && userDepartment.toLowerCase() === "hr") || hasModulePermission(user, "/tasks", "update");
+  // Role-only: decides who gets the My Tasks / All Tasks views
+  const isAdminOrHRRole = isUserAdmin(user) || userRole === "admin" || userRole === "superadmin" || userRole === "hr" || userRole === "subadmin" || (userDepartment && userDepartment.toLowerCase() === "hr");
+  // Role OR "/tasks update" permission: still drives edit / delete powers
+  const isAdminOrHR = isAdminOrHRRole || hasModulePermission(user, "/tasks", "update");
   const userDesignation = String(anyUser?.work_details?.designation || anyUser?.designation || "").trim().toLowerCase();
 
   // Role checks requested by user:
   // 1. Team Leader (only if not Admin/HR):
-  const isTeamLeader = !isAdminOrHR && (userDesignation.includes("team leader") || userRole.includes("team leader"));
+  const isTeamLeader = !isAdminOrHRRole && (userDesignation.includes("team leader") || userRole.includes("team leader"));
   // 2. Head / Admin / HR:
-  const isHead = isAdminOrHR || (!isTeamLeader && (userDesignation.includes("head") || userRole.includes("head")));
+  const isHead = isAdminOrHRRole || (!isTeamLeader && (userDesignation.includes("head") || userRole.includes("head")));
   // 3. Neither Head nor Team Leader (Other employees):
   const isOther = !isTeamLeader && !isHead;
 
@@ -233,7 +236,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   ], []);
 
   // Strict My Tasks vs All Tasks Access: Regular staff (Senior, Junior, Intern) are locked to My Tasks
-  const canViewAllTasks = isAdminOrHR || isHead || isTeamLeader;
+  // Only Admin, HR, Head and Team Leader get My Tasks / All Tasks; everyone else sees just their own tasks
+  const canViewAllTasks = isAdminOrHRRole || isHead || isTeamLeader;
   const [savedViewMode, setSavedViewMode] = usePersistentState<"my_tasks" | "all_tasks">("tasks.view", canViewAllTasks ? "all_tasks" : "my_tasks");
   const mainViewMode = canViewAllTasks ? savedViewMode : "my_tasks";
   const setMainViewMode = (mode: "my_tasks" | "all_tasks") => {
@@ -736,9 +740,9 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
   // Tasks are dynamically queried, filtered, and paginated (25 per page) from the backend directly
   const filteredTasks = useMemo(() => {
-    if (subCategoryFilter === "All") return tasks;
-    return tasks.filter(t => (t.subCategory || "").toLowerCase() === subCategoryFilter.toLowerCase());
-  }, [tasks, subCategoryFilter]);
+    // Stage filter is applied on the server (matches sub_category and Content-Calendar creative_role)
+    return tasks;
+  }, [tasks]);
   const { items: sortedTasks, requestSort, sortConfig } = useSortableData(filteredTasks);
 
   const totalPages = Math.max(1, Math.ceil(totalServerTasks / pageSize));
@@ -1454,7 +1458,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
       {/* Scope Filter Tabs & Controls (My Tasks vs All Tasks + Dept & Person Filters) */}
       <div className="flex flex-col gap-2.5 bg-muted/20 border border-border/50 rounded-2xl p-2.5 shrink-0">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        {/* Switcher row is only for roles that can see both views; everyone else just sees their own tasks */}
+        <div className={cn("flex flex-wrap items-center justify-between gap-3", !canViewAllTasks && "hidden")}>
           {/* Main View Mode Switcher: My Tasks vs All Tasks */}
           <div className="flex items-center gap-1 p-1 bg-muted/50 dark:bg-muted/30 rounded-xl border border-border/60">
             <button
@@ -1591,9 +1596,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
               />
             </div>
 
-            {/* Category Filter (Visible for Head / Admin and Team Leader) */}
-            {(isHead || isTeamLeader) && (
-              <div className="flex items-center gap-1.5">
+            {/* Category Filter (visible to everyone, including employees on My Tasks) */}
+            <div className="flex items-center gap-1.5">
                 <span className="text-[10px] font-bold text-muted-foreground uppercase">Category:</span>
                 <SearchableSelect
                   value={categoryFilter}
@@ -1602,7 +1606,6 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                   className="w-[120px] h-[32px] text-xs font-semibold"
                 />
               </div>
-            )}
 
             {/* Stage filter: Creative only */}
             {showCreativeFilters && (
