@@ -134,9 +134,9 @@ export function CalendarWidget({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
             {/* Left: Mini Calendar Grid */}
-            <div className="lg:col-span-7 bg-muted/20 border border-border/60 rounded-2xl p-4">
+            <div className="xl:col-span-7 bg-muted/20 border border-border/60 rounded-2xl p-4">
               <div className="flex items-center justify-between mb-4">
                 <h4 className="font-bold text-xs text-foreground">
                   {format(currentMonth, "MMMM yyyy")}
@@ -208,7 +208,7 @@ export function CalendarWidget({
             </div>
 
             {/* Right: Selected Date Event List */}
-            <div className="lg:col-span-5 flex flex-col justify-between space-y-3">
+            <div className="xl:col-span-5 flex flex-col justify-between space-y-3">
               <div>
                 <div className="flex items-center justify-between pb-2 border-b border-border">
                   <span className="text-xs font-bold text-foreground">

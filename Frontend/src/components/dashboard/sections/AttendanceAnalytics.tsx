@@ -80,9 +80,9 @@ export function AttendanceAnalytics() {
   return (
     <div className="mb-12">
       <CollapsibleSection section="Section 04" title="Attendance Analytics">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
         {/* Weekly Attendance */}
-        <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm md:col-span-2 min-w-0 overflow-hidden">
+        <div className="bg-white border border-border/60 rounded-3xl p-4 sm:p-6 shadow-sm xl:col-span-2 min-w-0 overflow-hidden">
           <div className="mb-6">
             <h3 className="font-bold text-foreground">Weekly Attendance</h3>
             <p className="text-[11px] text-muted-foreground">Present vs late vs WFH vs absent</p>
@@ -115,7 +115,7 @@ export function AttendanceAnalytics() {
         {/* Small stats */}
         <div className="space-y-6">
           {/* Work From Home — BIG with live names + auto % (Audio PDF) */}
-          <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm min-w-0 md:col-span-1">
+          <div className="bg-white border border-border/60 rounded-3xl p-4 sm:p-6 shadow-sm min-w-0 xl:col-span-1">
             <h3 className="font-bold text-foreground mb-1">Work From Home</h3>
             <p className="text-[11px] text-muted-foreground mb-3">
               {wfh.count > 0 ? wfh.names.slice(0, 4).join(", ") + (wfh.names.length > 4 ? ` +${wfh.names.length - 4}` : "") : "No one is on WFH"}
@@ -133,7 +133,7 @@ export function AttendanceAnalytics() {
           </div>
 
           {/* Late Coming Leaderboard — month-wise (Audio PDF) */}
-          <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm min-w-0">
+          <div className="bg-white border border-border/60 rounded-3xl p-4 sm:p-6 shadow-sm min-w-0">
             <div className="flex items-center justify-between mb-1">
               <h3 className="font-bold text-foreground">Late Coming</h3>
               <div className="flex items-center gap-1">
@@ -176,7 +176,7 @@ export function AttendanceAnalytics() {
         </div>
 
         {/* Heatmap Calendar */}
-        <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm md:col-span-3 min-w-0 overflow-hidden">
+        <div className="bg-white border border-border/60 rounded-3xl p-4 sm:p-6 shadow-sm xl:col-span-3 min-w-0 overflow-hidden">
           <div className="mb-6 flex flex-wrap gap-2 justify-between items-center">
             <div className="min-w-0">
               <h3 className="font-bold text-foreground">Heatmap Calendar</h3>

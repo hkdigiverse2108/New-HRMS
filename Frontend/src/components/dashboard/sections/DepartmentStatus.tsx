@@ -12,7 +12,7 @@ export function DepartmentStatus() {
         {depts.length === 0 ? (
           <p className="text-xs font-semibold text-muted-foreground/60 border border-dashed border-border/40 rounded-2xl px-4 py-8 text-center bg-white">No department data.</p>
         ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
         {depts.map((dept: any, i: number) => {
           const total = Number(dept.total || 0);
           const present = Number(dept.present || 0);

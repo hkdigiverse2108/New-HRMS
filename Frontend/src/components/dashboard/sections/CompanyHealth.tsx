@@ -45,7 +45,7 @@ export function CompanyHealth() {
     <div className="mb-12">
       <CollapsibleSection section="Section 02" title="Company Health">
 
-      <div className="grid grid-cols-1 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
         {metrics.map((metric, i) => {
           const sensitive = SENSITIVE_LABELS.includes(metric.label);
           const hidden = sensitive && !revealed.includes(metric.label);

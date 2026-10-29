@@ -14,7 +14,7 @@ export function FinanceOverview() {
   return (
     <div className="mb-12">
       <CollapsibleSection section="Section 08" title="Finance Overview">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
         {/* Pending payments — BIG */}
         <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm flex flex-col justify-between min-w-0 lg:row-span-1">
           <div>

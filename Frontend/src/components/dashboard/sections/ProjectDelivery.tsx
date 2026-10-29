@@ -11,7 +11,7 @@ export function ProjectDelivery() {
   return (
     <div className="mb-12">
       <CollapsibleSection section="Section 06" title="Project Delivery">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
         {/* Project KPIs — live counts */}
         <div className="grid grid-cols-1 min-[480px]:grid-cols-2 gap-3 sm:gap-4">
           <div className="bg-white border border-border/60 rounded-3xl p-5 shadow-sm flex flex-col justify-between min-w-0">
@@ -33,7 +33,7 @@ export function ProjectDelivery() {
         </div>
 
         {/* Roadmap — live 5 projects */}
-        <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm md:col-span-2 min-w-0">
+        <div className="bg-white border border-border/60 rounded-3xl p-4 sm:p-6 shadow-sm xl:col-span-2 min-w-0">
           <div className="mb-6 flex justify-between items-center">
             <div>
               <h3 className="font-bold text-foreground">Live Roadmap</h3>

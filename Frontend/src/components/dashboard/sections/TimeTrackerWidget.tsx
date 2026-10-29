@@ -407,11 +407,11 @@ export function TimeTrackerWidget() {
 
   return (
     <>
-      <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm flex flex-col gap-5 transition-all mb-12">
+      <div className="bg-card border border-border/60 rounded-3xl p-4 sm:p-6 shadow-sm flex flex-col gap-5 transition-all mb-12">
         {/* Row 1: status on the left, times in one horizontal strip on the right */}
-        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-5">
+        <div className="flex flex-col 2xl:flex-row 2xl:items-center justify-between gap-5">
         {/* Status Indicator */}
-        <div className="flex items-center gap-5 min-w-0 xl:flex-1">
+        <div className="flex items-center gap-5 min-w-0 2xl:flex-1">
           <div className={cn(
             "w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 shadow-sm border transition-all",
             status === "Punched In" && "bg-primary/10 border-primary/30 text-primary",
@@ -445,7 +445,7 @@ export function TimeTrackerWidget() {
                   <span className="relative inline-flex rounded-full h-3 w-3 bg-muted-foreground/60"></span>
                 )}
               </span>
-              <h2 className={cn("text-2xl font-black tracking-tight",
+              <h2 className={cn("text-2xl font-black tracking-tight whitespace-nowrap",
                 status === "Punched In" && "text-primary",
                 status === "On Break" && "text-amber-500",
                 status === "Punched Out" && "text-muted-foreground"
@@ -461,7 +461,7 @@ export function TimeTrackerWidget() {
 
             {/* Current Active Task Pill */}
             {(status === "Punched In" || status === "On Break") && (
-              <div className="inline-flex flex-nowrap items-center gap-2.5 mt-2.5 pl-3.5 pr-1.5 py-1.5 max-w-full bg-primary/10 dark:bg-primary/15 border border-primary/25 rounded-full shadow-sm">
+              <div className="inline-flex flex-wrap items-center gap-x-2.5 gap-y-1.5 mt-2.5 pl-3.5 pr-1.5 py-1.5 max-w-full bg-primary/10 dark:bg-primary/15 border border-primary/25 rounded-3xl shadow-sm">
                 <span className="text-[11px] font-extrabold text-primary/80 uppercase tracking-wider shrink-0">Working on:</span>
                 <span className="min-w-0 font-bold text-foreground text-xs sm:text-sm max-w-[120px] min-[400px]:max-w-[180px] sm:max-w-[260px] truncate" title={activeTaskTitle || "General Work"}>
                   {activeTaskTitle || "General Work"}
@@ -484,10 +484,10 @@ export function TimeTrackerWidget() {
         </div>
 
         {/* Right column: timers strip with action buttons right below it */}
-        <div className="flex flex-col gap-5 xl:shrink-0">
+        <div className="flex flex-col gap-5 2xl:shrink-0">
         {/* Timers & Times in IST: one row, each value in its own column */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 rounded-2xl border border-border/50 bg-muted/20 overflow-hidden xl:shrink-0 [&>div]:border-border/50 [&>div:nth-child(odd)]:border-r sm:[&>div:not(:last-child)]:border-r [&>div:nth-child(-n+2)]:border-b sm:[&>div:nth-child(-n+2)]:border-b-0">
-          <div className="flex flex-col gap-1.5 px-5 py-3.5 min-w-[150px]">
+        <div className="grid grid-cols-2 sm:grid-cols-4 rounded-2xl border border-border/50 bg-muted/20 overflow-hidden 2xl:shrink-0 [&>div]:border-border/50 [&>div:nth-child(odd)]:border-r sm:[&>div:not(:last-child)]:border-r [&>div:nth-child(-n+2)]:border-b sm:[&>div:nth-child(-n+2)]:border-b-0">
+          <div className="flex flex-col gap-1.5 px-5 py-3.5 min-w-0 sm:min-w-[150px]">
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-none">Net Work Time</p>
             <p className="text-xl font-mono font-black text-foreground leading-tight whitespace-nowrap tabular-nums">
               {formatStopwatchTime(workSeconds)}
@@ -495,7 +495,7 @@ export function TimeTrackerWidget() {
             <span className="text-[10px] text-muted-foreground font-semibold leading-none whitespace-nowrap">Gross Time − Break Time</span>
           </div>
 
-          <div className="flex flex-col gap-1.5 px-5 py-3.5 min-w-[150px]">
+          <div className="flex flex-col gap-1.5 px-5 py-3.5 min-w-0 sm:min-w-[150px]">
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-none">Total Break</p>
             <p className="text-xl font-mono font-black text-amber-500 leading-tight whitespace-nowrap tabular-nums">
               {formatDurationSeconds(breakSeconds)}
@@ -503,13 +503,13 @@ export function TimeTrackerWidget() {
             <span className="text-[10px] text-muted-foreground font-semibold leading-none whitespace-nowrap">Excluded from work</span>
           </div>
 
-          <div className="flex flex-col gap-1.5 px-5 py-3.5 min-w-[150px]">
+          <div className="flex flex-col gap-1.5 px-5 py-3.5 min-w-0 sm:min-w-[150px]">
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-none">Punch In</p>
             <p className="text-xl font-black text-foreground leading-tight whitespace-nowrap tabular-nums">{punchInTime || "--:--"}</p>
             <span className="text-[10px] text-muted-foreground font-semibold leading-none whitespace-nowrap">Today's first punch</span>
           </div>
 
-          <div className="flex flex-col gap-1.5 px-5 py-3.5 min-w-[150px]">
+          <div className="flex flex-col gap-1.5 px-5 py-3.5 min-w-0 sm:min-w-[150px]">
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-none">Punch Out</p>
             <p className="text-xl font-black text-foreground leading-tight whitespace-nowrap tabular-nums">{punchOutTime || "--:--"}</p>
             <span className="text-[10px] text-muted-foreground font-semibold leading-none whitespace-nowrap">{punchOutTime ? "Day completed" : "Not punched out yet"}</span>
@@ -517,16 +517,16 @@ export function TimeTrackerWidget() {
         </div>
 
         {/* Actions right below the timers (Recover Time, Break In/Out, Punch In/Out) */}
-        <div className="flex items-stretch gap-3">
+        <div className="flex flex-wrap items-stretch gap-2 sm:gap-3">
           {/* Recover Time Button (Available anytime for employees) */}
           {!isAdmin && (
             <button
               type="button"
               onClick={() => setIsRecoverModalOpen(true)}
-              className="px-5 py-3 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 bg-background border border-border hover:bg-muted/60 text-muted-foreground hover:text-foreground active:scale-95 flex-1 basis-0"
+              className="px-3 sm:px-5 py-3 rounded-2xl font-bold text-sm whitespace-nowrap transition-all flex items-center justify-center gap-2 bg-background border border-border hover:bg-muted/60 text-muted-foreground hover:text-foreground active:scale-95 flex-none sm:flex-1 sm:basis-0 w-12 sm:w-auto"
               title="Recover missed break-out or correct break time"
             >
-              <RotateCcw className="w-4 h-4 text-primary" />
+              <RotateCcw className="w-4 h-4 shrink-0 text-primary" />
               <span className="hidden sm:inline">Recover Time</span>
             </button>
           )}
@@ -538,17 +538,17 @@ export function TimeTrackerWidget() {
                 type="button"
                 onClick={handleBreakIn}
                 disabled={isSubmitting}
-                className="flex-1 basis-0 px-5 py-3 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-60 bg-amber-500/15 text-amber-600 dark:text-amber-400 hover:bg-amber-500/25 border border-amber-500/30"
+                className="flex-1 basis-0 min-w-[110px] whitespace-nowrap px-3 sm:px-5 py-3 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-60 bg-amber-500/15 text-amber-600 dark:text-amber-400 hover:bg-amber-500/25 border border-amber-500/30"
               >
-                <Coffee className="w-4 h-4" /> Break In
+                <Coffee className="w-4 h-4 shrink-0" /> Break In
               </button>
               <button
                 type="button"
                 onClick={handlePunchOut}
                 disabled={isSubmitting}
-                className="flex-1 basis-0 px-6 py-3 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-md active:scale-95 disabled:opacity-60 bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-destructive/20"
+                className="flex-1 basis-0 min-w-[110px] whitespace-nowrap px-3 sm:px-6 py-3 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-md active:scale-95 disabled:opacity-60 bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-destructive/20"
               >
-                <LogOut className="w-4 h-4" /> Punch Out
+                <LogOut className="w-4 h-4 shrink-0" /> Punch Out
               </button>
             </>
           )}
@@ -559,9 +559,9 @@ export function TimeTrackerWidget() {
               type="button"
               onClick={() => setIsBreakOutChoiceModalOpen(true)}
               disabled={isSubmitting}
-              className="flex-1 basis-0 px-6 py-3 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-60 bg-primary text-primary-foreground hover:bg-primary/90 shadow-md shadow-primary/20"
+              className="flex-1 basis-0 min-w-[110px] whitespace-nowrap px-3 sm:px-6 py-3 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-60 bg-primary text-primary-foreground hover:bg-primary/90 shadow-md shadow-primary/20"
             >
-              <CheckCircle2 className="w-4 h-4" /> Break Out
+              <CheckCircle2 className="w-4 h-4 shrink-0" /> Break Out
             </button>
           )}
 
@@ -571,9 +571,9 @@ export function TimeTrackerWidget() {
               type="button"
               onClick={handlePunchInClick}
               disabled={isSubmitting}
-              className="flex-1 basis-0 px-6 py-3 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-md active:scale-95 disabled:opacity-60 bg-primary text-primary-foreground hover:bg-primary/90 shadow-primary/20"
+              className="flex-1 basis-0 min-w-[110px] whitespace-nowrap px-3 sm:px-6 py-3 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-md active:scale-95 disabled:opacity-60 bg-primary text-primary-foreground hover:bg-primary/90 shadow-primary/20"
             >
-              <LogIn className="w-4 h-4" /> Punch In
+              <LogIn className="w-4 h-4 shrink-0" /> Punch In
             </button>
           )}
         </div>

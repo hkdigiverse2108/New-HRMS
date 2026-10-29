@@ -33,9 +33,9 @@ export function SalesOverview() {
   return (
     <div className="mb-12">
       <CollapsibleSection section="Section 07" title="Sales Overview">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
           {/* Main Sales Metrics (Audio 8 [09:37-10:34]) */}
-          <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm flex flex-col justify-between min-w-0">
+          <div className="bg-white border border-border/60 rounded-3xl p-4 sm:p-6 shadow-sm flex flex-col justify-between min-w-0">
             <div>
               <div className="flex justify-between items-start mb-6">
                 <div>
@@ -125,7 +125,7 @@ export function SalesOverview() {
           </div>
 
           {/* Upcoming Hot Leads & Follow-ups (Audio 8 [09:50]) */}
-          <div className="bg-white border border-border/60 rounded-3xl p-6 shadow-sm min-w-0">
+          <div className="bg-white border border-border/60 rounded-3xl p-4 sm:p-6 shadow-sm min-w-0">
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <h3 className="font-bold text-foreground">Upcoming Hot Follow-ups</h3>

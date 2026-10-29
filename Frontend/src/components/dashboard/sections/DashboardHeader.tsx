@@ -110,7 +110,7 @@ export function DashboardHeader({ setActive, onAction }: { setActive?: ((url: st
   return (
     <>
       <div className="bg-white rounded-2xl sm:rounded-[32px] p-4 sm:p-6 md:p-8 border border-border/60 shadow-sm relative overflow-hidden mb-8 sm:mb-12">
-      <div className="flex flex-col lg:flex-row justify-between items-start gap-6">
+      <div className="flex flex-col xl:flex-row justify-between items-start gap-6">
         <div>
           <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-2">CEO Command Center</p>
           <h1 className="text-2xl sm:text-3xl md:text-[34px] font-black text-foreground tracking-tight flex flex-wrap items-center gap-2 mb-2 leading-tight break-words min-w-0">
@@ -118,7 +118,7 @@ export function DashboardHeader({ setActive, onAction }: { setActive?: ((url: st
           </h1>
           <p className="text-xs sm:text-[14px] text-muted-foreground">Today's overview — everything moving across the company, in one screen.</p>
         </div>
-        <div className="flex flex-wrap gap-2 sm:gap-3 justify-start lg:justify-end w-full lg:max-w-xl items-center">
+        <div className="flex flex-wrap gap-2 sm:gap-3 justify-start xl:justify-end w-full xl:max-w-xl items-center">
           {isLeaderOrAdmin && (
             <button
               type="button"
@@ -154,7 +154,7 @@ export function DashboardHeader({ setActive, onAction }: { setActive?: ((url: st
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-6 sm:mt-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 mt-6 sm:mt-8">
         <div className="bg-muted/50/40 rounded-2xl p-4 sm:p-5 border border-border/40">
           <p className="text-[10px] font-bold text-muted-foreground mb-1">Current Time (IST)</p>
           <p className="text-xl sm:text-[22px] font-black text-primary truncate">{timeStr}</p>
