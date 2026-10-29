@@ -97,14 +97,10 @@ async def get_leaves(
         user_role = "HR"
     current_id = str(current_employee.get("_id") or current_employee.get("id") or current_employee.get("email") or "")
 
-    from app.controllers.auth import resolve_effective_permissions_for_employee
-    perms = await resolve_effective_permissions_for_employee(current_employee)
+    # Only Admin and HR can view everyone's leaves; all other roles see only their own
     can_view_all_leaves = (
-        user_role in ("Admin", "superadmin") or
-        dept.lower() == "hr" or
-        perms.get("/employees/leave-requests", {}).get("read") or
-        perms.get("/employees/leave-requests", {}).get("all") or
-        perms.get("/approvals", {}).get("all")
+        user_role in ("Admin", "superadmin", "Sub-Admin", "HR") or
+        dept.lower() == "hr"
     )
 
     cache_key = make_list_key(
@@ -255,16 +251,27 @@ async def get_leave_by_id(
     current_employee: dict = Depends(get_current_employee)
 ):
     cache_key = f"leave:{leave_id}"
-    cached = await get_cache(cache_key)
-    if cached is not None:
-        return cached
+    doc = await get_cache(cache_key)
 
-    from app.repository.leave import LeaveRepository
-    doc = await LeaveRepository.get_by_id(leave_id)
-    if not doc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Leave request not found.")
-        
-    await set_cache(cache_key, doc, ttl=300)
+    if doc is None:
+        from app.repository.leave import LeaveRepository
+        doc = await LeaveRepository.get_by_id(leave_id)
+        if not doc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Leave request not found.")
+        await set_cache(cache_key, doc, ttl=300)
+
+    work = current_employee.get("work_details", {})
+    user_role = work.get("system_role", "Employee")
+    dept = str(work.get("department") or "").strip()
+    can_view_all = user_role in ("Admin", "superadmin", "Sub-Admin", "HR") or dept.lower() == "hr" or current_employee.get("role") == "HR"
+    if not can_view_all:
+        own_ids = {
+            str(current_employee.get("_id") or ""),
+            str(current_employee.get("id") or ""),
+            str(current_employee.get("email") or ""),
+        } - {""}
+        if str(doc.get("employee_id") or "") not in own_ids:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only view your own leave requests.")
     return doc
 
 @router.delete("/{leave_id}", status_code=status.HTTP_200_OK)

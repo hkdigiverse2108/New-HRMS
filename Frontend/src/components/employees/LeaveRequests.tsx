@@ -225,7 +225,8 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
   const canManageLeaves = isStrictAdmin || isHRUser || hasModulePermission(user, "/employees/leave-requests", "update") || hasModulePermission(user, "/approvals", "update") || hasModulePermission(user, "/employees/leave-requests", "all");
   const canReadLeaves = isStrictAdmin || isHRUser || hasModulePermission(user, "/employees/leave-requests", "read") || hasModulePermission(user, "/approvals", "read");
   const canDeleteLeaves = isStrictAdmin || isHRUser || hasModulePermission(user, "/employees/leave-requests", "delete") || hasModulePermission(user, "/employees/leave-requests", "all");
-  const isAdminOrHR = canManageLeaves || canReadLeaves;
+  // Only Admin / HR see everyone's leaves; every other role (Head, TL, employees) sees only their own
+  const isAdminOrHR = isStrictAdmin || isHRUser;
 
   const [scopeFilter, setScopeFilter] = useState<"all" | "my">(isAdminOrHR ? "all" : "my");
   const [isEditOpen, setIsEditOpen] = useState(false);
