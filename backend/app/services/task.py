@@ -421,7 +421,8 @@ class TaskService:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         search: Optional[str] = None,
-        team_employee_ids: Optional[list[str]] = None
+        team_employee_ids: Optional[list[str]] = None,
+        sub_category: Optional[str] = None
     ):
         cache_key = make_list_key(
             "tasks",
@@ -444,7 +445,8 @@ class TaskService:
             start_date=start_date.isoformat() if start_date else None,
             end_date=end_date.isoformat() if end_date else None,
             search=search,
-            team_employee_ids=",".join(team_employee_ids) if team_employee_ids else None
+            team_employee_ids=",".join(team_employee_ids) if team_employee_ids else None,
+            sub_category=sub_category
         )
         cached = await get_cache(cache_key)
         if cached is not None:
@@ -476,7 +478,8 @@ class TaskService:
             start_date,
             end_date,
             search,
-            team_employee_ids
+            team_employee_ids,
+            sub_category
         )
         
         items = result.get("data", [])

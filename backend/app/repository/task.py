@@ -67,7 +67,8 @@ class TaskRepository:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         search: Optional[str] = None,
-        team_employee_ids: Optional[list[str]] = None
+        team_employee_ids: Optional[list[str]] = None,
+        sub_category: Optional[str] = None
     ):
         collection = await cls.get_collection()
         and_conditions = [{"is_deleted": is_deleted}, {"is_archived": {"$ne": True}}]
@@ -119,6 +120,9 @@ class TaskRepository:
             and_conditions.append({"creative_role": creative_role})
         if task_category and task_category != "All":
             and_conditions.append({"task_category": task_category})
+        if sub_category and sub_category != "All":
+            import re as _re
+            and_conditions.append({"sub_category": {"$regex": f"^{_re.escape(sub_category.strip())}$", "$options": "i"}})
             
         if search and search.strip():
             and_conditions.append({"title": {"$regex": search.strip(), "$options": "i"}})

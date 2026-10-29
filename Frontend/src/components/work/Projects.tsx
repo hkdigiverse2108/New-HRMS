@@ -7095,12 +7095,46 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                               </div>
                             );
                           })()}
-                          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4">
-                            <div>
-                              <h2 className="text-base sm:text-lg lg:text-xl font-bold tracking-tight">Content Calendar</h2>
-                              <p className="text-xs text-muted-foreground mt-0.5">Plan, schedule, and track content approval pipeline</p>
+                          <div className="flex flex-col gap-3">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <h2 className="text-base sm:text-lg lg:text-xl font-bold tracking-tight">Content Calendar</h2>
+                                <p className="text-xs text-muted-foreground mt-0.5">Plan, schedule, and track content approval pipeline</p>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const today = new Date().toISOString().split('T')[0] || "";
+                                  const future = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] || "";
+                                  setBulkStartDate(today);
+                                  setBulkEndDate(future);
+                                  setBulkSelectedDays([1, 3, 5]); // default Mon, Wed, Fri
+                                  setBulkFormatType("Post");
+                                  setBulkAddTab('range');
+                                  setVisualSelectedDates([]);
+                                  setIsBulkAddModalOpen(true);
+                                }}
+                                className="h-8 flex items-center gap-1.5 px-3 border border-border/60 bg-card/90 text-foreground hover:bg-muted/80 font-semibold text-xs rounded-xl transition-all shadow-sm shrink-0 whitespace-nowrap"
+                              >
+                                <Layers className="w-3.5 h-3.5 text-primary shrink-0" />
+                                <span className="whitespace-nowrap">Bulk Add Slots</span>
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingCalendarItem(null);
+                                  setCalendarForm({ ...defaultCalendarForm });
+                                  setIsAddCalendarItemModalOpen(true);
+                                }}
+                                className="h-8 flex items-center gap-1.5 px-3.5 bg-primary text-primary-foreground font-semibold text-xs rounded-xl hover:bg-primary/90 transition-all shadow-sm shrink-0 whitespace-nowrap active:scale-[0.98]"
+                              >
+                                <Plus className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
+                                <span className="whitespace-nowrap">Add Idea</span>
+                              </button>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar w-full lg:w-auto py-0.5 shrink-0">
+                            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 pt-2 border-t border-border/40">
                               <button
                                 type="button"
                                 onClick={() => {
@@ -7241,36 +7275,6 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                 className="hidden"
                                 onChange={(e) => handleUploadCCExcel(e, project)}
                               />
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const today = new Date().toISOString().split('T')[0] || "";
-                                  const future = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] || "";
-                                  setBulkStartDate(today);
-                                  setBulkEndDate(future);
-                                  setBulkSelectedDays([1, 3, 5]); // default Mon, Wed, Fri
-                                  setBulkFormatType("Post");
-                                  setBulkAddTab('range');
-                                  setVisualSelectedDates([]);
-                                  setIsBulkAddModalOpen(true);
-                                }}
-                                className="h-8 flex items-center gap-1.5 px-3 border border-border/60 bg-card/90 text-foreground hover:bg-muted/80 font-semibold text-xs rounded-xl transition-all shadow-sm shrink-0 whitespace-nowrap"
-                              >
-                                <Layers className="w-3.5 h-3.5 text-primary shrink-0" />
-                                <span className="whitespace-nowrap">Bulk Add Slots</span>
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setEditingCalendarItem(null);
-                                  setCalendarForm({ ...defaultCalendarForm });
-                                  setIsAddCalendarItemModalOpen(true);
-                                }}
-                                className="h-8 flex items-center gap-1.5 px-3.5 bg-primary text-primary-foreground font-semibold text-xs rounded-xl hover:bg-primary/90 transition-all shadow-sm shrink-0 whitespace-nowrap active:scale-[0.98]"
-                              >
-                                <Plus className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
-                                <span className="whitespace-nowrap">Add Idea</span>
-                              </button>
                             </div>
                           </div>
 

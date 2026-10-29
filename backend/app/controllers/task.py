@@ -150,6 +150,7 @@ async def get_all_tasks(
     end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
     search: Optional[str] = Query(None, description="Search by task title"),
     view: Optional[str] = Query("all", description="View scope: 'me' (My Tasks), 'team' (Team Tasks), or 'all'"),
+    sub_category: Optional[str] = Query(None, description="Filter by creative stage / sub category (e.g. Script, Shoot)"),
     current_user: dict = Depends(get_current_employee)
 ):
     role = current_user.get("work_details", {}).get("system_role", "Employee")
@@ -177,6 +178,7 @@ async def get_all_tasks(
         end_date=end_date,
         search=search,
         view=view,
+        sub_category=sub_category,
         user_id=emp_id,
         role=role,
         user_dept=user_dept
@@ -239,7 +241,8 @@ async def get_all_tasks(
         start_date=start_date,
         end_date=end_date,
         search=search,
-        team_employee_ids=team_employee_ids
+        team_employee_ids=team_employee_ids,
+        sub_category=sub_category
     )
     # Store in Redis (60s TTL)
     await set_cache(cache_key, result, ttl=60)

@@ -219,6 +219,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   // K15: category filter (transcript — category field)
   const [categoryFilter, setCategoryFilter] = useState<string>("All");
   const [subCategoryFilter, setSubCategoryFilter] = useState<string>("All");
+  const [projectFilter, setProjectFilter] = useState<string>("All");
+  const [allProjects, setAllProjects] = useState<{ label: string; value: string; depts: string[] }[]>([]);
 
   const CREATIVE_SUBCATEGORIES = useMemo(() => [
     "Script",
@@ -250,6 +252,68 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     return dLower.includes("creative") || desigLower.includes("creative") || categoryFilter === "Creative" || tasks.some(t => t.taskCategory === "Creative" || t.subCategory);
   }, [userDepartment, userDesignation, categoryFilter, tasks]);
 
+  // Stage / Project filters show only when the Creative department (or category) is selected
+  const showCreativeFilters = departmentFilter.toLowerCase().includes("creative") || categoryFilter === "Creative";
+
+  const STAGE_OPTIONS = useMemo(() => {
+    const base = [
+      "Script", "Shoot", "Brand Person", "Caption", "Thumbnail", "Editing",
+      "Post/Graphics", "Approval", "Posting", "Follow-up", "WhatsApp Group",
+    ];
+    const seen = new Set(base.map((x) => x.toLowerCase()));
+    const extra: string[] = [];
+    tasks.forEach((t) => {
+      const sc = (t.subCategory || "").trim();
+      if (sc && !seen.has(sc.toLowerCase())) {
+        seen.add(sc.toLowerCase());
+        extra.push(sc);
+      }
+    });
+    return [{ label: "All Stages", value: "All" }, ...[...base, ...extra].map((x) => ({ label: x, value: x }))];
+  }, [tasks]);
+
+  // Project filter shows whenever a department is picked (or Creative category); it lists that department's projects
+  const showProjectFilter = showCreativeFilters || departmentFilter !== "All";
+
+  const projectOptions = useMemo(() => {
+    const dept = departmentFilter !== "All" ? departmentFilter.toLowerCase() : categoryFilter === "Creative" ? "creative" : "";
+    const list = dept ? allProjects.filter((p) => p.depts.some((d) => d.includes(dept) || dept.includes(d))) : allProjects;
+    return list.map(({ label, value }) => ({ label, value }));
+  }, [allProjects, departmentFilter, categoryFilter]);
+
+  // Stage / Project selections don't carry over when the department changes
+  useEffect(() => {
+    setProjectFilter("All");
+    if (!showCreativeFilters) setSubCategoryFilter("All");
+  }, [departmentFilter, showCreativeFilters]);
+
+  useEffect(() => {
+    if (!showProjectFilter || allProjects.length > 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get<{ data?: any[] } | any[]>("/projects", { showLoader: false, showErrorToast: false });
+        const raw: any[] = Array.isArray(res) ? res : (res?.data || []);
+        const mapped = raw.map((p: any) => {
+          const g = p.general || p.general_details || {};
+          const name = String(g.project_name || p.project_name || p.name || p.title || "").trim() || "Untitled Project";
+          const client = String(p.client?.company_name || p.client?.contact_person_name || "").trim();
+          const norm = (x: string) => x.toLowerCase().replace(/[^a-z0-9]/g, "");
+          return {
+            label: client && !norm(name).includes(norm(client)) ? `${client} • ${name}` : name,
+            value: String(p._id || p.id),
+            depts: String(g.category || p.category || "").split(",").map((d) => d.trim().toLowerCase()).filter(Boolean),
+          };
+        });
+        mapped.sort((a, b) => a.label.localeCompare(b.label));
+        if (!cancelled) setAllProjects(mapped);
+      } catch {
+        // project filter is optional
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [showProjectFilter, allProjects.length]);
+
   // Reset page to 1 whenever any filter changes
   useEffect(() => {
     setCurrentPage(1);
@@ -265,6 +329,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     timeframeFilter,
     categoryFilter,
     subCategoryFilter,
+    projectFilter,
   ]);
 
   const taskCategories = useMemo(() => {
@@ -461,6 +526,14 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
         params.append("assigned_by", assignedByFilter);
       }
 
+      if (subCategoryFilter && subCategoryFilter !== "All") {
+        params.append("sub_category", subCategoryFilter);
+      }
+
+      if (projectFilter && projectFilter !== "All") {
+        params.append("project_id", projectFilter);
+      }
+
       if (debouncedSearch.trim()) {
         params.append("search", debouncedSearch.trim());
       }
@@ -612,6 +685,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     mainViewMode,
     scopeFilter,
     currentUserId,
+    subCategoryFilter,
+    projectFilter,
   ]);
 
   useEffect(() => {
@@ -1528,9 +1603,37 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                 />
               </div>
             )}
+
+            {/* Stage filter: Creative only */}
+            {showCreativeFilters && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold text-muted-foreground uppercase">Stage:</span>
+                <SearchableSelect
+                  value={subCategoryFilter}
+                  onChange={(val) => setSubCategoryFilter(val)}
+                  options={STAGE_OPTIONS}
+                  placeholder="All Stages"
+                  className="w-[150px] h-[32px] text-xs font-semibold"
+                />
+              </div>
+            )}
+
+            {/* Project filter: any selected department, lists that department's projects */}
+            {showProjectFilter && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold text-muted-foreground uppercase">Project:</span>
+                <SearchableSelect
+                  value={projectFilter}
+                  onChange={(val) => setProjectFilter(val)}
+                  options={[{ label: "All Projects", value: "All" }, ...projectOptions]}
+                  placeholder="All Projects"
+                  className="w-[240px] h-[32px] text-xs font-semibold"
+                />
+              </div>
+            )}
           </div>
 
-          {(statusFilter !== "All" || priorityFilter !== "All" || timeframeFilter !== "today" || scopeFilter !== "all" || categoryFilter !== "All" || subCategoryFilter !== "All" || departmentFilter !== "All" || assignedToFilter !== "All" || assignedByFilter !== "All" || (canViewAllTasks && mainViewMode !== "all_tasks")) && (
+          {(statusFilter !== "All" || priorityFilter !== "All" || timeframeFilter !== "today" || scopeFilter !== "all" || categoryFilter !== "All" || subCategoryFilter !== "All" || projectFilter !== "All" || departmentFilter !== "All" || assignedToFilter !== "All" || assignedByFilter !== "All" || (canViewAllTasks && mainViewMode !== "all_tasks")) && (
             <button
               onClick={() => {
                 setStatusFilter("All");
@@ -1539,6 +1642,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                 setScopeFilter("all");
                 setCategoryFilter("All");
                 setSubCategoryFilter("All");
+                setProjectFilter("All");
                 setDepartmentFilter("All");
                 setAssignedToFilter("All");
                 setAssignedByFilter("All");
