@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { usePersistentState } from "@/hooks/usePersistentState";
-import { Check, X, Calendar, Clock, ChevronDown, CalendarDays, Activity, Plus, AlertCircle, RefreshCw, Upload, FileText, Trash2, Paperclip, Edit2, Eye, Users, User } from "lucide-react";
+import { Check, X, Calendar, Clock, ChevronDown, CalendarDays, Activity, Plus, AlertCircle, Upload, FileText, Trash2, Paperclip, Edit2, Eye, Users, User } from "lucide-react";
 import { DialogClose, Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { SearchableSelect } from "@/components/ui/select";
@@ -277,9 +277,10 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
 
   // Fetch leaves from backend filtered by status directly
   const fetchLeaves = useCallback(
-    async (tabStatus: LeaveStatus = activeTab) => {
+    async (tabStatus: LeaveStatus = activeTab, silent = false) => {
+      // silent = background auto-sync: no loading state, and a failed poll keeps the current rows
       try {
-        setIsLoading(true);
+        if (!silent) setIsLoading(true);
         const params = new URLSearchParams();
         params.append("status", tabStatus);
         if (!isAdminOrHR && user?.id) {
@@ -323,10 +324,12 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
           setRequests(fallback);
         }
       } catch {
-        const fallback = FALLBACK_REQUESTS.filter((r) => r.status === tabStatus);
-        setRequests(fallback);
+        if (!silent) {
+          const fallback = FALLBACK_REQUESTS.filter((r) => r.status === tabStatus);
+          setRequests(fallback);
+        }
       } finally {
-        setIsLoading(false);
+        if (!silent) setIsLoading(false);
       }
     },
     [user?.id, isAdminOrHR, activeTab]
@@ -357,6 +360,21 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
   useEffect(() => {
     fetchPendingCount();
   }, [fetchPendingCount]);
+
+  // Auto-sync every 30s while the tab is visible (replaces the manual refresh button)
+  useEffect(() => {
+    const sync = () => {
+      if (document.visibilityState !== "visible") return;
+      fetchLeaves(activeTab, true);
+      fetchPendingCount();
+    };
+    const id = window.setInterval(sync, 30000);
+    document.addEventListener("visibilitychange", sync);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", sync);
+    };
+  }, [activeTab, fetchLeaves, fetchPendingCount]);
 
   // Handle status actions: Approved, Rejected, Pending
   const handleAction = async (id: string, action: "Approved" | "Rejected" | "Pending", isConditional?: boolean, reasonText?: string) => {
@@ -615,20 +633,20 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
   return (
     <div className="h-full flex flex-col space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-col 2xl:flex-row justify-between items-start 2xl:items-center gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">Leave Management</h1>
           <p className="text-xs sm:text-sm text-muted-foreground mt-1">Apply for leaves and track approval status in IST</p>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-3 w-full 2xl:w-auto">
           {isAdminOrHR && (
-            <div className="flex items-center bg-muted/60 p-1 rounded-xl border border-border/50 shrink-0">
+            <div className="flex items-center bg-muted/60 p-1 rounded-xl border border-border/50 shrink-0 w-full sm:w-auto">
               <button
                 type="button"
                 onClick={() => setScopeFilter("all")}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
+                  "flex flex-1 sm:flex-none items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 whitespace-nowrap rounded-lg text-xs font-bold transition-all",
                   scopeFilter === "all" ? "bg-white text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -639,7 +657,7 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                 type="button"
                 onClick={() => setScopeFilter("my")}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
+                  "flex flex-1 sm:flex-none items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 whitespace-nowrap rounded-lg text-xs font-bold transition-all",
                   scopeFilter === "my" ? "bg-white text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -653,20 +671,12 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
             value={searchQuery}
             onChange={setSearchQuery}
             placeholder="Search employee, dept or type..."
-            containerClassName="w-full sm:w-64"
+            containerClassName="flex-1 min-w-[180px] 2xl:flex-none 2xl:w-64"
           />
-
-          <button
-            onClick={() => fetchLeaves()}
-            title="Refresh leaves"
-            className="p-2 bg-card border border-border rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 shadow-sm transition-colors self-center sm:self-auto"
-          >
-            <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin text-primary")} />
-          </button>
 
 <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
             <DialogTrigger asChild>
-              <button className="px-4 py-2 bg-primary hover:bg-primary/95 text-primary-foreground rounded-xl text-xs sm:text-sm font-bold shadow-sm flex items-center justify-center gap-2 transition-colors shrink-0">
+              <button className="shrink-0 h-10 px-4 whitespace-nowrap bg-primary hover:bg-primary/95 text-primary-foreground rounded-xl text-xs sm:text-sm font-bold shadow-sm flex items-center justify-center gap-2 transition-colors shrink-0">
                 <Plus className="w-4 h-4" /> Apply Leave
               </button>
             </DialogTrigger>
@@ -946,15 +956,15 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
             <p className="text-muted-foreground text-xs mt-1">There are currently no leaves in this category.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
             {filteredRequests.map((request) => (
               <div
                 key={request.id}
-                className="bg-card border border-border rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow group relative overflow-hidden flex flex-col justify-between"
+                className="bg-card border border-border rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow group relative overflow-hidden flex flex-col justify-between min-w-0"
               >
                 {/* Top header */}
                 <div>
-                  <div className="flex justify-between items-start mb-4">
+                  <div className="flex flex-wrap justify-between items-start gap-2 mb-4">
                     <div className="flex items-center gap-3 min-w-0">
                       <img
                         src={request.avatar}
@@ -976,8 +986,8 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
 
                   {/* Details */}
                   <div className="space-y-2.5 bg-muted/30 rounded-xl p-3.5 border border-border/50 mb-4">
-                    <div className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2 text-foreground/80 font-bold">
+                    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 text-xs">
+                      <div className="flex items-center gap-2 text-foreground/80 font-bold min-w-0">
                         <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                         <span>
                           {formatISTDate(request.startDate)}
@@ -1019,8 +1029,8 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                 </div>
 
                 {/* Footer Controls */}
-                <div className="pt-3 border-t border-border/50 flex items-center justify-between gap-2">
-                  <p className="text-[11px] text-muted-foreground font-medium">
+                <div className="pt-3 border-t border-border/50 flex flex-wrap items-center justify-between gap-x-2 gap-y-3">
+                  <p className="text-[11px] text-muted-foreground font-medium min-w-0 flex-1">
                     Applied on {formatAppliedOnIST(request.createdAt || request.appliedOn)}
                   </p>
 
@@ -1037,17 +1047,17 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                       if (request.status === "Pending") {
                         if (canApproveThisRequest) {
                           return (
-                            <div className="flex flex-wrap items-center gap-1.5">
+                            <div className="grid grid-cols-2 gap-2 order-last basis-full w-full">
                               <button
                                 onClick={() => setRejectingId(request.id)}
-                                className="px-2.5 py-1.5 min-h-[44px] sm:min-h-0 text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
+                                className="px-2.5 py-1.5 min-h-10 justify-center text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
                                 title="Reject Leave"
                               >
                                 <X className="w-3.5 h-3.5" /> Reject
                               </button>
                               <button
                                 onClick={() => handleAction(request.id, "Approved")}
-                                className="px-3 py-1.5 min-h-[44px] sm:min-h-0 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+                                className="px-3 py-1.5 min-h-10 justify-center bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
                                 title="Approve Leave"
                               >
                                 <Check className="w-3.5 h-3.5" /> Approve

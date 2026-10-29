@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { usePersistentState } from "@/hooks/usePersistentState";
-import { X, Download, MoreHorizontal, Clock, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Coffee, Briefcase, Award, FileSpreadsheet, RefreshCw, Search, Check, Users, ChevronDown, RotateCcw } from "lucide-react";
+import { X, Download, MoreHorizontal, Clock, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Coffee, Briefcase, Award, FileSpreadsheet, Search, Check, Users, ChevronDown, RotateCcw } from "lucide-react";
 import { DateRange } from "react-day-picker";
 import { Calendar } from "@/components/ui/calendar";
 import { DialogClose, Dialog, DialogContent } from "@/components/ui/dialog";
@@ -312,9 +312,11 @@ export function AttendanceList() {
   };
 
   // Fetch real attendance records from backend
-  const fetchAttendance = useCallback(async () => {
+  const fetchAttendance = useCallback(async (silent?: unknown) => {
+    // silent === true is a background auto-sync: no loading state, and a failed poll keeps the current rows
+    const isSilent = silent === true;
     try {
-      setIsLoading(true);
+      if (!isSilent) setIsLoading(true);
       const params = new URLSearchParams();
       if (!isAdminOrHR && user?.id) {
         params.append("employee_id", user.id);
@@ -379,14 +381,29 @@ export function AttendanceList() {
         setRecords([]);
       }
     } catch {
-      setRecords([]);
+      if (!isSilent) setRecords([]);
     } finally {
-      setIsLoading(false);
+      if (!isSilent) setIsLoading(false);
     }
   }, [user?.id, user?.role, isAdminOrHR, dateRange, statusFilter]);
 
   useEffect(() => {
     fetchAttendance();
+  }, [fetchAttendance]);
+
+  // Auto-sync every 30s while the tab is visible (replaces the manual refresh button)
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (document.visibilityState === "visible") fetchAttendance(true);
+    }, 30000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") fetchAttendance(true);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [fetchAttendance]);
 
   // Live auto-refresh when attendance actions (Punch In, Break In, Break Out, Punch Out) occur
@@ -552,7 +569,7 @@ export function AttendanceList() {
   return (
     <div className="space-y-6">
       {/* Top Controls Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">Attendance</h1>
           <p className="text-xs sm:text-sm font-medium text-muted-foreground mt-0.5">
@@ -562,13 +579,13 @@ export function AttendanceList() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full lg:w-auto">
           {/* Daily vs EOM View Switcher */}
           <div className="flex items-center p-1 bg-muted/60 border border-border/60 rounded-2xl w-full sm:w-auto justify-center">
             <button
               onClick={() => setActiveView("daily")}
               className={cn(
-                "px-4 py-2 text-xs font-bold rounded-xl transition-all",
+                "flex-1 sm:flex-none px-4 py-2 text-xs font-bold rounded-xl transition-all",
                 activeView === "daily"
                   ? "bg-card text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
@@ -579,7 +596,7 @@ export function AttendanceList() {
             <button
               onClick={() => setActiveView("eom")}
               className={cn(
-                "px-4 py-2 text-xs font-bold rounded-xl transition-all",
+                "flex-1 sm:flex-none px-4 py-2 text-xs font-bold rounded-xl transition-all",
                 activeView === "eom"
                   ? "bg-card text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
@@ -592,15 +609,8 @@ export function AttendanceList() {
           {activeView === "daily" && (
             <>
               <button
-                onClick={() => fetchAttendance()}
-                title="Refresh logs"
-                className="p-2 bg-card border border-border rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 shadow-sm transition-colors"
-              >
-                <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin text-primary")} />
-              </button>
-              <button
                 onClick={exportCSV}
-                className="px-4 py-2 bg-card border border-border rounded-xl text-xs sm:text-sm font-bold text-foreground/80 hover:bg-muted/50 shadow-sm flex items-center gap-2 transition-colors"
+                className="h-10 px-3 sm:px-4 whitespace-nowrap bg-card border border-border rounded-xl text-xs sm:text-sm font-bold text-foreground/80 hover:bg-muted/50 shadow-sm flex items-center gap-2 transition-colors"
               >
                 <Download className="w-4 h-4" /> Export
               </button>
@@ -608,7 +618,7 @@ export function AttendanceList() {
                 <button
                   type="button"
                   onClick={() => setIsRecoverModalOpen(true)}
-                  className="px-3.5 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30 font-bold text-xs sm:text-sm rounded-xl shadow-sm flex items-center gap-1.5 transition-colors"
+                  className="h-10 px-3 sm:px-3.5 whitespace-nowrap bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30 font-bold text-xs sm:text-sm rounded-xl shadow-sm flex items-center gap-1.5 transition-colors"
                   title="Recover missed punches or break time"
                 >
                   <RotateCcw className="w-4 h-4" /> Recover Time
@@ -617,7 +627,7 @@ export function AttendanceList() {
               {canManageAttendance && (
                 <button
                   onClick={() => setIsManualModalOpen(true)}
-                  className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs sm:text-sm rounded-xl shadow-sm flex items-center gap-2 transition-colors"
+                  className="h-10 px-3 sm:px-4 whitespace-nowrap bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs sm:text-sm rounded-xl shadow-sm flex items-center gap-2 transition-colors"
                 >
                   <Clock className="w-4 h-4" /> Manual Attendance
                 </button>
@@ -637,23 +647,23 @@ export function AttendanceList() {
             <div className="xl:col-span-2 flex flex-col gap-6">
               {/* Overall Stats Cards - Only visible to Admin and HR as requested */}
               {isAdminOrHR && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                   {[
                     { label: "Total Present", value: stats.present, color: "text-emerald-600", bg: "bg-emerald-50" },
                     { label: "Total Absent", value: stats.absent, color: "text-rose-600", bg: "bg-rose-50" },
                     { label: "Late Arrivals", value: stats.late, color: "text-amber-600", bg: "bg-amber-50" },
                     { label: "On Leave", value: stats.onLeave, color: "text-blue-600", bg: "bg-blue-50" },
                   ].map((stat, i) => (
-                    <div key={i} className="bg-card border border-border rounded-2xl p-5 shadow-sm flex flex-col justify-center">
+                    <div key={i} className="bg-card border border-border rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-center">
                       <p className="text-sm font-bold text-muted-foreground">{stat.label}</p>
-                      <p className={cn("text-3xl font-black mt-2", stat.color)}>{stat.value}</p>
+                      <p className={cn("text-2xl sm:text-3xl font-black mt-2", stat.color)}>{stat.value}</p>
                     </div>
                   ))}
                 </div>
               )}
 
               {/* Personal Stats Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {[
                   { label: "Avg Daily Hours", value: statsSummary.avgDailyHours, sub: "Based on active logs", icon: Clock },
                   { label: "Break Time", value: statsSummary.breakTime, sub: "Excluded from work hours", icon: Coffee },
@@ -661,7 +671,7 @@ export function AttendanceList() {
                 ].map((stat, i) => {
                   const Icon = stat.icon;
                   return (
-                    <div key={i} className="bg-card border border-border/60 rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow">
+                    <div key={i} className={cn("bg-card border border-border/60 rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow", i === 2 && "sm:col-span-2 lg:col-span-1")}>
                       <div className="flex items-start justify-between mb-1.5">
                         <p className="text-[12px] font-bold text-muted-foreground truncate mr-2">{stat.label}</p>
                         <Icon className="w-4 h-4 text-muted-foreground/60 shrink-0" />
@@ -676,7 +686,7 @@ export function AttendanceList() {
               </div>
 
               {/* Top Punctual Employees / Hall of Fame - Dynamic from live attendance logs */}
-              <div className="bg-card border border-border/60 rounded-3xl shadow-sm p-5 h-auto sm:h-[160px] sm:min-h-[160px] flex flex-col relative overflow-hidden">
+              <div className="bg-card border border-border/60 rounded-3xl shadow-sm p-4 sm:p-5 h-auto sm:h-[160px] sm:min-h-[160px] flex flex-col relative overflow-hidden">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
                     <Award className="w-4 h-4 text-emerald-600" />
@@ -713,7 +723,7 @@ export function AttendanceList() {
 
             {/* Right Column: Calendar Preview */}
             <div className="xl:col-span-1 flex flex-col gap-6">
-              <div className="bg-card border border-border/60 rounded-3xl shadow-sm p-6 flex flex-col relative overflow-hidden shrink-0 h-full">
+              <div className="bg-card border border-border/60 rounded-3xl shadow-sm p-4 sm:p-6 flex flex-col relative overflow-hidden shrink-0 h-full">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-lg font-black text-foreground">Schedule Preview</h3>
                   {dateRange && (
@@ -736,7 +746,8 @@ export function AttendanceList() {
                         setDateRange(isAdminOrHR ? { from: new Date(), to: new Date() } : undefined);
                       }
                     }}
-                    className="bg-transparent p-0 [&_.rdp]:bg-transparent"
+                    classNames={{ root: "w-full" }}
+                    className="bg-transparent p-0 w-full max-w-[22rem] mx-auto [&_.rdp]:bg-transparent"
                   />
                 </div>
               </div>
@@ -746,18 +757,18 @@ export function AttendanceList() {
           {/* Main Content Area */}
           <div className="flex-1 bg-card border border-border rounded-3xl shadow-sm overflow-hidden flex flex-col min-h-[500px]">
             {/* Toolbar */}
-            <div className="p-3 sm:p-4 border-b border-border flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-3 sm:gap-4 bg-muted/20">
+            <div className="p-3 sm:p-4 border-b border-border flex flex-col 2xl:flex-row justify-between items-stretch 2xl:items-center gap-3 sm:gap-4 bg-muted/20">
               <SearchInput
                 value={searchQuery}
                 onChange={setSearchQuery}
                 placeholder="Search by name, department or role..."
-                containerClassName="w-full lg:w-72"
+                containerClassName="w-full 2xl:w-72"
               />
 
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
-                <DateRangeFilter value={dateRange} onChange={setDateRange} className="w-full sm:w-auto" />
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full 2xl:w-auto min-w-0">
+                <DateRangeFilter value={dateRange} onChange={setDateRange} className="w-full sm:w-auto sm:shrink-0" />
 
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none min-w-0 max-w-full sm:flex-1 2xl:flex-none touch-pan-x overscroll-x-contain">
                   {(["All", "Present", "Absent", "Late", "Half Day", "On Leave"] as const).map((status) => (
                     <button
                       key={status}
@@ -786,51 +797,51 @@ export function AttendanceList() {
                       sortKey="employeeName"
                       currentSort={sortConfig}
                       onSort={requestSort}
-                      className="px-6 py-4 text-xs font-black text-muted-foreground uppercase tracking-wider border-b border-border"
+                      className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs font-black text-muted-foreground uppercase tracking-wider border-b border-border"
                     />
                     <SortableHeader
                       label="Date (IST)"
                       sortKey="date"
                       currentSort={sortConfig}
                       onSort={requestSort}
-                      className="px-6 py-4 text-xs font-black text-muted-foreground uppercase tracking-wider border-b border-border"
+                      className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs font-black text-muted-foreground uppercase tracking-wider border-b border-border"
                     />
                     <SortableHeader
                       label="Status"
                       sortKey="status"
                       currentSort={sortConfig}
                       onSort={requestSort}
-                      className="px-6 py-4 text-xs font-black text-muted-foreground uppercase tracking-wider border-b border-border"
+                      className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs font-black text-muted-foreground uppercase tracking-wider border-b border-border"
                     />
                     <SortableHeader
                       label="Check In"
                       sortKey="checkIn"
                       currentSort={sortConfig}
                       onSort={requestSort}
-                      className="px-6 py-4 text-xs font-black text-muted-foreground uppercase tracking-wider border-b border-border"
+                      className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs font-black text-muted-foreground uppercase tracking-wider border-b border-border"
                     />
                     <SortableHeader
                       label="Check Out"
                       sortKey="checkOut"
                       currentSort={sortConfig}
                       onSort={requestSort}
-                      className="px-6 py-4 text-xs font-black text-muted-foreground uppercase tracking-wider border-b border-border"
+                      className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs font-black text-muted-foreground uppercase tracking-wider border-b border-border"
                     />
                     <SortableHeader
                       label="Break Time"
                       sortKey="breakHours"
                       currentSort={sortConfig}
                       onSort={requestSort}
-                      className="px-6 py-4 text-xs font-black text-muted-foreground uppercase tracking-wider border-b border-border"
+                      className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs font-black text-muted-foreground uppercase tracking-wider border-b border-border"
                     />
                     <SortableHeader
                       label="Net Hours"
                       sortKey="totalHours"
                       currentSort={sortConfig}
                       onSort={requestSort}
-                      className="px-6 py-4 text-xs font-black text-muted-foreground uppercase tracking-wider border-b border-border"
+                      className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs font-black text-muted-foreground uppercase tracking-wider border-b border-border"
                     />
-                    <th className="px-6 py-4 border-b border-border"></th>
+                    <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-border"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
@@ -843,7 +854,7 @@ export function AttendanceList() {
                   ) : (
                     paginatedData.map((record) => (
                       <tr key={record.id} className="hover:bg-muted/40 transition-colors group">
-                        <td className="px-6 py-4">
+                        <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
                           <div className="flex items-center gap-3">
                             <img
                               src={record.avatar}
@@ -858,10 +869,10 @@ export function AttendanceList() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap">
                           <span className="text-sm font-medium text-foreground/80">{formatISTDate(record.date)}</span>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
                           <div className="flex flex-col gap-1 items-start">
                             <StatusBadge status={record.status} />
                             {record.remarks && (
@@ -877,13 +888,13 @@ export function AttendanceList() {
                             )}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap">
                           <span className="text-sm font-medium text-foreground/80">{record.checkIn || "--:--"}</span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap">
                           <span className="text-sm font-medium text-foreground/80">{record.checkOut || "--:--"}</span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap">
                           <span
                             className={cn(
                               "text-sm font-bold",
@@ -893,7 +904,7 @@ export function AttendanceList() {
                             {record.breakHours || "-"}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap">
                           <span
                             className={cn(
                               "text-sm font-bold",
@@ -903,7 +914,7 @@ export function AttendanceList() {
                             {record.totalHours || "-"}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-right whitespace-nowrap">
+                        <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 text-right whitespace-nowrap">
                           <button
                             onClick={() => setSelectedRecord(record)}
                             className="p-2 min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 inline-flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:focus-within:opacity-100"
@@ -921,7 +932,7 @@ export function AttendanceList() {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="p-4 border-t border-border bg-card flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="p-4 border-t border-border bg-card flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
                 <p className="text-sm text-muted-foreground">
                   Showing <span className="font-bold text-foreground">{(currentPage - 1) * itemsPerPage + 1}</span> to{" "}
                   <span className="font-bold text-foreground">{Math.min(currentPage * itemsPerPage, filteredData.length)}</span> of{" "}
