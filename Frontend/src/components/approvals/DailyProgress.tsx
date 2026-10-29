@@ -148,7 +148,8 @@ export function DailyProgress() {
   const isTeamLeader = userDesig.includes("team leader") || userDesig.includes("tl") || userRole.includes("team leader");
   const isSenior = userDesig.includes("senior") || userDesig.includes("sr.") || userDesig.includes("sr ");
   const isJunior = userDesig.includes("junior") || userDesig.includes("jr.") || userDesig.includes("jr ");
-  const isHierarchicalReviewer = isTeamLeader || isSenior || isJunior;
+  // Juniors only see their own report, so they are not treated as reviewers
+  const isHierarchicalReviewer = isTeamLeader || isSenior;
 
   const currentUserId = String(user?.id || anyUser?._id || anyUser?.employee_id || "");
   const isOwnReport = (rec?: DailyRecord | null) => {

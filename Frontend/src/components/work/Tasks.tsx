@@ -257,7 +257,9 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   }, [userDepartment, userDesignation, categoryFilter, tasks]);
 
   // Stage / Project filters show only when the Creative department (or category) is selected
-  const showCreativeFilters = departmentFilter.toLowerCase().includes("creative") || categoryFilter === "Creative";
+  // Employees of the Creative department get the Stage filter by default (they have no Dept filter to pick it with)
+  const isUserCreative = userDepartment.toLowerCase().includes("creative") || userDesignation.includes("creative");
+  const showCreativeFilters = departmentFilter.toLowerCase().includes("creative") || categoryFilter === "Creative" || (departmentFilter === "All" && isUserCreative);
 
   const STAGE_OPTIONS = useMemo(() => {
     const base = [
@@ -280,10 +282,10 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   const showProjectFilter = showCreativeFilters || departmentFilter !== "All";
 
   const projectOptions = useMemo(() => {
-    const dept = departmentFilter !== "All" ? departmentFilter.toLowerCase() : categoryFilter === "Creative" ? "creative" : "";
+    const dept = departmentFilter !== "All" ? departmentFilter.toLowerCase() : (categoryFilter === "Creative" || isUserCreative) ? "creative" : "";
     const list = dept ? allProjects.filter((p) => p.depts.some((d) => d.includes(dept) || dept.includes(d))) : allProjects;
     return list.map(({ label, value }) => ({ label, value }));
-  }, [allProjects, departmentFilter, categoryFilter]);
+  }, [allProjects, departmentFilter, categoryFilter, isUserCreative]);
 
   // Stage / Project selections don't carry over when the department changes
   useEffect(() => {

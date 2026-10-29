@@ -164,9 +164,11 @@ class DailyProgressService:
                     continue
                 target.append(e)
 
-            # 2. Head (Rank 5): sees all TLs (Rank 4) and all team members (Rank 1, 2, 3) across departments
+            # 2. Head (Rank 5): sees own report + all TLs (Rank 4) and all team members (Rank 1, 2, 3) across departments
             elif user_rank == 5:
                 if eid == uid:
+                    if group_filter != "employees":
+                        target.append(e)
                     continue
                 if e_rank < 5:
                     if group_filter == "employees" and is_l_hr:
@@ -193,14 +195,10 @@ class DailyProgressService:
                     if not user_dept or e_dept == user_dept:
                         target.append(e)
 
-            # 5. Junior (Rank 2): sees own report + Interns in their team (Rank 1)
+            # 5. Junior / normal employee (Rank 2): only self
             elif user_rank == 2:
                 if eid == uid:
                     target.append(e)
-                    continue
-                if e_rank < 2:
-                    if not user_dept or e_dept == user_dept:
-                        target.append(e)
 
             # 6. Intern (Rank 1): only self
             else:

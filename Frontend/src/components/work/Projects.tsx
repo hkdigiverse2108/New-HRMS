@@ -2077,10 +2077,12 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   const canCreateProject = isAdminOrHr || isHead || isTl || projectPerms.canCreate;
   const canCreateClient = isAdminOrHr || isHead || isTl || clientPerms.canCreate;
 
-  const [tlProjectScope, setTlProjectScope] = useState<"all" | "my">("my");
+  // Admin / HR / Head / Team Leader can switch between My Projects and All Projects; everyone else sees only assigned projects
+  const canSeeAllProjects = isAdminOrHr || isHead || isTl;
+  const [projectScope, setProjectScope] = useState<"all" | "my">("all");
 
+  // True only when the current user is actually assigned to the project (role does not matter here)
   const isUserAssignedToProject = useCallback((project: Project): boolean => {
-    if (isAdminOrHr || isHead) return true;
     const currentId = String(user?.id || (user as any)?._id || (user as any)?.employee_id || (user as any)?.employeeId || "").trim();
     const currentName = String(user?.name || "").trim().toLowerCase();
 
@@ -2122,15 +2124,14 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     }))) return true;
 
     return false;
-  }, [user, isAdminOrHr, isHead]);
+  }, [user]);
 
   const isUserAssignedToClient = useCallback((client: Client): boolean => {
-    if (isAdminOrHr || isHead) return true;
-    if (isTl && tlProjectScope === "all") return true;
+    if (canSeeAllProjects && projectScope === "all") return true;
     const currentId = String(user?.id || (user as any)?._id || (user as any)?.employee_id || (user as any)?.employeeId || "").trim();
     if (client.assignedEmployeeId && String(client.assignedEmployeeId) === currentId) return true;
     return projects.some(p => p.clientId === client.id && isUserAssignedToProject(p));
-  }, [user, isAdminOrHr, isHead, isTl, tlProjectScope, projects, isUserAssignedToProject]);
+  }, [user, canSeeAllProjects, projectScope, projects, isUserAssignedToProject]);
 
   // K10 / Transcript [27:01]: Dynamic Finance Access
   // Admin has full access; employees only if assigned to Finance role in the project
@@ -4743,12 +4744,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   // Projects landing lists backed by is_archived flag (Completed projects stay in active view if not archived)
   // On Hold sorted last
   const filteredProjects = projects.filter(project => {
-    if (!(isAdminOrHr || isHead)) {
-      if (isTl && tlProjectScope === "my") {
-        if (!isUserAssignedToProject(project)) return false;
-      } else if (!isTl) {
-        if (!isUserAssignedToProject(project)) return false;
-      }
+    if (!(canSeeAllProjects && projectScope === "all")) {
+      if (!isUserAssignedToProject(project)) return false;
     }
     if (activeTab === "Active Projects" && project.is_archived) return false;
     if (activeTab === "Archived Projects" && !project.is_archived) return false;
@@ -4765,12 +4762,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   // Consolidate duplicate projects under the same client/brand in the UI landing grid (Issue 6)
   const groupedProjects = useMemo(() => {
     const matchedProjects = projects.filter(project => {
-      if (!(isAdminOrHr || isHead)) {
-        if (isTl && tlProjectScope === "my") {
-          if (!isUserAssignedToProject(project)) return false;
-        } else if (!isTl) {
-          if (!isUserAssignedToProject(project)) return false;
-        }
+      if (!(canSeeAllProjects && projectScope === "all")) {
+        if (!isUserAssignedToProject(project)) return false;
       }
       if (activeTab === "Active Projects" && project.is_archived) return false;
       if (activeTab === "Archived Projects" && !project.is_archived) return false;
@@ -4961,7 +4954,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       if (aHold !== bHold) return aHold - bHold;
       return a.displayName.localeCompare(b.displayName);
     });
-  }, [projects, clients, activeTab, searchQuery, clientFilterCategories]);
+  }, [projects, clients, activeTab, searchQuery, clientFilterCategories, canSeeAllProjects, projectScope, isUserAssignedToProject]);
 
   const currentProject = selectedProjectId ? (projects.find(p => p.id === selectedProjectId) || null) : null;
   const currentClient = (selectedClientId ? clients.find(c => c.id === selectedClientId) : null)
@@ -14053,15 +14046,15 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             )}
           </button>
 
-          {/* TL Scope Switcher */}
-          {isTl && !isAdminOrHr && (
-            <div className="flex items-center gap-1 p-1 bg-muted/60 border border-border/50 rounded-xl text-xs font-bold shadow-xs">
+          {/* My Projects / All Projects switcher (Admin, HR, Head, Team Leader) */}
+          {canSeeAllProjects && (
+            <div className="flex items-center gap-1 p-1 bg-muted/60 border border-border/50 rounded-xl text-sm font-bold shadow-xs">
               <button
                 type="button"
-                onClick={() => setTlProjectScope("my")}
+                onClick={() => setProjectScope("my")}
                 className={cn(
-                  "px-2.5 py-1 rounded-lg transition-all",
-                  tlProjectScope === "my"
+                  "px-3.5 py-2 rounded-lg transition-all",
+                  projectScope === "my"
                     ? "bg-primary text-primary-foreground shadow-xs"
                     : "text-muted-foreground hover:text-foreground"
                 )}
@@ -14070,10 +14063,10 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               </button>
               <button
                 type="button"
-                onClick={() => setTlProjectScope("all")}
+                onClick={() => setProjectScope("all")}
                 className={cn(
-                  "px-2.5 py-1 rounded-lg transition-all",
-                  tlProjectScope === "all"
+                  "px-3.5 py-2 rounded-lg transition-all",
+                  projectScope === "all"
                     ? "bg-primary text-primary-foreground shadow-xs"
                     : "text-muted-foreground hover:text-foreground"
                 )}
