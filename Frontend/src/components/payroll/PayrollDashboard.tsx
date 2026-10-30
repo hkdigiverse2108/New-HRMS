@@ -132,8 +132,8 @@ export function PayrollDashboard() {
   return (
     <div className="w-full min-w-0 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight">Payroll Dashboard</h1>
             <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-700">{shortMonth}</span>
@@ -144,7 +144,7 @@ export function PayrollDashboard() {
           type="month"
           value={month}
           onChange={e => e.target.value && setMonth(e.target.value)}
-          className="h-[38px] px-3 py-2 rounded-lg border border-border/80 bg-white text-[13px] font-semibold text-foreground/80 shadow-sm outline-none focus:border-emerald-500"
+          className="h-[38px] w-full sm:w-auto shrink-0 px-3 py-2 rounded-lg border border-border/80 bg-white text-[13px] font-semibold text-foreground/80 shadow-sm outline-none focus:border-emerald-500"
         />
       </div>
 
@@ -155,13 +155,13 @@ export function PayrollDashboard() {
       ) : (
         <>
           {/* Main Metrics */}
-          <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-emerald-100/50 p-5 shadow-sm">
+          <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="min-w-0 rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-emerald-100/50 p-4 sm:p-5 shadow-sm">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold text-emerald-900">Current Month Payroll</h3>
                 <div className="rounded-lg bg-emerald-200/50 p-2 text-emerald-700"><IndianRupee className="h-4 w-4" /></div>
               </div>
-              <p className="mt-4 text-2xl sm:text-3xl font-black text-emerald-950">{formatCurrency(m.net_payable)}</p>
+              <p className="mt-3 sm:mt-4 text-xl sm:text-2xl xl:text-3xl font-black text-emerald-950 break-words">{formatCurrency(m.net_payable)}</p>
               <p className="mt-1 text-xs font-medium text-emerald-700">Net payable · {shortMonth}</p>
             </div>
 
@@ -190,7 +190,7 @@ export function PayrollDashboard() {
           </div>
 
           {/* Secondary Metrics */}
-          <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
             {[
               { label: "Average Salary", value: formatCurrency(data.salary.average), sub: "Company average", icon: IndianRupee },
               {
@@ -214,34 +214,34 @@ export function PayrollDashboard() {
                 icon: Clock,
               },
             ].map(stat => (
-              <div key={stat.label} className="flex items-center gap-4 rounded-xl border border-border bg-white p-4 min-w-0">
+              <div key={stat.label} className="flex items-center gap-3 sm:gap-4 rounded-xl border border-border bg-white p-3 sm:p-4 min-w-0">
                 <div className="rounded-full bg-muted p-2 shrink-0">
                   <stat.icon className={cn("h-4 w-4", stat.color || "text-muted-foreground")} />
                 </div>
                 <div className="min-w-0">
                   <p className="text-xs font-bold uppercase text-muted-foreground">{stat.label}</p>
-                  <p className="text-base sm:text-lg font-black leading-none mt-1">{stat.value}</p>
-                  <p className="mt-1 text-[10px] text-muted-foreground truncate">{stat.sub}</p>
+                  <p className="text-base sm:text-lg font-black leading-tight mt-1 break-words">{stat.value}</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground truncate">{stat.sub}</p>
                 </div>
               </div>
             ))}
           </div>
 
           {/* Charts & Audit Log */}
-          <div className="grid gap-6 lg:grid-cols-3">
-            <div className="lg:col-span-2 space-y-6 min-w-0">
+          <div className="grid gap-4 sm:gap-6 xl:grid-cols-3">
+            <div className="xl:col-span-2 space-y-4 sm:space-y-6 min-w-0">
               {/* Trend Chart */}
               <div className="rounded-2xl border border-border bg-white p-4 sm:p-6 shadow-sm min-w-0 overflow-hidden">
-                <div className="mb-6">
+                <div className="mb-4 sm:mb-6">
                   <h3 className="font-bold">Payroll Cost Trend</h3>
                   <p className="text-xs text-muted-foreground">Monthly payroll expense · last 6 months</p>
                 </div>
-                <div className="h-[240px] w-full min-w-0">
+                <div className="h-[220px] sm:h-[260px] w-full min-w-0">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={trendCost} margin={{ top: 5, right: 10, left: 0, bottom: 10 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.5} />
                       <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} dy={10} />
-                      <YAxis axisLine={false} tickLine={false} width={56} allowDecimals={false} tickFormatter={compactRupees} tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} />
+                      <YAxis axisLine={false} tickLine={false} width={50} allowDecimals={false} tickFormatter={compactRupees} tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} />
                       <Tooltip
                         contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }}
                         labelFormatter={(l: string) => trendCost.find(t => t.month === l)?.full ?? l}
@@ -258,19 +258,19 @@ export function PayrollDashboard() {
 
               {/* Department Chart */}
               <div className="rounded-2xl border border-border bg-white p-4 sm:p-6 shadow-sm min-w-0 overflow-hidden">
-                <div className="mb-6">
+                <div className="mb-4 sm:mb-6">
                   <h3 className="font-bold">Department Salary Cost</h3>
                   <p className="text-xs text-muted-foreground">Gross monthly cost in ₹ thousands</p>
                 </div>
                 {data.departments.length === 0 ? (
                   <p className="py-16 text-center text-sm text-muted-foreground">No employees with a salary this month.</p>
                 ) : (
-                  <div className="h-[240px] w-full min-w-0">
+                  <div className="h-[220px] sm:h-[260px] w-full min-w-0">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={deptThousands} margin={{ top: 5, right: 10, left: 0, bottom: 0 }} layout="vertical">
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.5} />
                         <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#6b7280" }} />
-                        <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} width={110} tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} />
+                        <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} width={84} tickFormatter={(v: string) => (v.length > 11 ? `${v.slice(0, 10)}…` : v)} tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} />
                         <Tooltip
                           cursor={{ fill: "#f3f4f6" }}
                           contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }}
@@ -289,8 +289,8 @@ export function PayrollDashboard() {
             </div>
 
             {/* Quick Stats & Audit Log */}
-            <div className="space-y-6 min-w-0">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div className="space-y-4 sm:space-y-6 min-w-0">
+              <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-2 gap-3 sm:gap-4">
                 <QuickStat label="Bonus Given" value={formatCurrency(m.total_bonus)} valueClass="text-emerald-600" sub={shortMonth} />
                 <QuickStat
                   label="Total Deduction"
@@ -307,8 +307,8 @@ export function PayrollDashboard() {
                 />
               </div>
 
-              <div className="rounded-2xl border border-border bg-white p-4 sm:p-6 shadow-sm">
-                <div className="mb-6 flex items-center justify-between gap-2">
+              <div className="rounded-2xl border border-border bg-white p-4 sm:p-6 shadow-sm min-w-0">
+                <div className="mb-4 sm:mb-6 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <History className="h-5 w-5 text-emerald-600" />
                     <h3 className="font-bold">Audit Log</h3>
@@ -335,7 +335,7 @@ export function PayrollDashboard() {
       )}
 
       <Dialog open={allLogsOpen} onOpenChange={setAllLogsOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="w-[calc(100%-1.5rem)] max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-xl font-bold">
               <History className="h-5 w-5 text-emerald-600" />
@@ -370,7 +370,7 @@ function AuditTimeline({ logs }: { logs: DashboardData["audit_log"] }) {
           <div className="absolute left-0 top-1.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-emerald-100">
             <div className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
           </div>
-          <p className="text-sm font-medium leading-tight">{log.action}</p>
+          <p className="text-sm font-medium leading-tight break-words">{log.action}</p>
           <p className="mt-1 text-xs text-muted-foreground">
             {[log.by, formatDate(log.at)].filter(Boolean).join(" · ")}
           </p>
@@ -389,12 +389,12 @@ function MetricCard({ title, icon: Icon, iconClass, value, sub, subClass }: {
   subClass?: string | undefined;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-white p-5 shadow-sm min-w-0">
+    <div className="rounded-2xl border border-border bg-white p-4 sm:p-5 shadow-sm min-w-0">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-bold text-muted-foreground">{title}</h3>
         <div className={cn("rounded-lg p-2", iconClass || "bg-muted text-muted-foreground")}><Icon className="h-4 w-4" /></div>
       </div>
-      <p className="mt-4 text-2xl sm:text-3xl font-black">{value}</p>
+      <p className="mt-3 sm:mt-4 text-xl sm:text-2xl xl:text-3xl font-black break-words">{value}</p>
       <p className={cn("mt-1 text-xs font-medium text-muted-foreground", subClass)}>{sub}</p>
     </div>
   );
@@ -404,8 +404,8 @@ function QuickStat({ label, value, sub, valueClass }: { label: string; value: st
   return (
     <div className="rounded-xl border border-border bg-white p-4 min-w-0">
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className={cn("mt-1 text-xl font-bold", valueClass)}>{value}</p>
-      <p className="text-[10px] text-muted-foreground mt-1">{sub}</p>
+      <p className={cn("mt-1 text-lg sm:text-xl font-bold break-words", valueClass)}>{value}</p>
+      <p className="text-[11px] text-muted-foreground mt-1">{sub}</p>
     </div>
   );
 }

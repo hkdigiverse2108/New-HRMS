@@ -329,14 +329,14 @@ export function PayrollProcessing() {
   const cardAmount = (n?: number) => (isLoading ? "…" : formatCurrency(n ?? 0));
   const processedCount = stage === "not_generated" ? 0 : summary?.eligible ?? 0;
   const spinner = (action: string) => busyAction === action && <Loader2 className="h-4 w-4 animate-spin" />;
-  const headerCls = "py-4 px-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest";
+  const headerCls = "py-3 sm:py-4 px-3 sm:px-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest";
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-[1400px]">
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full min-w-0 max-w-[1400px]">
 
       {/* Header */}
       <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 border-b border-border pb-5 sm:pb-6">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Payroll Processing</h1>
           <p className="mt-1 text-xs sm:text-[14px] text-muted-foreground">{monthName} {year} · Attendance, leave, bonuses and recoveries fetched automatically</p>
         </div>
@@ -361,13 +361,13 @@ export function PayrollProcessing() {
       </div>
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-        <div className="bg-[#0b6c4b] rounded-2xl p-5 shadow-sm relative text-white">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
+        <div className="bg-[#0b6c4b] rounded-2xl p-4 sm:p-5 shadow-sm relative text-white min-w-0">
           <div className="flex justify-between items-start mb-2">
             <p className="text-[12px] font-medium text-emerald-50">Net Salary Payable</p>
             <span className="text-[14px] font-bold text-emerald-100">₹</span>
           </div>
-          <p className="text-2xl sm:text-[32px] font-black">{cardAmount(summary?.total_net)}</p>
+          <p className="text-2xl xl:text-[30px] font-black break-words">{cardAmount(summary?.total_net)}</p>
           <p className="text-[12px] text-emerald-100 mt-1">
             {periodLabel} · Earned {cardAmount(summary?.company_expense)}
             {/* Penalties, PF/PT and recoveries cut from the earned salary (LOP is already outside it) */}
@@ -375,30 +375,30 @@ export function PayrollProcessing() {
               ` − ${formatCurrency((summary?.company_expense ?? 0) - (summary?.total_net ?? 0))} deductions`}
           </p>
         </div>
-        <div className="bg-white border border-border/60 rounded-2xl p-5 shadow-sm relative">
+        <div className="bg-white border border-border/60 rounded-2xl p-4 sm:p-5 shadow-sm relative min-w-0">
           <div className="flex justify-between items-start mb-2">
             <p className="text-[12px] font-medium text-muted-foreground">Employees Processed</p>
             <Users className="h-4 w-4 text-[#0b6c4b]" />
           </div>
-          <p className="text-2xl sm:text-[32px] font-black text-foreground">{isLoading ? "…" : processedCount}</p>
+          <p className="text-2xl xl:text-[30px] font-black break-words text-foreground">{isLoading ? "…" : processedCount}</p>
           <p className="text-[12px] text-muted-foreground mt-1">
             {summary?.eligible ?? 0} with salary · {summary?.employees ?? 0} employees
           </p>
         </div>
-        <div className="bg-white border border-border/60 rounded-2xl p-5 shadow-sm relative">
+        <div className="bg-white border border-border/60 rounded-2xl p-4 sm:p-5 shadow-sm relative min-w-0">
           <div className="flex justify-between items-start mb-2">
             <p className="text-[12px] font-medium text-muted-foreground">Total Bonus</p>
             <Gift className="h-4 w-4 text-[#0b6c4b]" />
           </div>
-          <p className="text-2xl sm:text-[32px] font-black text-foreground">{cardAmount(summary?.total_bonus)}</p>
+          <p className="text-2xl xl:text-[30px] font-black break-words text-foreground">{cardAmount(summary?.total_bonus)}</p>
           <p className="text-[12px] text-muted-foreground mt-1">{periodLabel} · Approved bonuses</p>
         </div>
-        <div className="bg-white border border-border/60 rounded-2xl p-5 shadow-sm relative">
+        <div className="bg-white border border-border/60 rounded-2xl p-4 sm:p-5 shadow-sm relative min-w-0">
           <div className="flex justify-between items-start mb-2">
             <p className="text-[12px] font-medium text-muted-foreground">Total Deduction</p>
             <MinusCircle className="h-4 w-4 text-[#0b6c4b]" />
           </div>
-          <p className="text-2xl sm:text-[32px] font-black text-foreground">{cardAmount(summary?.total_deduction)}</p>
+          <p className="text-2xl xl:text-[30px] font-black break-words text-foreground">{cardAmount(summary?.total_deduction)}</p>
           <p className="text-[12px] text-muted-foreground mt-1">
             {!isLoading && (summary?.total_not_due ?? 0) > 0
               ? `${periodLabel} till ${formatDate(run!.calendar.counted_until)} · ${formatCurrency(summary!.total_not_due!)} for ${fmtDays(summary!.upcoming_days)} upcoming days not counted`
@@ -408,7 +408,7 @@ export function PayrollProcessing() {
       </div>
 
       {/* Action Bar */}
-      <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-6 bg-white border border-border/60 p-3 rounded-2xl shadow-sm overflow-x-auto">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4 sm:mb-6 bg-white border border-border/60 p-3 rounded-2xl shadow-sm">
         <div className={cn("px-4 py-1.5 rounded-full text-[12px] font-bold whitespace-nowrap", statusColor[stage])}>
           Status: {statusLabel[stage]}
         </div>
@@ -486,7 +486,7 @@ export function PayrollProcessing() {
         </button>
 
         {run?.generated_by && (
-          <p className="text-[11px] text-muted-foreground ml-auto whitespace-nowrap">
+          <p className="text-[11px] text-muted-foreground w-full xl:w-auto xl:ml-auto">
             Generated by {run.generated_by.name}
             {run.approved_by && ` · Approved by ${run.approved_by.name}`}
             {run.locked_by && ` · Locked by ${run.locked_by.name}`}
@@ -497,7 +497,7 @@ export function PayrollProcessing() {
       {/* Table */}
       <div className="bg-white border border-border/60 rounded-2xl shadow-sm overflow-hidden flex flex-col">
         <div className="p-4 sm:p-5 border-b border-border/60 bg-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-          <div>
+          <div className="min-w-0">
             <h2 className="text-[15px] font-bold text-foreground">Payroll Preview</h2>
             <p className="text-[12px] text-muted-foreground mt-0.5">
               {run
@@ -517,17 +517,17 @@ export function PayrollProcessing() {
         </div>
 
         <div className="overflow-x-auto min-w-0">
-          <table className="w-full text-left border-collapse min-w-[950px]">
+          <table className="w-full text-left border-collapse min-w-[420px]">
             <thead>
               <tr className="border-b border-border/60 bg-muted/50/50">
                 <SortableHeader label="Employee" sortKey="employee" currentSort={sortConfig} onSort={requestSort} className={headerCls} />
-                <SortableHeader label="Working" sortKey="working" currentSort={sortConfig} onSort={requestSort} className={cn(headerCls, "text-center")} />
-                <SortableHeader label="Present" sortKey="present" currentSort={sortConfig} onSort={requestSort} className={cn(headerCls, "text-center")} />
-                <SortableHeader label="Absent" sortKey="absent" currentSort={sortConfig} onSort={requestSort} className={cn(headerCls, "text-center")} />
-                <SortableHeader label="Leave" sortKey="leave" currentSort={sortConfig} onSort={requestSort} className={cn(headerCls, "text-center")} />
-                <SortableHeader label="Payable" sortKey="payable_days" currentSort={sortConfig} onSort={requestSort} className={cn(headerCls, "text-center")} />
-                <SortableHeader label="Gross" sortKey="gross" currentSort={sortConfig} onSort={requestSort} className={cn(headerCls, "text-right")} />
-                <SortableHeader label="Deduction" sortKey="deduction" currentSort={sortConfig} onSort={requestSort} className={cn(headerCls, "text-right")} />
+                <SortableHeader label="Working" sortKey="working" currentSort={sortConfig} onSort={requestSort} className={cn(headerCls, "text-center hidden xl:table-cell")} />
+                <SortableHeader label="Present" sortKey="present" currentSort={sortConfig} onSort={requestSort} className={cn(headerCls, "text-center hidden lg:table-cell")} />
+                <SortableHeader label="Absent" sortKey="absent" currentSort={sortConfig} onSort={requestSort} className={cn(headerCls, "text-center hidden lg:table-cell")} />
+                <SortableHeader label="Leave" sortKey="leave" currentSort={sortConfig} onSort={requestSort} className={cn(headerCls, "text-center hidden md:table-cell")} />
+                <SortableHeader label="Payable" sortKey="payable_days" currentSort={sortConfig} onSort={requestSort} className={cn(headerCls, "text-center hidden sm:table-cell")} />
+                <SortableHeader label="Gross" sortKey="gross" currentSort={sortConfig} onSort={requestSort} className={cn(headerCls, "text-right hidden md:table-cell")} />
+                <SortableHeader label="Deduction" sortKey="deduction" currentSort={sortConfig} onSort={requestSort} className={cn(headerCls, "text-right hidden lg:table-cell")} />
                 <SortableHeader label="Net Salary" sortKey="netSalary" currentSort={sortConfig} onSort={requestSort} className={cn(headerCls, "text-right")} />
                 <th className={cn(headerCls, "text-center")}>Status</th>
               </tr>
@@ -545,8 +545,8 @@ export function PayrollProcessing() {
                     onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
                     className="hover:bg-muted/40 transition-colors cursor-pointer"
                   >
-                    <td className="py-4 px-5">
-                      <div className="flex items-center gap-3">
+                    <td className="py-3 sm:py-4 px-3 sm:px-5 min-w-0">
+                      <div className="flex items-center gap-2 sm:gap-3">
                         <div className="w-8 h-8 rounded-full bg-[#0b6c4b] text-white flex items-center justify-center text-[11px] font-bold shrink-0">
                           {r.employee.split(' ').filter(Boolean).map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
                         </div>
@@ -559,10 +559,10 @@ export function PayrollProcessing() {
                         <ChevronDown className={cn("h-4 w-4 text-muted-foreground ml-auto transition-transform", expandedId === r.id && "rotate-180")} />
                       </div>
                     </td>
-                    <td className="py-4 px-5 text-center text-[13px] text-foreground/80">{r.working}</td>
-                    <td className="py-4 px-5 text-center text-[13px] text-foreground/80">{fmtDays(r.present)}</td>
-                    <td className="py-4 px-5 text-center text-[13px] text-foreground/80">{fmtDays(r.absent)}</td>
-                    <td className="py-4 px-5 text-center text-[13px] text-foreground/80">
+                    <td className="hidden xl:table-cell py-4 px-5 text-center text-[13px] text-foreground/80">{r.working}</td>
+                    <td className="hidden lg:table-cell py-4 px-5 text-center text-[13px] text-foreground/80">{fmtDays(r.present)}</td>
+                    <td className="hidden lg:table-cell py-4 px-5 text-center text-[13px] text-foreground/80">{fmtDays(r.absent)}</td>
+                    <td className="hidden md:table-cell py-4 px-5 text-center text-[13px] text-foreground/80">
                       {fmtDays(r.leave)}
                       {r.leave > 0 && (
                         <p className="text-[10px] text-muted-foreground whitespace-nowrap">
@@ -570,13 +570,13 @@ export function PayrollProcessing() {
                         </p>
                       )}
                     </td>
-                    <td className="py-4 px-5 text-center text-[13px] font-bold text-foreground">{fmtDays(r.payable_days)}</td>
-                    <td className="py-4 px-5 text-right text-[13px] font-medium text-foreground/80">
+                    <td className="hidden sm:table-cell py-4 px-5 text-center text-[13px] font-bold text-foreground">{fmtDays(r.payable_days)}</td>
+                    <td className="hidden md:table-cell py-4 px-5 text-right text-[13px] font-medium text-foreground/80">
                       {formatCurrency(r.gross)}
                     </td>
-                    <td className="py-4 px-5 text-right text-[13px] font-medium text-rose-500">-{formatCurrency(r.deduction)}</td>
-                    <td className="py-4 px-5 text-right text-[14px] font-bold text-foreground">{formatCurrency(r.netSalary)}</td>
-                    <td className="py-4 px-5 text-center" onClick={e => e.stopPropagation()}>
+                    <td className="hidden lg:table-cell py-4 px-5 text-right text-[13px] font-medium text-rose-500">-{formatCurrency(r.deduction)}</td>
+                    <td className="py-3 sm:py-4 px-3 sm:px-5 text-right text-[13px] sm:text-[14px] font-bold text-foreground whitespace-nowrap">{formatCurrency(r.netSalary)}</td>
+                    <td className="py-3 sm:py-4 px-3 sm:px-5 text-center" onClick={e => e.stopPropagation()}>
                       {stage === "generated" || stage === "approved" ? (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -615,8 +615,8 @@ export function PayrollProcessing() {
                   </tr>
                   {expandedId === r.id && (
                     <tr className="bg-muted/30">
-                      <td colSpan={10} className="px-5 py-4">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-[12px]">
+                      <td colSpan={10} className="px-3 sm:px-5 py-4">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 text-[12px]">
                           <div className="space-y-1.5">
                             <p className="font-bold text-foreground uppercase text-[10px] tracking-widest mb-2">Attendance</p>
                             <Line label="Present" value={`${fmtDays(r.present)} days`} />

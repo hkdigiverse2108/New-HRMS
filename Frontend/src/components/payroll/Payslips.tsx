@@ -252,9 +252,9 @@ export function Payslips() {
   };
 
   const btn =
-    "inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-border/80 bg-white px-3.5 text-[13px] font-semibold text-foreground/80 shadow-sm transition-colors hover:bg-muted/50 disabled:opacity-50";
+    "inline-flex h-9 w-full sm:w-auto items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-border/80 bg-white px-3.5 text-[13px] font-semibold text-foreground/80 shadow-sm transition-colors hover:bg-muted/50 disabled:opacity-50";
   const primaryBtn =
-    "inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#0c7851] px-4 text-[13px] font-semibold text-white shadow-sm transition-colors hover:bg-[#00925e] disabled:opacity-50";
+    "inline-flex h-9 w-full sm:w-auto items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-[#0c7851] px-4 text-[13px] font-semibold text-white shadow-sm transition-colors hover:bg-[#00925e] disabled:opacity-50";
   const selectClass =
     "h-9 bg-white border border-border/80 text-[13px] font-semibold text-foreground/80 rounded-lg shadow-sm focus:ring-emerald-500";
 
@@ -262,9 +262,9 @@ export function Payslips() {
   const compactHeader = !data?.can_view_all && !data?.can_edit;
 
   const header = (
-    <div className="mb-6 border-b border-border pb-5 print:hidden">
+    <div className="mb-4 sm:mb-6 border-b border-border pb-4 sm:pb-5 print:hidden">
       {/* Row 1: title + month / employee */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Payslip</h1>
           <p className="mt-0.5 text-xs sm:text-[13px] text-muted-foreground">
@@ -274,13 +274,13 @@ export function Payslips() {
           </p>
         </div>
         {(data?.months.length ?? 0) > 0 && (
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
             <SearchableSelect
               value={month ?? ""}
               onChange={(val) => val && fetchPayslips(val)}
               options={(data?.months ?? []).map(m => ({ label: monthLabel(m), value: m }))}
               placeholder="Select month"
-              className={`w-full sm:w-[170px] ${selectClass}`}
+              className={`w-full sm:w-[170px] ${selectClass} ${data?.can_view_all ? "" : "col-span-2"}`}
             />
             {data?.can_view_all && (
               <SearchableSelect
@@ -292,7 +292,7 @@ export function Payslips() {
               />
             )}
             {compactHeader && slip && (
-              <button onClick={handlePrint} title="Choose “Save as PDF” in the print dialog" className={primaryBtn}>
+              <button onClick={handlePrint} title="Choose “Save as PDF” in the print dialog" className={`${primaryBtn} col-span-2 sm:col-span-1`}>
                 <Download className="h-4 w-4" /> Download PDF
               </button>
             )}
@@ -302,7 +302,7 @@ export function Payslips() {
 
       {/* Row 2: actions */}
       {slip && !compactHeader && (
-        <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+        <div className="mt-3 sm:mt-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
           {draft ? (
             <>
               <button onClick={() => setDraft(null)} disabled={isSaving} className={btn}>
@@ -343,7 +343,7 @@ export function Payslips() {
               </button>
               </>
               )}
-              <button onClick={handlePrint} title="Choose “Save as PDF” in the print dialog" className={primaryBtn}>
+              <button onClick={handlePrint} title="Choose “Save as PDF” in the print dialog" className={`${primaryBtn} col-span-2 sm:col-span-1`}>
                 <Download className="h-4 w-4" /> Download PDF
               </button>
             </>
@@ -401,7 +401,7 @@ export function Payslips() {
   const rows = Math.max(earnings.length, deductions.length);
   const hasBank = Boolean(account);
 
-  const cell = "border border-black px-3 py-1.5";
+  const cell = "border border-black px-2 sm:px-3 py-1.5";
   const inputClass = "w-full bg-amber-50 border border-amber-300 rounded px-1.5 py-0.5 text-[13px] outline-none focus:border-emerald-500";
 
   const setEmployee = (key: keyof EmployeeDraft, value: string) =>
@@ -450,7 +450,7 @@ export function Payslips() {
         className="mx-auto w-full max-w-[900px] bg-white px-3 py-4 sm:px-6 sm:py-6 shadow-sm min-w-0 overflow-x-auto"
         style={{ fontFamily: "'Poppins', ui-sans-serif, system-ui, sans-serif" }}
       >
-        <table className="w-full min-w-[600px] border-collapse border-2 border-black text-[13px] text-black">
+        <table className="w-full min-w-[520px] sm:min-w-[600px] border-collapse border-2 border-black text-[12px] sm:text-[13px] text-black">
           <colgroup>
             <col className="w-[30%]" />
             <col className="w-[22%]" />

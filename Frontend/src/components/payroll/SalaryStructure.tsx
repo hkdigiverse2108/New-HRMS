@@ -287,7 +287,7 @@ export function SalaryStructure() {
             min={0}
             value={editForm[field]}
             onChange={e => setEditForm({ ...editForm, [field]: e.target.value })}
-            className="w-32 text-right border border-border rounded p-1 outline-none focus:border-emerald-500"
+            className="w-24 sm:w-32 text-right border border-border rounded p-1 outline-none focus:border-emerald-500"
           />
         ) : (
           formatCurrency(value)
@@ -305,7 +305,7 @@ export function SalaryStructure() {
   }
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-[1400px] space-y-6">
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full min-w-0 max-w-[1400px] space-y-4 sm:space-y-6">
 
       {/* Header */}
       <div>
@@ -314,59 +314,59 @@ export function SalaryStructure() {
       </div>
 
       {/* Top Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-2xl border border-border bg-white p-5 shadow-sm flex items-center justify-between">
-          <div>
+      <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-2xl border border-border bg-white p-4 sm:p-5 shadow-sm flex items-center justify-between gap-3 min-w-0">
+          <div className="min-w-0">
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Employees on payroll</p>
-            <p className="text-3xl font-black mt-2">{summary?.employees_on_payroll ?? 0}</p>
+            <p className="text-2xl sm:text-3xl font-black mt-2 break-words">{summary?.employees_on_payroll ?? 0}</p>
           </div>
-          <div className="rounded-lg bg-emerald-100/50 p-3 text-emerald-600">
+          <div className="rounded-lg bg-emerald-100/50 p-2.5 sm:p-3 shrink-0 text-emerald-600">
             <Users className="h-5 w-5" />
           </div>
         </div>
 
-        <div className="rounded-2xl border border-border bg-white p-5 shadow-sm flex items-center justify-between">
-          <div>
+        <div className="rounded-2xl border border-border bg-white p-4 sm:p-5 shadow-sm flex items-center justify-between gap-3 min-w-0">
+          <div className="min-w-0">
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total monthly gross</p>
-            <p className="text-3xl font-black mt-2">{formatCurrency(summary?.total_monthly_gross ?? 0)}</p>
+            <p className="text-2xl sm:text-3xl font-black mt-2 break-words">{formatCurrency(summary?.total_monthly_gross ?? 0)}</p>
           </div>
-          <div className="rounded-lg bg-blue-100/50 p-3 text-blue-600">
+          <div className="rounded-lg bg-blue-100/50 p-2.5 sm:p-3 shrink-0 text-blue-600">
             <IndianRupee className="h-5 w-5" />
           </div>
         </div>
 
-        <div className="rounded-2xl border border-border bg-white p-5 shadow-sm flex items-center justify-between">
-          <div>
+        <div className="rounded-2xl border border-border bg-white p-4 sm:p-5 shadow-sm flex items-center justify-between gap-3 min-w-0">
+          <div className="min-w-0">
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Revisions this year</p>
-            <div className="flex items-end gap-2 mt-2">
-              <p className="text-3xl font-black">{summary?.revisions_this_year ?? 0}</p>
+            <div className="flex flex-wrap items-end gap-x-2 mt-2">
+              <p className="text-2xl sm:text-3xl font-black">{summary?.revisions_this_year ?? 0}</p>
               <p className="text-xs font-medium text-muted-foreground mb-1">Append-only history</p>
             </div>
           </div>
-          <div className="rounded-lg bg-purple-100/50 p-3 text-purple-600">
+          <div className="rounded-lg bg-purple-100/50 p-2.5 sm:p-3 shrink-0 text-purple-600">
             <Activity className="h-5 w-5" />
           </div>
         </div>
 
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm flex items-center justify-between">
-          <div>
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:p-5 shadow-sm flex items-center justify-between gap-3 min-w-0">
+          <div className="min-w-0">
             <p className="text-xs font-bold text-amber-900 uppercase tracking-wider">Pending revisions</p>
-            <div className="flex items-end gap-2 mt-2">
-              <p className="text-3xl font-black text-amber-950">{summary?.pending_revisions ?? 0}</p>
+            <div className="flex flex-wrap items-end gap-x-2 mt-2">
+              <p className="text-2xl sm:text-3xl font-black text-amber-950">{summary?.pending_revisions ?? 0}</p>
               <p className="text-xs font-medium text-amber-700 mb-1">Awaiting Admin approval</p>
             </div>
           </div>
-          <div className="rounded-lg bg-amber-200/50 p-3 text-amber-700">
+          <div className="rounded-lg bg-amber-200/50 p-2.5 sm:p-3 shrink-0 text-amber-700">
             <AlertCircle className="h-5 w-5" />
           </div>
         </div>
       </div>
 
       {/* Main Split Layout */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1.5fr_1fr] gap-6 items-start">
+      <div className="grid grid-cols-1 2xl:grid-cols-[1.5fr_1fr] gap-4 sm:gap-6 items-start">
 
         {/* Left Pane - Employee Table */}
-        <div className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
+        <div className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden min-w-0">
           <div className="p-4 border-b border-border bg-white">
             <div className="relative w-full max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -381,14 +381,14 @@ export function SalaryStructure() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] whitespace-nowrap text-sm">
+            <table className="w-full whitespace-nowrap text-sm">
               <thead className="bg-white text-muted-foreground/70 border-b border-border">
                 <tr>
-                  <SortableHeader label="Employee" sortKey="name" currentSort={sortConfig} onSort={requestSort} className="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider" />
-                  <SortableHeader label="Department" sortKey="department" currentSort={sortConfig} onSort={requestSort} className="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider" />
-                  <SortableHeader label="Gross" sortKey="gross" currentSort={sortConfig} onSort={requestSort} className="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider" />
-                  <SortableHeader label="Joining" sortKey="joining_date" currentSort={sortConfig} onSort={requestSort} className="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider" />
-                  <SortableHeader label="Effective From" sortKey="effective_date" currentSort={sortConfig} onSort={requestSort} className="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider" />
+                  <SortableHeader label="Employee" sortKey="name" currentSort={sortConfig} onSort={requestSort} className="px-3 sm:px-4 xl:px-6 py-3 sm:py-4 text-left text-[11px] font-bold uppercase tracking-wider" />
+                  <SortableHeader label="Department" sortKey="department" currentSort={sortConfig} onSort={requestSort} className="hidden sm:table-cell px-3 sm:px-4 xl:px-6 py-3 sm:py-4 text-left text-[11px] font-bold uppercase tracking-wider" />
+                  <SortableHeader label="Gross" sortKey="gross" currentSort={sortConfig} onSort={requestSort} className="px-3 sm:px-4 xl:px-6 py-3 sm:py-4 text-left text-[11px] font-bold uppercase tracking-wider" />
+                  <SortableHeader label="Joining" sortKey="joining_date" currentSort={sortConfig} onSort={requestSort} className="hidden md:table-cell px-3 sm:px-4 xl:px-6 py-3 sm:py-4 text-left text-[11px] font-bold uppercase tracking-wider" />
+                  <SortableHeader label="Effective From" sortKey="effective_date" currentSort={sortConfig} onSort={requestSort} className="hidden lg:table-cell px-3 sm:px-4 xl:px-6 py-3 sm:py-4 text-left text-[11px] font-bold uppercase tracking-wider" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/50">
@@ -403,7 +403,7 @@ export function SalaryStructure() {
                       )}
                       onClick={() => setSelectedEmpId(emp.id)}
                     >
-                      <td className="px-6 py-4">
+                      <td className="px-3 sm:px-4 xl:px-6 py-3 sm:py-4">
                         <div className="flex items-center gap-3">
                           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-700 text-white text-xs font-bold">
                             {getInitials(emp.name)}
@@ -421,16 +421,16 @@ export function SalaryStructure() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-foreground/80 font-medium">{emp.department || "-"}</td>
-                      <td className="px-6 py-4 text-foreground font-bold">{emp.gross ? formatCurrency(emp.gross) : "-"}</td>
-                      <td className="px-6 py-4 text-foreground/80 font-medium">{formatDate(emp.joining_date ?? undefined)}</td>
-                      <td className="px-6 py-4 text-foreground/80 font-medium">{formatDate(emp.effective_date ?? undefined)}</td>
+                      <td className="hidden sm:table-cell px-3 sm:px-4 xl:px-6 py-3 sm:py-4 text-foreground/80 font-medium">{emp.department || "-"}</td>
+                      <td className="px-3 sm:px-4 xl:px-6 py-3 sm:py-4 text-foreground font-bold">{emp.gross ? formatCurrency(emp.gross) : "-"}</td>
+                      <td className="hidden md:table-cell px-3 sm:px-4 xl:px-6 py-3 sm:py-4 text-foreground/80 font-medium">{formatDate(emp.joining_date ?? undefined)}</td>
+                      <td className="hidden lg:table-cell px-3 sm:px-4 xl:px-6 py-3 sm:py-4 text-foreground/80 font-medium">{formatDate(emp.effective_date ?? undefined)}</td>
                     </tr>
                   );
                 })}
                 {sortedEmployees.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-sm text-muted-foreground">
+                    <td colSpan={6} className="px-6 py-12 text-center text-sm text-muted-foreground">
                       No employees found
                     </td>
                   </tr>
@@ -442,21 +442,21 @@ export function SalaryStructure() {
 
         {/* Right Pane - Salary Details */}
         {selectedEmpId && (
-          <div className="rounded-2xl border border-border bg-white shadow-sm p-4 sm:p-8 lg:sticky lg:top-8">
+          <div className="rounded-2xl border border-border bg-white shadow-sm p-4 sm:p-6 lg:p-8 min-w-0 2xl:sticky 2xl:top-8">
             {detailLoading || !detail || !current ? (
               <div className="flex h-64 items-center justify-center">
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
               </div>
             ) : (
               <>
-                <div className="flex items-start justify-between mb-8 pb-6 border-b border-border/60">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-6 sm:mb-8 pb-4 sm:pb-6 border-b border-border/60">
                   <div>
                     <h2 className="text-xl font-bold text-foreground">{detail.employee.name}</h2>
                     <p className="text-sm text-muted-foreground mt-1">
                       {[detail.employee.employee_code, detail.employee.designation].filter(Boolean).join(" · ") || "-"}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     {!isEditing ? (
                       <button
                         onClick={handleEditClick}
@@ -477,7 +477,7 @@ export function SalaryStructure() {
                   </div>
                 </div>
 
-                <div className="space-y-8 flex-1 overflow-y-auto pr-2 pb-8">
+                <div className="space-y-6 sm:space-y-8 flex-1 min-w-0 pb-4 sm:pb-8">
 
                   {/* Pending revision banner */}
                   {pending && !isEditing && (
@@ -542,12 +542,12 @@ export function SalaryStructure() {
                     </div>
                   )}
 
-                  <div className="rounded-2xl bg-emerald-900 p-6 text-white flex items-center justify-between shadow-md">
+                  <div className="rounded-2xl bg-emerald-900 p-4 sm:p-6 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
                     <div>
                       <p className="text-emerald-100 text-sm font-medium">{isEditing ? "Proposed Net In-hand" : "Net In-hand Salary"}</p>
-                      <p className="text-3xl font-black mt-1">{formatCurrency(viewGross - viewDeductions)}</p>
+                      <p className="text-2xl sm:text-3xl font-black mt-1 break-words">{formatCurrency(viewGross - viewDeductions)}</p>
                     </div>
-                    <div className="text-right text-sm space-y-1 text-emerald-100 font-medium">
+                    <div className="sm:text-right text-sm space-y-1 text-emerald-100 font-medium">
                       <p>Gross: {formatCurrency(viewGross)}</p>
                       <p className="text-emerald-300">Deductions: -{formatCurrency(viewDeductions)}</p>
                     </div>
@@ -596,9 +596,9 @@ export function SalaryStructure() {
                       <History className="h-4 w-4 text-primary" /> Salary Revision History
                     </h3>
                     {isEditing && editForm ? (
-                      <div className="rounded-xl border border-border p-5 bg-emerald-50/50 space-y-4">
+                      <div className="rounded-xl border border-border p-4 sm:p-5 bg-emerald-50/50 space-y-4">
                         <p className="text-sm font-bold text-emerald-900">Finalize Revision</p>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div>
                             <label className="text-xs font-bold text-muted-foreground flex gap-1 mb-1">
                               Effective Date <span className="text-rose-500">*</span>
@@ -633,7 +633,7 @@ export function SalaryStructure() {
                         </button>
                       </div>
                     ) : (
-                      <div className="rounded-xl border border-border p-5">
+                      <div className="rounded-xl border border-border p-4 sm:p-5">
                         <div className="relative space-y-6 before:absolute before:inset-y-0 before:left-2 before:w-px before:bg-border">
                           {detail.history.map((hist, i) => (
                             <div key={hist._id ?? `virtual-${i}`} className="relative pl-6">

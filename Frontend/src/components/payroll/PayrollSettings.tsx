@@ -223,7 +223,7 @@ export function PayrollSettings() {
 
   return (
     <div>
-      <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-[1400px]">
+      <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full min-w-0 max-w-[1400px]">
       
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -247,16 +247,16 @@ export function PayrollSettings() {
           <h2 className="text-[13px] font-bold uppercase tracking-wider text-muted-foreground">Salary & Attendance</h2>
           <p className="text-[12px] text-muted-foreground/80 mt-0.5">Working days, holidays, late arrival grace and overtime pay</p>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
             {/* Card 1: Working Days & Holidays */}
-            <div className="rounded-[16px] border border-border/60 bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)] lg:col-span-2">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="rounded-[16px] border border-border/60 bg-white p-4 sm:p-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)] xl:col-span-2 min-w-0">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 xl:gap-8">
                 {/* Working Days Per Month */}
-                <div>
+                <div className="min-w-0">
                   <h3 className="text-[13px] font-semibold text-foreground">Working Days Per Month</h3>
                   <p className="text-[12px] text-muted-foreground/80 mt-0.5 mb-4">Select leave / off days on the calendar — they are added to the holiday list</p>
 
-                  <div className="flex flex-col sm:flex-row gap-5 items-start">
+                  <div className="flex flex-col sm:flex-row xl:flex-col 2xl:flex-row gap-4 sm:gap-5 items-start">
                     <DayCalendar
                       mode="multiple"
                       selected={holidayDates}
@@ -264,10 +264,10 @@ export function PayrollSettings() {
                       month={calendarMonth}
                       onMonthChange={setCalendarMonth}
                       showOutsideDays={false}
-                      className="rounded-xl border border-border/80 bg-white shadow-sm"
+                      className="rounded-xl border border-border/80 bg-white shadow-sm shrink-0 max-w-full !w-full sm:!w-fit [--cell-size:clamp(1.75rem,9.5vw,2.5rem)] sm:[--cell-size:2rem]"
                     />
 
-                    <div className="flex-1 w-full space-y-3">
+                    <div className="flex-1 w-full min-w-0 space-y-3">
                       <div className="rounded-xl border border-primary/30 bg-[#E8F5F1] p-4">
                         <p className="text-[11px] font-bold uppercase tracking-wider text-primary">Working days · {format(calendarMonth, "MMMM yyyy")}</p>
                         <p className="text-3xl font-bold text-primary mt-1">{monthWorkingDays}</p>
@@ -296,23 +296,23 @@ export function PayrollSettings() {
                 </div>
 
                 {/* Holiday Calendar */}
-                <div className="border-t border-border/40 pt-6 lg:border-t-0 lg:pt-0 lg:border-l lg:pl-8">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
+                <div className="min-w-0 border-t border-border/40 pt-6 xl:border-t-0 xl:pt-0 xl:border-l xl:pl-8">
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-4">
+                    <div className="min-w-0">
                       <h3 className="text-[13px] font-semibold text-foreground">Holiday Calendar</h3>
                       <p className="text-[12px] text-muted-foreground/80 mt-0.5">Holidays treated as paid non-working days</p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="px-3 py-1 bg-[#E8F5F1] text-primary text-[12px] font-bold rounded-full">Total: {totalHolidays}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="px-3 py-1 bg-[#E8F5F1] text-primary text-[12px] font-bold rounded-full whitespace-nowrap">Total: {totalHolidays}</span>
                       <button 
                         onClick={() => setIsAddHolidayOpen(true)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground text-xs font-semibold rounded-lg hover:bg-primary/90 transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground text-xs font-semibold rounded-lg hover:bg-primary/90 transition-colors whitespace-nowrap"
                       >
                         <Plus className="w-3.5 h-3.5" /> Add
                       </button>
                     </div>
                   </div>
-                  <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                  <div className="space-y-3 max-h-80 sm:max-h-96 overflow-y-auto pr-1">
                     {holidays.length === 0 ? (
                       <p className="text-[13px] text-muted-foreground/60 text-center py-8 border border-dashed border-border/40 rounded-xl">No holidays added yet. Click "Add" to create one.</p>
                     ) : (
@@ -352,7 +352,7 @@ export function PayrollSettings() {
             </div>
 
             {/* Card 2: Late Coming */}
-            <div className="rounded-[16px] border border-border/60 bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+            <div className="rounded-[16px] border border-border/60 bg-white p-4 sm:p-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)] min-w-0">
               <div className="mb-5">
                 <h2 className="text-[15px] font-bold text-foreground">Late Coming</h2>
                 <p className="text-[13px] text-muted-foreground/80 mt-1">Grace period before an arrival is marked late</p>
@@ -368,7 +368,7 @@ export function PayrollSettings() {
             </div>
 
             {/* Card 3: Overtime */}
-            <div className="rounded-[16px] border border-border/60 bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+            <div className="rounded-[16px] border border-border/60 bg-white p-4 sm:p-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)] min-w-0">
               <div className="mb-5">
                 <h2 className="text-[15px] font-bold text-foreground">Overtime</h2>
                 <p className="text-[13px] text-muted-foreground/80 mt-1">Hours worked beyond the standard day are paid as OT</p>
@@ -420,7 +420,7 @@ export function PayrollSettings() {
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Card 4: Leave Policy */}
-            <div className="rounded-[16px] border border-border/60 bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+            <div className="rounded-[16px] border border-border/60 bg-white p-4 sm:p-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)] min-w-0">
               <div className="mb-5">
                 <h2 className="text-[15px] font-bold text-foreground">Leave Policy</h2>
                 <p className="text-[13px] text-muted-foreground/80 mt-1">Monthly paid, unpaid, half-day, and carry forward rules</p>
@@ -464,7 +464,7 @@ export function PayrollSettings() {
             </div>
 
             {/* Card 5: Leave Types */}
-            <div className="rounded-[16px] border border-border/60 bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+            <div className="rounded-[16px] border border-border/60 bg-white p-4 sm:p-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)] min-w-0">
               <div className="mb-5">
                 <h2 className="text-[15px] font-bold text-foreground">Leave Types</h2>
                 <p className="text-[13px] text-muted-foreground/80 mt-1">Configure available leave types for employees</p>
