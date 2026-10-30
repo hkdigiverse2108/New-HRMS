@@ -133,3 +133,51 @@ async def upload_company_letterhead(
     res = await SettingsService.update_settings(update_dto)
     await clear_pattern("settings:*")
     return res
+
+from pydantic import BaseModel, Field
+
+class GlobalTimelineSettings(BaseModel):
+    script_days_before: int = Field(16, ge=0, description="Script days before posting")
+    shoot_days_before: int = Field(14, ge=0, description="Shoot days before posting")
+    editing_graphics_days_before: int = Field(7, ge=0, description="Editing/Graphics days before posting")
+    thumbnail_days_before: int = Field(5, ge=0, description="Thumbnail days before posting")
+    approval_days_before: int = Field(5, ge=0, description="Approval days before posting")
+
+@router.get("/content-timeline", response_model=GlobalTimelineSettings)
+async def get_global_content_timeline():
+    from app.services.content import ContentService
+    settings = await ContentService.get_settings("global")
+    return GlobalTimelineSettings(
+        script_days_before=settings.get("script_days_before", 16),
+        shoot_days_before=settings.get("shoot_days_before", 14),
+        editing_graphics_days_before=settings.get("editing_graphics_days_before", 7),
+        thumbnail_days_before=settings.get("thumbnail_days_before", 5),
+        approval_days_before=settings.get("approval_days_before", 5),
+    )
+
+@router.put("/content-timeline", response_model=GlobalTimelineSettings)
+async def update_global_content_timeline(
+    data: GlobalTimelineSettings,
+    current_user: dict = Depends(get_current_employee)
+):
+    check_admin_role(current_user)
+    from app.services.content import ContentService
+    from app.schemas.content import ContentTimelineSettings
+    settings_dto = ContentTimelineSettings(
+        project_id="global",
+        script_days_before=data.script_days_before,
+        shoot_days_before=data.shoot_days_before,
+        editing_graphics_days_before=data.editing_graphics_days_before,
+        thumbnail_days_before=data.thumbnail_days_before,
+        approval_days_before=data.approval_days_before,
+    )
+    res = await ContentService.update_settings("global", settings_dto)
+    await clear_pattern("settings:*")
+    await clear_pattern("content:global:*")
+    return GlobalTimelineSettings(
+        script_days_before=res.get("script_days_before", 16),
+        shoot_days_before=res.get("shoot_days_before", 14),
+        editing_graphics_days_before=res.get("editing_graphics_days_before", 7),
+        thumbnail_days_before=res.get("thumbnail_days_before", 5),
+        approval_days_before=res.get("approval_days_before", 5),
+    )

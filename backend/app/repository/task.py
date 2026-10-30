@@ -71,7 +71,19 @@ class TaskRepository:
         sub_category: Optional[str] = None
     ):
         collection = await cls.get_collection()
+        
+        # Ensure tasks belonging to archived projects are excluded from active tasks
+        from app.database.db import get_database
+        db = get_database()
+        archived_projs = await db["projects"].find({"is_archived": True}, {"_id": 1}).to_list(length=10000)
+        archived_proj_ids = []
+        for p in archived_projs:
+            archived_proj_ids.append(str(p["_id"]))
+            archived_proj_ids.append(p["_id"])
+
         and_conditions = [{"is_deleted": is_deleted}, {"is_archived": {"$ne": True}}]
+        if archived_proj_ids:
+            and_conditions.append({"project_id": {"$nin": archived_proj_ids}})
         
         if involved_emp_id:
             and_conditions.append({
@@ -287,7 +299,18 @@ class TaskRepository:
         search: Optional[str] = None
     ):
         collection = await cls.get_collection()
+        
+        from app.database.db import get_database
+        db = get_database()
+        archived_projs = await db["projects"].find({"is_archived": True}, {"_id": 1}).to_list(length=10000)
+        archived_proj_ids = []
+        for p in archived_projs:
+            archived_proj_ids.append(str(p["_id"]))
+            archived_proj_ids.append(p["_id"])
+
         base_query = {"is_deleted": False, "is_archived": {"$ne": True}}
+        if archived_proj_ids:
+            base_query["project_id"] = {"$nin": archived_proj_ids}
         if involved_emp_id:
             base_query["$or"] = [
                 {"assigned_to": involved_emp_id},

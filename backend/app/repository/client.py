@@ -37,7 +37,7 @@ class ClientRepository:
             from app.repository.project import ProjectRepository
             project_coll = await ProjectRepository.get_collection()
             clean_category = project_category.lower().replace(" ", "").replace("_", "")
-            cat_map = {"development": "Development", "creative": "Creative", "digitalmarketing": "Digital Marketing", "sales": "Sales"}
+            cat_map = {"development": "Development", "creative": "Creative", "digitalmarketing": "Digital Marketing"}
             mapped_cat = cat_map.get(clean_category, project_category)
             
             proj_query = {"is_deleted": False, "general.category": {"$in": [mapped_cat, clean_category, project_category]}}

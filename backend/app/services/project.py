@@ -152,6 +152,29 @@ class ProjectService:
             data_dict["next_feedback_date"] = datetime.combine(next_fb, datetime.min.time()) if isinstance(next_fb, date) and not isinstance(next_fb, datetime) else next_fb
             
         created = await ProjectRepository.create(data_dict)
+        if created:
+            # Auto-initialize this new project's own content calendar timeline settings from current global default
+            try:
+                from app.services.content import ContentService
+                from app.database.db import get_database
+                db = get_database()
+                global_settings = await ContentService.get_settings("global")
+                proj_id_str = str(created["_id"])
+                await db["content_settings"].update_one(
+                    {"project_id": proj_id_str},
+                    {"$set": {
+                        "project_id": proj_id_str,
+                        "script_days_before": int(global_settings.get("script_days_before", 16)),
+                        "shoot_days_before": int(global_settings.get("shoot_days_before", 14)),
+                        "editing_graphics_days_before": int(global_settings.get("editing_graphics_days_before", 7)),
+                        "thumbnail_days_before": int(global_settings.get("thumbnail_days_before", 5)),
+                        "approval_days_before": int(global_settings.get("approval_days_before", 5)),
+                        "updated_at": datetime.utcnow().isoformat()
+                    }},
+                    upsert=True
+                )
+            except Exception:
+                pass
         await clear_pattern("projects:list:*")
         await clear_pattern("clients:list:*")
         if data_dict.get("client_id"):

@@ -7,9 +7,9 @@ from enum import Enum
 # --- Timeline Settings Schema ---
 class ContentTimelineSettings(BaseModel):
     project_id: str = Field(..., description="The ID of the parent project")
-    script_days_before: int = 0
-    shoot_days_before: int = 12
-    editing_graphics_days_before: int = 6
+    script_days_before: int = 16
+    shoot_days_before: int = 14
+    editing_graphics_days_before: int = 7
     thumbnail_days_before: int = 5
     approval_days_before: int = 5
 
