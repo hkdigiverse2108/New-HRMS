@@ -59,11 +59,11 @@ export function ElectionsHub({ initialTab = "elections" }: ElectionsHubProps) {
   }, [visibleTabs, activeTab, setActiveTab]);
 
   return (
-    <div className="space-y-6">
+    <div className="w-full min-w-0 space-y-4 sm:space-y-6">
       {/* Top Header & Sub-Navigation Tabs */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/80 pb-3">
-        <div>
-          <h1 className="text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 sm:gap-4 border-b border-border/80 pb-3">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
             <span>🗳️</span> Elections & Recognition
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">
@@ -73,7 +73,7 @@ export function ElectionsHub({ initialTab = "elections" }: ElectionsHubProps) {
 
         {/* Tab Pills: ONLY show if user has access to MORE THAN 1 tab */}
         {visibleTabs.length > 1 && (
-          <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 scrollbar-none bg-muted/60 p-1 rounded-xl border border-border/60">
+          <div className="flex items-center gap-1 overflow-x-auto max-w-full w-full xl:w-auto scrollbar-none bg-muted/60 p-1 rounded-xl border border-border/60">
             {visibleTabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -83,7 +83,7 @@ export function ElectionsHub({ initialTab = "elections" }: ElectionsHubProps) {
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
                   className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all",
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 transition-all",
                     isActive
                       ? "bg-card text-foreground shadow-xs border border-border/80 font-bold"
                       : "text-muted-foreground hover:text-foreground hover:bg-muted/80"

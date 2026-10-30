@@ -477,31 +477,31 @@ export function Elections() {
   const activeRound = rounds[currentRoundIdx];
 
   return (
-    <div className="w-full space-y-8 animate-in fade-in duration-500">
+    <div className="w-full min-w-0 space-y-5 sm:space-y-8 animate-in fade-in duration-500">
       {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
           <div className="flex items-center gap-3 mb-1">
-            <div className="p-2.5 bg-primary/10 text-primary rounded-2xl border border-primary/20 shadow-xs">
+            <div className="p-2.5 bg-primary/10 text-primary rounded-2xl border border-primary/20 shadow-xs shrink-0">
               <Vote className="w-7 h-7" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-xl sm:text-3xl font-black tracking-tight text-foreground">
                   Elections & Voting
                 </h1>
                 <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 font-bold px-2 py-0.5 text-xs">
                   STV Ranked Choice
                 </Badge>
               </div>
-              <p className="text-sm font-medium text-muted-foreground mt-1">
+              <p className="text-xs sm:text-sm font-medium text-muted-foreground mt-1">
                 Single Transferable Vote (STV) algorithm with Droop Quota, round elimination, and audit history.
               </p>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0">
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
           <button
             onClick={fetchElections}
             className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-card hover:bg-muted text-foreground font-semibold rounded-xl border border-border/60 shadow-xs transition-all text-xs"
@@ -524,7 +524,7 @@ export function Elections() {
       </div>
 
       {/* Stats Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         <div className="bg-card p-4 rounded-2xl border border-border/60 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Total Elections</span>
@@ -565,9 +565,9 @@ export function Elections() {
           <span>Filter Elections:</span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
           <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-            <SelectTrigger className="w-[140px] rounded-xl text-xs font-medium">
+            <SelectTrigger className="w-full sm:w-[140px] rounded-xl text-xs font-medium">
               <SelectValue placeholder="Month" />
             </SelectTrigger>
             <SelectContent>
@@ -579,7 +579,7 @@ export function Elections() {
           </Select>
 
           <Select value={selectedYear} onValueChange={setSelectedYear}>
-            <SelectTrigger className="w-[120px] rounded-xl text-xs font-medium">
+            <SelectTrigger className="w-full sm:w-[120px] rounded-xl text-xs font-medium">
               <SelectValue placeholder="Year" />
             </SelectTrigger>
             <SelectContent>
@@ -606,7 +606,7 @@ export function Elections() {
 
       {/* Elections Grid */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
           {[1, 2, 3].map((i) => (
             <div key={i} className="bg-card rounded-3xl p-6 border border-border/60 animate-pulse space-y-4">
               <div className="h-6 bg-muted rounded-md w-1/3" />
@@ -636,7 +636,7 @@ export function Elections() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
           {elections.map((election) => {
             const isCompleted = election.status === "completed";
             const turnoutPercent = election.totalEligibleVoters > 0

@@ -1245,16 +1245,16 @@ export function Recognitions() {
   const top3 = leaderboard.slice(0, 3);
 
   return (
-    <div className="w-full space-y-6 animate-in fade-in duration-500">
+    <div className="w-full min-w-0 space-y-4 sm:space-y-6 animate-in fade-in duration-500">
       {/* Top Header Bar */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-card p-6 rounded-3xl shadow-xs border border-border/60">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-amber-500/10 text-amber-500 rounded-2xl border border-amber-500/20 shadow-xs">
+      <div className="flex flex-col 2xl:flex-row 2xl:items-center justify-between gap-3 sm:gap-4 bg-card p-4 sm:p-6 rounded-3xl shadow-xs border border-border/60">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="p-3 bg-amber-500/10 text-amber-500 rounded-2xl border border-amber-500/20 shadow-xs shrink-0">
             <Trophy className="w-7 h-7" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl sm:text-2xl font-black text-foreground">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-lg sm:text-2xl font-black text-foreground">
                 Employee of the Month (EOM)
               </h1>
               <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/20 font-bold px-2 py-0.5 text-xs">
@@ -1268,12 +1268,12 @@ export function Recognitions() {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
           {isAdmin && (
             <>
               <button
                 onClick={() => setParticipantModalOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 text-xs font-bold rounded-xl transition-all border border-amber-500/20 shadow-xs cursor-pointer"
+                className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 text-xs font-bold rounded-xl transition-all border border-amber-500/20 shadow-xs cursor-pointer"
               >
                 <Users className="w-3.5 h-3.5" />
                 <span>Employees ({selectedEmpIds.length})</span>
@@ -1281,7 +1281,7 @@ export function Recognitions() {
 
               <button
                 onClick={() => setHistoryModalOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-muted hover:bg-muted/80 text-foreground text-xs font-bold rounded-xl transition-all border border-border shadow-xs cursor-pointer"
+                className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-muted hover:bg-muted/80 text-foreground text-xs font-bold rounded-xl transition-all border border-border shadow-xs cursor-pointer"
               >
                 <History className="w-3.5 h-3.5" />
                 <span>History</span>
@@ -1289,7 +1289,7 @@ export function Recognitions() {
 
               <button
                 onClick={handleOpenMasterModal}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-muted hover:bg-muted/80 text-foreground text-xs font-bold rounded-xl transition-all border border-border shadow-xs cursor-pointer"
+                className="col-span-2 sm:col-span-1 flex items-center justify-center gap-1.5 px-3.5 py-2 bg-muted hover:bg-muted/80 text-foreground text-xs font-bold rounded-xl transition-all border border-border shadow-xs cursor-pointer"
               >
                 <Settings className="w-3.5 h-3.5" />
                 <span>Master Template</span>
@@ -1298,9 +1298,9 @@ export function Recognitions() {
           )}
 
           {/* Month / Year Pickers */}
-          <div className="flex items-center gap-1.5">
+          <div className="col-span-2 sm:col-span-1 grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-1.5">
             <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-              <SelectTrigger className="w-[125px] rounded-xl font-bold text-xs">
+              <SelectTrigger className="w-full sm:w-[125px] rounded-xl font-bold text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1311,7 +1311,7 @@ export function Recognitions() {
             </Select>
 
             <Select value={selectedYear} onValueChange={setSelectedYear}>
-              <SelectTrigger className="w-[95px] rounded-xl font-bold text-xs">
+              <SelectTrigger className="w-full sm:w-[95px] rounded-xl font-bold text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1326,15 +1326,16 @@ export function Recognitions() {
             <>
               <button
                 onClick={handleOpenScoreEntry}
-                className="flex items-center gap-1.5 px-4 py-2 bg-primary text-primary-foreground text-xs font-bold rounded-xl hover:bg-primary/90 transition-all shadow-xs cursor-pointer"
+                className="col-span-2 sm:col-span-1 flex items-center justify-center gap-1.5 px-4 py-2 bg-primary text-primary-foreground text-xs font-bold rounded-xl hover:bg-primary/90 transition-all shadow-xs cursor-pointer"
               >
                 <Edit className="w-3.5 h-3.5" />
                 <span>Score Entry (Stepper)</span>
               </button>
 
+              <div className="col-span-2 flex items-stretch gap-2 sm:contents">
               <button
                 onClick={handleLaunchAuditoriumCeremony}
-                className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-slate-950 text-xs font-black rounded-xl hover:shadow-md transition-all uppercase tracking-wide cursor-pointer"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-slate-950 text-xs font-black rounded-xl hover:shadow-md transition-all uppercase tracking-wide cursor-pointer"
               >
                 <Play className="w-3.5 h-3.5 fill-slate-950" />
                 <span>Auditorium Reveal</span>
@@ -1347,6 +1348,7 @@ export function Recognitions() {
               >
                 <Calendar className="w-4 h-4" />
               </button>
+              </div>
             </>
           )}
         </div>
@@ -1354,7 +1356,7 @@ export function Recognitions() {
 
       {/* Tabs: Criteria Setup first, Leaderboard second */}
       <Tabs value={activeTab} onValueChange={(v: any) => setActiveTab(v)}>
-        <TabsList className="bg-muted/60 p-1 rounded-xl">
+        <TabsList className="bg-muted/60 p-1 rounded-xl h-auto w-full sm:w-auto flex flex-wrap justify-start">
           <TabsTrigger value="criteria" className="text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer">
             <Settings className="w-3.5 h-3.5" />
             <span>Criteria Setup ({criteria.length} • {totalMaxScore} Pts)</span>

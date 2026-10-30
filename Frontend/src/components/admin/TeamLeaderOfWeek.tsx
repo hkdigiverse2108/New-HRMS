@@ -787,15 +787,15 @@ export function TeamLeaderOfWeek() {
   const championTeam = sortedDeclaredTeams.length > 0 ? sortedDeclaredTeams[0] : null;
 
   return (
-    <div className="w-full space-y-6 animate-in fade-in duration-500 pb-20">
+    <div className="w-full min-w-0 space-y-4 sm:space-y-6 animate-in fade-in duration-500 pb-20">
       {/* Top Header Card */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-card p-6 rounded-2xl shadow-sm border border-border/70">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col 2xl:flex-row 2xl:items-center justify-between gap-3 sm:gap-4 bg-card p-4 sm:p-6 rounded-2xl shadow-sm border border-border/70">
+        <div className="flex items-center gap-3 min-w-0">
           <div className="p-3 bg-gradient-to-tr from-blue-600 to-indigo-500 text-white rounded-xl shadow-md shadow-blue-500/20 shrink-0">
             <Award className="w-6 h-6" />
           </div>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight flex items-center gap-2">
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-2xl font-bold text-foreground tracking-tight flex flex-wrap items-center gap-2">
               <span>Team Leader of the Week</span>
               <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold border border-blue-500/20">
                 Evaluation & Tracker
@@ -807,13 +807,13 @@ export function TeamLeaderOfWeek() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-2.5">
           {isAdmin && (
             <>
               <button
                 type="button"
                 onClick={openDeclareModal}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-amber-300 hover:to-yellow-300 text-amber-950 font-black text-xs sm:text-sm rounded-xl shadow-lg shadow-amber-500/25 transition-all uppercase tracking-wide cursor-pointer active:scale-95"
+                className="col-span-2 sm:col-span-1 flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-amber-300 hover:to-yellow-300 text-amber-950 font-black text-xs sm:text-sm rounded-xl shadow-lg shadow-amber-500/25 transition-all uppercase tracking-wide cursor-pointer active:scale-95"
               >
                 <Sparkles className="w-4 h-4 fill-amber-950" />
                 Declare Team Result
@@ -822,7 +822,7 @@ export function TeamLeaderOfWeek() {
               <button
                 type="button"
                 onClick={() => setLaunchRevealModalOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-slate-900 dark:bg-slate-800 text-amber-400 text-xs sm:text-sm font-bold rounded-xl border border-amber-500/40 hover:bg-slate-800 dark:hover:bg-slate-700 transition-all shadow-sm cursor-pointer"
+                className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-slate-900 dark:bg-slate-800 text-amber-400 text-xs sm:text-sm font-bold rounded-xl border border-amber-500/40 hover:bg-slate-800 dark:hover:bg-slate-700 transition-all shadow-sm cursor-pointer"
               >
                 <Play className="w-4 h-4 fill-amber-400 text-amber-400" />
                 Auditorium Reveal
@@ -831,7 +831,7 @@ export function TeamLeaderOfWeek() {
               <button
                 type="button"
                 onClick={fetchMasterTopics}
-                className="flex items-center gap-2 px-3.5 py-2 bg-muted hover:bg-muted/80 text-foreground text-xs sm:text-sm font-semibold rounded-xl transition-all border border-border cursor-pointer"
+                className="col-span-2 order-4 sm:order-none sm:col-span-1 flex items-center justify-center gap-2 px-3.5 py-2 bg-muted hover:bg-muted/80 text-foreground text-xs sm:text-sm font-semibold rounded-xl transition-all border border-border cursor-pointer"
               >
                 <Settings className="w-4 h-4 text-muted-foreground" />
                 Master Topics Template
@@ -840,7 +840,7 @@ export function TeamLeaderOfWeek() {
               <button
                 type="button"
                 onClick={openNewMeetingModal}
-                className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-xs sm:text-sm font-bold rounded-xl shadow-md transition-all cursor-pointer active:scale-95"
+                className="order-3 sm:order-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-xs sm:text-sm font-bold rounded-xl shadow-md transition-all cursor-pointer active:scale-95"
               >
                 <Plus className="w-4 h-4" />
                 New Weekly Meeting
@@ -910,8 +910,8 @@ export function TeamLeaderOfWeek() {
         </div>
       ) : (
         <div className="bg-card rounded-2xl border border-border/70 shadow-sm overflow-hidden p-4 sm:p-6 space-y-4">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div>
+          <div className="flex flex-col 2xl:flex-row 2xl:items-center justify-between gap-3 sm:gap-4">
+            <div className="min-w-0">
               <h2 className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2">
                 <span>TL Meeting Evaluation ({meetingDetail.meetingDate})</span>
               </h2>

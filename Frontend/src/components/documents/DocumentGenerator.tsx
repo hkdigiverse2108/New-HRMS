@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { ArrowLeft, Download, Send, Printer, User, FileText, Sparkles, Settings2, Loader2 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { SearchableSelect } from "@/components/ui/select";
@@ -127,6 +127,31 @@ function distributeBlocksToPages(blocks: string[]): string[] {
   }
   if (pageHtml.trim()) pages.push(pageHtml);
   return pages.length > 0 ? pages : [""];
+}
+
+/** Shrinks the fixed-size A4 pages to the available width (via the --a4-scale CSS variable) so they never overflow small screens. */
+const A4_WIDTH_PX = 794;
+function A4Fit({ children, className }: { children: React.ReactNode; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => {
+      const cs = getComputedStyle(el);
+      const inner = el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      setScale(Math.min(1, inner / A4_WIDTH_PX));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <div ref={ref} className={className} style={{ "--a4-scale": scale } as React.CSSProperties}>
+      {children}
+    </div>
+  );
 }
 
 export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => void; activeTabPath?: string }) {
@@ -741,6 +766,7 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
         // Paper look only (rounded corners, shadow) is removed; the border stays as transparent so
         // the content keeps the exact same width as on screen.
         page.style.setProperty("border-radius", "0", "important");
+        page.style.setProperty("zoom", "1", "important");
         page.style.setProperty("box-shadow", "none", "important");
         page.style.setProperty("border-color", "transparent", "important");
         page.style.setProperty("margin", "0", "important");
@@ -996,6 +1022,9 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
           position: relative;
           flex-shrink: 0;
           page-break-after: always;
+          margin-left: auto;
+          margin-right: auto;
+          zoom: var(--a4-scale, 1);
         }
         .a4-page-card:hover { box-shadow: 0 24px 70px -10px rgba(16,185,129,0.15), 0 4px 16px -4px rgba(0,0,0,0.08); }
         .a4-page-content {
@@ -1026,8 +1055,8 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
         }
       `}</style>
       {/* Header */}
-      <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center justify-between pb-6 mb-6 border-b border-border/50">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col 2xl:flex-row gap-3 sm:gap-4 items-stretch 2xl:items-center justify-between pb-4 sm:pb-6 mb-4 sm:mb-6 border-b border-border/50">
+        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
           {onBack && (
             <button
               onClick={onBack}
@@ -1037,18 +1066,18 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
             </button>
           )}
           <div className="min-w-0">
-            <h1 className="text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
-              <Sparkles className="w-6 h-6 text-primary" />
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
+              <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-primary shrink-0" />
               Document Generator
             </h1>
-            <p className="text-muted-foreground text-sm font-medium">Create and preview dynamic document templates</p>
+            <p className="text-muted-foreground text-xs sm:text-sm font-medium">Create and preview dynamic document templates</p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 2xl:flex 2xl:items-center gap-2 sm:gap-3 shrink-0">
           <button
             onClick={handlePrint}
             disabled={!selectedTemp}
-            className="px-4 py-2.5 min-h-[44px] sm:min-h-0 flex-1 sm:flex-none justify-center bg-card border border-border/50 text-foreground font-bold rounded-xl hover:bg-muted/50 transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50"
+            className="px-3 sm:px-4 py-2.5 min-h-[44px] sm:min-h-0 justify-center whitespace-nowrap bg-card border border-border/50 text-foreground font-bold rounded-xl hover:bg-muted/50 transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50"
           >
             <Printer className="w-4 h-4" />
             Print
@@ -1056,7 +1085,7 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
           <button
             onClick={handleExportPDF}
             disabled={!selectedTemp || isExporting}
-            className="px-4 py-2.5 min-h-[44px] sm:min-h-0 flex-1 sm:flex-none justify-center bg-card border border-border/50 text-foreground font-bold rounded-xl hover:bg-muted/50 transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50"
+            className="px-3 sm:px-4 py-2.5 min-h-[44px] sm:min-h-0 justify-center whitespace-nowrap bg-card border border-border/50 text-foreground font-bold rounded-xl hover:bg-muted/50 transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50"
           >
             {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
             {isExporting ? "Exporting..." : "Export PDF"}
@@ -1064,7 +1093,7 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
           <button
             onClick={handleSendForSignature}
             disabled={!selectedTemp || isSending}
-            className="px-5 py-2.5 min-h-[44px] sm:min-h-0 flex-1 sm:flex-none justify-center bg-primary text-primary-foreground hover:bg-primary/90 font-bold rounded-xl transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50"
+            className="px-5 py-2.5 min-h-[44px] sm:min-h-0 col-span-2 sm:col-span-1 justify-center whitespace-nowrap bg-primary text-primary-foreground hover:bg-primary/90 font-bold rounded-xl transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50"
           >
             {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             {isSending ? "Sending..." : "Send for Signature"}
@@ -1073,12 +1102,12 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
       </div>
 
       {/* Main Workspace */}
-      <div className="flex flex-col lg:flex-row gap-8 h-full flex-grow">
+      <div className="flex flex-col xl:flex-row gap-4 sm:gap-8 h-full flex-grow min-w-0">
         {/* Left Panel: Configuration */}
-        <div className="w-full lg:w-[420px] flex flex-col gap-6 shrink-0">
+        <div className="w-full xl:w-[380px] 2xl:w-[420px] flex flex-col gap-4 sm:gap-6 shrink-0 min-w-0">
           {/* Target Selection */}
-          <div className="bg-card border border-border/50 p-5 rounded-2xl shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
+          <div className="bg-card border border-border/50 p-4 sm:p-5 rounded-2xl shadow-sm space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="font-bold flex items-center gap-2 text-foreground">
                 <User className="w-4 h-4 text-primary" />
                 Target Employee / Candidate
@@ -1130,7 +1159,7 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
 
           {/* Dynamic Variables Form */}
           {selectedTemp && (
-            <div className="bg-card border border-border/50 p-5 rounded-2xl shadow-sm flex-grow space-y-4">
+            <div className="bg-card border border-border/50 p-4 sm:p-5 rounded-2xl shadow-sm flex-grow space-y-4">
               <div className="flex items-center justify-between border-b border-border/50 pb-3">
                 <div>
                   <h3 className="font-bold flex items-center gap-2 text-foreground">
@@ -1185,7 +1214,7 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
                 </div>
               )}
 
-              <div className="space-y-3.5 overflow-y-auto max-h-[480px] pr-2 custom-scrollbar">
+              <div className="space-y-3.5 overflow-y-auto max-h-[420px] xl:max-h-[480px] pr-2 custom-scrollbar">
                 {templatePlaceholders.map((varKey) => {
                   const currentVal = getVarValue(varKey);
                   const isAutoFilled = selectedEmpId !== "manual" && Boolean(selectedEmp) && Boolean(currentVal);
@@ -1226,8 +1255,8 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
         </div>
 
         {/* Right Panel: Live Preview (A4 Paper Sheet View) */}
-        <div className="flex-grow bg-slate-100 dark:bg-slate-900/60 border border-border/50 rounded-3xl p-3 sm:p-6 flex flex-col min-h-[500px] sm:min-h-[700px] min-w-0">
-          <div className="flex justify-between items-center mb-3 px-2">
+        <div className="flex-grow bg-slate-100 dark:bg-slate-900/60 border border-border/50 rounded-3xl p-2 sm:p-6 flex flex-col min-h-[360px] sm:min-h-[700px] min-w-0">
+          <div className="flex flex-wrap justify-between items-center gap-2 mb-3 px-2">
             <div className="flex items-center gap-2">
               <h3 className="font-bold text-muted-foreground uppercase tracking-wider text-xs">Live Preview (A4 Page Sheet)</h3>
               <span className="text-[10px] font-mono font-bold bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded border border-slate-300/50">
@@ -1248,7 +1277,7 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
               </p>
             </div>
           ) : (
-            <div className="flex-grow p-2 sm:p-4 flex flex-col items-center space-y-6">
+            <A4Fit className="flex-grow p-1 sm:p-4 flex flex-col items-center space-y-4 sm:space-y-6">
               {pageSections.map((pageHtml, pageIndex) => (
                 <div key={pageIndex} className="a4-page-card">
                   <div className="a4-page-content">
@@ -1262,7 +1291,7 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
                   </div>
                 </div>
               ))}
-            </div>
+            </A4Fit>
           )}
         </div>
       </div>
