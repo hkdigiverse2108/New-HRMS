@@ -133,17 +133,17 @@ export function ContentTimelineSettingsCard({ className }: { className?: string 
   };
 
   return (
-    <div className={cn("bg-card border border-border/60 rounded-3xl p-6 sm:p-7 shadow-sm flex flex-col space-y-6 relative overflow-hidden", className)}>
+    <div className={cn("bg-card border border-border/60 rounded-2xl sm:rounded-3xl p-4 sm:p-7 shadow-sm flex flex-col space-y-6 relative overflow-hidden min-w-0 max-w-full", className)}>
       {/* Background subtle decorative glow */}
       <div className="absolute top-0 right-0 w-80 h-80 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/50 pb-5">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0 shadow-xs">
             <CalendarDays className="w-6 h-6" />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-lg md:text-xl font-black text-foreground">Content Calendar Default Timeline</h3>
               <span className="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 text-[10px] font-extrabold uppercase tracking-wider">
@@ -168,11 +168,11 @@ export function ContentTimelineSettingsCard({ className }: { className?: string 
       </div>
 
       {/* Form Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3.5 sm:gap-4">
         {/* 1. Scripting */}
         <div className="p-4 rounded-2xl border border-border/70 bg-muted/20 hover:border-primary/40 transition-all flex flex-col justify-between space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+            <div className="flex items-center gap-2 min-w-0">
               <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
                 <FileText className="w-3.5 h-3.5" />
               </div>
@@ -180,7 +180,7 @@ export function ContentTimelineSettingsCard({ className }: { className?: string 
             </div>
             <span className="text-[10px] font-bold text-muted-foreground uppercase">T - {formData.script_days_before}d</span>
           </div>
-          <div>
+          <div className="min-w-0">
             <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
               Days Before Posting
             </label>
@@ -200,8 +200,8 @@ export function ContentTimelineSettingsCard({ className }: { className?: string 
 
         {/* 2. Shoot / Assets */}
         <div className="p-4 rounded-2xl border border-border/70 bg-muted/20 hover:border-amber-500/40 transition-all flex flex-col justify-between space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+            <div className="flex items-center gap-2 min-w-0">
               <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
                 <Video className="w-3.5 h-3.5" />
               </div>
@@ -209,7 +209,7 @@ export function ContentTimelineSettingsCard({ className }: { className?: string 
             </div>
             <span className="text-[10px] font-bold text-muted-foreground uppercase">T - {formData.shoot_days_before}d</span>
           </div>
-          <div>
+          <div className="min-w-0">
             <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
               Days Before Posting
             </label>
@@ -229,8 +229,8 @@ export function ContentTimelineSettingsCard({ className }: { className?: string 
 
         {/* 3. Editing / Graphics */}
         <div className="p-4 rounded-2xl border border-border/70 bg-muted/20 hover:border-violet-500/40 transition-all flex flex-col justify-between space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+            <div className="flex items-center gap-2 min-w-0">
               <div className="w-7 h-7 rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
                 <Sparkles className="w-3.5 h-3.5" />
               </div>
@@ -238,7 +238,7 @@ export function ContentTimelineSettingsCard({ className }: { className?: string 
             </div>
             <span className="text-[10px] font-bold text-muted-foreground uppercase">T - {formData.editing_graphics_days_before}d</span>
           </div>
-          <div>
+          <div className="min-w-0">
             <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
               Days Before Posting
             </label>
@@ -258,8 +258,8 @@ export function ContentTimelineSettingsCard({ className }: { className?: string 
 
         {/* 4. Thumbnail */}
         <div className="p-4 rounded-2xl border border-border/70 bg-muted/20 hover:border-blue-500/40 transition-all flex flex-col justify-between space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+            <div className="flex items-center gap-2 min-w-0">
               <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
                 <Image className="w-3.5 h-3.5" />
               </div>
@@ -267,7 +267,7 @@ export function ContentTimelineSettingsCard({ className }: { className?: string 
             </div>
             <span className="text-[10px] font-bold text-muted-foreground uppercase">T - {formData.thumbnail_days_before}d</span>
           </div>
-          <div>
+          <div className="min-w-0">
             <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
               Days Before Posting
             </label>
@@ -287,8 +287,8 @@ export function ContentTimelineSettingsCard({ className }: { className?: string 
 
         {/* 5. Approval & QC */}
         <div className="p-4 rounded-2xl border border-border/70 bg-muted/20 hover:border-emerald-500/40 transition-all flex flex-col justify-between space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+            <div className="flex items-center gap-2 min-w-0">
               <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
                 <CheckCircle2 className="w-3.5 h-3.5" />
               </div>
@@ -296,7 +296,7 @@ export function ContentTimelineSettingsCard({ className }: { className?: string 
             </div>
             <span className="text-[10px] font-bold text-muted-foreground uppercase">T - {formData.approval_days_before}d</span>
           </div>
-          <div>
+          <div className="min-w-0">
             <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
               Days Before Posting
             </label>
@@ -317,7 +317,7 @@ export function ContentTimelineSettingsCard({ className }: { className?: string 
 
       {/* Visual Pipeline Sequence Preview */}
       <div className="p-4 rounded-2xl border border-border/50 bg-muted/10 space-y-2.5">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Pipeline Schedule Sequence</span>
           <span className="text-[10px] font-semibold text-muted-foreground">Chronological Flow before Posting Date</span>
         </div>

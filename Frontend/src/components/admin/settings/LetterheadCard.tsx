@@ -90,7 +90,7 @@ export function LetterheadCard({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        "bg-card border border-border/50 rounded-3xl p-6 sm:p-8 shadow-sm flex flex-col space-y-5",
+        "bg-card border border-border/50 rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-sm flex flex-col min-w-0 max-w-full space-y-5",
         className
       )}
     >

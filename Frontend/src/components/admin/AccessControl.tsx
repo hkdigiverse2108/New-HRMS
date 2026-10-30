@@ -464,18 +464,18 @@ export function AccessControl() {
   }, [hierarchicalModules, modules, searchQuery, filterSection]);
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 space-y-6 pb-28 max-w-full overflow-x-hidden">
-      
+    <div className="w-full space-y-4 sm:space-y-6 pb-28 max-w-full overflow-x-hidden">
+
       {/* Header Banner - Fully Responsive */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-card border border-border/60 rounded-3xl p-5 md:p-6 shadow-sm">
-        <div className="space-y-1">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-card border border-border/60 rounded-2xl sm:rounded-3xl p-4 sm:p-5 md:p-6 shadow-sm">
+        <div className="space-y-1 min-w-0">
           <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
             <span>Admin</span>
             <span>/</span>
             <span className="text-foreground">Access Control</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight text-foreground flex items-center gap-3">
-            <Shield className="w-8 h-8 sm:w-9 sm:h-9 text-primary shrink-0" />
+          <h1 className="text-xl sm:text-3xl md:text-4xl font-black tracking-tight text-foreground flex items-center gap-2 sm:gap-3">
+            <Shield className="w-7 h-7 sm:w-9 sm:h-9 text-primary shrink-0" />
             <span>Dynamic Access Control</span>
           </h1>
           <p className="text-muted-foreground text-xs sm:text-sm font-medium">
@@ -484,10 +484,10 @@ export function AccessControl() {
         </div>
 
         {/* Action Controls */}
-        <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 pt-2 lg:pt-0">
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-stretch sm:items-center gap-2 sm:gap-3 pt-1 lg:pt-0">
           <button
             onClick={handleGrantFullAccessAll}
-            className="flex-1 sm:flex-none px-4 py-2.5 text-xs font-black rounded-xl bg-primary text-primary-foreground shadow-md hover:bg-primary/90 transition-all flex items-center justify-center gap-2 active:scale-95"
+            className="sm:flex-none px-3 sm:px-4 py-2.5 whitespace-nowrap text-xs font-black rounded-xl bg-primary text-primary-foreground shadow-md hover:bg-primary/90 transition-all flex items-center justify-center gap-2 active:scale-95"
             title="Grant full CRUD access across all parent & sub-modules"
           >
             <Sparkles className="w-4 h-4 text-amber-300" />
@@ -495,7 +495,7 @@ export function AccessControl() {
           </button>
           <button
             onClick={handleRevokeAll}
-            className="px-3.5 py-2.5 text-xs font-bold rounded-xl border border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20 transition-all flex items-center justify-center gap-1.5 active:scale-95"
+            className="px-3.5 py-2.5 whitespace-nowrap text-xs font-bold rounded-xl border border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20 transition-all flex items-center justify-center gap-1.5 active:scale-95"
             title="Revoke all permissions"
           >
             <Ban className="w-4 h-4" />
@@ -504,7 +504,7 @@ export function AccessControl() {
           <button
             onClick={handleSave}
             disabled={isSaving}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-xs sm:text-sm font-black shadow-md hover:bg-primary/90 transition-all disabled:opacity-50 active:scale-95"
+            className="col-span-2 sm:col-span-1 sm:flex-none flex items-center justify-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-xs sm:text-sm font-black shadow-md hover:bg-primary/90 transition-all disabled:opacity-50 active:scale-95"
           >
             <Save className="w-4 h-4" />
             <span>{isSaving ? "Saving..." : "Save Changes"}</span>
@@ -541,7 +541,7 @@ export function AccessControl() {
       </div>
 
       {/* Target Selector Banner */}
-      <div className="bg-card border border-border/50 rounded-2xl p-4 sm:p-5 shadow-sm">
+      <div className="bg-card border border-border/50 rounded-2xl p-3 sm:p-5 shadow-sm">
         {activeTab === "employees" ? (
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div className="flex-1 max-w-full lg:max-w-md">
@@ -559,7 +559,7 @@ export function AccessControl() {
               />
             </div>
             {selectedEmployee && (
-              <div className="flex flex-wrap items-center gap-3 bg-muted/40 p-3 rounded-xl border border-border/50 text-xs w-full lg:w-auto">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 bg-muted/40 p-3 rounded-xl border border-border/50 text-xs w-full lg:w-auto min-w-0 [&_.break-all]:break-all">
                 <div>
                   <span className="text-muted-foreground font-semibold">Department:</span>{" "}
                   <span className="font-bold text-foreground">{selectedEmployee.department || "N/A"}</span>
@@ -580,7 +580,7 @@ export function AccessControl() {
                   </span>
                 </div>
                 <div className="h-4 w-px bg-border hidden sm:block" />
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                   {empInheritanceInfo.isCustom ? (
                     <>
                       <span className="px-2.5 py-1 rounded-md font-bold text-[11px] bg-amber-500/10 text-amber-500 border border-amber-500/25 flex items-center gap-1.5 shadow-sm">
@@ -616,7 +616,7 @@ export function AccessControl() {
               <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
                 Select Department for Preset
               </label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2 sm:gap-3">
                 {availableDepartments.map(dept => {
                   const descMap: Record<string, string> = {
                     "HR": "Human Resources, Recruitment & Approvals",
@@ -661,8 +661,8 @@ export function AccessControl() {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        <div className="relative w-full sm:w-80">
+      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 min-w-0">
+        <div className="relative w-full lg:w-80 shrink-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
           <input
             type="text"
@@ -673,7 +673,7 @@ export function AccessControl() {
           />
         </div>
 
-        <div className="flex items-center gap-1.5 overflow-x-auto max-w-full pb-1 scrollbar-hide">
+        <div className="flex items-center gap-1.5 overflow-x-auto min-w-0 max-w-full pb-1 scrollbar-hide">
           {sections.map(sec => (
             <button
               key={sec}
@@ -692,7 +692,7 @@ export function AccessControl() {
       </div>
 
       {/* Hierarchical Permissions Matrix Table */}
-      <div className="bg-card border border-border/50 rounded-3xl overflow-hidden shadow-sm">
+      <div className="bg-card border border-border/50 rounded-2xl sm:rounded-3xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[760px]">
             <thead>

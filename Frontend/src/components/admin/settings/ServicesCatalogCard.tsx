@@ -94,7 +94,7 @@ export function ServicesCatalogCard({ className }: { className?: string }) {
   };
 
   return (
-    <div className={cn("bg-card border border-border/50 rounded-3xl p-6 sm:p-8 shadow-sm flex flex-col space-y-6", className)}>
+    <div className={cn("bg-card border border-border/50 rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-sm flex flex-col min-w-0 max-w-full space-y-6", className)}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5 mb-1.5">

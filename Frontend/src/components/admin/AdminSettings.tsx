@@ -67,7 +67,7 @@ function FontSelector({ value, onChange }: { value: string; onChange: (v: string
         className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl border border-border bg-background text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/50"
         style={{ fontFamily: selected?.value === "System" ? "inherit" : selected?.value }}
       >
-        <span className="flex items-center gap-2">
+        <span className="flex items-center gap-2 min-w-0 truncate">
           <Type className="w-4 h-4 text-muted-foreground" />
           {selected?.label}
         </span>
@@ -263,18 +263,18 @@ export function AdminSettings() {
   };
 
   return (
-    <div className="p-6 md:p-8 space-y-8 pb-24">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+    <div className="p-3 sm:p-6 md:p-8 space-y-6 md:space-y-8 pb-24 min-w-0 w-full">
+      <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-3 sm:gap-4">
         <div>
           <div className="flex items-center gap-2 text-sm font-bold text-muted-foreground mb-1">
             <span>Dashboard</span>
             <span>/</span>
             <span className="text-foreground">Admin Settings</span>
           </div>
-          <h1 className="text-3xl md:text-4xl font-black tracking-tight text-foreground">Global Configuration</h1>
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight text-foreground break-words">Global Configuration</h1>
           <p className="text-muted-foreground mt-2 font-medium">Manage platform-wide settings and white-label branding.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 [&>button]:flex-1 sm:[&>button]:flex-none">
           {isBrandingDirty && (
             <>
               <span className="text-xs font-bold text-amber-700 bg-amber-100 border border-amber-200 px-2.5 py-1 rounded-lg">Unsaved changes</span>
@@ -298,10 +298,10 @@ export function AdminSettings() {
       </div>
 
       {/* Appearance & identity: two balanced columns, right under the page header (its Save button applies to these) */}
-      <div className="grid gap-6 md:grid-cols-2 items-start">
-        <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-2 items-start">
+        <div className="flex flex-col gap-4 sm:gap-6 min-w-0">
         {/* Theme Color Card */}
-        <div className="bg-card border border-border/50 rounded-3xl p-6 shadow-sm flex flex-col">
+        <div className="bg-card border border-border/50 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm flex flex-col">
           <div className="flex items-center gap-2 mb-4">
             <Palette className="w-5 h-5 text-primary" />
             <h3 className="text-lg font-black">Brand Color</h3>
@@ -312,9 +312,9 @@ export function AdminSettings() {
           
           <div className="flex flex-col gap-4">
             {/* Gradient Toggle */}
-            <div className="flex items-center justify-between p-3 border border-border rounded-xl bg-muted/20">
+            <div className="flex items-center justify-between gap-3 p-3 border border-border rounded-xl bg-muted/20">
               <span className="text-sm font-bold text-foreground">Enable Gradient</span>
-              <div className={`w-10 h-6 rounded-full transition-colors relative cursor-pointer ${isGradient ? 'bg-primary' : 'bg-muted border border-border/50'}`} onClick={() => setIsGradient(!isGradient)}>
+              <div className={`w-10 h-6 shrink-0 rounded-full transition-colors relative cursor-pointer ${isGradient ? 'bg-primary' : 'bg-muted border border-border/50'}`} onClick={() => setIsGradient(!isGradient)}>
                 <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${isGradient ? 'translate-x-4' : ''}`} />
               </div>
             </div>
@@ -347,7 +347,7 @@ export function AdminSettings() {
                         <div 
                           key={idx} 
                           className={cn(
-                            "flex items-center gap-4 p-2 rounded-xl border border-transparent transition-colors",
+                            "flex items-center gap-2 sm:gap-4 p-1 sm:p-2 rounded-xl border border-transparent transition-colors",
                             draggedColorIndex === idx ? "opacity-50 border-dashed border-primary" : "hover:border-border"
                           )}
                           draggable={dragHandleIndex === idx}
@@ -476,11 +476,11 @@ export function AdminSettings() {
                   <span className="text-[10px] font-bold text-amber-700">Preview — click Save to keep it</span>
                 )}
               </div>
-              <div className="flex gap-2 w-full">
+              <div className="flex flex-wrap gap-2 w-full">
                 {/* Current brand (solid or gradient) */}
                 <div
                   className={cn(
-                    "relative flex-1 h-8 rounded-md shadow-sm border border-border/50",
+                    "relative flex-1 min-w-[2.5rem] h-8 rounded-md shadow-sm border border-border/50",
                     !paletteColorSelected && "ring-2 ring-offset-2 ring-offset-card ring-foreground/70"
                   )}
                   style={{ background: draftBrandFill }}
@@ -497,7 +497,7 @@ export function AdminSettings() {
                       onClick={() => setColor(c.hex)}
                       title={`${c.label} (${c.hex.toUpperCase()})`}
                       className={cn(
-                        "relative flex-1 h-8 rounded-md shadow-sm border border-border/50 transition-transform hover:scale-105",
+                        "relative flex-1 min-w-[2.5rem] h-8 rounded-md shadow-sm border border-border/50 transition-transform hover:scale-105",
                         selected && "ring-2 ring-offset-2 ring-offset-card ring-foreground/70"
                       )}
                       style={{ backgroundColor: c.hex }}
@@ -511,7 +511,7 @@ export function AdminSettings() {
           </div>
         </div>
         {/* UI Elements Card */}
-        <div className="bg-card border border-border/50 rounded-3xl p-6 shadow-sm flex flex-col">
+        <div className="bg-card border border-border/50 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm flex flex-col">
           <div className="flex items-center gap-2 mb-4">
             <Square className="w-5 h-5 text-primary" />
             <h3 className="text-lg font-black">UI & Typography</h3>
@@ -520,7 +520,7 @@ export function AdminSettings() {
             Adjust the shape of UI elements and select a global font family.
           </p>
           
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-4 sm:gap-6 min-w-0">
             <div>
               <div className="flex justify-between items-center mb-1.5">
                 <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wide">Border Radius</label>
@@ -548,9 +548,9 @@ export function AdminSettings() {
           </div>
         </div>
         </div>
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-4 sm:gap-6 min-w-0">
         {/* Brand Identity Card */}
-        <div className="bg-card border border-border/50 rounded-3xl p-6 shadow-sm flex flex-col">
+        <div className="bg-card border border-border/50 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm flex flex-col">
           <div className="flex items-center gap-2 mb-4">
             <Briefcase className="w-5 h-5 text-primary" />
             <h3 className="text-lg font-black">Company Identity</h3>
@@ -627,7 +627,7 @@ export function AdminSettings() {
           </div>
         </div>
         {/* System Preferences Card */}
-        <div className="bg-card border border-border/50 rounded-3xl p-6 shadow-sm flex flex-col">
+        <div className="bg-card border border-border/50 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm flex flex-col">
           <div className="flex items-center gap-2 mb-4">
             <Settings2 className="w-5 h-5 text-primary" />
             <h3 className="text-lg font-black">System Preferences</h3>
@@ -675,7 +675,7 @@ export function AdminSettings() {
       </div>
 
       {/* Content Calendar Defaults, Notifications, billing and letterhead */}
-      <div className="grid gap-6">
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 min-w-0">
         {/* Content Calendar Default Timeline Card */}
         <ContentTimelineSettingsCard />
 
@@ -693,7 +693,7 @@ export function AdminSettings() {
       </div>
 
       {/* Chat Permissions Card */}
-      <div className="bg-card border border-border/50 rounded-3xl p-6 shadow-sm">
+      <div className="bg-card border border-border/50 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm">
         <div className="flex items-center gap-2 mb-4">
           <MessageSquare className="w-5 h-5 text-primary" />
           <h3 className="text-lg font-black">Chat &amp; Permissions</h3>
@@ -704,13 +704,13 @@ export function AdminSettings() {
 
         <div className="flex flex-col gap-4">
           {/* Toggle Channel Creation */}
-          <div className="flex items-center justify-between p-3 border border-border rounded-xl bg-muted/20">
+          <div className="flex items-center justify-between gap-3 p-3 border border-border rounded-xl bg-muted/20">
             <div className="flex flex-col text-left">
               <span className="text-sm font-bold text-foreground">Allow Channel Creation</span>
               <span className="text-[11px] text-muted-foreground mt-0.5">Users can create new channels in Chat</span>
             </div>
             <div
-              className={`w-10 h-6 rounded-full transition-colors relative cursor-pointer ${canCreateChannels ? "bg-primary" : "bg-muted border border-border/50"}`}
+              className={`w-10 h-6 shrink-0 rounded-full transition-colors relative cursor-pointer ${canCreateChannels ? "bg-primary" : "bg-muted border border-border/50"}`}
               onClick={handleToggleCreateChannels}
             >
               <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${canCreateChannels ? "translate-x-4" : ""}`} />
@@ -718,13 +718,13 @@ export function AdminSettings() {
           </div>
 
           {/* Toggle Message Deletion */}
-          <div className="flex items-center justify-between p-3 border border-border rounded-xl bg-muted/20">
+          <div className="flex items-center justify-between gap-3 p-3 border border-border rounded-xl bg-muted/20">
             <div className="flex flex-col text-left">
               <span className="text-sm font-bold text-foreground">Allow Message Deletion</span>
               <span className="text-[11px] text-muted-foreground mt-0.5">Users can delete their own messages</span>
             </div>
             <div
-              className={`w-10 h-6 rounded-full transition-colors relative cursor-pointer ${canDeleteMessages ? "bg-primary" : "bg-muted border border-border/50"}`}
+              className={`w-10 h-6 shrink-0 rounded-full transition-colors relative cursor-pointer ${canDeleteMessages ? "bg-primary" : "bg-muted border border-border/50"}`}
               onClick={handleToggleDeleteMessages}
             >
               <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${canDeleteMessages ? "translate-x-4" : ""}`} />

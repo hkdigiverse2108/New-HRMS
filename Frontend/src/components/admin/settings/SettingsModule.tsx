@@ -44,7 +44,7 @@ export function SettingsModule() {
   const permStatus = getPermissionStatus();
 
   return (
-    <div className="p-6 md:p-8 space-y-8 pb-24">
+    <div className="p-3 sm:p-6 md:p-8 space-y-6 md:space-y-8 pb-24">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-sm font-bold text-muted-foreground mb-1">
@@ -57,7 +57,7 @@ export function SettingsModule() {
         </div>
         <button 
           onClick={() => toast.success("Settings saved successfully!")} 
-          className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-bold shadow-md hover:bg-primary/90 transition-colors"
+          className="flex items-center justify-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-bold shadow-md hover:bg-primary/90 transition-colors w-full sm:w-auto"
         >
           <Save className="w-4 h-4" /> Save Changes
         </button>
@@ -66,9 +66,9 @@ export function SettingsModule() {
       {/* Notification Preferences Section */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <div>
-              <CardTitle className="flex items-center gap-2 text-2xl font-black">
+              <CardTitle className="flex items-center gap-2 text-xl sm:text-2xl font-black">
                 <Bell className="w-6 h-6 text-primary" />
                 Notification Preferences
               </CardTitle>
@@ -80,12 +80,12 @@ export function SettingsModule() {
           
           {/* Push Notifications */}
           <div className="space-y-4">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1">
+            <div className="flex items-start justify-between gap-3 sm:gap-4">
+              <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   <label htmlFor="push-notifications" className="flex items-center gap-2 cursor-pointer">
                     <Bell className="w-5 h-5 text-foreground" />
-                    <span className="font-semibold text-lg">Push Notifications</span>
+                    <span className="font-semibold text-base sm:text-lg">Push Notifications</span>
                   </label>
                   <span className={`text-xs font-medium px-2 py-0.5 rounded-full bg-muted ${permStatus.color}`}>
                     {permStatus.icon && <permStatus.icon className="w-3 h-3 inline-block align-middle mr-1" />}
@@ -107,9 +107,9 @@ export function SettingsModule() {
             </div>
 
             {/* Permission Status */}
-            <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-xl">
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 p-3 bg-muted/50 rounded-xl">
               <permStatus.icon className={`w-5 h-5 ${permStatus.color} flex-shrink-0`} />
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm">Browser Permission: <span className={permStatus.color}>{permStatus.label}</span></p>
                 {permission !== "granted" && isSupported && (
                   <p className="text-xs text-muted-foreground mt-1">
@@ -144,13 +144,13 @@ export function SettingsModule() {
               <div className="space-y-2 pt-2 border-t border-border/50">
                 <p className="text-sm font-medium text-muted-foreground">Active Devices ({subscriptions.length})</p>
                 {subscriptions.map((sub) => (
-                  <div key={sub.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
-                    <div className="flex items-center gap-3">
+                  <div key={sub.id} className="flex items-center justify-between gap-2 p-3 bg-muted/30 rounded-lg">
+                    <div className="flex items-center gap-3 min-w-0">
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                         <Bell className="w-5 h-5 text-primary" />
                       </div>
                       <div>
-                        <p className="font-medium text-sm">{sub.user_agent || "Unknown Device"}</p>
+                        <p className="font-medium text-sm truncate">{sub.user_agent || "Unknown Device"}</p>
                         <p className="text-xs text-muted-foreground">
                           Added: {formatDate(sub.created_at)}
                         </p>
@@ -196,9 +196,9 @@ export function SettingsModule() {
           <Separator />
 
           {/* Email Notifications */}
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <div>
-              <Label className="flex items-center gap-2 cursor-pointer font-semibold text-lg">
+              <Label className="flex items-center gap-2 cursor-pointer font-semibold text-base sm:text-lg">
                 <Mail className="w-5 h-5 text-foreground" />
                 Email Notifications
               </Label>
@@ -213,9 +213,9 @@ export function SettingsModule() {
           </div>
 
           {/* In-App Notifications */}
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <div>
-              <Label className="flex items-center gap-2 cursor-pointer font-semibold text-lg">
+              <Label className="flex items-center gap-2 cursor-pointer font-semibold text-base sm:text-lg">
                 <Bell className="w-5 h-5 text-foreground" />
                 In-App Notifications
               </Label>
@@ -235,7 +235,7 @@ export function SettingsModule() {
       {/* Placeholder for other settings */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-2xl font-black">
+          <CardTitle className="flex items-center gap-2 text-xl sm:text-2xl font-black">
             <Settings className="w-6 h-6 text-primary" />
             Other Settings
           </CardTitle>

@@ -189,7 +189,7 @@ export function InvoiceSettingsCard({
   return (
     <div
       className={cn(
-        "bg-card border border-border/50 rounded-3xl p-6 sm:p-8 shadow-sm flex flex-col space-y-7",
+        "bg-card border border-border/50 rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-sm flex flex-col min-w-0 max-w-full space-y-7",
         className
       )}
     >
@@ -230,13 +230,13 @@ export function InvoiceSettingsCard({
       ) : (
         <div className="space-y-7">
           {/* Section 1: GST & Legal Credentials */}
-          <div className="bg-muted/20 border border-border/60 rounded-2xl p-5 sm:p-6 space-y-4">
+          <div className="bg-muted/20 border border-border/60 rounded-2xl p-3 sm:p-6 space-y-4">
             <div className="flex items-center gap-2 text-foreground font-bold text-sm">
               <ShieldCheck className="w-4 h-4 text-primary" />
               <span>Tax & Business Credentials</span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
               <div>
                 <label className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
                   Company GSTIN
@@ -292,13 +292,13 @@ export function InvoiceSettingsCard({
           </div>
 
           {/* Section 2: Default Bank Account */}
-          <div className="bg-muted/20 border border-border/60 rounded-2xl p-5 sm:p-6 space-y-4">
+          <div className="bg-muted/20 border border-border/60 rounded-2xl p-3 sm:p-6 space-y-4">
             <div className="flex items-center gap-2 text-foreground font-bold text-sm">
               <CreditCard className="w-4 h-4 text-primary" />
               <span>Default Bank Account (For Invoices & Quotations)</span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
               <div>
                 <label className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
                   Account Name / Beneficiary
@@ -354,7 +354,7 @@ export function InvoiceSettingsCard({
           </div>
 
           {/* Section 3: Authorized Signatory */}
-          <div className="bg-muted/20 border border-border/60 rounded-2xl p-5 sm:p-6 space-y-4">
+          <div className="bg-muted/20 border border-border/60 rounded-2xl p-3 sm:p-6 space-y-4">
             <div className="flex items-center gap-2 text-foreground font-bold text-sm">
               <FileCheck className="w-4 h-4 text-primary" />
               <span>Authorized Signatory</span>
@@ -418,7 +418,7 @@ export function InvoiceSettingsCard({
           </div>
 
           {/* Section: Invoice & Quotation theme colors (PDF header gradient, badges, table headers) */}
-          <div className="bg-muted/20 border border-border/60 rounded-2xl p-5 sm:p-6 space-y-4">
+          <div className="bg-muted/20 border border-border/60 rounded-2xl p-3 sm:p-6 space-y-4">
             <div className="flex items-center gap-2 text-foreground font-bold text-sm">
               <Palette className="w-4 h-4 text-primary" />
               <span>Invoice & Quotation Theme Colors</span>
@@ -487,9 +487,9 @@ export function InvoiceSettingsCard({
           </div>
 
           {/* Section 4: Terms & Conditions for Invoice and Quotation */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             {/* Left: Default Invoice Terms */}
-            <div className="bg-muted/20 border border-border/60 rounded-2xl p-5 sm:p-6 space-y-2.5 flex flex-col">
+            <div className="bg-muted/20 border border-border/60 rounded-2xl p-3 sm:p-6 space-y-2.5 flex flex-col">
               <div className="flex items-center gap-2 text-foreground font-bold text-sm mb-1">
                 <FileCheck className="w-4 h-4 text-primary" />
                 <span>Default Invoice Terms & Conditions</span>
@@ -507,7 +507,7 @@ export function InvoiceSettingsCard({
             </div>
 
             {/* Right: Default Quotation Terms */}
-            <div className="bg-muted/20 border border-border/60 rounded-2xl p-5 sm:p-6 space-y-2.5 flex flex-col">
+            <div className="bg-muted/20 border border-border/60 rounded-2xl p-3 sm:p-6 space-y-2.5 flex flex-col">
               <div className="flex items-center gap-2 text-foreground font-bold text-sm mb-1">
                 <FileText className="w-4 h-4 text-primary" />
                 <span>Default Quotation Terms & Conditions</span>
@@ -526,7 +526,7 @@ export function InvoiceSettingsCard({
           </div>
 
           {/* Section 5: Registered Company Address & Contact */}
-          <div className="bg-muted/20 border border-border/60 rounded-2xl p-5 sm:p-6 space-y-4">
+          <div className="bg-muted/20 border border-border/60 rounded-2xl p-3 sm:p-6 space-y-4">
             <div className="flex items-center gap-2 text-foreground font-bold text-sm">
               <Building2 className="w-4 h-4 text-primary" />
               <span>Registered Billing Address & Contact</span>
