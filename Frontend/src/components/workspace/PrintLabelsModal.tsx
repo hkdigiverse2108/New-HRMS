@@ -145,12 +145,12 @@ export function PrintLabelsModal({ isOpen, onClose, resources }: PrintLabelsModa
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 print:hidden overflow-y-auto">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4 print:hidden lg:overflow-y-auto">
 
       {/* Modal Container */}
-      <div className="bg-white border border-border rounded-2xl shadow-xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[90vh] print:hidden">
+      <div className="bg-white border border-border rounded-2xl shadow-xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[94dvh] lg:max-h-[90vh] print:hidden">
         {/* Header */}
-        <div className="p-6 border-b border-border flex justify-between items-center bg-gray-50/50">
+        <div className="p-4 sm:p-6 border-b border-border flex justify-between items-start sm:items-center gap-2 bg-gray-50/50 shrink-0">
           <div>
             <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
               <LayoutGrid className="w-5 h-5 text-brand-teal" />
@@ -164,9 +164,9 @@ export function PrintLabelsModal({ isOpen, onClose, resources }: PrintLabelsModa
         </div>
 
         {/* Content */}
-        <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
+        <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-y-auto lg:overflow-hidden">
           {/* Controls */}
-          <div className="p-6 w-full lg:w-80 border-r border-border overflow-y-auto space-y-6 flex-shrink-0">
+          <div className="p-4 sm:p-6 w-full lg:w-80 border-b lg:border-b-0 lg:border-r border-border lg:overflow-y-auto space-y-4 sm:space-y-6 flex-shrink-0">
             <div className="space-y-2">
               <label className="text-xs font-bold text-foreground">Page Size</label>
               <Select value={pageSize} onValueChange={setPageSize}>
@@ -246,7 +246,7 @@ export function PrintLabelsModal({ isOpen, onClose, resources }: PrintLabelsModa
           </div>
 
           {/* Preview */}
-          <div className="flex-1 bg-gray-100 p-8 overflow-y-auto flex flex-col items-center gap-8">
+          <div className="flex-1 bg-gray-100 p-3 sm:p-8 lg:overflow-y-auto flex flex-col items-center gap-4 sm:gap-8 min-w-0">
             {pages.map((pageLabels, pageIdx) => (
               <div 
                 key={pageIdx}

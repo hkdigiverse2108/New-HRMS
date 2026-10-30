@@ -948,14 +948,14 @@ export default function ResourceManagementPage() {
   }
 
   return (
-    <div className="space-y-6 pb-10">
+    <div className="space-y-4 sm:space-y-6 pb-10 min-w-0">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Resource & Inventory Management</h1>
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Resource & Inventory Management</h1>
       </div>
 
       {/* Tab Navigation */}
       {!isEmployeeOnly && (
-        <div className="flex border-b border-border bg-gray-50/50 p-1.5 rounded-xl max-w-full sm:max-w-2xl overflow-x-auto shadow-sm border">
+        <div className="flex gap-1 sm:gap-0 border-b border-border bg-gray-50/50 p-1.5 rounded-xl max-w-full sm:max-w-2xl overflow-x-auto shadow-sm border">
           <button 
             onClick={() => setActiveTab("overview")} 
             className={`flex-1 min-h-[44px] sm:min-h-0 whitespace-nowrap shrink-0 py-2 px-3 text-xs sm:text-sm font-semibold rounded-lg flex items-center justify-center gap-2 transition-all ${activeTab === "overview" ? "bg-white text-emerald-700 shadow-sm border border-emerald-200" : "text-muted-foreground hover:text-foreground"}`}
@@ -972,7 +972,7 @@ export default function ResourceManagementPage() {
           </button>
           <button 
             onClick={() => setActiveTab("categories")} 
-            className={`flex-1 py-2 px-3 text-xs sm:text-sm font-semibold rounded-lg flex items-center justify-center gap-2 transition-all ${activeTab === "categories" ? "bg-white text-emerald-700 shadow-sm border border-emerald-200" : "text-muted-foreground hover:text-foreground"}`}
+            className={`flex-1 min-h-[44px] sm:min-h-0 whitespace-nowrap shrink-0 py-2 px-3 text-xs sm:text-sm font-semibold rounded-lg flex items-center justify-center gap-2 transition-all ${activeTab === "categories" ? "bg-white text-emerald-700 shadow-sm border border-emerald-200" : "text-muted-foreground hover:text-foreground"}`}
           >
             <Layers className="w-4 h-4 text-emerald-600" />
             Categories ({categories.length})
@@ -981,10 +981,10 @@ export default function ResourceManagementPage() {
       )}
 
       {activeTab === "overview" && !isEmployeeOnly && (
-        <div className="space-y-8 animate-in fade-in-50 duration-200">
+        <div className="space-y-6 sm:space-y-8 animate-in fade-in-50 duration-200">
           {/* Top Level KPIs */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div className="bg-white border border-border rounded-2xl p-6 shadow-sm flex items-center justify-between group hover:border-brand-teal/30 transition-all hover:shadow-md">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
+            <div className="bg-white border border-border rounded-2xl p-4 sm:p-6 shadow-sm flex items-center justify-between group hover:border-brand-teal/30 transition-all hover:shadow-md">
               <div>
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Assets</span>
                 <h3 className="text-3xl font-bold text-foreground mt-1">{totalAssetsCount}</h3>
@@ -995,7 +995,7 @@ export default function ResourceManagementPage() {
               </div>
             </div>
 
-            <div className="bg-white border border-border rounded-2xl p-6 shadow-sm flex items-center justify-between group hover:border-brand-teal/30 transition-all hover:shadow-md">
+            <div className="bg-white border border-border rounded-2xl p-4 sm:p-6 shadow-sm flex items-center justify-between group hover:border-brand-teal/30 transition-all hover:shadow-md">
               <div>
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Allocated Assets</span>
                 <h3 className="text-3xl font-bold text-foreground mt-1">{allocatedCount}</h3>
@@ -1008,7 +1008,7 @@ export default function ResourceManagementPage() {
               </div>
             </div>
 
-            <div className="bg-white border border-border rounded-2xl p-6 shadow-sm flex items-center justify-between group hover:border-brand-teal/30 transition-all hover:shadow-md">
+            <div className="bg-white border border-border rounded-2xl p-4 sm:p-6 shadow-sm flex items-center justify-between group hover:border-brand-teal/30 transition-all hover:shadow-md">
               <div>
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">In Maintenance</span>
                 <h3 className="text-3xl font-bold text-foreground mt-1">{maintenanceCount}</h3>
@@ -1033,39 +1033,39 @@ export default function ResourceManagementPage() {
                 <table className="w-full text-sm text-left whitespace-nowrap min-w-[700px]">
                   <thead className="text-xs text-muted-foreground font-semibold border-b border-border bg-gray-50/50 uppercase tracking-wider">
                     <tr>
-                      <SortableHeader label="Category Name" sortKey="name" currentSort={sortConfigCategories} onSort={requestSortCategories} className="px-6 py-4" />
-                      <SortableHeader label="Total Items" sortKey="total" currentSort={sortConfigCategories} onSort={requestSortCategories} className="px-6 py-4 text-center" />
-                      <SortableHeader label="Available Stock" sortKey="available" currentSort={sortConfigCategories} onSort={requestSortCategories} className="px-6 py-4 text-center" />
-                      <SortableHeader label="Allocated (Assigned)" sortKey="allocated" currentSort={sortConfigCategories} onSort={requestSortCategories} className="px-6 py-4 text-center" />
-                      <SortableHeader label="In Maintenance" sortKey="maintenance" currentSort={sortConfigCategories} onSort={requestSortCategories} className="px-6 py-4 text-center" />
-                      <SortableHeader label="Allocation Ratio" sortKey="allocationRate" currentSort={sortConfigCategories} onSort={requestSortCategories} className="px-6 py-4" />
+                      <SortableHeader label="Category Name" sortKey="name" currentSort={sortConfigCategories} onSort={requestSortCategories} className="px-3 sm:px-6 py-3 sm:py-4" />
+                      <SortableHeader label="Total Items" sortKey="total" currentSort={sortConfigCategories} onSort={requestSortCategories} className="px-3 sm:px-6 py-3 sm:py-4 text-center" />
+                      <SortableHeader label="Available Stock" sortKey="available" currentSort={sortConfigCategories} onSort={requestSortCategories} className="px-3 sm:px-6 py-3 sm:py-4 text-center" />
+                      <SortableHeader label="Allocated (Assigned)" sortKey="allocated" currentSort={sortConfigCategories} onSort={requestSortCategories} className="px-3 sm:px-6 py-3 sm:py-4 text-center" />
+                      <SortableHeader label="In Maintenance" sortKey="maintenance" currentSort={sortConfigCategories} onSort={requestSortCategories} className="px-3 sm:px-6 py-3 sm:py-4 text-center" />
+                      <SortableHeader label="Allocation Ratio" sortKey="allocationRate" currentSort={sortConfigCategories} onSort={requestSortCategories} className="px-3 sm:px-6 py-3 sm:py-4" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
                     {sortedCategoryStats.map((cat: any) => (
                       <tr key={cat.name} className="hover:bg-gray-50/30 transition-colors">
-                        <td className="px-6 py-4 font-medium text-foreground">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 font-medium text-foreground">
                           <span className="font-semibold text-sm">{cat.name}</span>
                         </td>
-                        <td className="px-6 py-4 text-center font-semibold text-foreground text-sm">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-center font-semibold text-foreground text-sm">
                           {cat.total}
                         </td>
-                        <td className="px-6 py-4 text-center text-sm">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-center text-sm">
                           <span className={cat.available > 0 ? "text-emerald-700 font-semibold" : "text-muted-foreground"}>
                             {cat.available}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-center text-sm">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-center text-sm">
                           <span className={cat.allocated > 0 ? "text-blue-700 font-semibold" : "text-muted-foreground"}>
                             {cat.allocated}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-center text-sm">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-center text-sm">
                           <span className={cat.maintenance > 0 ? "text-amber-700 font-semibold" : "text-muted-foreground"}>
                             {cat.maintenance || "-"}
                           </span>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4">
                           <div className="flex items-center gap-3">
                             <div className="w-24 bg-gray-100 rounded-full h-1.5 overflow-hidden">
                               <div className="bg-brand-teal h-1.5 rounded-full transition-all" style={{ width: `${cat.allocationRate}%` }}></div>
@@ -1085,23 +1085,23 @@ export default function ResourceManagementPage() {
 
       {(activeTab === "registry" || isEmployeeOnly) && (
         <div className="bg-white border border-border rounded-2xl shadow-sm flex flex-col animate-in fade-in-50 duration-200">
-          <div className="p-6 border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
+          <div className="p-4 sm:p-6 border-b border-border flex flex-wrap md:flex-nowrap items-center justify-between gap-4 min-w-0">
+            <div className="shrink-0">
               <h2 className="text-lg font-bold text-foreground">Asset Catalog</h2>
               <p className="text-xs text-muted-foreground mt-0.5">Add, allocate, check health, and track all physical resources.</p>
             </div>
-            <div className="flex flex-col sm:flex-row items-center gap-3">
+            <div className="flex flex-wrap md:flex-nowrap items-center gap-2 sm:gap-3 min-w-0 w-full md:w-auto">
               {!isEmployeeOnly && (
                 <Button 
                   onClick={() => setIsPrintModalOpen(true)} 
                   variant="outline"
-                  className="w-full sm:w-auto bg-white border-border text-foreground hover:bg-gray-50 flex items-center gap-2"
+                  className="w-auto bg-white border-border text-foreground hover:bg-gray-50 flex items-center justify-center gap-2 shrink-0"
                 >
                   <Printer className="w-4 h-4 text-brand-teal" />
                   Print Labels
                 </Button>
               )}
-              <div className="relative w-full sm:w-64">
+              <div className="relative flex-1 min-w-[150px] md:flex-none md:w-64">
                 <RefreshCw className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground ${isLoading ? 'animate-spin text-brand-teal' : ''}`} />
                 <Input 
                   placeholder="Search name, ID, SN..." 
@@ -1110,9 +1110,9 @@ export default function ResourceManagementPage() {
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
-              <div className="flex items-center gap-2 w-full sm:w-auto">
+              <div className="flex flex-wrap md:flex-nowrap items-center gap-2 w-full md:w-auto">
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-full sm:w-[140px] bg-gray-50">
+                  <SelectTrigger className="flex-1 min-w-[120px] md:flex-none md:w-[140px] bg-gray-50">
                     <SelectValue placeholder="Select Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1123,7 +1123,7 @@ export default function ResourceManagementPage() {
                   </SelectContent>
                 </Select>
                 <Select value={typeFilter} onValueChange={setTypeFilter}>
-                  <SelectTrigger className="w-full sm:w-[150px] bg-gray-50">
+                  <SelectTrigger className="flex-1 min-w-[120px] md:flex-none md:w-[150px] bg-gray-50">
                     <SelectValue placeholder="Select Type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1134,7 +1134,7 @@ export default function ResourceManagementPage() {
                   </SelectContent>
                 </Select>
                 {!isEmployeeOnly && (
-                  <div className="w-full sm:w-[180px]">
+                  <div className="flex-1 min-w-[120px] md:flex-none md:w-[180px]">
                     <Select value={employeeFilter} onValueChange={setEmployeeFilter}>
                       <SelectTrigger className="w-full bg-gray-50">
                         <SelectValue placeholder="Select Employee" />
@@ -1156,12 +1156,12 @@ export default function ResourceManagementPage() {
             <table className="w-full text-sm text-left whitespace-nowrap min-w-[700px]">
               <thead className="text-xs text-muted-foreground font-semibold border-b border-border bg-gray-50/50 uppercase tracking-wider">
                 <tr>
-                  <SortableHeader label="Resource ID" sortKey="assetId" currentSort={sortConfigResources} onSort={requestSortResources} className="px-6 py-4" />
-                  <SortableHeader label="Category" sortKey="category" currentSort={sortConfigResources} onSort={requestSortResources} className="px-6 py-4" />
-                  <SortableHeader label="Condition" sortKey="condition" currentSort={sortConfigResources} onSort={requestSortResources} className="px-6 py-4 text-center" />
-                  <SortableHeader label="Status" sortKey="status" currentSort={sortConfigResources} onSort={requestSortResources} className="px-6 py-4" />
-                  <SortableHeader label="Assigned To" sortKey="assignedTo" currentSort={sortConfigResources} onSort={requestSortResources} className="px-6 py-4" />
-                  {!isEmployeeOnly && <th className="px-6 py-4 font-bold text-foreground text-right sticky right-0 z-20 bg-[#f9fafb] shadow-[-1px_0_0_0_#e2e8f0]">Actions</th>}
+                  <SortableHeader label="Resource ID" sortKey="assetId" currentSort={sortConfigResources} onSort={requestSortResources} className="px-3 sm:px-6 py-3 sm:py-4" />
+                  <SortableHeader label="Category" sortKey="category" currentSort={sortConfigResources} onSort={requestSortResources} className="px-3 sm:px-6 py-3 sm:py-4" />
+                  <SortableHeader label="Condition" sortKey="condition" currentSort={sortConfigResources} onSort={requestSortResources} className="px-3 sm:px-6 py-3 sm:py-4 text-center" />
+                  <SortableHeader label="Status" sortKey="status" currentSort={sortConfigResources} onSort={requestSortResources} className="px-3 sm:px-6 py-3 sm:py-4" />
+                  <SortableHeader label="Assigned To" sortKey="assignedTo" currentSort={sortConfigResources} onSort={requestSortResources} className="px-3 sm:px-6 py-3 sm:py-4" />
+                  {!isEmployeeOnly && <th className="px-3 sm:px-6 py-3 sm:py-4 font-bold text-foreground text-right md:sticky md:right-0 md:z-20 md:bg-[#f9fafb] md:shadow-[-1px_0_0_0_#e2e8f0]">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -1179,7 +1179,7 @@ export default function ResourceManagementPage() {
                       className="hover:bg-gray-50/30 transition-colors"
                     >
 
-                      <td className={`px-6 py-4 text-xs font-semibold text-muted-foreground font-mono ${!isEmployeeOnly ? 'cursor-pointer hover:bg-gray-50/50' : ''}`} onClick={isEmployeeOnly ? undefined : (e) => { e.stopPropagation(); setEditingCell({ id: res.id, field: 'assetId' }); setTempValue(res.assetId); }}>
+                      <td className={`px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-muted-foreground font-mono ${!isEmployeeOnly ? 'cursor-pointer hover:bg-gray-50/50' : ''}`} onClick={isEmployeeOnly ? undefined : (e) => { e.stopPropagation(); setEditingCell({ id: res.id, field: 'assetId' }); setTempValue(res.assetId); }}>
                         {editingCell?.id === res.id && editingCell?.field === 'assetId' ? (
                           <Input 
                             value={tempValue} 
@@ -1193,7 +1193,7 @@ export default function ResourceManagementPage() {
                           res.assetId
                         )}
                       </td>
-                      <td className={`px-6 py-4 text-muted-foreground text-xs font-semibold ${!isEmployeeOnly ? 'cursor-pointer hover:bg-gray-50/50' : ''}`} onClick={isEmployeeOnly ? undefined : (e) => { e.stopPropagation(); setEditingCell({ id: res.id, field: 'category' }); setTempValue(res.category); }}>
+                      <td className={`px-3 sm:px-6 py-3 sm:py-4 text-muted-foreground text-xs font-semibold ${!isEmployeeOnly ? 'cursor-pointer hover:bg-gray-50/50' : ''}`} onClick={isEmployeeOnly ? undefined : (e) => { e.stopPropagation(); setEditingCell({ id: res.id, field: 'category' }); setTempValue(res.category); }}>
                         {editingCell?.id === res.id && editingCell?.field === 'category' ? (
                           <Select value={tempValue} onValueChange={(val) => handleInlineSave(res.id, 'category', val)}>
                             <SelectTrigger className="h-8 bg-white text-xs">
@@ -1209,7 +1209,7 @@ export default function ResourceManagementPage() {
                           res.category
                         )}
                       </td>
-                      <td className={`px-6 py-4 text-center ${!isEmployeeOnly ? 'cursor-pointer hover:bg-gray-50/50' : ''}`} onClick={isEmployeeOnly ? undefined : (e) => { e.stopPropagation(); setEditingCell({ id: res.id, field: 'condition' }); setTempValue(res.condition || 'Good'); }}>
+                      <td className={`px-3 sm:px-6 py-3 sm:py-4 text-center ${!isEmployeeOnly ? 'cursor-pointer hover:bg-gray-50/50' : ''}`} onClick={isEmployeeOnly ? undefined : (e) => { e.stopPropagation(); setEditingCell({ id: res.id, field: 'condition' }); setTempValue(res.condition || 'Good'); }}>
                         {editingCell?.id === res.id && editingCell?.field === 'condition' ? (
                           <Select value={tempValue} onValueChange={(val) => handleInlineSave(res.id, 'condition', val)}>
                             <SelectTrigger className="h-8 bg-white text-xs mx-auto w-24">
@@ -1229,7 +1229,7 @@ export default function ResourceManagementPage() {
                         )}
                       </td>
 
-                      <td className={`px-6 py-4 ${!isEmployeeOnly ? 'cursor-pointer hover:bg-gray-50/50' : ''}`} onClick={isEmployeeOnly ? undefined : (e) => { e.stopPropagation(); setEditingCell({ id: res.id, field: 'status' }); setTempValue(res.status); }}>
+                      <td className={`px-3 sm:px-6 py-3 sm:py-4 ${!isEmployeeOnly ? 'cursor-pointer hover:bg-gray-50/50' : ''}`} onClick={isEmployeeOnly ? undefined : (e) => { e.stopPropagation(); setEditingCell({ id: res.id, field: 'status' }); setTempValue(res.status); }}>
                         {editingCell?.id === res.id && editingCell?.field === 'status' ? (
                           <Select value={tempValue} onValueChange={(val) => handleInlineSave(res.id, 'status', val)}>
                             <SelectTrigger className="h-8 bg-white text-xs w-28">
@@ -1247,7 +1247,7 @@ export default function ResourceManagementPage() {
                           </span>
                         )}
                       </td>
-                      <td className={`px-6 py-4 ${!isEmployeeOnly ? 'cursor-pointer hover:bg-gray-50/50' : ''}`} onClick={isEmployeeOnly ? undefined : (e) => { e.stopPropagation(); setEditingCell({ id: res.id, field: 'assignedTo' }); setTempValue(res.assignedTo || 'unassigned'); }}>
+                      <td className={`px-3 sm:px-6 py-3 sm:py-4 ${!isEmployeeOnly ? 'cursor-pointer hover:bg-gray-50/50' : ''}`} onClick={isEmployeeOnly ? undefined : (e) => { e.stopPropagation(); setEditingCell({ id: res.id, field: 'assignedTo' }); setTempValue(res.assignedTo || 'unassigned'); }}>
                         {editingCell?.id === res.id && editingCell?.field === 'assignedTo' ? (
                           <Select 
                             value={(() => {
@@ -1295,7 +1295,7 @@ export default function ResourceManagementPage() {
                         )}
                       </td>
                       {!isEmployeeOnly && (
-                        <td className="px-6 py-4 text-right sticky right-0 z-10 bg-white group-hover:bg-slate-50 shadow-[-1px_0_0_0_#e2e8f0] transition-colors" onClick={(e) => e.stopPropagation()}>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-right md:sticky md:right-0 md:z-10 md:bg-white md:group-hover:bg-slate-50 md:shadow-[-1px_0_0_0_#e2e8f0] transition-colors" onClick={(e) => e.stopPropagation()}>
                           <div className="flex justify-end gap-1">
                             <Button 
                               variant="ghost" 
@@ -1440,10 +1440,10 @@ export default function ResourceManagementPage() {
                 <table className="w-full text-sm text-left whitespace-nowrap min-w-[650px]">
                   <thead className="text-xs text-muted-foreground font-semibold border-b border-border bg-gray-50/50 uppercase tracking-wider">
                     <tr>
-                      <SortableHeader label="Category" sortKey="name" currentSort={sortConfigCategories} onSort={requestSortCategories} className="px-6 py-4" />
-                      <SortableHeader label="Description" sortKey="description" currentSort={sortConfigCategories} onSort={requestSortCategories} className="px-6 py-4" />
-                      <SortableHeader label="Total Resources" sortKey="total" currentSort={sortConfigCategories} onSort={requestSortCategories} className="px-6 py-4" />
-                      <th className="px-6 py-4 font-bold text-foreground text-right sticky right-0 z-20 bg-[#f9fafb] shadow-[-1px_0_0_0_#e2e8f0]">Actions</th>
+                      <SortableHeader label="Category" sortKey="name" currentSort={sortConfigCategories} onSort={requestSortCategories} className="px-3 sm:px-6 py-3 sm:py-4" />
+                      <SortableHeader label="Description" sortKey="description" currentSort={sortConfigCategories} onSort={requestSortCategories} className="px-3 sm:px-6 py-3 sm:py-4" />
+                      <SortableHeader label="Total Resources" sortKey="total" currentSort={sortConfigCategories} onSort={requestSortCategories} className="px-3 sm:px-6 py-3 sm:py-4" />
+                      <th className="px-3 sm:px-6 py-3 sm:py-4 font-bold text-foreground text-right md:sticky md:right-0 md:z-20 md:bg-[#f9fafb] md:shadow-[-1px_0_0_0_#e2e8f0]">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -1455,16 +1455,16 @@ export default function ResourceManagementPage() {
                       </tr>
                     ) : sortedCategoryStats.map((cat: any) => (
                       <tr key={cat.id} className="hover:bg-gray-50/30 transition-colors">
-                        <td className="px-6 py-4 font-medium text-foreground">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 font-medium text-foreground">
                           <span className="font-semibold text-sm">{cat.name}</span>
                         </td>
-                        <td className="px-6 py-4 text-xs text-muted-foreground">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs text-muted-foreground">
                           {cat.description || "No description provided."}
                         </td>
-                        <td className="px-6 py-4 text-sm font-semibold text-foreground">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm font-semibold text-foreground">
                           {cat.total}
                         </td>
-                        <td className="px-6 py-4 text-right sticky right-0 z-10 bg-white group-hover:bg-slate-50 shadow-[-1px_0_0_0_#e2e8f0] transition-colors">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-right md:sticky md:right-0 md:z-10 md:bg-white md:group-hover:bg-slate-50 md:shadow-[-1px_0_0_0_#e2e8f0] transition-colors">
                           <div className="flex justify-end gap-1">
                             <Button 
                               variant="ghost" 
