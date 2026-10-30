@@ -61,7 +61,14 @@ class ContentService:
     async def get_settings(project_id: str):
         settings = await ContentRepository.get_settings(project_id)
         if not settings:
-            # Return default
+            if project_id != "global":
+                global_settings = await ContentRepository.get_settings("global")
+                if global_settings:
+                    settings = dict(global_settings)
+                    settings["project_id"] = project_id
+                    settings["_id"] = "default"
+                    return settings
+            # Return default template
             default_settings = ContentTimelineSettings(project_id=project_id)
             settings = default_settings.model_dump()
             settings["_id"] = "default"
@@ -80,6 +87,7 @@ class ContentService:
             
         topic = item_data.get("topic_title", "Untitled")
         content_type = item_data.get("content_type", "Content")
+        is_post_type = content_type in ["Post", "Carousel", "Story"]
         
         roles_mapping = {
             "scripting": {"date_field": ["script", "date"], "is_completed": lambda d: bool(d.get("script", {}).get("link")), "title": f"Scripting - {topic} ({content_type})"},
@@ -99,6 +107,26 @@ class ContentService:
             emp_id = team.get(role)
             if not emp_id:
                 continue
+
+            # Exclude roles not needed per content type
+            if is_post_type:
+                if role == "reel_editing":
+                    continue
+                if role == "scripting":
+                    link = (item_data.get("script") or {}).get("link", "")
+                    if not link or str(link).strip().lower() == "not required":
+                        continue
+                if role == "shoot_videography":
+                    link = (item_data.get("shoot") or {}).get("link", "")
+                    if not link or str(link).strip().lower() == "not required":
+                        continue
+                if role == "thumbnail":
+                    link = (item_data.get("thumbnail") or {}).get("link", "")
+                    if not link or str(link).strip().lower() == "not required":
+                        continue
+            elif content_type == "Reel":
+                if role == "post_graphics":
+                    continue
                 
             date_val = item_data
             for key in mapping["date_field"]:
@@ -185,6 +213,14 @@ class ContentService:
                 
         if insert_data.get("caption_date") is None:
             insert_data["caption_date"] = (schedule_date - timedelta(days=settings.approval_days_before)).isoformat()
+
+        # For static Post deliverables, default Script, Shoot, Thumbnail to "Not Required"
+        if insert_data.get("content_type") in ["Post", "Carousel", "Story"]:
+            for stg in ["script", "shoot", "thumbnail"]:
+                if stg not in insert_data:
+                    insert_data[stg] = {}
+                if not insert_data[stg].get("link"):
+                    insert_data[stg]["link"] = "Not Required"
 
 
         created_item = await ContentRepository.create(insert_data)

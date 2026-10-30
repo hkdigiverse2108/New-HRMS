@@ -387,7 +387,7 @@ function NewProjectModal({ open, onClose }: { open: boolean; onClose: () => void
     onClose();
   };
 
-  const CATEGORIES = ["General", "Digital Marketing", "Web Development", "Mobile App", "Design", "Consulting", "Sales", "HR", "Finance", "Operations"];
+  const CATEGORIES = ["General", "Digital Marketing", "Web Development", "Mobile App", "Design", "Consulting", "HR", "Finance", "Operations"];
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>

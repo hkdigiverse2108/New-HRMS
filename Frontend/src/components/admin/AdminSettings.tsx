@@ -9,6 +9,7 @@ import { NotificationSettingsCard } from "@/components/notifications/Notificatio
 import { InvoiceSettingsCard } from "./settings/InvoiceSettingsCard";
 import { LetterheadCard } from "./settings/LetterheadCard";
 import { ServicesCatalogCard } from "./settings/ServicesCatalogCard";
+import { ContentTimelineSettingsCard } from "./settings/ContentTimelineSettingsCard";
 
 const FONTS = [
   { value: "System", label: "System Default" },
@@ -673,8 +674,11 @@ export function AdminSettings() {
         </div>
       </div>
 
-      {/* Notifications, billing and letterhead */}
+      {/* Content Calendar Defaults, Notifications, billing and letterhead */}
       <div className="grid gap-6">
+        {/* Content Calendar Default Timeline Card */}
+        <ContentTimelineSettingsCard />
+
         {/* Notification Preferences Card */}
         <NotificationSettingsCard />
 

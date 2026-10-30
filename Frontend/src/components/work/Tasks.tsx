@@ -28,6 +28,7 @@ type TimeframeFilter = "all" | "today" | "overdue" | "client_issue" | "pending" 
 interface BackendTask {
   _id: string;
   id?: string;
+  is_archived?: boolean;
   title: string;
   description?: string;
   status: string;
@@ -119,6 +120,7 @@ interface TaskItem {
   isAuto: boolean;
   isTransferred: boolean;
   department?: string;
+  is_archived?: boolean;
   createdAt?: string | undefined;
   rawBackend: BackendTask;
 }
@@ -651,6 +653,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
             isTransferred: Boolean(t.transfer_history && t.transfer_history.length > 0) || Boolean(t.transfer_request?.status === "transferred" || t.transfer_request?.status === "accepted"),
             department: t.department || "",
             createdAt: t.created_at || (t as any).createdAt || "",
+            is_archived: Boolean(t.is_archived || t.project_details?.is_archived),
             rawBackend: t,
           };
         });
@@ -722,7 +725,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
       if (t.department && t.department.trim()) deptSet.add(t.department.trim());
       if (t.rawBackend?.department && t.rawBackend.department.trim()) deptSet.add(t.rawBackend.department.trim());
     });
-    ["Creative", "Development", "SMM", "Video Editing", "Sales", "HR"].forEach((d) => deptSet.add(d));
+    ["Creative", "Development", "SMM", "Video Editing", "HR"].forEach((d) => deptSet.add(d));
     return ["All", ...Array.from(deptSet).sort()];
   }, [employees, tasks]);
 
@@ -743,7 +746,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   // Tasks are dynamically queried, filtered, and paginated (25 per page) from the backend directly
   const filteredTasks = useMemo(() => {
     // Stage filter is applied on the server (matches sub_category and Content-Calendar creative_role)
-    return tasks;
+    return tasks.filter(t => !t.is_archived);
   }, [tasks]);
   const { items: sortedTasks, requestSort, sortConfig } = useSortableData(filteredTasks);
 

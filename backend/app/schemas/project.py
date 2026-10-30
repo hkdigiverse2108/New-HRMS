@@ -7,7 +7,6 @@ class ProjectCategory(str, Enum):
     DEVELOPMENT = "Development"
     CREATIVE = "Creative"
     DIGITAL_MARKETING = "Digital Marketing"
-    SALES = "Sales"
     
 class ProjectStatus(str, Enum):
     NOT_STARTED = "Not Started"
@@ -101,7 +100,6 @@ class ProjectGeneralDetails(BaseModel):
                 "development": "Development",
                 "creative": "Creative",
                 "digitalmarketing": "Digital Marketing",
-                "sales": "Sales",
                 "webdev": "Development",
                 "appdev": "Development",
                 "design": "Creative",
@@ -416,7 +414,6 @@ class ProjectGeneralUpdate(BaseModel):
                 "development": "Development",
                 "creative": "Creative",
                 "digitalmarketing": "Digital Marketing",
-                "sales": "Sales",
                 "webdev": "Development",
                 "appdev": "Development",
                 "design": "Creative",

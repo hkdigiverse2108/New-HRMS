@@ -66,7 +66,7 @@ class ProjectRepository:
             query["client_id"] = client_id
         if category:
             clean_category = category.lower().replace(" ", "").replace("_", "")
-            cat_map = {"development": "Development", "creative": "Creative", "digitalmarketing": "Digital Marketing", "sales": "Sales"}
+            cat_map = {"development": "Development", "creative": "Creative", "digitalmarketing": "Digital Marketing"}
             target_cat = cat_map.get(clean_category, category)
             import re
             query["general.category"] = {"$regex": re.escape(target_cat), "$options": "i"}
