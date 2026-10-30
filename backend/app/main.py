@@ -241,6 +241,20 @@ app.mount("/uploads", SafeStaticFiles(directory=str(UPLOADS_DIR)), name="uploads
 async def root():
     return {"message": "Welcome to New-HRMS API"}
 
+@app.get("/clear-cache")
+async def clear_all_cache():
+    """Flushes Redis cache and in-memory cache directly via API"""
+    try:
+        from app.redis.service import clear_pattern, _memory_cache
+        _memory_cache.clear()
+        await clear_pattern("projects:*")
+        await clear_pattern("clients:*")
+        await clear_pattern("tasks:*")
+        await clear_pattern("*")
+        return {"status": "success", "message": "All Redis and in-memory cache cleared successfully!"}
+    except Exception as e:
+        return {"status": "error", "message": f"Failed to clear cache: {str(e)}"}
+
 @app.get("/test-redis")
 async def test_redis():
     try:
