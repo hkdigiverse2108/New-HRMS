@@ -174,6 +174,7 @@ class TaskRepository:
 
         start_of_today = datetime(ref_date.year, ref_date.month, ref_date.day)
         end_of_today = datetime(ref_date.year, ref_date.month, ref_date.day, 23, 59, 59, 999999)
+        today_str = ref_date.strftime("%Y-%m-%d")
 
         if timeline_filter:
             tf = timeline_filter.lower().strip()
@@ -182,15 +183,22 @@ class TaskRepository:
                 and_conditions.append({
                     "$or": [
                         {"due_date": {"$gte": start_of_today, "$lte": end_of_today}},
+                        {"due_date": today_str},
                         {
-                            "due_date": {"$lt": start_of_today},
+                            "$or": [
+                                {"due_date": {"$lt": start_of_today}},
+                                {"due_date": {"$type": "string", "$lt": today_str}}
+                            ],
                             "status": {"$nin": ["completed", "done"]}
                         }
                     ]
                 })
             elif tf == "overdue":
                 and_conditions.append({
-                    "due_date": {"$lt": start_of_today},
+                    "$or": [
+                        {"due_date": {"$lt": start_of_today}},
+                        {"due_date": {"$type": "string", "$lt": today_str}}
+                    ],
                     "status": {"$nin": ["completed", "done"]}
                 })
             elif tf == "pending":
@@ -203,7 +211,10 @@ class TaskRepository:
                 })
             elif tf == "upcoming":
                 and_conditions.append({
-                    "due_date": {"$gt": end_of_today},
+                    "$or": [
+                        {"due_date": {"$gt": end_of_today}},
+                        {"due_date": {"$type": "string", "$gt": today_str}}
+                    ],
                     "status": {"$nin": ["completed", "done"]}
                 })
             elif tf == "client_issue":
@@ -380,6 +391,7 @@ class TaskRepository:
 
         start_of_today = datetime(ref_date.year, ref_date.month, ref_date.day)
         end_of_today = datetime(ref_date.year, ref_date.month, ref_date.day, 23, 59, 59, 999999)
+        today_str = ref_date.strftime("%Y-%m-%d")
 
         # Single round-trip facet with filter-wise KPIs
         facet_res = await collection.aggregate([
@@ -390,9 +402,9 @@ class TaskRepository:
                 "inprogress": [{"$match": {"status": "inprogress"}}, {"$count": "n"}],
                 "inreview": [{"$match": {"status": {"$in": ["inreview", "review"]}}}, {"$count": "n"}],
                 "completed": [{"$match": {"status": {"$in": ["completed", "done"]}, "content_item_id": {"$in": [None, ""]}}}, {"$count": "n"}],
-                "today": [{"$match": {"due_date": {"$gte": start_of_today, "$lte": end_of_today}}}, {"$count": "n"}],
-                "overdue": [{"$match": {"due_date": {"$lt": start_of_today}, "status": {"$nin": ["completed", "done"]}}}, {"$count": "n"}],
-                "upcoming": [{"$match": {"due_date": {"$gt": end_of_today}, "status": {"$nin": ["completed", "done"]}}}, {"$count": "n"}],
+                "today": [{"$match": {"$or": [{"due_date": {"$gte": start_of_today, "$lte": end_of_today}}, {"due_date": today_str}]}}, {"$count": "n"}],
+                "overdue": [{"$match": {"$or": [{"due_date": {"$lt": start_of_today}}, {"due_date": {"$type": "string", "$lt": today_str}}], "status": {"$nin": ["completed", "done"]}}}, {"$count": "n"}],
+                "upcoming": [{"$match": {"$or": [{"due_date": {"$gt": end_of_today}}, {"due_date": {"$type": "string", "$gt": today_str}}], "status": {"$nin": ["completed", "done"]}}}, {"$count": "n"}],
                 "client_issue": [{"$match": {"$or": [{"task_category": "Client Issue"}, {"title": {"$regex": "^\\[client issue\\]", "$options": "i"}}, {"is_client_issue": True}]}}, {"$count": "n"}],
                 "pending": [{"$match": {"$or": [{"task_category": "Pending"}, {"title": {"$regex": "^\\[pending\\]", "$options": "i"}}, {"is_pending_issue": True}]}}, {"$count": "n"}]
             }},

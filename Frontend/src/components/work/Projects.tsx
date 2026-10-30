@@ -4665,6 +4665,28 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     });
   };
 
+  const confirmDeleteBrandProjects = (group: any) => {
+    const subProjects = group.subProjects || [];
+    setConfirmModalState({
+      isOpen: true,
+      title: "Delete All Projects",
+      description: `Are you sure you want to delete all ${subProjects.length} project(s) for "${group.displayName}"? All associated tasks will also be permanently removed.`,
+      itemName: group.displayName,
+      action: async () => {
+        try {
+          for (const sp of subProjects) {
+            await api.delete(`/projects/${sp.id}`);
+            moveToRecycleBin('Project', sp.name, sp, 'hrms_projects');
+          }
+          await loadLiveData();
+          toast.success(`All projects for "${group.displayName}" deleted.`);
+        } catch (err: any) {
+          toast.error(err?.message || "Failed to delete projects");
+        }
+      }
+    });
+  };
+
 
   const archiveClient = async (client: Client) => {
     try {
@@ -6657,6 +6679,18 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         <span>Archive</span>
                       </>
                     )}
+                  </button>
+                )}
+
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => confirmDeleteProject(project)}
+                    className="flex items-center gap-2 px-3.5 py-2 font-bold text-xs rounded-xl transition-all shadow-sm border bg-rose-500/10 text-rose-600 border-rose-500/20 hover:bg-rose-500/20 cursor-pointer"
+                    title="Delete project permanently"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Delete</span>
                   </button>
                 )}
               </div>
@@ -13008,6 +13042,44 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   <span className="hidden sm:inline">New Project</span>
                 </button>
               )}
+
+              {isAdminOrHr && (
+                <button
+                  type="button"
+                  onClick={() => client.status === "Archived" ? unarchiveClient(client) : archiveClient(client)}
+                  className={cn(
+                    "flex items-center gap-2 px-3.5 py-2.5 font-bold text-xs rounded-xl transition-all shadow-sm border cursor-pointer",
+                    client.status === "Archived"
+                      ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-emerald-500/20"
+                      : "bg-muted text-muted-foreground border-border/50 hover:bg-amber-500/10 hover:text-amber-600 hover:border-amber-500/20"
+                  )}
+                  title={client.status === "Archived" ? "Restore client to Active" : "Archive client"}
+                >
+                  {client.status === "Archived" ? (
+                    <>
+                      <ArchiveRestore className="w-3.5 h-3.5 text-emerald-600" />
+                      <span className="hidden sm:inline">Unarchive</span>
+                    </>
+                  ) : (
+                    <>
+                      <Archive className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Archive</span>
+                    </>
+                  )}
+                </button>
+              )}
+
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => confirmDeleteClient(client)}
+                  className="flex items-center gap-2 px-3.5 py-2.5 font-bold text-xs rounded-xl transition-all shadow-sm border bg-rose-500/10 text-rose-600 border-rose-500/20 hover:bg-rose-500/20 cursor-pointer"
+                  title="Delete client and all projects permanently"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                  <span className="hidden sm:inline">Delete</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -13115,6 +13187,26 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         >
                           <Edit2 className="w-4 h-4 mr-2" /> Edit Project
                         </DropdownMenuItem>
+                        {isAdminOrHr && (
+                          <DropdownMenuItem
+                            onSelect={() => {
+                              setTimeout(() => {
+                                handleArchiveProject(project, !project.is_archived);
+                              }, 100);
+                            }}
+                            className="rounded-xl cursor-pointer py-2.5 focus:bg-amber-500/10 focus:text-amber-600 font-medium transition-colors"
+                          >
+                            {project.is_archived ? (
+                              <>
+                                <ArchiveRestore className="w-4 h-4 mr-2 text-emerald-600" /> Unarchive Project
+                              </>
+                            ) : (
+                              <>
+                                <Archive className="w-4 h-4 mr-2" /> Archive Project
+                              </>
+                            )}
+                          </DropdownMenuItem>
+                        )}
                         {isAdmin && (
                           <>
                             <DropdownMenuSeparator className="bg-border/50" />
@@ -14759,6 +14851,23 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         )}
                       </button>
                     )}
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if ((group.subProjects?.length || 0) <= 1) {
+                            confirmDeleteProject(group.primaryProject);
+                          } else {
+                            confirmDeleteBrandProjects(group);
+                          }
+                        }}
+                        className="p-1.5 rounded-lg border border-border/50 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                        title={(group.subProjects?.length || 0) <= 1 ? "Delete Project" : `Delete all ${group.subProjects.length} projects`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                      </button>
+                    )}
                     <span className={cn("px-2.5 py-1 rounded-full text-[11px] font-black border shrink-0", group.statusStyle)}>
                       {group.status}
                     </span>
@@ -14968,17 +15077,51 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                           )}
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedProjectId(sp.id);
-                          }}
-                          className="px-2.5 py-1 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-[10px] rounded-lg shadow-sm hover:shadow transition-all flex items-center gap-1 shrink-0 cursor-pointer"
-                        >
-                          <span>Open Project</span>
-                          <ChevronRight className="w-3 h-3" />
-                        </button>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {isAdminOrHr && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleArchiveProject(sp, !sp.is_archived);
+                              }}
+                              className="p-1 rounded-lg border border-border/50 text-muted-foreground hover:text-amber-600 hover:bg-amber-500/10 transition-colors cursor-pointer"
+                              title={sp.is_archived ? "Restore this project to Active" : "Archive this project"}
+                            >
+                              {sp.is_archived ? (
+                                <ArchiveRestore className="w-3 h-3 text-emerald-600" />
+                              ) : (
+                                <Archive className="w-3 h-3 text-muted-foreground hover:text-amber-500" />
+                              )}
+                            </button>
+                          )}
+
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                confirmDeleteProject(sp);
+                              }}
+                              className="p-1 rounded-lg border border-border/50 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                              title="Delete this project permanently"
+                            >
+                              <Trash2 className="w-3 h-3 text-rose-500" />
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedProjectId(sp.id);
+                            }}
+                            className="px-2.5 py-1 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-[10px] rounded-lg shadow-sm hover:shadow transition-all flex items-center gap-1 shrink-0 cursor-pointer"
+                          >
+                            <span>Open Project</span>
+                            <ChevronRight className="w-3 h-3" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -15055,6 +15198,20 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   >
                     <Clock className="w-4 h-4" />
                   </button>
+
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        confirmDeleteClient(client);
+                      }}
+                      className="p-1.5 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors border border-border/40 bg-background/50 backdrop-blur-sm cursor-pointer"
+                      title="Delete Client & all projects"
+                    >
+                      <Trash2 className="w-4 h-4 text-rose-500" />
+                    </button>
+                  )}
 
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>

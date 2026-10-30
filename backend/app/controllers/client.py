@@ -86,8 +86,8 @@ async def delete_client(client_id: str, current_user: dict = Depends(get_current
     if not item or item.get("is_deleted"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Client not found")
         
-    role = current_user.get("work_details", {}).get("system_role", "Employee")
-    if role not in ["Admin", "SuperAdmin", "superadmin"]:
+    role = str(current_user.get("work_details", {}).get("system_role") or current_user.get("role") or "").strip().lower()
+    if role not in ["admin", "superadmin", "subadmin"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Admin can delete clients")
         
     success = await ClientService.delete_client(client_id)
@@ -95,6 +95,8 @@ async def delete_client(client_id: str, current_user: dict = Depends(get_current
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to delete client")
 
     await clear_pattern("clients:*")
+    await clear_pattern("projects:*")
+    await clear_pattern("tasks:*")
 
 @router.patch("/{client_id}/archive", response_model=ClientResponse, response_model_exclude_none=True)
 @router.post("/{client_id}/archive", response_model=ClientResponse, response_model_exclude_none=True)

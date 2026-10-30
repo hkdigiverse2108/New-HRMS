@@ -90,8 +90,12 @@ class ContentService:
         is_post_type = content_type in ["Post", "Carousel", "Story"]
         
         def _check_link_done(obj):
-            lnk = str(obj.get("link") or "").strip().lower() if isinstance(obj, dict) else ""
-            return bool(lnk) and lnk != "not required"
+            if not isinstance(obj, dict):
+                return False
+            lnk = str(obj.get("link") or "").strip().lower()
+            if not lnk or lnk in ["-", "--", "---", "n/a", "na", "none", "null", "not required", "not req"]:
+                return False
+            return len(lnk) >= 3
 
         roles_mapping = {
             "scripting": {"date_field": ["script", "date"], "is_completed": lambda d: _check_link_done(d.get("script")), "title": f"Scripting - {topic} ({content_type})"},
@@ -120,6 +124,9 @@ class ContentService:
         
         for role, mapping in roles_mapping.items():
             emp_id = team.get(role)
+            # If not assigned in creative_team, fallback to cc_creator or other so tasks are not lost!
+            if not emp_id:
+                emp_id = team.get("cc_creator") or team.get("other") or ""
             if not emp_id:
                 continue
 

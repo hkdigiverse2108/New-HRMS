@@ -201,12 +201,26 @@ class ClientService:
     async def delete_client(client_id: str):
         success = await ClientRepository.delete(client_id)
         if success:
-            projects_res = await ProjectRepository.get_all(is_deleted=False, client_id=client_id, limit=1000)
-            for p in projects_res.get("data", []):
-                await ProjectService.delete_project(p["_id"])
-            await clear_pattern("clients:list:*")
+            try:
+                from app.database.db import get_database
+                from bson import ObjectId
+                db = get_database()
+                c_query = {"$or": [{"client_id": str(client_id)}]}
+                if ObjectId.is_valid(str(client_id)):
+                    c_query["$or"].append({"client_id": ObjectId(str(client_id))})
+                
+                # Cascade soft-delete to all projects of this client
+                projs = await db["projects"].find(c_query).to_list(length=1000)
+                for p in projs:
+                    pid = str(p["_id"])
+                    await ProjectService.delete_project(pid)
+            except Exception:
+                pass
+
+            await clear_pattern("clients:*")
+            await clear_pattern("projects:*")
+            await clear_pattern("tasks:*")
             await delete_cache(f"client:{client_id}")
-            await clear_pattern("projects:list:*")
         return success
 
     @staticmethod

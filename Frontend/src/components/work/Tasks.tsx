@@ -220,6 +220,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   // K15: category filter (transcript — category field)
   const [categoryFilter, setCategoryFilter] = useState<string>("All");
   const [subCategoryFilter, setSubCategoryFilter] = useState<string>("All");
+  const [creativeStageCounts, setCreativeStageCounts] = useState<Record<string, number>>({});
   const [projectFilter, setProjectFilter] = useState<string>("All");
   const [allProjects, setAllProjects] = useState<{ label: string; value: string; depts: string[] }[]>([]);
 
@@ -699,6 +700,31 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     subCategoryFilter,
     projectFilter,
   ]);
+
+  // Audio 19: Keep stable stage counts across creative subcategories so badges don't collapse to 0 when filtered
+  useEffect(() => {
+    if (subCategoryFilter === "All" && tasks.length > 0) {
+      const counts: Record<string, number> = { All: totalServerTasks || tasks.length };
+      CREATIVE_SUBCATEGORIES.forEach(sc => {
+        const scLower = sc.toLowerCase();
+        counts[sc] = tasks.filter(t => {
+          const subCat = (t.subCategory || "").toLowerCase();
+          const role = (t.creativeDetails?.role || (t as any).creative_role || "").toLowerCase();
+          const title = (t.title || "").toLowerCase();
+          if (subCat === scLower) return true;
+          if (scLower === "script" && (role.includes("script") || title.includes("script"))) return true;
+          if (scLower === "shoot" && (role.includes("shoot") || title.includes("shoot"))) return true;
+          if (scLower === "editing" && (role.includes("edit") || title.includes("edit"))) return true;
+          if (scLower === "thumbnail" && (role.includes("thumb") || title.includes("thumb"))) return true;
+          if (scLower === "caption" && (role.includes("caption") || title.includes("caption"))) return true;
+          if (scLower === "approval" && (role.includes("approval") || title.includes("approv"))) return true;
+          if (scLower === "posting" && (role.includes("post") || title.includes("post"))) return true;
+          return false;
+        }).length;
+      });
+      setCreativeStageCounts(counts);
+    }
+  }, [tasks, subCategoryFilter, totalServerTasks, CREATIVE_SUBCATEGORIES]);
 
   useEffect(() => {
     fetchEmployees();
@@ -1615,19 +1641,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                 />
               </div>
 
-            {/* Stage filter: Creative only */}
-            {showCreativeFilters && (
-              <div className="flex flex-col items-stretch sm:flex-row sm:items-center gap-1 sm:gap-1.5 min-w-0">
-                <span className="text-[10px] font-bold text-muted-foreground uppercase">Stage:</span>
-                <SearchableSelect
-                  value={subCategoryFilter}
-                  onChange={(val) => setSubCategoryFilter(val)}
-                  options={STAGE_OPTIONS}
-                  placeholder="All Stages"
-                  className="w-full sm:w-[150px] h-[32px] text-xs font-semibold"
-                />
-              </div>
-            )}
+
 
             {/* Project filter: any selected department, lists that department's projects */}
             {showProjectFilter && (
@@ -1689,12 +1703,12 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                 "px-1.5 py-0.2 rounded-full text-[9px] font-black",
                 subCategoryFilter === "All" ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
               )}>
-                {tasks.length}
+                {subCategoryFilter === "All" ? (totalServerTasks || tasks.length) : (creativeStageCounts["All"] ?? (totalServerTasks || tasks.length))}
               </span>
             </button>
             {CREATIVE_SUBCATEGORIES.map((sc) => {
               const scLower = sc.toLowerCase();
-              const count = tasks.filter(t => {
+              const currentCount = tasks.filter(t => {
                 const subCat = (t.subCategory || "").toLowerCase();
                 const role = (t.creativeDetails?.role || (t as any).creative_role || "").toLowerCase();
                 const title = (t.title || "").toLowerCase();
@@ -1708,26 +1722,31 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                 if (scLower === "posting" && (role.includes("post") || title.includes("post"))) return true;
                 return false;
               }).length;
+
+              const displayCount = subCategoryFilter === "All"
+                ? currentCount
+                : (subCategoryFilter.toLowerCase() === scLower ? (totalServerTasks || currentCount) : (creativeStageCounts[sc] ?? currentCount));
+
               return (
                 <button
                   key={sc}
                   type="button"
-                  onClick={() => setSubCategoryFilter(sc)}
+                  onClick={() => setSubCategoryFilter(subCategoryFilter.toLowerCase() === scLower ? "All" : sc)}
                   className={cn(
                     "px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer",
-                    subCategoryFilter.toLowerCase() === sc.toLowerCase()
-                      ? "bg-primary text-primary-foreground shadow-xs"
+                    subCategoryFilter.toLowerCase() === scLower
+                      ? "bg-primary text-primary-foreground shadow-xs ring-1 ring-primary/40"
                       : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground border border-border/40"
                   )}
                 >
                   <span>{sc}</span>
                   <span className={cn(
                     "px-1.5 py-0.2 rounded-full text-[9px] font-black",
-                    subCategoryFilter.toLowerCase() === sc.toLowerCase()
+                    subCategoryFilter.toLowerCase() === scLower
                       ? "bg-white/20 text-white"
                       : "bg-muted text-muted-foreground"
                   )}>
-                    {count}
+                    {displayCount}
                   </span>
                 </button>
               );
