@@ -763,8 +763,8 @@ export function SalesReports({ onAction }: { onAction?: (action: string) => void
 
           {/* Real-time KPI Preview Grid */}
           <div className="rounded-2xl border border-border bg-white p-5 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+              <h3 className="text-sm font-bold text-foreground flex items-center gap-2 min-w-0">
                 <PieChart className="h-4 w-4 text-emerald-600" />
                 Live {reportTypes.find((r) => r.id === selectedReport)?.title} Summary ({dateRange})
               </h3>
@@ -772,28 +772,28 @@ export function SalesReports({ onAction }: { onAction?: (action: string) => void
             </div>
 
             {selectedReport === "revenue" && (
-              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-3">
                 <div className="rounded-xl bg-slate-50 border border-slate-200/60 p-3">
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Total Deals Won</span>
-                  <span className="text-lg font-extrabold text-foreground mt-1 block">
+                  <span className="text-base sm:text-lg font-extrabold text-foreground mt-1 block break-words">
                     {reportData?.summary?.total_deals ?? leads.filter((l) => l.is_converted || l.stage === "Won" || l.stage === "5").length}
                   </span>
                 </div>
                 <div className="rounded-xl bg-emerald-50/70 border border-emerald-200/80 p-3">
                   <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">Net Revenue</span>
-                  <span className="text-lg font-extrabold text-emerald-800 mt-1 block">
+                  <span className="text-base sm:text-lg font-extrabold text-emerald-800 mt-1 block break-words">
                     ₹{Number(reportData?.summary?.net_revenue ?? wonRevenue).toLocaleString("en-IN")}
                   </span>
                 </div>
                 <div className="rounded-xl bg-blue-50/70 border border-blue-200/80 p-3">
                   <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block">18% GST Accrual</span>
-                  <span className="text-lg font-extrabold text-blue-800 mt-1 block">
+                  <span className="text-base sm:text-lg font-extrabold text-blue-800 mt-1 block break-words">
                     ₹{Number(reportData?.summary?.gst_collected ?? wonRevenue * 0.18).toLocaleString("en-IN")}
                   </span>
                 </div>
                 <div className="rounded-xl bg-purple-50/70 border border-purple-200/80 p-3">
                   <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider block">Gross Deal Value</span>
-                  <span className="text-lg font-extrabold text-purple-800 mt-1 block">
+                  <span className="text-base sm:text-lg font-extrabold text-purple-800 mt-1 block break-words">
                     ₹{Number(reportData?.summary?.gross_revenue ?? wonRevenue * 1.18).toLocaleString("en-IN")}
                   </span>
                 </div>
@@ -801,28 +801,28 @@ export function SalesReports({ onAction }: { onAction?: (action: string) => void
             )}
 
             {selectedReport === "performance" && (
-              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-3">
                 <div className="rounded-xl bg-slate-50 border border-slate-200/60 p-3">
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Sales Reps</span>
-                  <span className="text-lg font-extrabold text-foreground mt-1 block">
+                  <span className="text-base sm:text-lg font-extrabold text-foreground mt-1 block break-words">
                     {reportData?.summary?.total_members ?? 4}
                   </span>
                 </div>
                 <div className="rounded-xl bg-blue-50/70 border border-blue-200/80 p-3">
                   <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block">Target Allocated</span>
-                  <span className="text-lg font-extrabold text-blue-800 mt-1 block">
+                  <span className="text-base sm:text-lg font-extrabold text-blue-800 mt-1 block break-words">
                     ₹{Number(reportData?.summary?.total_target ?? 5000000).toLocaleString("en-IN")}
                   </span>
                 </div>
                 <div className="rounded-xl bg-emerald-50/70 border border-emerald-200/80 p-3">
                   <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">Net Revenue Achieved</span>
-                  <span className="text-lg font-extrabold text-emerald-800 mt-1 block">
+                  <span className="text-base sm:text-lg font-extrabold text-emerald-800 mt-1 block break-words">
                     ₹{Number(reportData?.summary?.total_achieved ?? wonRevenue).toLocaleString("en-IN")}
                   </span>
                 </div>
                 <div className="rounded-xl bg-purple-50/70 border border-purple-200/80 p-3">
                   <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider block">Avg Conversion %</span>
-                  <span className="text-lg font-extrabold text-purple-800 mt-1 block">
+                  <span className="text-base sm:text-lg font-extrabold text-purple-800 mt-1 block break-words">
                     {reportData?.summary?.overall_conversion_rate ?? 18.5}%
                   </span>
                 </div>
@@ -830,28 +830,28 @@ export function SalesReports({ onAction }: { onAction?: (action: string) => void
             )}
 
             {selectedReport === "activity" && (
-              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-3">
                 <div className="rounded-xl bg-slate-50 border border-slate-200/60 p-3">
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Total Interactions</span>
-                  <span className="text-lg font-extrabold text-foreground mt-1 block">
+                  <span className="text-base sm:text-lg font-extrabold text-foreground mt-1 block break-words">
                     {reportData?.summary?.total_activities ?? 42}
                   </span>
                 </div>
                 <div className="rounded-xl bg-emerald-50/70 border border-emerald-200/80 p-3">
                   <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">Today's Completed</span>
-                  <span className="text-lg font-extrabold text-emerald-800 mt-1 block">
+                  <span className="text-base sm:text-lg font-extrabold text-emerald-800 mt-1 block break-words">
                     {reportData?.summary?.today_activities ?? 10}
                   </span>
                 </div>
                 <div className="rounded-xl bg-amber-50/70 border border-amber-200/80 p-3">
                   <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">CNR (Call Not Received)</span>
-                  <span className="text-lg font-extrabold text-amber-800 mt-1 block">
+                  <span className="text-base sm:text-lg font-extrabold text-amber-800 mt-1 block break-words">
                     {reportData?.summary?.cnr_count ?? 8}
                   </span>
                 </div>
                 <div className="rounded-xl bg-blue-50/70 border border-blue-200/80 p-3">
                   <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block">Call Later Rescheduled</span>
-                  <span className="text-lg font-extrabold text-blue-800 mt-1 block">
+                  <span className="text-base sm:text-lg font-extrabold text-blue-800 mt-1 block break-words">
                     {reportData?.summary?.call_later_count ?? 5}
                   </span>
                 </div>
@@ -859,28 +859,28 @@ export function SalesReports({ onAction }: { onAction?: (action: string) => void
             )}
 
             {selectedReport === "leads" && (
-              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-3">
                 <div className="rounded-xl bg-slate-50 border border-slate-200/60 p-3">
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Total Inflow</span>
-                  <span className="text-lg font-extrabold text-foreground mt-1 block">
+                  <span className="text-base sm:text-lg font-extrabold text-foreground mt-1 block break-words">
                     {reportData?.summary?.total_leads ?? leads.length}
                   </span>
                 </div>
                 <div className="rounded-xl bg-emerald-50/70 border border-emerald-200/80 p-3">
                   <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">Pipeline Value</span>
-                  <span className="text-lg font-extrabold text-emerald-800 mt-1 block">
+                  <span className="text-base sm:text-lg font-extrabold text-emerald-800 mt-1 block break-words">
                     ₹{pipelineValue.toLocaleString("en-IN")}
                   </span>
                 </div>
                 <div className="rounded-xl bg-purple-50/70 border border-purple-200/80 p-3">
                   <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider block">Channels</span>
-                  <span className="text-lg font-extrabold text-purple-800 mt-1 block">
+                  <span className="text-base sm:text-lg font-extrabold text-purple-800 mt-1 block break-words">
                     {reportData?.summary?.unique_sources ?? 6} Sources
                   </span>
                 </div>
                 <div className="rounded-xl bg-blue-50/70 border border-blue-200/80 p-3">
                   <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block">Industries</span>
-                  <span className="text-lg font-extrabold text-blue-800 mt-1 block">
+                  <span className="text-base sm:text-lg font-extrabold text-blue-800 mt-1 block break-words">
                     {reportData?.summary?.unique_categories ?? 8} Verticals
                   </span>
                 </div>
@@ -893,9 +893,9 @@ export function SalesReports({ onAction }: { onAction?: (action: string) => void
             <h3 className="mb-3 text-xs font-bold text-muted-foreground uppercase tracking-wider">
               Quick Snapshots Available
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-2.5">
               {recentReports.map((file, i) => (
-                <div key={i} className="flex items-center justify-between rounded-xl border border-border p-3 hover:bg-muted/40 transition-colors">
+                <div key={i} className="flex min-w-0 items-center justify-between gap-1 rounded-xl border border-border p-3 hover:bg-muted/40 transition-colors">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div className="grid h-7 w-7 place-items-center rounded-lg bg-emerald-100 text-emerald-700 shrink-0">
                       <FileText className="h-3.5 w-3.5" />
@@ -950,7 +950,7 @@ export function SalesReports({ onAction }: { onAction?: (action: string) => void
           {/* Export Format Selection */}
           <div>
             <label className="mb-2 block text-xs font-bold uppercase text-muted-foreground">Export Format</label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 min-[360px]:grid-cols-3 gap-2">
               {(["PDF", "CSV", "Excel"] as const).map((fmt) => (
                 <button
                   key={fmt}

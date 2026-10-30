@@ -209,9 +209,9 @@ export function SalesTasks({ onAction }: { onAction?: (action: string) => void }
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between min-w-0">
         <div>
-          <h1 className="text-2xl font-black tracking-tight sm:text-3xl">Sales Tasks & Follow-ups</h1>
+          <h1 className="text-xl font-black tracking-tight sm:text-3xl">Sales Tasks & Follow-ups</h1>
           <p className="text-sm text-muted-foreground">Auto-created from pipeline activity — nothing slips through</p>
         </div>
         <button

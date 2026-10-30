@@ -105,13 +105,13 @@ function StatCard({
 
 function SectionTitle({ title, subtitle, action }: { title: string; subtitle?: string; action?: { label: string; onClick?: () => void } }) {
   return (
-    <div className="flex items-end justify-between">
-      <div>
+    <div className="flex items-end justify-between gap-2 min-w-0">
+      <div className="min-w-0">
         <h2 className="text-lg font-bold tracking-tight">{title}</h2>
         {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
       </div>
       {action && (
-        <button onClick={action.onClick} className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold text-emerald-600 transition-colors hover:bg-emerald-50">
+        <button onClick={action.onClick} className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold text-emerald-600 transition-colors hover:bg-emerald-50">
           {action.label} <ArrowRight className="h-3.5 w-3.5" />
         </button>
       )}
@@ -434,9 +434,9 @@ export function SalesDashboard({ setActive, onAction }: { setActive?: (path: str
               No hot leads marked currently. Mark leads as 🔥 Hot to prioritize them here.
             </p>
           ) : (
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
               {hotLeads.slice(0, 4).map((lead) => (
-                <div key={lead.id || lead._id} className="group cursor-pointer rounded-xl border border-border bg-background p-4 transition-all hover:border-emerald-300 hover:shadow-md">
+                <div key={lead.id || lead._id} className="group min-w-0 cursor-pointer rounded-xl border border-border bg-background p-4 transition-all hover:border-emerald-300 hover:shadow-md">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold truncate">{lead.company}</p>

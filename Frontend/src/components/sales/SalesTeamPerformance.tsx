@@ -71,8 +71,8 @@ function MemberCard({ member }: { member: TeamMember }) {
       {/* Metrics Grid */}
       <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-1.5">
         {metrics.map((m) => (
-          <div key={m.label} className="flex items-center justify-between">
-            <span className="text-[11px] text-muted-foreground">{m.label}</span>
+          <div key={m.label} className="flex items-center justify-between gap-2 min-w-0">
+            <span className="text-[11px] text-muted-foreground truncate">{m.label}</span>
             <span className="text-xs font-semibold">{m.value}</span>
           </div>
         ))}

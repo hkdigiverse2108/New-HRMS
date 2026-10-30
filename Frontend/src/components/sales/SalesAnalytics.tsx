@@ -300,9 +300,9 @@ export function SalesAnalytics({ onAction }: { onAction?: (action: string) => vo
           <div className="space-y-2.5">
             {dynamicLostReasons.map((r) => (
               <div key={r.reason}>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium">{r.reason}</span>
-                  <span className="text-xs text-muted-foreground">{r.count} ({r.pct}%)</span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium truncate min-w-0">{r.reason}</span>
+                  <span className="text-xs text-muted-foreground shrink-0">{r.count} ({r.pct}%)</span>
                 </div>
                 <div className="mt-1 h-2 overflow-hidden rounded-full bg-muted/50">
                   <div className="h-full rounded-full bg-rose-400 transition-all duration-700" style={{ width: `${r.pct}%` }} />

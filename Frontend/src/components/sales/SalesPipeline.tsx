@@ -31,8 +31,8 @@ function DealCard({ lead }: { lead: any }) {
     >
       <p className="text-sm font-semibold leading-snug truncate" title={lead.company}>{lead.company}</p>
       <p className="mt-0.5 text-[11px] text-muted-foreground truncate">{lead.contact} · {lead.city || ""}</p>
-      <div className="mt-2 flex items-center justify-between">
-        <span className="text-xs font-medium text-muted-foreground">{lead.owner || ""}</span>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-muted-foreground truncate min-w-0">{lead.owner || ""}</span>
         <span className="text-xs font-bold text-emerald-700">{formatCurrency(leadAmount(lead))}</span>
       </div>
     </div>

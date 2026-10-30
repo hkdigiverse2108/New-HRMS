@@ -988,7 +988,7 @@ export function SalesLeads({
               size="sm"
               variant="outline"
               onClick={() => setSelectedFollowUpLead(lead)}
-              className="h-10 flex-1 min-w-[140px] @3xl:flex-none @3xl:min-w-0text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 gap-1.5 rounded-lg"
+              className="h-10 flex-1 min-w-[140px] @3xl:flex-none @3xl:min-w-0 text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 gap-1.5 rounded-lg"
             >
               <MessageSquare className="w-3.5 h-3.5 shrink-0" />
               Follow-ups ({followUpList.length})

@@ -81,11 +81,11 @@ export function SalesHub({ initialTab = "dashboard", setActive, onAction, isNew 
   }, [visibleTabs, activeTab, setActiveTab]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 min-w-0">
       {/* Top Header & Integrated Sub-Navigation Tabs */}
       <div className="flex flex-col 2xl:flex-row 2xl:items-center justify-between gap-3 sm:gap-4 border-b border-border/80 pb-3 min-w-0">
         <div>
-          <h1 className="text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
+          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
             <span>🎯</span> Sales Hub
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">
