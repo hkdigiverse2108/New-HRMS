@@ -162,19 +162,15 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   const currentUserId = String(anyUser?._id || anyUser?.id || "");
   const userRole = String(anyUser?.role || anyUser?.work_details?.system_role || "Employee").toLowerCase();
   const userDepartment = String(anyUser?.work_details?.department || anyUser?.department || "").trim();
-  // Role-only: decides who gets the My Tasks / All Tasks views
-  const isAdminOrHRRole = isUserAdmin(user) || userRole === "admin" || userRole === "superadmin" || userRole === "hr" || userRole === "subadmin" || (userDepartment && userDepartment.toLowerCase() === "hr");
-  // Role OR "/tasks update" permission: still drives edit / delete powers
-  const isAdminOrHR = isAdminOrHRRole || hasModulePermission(user, "/tasks", "update");
+  // Audio 19: All Tasks is strictly for Head, Team Leader, and Admin regardless of department.
+  // Everyone else defaults strictly to My Tasks and cannot view All Tasks.
+  const isAdmin = isUserAdmin(user) || userRole === "admin" || userRole === "superadmin";
   const userDesignation = String(anyUser?.work_details?.designation || anyUser?.designation || "").trim().toLowerCase();
-
-  // Role checks requested by user:
-  // 1. Team Leader (only if not Admin/HR):
-  const isTeamLeader = !isAdminOrHRRole && (userDesignation.includes("team leader") || userRole.includes("team leader"));
-  // 2. Head / Admin / HR:
-  const isHead = isAdminOrHRRole || (!isTeamLeader && (userDesignation.includes("head") || userRole.includes("head")));
-  // 3. Neither Head nor Team Leader (Other employees):
+  const isTeamLeader = userDesignation.includes("team leader") || userDesignation.includes("teamlead") || userDesignation.includes("leader") || userRole.includes("team leader");
+  const isHead = isAdmin || userDesignation.includes("head") || userRole.includes("head");
   const isOther = !isTeamLeader && !isHead;
+  const isAdminOrHRRole = isAdmin || isHead || userRole === "hr" || (userDepartment && userDepartment.toLowerCase() === "hr");
+  const isAdminOrHR = isAdminOrHRRole || hasModulePermission(user, "/tasks", "update");
 
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [stats, setStats] = useState({
@@ -237,9 +233,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     "Posting"
   ], []);
 
-  // Strict My Tasks vs All Tasks Access: Regular staff (Senior, Junior, Intern) are locked to My Tasks
-  // Only Admin, HR, Head and Team Leader get My Tasks / All Tasks; everyone else sees just their own tasks
-  const canViewAllTasks = isAdminOrHRRole || isHead || isTeamLeader;
+  // Audio 19: Designation-based access: Admin, Head, and Team Leader get All Tasks; others locked to My Tasks
+  const canViewAllTasks = isAdmin || isHead || isTeamLeader;
   const [savedViewMode, setSavedViewMode] = usePersistentState<"my_tasks" | "all_tasks">("tasks.view", canViewAllTasks ? "all_tasks" : "my_tasks");
   const mainViewMode = canViewAllTasks ? savedViewMode : "my_tasks";
   const setMainViewMode = (mode: "my_tasks" | "all_tasks") => {
@@ -583,6 +578,13 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
       }
       if (debouncedSearch.trim()) {
         statsParams.append("search", debouncedSearch.trim());
+      }
+      // Audio 19: Sync sub_category & project_id to stats API so KPIs update dynamically
+      if (subCategoryFilter && subCategoryFilter !== "All") {
+        statsParams.append("sub_category", subCategoryFilter);
+      }
+      if (projectFilter && projectFilter !== "All") {
+        statsParams.append("project_id", projectFilter);
       }
 
       const [tasksRes, statsRes] = await Promise.allSettled([
@@ -1691,7 +1693,21 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
               </span>
             </button>
             {CREATIVE_SUBCATEGORIES.map((sc) => {
-              const count = tasks.filter(t => (t.subCategory || "").toLowerCase() === sc.toLowerCase()).length;
+              const scLower = sc.toLowerCase();
+              const count = tasks.filter(t => {
+                const subCat = (t.subCategory || "").toLowerCase();
+                const role = (t.creativeDetails?.role || (t as any).creative_role || "").toLowerCase();
+                const title = (t.title || "").toLowerCase();
+                if (subCat === scLower) return true;
+                if (scLower === "script" && (role.includes("script") || title.includes("script"))) return true;
+                if (scLower === "shoot" && (role.includes("shoot") || title.includes("shoot"))) return true;
+                if (scLower === "editing" && (role.includes("edit") || title.includes("edit"))) return true;
+                if (scLower === "thumbnail" && (role.includes("thumb") || title.includes("thumb"))) return true;
+                if (scLower === "caption" && (role.includes("caption") || title.includes("caption"))) return true;
+                if (scLower === "approval" && (role.includes("approval") || title.includes("approv"))) return true;
+                if (scLower === "posting" && (role.includes("post") || title.includes("post"))) return true;
+                return false;
+              }).length;
               return (
                 <button
                   key={sc}

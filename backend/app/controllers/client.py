@@ -87,8 +87,8 @@ async def delete_client(client_id: str, current_user: dict = Depends(get_current
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Client not found")
         
     role = current_user.get("work_details", {}).get("system_role", "Employee")
-    if role not in ["Admin", "Subadmin", "HR"]:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to delete this client")
+    if role not in ["Admin", "SuperAdmin", "superadmin"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Admin can delete clients")
         
     success = await ClientService.delete_client(client_id)
     if not success:

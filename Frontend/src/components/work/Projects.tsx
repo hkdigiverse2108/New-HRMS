@@ -710,7 +710,6 @@ const SMM_DUMMY_PROJECT: Project = {
 };
 
 const INITIAL_PROJECTS: Project[] = [
-  SMM_DUMMY_PROJECT,
   {
     id: "1",
     clientId: "c1",
@@ -910,12 +909,17 @@ const syncSocialMediaTasksForProject = (project: any, calendarItems: any[]) => {
     const topicText = item.topic || "Untitled Idea";
     const typeLabel = item.type || "Content";
     const assigned = item.assignedTo || undefined;
-    const isPost = item.type === "Post" || item.type === "Carousel" || item.type === "Story";
-    const scriptNotReq = String(item.scriptLink || "").trim().toLowerCase() === "not required" || (isPost && !item.scriptLink);
-    const shootNotReq = String(item.shootLink || "").trim().toLowerCase() === "not required" || (isPost && !item.shootLink);
-    const thumbNotReq = String(item.thumbnailLink || "").trim().toLowerCase() === "not required" || (isPost && !item.thumbnailLink);
+    const isLinkFilled = (link?: string) => {
+      const s = String(link || "").trim();
+      return s !== "" && s.toLowerCase() !== "not required";
+    };
+    const isLinkNotReq = (link?: string) => {
+      return String(link || "").trim().toLowerCase() === "not required";
+    };
 
-    if (item.scriptDate && !scriptNotReq) {
+    // Audio 19: Only push tasks that are actually pending (link not filled and not "not required").
+    // If user deleted "Not Required" (making it empty), it is pending and pushed!
+    if (item.scriptDate && !isLinkNotReq(item.scriptLink) && !isLinkFilled(item.scriptLink)) {
       newGeneratedTasks.push({
         id: `sm-cal-script-${item.id}`,
         title: `📝 Script: ${typeLabel} - ${topicText}`,
@@ -925,7 +929,7 @@ const syncSocialMediaTasksForProject = (project: any, calendarItems: any[]) => {
         assignedToName: assigned
       });
     }
-    if (item.shootDate && !shootNotReq) {
+    if (item.shootDate && !isLinkNotReq(item.shootLink) && !isLinkFilled(item.shootLink)) {
       newGeneratedTasks.push({
         id: `sm-cal-shoot-${item.id}`,
         title: `🎥 Shoot: ${typeLabel} - ${topicText}`,
@@ -935,7 +939,7 @@ const syncSocialMediaTasksForProject = (project: any, calendarItems: any[]) => {
         assignedToName: assigned
       });
     }
-    if (item.editingStart) {
+    if (item.editingStart && !isLinkFilled(item.editingDriveLink)) {
       newGeneratedTasks.push({
         id: `sm-cal-edit-${item.id}`,
         title: `🎬 Edit: ${typeLabel} - ${topicText}`,
@@ -945,7 +949,7 @@ const syncSocialMediaTasksForProject = (project: any, calendarItems: any[]) => {
         assignedToName: assigned
       });
     }
-    if (item.captionDate) {
+    if (item.captionDate && item.approvalStatus !== "Approved") {
       newGeneratedTasks.push({
         id: `sm-cal-approve-${item.id}`,
         title: `✅ Approve: ${typeLabel} - ${topicText}`,
@@ -955,13 +959,23 @@ const syncSocialMediaTasksForProject = (project: any, calendarItems: any[]) => {
         assignedToName: assigned
       });
     }
-    if (item.thumbnailDate && !thumbNotReq) {
+    if (item.thumbnailDate && !isLinkNotReq(item.thumbnailLink) && !isLinkFilled(item.thumbnailLink)) {
       newGeneratedTasks.push({
         id: `sm-cal-thumb-${item.id}`,
         title: `🖼️ Thumbnail: ${typeLabel} - ${topicText}`,
         status: "todo",
         phase: "Graphics",
         dueDate: item.thumbnailDate,
+        assignedToName: assigned
+      });
+    }
+    if (item.postingDate && !isLinkFilled(item.postingLinkOfIg)) {
+      newGeneratedTasks.push({
+        id: `sm-cal-post-${item.id}`,
+        title: `📢 Posting: ${typeLabel} - ${topicText}`,
+        status: "todo",
+        phase: "Posting",
+        dueDate: item.postingDate,
         assignedToName: assigned
       });
     }
@@ -1893,7 +1907,6 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         if (JSON.stringify(parsed).includes('$')) loadedProjects = INITIAL_PROJECTS; // Force update to ₹
         else {
           if (!parsed.some((p: any) => p.id === "smm-dummy-project")) {
-            parsed.unshift(SMM_DUMMY_PROJECT);
           }
           // Migration: Add default dailyStats if missing
           parsed.forEach((p: any) => {
@@ -2072,20 +2085,26 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   const projectPerms = useModulePermissions("/work/projects");
   const clientPerms = useModulePermissions("/work/clients");
 
+  const isAdmin = useMemo(() => {
+    const role = String(user?.role || (user as any)?.system_role || (user as any)?.work_details?.system_role || "").toLowerCase();
+    return role === "admin" || role === "superadmin";
+  }, [user]);
+
   const isHead = useMemo(() => {
     const desig = String(user?.designation || (user as any)?.work_details?.designation || "").toLowerCase();
     const role = String(user?.role || (user as any)?.system_role || "").toLowerCase();
-    return desig.includes("head") || role.includes("head");
-  }, [user]);
+    return isAdmin || desig.includes("head") || role.includes("head");
+  }, [user, isAdmin]);
 
   const isTl = useMemo(() => {
     const desig = String(user?.designation || (user as any)?.work_details?.designation || "").toLowerCase();
     const role = String(user?.role || (user as any)?.system_role || "").toLowerCase();
-    return !isHead && (desig.includes("lead") || desig.includes("tl") || desig.includes("manager") || role.includes("lead"));
+    return !isHead && (desig.includes("team leader") || desig.includes("lead") || desig.includes("tl") || role.includes("team leader"));
   }, [user, isHead]);
 
-  const canCreateProject = isAdminOrHr || isHead || isTl || projectPerms.canCreate;
-  const canCreateClient = isAdminOrHr || isHead || isTl || clientPerms.canCreate;
+  // Audio 19: New Client & New Project strictly Admin, Head and Team Leader only
+  const canCreateProject = isAdmin || isHead || isTl;
+  const canCreateClient = isAdmin || isHead || isTl;
 
   // Admin / HR / Head / Team Leader can switch between My Projects and All Projects; everyone else sees only assigned projects
   const canSeeAllProjects = isAdminOrHr || isHead || isTl;
@@ -4716,11 +4735,25 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
   const isProjectTabActive = PROJECT_TABS.includes(activeTab);
 
+  // Audio 19: Scope-aware accessible projects and clients for KPIs
+  const userAccessibleProjects = useMemo(() => {
+    return projects.filter(project => {
+      if (!(canSeeAllProjects && projectScope === "all")) {
+        if (!isUserAssignedToProject(project)) return false;
+      }
+      return true;
+    });
+  }, [projects, canSeeAllProjects, projectScope, isUserAssignedToProject]);
+
+  const userAccessibleClients = useMemo(() => {
+    return clients.filter(client => isUserAssignedToClient(client));
+  }, [clients, isUserAssignedToClient]);
+
   const categoryStats = useMemo(() => {
     const activeCategories = categories.filter(c => c.toLowerCase() !== "sales");
 
     if (isProjectTabActive) {
-      const activeProjList = projects.filter(p => !p.is_archived);
+      const activeProjList = userAccessibleProjects.filter(p => activeTab === "Archived Projects" ? p.is_archived : !p.is_archived);
       const catCounts = activeCategories.map(cat => ({
         category: cat,
         count: activeProjList.filter(p => p.category === cat).length,
@@ -4731,11 +4764,11 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         ...catCounts
       ];
     } else {
-      const targetClients = clients.filter(c => activeTab === "Archived Clients" ? c.status === "Archived" : c.status === "Active");
+      const targetClients = userAccessibleClients.filter(c => activeTab === "Archived Clients" ? c.status === "Archived" : c.status === "Active");
       const clientIds = new Set(targetClients.map(c => c.id));
       const stats: Record<string, Set<string>> = {};
       activeCategories.forEach(cat => { stats[cat] = new Set(); });
-      projects.forEach(p => {
+      userAccessibleProjects.forEach(p => {
         if (clientIds.has(p.clientId) && stats[p.category]) {
           stats[p.category]?.add(p.clientId);
         }
@@ -4750,7 +4783,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         ...catCounts
       ];
     }
-  }, [projects, clients, categories, activeTab, isProjectTabActive]);
+  }, [userAccessibleProjects, userAccessibleClients, categories, activeTab, isProjectTabActive]);
 
   const filteredClients = clients.filter(client => {
     if (!isUserAssignedToClient(client)) return false;
@@ -13082,17 +13115,21 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         >
                           <Edit2 className="w-4 h-4 mr-2" /> Edit Project
                         </DropdownMenuItem>
-                        <DropdownMenuSeparator className="bg-border/50" />
-                        <DropdownMenuItem
-                          onSelect={() => {
-                            setTimeout(() => {
-                              confirmDeleteProject(project);
-                            }, 100);
-                          }}
-                          className="rounded-xl cursor-pointer py-2.5 focus:bg-rose-500/10 focus:text-rose-600 font-medium text-rose-600 transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4 mr-2" /> Delete
-                        </DropdownMenuItem>
+                        {isAdmin && (
+                          <>
+                            <DropdownMenuSeparator className="bg-border/50" />
+                            <DropdownMenuItem
+                              onSelect={() => {
+                                setTimeout(() => {
+                                  confirmDeleteProject(project);
+                                }, 100);
+                              }}
+                              className="rounded-xl cursor-pointer py-2.5 focus:bg-rose-500/10 focus:text-rose-600 font-medium text-rose-600 transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" /> Delete
+                            </DropdownMenuItem>
+                          </>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -15068,16 +15105,18 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                           )}
                         </>
                       )}
-                      <DropdownMenuItem
-                        onSelect={() => {
-                          setTimeout(() => {
-                            confirmDeleteClient(client);
-                          }, 100);
-                        }}
-                        className="rounded-xl cursor-pointer py-2.5 focus:bg-rose-500/10 focus:text-rose-600 font-medium text-rose-600 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" /> Delete
-                      </DropdownMenuItem>
+                      {isAdmin && (
+                        <DropdownMenuItem
+                          onSelect={() => {
+                            setTimeout(() => {
+                              confirmDeleteClient(client);
+                            }, 100);
+                          }}
+                          className="rounded-xl cursor-pointer py-2.5 focus:bg-rose-500/10 focus:text-rose-600 font-medium text-rose-600 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" /> Delete
+                        </DropdownMenuItem>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>

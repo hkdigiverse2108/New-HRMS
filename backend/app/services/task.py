@@ -799,10 +799,12 @@ class TaskService:
         assigned_by: Optional[str] = None,
         team_employee_ids: Optional[list[str]] = None,
         task_category: Optional[str] = None,
+        sub_category: Optional[str] = None,
+        project_id: Optional[str] = None,
         priority: Optional[str] = None,
         search: Optional[str] = None
     ):
-        cache_key = f"tasks:stats:{involved_emp_id or 'all'}:{target_date or 'today'}:{assigned_to or 'all'}:{assigned_by or 'all'}:{task_category or 'all'}:{priority or 'all'}:{search or ''}"
+        cache_key = f"tasks:stats:{involved_emp_id or 'all'}:{target_date or 'today'}:{assigned_to or 'all'}:{assigned_by or 'all'}:{task_category or 'all'}:{sub_category or 'all'}:{project_id or 'all'}:{priority or 'all'}:{search or ''}"
         cached = await get_cache(cache_key)
         if cached is not None:
             return cached
@@ -817,6 +819,8 @@ class TaskService:
             assigned_by=assigned_by,
             team_employee_ids=team_employee_ids,
             task_category=task_category,
+            sub_category=sub_category,
+            project_id=project_id,
             priority=priority,
             search=search
         )

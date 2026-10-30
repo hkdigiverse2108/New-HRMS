@@ -89,15 +89,30 @@ class ContentService:
         content_type = item_data.get("content_type", "Content")
         is_post_type = content_type in ["Post", "Carousel", "Story"]
         
+        def _check_link_done(obj):
+            lnk = str(obj.get("link") or "").strip().lower() if isinstance(obj, dict) else ""
+            return bool(lnk) and lnk != "not required"
+
         roles_mapping = {
-            "scripting": {"date_field": ["script", "date"], "is_completed": lambda d: bool(d.get("script", {}).get("link")), "title": f"Scripting - {topic} ({content_type})"},
-            "reel_editing": {"date_field": ["editing", "date"], "is_completed": lambda d: bool(d.get("editing", {}).get("link")), "title": f"Editing - {topic} ({content_type})"},
-            "post_graphics": {"date_field": ["editing", "date"], "is_completed": lambda d: bool(d.get("editing", {}).get("link")), "title": f"Graphics - {topic} ({content_type})"},
-            "shoot_videography": {"date_field": ["shoot", "date"], "is_completed": lambda d: bool(d.get("shoot", {}).get("link")), "title": f"Shoot - {topic} ({content_type})"},
-            "thumbnail": {"date_field": ["thumbnail", "date"], "is_completed": lambda d: bool(d.get("thumbnail", {}).get("link")), "title": f"Thumbnail - {topic} ({content_type})"},
+            "scripting": {"date_field": ["script", "date"], "is_completed": lambda d: _check_link_done(d.get("script")), "title": f"Scripting - {topic} ({content_type})"},
+            "reel_editing": {"date_field": ["editing", "date"], "is_completed": lambda d: _check_link_done(d.get("editing")), "title": f"Editing - {topic} ({content_type})"},
+            "post_graphics": {"date_field": ["editing", "date"], "is_completed": lambda d: _check_link_done(d.get("editing")), "title": f"Graphics - {topic} ({content_type})"},
+            "shoot_videography": {"date_field": ["shoot", "date"], "is_completed": lambda d: _check_link_done(d.get("shoot")), "title": f"Shoot - {topic} ({content_type})"},
+            "thumbnail": {"date_field": ["thumbnail", "date"], "is_completed": lambda d: _check_link_done(d.get("thumbnail")), "title": f"Thumbnail - {topic} ({content_type})"},
             "approval_qc": {"date_field": ["caption_date"], "is_completed": lambda d: d.get("approval_status") == "Approved", "title": f"Approval/QC - {topic} ({content_type})"},
             "posting_publisher": {"date_field": ["schedule_date"], "is_completed": lambda d: bool(d.get("instagram_link")), "title": f"Posting - {topic} ({content_type})"},
             "caption": {"date_field": ["caption_date"], "is_completed": lambda d: bool(d.get("caption_text")), "title": f"Caption - {topic} ({content_type})"}
+        }
+
+        role_to_subcat = {
+            "scripting": "Script",
+            "shoot_videography": "Shoot",
+            "reel_editing": "Editing",
+            "post_graphics": "Post/Graphics",
+            "thumbnail": "Thumbnail",
+            "caption": "Caption",
+            "approval_qc": "Approval",
+            "posting_publisher": "Posting",
         }
         
         from app.services.task import TaskService
@@ -112,17 +127,18 @@ class ContentService:
             if is_post_type:
                 if role == "reel_editing":
                     continue
+                # Audio 19: Only skip if explicitly 'Not Required'. If empty/null (e.g. user cleared Not Required), it IS pending!
                 if role == "scripting":
-                    link = (item_data.get("script") or {}).get("link", "")
-                    if not link or str(link).strip().lower() == "not required":
+                    link = str((item_data.get("script") or {}).get("link") or "").strip().lower()
+                    if link == "not required":
                         continue
                 if role == "shoot_videography":
-                    link = (item_data.get("shoot") or {}).get("link", "")
-                    if not link or str(link).strip().lower() == "not required":
+                    link = str((item_data.get("shoot") or {}).get("link") or "").strip().lower()
+                    if link == "not required":
                         continue
                 if role == "thumbnail":
-                    link = (item_data.get("thumbnail") or {}).get("link", "")
-                    if not link or str(link).strip().lower() == "not required":
+                    link = str((item_data.get("thumbnail") or {}).get("link") or "").strip().lower()
+                    if link == "not required":
                         continue
             elif content_type == "Reel":
                 if role == "post_graphics":
@@ -151,17 +167,22 @@ class ContentService:
             assigned_by = current_user_id if current_user_id else "system"
             
             if existing_tasks and existing_tasks.get("data"):
-                # Update existing task if not completed
                 task = existing_tasks["data"][0]
                 task_id = str(task["_id"])
+                update_payload = {}
                 
-                # Only update if date changed
                 if date_str and task.get("due_date") != date_str:
-                    await TaskRepository.update(task_id, {"due_date": date_str})
+                    update_payload["due_date"] = date_str
+                if not task.get("sub_category"):
+                    update_payload["sub_category"] = role_to_subcat.get(role, "General")
                     
-                # If a link is added, mark completed
                 if is_completed and task.get("status") != TaskStatus.COMPLETED:
-                    await TaskRepository.update(task_id, {"status": TaskStatus.COMPLETED})
+                    update_payload["status"] = TaskStatus.COMPLETED
+                elif not is_completed and task.get("status") == TaskStatus.COMPLETED:
+                    update_payload["status"] = TaskStatus.TODO
+                    
+                if update_payload:
+                    await TaskRepository.update(task_id, update_payload)
             else:
                 # Create new task
                 from datetime import datetime, date as py_date
@@ -177,6 +198,7 @@ class ContentService:
                     assigned_to=emp_id,
                     due_date=due_date_obj,
                     task_category="SMM",
+                    sub_category=role_to_subcat.get(role, "General"),
                     content_item_id=str(item_id),
                     project_id=str(project.get("_id")),
                     creative_role=role
