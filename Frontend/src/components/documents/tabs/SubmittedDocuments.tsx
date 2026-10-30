@@ -680,15 +680,26 @@ export function SubmittedDocuments() {
       </div>
 
       {/* Filters & Action Bar */}
-      <div className="flex flex-col sm:flex-row gap-3 justify-between items-stretch sm:items-center">
-        <SearchInput
-          placeholder="Search employees or documents..."
-          value={search}
-          onChange={setSearch}
-          className="w-full sm:max-w-xs"
-        />
+      <div className="flex flex-col 2xl:flex-row gap-3 justify-between items-stretch 2xl:items-center">
+        <div className="flex items-center gap-2 min-w-0 2xl:flex-none">
+          <SearchInput
+            placeholder="Search employees or documents..."
+            value={search}
+            onChange={setSearch}
+            containerClassName="flex-1 min-w-0 w-auto sm:w-auto shrink 2xl:flex-none 2xl:w-72"
+          />
+          {isAdminOrHR && (
+            <button
+              onClick={() => setIsUploadModalOpen(true)}
+              className="sm:hidden shrink-0 px-3 h-10 bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-sm whitespace-nowrap"
+            >
+              <Plus className="w-4 h-4" />
+              Upload
+            </button>
+          )}
+        </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="grid grid-cols-3 gap-2 sm:gap-2.5 sm:grid-cols-[repeat(3,minmax(0,1fr))_auto] 2xl:flex 2xl:flex-wrap 2xl:items-center">
           {isAdminOrHR && (
             <SearchableSelect
               value={filterEmployee}
@@ -697,16 +708,16 @@ export function SubmittedDocuments() {
                 { label: "All Employees", value: "all" },
                 ...formattedEmployeeOptions
               ]}
-              className="w-full sm:w-[190px] h-[40px] text-xs font-bold bg-card border border-border/50 rounded-xl"
+              className="col-span-1 min-w-0 w-full 2xl:w-[190px] h-9 sm:h-[40px] text-[11px] sm:text-xs font-bold bg-card border border-border/50 rounded-xl"
             />
           )}
 
           <select
             value={filterType}
             onChange={e => setFilterType(e.target.value)}
-            className="px-3 h-[40px] text-xs font-bold bg-card border border-border/50 rounded-xl focus:outline-none"
+            className="w-full 2xl:w-auto min-w-0 px-2 sm:px-3 h-9 sm:h-[40px] text-[11px] sm:text-xs font-bold bg-card border border-border/50 rounded-xl focus:outline-none truncate"
           >
-            <option value="all">All Document Types</option>
+            <option value="all">All Types</option>
             <option value="deposit">Security Deposits Only</option>
             {docTypes.map(t => (
               <option key={t.id} value={t.id}>{t.name}</option>
@@ -716,9 +727,9 @@ export function SubmittedDocuments() {
           <select
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value)}
-            className="px-3 h-[40px] text-xs font-bold bg-card border border-border/50 rounded-xl focus:outline-none"
+            className="w-full 2xl:w-auto min-w-0 px-2 sm:px-3 h-9 sm:h-[40px] text-[11px] sm:text-xs font-bold bg-card border border-border/50 rounded-xl focus:outline-none truncate"
           >
-            <option value="all">All Statuses</option>
+            <option value="all">All Status</option>
             <option value="Pending to Submit">Pending to Submit</option>
             <option value="Accepted">Accepted</option>
             <option value="Rejected">Rejected</option>
@@ -728,7 +739,7 @@ export function SubmittedDocuments() {
           {isAdminOrHR && (
             <button
               onClick={() => setIsUploadModalOpen(true)}
-              className="px-4 py-2 min-h-[40px] bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm"
+              className="hidden sm:flex w-auto px-4 py-2 min-h-[40px] bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm whitespace-nowrap"
             >
               <Plus className="w-4 h-4" />
               Upload Document

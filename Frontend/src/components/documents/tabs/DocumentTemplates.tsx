@@ -400,6 +400,27 @@ function focusAtStart(el: HTMLElement) {
   }
 }
 
+/** Shrinks the fixed-size A4 pages to the available width (via the --a4-scale CSS variable) so they never overflow small screens. */
+const A4_WIDTH_PX = 794;
+function A4Fit({ children, className }: { children: React.ReactNode; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => setScale(Math.min(1, el.clientWidth / A4_WIDTH_PX));
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <div ref={ref} className={className} style={{ "--a4-scale": scale } as React.CSSProperties}>
+      {children}
+    </div>
+  );
+}
+
 export function DocumentTemplates() {
   const [isMounted, setIsMounted] = useState(false);
   const [templates, setTemplates] = useState<DocTemplate[]>([]);
@@ -956,6 +977,9 @@ export function DocumentTemplates() {
           position: relative;
           flex-shrink: 0;
           page-break-after: always;
+          margin-left: auto;
+          margin-right: auto;
+          zoom: var(--a4-scale, 1);
         }
         .a4-page-card:hover { box-shadow: 0 24px 70px -10px rgba(16,185,129,0.15), 0 4px 16px -4px rgba(0,0,0,0.08); }
         .a4-page-content {
@@ -996,9 +1020,9 @@ export function DocumentTemplates() {
       `}</style>
 
       {/* Master-Detail Layout */}
-      <div className="flex flex-col lg:flex-row gap-6 items-start">
+      <div className="flex flex-col xl:flex-row gap-4 sm:gap-6 items-start min-w-0">
         {/* Left Column: Templates List */}
-        <div className="w-full lg:w-80 shrink-0 bg-card border border-border/50 rounded-2xl p-4 shadow-sm flex flex-col gap-4">
+        <div className="w-full xl:w-80 shrink-0 bg-card border border-border/50 rounded-2xl p-4 shadow-sm flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <h3 className="font-black text-lg flex items-center gap-2 text-foreground">
               <FileText className="w-5 h-5 text-primary" />
@@ -1026,7 +1050,7 @@ export function DocumentTemplates() {
           </div>
 
           {/* Template List */}
-          <div className="space-y-2 max-h-[650px] overflow-y-auto pr-1 custom-scrollbar">
+          <div className="space-y-2 max-h-[320px] xl:max-h-[650px] overflow-y-auto pr-1 custom-scrollbar">
             {isLoading ? (
               <div className="py-8 text-center text-muted-foreground text-xs">
                 <Loader2 className="w-5 h-5 mx-auto animate-spin mb-2 text-primary" />
@@ -1076,13 +1100,13 @@ export function DocumentTemplates() {
         </div>
 
         {/* Right Column */}
-        <div className="flex-1 w-full min-w-0 bg-card border border-border/50 rounded-2xl p-4 sm:p-6 shadow-sm space-y-6">
+        <div className="flex-1 w-full min-w-0 bg-card border border-border/50 rounded-2xl p-3 sm:p-6 shadow-sm space-y-4 sm:space-y-6">
           {isInlineEditing ? (
             /* ── INLINE EDITING MODE ── */
-            <div className="space-y-5 animate-in fade-in duration-300">
+            <div className="space-y-4 sm:space-y-5 animate-in fade-in duration-300 min-w-0">
               {/* Top Header */}
-              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between border-b border-border/50 pb-4">
-                <div className="flex items-center gap-3">
+              <div className="flex flex-col lg:flex-row gap-3 sm:gap-4 items-start lg:items-center justify-between border-b border-border/50 pb-4">
+                <div className="flex items-center gap-3 min-w-0">
                   <button
                     onClick={handleCancelInlineEdit}
                     className="p-2 border border-border rounded-xl hover:bg-muted/50 transition-colors text-muted-foreground"
@@ -1091,7 +1115,7 @@ export function DocumentTemplates() {
                     <ArrowLeft className="w-5 h-5" />
                   </button>
                   <div>
-                    <h2 className="text-xl sm:text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
+                    <h2 className="text-base sm:text-2xl font-black tracking-tight text-foreground flex items-center gap-2 break-words">
                       <Edit2 className="w-5 h-5 text-emerald-600" />
                       {editingTemplateId ? `Editing: ${tempName || "Untitled"}` : "Create New Document Template"}
                     </h2>
@@ -1100,7 +1124,7 @@ export function DocumentTemplates() {
                     </p>
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto justify-end">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full lg:w-auto lg:justify-end">
                   <button
                     onClick={handleCancelInlineEdit}
                     className="px-4 py-2 border border-border text-foreground font-bold text-sm rounded-xl hover:bg-muted/50 transition-colors flex items-center gap-1.5 shadow-xs"
@@ -1196,7 +1220,7 @@ export function DocumentTemplates() {
                   <select
                     onChange={(e) => { if (typeof document !== "undefined") document.execCommand("formatBlock", false, e.target.value); }}
                     defaultValue="p"
-                    className="min-w-[125px] h-8 px-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 hover:border-emerald-500/50 cursor-pointer"
+                    className="min-w-[110px] h-8 px-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 hover:border-emerald-500/50 cursor-pointer"
                     title="Text Format"
                   >
                     <option value="p">Normal (10pt)</option>
@@ -1283,7 +1307,7 @@ export function DocumentTemplates() {
                     </button>
                   </div>
 
-                  <div className="bg-slate-100 dark:bg-slate-900/60 border border-border/50 rounded-2xl p-4 sm:p-8 flex flex-col items-center gap-6">
+                  <div className="bg-slate-100 dark:bg-slate-900/60 border border-border/50 rounded-2xl p-2 sm:p-8 flex flex-col items-start gap-4 sm:gap-6 overflow-x-auto">
                     {editorPages.map((pageHtml, pIdx) => (
                       <div key={`editor-page-${pIdx}`} className="a4-page-card">
                         <div className="a4-page-content">
@@ -1375,8 +1399,9 @@ export function DocumentTemplates() {
                     <div
                       ref={previewScrollRef}
                       onScroll={handlePreviewScroll}
-                      className="w-full flex flex-col items-center gap-6"
+                      className="w-full"
                     >
+                     <A4Fit className="w-full flex flex-col items-center gap-4 sm:gap-6">
                       {getPreviewPages(quillContent, showSampleDataInPreview).map((pageHtml, pIdx) => (
                         <div key={pIdx} className="a4-page-card">
                           <div className="a4-page-content">
@@ -1390,6 +1415,7 @@ export function DocumentTemplates() {
                         </div>
                       </div>
                       ))}
+                     </A4Fit>
                     </div>
                   </div>
                 </div>
@@ -1398,14 +1424,14 @@ export function DocumentTemplates() {
           ) : selectedTemplate ? (
             /* ── VIEW MODE ── */
             <>
-              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between border-b border-border/50 pb-4">
-                <div>
-                  <h2 className="text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-start sm:items-center justify-between border-b border-border/50 pb-4">
+                <div className="min-w-0">
+                  <h2 className="text-lg sm:text-2xl font-black break-words tracking-tight text-foreground flex items-center gap-2">
                     Template: {selectedTemplate.name}
                   </h2>
                   <p className="text-sm text-muted-foreground mt-0.5 font-medium">Click "Edit Content" to edit this template.</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 w-full sm:w-auto">
                   <button
                     onClick={() => confirmDelete(selectedTemplate.id, selectedTemplate.name)}
                     className="px-4 py-2 border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl transition-colors font-bold text-sm flex items-center gap-1.5 shadow-xs"
@@ -1454,7 +1480,8 @@ export function DocumentTemplates() {
                   </button>
                 </div>
 
-                <div className="bg-slate-100 dark:bg-slate-900/60 border border-border/50 rounded-2xl p-4 sm:p-8 flex flex-col items-center gap-6">
+                <div className="bg-slate-100 dark:bg-slate-900/60 border border-border/50 rounded-2xl p-2 sm:p-8">
+                 <A4Fit className="w-full flex flex-col items-center gap-4 sm:gap-6">
                   {getPreviewPages(selectedTemplate.content, showSampleDataInPreview).map((pageHtml, pageIndex) => (
                     <div
                       key={pageIndex}
@@ -1473,6 +1500,7 @@ export function DocumentTemplates() {
                       </div>
                     </div>
                   ))}
+                 </A4Fit>
                 </div>
               </div>
             </>

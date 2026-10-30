@@ -140,7 +140,7 @@ export function VerifyContracts() {
   return (
     <div className="space-y-6">
       {/* Search and Filters Header */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-between items-stretch sm:items-center">
         <div className="relative w-full sm:max-w-md">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
@@ -156,7 +156,7 @@ export function VerifyContracts() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as any)}
-            className="py-2.5 px-4 bg-card border border-border/60 rounded-2xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all cursor-pointer"
+            className="w-full sm:w-auto py-2.5 px-4 bg-card border border-border/60 rounded-2xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all cursor-pointer"
           >
             <option value="All">All Statuses ({totalContracts})</option>
             <option value="Pending">Pending Verification ({pendingCount})</option>
@@ -171,7 +171,7 @@ export function VerifyContracts() {
         <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex items-center justify-between">
           <div>
             <div className="text-slate-500 font-bold text-xs uppercase tracking-wider mb-1">Total Active Contracts</div>
-            <div className="text-3xl font-black text-slate-800">{totalContracts}</div>
+            <div className="text-2xl sm:text-3xl font-black text-slate-800">{totalContracts}</div>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center font-bold">
             <Stamp className="w-6 h-6" />
@@ -350,7 +350,7 @@ export function VerifyContracts() {
 
       {/* Contract View Details Dialog */}
       <Dialog open={!!selectedContract} onOpenChange={(open) => !open && setSelectedContract(null)}>
-        <DialogContent className="sm:max-w-md p-0 overflow-hidden rounded-3xl border border-border/60 shadow-2xl bg-background [&>button]:hidden">
+        <DialogContent className="w-[calc(100vw-16px)] sm:max-w-md p-0 overflow-hidden rounded-3xl border border-border/60 shadow-2xl bg-background [&>button]:hidden">
           <div className="px-6 py-4 border-b border-border/60 flex items-center justify-between bg-card">
             <div className="flex items-center gap-2.5">
               <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600">

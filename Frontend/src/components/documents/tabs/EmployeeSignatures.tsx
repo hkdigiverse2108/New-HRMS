@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Search, PenTool, CheckCircle2, Clock, Eye, UserCheck, Image as ImageIcon, X, Building2, RefreshCw, Trash2 } from "lucide-react";
+import { Search, PenTool, CheckCircle2, Clock, Eye, UserCheck, Image as ImageIcon, X, Building2, Trash2 } from "lucide-react";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { useEmployeesContext } from "@/components/employees/EmployeeContext";
@@ -16,7 +16,6 @@ export function EmployeeSignatures() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"All" | "Signed" | "Pending">("All");
   const [departmentFilter, setDepartmentFilter] = useState<string>("All");
-  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Preview modal state
   const [previewSigEmp, setPreviewSigEmp] = useState<{ name: string; id: string; signatureUrl: string } | null>(null);
@@ -70,16 +69,8 @@ export function EmployeeSignatures() {
   };
 
   // Auto refresh employee signatures on mount & poll
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    if (refreshEmployees) {
-      await refreshEmployees();
-    }
-    setTimeout(() => setIsRefreshing(false), 500);
-  };
-
   useEffect(() => {
-    handleRefresh();
+    refreshEmployees?.();
   }, []);
 
   // Helper to resolve employee signature from API object, nested objects, or local storage
@@ -157,8 +148,8 @@ export function EmployeeSignatures() {
   return (
     <div className="space-y-6">
       {/* Header Controls: Search & Filters */}
-      <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
-        <div className="relative w-full md:max-w-md">
+      <div className="flex flex-col lg:flex-row gap-3 sm:gap-4 justify-between items-stretch lg:items-center">
+        <div className="relative w-full lg:max-w-md">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             type="text"
@@ -169,18 +160,7 @@ export function EmployeeSignatures() {
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-          {/* Refresh Button */}
-          <button
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="p-2.5 bg-card border border-border/60 rounded-2xl text-xs font-bold hover:bg-muted transition-all flex items-center gap-1.5"
-            title="Refresh Employee Signatures"
-          >
-            <RefreshCw className={`w-4 h-4 text-emerald-600 ${isRefreshing ? "animate-spin" : ""}`} />
-            Refresh
-          </button>
-
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full lg:w-auto">
           {/* Status Filter */}
           <select
             value={statusFilter}
@@ -215,7 +195,7 @@ export function EmployeeSignatures() {
         <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex items-center justify-between">
           <div>
             <div className="text-slate-500 font-bold text-xs uppercase tracking-wider mb-1">Total Employees</div>
-            <div className="text-3xl font-black text-slate-800">{totalEmployees}</div>
+            <div className="text-2xl sm:text-3xl font-black text-slate-800">{totalEmployees}</div>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-600 flex items-center justify-center font-bold">
             <UserCheck className="w-6 h-6" />
@@ -415,7 +395,7 @@ export function EmployeeSignatures() {
 
       {/* Signature Zoom Preview Dialog */}
       <Dialog open={!!previewSigEmp} onOpenChange={(open) => !open && setPreviewSigEmp(null)}>
-        <DialogContent className="sm:max-w-md p-0 overflow-hidden rounded-3xl border border-border/60 shadow-2xl bg-background [&>button]:hidden">
+        <DialogContent className="w-[calc(100vw-16px)] sm:max-w-md p-0 overflow-hidden rounded-3xl border border-border/60 shadow-2xl bg-background [&>button]:hidden">
           <div className="px-6 py-4 border-b border-border/60 flex items-center justify-between bg-card">
             <div>
               <h3 className="text-base font-black text-foreground">{previewSigEmp?.name}</h3>

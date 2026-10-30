@@ -279,7 +279,7 @@ export function OfficialLetters({ onNavigate }: { onNavigate?: ((path: string) =
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-between items-stretch sm:items-center">
         <SearchInput
           placeholder="Search requests..."
           value={search}
@@ -371,7 +371,7 @@ export function OfficialLetters({ onNavigate }: { onNavigate?: ((path: string) =
             </div>
           </div>
 
-          <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
+          <div className="px-4 sm:px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex flex-wrap justify-end gap-3 mt-auto shrink-0">
             <button 
               onClick={() => setIsAddMode(false)}
               className="px-4 py-2 font-bold text-muted-foreground hover:bg-muted/50 rounded-xl transition-colors"
@@ -392,7 +392,7 @@ export function OfficialLetters({ onNavigate }: { onNavigate?: ((path: string) =
 
       {/* REJECTION REASON DIALOG */}
       <Dialog open={rejectModal.isOpen} onOpenChange={(open) => setRejectModal({ isOpen: open, reason: "" })}>
-        <DialogContent className="sm:max-w-md p-6 rounded-2xl bg-card border border-border/60">
+        <DialogContent className="w-[calc(100vw-16px)] sm:max-w-md p-4 sm:p-6 rounded-2xl bg-card border border-border/60">
           <h3 className="text-lg font-bold text-rose-600 flex items-center gap-2">
             <XCircle className="w-5 h-5" /> Reject Request
           </h3>
@@ -631,7 +631,7 @@ export function OfficialLetters({ onNavigate }: { onNavigate?: ((path: string) =
                 <p className="text-sm font-semibold">Loading document content...</p>
               </div>
             ) : viewDocModal.htmlContent ? (
-              <div className="w-full max-w-[210mm] min-h-[297mm] bg-white text-slate-900 shadow-md rounded-2xl p-8 sm:p-12 border border-slate-200 font-normal text-sm leading-relaxed prose max-w-none">
+              <div className="w-full max-w-[210mm] min-h-[297mm] bg-white text-slate-900 shadow-md rounded-2xl p-5 sm:p-12 border border-slate-200 font-normal text-sm leading-relaxed prose max-w-none">
                 <div dangerouslySetInnerHTML={{ __html: viewDocModal.htmlContent }} />
               </div>
             ) : (
