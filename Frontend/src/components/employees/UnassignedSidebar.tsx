@@ -5,7 +5,7 @@ import { useEmployeesContext } from "./EmployeeContext";
 import { OrgNodeData } from "./org-data";
 
 export function UnassignedSidebar() {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(() => typeof window === "undefined" || window.innerWidth >= 1024);
   const { employees, treeData } = useEmployeesContext();
 
   const placedIds = new Set<string>();

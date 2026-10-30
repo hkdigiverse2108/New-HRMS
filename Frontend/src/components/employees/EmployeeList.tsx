@@ -407,17 +407,17 @@ useEffect(() => {
   };
 
   return (
-    <div className="w-full animate-in fade-in zoom-in-95 duration-300">
+    <div className="w-full min-w-0 animate-in fade-in zoom-in-95 duration-300">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-[28px] font-black text-foreground tracking-tight mb-2">Employee Directory</h1>
-          <p className="text-[14px] text-muted-foreground">Manage your team members and their account permissions here.</p>
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 sm:gap-4 mb-5 sm:mb-8">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-[28px] font-black text-foreground tracking-tight mb-1 sm:mb-2">Employee Directory</h1>
+          <p className="text-[13px] sm:text-[14px] text-muted-foreground">Manage your team members and their account permissions here.</p>
         </div>
         {canCreate && (
           <button 
             onClick={openAddForm}
-            className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-5 py-2.5 rounded-xl font-bold transition-all shadow-sm shadow-primary/20 active:scale-95"
+            className="flex items-center justify-center gap-2 shrink-0 w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground px-5 py-2.5 rounded-xl font-bold transition-all shadow-sm shadow-primary/20 active:scale-95"
           >
             <Plus className="w-4 h-4" />
             Add Employee
@@ -426,9 +426,9 @@ useEffect(() => {
       </div>
 
       {/* Filters Bar */}
-      <div className="bg-white border border-border/60 rounded-2xl p-4 shadow-sm flex flex-col lg:flex-row gap-4 justify-between items-stretch lg:items-center mb-8">
-        <div className="flex flex-col lg:flex-row items-stretch lg:items-center flex-1 gap-3 sm:gap-4 min-w-0">
-          <div className="relative w-full lg:w-72 min-w-[220px] flex-shrink-0">
+      <div className="bg-white border border-border/60 rounded-2xl p-4 shadow-sm grid grid-cols-[minmax(0,1fr)_auto] gap-3 sm:gap-4 items-center lg:flex lg:flex-row lg:justify-between mb-5 sm:mb-8">
+        <div className="contents lg:flex lg:flex-row lg:items-center lg:flex-1 lg:gap-4 lg:min-w-0">
+          <div className="order-1 relative w-full lg:w-72 lg:min-w-[220px] min-w-0 flex-shrink-0">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             <input 
               type="text" 
@@ -450,7 +450,7 @@ useEffect(() => {
           </div>
           
           {/* Dynamic Department Tabs with 'All' First */}
-          <div className="flex items-center gap-2 overflow-x-auto min-w-0 flex-1 max-w-full pb-1 lg:pb-0 scrollbar-none">
+          <div className="order-3 col-span-2 lg:col-span-1 lg:order-none flex items-center gap-2 overflow-x-auto min-w-0 lg:flex-1 max-w-full pb-1 lg:pb-0 scrollbar-none">
             {/* All Filter Option - FIRST */}
             <button 
               type="button"
@@ -500,7 +500,7 @@ useEffect(() => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-shrink-0 self-end lg:self-auto">
+        <div className="order-2 lg:order-none flex items-center gap-2 flex-shrink-0">
           {viewMode === 'list' && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

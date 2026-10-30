@@ -277,7 +277,44 @@ export function OrgStructure() {
   const canCreate = editing;
   const canUpdate = editing;
   const canDelete = editing;
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoomState] = useState(1);
+  const [contentSize, setContentSize] = useState({ w: 0, h: 0 });
+  const userZoomed = useRef(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const setZoom = (z: number) => {
+    userZoomed.current = true;
+    setZoomState(z);
+  };
+  // Scale the chart down so it fits the available width (never above 100%)
+  const fitToWidth = () => {
+    const box = scrollRef.current;
+    if (!box || !contentSize.w) return;
+    const avail = box.clientWidth - (box.clientWidth < 640 ? 32 : 64);
+    setZoomState(Math.max(0.2, Math.min(1, avail / contentSize.w)));
+  };
+
+  // Track the real (unscaled) chart size so the scroll area matches the scaled chart
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setContentSize({ w: el.offsetWidth, h: el.offsetHeight }));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Auto-fit on load, on resize and when branches expand, until the user picks a zoom level
+  useEffect(() => {
+    if (!userZoomed.current) fitToWidth();
+    const box = scrollRef.current;
+    if (!box) return;
+    const ro = new ResizeObserver(() => {
+      if (!userZoomed.current) fitToWidth();
+    });
+    ro.observe(box);
+    return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contentSize.w]);
   const chartRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -433,15 +470,15 @@ export function OrgStructure() {
     .map((e) => ({ label: `${e.name}${e.designation || e.role ? ` (${e.designation || e.role})` : ""}`, value: e.id }));
 
   return (
-    <div className="w-full animate-in fade-in zoom-in-95 duration-300 flex flex-col h-[calc(100vh-4rem)] pb-0">
+    <div className="w-full animate-in fade-in zoom-in-95 duration-300 flex flex-col min-h-[calc(100dvh-6rem)] lg:h-[calc(100vh-4rem)] pb-0">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6 shrink-0">
-        <div>
-          <h1 className="text-[28px] font-black text-foreground tracking-tight mb-1">Organizational Structure</h1>
-          <p className="text-[14px] text-muted-foreground">{editing ? "Edit mode: drag and drop cards to reorganize, use + to add members." : "Visual hierarchy of teams."}</p>
+      <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-3 sm:gap-4 mb-4 sm:mb-6 shrink-0">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl lg:text-[28px] font-black text-foreground tracking-tight mb-1">Organizational Structure</h1>
+          <p className="text-xs sm:text-[14px] text-muted-foreground">{editing ? "Edit mode: drag and drop cards to reorganize, use + to add members." : "Visual hierarchy of teams."}</p>
         </div>
 
-        <div className="flex flex-wrap gap-2 sm:gap-4 items-center">
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-3 items-stretch sm:items-center w-full xl:w-auto [&>button]:justify-center [&>button]:whitespace-nowrap">
           {canEditOrg && (
             <button
               onClick={() => setIsEditMode((v) => !v)}
@@ -461,7 +498,7 @@ export function OrgStructure() {
             <>
               <button
                 onClick={() => setIsDeptDesignationOpen(true)}
-                className="flex items-center gap-2 px-3.5 py-2 bg-primary text-primary-foreground font-bold rounded-xl shadow-sm hover:bg-primary/90 transition-all text-xs active:scale-95 cursor-pointer"
+                className="col-span-2 order-last sm:order-none flex items-center gap-2 px-3.5 py-2 bg-primary text-primary-foreground font-bold rounded-xl shadow-sm hover:bg-primary/90 transition-all text-xs active:scale-95 cursor-pointer"
                 title="Manage Sub-Departments & Designations"
               >
                 <Layers className="w-4 h-4" />
@@ -478,16 +515,23 @@ export function OrgStructure() {
             </>
           )}
 
-          <div className="flex items-center gap-2 bg-card border border-border p-1.5 rounded-2xl shadow-sm">
+          <div className="col-span-2 sm:col-span-1 flex items-center justify-between sm:justify-start gap-2 bg-card border border-border p-1.5 rounded-2xl shadow-sm">
             <button
-              onClick={() => setZoom(Math.max(0.4, zoom - 0.1))}
+              onClick={() => setZoom(Math.max(0.2, zoom - 0.1))}
               className="p-2 hover:bg-muted rounded-xl text-foreground/80 transition-colors"
             >
               <ZoomOut className="w-4 h-4" />
             </button>
-            <span className="text-[12px] font-bold text-foreground/80 w-12 text-center">
+            <button
+              onClick={() => {
+                userZoomed.current = false;
+                fitToWidth();
+              }}
+              title="Fit to screen"
+              className="text-[12px] font-bold text-foreground/80 w-12 text-center cursor-pointer hover:text-primary"
+            >
               {Math.round(zoom * 100)}%
-            </span>
+            </button>
             <button
               onClick={() => setZoom(Math.min(2, zoom + 0.1))}
               className="p-2 hover:bg-muted rounded-xl text-foreground/80 transition-colors"
@@ -507,8 +551,8 @@ export function OrgStructure() {
       </div>
 
       {/* Org Chart Container */}
-      <div ref={chartRef} className="flex-1 flex relative overflow-hidden rounded-3xl border border-border/60 shadow-inner bg-background">
-        <div className="flex-1 bg-muted/50/50 overflow-auto">
+      <div ref={chartRef} className="h-[65dvh] lg:h-auto lg:flex-1 lg:min-h-[420px] flex relative overflow-hidden rounded-2xl sm:rounded-3xl border border-border/60 shadow-inner bg-background">
+        <div ref={scrollRef} className="flex-1 min-w-0 bg-muted/50/50 overflow-auto overscroll-contain">
           <style dangerouslySetInnerHTML={{
             __html: `
                 .org-children {
@@ -563,8 +607,20 @@ export function OrgStructure() {
                 }
               `}} />
 
-          <div className="min-w-max p-12 flex justify-center items-start min-h-full">
-            <div style={{ transform: `scale(${zoom})`, transformOrigin: 'top center', transition: 'transform 0.3s ease' }}>
+          <div className="w-max min-w-full box-border p-4 sm:p-8 lg:p-12 flex justify-center items-center min-h-full">
+            <div
+              className="relative shrink-0"
+              style={contentSize.w ? { width: contentSize.w * zoom, height: contentSize.h * zoom } : undefined}
+            >
+            <div
+              ref={contentRef}
+              style={{
+                width: 'max-content',
+                transform: `scale(${zoom})`,
+                transformOrigin: 'top left',
+                ...(contentSize.w ? { position: 'absolute', top: 0, left: 0 } : {}),
+              }}
+            >
               <ul className="flex justify-center m-0 p-0">
                 <OrgTree
                   node={treeData}
@@ -583,6 +639,7 @@ export function OrgStructure() {
                   canDelete={canDelete}
                 />
               </ul>
+            </div>
             </div>
           </div>
         </div>

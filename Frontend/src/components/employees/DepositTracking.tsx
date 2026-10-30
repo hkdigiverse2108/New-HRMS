@@ -230,17 +230,17 @@ export function DepositTracking() {
   };
 
   return (
-    <div className="w-full space-y-6 animate-in fade-in duration-300 pb-20">
+    <div className="w-full min-w-0 space-y-4 sm:space-y-6 animate-in fade-in duration-300 pb-20">
       {/* Header Banner (Cleaned - Removed Document references) */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-card p-6 md:p-8 rounded-[2.5rem] border border-border/60 shadow-sm relative overflow-hidden">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-card p-4 sm:p-6 md:p-8 rounded-3xl sm:rounded-[2.5rem] border border-border/60 shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl -z-0 pointer-events-none" />
-        <div className="relative z-10">
+        <div className="relative z-10 min-w-0">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-primary/10 text-primary rounded-2xl border border-primary/20 shadow-sm">
+            <div className="p-2.5 sm:p-3 bg-primary/10 text-primary rounded-2xl border border-primary/20 shadow-sm shrink-0">
               <ShieldCheck className="w-7 h-7" />
             </div>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-black text-foreground tracking-tight">
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-foreground tracking-tight">
                 Security Deposit Tracking
               </h1>
               <p className="text-xs md:text-sm text-muted-foreground mt-1">
@@ -252,16 +252,16 @@ export function DepositTracking() {
       </div>
 
       {/* 4 KPIs Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         {/* KPI 1: Total Deposit Value */}
-        <div className="bg-card border border-border/60 rounded-3xl p-5 shadow-sm space-y-2 relative overflow-hidden group hover:border-primary/40 transition-all">
+        <div className="bg-card border border-border/60 rounded-3xl p-4 sm:p-5 shadow-sm space-y-2 relative overflow-hidden group min-w-0 hover:border-primary/40 transition-all">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total Deposit Value</span>
             <div className="p-2 rounded-xl bg-primary/10 text-primary">
               <ShieldCheck className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-black text-foreground font-mono">
+          <div className="text-xl sm:text-2xl font-black text-foreground font-mono break-words">
             ₹{stats.totalTarget.toLocaleString("en-IN")}
           </div>
           <div className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
@@ -270,14 +270,14 @@ export function DepositTracking() {
         </div>
 
         {/* KPI 2: Total Collected */}
-        <div className="bg-card border border-border/60 rounded-3xl p-5 shadow-sm space-y-2 relative overflow-hidden group hover:border-emerald-500/40 transition-all">
+        <div className="bg-card border border-border/60 rounded-3xl p-4 sm:p-5 shadow-sm space-y-2 relative overflow-hidden group min-w-0 hover:border-emerald-500/40 transition-all">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Collected Deposits</span>
             <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600">
               <IndianRupee className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-black text-foreground font-mono">
+          <div className="text-xl sm:text-2xl font-black text-foreground font-mono break-words">
             ₹{stats.totalCollected.toLocaleString("en-IN")}
           </div>
           <div className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
@@ -286,14 +286,14 @@ export function DepositTracking() {
         </div>
 
         {/* KPI 3: Total Pending */}
-        <div className="bg-card border border-border/60 rounded-3xl p-5 shadow-sm space-y-2 relative overflow-hidden group hover:border-amber-500/40 transition-all">
+        <div className="bg-card border border-border/60 rounded-3xl p-4 sm:p-5 shadow-sm space-y-2 relative overflow-hidden group min-w-0 hover:border-amber-500/40 transition-all">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Pending Deposits</span>
             <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600">
               <Clock className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-black text-foreground font-mono">
+          <div className="text-xl sm:text-2xl font-black text-foreground font-mono break-words">
             ₹{stats.totalPending.toLocaleString("en-IN")}
           </div>
           <div className="text-[11px] font-semibold text-amber-600 flex items-center gap-1">
@@ -302,7 +302,7 @@ export function DepositTracking() {
         </div>
 
         {/* KPI 4: Employee Breakdown */}
-        <div className="bg-card border border-border/60 rounded-3xl p-5 shadow-sm space-y-2 relative overflow-hidden group hover:border-blue-500/40 transition-all">
+        <div className="bg-card border border-border/60 rounded-3xl p-4 sm:p-5 shadow-sm space-y-2 relative overflow-hidden group min-w-0 hover:border-blue-500/40 transition-all">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Employee Breakdown</span>
             <div className="p-2 rounded-xl bg-blue-500/10 text-blue-600">
@@ -321,27 +321,27 @@ export function DepositTracking() {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-card border border-border/60 rounded-3xl p-4 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-        <div className="relative flex-1 min-w-[240px]">
+      <div className="bg-card border border-border/60 rounded-3xl p-3 sm:p-4 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+        <div className="relative flex-1 min-w-0">
           <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by candidate name, employee ID or department..."
+            placeholder="Search candidate, ID or department..."
             className="w-full pl-10 pr-4 py-2 bg-muted/30 border border-border/60 rounded-2xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
           />
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap md:flex-nowrap shrink-0">
           {/* Type Filter */}
-          <div className="flex bg-muted/40 p-1 rounded-2xl border border-border/40">
+          <div className="flex flex-1 md:flex-none bg-muted/40 p-1 rounded-2xl border border-border/40">
             {(["All", "Intern", "Employee"] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTypeFilter(t)}
                 className={cn(
-                  "px-3 py-1 min-h-[44px] sm:min-h-0 inline-flex items-center rounded-xl text-xs font-bold transition-all",
+                  "flex-1 sm:flex-none justify-center whitespace-nowrap px-2 sm:px-3 py-1 min-h-[40px] sm:min-h-0 inline-flex items-center rounded-xl text-[11px] sm:text-xs font-bold transition-all",
                   typeFilter === t
                     ? "bg-card text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
@@ -356,7 +356,7 @@ export function DepositTracking() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="min-h-[44px] sm:min-h-0 sm:h-9 px-3 bg-muted/30 border border-border/60 rounded-xl text-xs font-bold text-foreground focus:outline-none"
+            className="w-full md:w-auto min-h-[40px] md:min-h-0 md:h-9 px-3 bg-muted/30 border border-border/60 rounded-xl text-xs font-bold text-foreground focus:outline-none"
           >
             <option value="All">All Statuses</option>
             <option value="Paid">Paid</option>
@@ -368,7 +368,7 @@ export function DepositTracking() {
       </div>
 
       {/* Main Table (Document Checklist Column REMOVED, Remaining Column ADDED) */}
-      <div className="bg-card border border-border/60 rounded-[2.5rem] shadow-sm overflow-hidden">
+      <div className="bg-card border border-border/60 rounded-3xl sm:rounded-[2.5rem] shadow-sm overflow-hidden min-w-0">
         {filteredEmployees.length === 0 ? (
           <div className="text-center py-20 text-muted-foreground space-y-2">
             <ShieldCheck className="w-10 h-10 mx-auto opacity-30" />
@@ -376,17 +376,17 @@ export function DepositTracking() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-left border-collapse text-xs">
+            <table className="w-full min-w-[900px] whitespace-nowrap text-left border-collapse text-xs">
               <thead>
                 <tr className="border-b border-border/50 text-muted-foreground font-black uppercase tracking-wider bg-muted/20">
-                  <th className="py-4 px-6">Candidate / Employee</th>
+                  <th className="py-3 sm:py-4 px-3 sm:px-6">Candidate / Employee</th>
                   <th className="py-4 px-4">Designation & Department</th>
                   <th className="py-4 px-4 text-center">Type</th>
                   <th className="py-4 px-4 text-right">Standard Deposit</th>
-                  <th className="py-4 px-4 text-right">Amount Paid</th>
+                  <th className="py-3 sm:py-4 px-3 sm:px-4 text-right">Amount Paid</th>
                   <th className="py-4 px-4 text-right">Remaining Balance</th>
-                  <th className="py-4 px-4 text-center">Deposit Status</th>
-                  <th className="py-4 px-6 text-center">Actions</th>
+                  <th className="py-3 sm:py-4 px-3 sm:px-4 text-center">Deposit Status</th>
+                  <th className="py-3 sm:py-4 px-3 sm:px-6 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/20">
@@ -400,7 +400,7 @@ export function DepositTracking() {
                   return (
                     <tr key={emp.id} className="hover:bg-muted/30 transition-colors group">
                       {/* Name & Photo */}
-                      <td className="py-3.5 px-6">
+                      <td className="py-3.5 px-3 sm:px-6">
                         <div className="flex items-center gap-3">
                           <img
                             src={getAvatarUrl(emp.avatar || emp.profile_photo, emp.name)}
@@ -446,7 +446,7 @@ export function DepositTracking() {
                       </td>
 
                       {/* Amount Paid */}
-                      <td className="py-3.5 px-4 text-right font-black font-mono text-sm">
+                      <td className="py-3.5 px-3 sm:px-4 text-right font-black font-mono text-sm whitespace-nowrap">
                         <span className={paid >= targetDeposit ? "text-emerald-600" : paid > 0 ? "text-amber-600" : "text-muted-foreground"}>
                           ₹{paid.toLocaleString("en-IN")}
                         </span>
@@ -473,7 +473,7 @@ export function DepositTracking() {
                       </td>
 
                       {/* Deposit Status (Auto Status) */}
-                      <td className="py-3.5 px-4 text-center">
+                      <td className="py-3.5 px-3 sm:px-4 text-center">
                         <span
                           className={cn(
                             "px-2.5 py-1 rounded-xl text-[10px] font-extrabold uppercase tracking-wider inline-block",
@@ -488,7 +488,7 @@ export function DepositTracking() {
                       </td>
 
                       {/* Actions */}
-                      <td className="py-3.5 px-6 text-center">
+                      <td className="py-3.5 px-3 sm:px-6 text-center">
                         <button
                           onClick={() => handleOpenDepositModal(emp)}
                           className="px-3 py-1.5 min-h-[44px] sm:min-h-0 inline-flex items-center gap-1.5 bg-primary/10 hover:bg-primary/20 text-primary font-bold text-xs rounded-xl transition-colors"
