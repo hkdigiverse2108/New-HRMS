@@ -266,33 +266,31 @@ export function InvoiceLedger() {
   const numTd = `${tdCls} text-right font-semibold text-foreground tabular-nums`;
 
   return (
-    <div className="w-full space-y-6 sm:space-y-8 animate-in fade-in duration-500 min-w-0">
+    <div className="@container w-full space-y-6 sm:space-y-8 animate-in fade-in duration-500 min-w-0">
 
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground flex items-center gap-2">
-            <Landmark className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
-            Invoice Ledger
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between gap-3 sm:gap-4">
+          <h1 className="text-xl sm:text-3xl font-black tracking-tight text-foreground flex items-center gap-2 min-w-0">
+            <Landmark className="w-5 h-5 sm:w-8 sm:h-8 text-primary shrink-0" />
+            <span className="truncate">Invoice Ledger</span>
           </h1>
-          <p className="text-muted-foreground mt-1 text-xs sm:text-sm font-medium">
-            Sales &amp; receipt register: Tax and Proforma invoices.
-          </p>
-        </div>
-        <div className="flex items-center gap-3 w-full sm:w-auto">
           <button
             onClick={exportCsv}
             disabled={visibleEntries.length === 0}
-            className="w-full sm:w-auto px-4 py-2 sm:py-2.5 bg-card border border-border/50 text-foreground font-bold rounded-xl hover:bg-muted/50 transition-colors flex items-center justify-center gap-2 shadow-sm text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            className="shrink-0 px-3 sm:px-4 py-2 sm:py-2.5 whitespace-nowrap bg-card border border-border/50 text-foreground font-bold rounded-xl hover:bg-muted/50 transition-colors flex items-center justify-center gap-2 shadow-sm text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Download className="w-4 h-4" />
             Export CSV
           </button>
         </div>
+        <p className="text-muted-foreground text-xs sm:text-sm font-medium">
+          Sales &amp; receipt register: Tax and Proforma invoices.
+        </p>
       </div>
 
       {/* Stats Bar: click a card to filter Entries / Client-wise by invoice type */}
-      <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 @5xl:grid-cols-4">
         {([
           {
             key: "total", type: "All", label: "Total Received", icon: IndianRupee,
@@ -332,17 +330,17 @@ export function InvoiceLedger() {
                 setTypeFilter(next === "tax" ? "Tax Invoice" : next === "proforma" ? "Proforma Invoice" : "All");
               }}
               className={cn(
-                "text-left border rounded-2xl p-4 sm:p-6 shadow-sm transition-all hover:scale-[1.01] cursor-pointer select-none",
+                "min-w-0 text-left border rounded-2xl p-3.5 sm:p-5 @5xl:p-6 shadow-sm transition-all hover:scale-[1.01] cursor-pointer select-none",
                 isActive ? cn(c.active, "ring-2 shadow-md") : cn(c.card, "opacity-80 hover:opacity-100 hover:shadow-md")
               )}
             >
               <div className={cn(c.title, "font-bold text-xs uppercase tracking-wider mb-1 flex items-center justify-between gap-2")}>
-                <span className="flex items-center gap-2">
-                  <Icon className="w-4 h-4" /> {c.label}
+                <span className="flex items-center gap-2 min-w-0">
+                  <Icon className="w-4 h-4 shrink-0" /> <span className="min-w-0">{c.label}</span>
                 </span>
                 {isActive && <span className="w-2 h-2 rounded-full bg-current animate-pulse shrink-0" />}
               </div>
-              <div className={cn(c.value, "text-2xl sm:text-3xl font-black")}>{inr(c.amount)}</div>
+              <div className={cn(c.value, "text-xl sm:text-2xl @6xl:text-3xl font-black whitespace-nowrap")}>{inr(c.amount)}</div>
               <div className={cn(c.value, "text-[11px] font-semibold opacity-80 mt-1")}>{invoiceCount(c.count)}</div>
             </button>
           );
@@ -350,19 +348,19 @@ export function InvoiceLedger() {
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-col xl:flex-row gap-3 sm:gap-4 justify-between items-stretch xl:items-center bg-card border border-border/50 p-3 sm:p-4 rounded-2xl shadow-sm">
+      <div className="flex flex-col @5xl:flex-row @5xl:justify-between @5xl:items-center gap-3 sm:gap-4 bg-card border border-border/50 p-3 sm:p-4 rounded-2xl shadow-sm">
         <SearchInput
           placeholder="Search invoice no, client or GSTIN..."
           value={search}
           onChange={setSearch}
-          className="w-full xl:max-w-sm"
+          className="w-full" containerClassName="w-full sm:w-full md:w-full @5xl:w-72 @5xl:flex-none @5xl:min-w-[180px]"
         />
-        <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2 sm:gap-3 w-full xl:w-auto">
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-3 w-full @5xl:w-auto">
           <DateRangeFilter
             dateRange={dateRange}
             onChange={(r) => setDateRange(r ? { ...(r.from && { from: r.from }), ...(r.to && { to: r.to }) } : {})}
             placeholder="Filter by invoice date"
-            className="w-full sm:w-auto"
+            className="col-span-2 sm:col-span-1 sm:flex-1 sm:min-w-[150px] @5xl:flex-none @5xl:w-auto"
           />
           <SearchableSelect
             value={clientFilter}
@@ -371,7 +369,7 @@ export function InvoiceLedger() {
               { label: "All Clients", value: "All" },
               ...clientRows.map((c) => ({ label: c.brand, value: c.brand })),
             ]}
-            className="w-full sm:w-[180px] h-[40px] px-3 bg-background border border-border/50 rounded-xl text-sm font-bold cursor-pointer"
+            className="w-full sm:w-auto sm:flex-1 sm:min-w-[150px] @5xl:flex-none @5xl:w-[180px] h-[40px] px-3 bg-background border border-border/50 rounded-xl text-sm font-bold cursor-pointer"
           />
           <SearchableSelect
             value={modeFilter}
@@ -380,13 +378,13 @@ export function InvoiceLedger() {
               { label: "All Modes", value: "All" },
               ...PAYMENT_MODES.map((m) => ({ label: m, value: m })),
             ]}
-            className="w-full sm:w-[160px] h-[40px] px-3 bg-background border border-border/50 rounded-xl text-sm font-bold cursor-pointer"
+            className="w-full sm:w-auto sm:flex-1 sm:min-w-[150px] @5xl:flex-none @5xl:w-[160px] h-[40px] px-3 bg-background border border-border/50 rounded-xl text-sm font-bold cursor-pointer"
           />
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {([
           { key: "clients", label: "Client-wise", icon: Users },
           { key: "entries", label: "Entries", icon: List },
@@ -412,7 +410,7 @@ export function InvoiceLedger() {
         {clientFilter !== "All" && tab === "entries" && (
           <button
             onClick={() => setClientFilter("All")}
-            className="ml-auto text-xs font-bold text-primary hover:underline"
+            className="sm:ml-auto text-xs font-bold text-primary hover:underline text-left"
           >
             Statement: {clientFilter} ✕
           </button>

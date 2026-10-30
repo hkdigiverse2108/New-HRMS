@@ -112,6 +112,7 @@ interface FilterDropdownProps {
   onChange: (value: string) => void;
   defaultValue?: string;
   align?: "left" | "right";
+  menuClassName?: string;
   className?: string;
 }
 
@@ -123,6 +124,7 @@ function FilterDropdown({
   onChange,
   defaultValue = "All",
   align = "left",
+  menuClassName,
   className,
 }: FilterDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -147,12 +149,12 @@ function FilterDropdown({
   const displayLabel = selectedOption ? selectedOption.label : label;
 
   return (
-    <div className={cn("relative inline-block text-left", className)} ref={dropdownRef}>
+    <div className={cn("relative block text-left", className)} ref={dropdownRef}>
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
-          "h-9 px-3 rounded-xl text-xs font-bold border transition-all duration-150 flex items-center gap-2 shadow-xs cursor-pointer select-none",
+          "h-[42px] w-full px-3 rounded-xl text-xs font-bold border transition-all duration-150 flex items-center gap-2 shadow-xs cursor-pointer select-none",
           isFiltered
             ? "bg-primary/10 text-primary border-primary/30 shadow-xs"
             : "bg-card text-foreground/80 border-border hover:border-border hover:bg-muted/50 hover:text-foreground",
@@ -162,7 +164,7 @@ function FilterDropdown({
         <span className={cn("shrink-0", isFiltered ? "text-primary" : "text-muted-foreground")}>
           {icon}
         </span>
-        <span className="truncate max-w-[130px]">{displayLabel}</span>
+        <span className="truncate flex-1 min-w-0 text-left">{displayLabel}</span>
         <ChevronDown
           className={cn(
             "w-3.5 h-3.5 text-muted-foreground transition-transform duration-200 shrink-0",
@@ -174,8 +176,8 @@ function FilterDropdown({
       {isOpen && (
         <div
           className={cn(
-            "absolute mt-1.5 py-1.5 min-w-[185px] max-w-[280px] max-h-72 overflow-y-auto rounded-2xl bg-popover/95 backdrop-blur-md border border-border shadow-xl z-50 animate-in fade-in-0 zoom-in-95 duration-100 scrollbar-thin",
-            align === "right" ? "right-0" : "left-0"
+            "absolute mt-1.5 py-1.5 min-w-full w-max max-w-[min(280px,calc(100vw-2.5rem))] max-h-72 overflow-y-auto rounded-2xl bg-popover/95 backdrop-blur-md border border-border shadow-xl z-50 animate-in fade-in-0 zoom-in-95 duration-100 scrollbar-thin",
+            menuClassName ?? (align === "right" ? "right-0" : "left-0")
           )}
         >
           {options.map((opt) => {
@@ -378,6 +380,28 @@ export function ActivityLogs() {
     { value: "100", label: "100 rows" },
   ];
 
+  const filterDropdowns: {
+    key: string;
+    label: string;
+    icon: React.ReactNode;
+    value: string;
+    options: DropdownOption[];
+    onChange: (v: string) => void;
+    defaultValue: string;
+  }[] = [
+    { key: "severity", label: "All Severities", icon: <AlertTriangle className="w-3.5 h-3.5" />, value: severityFilter, options: severityOptions, onChange: setSeverityFilter, defaultValue: "All" },
+    ...(isAdmin
+      ? [
+          { key: "department", label: "All Departments", icon: <Building2 className="w-3.5 h-3.5" />, value: departmentFilter, options: departmentOptions, onChange: setDepartmentFilter, defaultValue: "All" },
+          { key: "user", label: "All Users", icon: <UserCheck className="w-3.5 h-3.5" />, value: userFilter, options: userOptions, onChange: setUserFilter, defaultValue: "All" },
+        ]
+      : []),
+    { key: "action", label: "All Actions", icon: <Tag className="w-3.5 h-3.5" />, value: actionFilter, options: actionOptions, onChange: setActionFilter, defaultValue: "All" },
+    { key: "date", label: "All Time", icon: <Calendar className="w-3.5 h-3.5" />, value: dateRangePreset, options: dateOptions, onChange: setDateRangePreset, defaultValue: "all" },
+    { key: "sort", label: "Sort Order", icon: <ArrowUpDown className="w-3.5 h-3.5" />, value: sortOrder, options: sortOptions, onChange: (v) => setSortOrder(v as "desc" | "asc"), defaultValue: "desc" },
+    { key: "limit", label: "Rows", icon: <ListFilter className="w-3.5 h-3.5" />, value: String(limit), options: limitOptions, onChange: (v) => setLimit(Number(v)), defaultValue: "25" },
+  ];
+
   // Fetch Logs with all active filters
   const fetchLogs = useCallback(async () => {
     try {
@@ -521,55 +545,55 @@ export function ActivityLogs() {
   return (
     <div className="space-y-6 min-h-[calc(100vh-4rem)] flex flex-col pb-6">
       {/* Header & Metric Cards */}
-      <div className="shrink-0 bg-card border border-border/80 rounded-3xl p-5 sm:p-7 shadow-xs relative overflow-hidden">
+      <div className="shrink-0 bg-card border border-border/80 rounded-2xl sm:rounded-3xl p-4 sm:p-7 shadow-xs relative overflow-hidden">
         <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
           <TerminalSquare className="w-56 h-56 text-foreground" />
         </div>
         
-        <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-          <div>
+        <div className="relative flex flex-col 2xl:flex-row 2xl:items-center justify-between gap-5">
+          <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1.5">
-              <span className="p-2 rounded-xl bg-primary/10 text-primary">
+              <span className="p-2 rounded-xl bg-primary/10 text-primary shrink-0">
                 <Activity className="w-5 h-5" />
               </span>
-              <h1 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">
+              <h1 className="text-xl sm:text-3xl font-black text-foreground tracking-tight leading-tight">
                 {isAdmin ? "Activity Logs & System Audit" : "My Activity History"}
               </h1>
             </div>
-            <p className="text-xs sm:text-sm text-muted-foreground max-w-xl">
+            <p className="text-xs sm:text-sm text-muted-foreground max-w-2xl">
               {isAdmin 
                 ? "Live tamper-evident company audit trail. Filter across all departments, team members, categories, and actions."
                 : "Your personal activity trail and event history recorded across the platform."}
             </p>
           </div>
           
-          <div className="flex flex-wrap sm:flex-nowrap gap-3 sm:gap-4">
-            <div className="bg-muted/40 border border-border rounded-2xl p-3.5 sm:p-4 flex items-center gap-3.5 min-w-[140px] flex-1 shadow-xs">
-              <div className="w-10 h-10 bg-background rounded-xl shadow-xs flex items-center justify-center text-primary shrink-0 border border-border/60">
+          <div className="grid grid-cols-3 gap-2 sm:gap-4 w-full 2xl:w-[640px] 2xl:shrink-0">
+            <div className="bg-muted/40 border border-border rounded-xl sm:rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3.5 min-w-0 shadow-xs">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-background rounded-lg sm:rounded-xl shadow-xs flex items-center justify-center text-primary shrink-0 border border-border/60">
                 <Activity className="w-5 h-5" />
               </div>
-              <div>
-                <p className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Events Today</p>
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-[11px] font-bold text-muted-foreground uppercase tracking-wide mb-0.5">Events Today</p>
                 <p className="text-xl sm:text-2xl font-black text-foreground leading-none">{stats.events_today}</p>
               </div>
             </div>
             
-            <div className="bg-destructive/10 border border-destructive/20 rounded-2xl p-3.5 sm:p-4 flex items-center gap-3.5 min-w-[140px] flex-1 shadow-xs">
-              <div className="w-10 h-10 bg-background rounded-xl shadow-xs flex items-center justify-center text-rose-600 shrink-0 border border-destructive/20">
+            <div className="bg-destructive/10 border border-destructive/20 rounded-xl sm:rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3.5 min-w-0 shadow-xs">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-background rounded-lg sm:rounded-xl shadow-xs flex items-center justify-center text-rose-600 shrink-0 border border-destructive/20">
                 <ShieldAlert className="w-5 h-5" />
               </div>
-              <div>
-                <p className="text-[10px] sm:text-xs font-bold text-rose-600/80 uppercase tracking-wider mb-0.5">Critical Alerts</p>
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-[11px] font-bold text-rose-600/80 uppercase tracking-wide mb-0.5">Critical Alerts</p>
                 <p className="text-xl sm:text-2xl font-black text-rose-700 leading-none">{stats.critical_alerts}</p>
               </div>
             </div>
 
-            <div className="bg-muted/40 border border-border rounded-2xl p-3.5 sm:p-4 flex items-center gap-3.5 min-w-[140px] flex-1 shadow-xs">
-              <div className="w-10 h-10 bg-background rounded-xl shadow-xs flex items-center justify-center text-muted-foreground shrink-0 border border-border/60">
+            <div className="bg-muted/40 border border-border rounded-xl sm:rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3.5 min-w-0 shadow-xs">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-background rounded-lg sm:rounded-xl shadow-xs flex items-center justify-center text-muted-foreground shrink-0 border border-border/60">
                 <CheckCircle2 className="w-5 h-5 text-emerald-600" />
               </div>
-              <div>
-                <p className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Total Records</p>
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-[11px] font-bold text-muted-foreground uppercase tracking-wide mb-0.5">Total Records</p>
                 <p className="text-xl sm:text-2xl font-black text-foreground leading-none">{stats.total_records || total}</p>
               </div>
             </div>
@@ -603,130 +627,72 @@ export function ActivityLogs() {
 
         {/* Row 2: Comprehensive Multi-Filter Bar with Custom Sleek Dropdowns */}
         <div className="p-3 sm:p-4 border-b border-border bg-background/50 flex flex-col gap-3 shrink-0 relative z-30">
-          <div className="flex flex-wrap items-center justify-between gap-2.5">
-            {/* Filter Dropdowns Grid */}
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Severity Dropdown */}
-              <FilterDropdown
-                label="All Severities"
-                icon={<AlertTriangle className="w-3.5 h-3.5" />}
-                value={severityFilter}
-                options={severityOptions}
-                onChange={setSeverityFilter}
-                defaultValue="All"
+          {/* Search + Export / Refresh */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="relative flex-1 min-w-0 xl:max-w-md">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search action, user, IP, metadata..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-8 h-[42px] text-xs sm:text-sm font-medium bg-background border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-xs"
               />
-
-              {/* Department Dropdown (Admin / HR only) */}
-              {isAdmin && (
-                <FilterDropdown
-                  label="All Departments"
-                  icon={<Building2 className="w-3.5 h-3.5" />}
-                  value={departmentFilter}
-                  options={departmentOptions}
-                  onChange={setDepartmentFilter}
-                  defaultValue="All"
-                />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
               )}
-
-              {/* User Dropdown (Admin / HR only - Lists ALL Employees) */}
-              {isAdmin && (
-                <FilterDropdown
-                  label="All Users"
-                  icon={<UserCheck className="w-3.5 h-3.5" />}
-                  value={userFilter}
-                  options={userOptions}
-                  onChange={setUserFilter}
-                  defaultValue="All"
-                />
-              )}
-
-              {/* Action Dropdown */}
-              <FilterDropdown
-                label="All Actions"
-                icon={<Tag className="w-3.5 h-3.5" />}
-                value={actionFilter}
-                options={actionOptions}
-                onChange={setActionFilter}
-                defaultValue="All"
-              />
-
-              {/* Date Preset Dropdown */}
-              <FilterDropdown
-                label="All Time"
-                icon={<Calendar className="w-3.5 h-3.5" />}
-                value={dateRangePreset}
-                options={dateOptions}
-                onChange={setDateRangePreset}
-                defaultValue="all"
-              />
-
-              {/* Sort Order Dropdown */}
-              <FilterDropdown
-                label="Sort Order"
-                icon={<ArrowUpDown className="w-3.5 h-3.5" />}
-                value={sortOrder}
-                options={sortOptions}
-                onChange={(val) => setSortOrder(val as "desc" | "asc")}
-                defaultValue="desc"
-              />
-
-              {/* Per Page Limit Dropdown */}
-              <FilterDropdown
-                label="Rows"
-                icon={<ListFilter className="w-3.5 h-3.5" />}
-                value={String(limit)}
-                options={limitOptions}
-                onChange={(val) => setLimit(Number(val))}
-                defaultValue="25"
-              />
             </div>
 
-            {/* Actions: Search, Export, Refresh */}
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <div className="relative flex-1 sm:w-60">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Search action, user, IP, metadata..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-8 h-9 text-xs bg-background border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary shadow-xs"
-                />
-                {searchQuery && (
-                  <button 
-                    onClick={() => setSearchQuery("")} 
-                    className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground cursor-pointer"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportCsv}
+              disabled={logs.length === 0}
+              className="h-[42px] w-[42px] sm:w-auto px-0 sm:px-4 text-xs font-bold rounded-xl gap-1.5 shadow-xs cursor-pointer shrink-0"
+              title="Export filtered logs as CSV"
+            >
+              <Download className="w-4 h-4" />
+              <span className="hidden sm:inline">Export</span>
+            </Button>
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExportCsv}
-                disabled={logs.length === 0}
-                className="h-9 px-3 text-xs font-bold rounded-xl gap-1.5 shadow-xs cursor-pointer"
-                title="Export filtered logs as CSV"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span className="hidden md:inline">Export</span>
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={fetchLogs}
-                disabled={isLoading}
-                className="h-9 px-3 text-xs font-bold rounded-xl gap-1.5 shadow-xs cursor-pointer"
-                title="Refresh logs"
-              >
-                <RefreshCw className={cn("w-3.5 h-3.5", isLoading && "animate-spin text-primary")} />
-                <span className="hidden sm:inline">Refresh</span>
-              </Button>
-            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchLogs}
+              disabled={isLoading}
+              className="h-[42px] w-[42px] sm:w-auto px-0 sm:px-4 text-xs font-bold rounded-xl gap-1.5 shadow-xs cursor-pointer shrink-0"
+              title="Refresh logs"
+            >
+              <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin text-primary")} />
+              <span className="hidden sm:inline">Refresh</span>
+            </Button>
           </div>
+
+          {/* Filter Dropdowns: 2 cols on mobile, 3 on tablet, one wrapping row on desktop */}
+          <div className="grid grid-cols-2 sm:grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-2 sm:gap-3">
+            {filterDropdowns.map((f, i) => (
+              <FilterDropdown
+                key={f.key}
+                label={f.label}
+                icon={f.icon}
+                value={f.value}
+                options={f.options}
+                onChange={f.onChange}
+                defaultValue={f.defaultValue}
+                className="min-w-0"
+                menuClassName={cn(
+                  i % 2 === 1 ? "right-0 left-auto" : "left-0 right-auto",
+                  "sm:left-0 sm:right-auto"
+                )}
+              />
+            ))}
+          </div>
+
 
           {/* Custom Date Pickers (Shown only when dateRangePreset === "custom") */}
           {dateRangePreset === "custom" && (
@@ -849,15 +815,15 @@ export function ActivityLogs() {
         </div>
 
         {/* Timeline Logs List */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-muted/5 relative z-10">
-          <div className="max-w-4xl mx-auto">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-6 bg-muted/5 relative z-10">
+          <div className="max-w-5xl mx-auto min-w-0">
             {isLoading && logs.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-24 text-center">
                 <RefreshCw className="w-8 h-8 animate-spin text-primary mb-3" />
                 <p className="text-sm font-semibold text-muted-foreground">Loading activity audit logs...</p>
               </div>
             ) : logs.length > 0 ? (
-              <div className="relative border-l border-border/80 ml-4 space-y-6 pb-6">
+              <div className="relative border-l border-border/80 ml-3 sm:ml-4 space-y-4 sm:space-y-6 pb-6">
                 {logs.map((log) => {
                   const logId = log.id || log._id || Math.random().toString();
                   const sev = (log.severity || "Info").toLowerCase();
@@ -869,7 +835,7 @@ export function ActivityLogs() {
                   const userAvatar = getAvatarUrl(log.performed_by_avatar || "", userName);
 
                   return (
-                    <div key={logId} className="relative pl-7 sm:pl-10 group">
+                    <div key={logId} className="relative pl-6 sm:pl-10 group min-w-0">
                       {/* Timeline Node Icon */}
                       <div className={cn(
                         "absolute -left-[1.05rem] top-1.5 w-7 h-7 rounded-full border-2 border-card flex items-center justify-center shadow-xs transition-transform group-hover:scale-110",
@@ -884,22 +850,22 @@ export function ActivityLogs() {
 
                       {/* Content Card */}
                       <div className={cn(
-                        "bg-card rounded-2xl p-4 sm:p-5 shadow-xs border transition-all duration-200 group-hover:shadow-sm",
+                        "bg-card rounded-2xl p-3.5 sm:p-5 shadow-xs border transition-all duration-200 group-hover:shadow-sm min-w-0",
                         isCrit ? "border-rose-300 dark:border-rose-900/60 bg-rose-50/20 dark:bg-rose-950/20" : 
                         isWarn ? "border-amber-300 dark:border-amber-900/60 bg-amber-50/20 dark:bg-amber-950/20" : 
                         "border-border/80 hover:border-border"
                       )}>
                         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-2.5">
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
                             <img 
                               src={userAvatar} 
                               alt={userName}
                               onError={handleAvatarError}
                               className="w-10 h-10 rounded-full border border-border object-cover bg-muted shrink-0"
                             />
-                            <div>
+                            <div className="min-w-0">
                               <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                                <span className="font-bold text-foreground text-xs sm:text-sm leading-tight">
+                                <span className="font-bold text-foreground text-xs sm:text-sm leading-tight break-words">
                                   {userName}
                                 </span>
                                 {userDept && (
@@ -911,13 +877,13 @@ export function ActivityLogs() {
                                   {userRole}
                                 </Badge>
                               </div>
-                              <p className="text-xs sm:text-[13px] font-bold text-foreground/90">
+                              <p className="text-xs sm:text-[13px] font-bold text-foreground/90 break-words">
                                 {log.action}
                               </p>
                             </div>
                           </div>
                           
-                          <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-1 shrink-0">
+                          <div className="flex flex-row sm:flex-col flex-wrap items-center sm:items-end justify-between sm:justify-start gap-1 sm:shrink-0">
                             <span className="text-[11px] font-semibold text-muted-foreground">
                               {formatTimestamp(log.timestamp || log.created_at)}
                             </span>
@@ -930,7 +896,7 @@ export function ActivityLogs() {
                         </div>
 
                         {log.description && log.description !== log.action && (
-                          <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                          <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed break-words">
                             {log.description}
                           </p>
                         )}
@@ -995,7 +961,7 @@ export function ActivityLogs() {
 
         {/* Bottom Pagination & Records Summary */}
         {total > 0 && (
-          <div className="p-3 sm:p-4 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-3 bg-muted/10 shrink-0">
+          <div className="p-3 sm:p-4 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-3 bg-muted/10 shrink-0 text-center sm:text-left">
             <p className="text-xs text-muted-foreground font-medium">
               Showing <strong className="text-foreground">{(page - 1) * limit + 1}</strong> to{" "}
               <strong className="text-foreground">{Math.min(page * limit, total)}</strong> of{" "}
@@ -1003,13 +969,13 @@ export function ActivityLogs() {
             </p>
 
             {totalPages > 1 && (
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center justify-center gap-1.5">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page <= 1}
-                  className="h-8 px-2.5 text-xs font-bold rounded-lg cursor-pointer"
+                  className="h-9 px-3 text-xs font-bold rounded-lg cursor-pointer"
                 >
                   Previous
                 </Button>
@@ -1021,7 +987,7 @@ export function ActivityLogs() {
                   size="sm"
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page >= totalPages}
-                  className="h-8 px-2.5 text-xs font-bold rounded-lg cursor-pointer"
+                  className="h-9 px-3 text-xs font-bold rounded-lg cursor-pointer"
                 >
                   Next
                 </Button>

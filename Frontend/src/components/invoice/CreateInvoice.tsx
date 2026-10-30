@@ -939,7 +939,7 @@ export function CreateInvoice({
       : PAYMENT_MODES_TAX;
 
   return (
-    <div className="w-full space-y-6 sm:space-y-8 animate-in fade-in duration-500 min-w-0">
+    <div className="@container w-full space-y-6 sm:space-y-8 animate-in fade-in duration-500 min-w-0">
       {clientCreatePrompt && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="w-full max-w-md rounded-2xl bg-card border border-border p-6 shadow-xl space-y-4">
@@ -979,8 +979,8 @@ export function CreateInvoice({
         document.body
       )}
       {/* Top Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div className="flex items-center gap-3 sm:gap-4">
+      <div className="flex flex-col @2xl:flex-row justify-between items-start @2xl:items-center gap-4">
+        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
           {onBack && (
             <button
               onClick={onBack}
@@ -990,7 +990,7 @@ export function CreateInvoice({
               <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           )}
-          <div>
+          <div className="min-w-0">
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground flex items-center gap-2">
               <FileText className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
               {isEditMode
@@ -1009,14 +1009,14 @@ export function CreateInvoice({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full @2xl:w-auto @2xl:shrink-0">
           {/* Proforma invoices are created only after payment, so they are never drafts */}
           {invoiceType !== "Proforma Invoice" && (
             <button
               type="button"
               disabled={isSubmitting || isLoadingInvoice}
               onClick={() => handleSave(true)}
-              className="flex-1 sm:flex-initial px-4 py-2 sm:py-2.5 bg-card border border-border/60 text-foreground font-bold rounded-xl hover:bg-muted/50 transition-colors flex items-center justify-center gap-2 shadow-sm text-xs sm:text-sm disabled:opacity-50 cursor-pointer"
+              className="flex-1 @2xl:flex-initial px-4 py-2.5 whitespace-nowrap bg-card border border-border/60 text-foreground font-bold rounded-xl hover:bg-muted/50 transition-colors flex items-center justify-center gap-2 shadow-sm text-xs sm:text-sm disabled:opacity-50 cursor-pointer"
             >
               <Save className="w-4 h-4" />
               Save Draft
@@ -1026,7 +1026,7 @@ export function CreateInvoice({
             type="button"
             disabled={isSubmitting || isLoadingInvoice}
             onClick={() => handleSave(false)}
-            className="flex-1 sm:flex-initial px-4 sm:px-5 py-2 sm:py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm text-xs sm:text-sm disabled:opacity-50 cursor-pointer"
+            className="flex-1 @2xl:flex-initial px-4 @2xl:px-5 py-2.5 whitespace-nowrap bg-primary text-primary-foreground hover:bg-primary/90 font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm text-xs sm:text-sm disabled:opacity-50 cursor-pointer"
           >
             {isSubmitting ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -1055,7 +1055,7 @@ export function CreateInvoice({
               Invoice Details
             </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
+        <div className="grid grid-cols-1 @2xl:grid-cols-2 gap-x-8 gap-y-5">
           {/* Row 1: Billed To (Client) | Client Address */}
           <div>
             <label className="text-xs sm:text-sm font-semibold text-foreground mb-2 block">
@@ -1478,9 +1478,9 @@ export function CreateInvoice({
         </h2>
 
         <div className="overflow-x-auto min-w-0">
-          <div className="min-w-[760px] space-y-3">
+          <div className="@3xl:min-w-[760px] space-y-3">
             {/* Table Header */}
-            <div className="grid grid-cols-12 gap-3 pb-2 text-[11px] font-black uppercase tracking-wider text-muted-foreground">
+            <div className="hidden @3xl:grid grid-cols-12 gap-3 pb-2 text-[11px] font-black uppercase tracking-wider text-muted-foreground">
               <div className="col-span-4 pl-1">ITEM DESCRIPTION</div>
               <div className="col-span-1 text-center">SAC</div>
               <div className="col-span-1 text-center">QTY</div>
@@ -1498,10 +1498,11 @@ export function CreateInvoice({
               return (
                 <div
                   key={item.id}
-                  className="grid grid-cols-12 gap-3 items-center group py-1"
+                  className="grid grid-cols-2 @3xl:grid-cols-12 gap-3 items-end @3xl:items-center group py-3 px-3 @3xl:py-1 @3xl:px-0 @max-3xl:rounded-xl @max-3xl:border @max-3xl:border-border/60 @max-3xl:bg-muted/20"
                 >
                   {/* ITEM DESCRIPTION */}
-                  <div className="col-span-4">
+                  <div className="col-span-2 @3xl:col-span-4 min-w-0">
+                    <span className="@3xl:hidden block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Item Description</span>
                     <ServiceDescriptionInput
                       value={item.description}
                       services={services}
@@ -1512,7 +1513,8 @@ export function CreateInvoice({
                   </div>
 
                   {/* SAC */}
-                  <div className="col-span-1">
+                  <div className="col-span-1 min-w-0">
+                    <span className="@3xl:hidden block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">SAC</span>
                     <input
                       type="text"
                       value={item.sac}
@@ -1523,7 +1525,8 @@ export function CreateInvoice({
                   </div>
 
                   {/* QTY */}
-                  <div className="col-span-1">
+                  <div className="col-span-1 min-w-0">
+                    <span className="@3xl:hidden block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Qty</span>
                     <input
                       type="number"
                       min="0"
@@ -1541,7 +1544,8 @@ export function CreateInvoice({
                   </div>
 
                   {/* RATE (₹) */}
-                  <div className="col-span-2">
+                  <div className="col-span-1 @3xl:col-span-2 min-w-0">
+                    <span className="@3xl:hidden block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Rate (₹)</span>
                     <input
                       type="number"
                       min="0"
@@ -1560,7 +1564,8 @@ export function CreateInvoice({
                   </div>
 
                   {/* DISCOUNT with % / ₹ toggle (Per QTY) */}
-                  <div className="col-span-2">
+                  <div className="col-span-1 @3xl:col-span-2 min-w-0">
+                    <span className="@3xl:hidden block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Discount</span>
                     <div className="relative flex items-center">
                       <input
                         type="number"
@@ -1610,7 +1615,8 @@ export function CreateInvoice({
                   </div>
 
                   {/* AMOUNT + Trash */}
-                  <div className="col-span-2 flex items-center justify-end gap-2.5">
+                  <div className="col-span-2 @3xl:col-span-2 flex items-center justify-between @3xl:justify-end gap-2.5 @max-3xl:pt-2 @max-3xl:border-t @max-3xl:border-border/50">
+                    <span className="@3xl:hidden text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Amount</span>
                     <span className="text-sm sm:text-base font-bold text-foreground tabular-nums">
                       ₹ {formatNumber(itemAmt)}
                     </span>
@@ -1630,7 +1636,7 @@ export function CreateInvoice({
 
             {/* Total Footer Row (Screenshot 2) */}
             <div className="pt-4 border-t border-border/60">
-              <div className="grid grid-cols-12 gap-3 items-center text-sm font-bold text-foreground">
+              <div className="hidden @3xl:grid grid-cols-12 gap-3 items-center text-sm font-bold text-foreground">
                 <div className="col-span-4 pl-1 text-base">Total</div>
                 <div className="col-span-1"></div>
                 <div className="col-span-1 text-center tabular-nums">
@@ -1645,6 +1651,10 @@ export function CreateInvoice({
                 <div className="col-span-2 text-right pr-6 tabular-nums text-base">
                   ₹ {formatNumber(lineItemsTotalAmount)}
                 </div>
+              </div>
+              <div className="@3xl:hidden flex items-center justify-between text-base font-bold text-foreground">
+                <span>Total ({totalQty} qty)</span>
+                <span className="tabular-nums">₹ {formatNumber(lineItemsTotalAmount)}</span>
               </div>
             </div>
           </div>
@@ -1672,8 +1682,8 @@ export function CreateInvoice({
         </div>
         <div
           className={cn(
-            "grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6",
-            upiId?.trim() ? "md:grid-cols-4" : "md:grid-cols-3"
+            "grid grid-cols-1 @xl:grid-cols-2 gap-4 sm:gap-6",
+            upiId?.trim() ? "@3xl:grid-cols-4" : "@3xl:grid-cols-3"
           )}
         >
           <div>
@@ -1757,9 +1767,9 @@ export function CreateInvoice({
 
 
       {/* Bottom Section: Notes / Terms & Tax/Total Summary */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 items-start">
+      <div className="grid grid-cols-1 @4xl:grid-cols-12 gap-6 sm:gap-8 items-start">
         {/* Left: Notes / Terms */}
-        <div className="lg:col-span-6 bg-card border border-border/60 rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-sm space-y-3">
+        <div className="@4xl:col-span-6 bg-card border border-border/60 rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-sm space-y-3">
           <label className="text-xs sm:text-sm font-semibold text-foreground block">
             Notes / Terms
           </label>
@@ -1772,7 +1782,7 @@ export function CreateInvoice({
         </div>
 
         {/* Right: Invoice Summary Card (Matching User Screenshot Exactly) */}
-        <div className="lg:col-span-6 bg-card border border-border/60 rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-sm space-y-3.5">
+        <div className="@4xl:col-span-6 bg-card border border-border/60 rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-sm space-y-3.5">
           {/* Total Before Tax */}
           <div className="flex justify-between items-center text-sm font-medium text-muted-foreground">
             <span>Total Before Tax</span>

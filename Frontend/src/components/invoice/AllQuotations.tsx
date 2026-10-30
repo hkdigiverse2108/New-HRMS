@@ -706,10 +706,10 @@ export function AllQuotations({
     );
 
     return (
-      <div className="w-full space-y-6 sm:space-y-8 animate-in fade-in duration-300 min-w-0">
+      <div className="@container w-full space-y-6 sm:space-y-8 animate-in fade-in duration-300 min-w-0">
         {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div className="flex items-center gap-3 sm:gap-4">
+        <div className="flex flex-col @2xl:flex-row justify-between items-start @2xl:items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
             <button
               type="button"
               onClick={handleBackToList}
@@ -718,7 +718,7 @@ export function AllQuotations({
             >
               <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
-            <div>
+            <div className="min-w-0">
               <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground flex items-center gap-2">
                 <FileText className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
                 {viewMode === "edit" ? `Update Quotation (${formQuotationNumber})` : "Create Quotation"}
@@ -731,11 +731,11 @@ export function AllQuotations({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full @2xl:w-auto @2xl:shrink-0">
             <button
               type="button"
               onClick={handleBackToList}
-              className="flex-1 sm:flex-initial px-4 py-2 sm:py-2.5 bg-card border border-border/60 text-foreground font-bold rounded-xl hover:bg-muted/50 transition-colors flex items-center justify-center gap-2 shadow-sm text-xs sm:text-sm cursor-pointer"
+              className="flex-1 @2xl:flex-initial px-4 py-2.5 whitespace-nowrap bg-card border border-border/60 text-foreground font-bold rounded-xl hover:bg-muted/50 transition-colors flex items-center justify-center gap-2 shadow-sm text-xs sm:text-sm cursor-pointer"
             >
               Cancel
             </button>
@@ -743,7 +743,7 @@ export function AllQuotations({
               type="button"
               onClick={handleSaveQuotation}
               disabled={isSubmittingForm}
-              className="flex-1 sm:flex-initial px-4 sm:px-5 py-2 sm:py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm text-xs sm:text-sm disabled:opacity-50 cursor-pointer"
+              className="flex-1 @2xl:flex-initial px-4 @2xl:px-5 py-2.5 whitespace-nowrap bg-primary text-primary-foreground hover:bg-primary/90 font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm text-xs sm:text-sm disabled:opacity-50 cursor-pointer"
             >
               {isSubmittingForm ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -1020,8 +1020,8 @@ export function AllQuotations({
             <h2 className="text-base sm:text-lg font-bold text-foreground">Line Items</h2>
 
             <div className="overflow-x-auto min-w-0">
-              <div className="min-w-[760px] space-y-3">
-                <div className="grid grid-cols-12 gap-3 pb-2 text-[11px] font-black uppercase tracking-wider text-muted-foreground">
+              <div className="@3xl:min-w-[760px] space-y-3">
+                <div className="hidden @3xl:grid grid-cols-12 gap-3 pb-2 text-[11px] font-black uppercase tracking-wider text-muted-foreground">
                   <div className="col-span-4 pl-1">ITEM DESCRIPTION</div>
                   <div className="col-span-1 text-center">SAC</div>
                   <div className="col-span-1 text-center">QTY</div>
@@ -1035,8 +1035,9 @@ export function AllQuotations({
                   const itemAmt = Math.max(0, itemGross - getItemDiscountAmount(item));
 
                   return (
-                    <div key={item.id} className="grid grid-cols-12 gap-3 items-center group py-1">
-                      <div className="col-span-4">
+                    <div key={item.id} className="grid grid-cols-2 @3xl:grid-cols-12 gap-3 items-end @3xl:items-center group py-3 px-3 @3xl:py-1 @3xl:px-0 @max-3xl:rounded-xl @max-3xl:border @max-3xl:border-border/60 @max-3xl:bg-muted/20">
+                      <div className="col-span-2 @3xl:col-span-4 min-w-0">
+                        <span className="@3xl:hidden block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Item Description</span>
                         <input
                           type="text"
                           value={item.description}
@@ -1046,7 +1047,8 @@ export function AllQuotations({
                         />
                       </div>
 
-                      <div className="col-span-1">
+                      <div className="col-span-1 min-w-0">
+                        <span className="@3xl:hidden block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">SAC</span>
                         <input
                           type="text"
                           value={item.sac || ""}
@@ -1056,7 +1058,8 @@ export function AllQuotations({
                         />
                       </div>
 
-                      <div className="col-span-1">
+                      <div className="col-span-1 min-w-0">
+                        <span className="@3xl:hidden block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Qty</span>
                         <input
                           type="number"
                           min="0"
@@ -1069,7 +1072,8 @@ export function AllQuotations({
                         />
                       </div>
 
-                      <div className="col-span-2">
+                      <div className="col-span-1 @3xl:col-span-2 min-w-0">
+                        <span className="@3xl:hidden block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Rate (₹)</span>
                         <input
                           type="number"
                           min="0"
@@ -1083,7 +1087,8 @@ export function AllQuotations({
                         />
                       </div>
 
-                      <div className="col-span-2">
+                      <div className="col-span-1 @3xl:col-span-2 min-w-0">
+                        <span className="@3xl:hidden block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Discount</span>
                         <div className="relative flex items-center">
                           <input
                             type="number"
@@ -1128,7 +1133,8 @@ export function AllQuotations({
                         </div>
                       </div>
 
-                      <div className="col-span-2 flex items-center justify-end gap-2.5">
+                      <div className="col-span-2 flex items-center justify-between @3xl:justify-end gap-2.5 @max-3xl:pt-2 @max-3xl:border-t @max-3xl:border-border/50">
+                        <span className="@3xl:hidden text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Amount</span>
                         <span className="text-sm sm:text-base font-bold text-foreground tabular-nums">
                           ₹ {formatNumber(itemAmt)}
                         </span>
@@ -1147,7 +1153,7 @@ export function AllQuotations({
                 })}
 
                 <div className="pt-4 border-t border-border/60">
-                  <div className="grid grid-cols-12 gap-3 items-center text-sm font-bold text-foreground">
+                  <div className="hidden @3xl:grid grid-cols-12 gap-3 items-center text-sm font-bold text-foreground">
                     <div className="col-span-4 pl-1 text-base">Total</div>
                     <div className="col-span-1"></div>
                     <div className="col-span-1 text-center tabular-nums">{totalQty}</div>
@@ -1156,6 +1162,10 @@ export function AllQuotations({
                     <div className="col-span-2 text-right pr-6 tabular-nums text-base">
                       ₹ {formatNumber(totalBeforeTax)}
                     </div>
+                  </div>
+                  <div className="@3xl:hidden flex items-center justify-between text-base font-bold text-foreground">
+                    <span>Total ({totalQty} qty)</span>
+                    <span className="tabular-nums">₹ {formatNumber(totalBeforeTax)}</span>
                   </div>
                 </div>
               </div>
@@ -1231,8 +1241,8 @@ export function AllQuotations({
           </div>
 
           {/* Bottom: Notes / Terms & Summary */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 items-start">
-            <div className="lg:col-span-6 bg-card border border-border/60 rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-sm space-y-3">
+          <div className="grid grid-cols-1 @4xl:grid-cols-12 gap-6 sm:gap-8 items-start">
+            <div className="@4xl:col-span-6 bg-card border border-border/60 rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-sm space-y-3">
               <label className="text-xs sm:text-sm font-semibold text-foreground block">Notes / Terms</label>
               <textarea
                 value={formNotes}
@@ -1242,7 +1252,7 @@ export function AllQuotations({
               />
             </div>
 
-            <div className="lg:col-span-6 bg-card border border-border/60 rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-sm space-y-3.5">
+            <div className="@4xl:col-span-6 bg-card border border-border/60 rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-sm space-y-3.5">
               <div className="flex justify-between items-center text-sm font-medium text-muted-foreground">
                 <span>Total Before Tax</span>
                 <span className="text-foreground font-bold tabular-nums">₹ {formatNumber(totalBeforeTax)}</span>
@@ -1368,10 +1378,10 @@ export function AllQuotations({
 
   // RENDER: ALL QUOTATIONS LIST VIEW WITH TOP KPIS
   return (
-    <div className="w-full space-y-6 sm:space-y-8 animate-in fade-in duration-500 min-w-0">
+    <div className="@container w-full space-y-6 sm:space-y-8 animate-in fade-in duration-500 min-w-0">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
+      <div className="flex flex-col @4xl:flex-row justify-between items-start @4xl:items-center gap-4">
+        <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground flex items-center gap-2">
             <ReceiptText className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
             All Quotations
@@ -1381,11 +1391,11 @@ export function AllQuotations({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 @4xl:shrink-0">
           <button
             type="button"
             onClick={handleOpenCreate}
-            className="w-full sm:w-auto px-4 py-2 sm:py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm text-xs sm:text-sm cursor-pointer"
+            className="w-auto px-4 py-2.5 whitespace-nowrap sm:py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm text-xs sm:text-sm cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             Create Quotation
@@ -1420,7 +1430,7 @@ export function AllQuotations({
               link.click();
               document.body.removeChild(link);
             }}
-            className="w-full sm:w-auto px-4 py-2 sm:py-2.5 bg-card border border-border/50 text-foreground font-bold rounded-xl hover:bg-muted/50 transition-colors flex items-center justify-center gap-2 shadow-sm text-xs sm:text-sm cursor-pointer"
+            className="w-auto px-4 py-2.5 whitespace-nowrap sm:py-2.5 bg-card border border-border/50 text-foreground font-bold rounded-xl hover:bg-muted/50 transition-colors flex items-center justify-center gap-2 shadow-sm text-xs sm:text-sm cursor-pointer"
           >
             <Download className="w-4 h-4" />
             Export List
@@ -1429,12 +1439,12 @@ export function AllQuotations({
       </div>
 
       {/* Stats Bar (5 Top KPI Cards with click-to-filter just like Invoices) */}
-      <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 md:grid-cols-6 @5xl:grid-cols-5">
         {/* 1. Total Quotations */}
         <div
           onClick={() => handleKpiBoxClick("all")}
           className={cn(
-            "bg-card border rounded-2xl p-4 sm:p-5 shadow-xs cursor-pointer transition-all hover:scale-[1.01] select-none",
+            "min-w-0 col-span-2 md:col-span-2 @5xl:col-span-1 bg-card border rounded-2xl p-4 sm:p-5 shadow-xs cursor-pointer transition-all hover:scale-[1.01] select-none",
             isAllActive
               ? "border-primary/60 ring-2 ring-primary/25 bg-primary/5 shadow-md"
               : "border-border/50 hover:border-border opacity-80 hover:opacity-100"
@@ -1444,14 +1454,14 @@ export function AllQuotations({
             <span>Total Quotations</span>
             {isAllActive && <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />}
           </div>
-          <div className="text-2xl sm:text-3xl font-black">{dateFilteredQuotations.length}</div>
+          <div className="text-xl sm:text-2xl @6xl:text-3xl font-black whitespace-nowrap">{dateFilteredQuotations.length}</div>
         </div>
 
         {/* 2. Upcoming (still valid) */}
         <div
           onClick={() => handleKpiBoxClick("upcoming")}
           className={cn(
-            "border rounded-2xl p-4 sm:p-5 shadow-xs cursor-pointer transition-all hover:scale-[1.01] select-none",
+            "min-w-0 col-span-1 md:col-span-2 @5xl:col-span-1 border rounded-2xl p-4 sm:p-5 shadow-xs cursor-pointer transition-all hover:scale-[1.01] select-none",
             isUpcomingBoxSelected
               ? "bg-blue-500/15 border-blue-500/50 ring-2 ring-blue-500/30 shadow-md"
               : "bg-blue-500/5 border-blue-500/20 hover:bg-blue-500/10 opacity-80 hover:opacity-100"
@@ -1466,7 +1476,7 @@ export function AllQuotations({
               </span>
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-blue-700 dark:text-blue-400">
+          <div className="text-xl sm:text-2xl @6xl:text-3xl font-black whitespace-nowrap text-blue-700 dark:text-blue-400">
             ₹ {upcomingAmount.toLocaleString("en-IN")}
           </div>
         </div>
@@ -1475,7 +1485,7 @@ export function AllQuotations({
         <div
           onClick={() => handleKpiBoxClick("accepted")}
           className={cn(
-            "border rounded-2xl p-4 sm:p-5 shadow-xs cursor-pointer transition-all hover:scale-[1.01] select-none",
+            "min-w-0 col-span-1 md:col-span-2 @5xl:col-span-1 border rounded-2xl p-4 sm:p-5 shadow-xs cursor-pointer transition-all hover:scale-[1.01] select-none",
             isAcceptedBoxSelected
               ? "bg-emerald-500/15 border-emerald-500/50 ring-2 ring-emerald-500/30 shadow-md"
               : "bg-emerald-500/5 border-emerald-500/20 hover:bg-emerald-500/10 opacity-80 hover:opacity-100"
@@ -1492,7 +1502,7 @@ export function AllQuotations({
               </span>
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-emerald-700 dark:text-emerald-400">
+          <div className="text-xl sm:text-2xl @6xl:text-3xl font-black whitespace-nowrap text-emerald-700 dark:text-emerald-400">
             ₹ {acceptedAmount.toLocaleString("en-IN")}
           </div>
         </div>
@@ -1501,7 +1511,7 @@ export function AllQuotations({
         <div
           onClick={() => handleKpiBoxClick("overdue")}
           className={cn(
-            "border rounded-2xl p-4 sm:p-5 shadow-xs cursor-pointer transition-all hover:scale-[1.01] select-none",
+            "min-w-0 col-span-1 md:col-span-3 @5xl:col-span-1 border rounded-2xl p-4 sm:p-5 shadow-xs cursor-pointer transition-all hover:scale-[1.01] select-none",
             isOverdueBoxSelected
               ? "bg-amber-500/15 border-amber-500/50 ring-2 ring-amber-500/30 shadow-md"
               : "bg-amber-500/5 border-amber-500/20 hover:bg-amber-500/10 opacity-80 hover:opacity-100"
@@ -1518,7 +1528,7 @@ export function AllQuotations({
               </span>
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-amber-700 dark:text-amber-400">
+          <div className="text-xl sm:text-2xl @6xl:text-3xl font-black whitespace-nowrap text-amber-700 dark:text-amber-400">
             ₹ {overdueAmount.toLocaleString("en-IN")}
           </div>
         </div>
@@ -1527,7 +1537,7 @@ export function AllQuotations({
         <div
           onClick={() => handleKpiBoxClick("cancelled")}
           className={cn(
-            "border rounded-2xl p-4 sm:p-5 shadow-xs cursor-pointer transition-all hover:scale-[1.01] select-none",
+            "min-w-0 col-span-1 md:col-span-3 @5xl:col-span-1 border rounded-2xl p-4 sm:p-5 shadow-xs cursor-pointer transition-all hover:scale-[1.01] select-none",
             isCancelledBoxSelected
               ? "bg-slate-500/15 border-slate-500/50 ring-2 ring-slate-500/30 shadow-md"
               : "bg-slate-500/5 border-slate-500/20 hover:bg-slate-500/10 opacity-80 hover:opacity-100"
@@ -1544,30 +1554,30 @@ export function AllQuotations({
               </span>
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-slate-700 dark:text-slate-300">
+          <div className="text-xl sm:text-2xl @6xl:text-3xl font-black whitespace-nowrap text-slate-700 dark:text-slate-300">
             ₹ {cancelledAmount.toLocaleString("en-IN")}
           </div>
         </div>
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-col lg:flex-row gap-3 sm:gap-4 justify-between items-stretch lg:items-center bg-card border border-border/50 p-3 sm:p-4 rounded-2xl shadow-sm">
+      <div className="flex flex-col @5xl:flex-row @5xl:justify-between @5xl:items-center gap-3 sm:gap-4 bg-card border border-border/50 p-3 sm:p-4 rounded-2xl shadow-sm">
         <SearchInput
           placeholder="Search by client, quotation number, or subject..."
           value={search}
           onChange={setSearch}
-          className="w-full lg:max-w-md"
+          className="w-full" containerClassName="w-full sm:w-full md:w-full @5xl:w-72 @5xl:flex-none @5xl:min-w-[180px]"
         />
 
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full lg:w-auto">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full @5xl:w-auto">
           <DateRangeFilter
             dateRange={dateRange}
             onChange={(val) => setDateRange(val || { from: undefined, to: undefined })}
             placeholder="Filter by quotation date"
-            className="w-full sm:w-auto"
+            className="flex-1 min-w-[150px] @5xl:flex-none @5xl:w-auto"
           />
 
-          <div className="relative w-full sm:w-auto flex items-center gap-2">
+          <div className="relative flex-1 min-w-[150px] @5xl:flex-none @5xl:w-auto flex items-center gap-2">
             {/* Exact status saved on the quotation */}
             <SearchableSelect
               value={quotationStatusFilter}
@@ -1576,7 +1586,7 @@ export function AllQuotations({
                 { label: "All Quotation Status", value: "All" },
                 ...QUOTATION_STATUSES.map((s) => ({ label: s.charAt(0).toUpperCase() + s.slice(1), value: s })),
               ]}
-              className="w-full sm:w-[190px] h-[40px] px-3 bg-background border border-border/50 rounded-xl text-sm font-bold cursor-pointer"
+              className="w-full @5xl:w-[190px] h-[40px] px-3 bg-background border border-border/50 rounded-xl text-sm font-bold cursor-pointer"
             />
             {(!isAllActive || quotationStatusFilter !== "All") && (
               <button

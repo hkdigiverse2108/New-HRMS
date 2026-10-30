@@ -600,9 +600,9 @@ export function AllInvoices({ setActive }: { setActive?: (path: string) => void 
   const overdueAmount = 0;
 
   return (
-    <div className="w-full space-y-6 sm:space-y-8 animate-in fade-in duration-500 min-w-0">
+    <div className="@container w-full space-y-6 sm:space-y-8 animate-in fade-in duration-500 min-w-0">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="flex flex-col @4xl:flex-row justify-between items-start @4xl:items-center gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground flex items-center gap-2">
             <ReceiptText className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
@@ -612,12 +612,12 @@ export function AllInvoices({ setActive }: { setActive?: (path: string) => void 
             Manage your billing, track payments, and generate new invoices.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 @4xl:shrink-0">
           {/* Manage Other Accounts Button */}
           <button
             type="button"
             onClick={() => setShowAccountsModal(true)}
-            className="w-full sm:w-auto px-4 py-2 sm:py-2.5 bg-card border border-border/70 hover:border-primary/50 text-foreground font-bold rounded-xl hover:bg-muted/50 transition-colors flex items-center justify-center gap-2 shadow-sm text-xs sm:text-sm group"
+            className="w-auto px-4 py-2.5 whitespace-nowrap sm:py-2.5 bg-card border border-border/70 hover:border-primary/50 text-foreground font-bold rounded-xl hover:bg-muted/50 transition-colors flex items-center justify-center gap-2 shadow-sm text-xs sm:text-sm group"
           >
             <Building2 className="w-4 h-4 text-primary group-hover:scale-110 transition-transform" />
             Other Accounts
@@ -632,7 +632,7 @@ export function AllInvoices({ setActive }: { setActive?: (path: string) => void 
           <button
             type="button"
             onClick={() => setShowServicesModal(true)}
-            className="w-full sm:w-auto px-4 py-2 sm:py-2.5 bg-card border border-border/70 hover:border-primary/50 text-foreground font-bold rounded-xl hover:bg-muted/50 transition-colors flex items-center justify-center gap-2 shadow-sm text-xs sm:text-sm group"
+            className="w-auto px-4 py-2.5 whitespace-nowrap sm:py-2.5 bg-card border border-border/70 hover:border-primary/50 text-foreground font-bold rounded-xl hover:bg-muted/50 transition-colors flex items-center justify-center gap-2 shadow-sm text-xs sm:text-sm group"
           >
             <Briefcase className="w-4 h-4 text-primary group-hover:scale-110 transition-transform" />
             Services
@@ -642,7 +642,7 @@ export function AllInvoices({ setActive }: { setActive?: (path: string) => void 
             <button
               type="button"
               onClick={() => setActive("/invoice/create")}
-              className="w-full sm:w-auto px-4 py-2 sm:py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm text-xs sm:text-sm"
+              className="w-auto px-4 py-2.5 whitespace-nowrap sm:py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm text-xs sm:text-sm"
             >
               <Plus className="w-4 h-4" />
               Create Invoice
@@ -653,7 +653,7 @@ export function AllInvoices({ setActive }: { setActive?: (path: string) => void 
             type="button"
             onClick={handleExportList}
             disabled={loadingInvoices}
-            className="w-full sm:w-auto px-4 py-2 sm:py-2.5 bg-card border border-border/50 text-foreground font-bold rounded-xl hover:bg-muted/50 transition-colors flex items-center justify-center gap-2 shadow-sm text-xs sm:text-sm disabled:opacity-50 cursor-pointer"
+            className="w-auto px-4 py-2.5 whitespace-nowrap sm:py-2.5 bg-card border border-border/50 text-foreground font-bold rounded-xl hover:bg-muted/50 transition-colors flex items-center justify-center gap-2 shadow-sm text-xs sm:text-sm disabled:opacity-50 cursor-pointer"
           >
             <Download className="w-4 h-4" />
             Export List
@@ -662,12 +662,12 @@ export function AllInvoices({ setActive }: { setActive?: (path: string) => void 
       </div>
 
       {/* Stats Bar */}
-      <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 md:grid-cols-6 @5xl:grid-cols-5">
         {/* 1. Total Invoices */}
         <div
           onClick={() => handleKpiBoxClick("all")}
           className={cn(
-            "bg-card border rounded-2xl p-4 sm:p-5 shadow-xs cursor-pointer transition-all hover:scale-[1.01] select-none",
+            "min-w-0 col-span-2 md:col-span-2 @5xl:col-span-1 bg-card border rounded-2xl p-4 sm:p-5 shadow-xs cursor-pointer transition-all hover:scale-[1.01] select-none",
             isAllActive
               ? "border-primary/60 ring-2 ring-primary/25 bg-primary/5 shadow-md"
               : "border-border/50 hover:border-border opacity-80 hover:opacity-100"
@@ -679,14 +679,14 @@ export function AllInvoices({ setActive }: { setActive?: (path: string) => void 
               <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
             )}
           </div>
-          <div className="text-2xl sm:text-3xl font-black">{dateFilteredInvoices.length}</div>
+          <div className="text-xl sm:text-2xl @6xl:text-3xl font-black whitespace-nowrap">{dateFilteredInvoices.length}</div>
         </div>
 
         {/* 2. Total Billed */}
         <div
           onClick={() => handleKpiBoxClick("billed")}
           className={cn(
-            "border rounded-2xl p-4 sm:p-5 shadow-xs cursor-pointer transition-all hover:scale-[1.01] select-none",
+            "min-w-0 col-span-1 md:col-span-2 @5xl:col-span-1 border rounded-2xl p-4 sm:p-5 shadow-xs cursor-pointer transition-all hover:scale-[1.01] select-none",
             isBilledActive
               ? "bg-emerald-500/15 border-emerald-500/50 ring-2 ring-emerald-500/30 shadow-md"
               : "bg-emerald-500/5 border-emerald-500/20 hover:bg-emerald-500/10 opacity-80 hover:opacity-100"
@@ -698,7 +698,7 @@ export function AllInvoices({ setActive }: { setActive?: (path: string) => void 
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             )}
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-emerald-700 dark:text-emerald-400">
+          <div className="text-xl sm:text-2xl @6xl:text-3xl font-black whitespace-nowrap text-emerald-700 dark:text-emerald-400">
             ₹ {totalAmount.toLocaleString("en-IN")}
           </div>
         </div>
@@ -707,7 +707,7 @@ export function AllInvoices({ setActive }: { setActive?: (path: string) => void 
         <div
           onClick={() => handleKpiBoxClick("tax")}
           className={cn(
-            "border rounded-2xl p-4 sm:p-5 shadow-xs cursor-pointer transition-all hover:scale-[1.01] select-none",
+            "min-w-0 col-span-1 md:col-span-2 @5xl:col-span-1 border rounded-2xl p-4 sm:p-5 shadow-xs cursor-pointer transition-all hover:scale-[1.01] select-none",
             isTaxActive
               ? "bg-amber-500/15 border-amber-500/50 ring-2 ring-amber-500/30 shadow-md"
               : "bg-amber-500/5 border-amber-500/20 hover:bg-amber-500/10 opacity-80 hover:opacity-100"
@@ -724,7 +724,7 @@ export function AllInvoices({ setActive }: { setActive?: (path: string) => void 
               </span>
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-amber-700 dark:text-amber-400">
+          <div className="text-xl sm:text-2xl @6xl:text-3xl font-black whitespace-nowrap text-amber-700 dark:text-amber-400">
             ₹ {taxInvoiceAmount.toLocaleString("en-IN")}
           </div>
         </div>
@@ -733,7 +733,7 @@ export function AllInvoices({ setActive }: { setActive?: (path: string) => void 
         <div
           onClick={() => handleKpiBoxClick("proforma")}
           className={cn(
-            "border rounded-2xl p-4 sm:p-5 shadow-xs cursor-pointer transition-all hover:scale-[1.01] select-none",
+            "min-w-0 col-span-1 md:col-span-3 @5xl:col-span-1 border rounded-2xl p-4 sm:p-5 shadow-xs cursor-pointer transition-all hover:scale-[1.01] select-none",
             isProformaActive
               ? "bg-rose-500/15 border-rose-500/50 ring-2 ring-rose-500/30 shadow-md"
               : "bg-rose-500/5 border-rose-500/20 hover:bg-rose-500/10 opacity-80 hover:opacity-100"
@@ -750,7 +750,7 @@ export function AllInvoices({ setActive }: { setActive?: (path: string) => void 
               </span>
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-rose-700 dark:text-rose-400">
+          <div className="text-xl sm:text-2xl @6xl:text-3xl font-black whitespace-nowrap text-rose-700 dark:text-rose-400">
             ₹ {proformaInvoiceAmount.toLocaleString("en-IN")}
           </div>
         </div>
@@ -759,7 +759,7 @@ export function AllInvoices({ setActive }: { setActive?: (path: string) => void 
         <div
           onClick={() => handleKpiBoxClick("cancelled")}
           className={cn(
-            "border rounded-2xl p-4 sm:p-5 shadow-xs cursor-pointer transition-all hover:scale-[1.01] select-none",
+            "min-w-0 col-span-1 md:col-span-3 @5xl:col-span-1 border rounded-2xl p-4 sm:p-5 shadow-xs cursor-pointer transition-all hover:scale-[1.01] select-none",
             isCancelledActive
               ? "bg-slate-500/15 border-slate-500/50 ring-2 ring-slate-500/30 shadow-md"
               : "bg-slate-500/5 border-slate-500/20 hover:bg-slate-500/10 opacity-80 hover:opacity-100"
@@ -776,28 +776,28 @@ export function AllInvoices({ setActive }: { setActive?: (path: string) => void 
               </span>
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-slate-700 dark:text-slate-300">
+          <div className="text-xl sm:text-2xl @6xl:text-3xl font-black whitespace-nowrap text-slate-700 dark:text-slate-300">
             ₹ {cancelledAmount.toLocaleString("en-IN")}
           </div>
         </div>
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-col lg:flex-row gap-3 sm:gap-4 justify-between items-stretch lg:items-center bg-card border border-border/50 p-3 sm:p-4 rounded-2xl shadow-sm">
+      <div className="flex flex-col @5xl:flex-row @5xl:justify-between @5xl:items-center gap-3 sm:gap-4 bg-card border border-border/50 p-3 sm:p-4 rounded-2xl shadow-sm">
         <SearchInput
           placeholder="Search by client or invoice number..."
           value={search}
           onChange={setSearch}
-          className="w-full lg:max-w-md"
+          className="w-full" containerClassName="w-full sm:w-full md:w-full @5xl:w-72 @5xl:flex-none @5xl:min-w-[180px]"
         />
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full lg:w-auto">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full @5xl:w-auto">
           <DateRangeFilter
             dateRange={dateRange}
             onChange={(val) => setDateRange(val || { from: undefined, to: undefined })}
             placeholder="Filter by invoice date"
-            className="w-full sm:w-auto"
+            className="flex-1 min-w-[150px] @5xl:flex-none @5xl:w-auto"
           />
-          <div className="relative w-full sm:w-auto flex items-center gap-2">
+          <div className="relative flex-1 min-w-[150px] @5xl:flex-none @5xl:w-auto flex items-center gap-2">
             <SearchableSelect
               value={statusFilter}
               onChange={(val) => {
@@ -809,7 +809,7 @@ export function AllInvoices({ setActive }: { setActive?: (path: string) => void 
                 { label: "Paid", value: "Paid" },
                 { label: "Cancelled", value: "Cancelled" },
               ]}
-              className="w-full sm:w-[180px] h-[40px] px-3 bg-background border border-border/50 rounded-xl text-sm font-bold cursor-pointer"
+              className="w-full @5xl:w-[180px] h-[40px] px-3 bg-background border border-border/50 rounded-xl text-sm font-bold cursor-pointer"
             />
             {!isAllActive && (
               <button
