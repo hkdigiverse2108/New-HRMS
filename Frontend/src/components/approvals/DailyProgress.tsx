@@ -580,27 +580,25 @@ export function DailyProgress() {
       )}
 
       {/* Toolbar */}
-      <div className="flex flex-col xl:flex-row gap-3 sm:gap-4 justify-between items-stretch xl:items-center bg-card border border-border/50 p-3 sm:p-4 rounded-2xl shadow-sm">
-        {canFilterEmployees ? (
-          <div className="relative w-full xl:max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+      <div className="flex flex-col 2xl:flex-row gap-3 2xl:items-center bg-card border border-border/50 p-3 sm:p-4 rounded-2xl shadow-sm">
+        {canFilterEmployees && (
+          <div className="relative w-full 2xl:w-72 2xl:shrink-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             <input
               type="text"
               placeholder="Search employee names..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium"
+              className="w-full h-[42px] pl-9 pr-4 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium"
             />
           </div>
-        ) : (
-          <div className="hidden xl:block" />
         )}
-        <div className="grid grid-cols-2 lg:grid-cols-4 xl:flex xl:flex-wrap items-center gap-2 w-full xl:w-auto">
+        <div className="grid grid-cols-2 xl:grid-cols-[repeat(auto-fit,minmax(170px,1fr))] max-xl:min-[480px]:[&>*:last-child:nth-child(odd)]:col-span-2 gap-2 sm:gap-3 w-full 2xl:flex-1">
           {canFilterEmployees && (
             <>
               {/* "My Progress" only has the leader's own report, so no employee filter there */}
               {!(showLeaderTabs && leaderView === "my") && (
-                <div className="relative min-w-0 xl:w-[170px]">
+                <div className="relative min-w-0 order-1 min-[480px]:order-none">
                   <SearchableSelect
                     value={employeeFilter}
                     onChange={(val) => setEmployeeFilter(val)}
@@ -610,7 +608,7 @@ export function DailyProgress() {
                 </div>
               )}
               {(isAdmin || isHr) && (
-                <div className="relative min-w-0 xl:w-[190px]">
+                <div className="relative min-w-0 order-3 col-span-2 min-[480px]:order-none min-[480px]:col-span-1">
                   <SearchableSelect
                     value={departmentFilter}
                     onChange={(val) => setDepartmentFilter(val)}
@@ -622,14 +620,16 @@ export function DailyProgress() {
             </>
           )}
           {/* One picker: click a single day, or a start and an end day for a range */}
-          <DateRangeFilter
-            value={dateRangeValue}
-            onChange={handleDateRangeChange}
-            placeholder="Select date / range"
-            className="w-full min-w-0 xl:w-auto"
-          />
-          <div className="relative min-w-0">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />
+          <div className="min-w-0 order-4 col-span-2 min-[480px]:order-none min-[480px]:col-span-1">
+            <DateRangeFilter
+              value={dateRangeValue}
+              onChange={handleDateRangeChange}
+              placeholder="Select date / range"
+              className="w-full min-w-0 h-[42px] text-xs font-bold"
+            />
+          </div>
+          <div className="relative min-w-0 order-2 min-[480px]:order-none">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10 pointer-events-none" />
             <SearchableSelect
               value={statusFilter}
               onChange={(val) => setStatusFilter(val as any)}
@@ -639,7 +639,7 @@ export function DailyProgress() {
                 { label: "Verified", value: "Verified" },
                 { label: "Rejected", value: "Rejected" },
               ]}
-              className="w-full xl:w-[180px] h-[42px] pl-9 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-bold cursor-pointer"
+              className="w-full h-[42px] pl-9 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-xs font-bold cursor-pointer"
             />
           </div>
         </div>

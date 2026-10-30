@@ -894,18 +894,20 @@ export function Hirings({ setActive }: HiringsProps = {}) {
   return (
     <div className="h-full flex flex-col space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 w-full">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-foreground tracking-tight">Job Openings</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage active requisitions and hiring pipelines</p>
+      <div className="flex flex-col gap-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">Job Openings</h1>
+          <p className="text-sm font-medium text-muted-foreground mt-1">Manage active requisitions and hiring pipelines</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+        <div className="flex flex-col lg:flex-row gap-3 lg:items-center bg-card border border-border/50 p-3 sm:p-4 rounded-2xl shadow-sm">
           <SearchInput
             placeholder="Search jobs, departments..."
             value={searchQuery}
             onChange={setSearchQuery}
-            className="w-full sm:w-64 flex-1 min-w-[180px]"
+            containerClassName="w-full sm:w-full md:w-full lg:flex-1 lg:max-w-md min-w-0"
+            className="h-[42px] py-0 bg-background"
           />
+          <div className="flex items-center gap-2 sm:gap-3 w-full lg:w-auto lg:ml-auto">
           <button
             type="button"
             onClick={() => {
@@ -916,7 +918,7 @@ export function Hirings({ setActive }: HiringsProps = {}) {
                 window.dispatchEvent(new CustomEvent("navigate_tab", { detail: "/recruitment/interviews" }));
               }
             }}
-            className="px-4 py-2 min-h-[44px] sm:min-h-0 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl text-sm font-bold shadow-xs flex items-center gap-2 transition-colors whitespace-nowrap cursor-pointer"
+            className="h-[42px] flex-1 lg:flex-none px-4 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-colors whitespace-nowrap cursor-pointer"
           >
             <CalendarIcon className="w-4 h-4" /> Interviews
           </button>
@@ -924,7 +926,7 @@ export function Hirings({ setActive }: HiringsProps = {}) {
             type="button"
             onClick={() => setShowFilterBar((prev) => !prev)}
             className={cn(
-              "p-2 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center border rounded-xl transition-colors shrink-0 cursor-pointer shadow-xs",
+              "h-[42px] w-[42px] inline-flex items-center justify-center border rounded-xl transition-colors shrink-0 cursor-pointer",
               showFilterBar
                 ? "bg-primary text-primary-foreground border-primary"
                 : "bg-card border-border text-foreground hover:bg-muted/50"
@@ -938,13 +940,13 @@ export function Hirings({ setActive }: HiringsProps = {}) {
             <DialogTrigger asChild>
               <button
                 type="button"
-                className="px-4 py-2 min-h-[44px] sm:min-h-0 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-sm font-bold shadow-sm flex items-center gap-2 transition-colors whitespace-nowrap cursor-pointer"
+                className="h-[42px] flex-1 lg:flex-none px-4 sm:px-5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs sm:text-sm font-bold shadow-sm flex items-center justify-center gap-2 transition-colors whitespace-nowrap cursor-pointer"
               >
                 <Plus className="w-4 h-4" /> Post Job
               </button>
             </DialogTrigger>
             <DialogContent className="w-[calc(100vw-16px)] sm:w-full sm:max-w-[560px] max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
-              <div className="flex items-center justify-between px-6 md:px-8 py-5 border-b border-border/50 bg-muted/30">
+              <div className="flex items-center justify-between px-4 sm:px-6 md:px-8 py-4 sm:py-5 border-b border-border/50 bg-muted/30">
                 <div>
                   <h2 className="text-xl md:text-2xl font-black tracking-tight">Post New Job</h2>
                   <p className="text-xs text-muted-foreground mt-0.5">Create a new hiring requirement</p>
@@ -960,7 +962,7 @@ export function Hirings({ setActive }: HiringsProps = {}) {
               </div>
 
               <form onSubmit={handlePostJob} className="flex flex-col min-h-0 max-h-[calc(90dvh-75px)]">
-                <div className="p-6 md:p-8 space-y-4 overflow-y-auto flex-1">
+                <div className="p-4 sm:p-6 md:p-8 space-y-4 overflow-y-auto flex-1">
                   {/* Job Title */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
@@ -1100,7 +1102,7 @@ export function Hirings({ setActive }: HiringsProps = {}) {
                   </div>
                 </div>
 
-                <div className="px-6 md:px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
+                <div className="px-4 sm:px-6 md:px-8 py-3 sm:py-4 bg-muted/30 border-t border-border/50 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 shrink-0 [&>button]:w-full sm:[&>button]:w-auto [&>button]:justify-center [&>button]:h-[42px]">
                   <button
                     type="button"
                     onClick={() => setIsPostOpen(false)}
@@ -1121,13 +1123,14 @@ export function Hirings({ setActive }: HiringsProps = {}) {
             </DialogContent>
           </Dialog>
           )}
+          </div>
         </div>
       </div>
 
       {/* Filter Bar (Collapsible) */}
       {showFilterBar && (
-        <div className="p-4 bg-card border border-border rounded-2xl shadow-xs flex flex-wrap items-center gap-4 animate-in fade-in duration-200">
-          <div className="flex-1 min-w-[160px]">
+        <div className="p-3 sm:p-4 bg-card border border-border/50 rounded-2xl shadow-sm grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] items-end gap-3 sm:gap-4 animate-in fade-in duration-200">
+          <div className="min-w-0">
             <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">
               Department
             </label>
@@ -1136,10 +1139,10 @@ export function Hirings({ setActive }: HiringsProps = {}) {
               onChange={setSelectedDepartment}
               options={[{ label: "All Departments", value: "ALL" }, ...departments.map((d) => ({ label: d, value: d }))]}
               placeholder="All Departments"
-              className="w-full h-[36px] bg-background text-xs"
+              className="w-full h-[42px] bg-background text-xs font-bold"
             />
           </div>
-          <div className="flex-1 min-w-[160px]">
+          <div className="min-w-0">
             <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">
               Employment Type
             </label>
@@ -1148,10 +1151,10 @@ export function Hirings({ setActive }: HiringsProps = {}) {
               onChange={setSelectedType}
               options={[{ label: "All Types", value: "ALL" }, ...employmentTypes.map((t) => ({ label: t, value: t }))]}
               placeholder="All Types"
-              className="w-full h-[36px] bg-background text-xs"
+              className="w-full h-[42px] bg-background text-xs font-bold"
             />
           </div>
-          <div className="flex-1 min-w-[160px]">
+          <div className="min-w-0">
             <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">
               Status
             </label>
@@ -1165,7 +1168,7 @@ export function Hirings({ setActive }: HiringsProps = {}) {
                 { label: "On Hold", value: "On Hold" },
               ]}
               placeholder="All Statuses"
-              className="w-full h-[36px] bg-background text-xs"
+              className="w-full h-[42px] bg-background text-xs font-bold"
             />
           </div>
           <div className="flex items-end">
@@ -1177,7 +1180,7 @@ export function Hirings({ setActive }: HiringsProps = {}) {
                 setSelectedStatus("ALL");
                 setSearchQuery("");
               }}
-              className="h-[36px] px-3.5 bg-muted text-muted-foreground hover:text-foreground text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="h-[42px] w-full px-4 bg-muted text-muted-foreground hover:text-foreground text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5" /> Reset
             </button>
@@ -1186,7 +1189,7 @@ export function Hirings({ setActive }: HiringsProps = {}) {
       )}
 
       {/* Stats Overview (Live Backend Dashboard Metrics) */}
-      <div className="grid grid-cols-1 min-[360px]:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {[
           {
             label: "Active Jobs",
@@ -1213,11 +1216,11 @@ export function Hirings({ setActive }: HiringsProps = {}) {
             color: "text-purple-600 dark:text-purple-400",
           },
         ].map((stat) => (
-          <div key={stat.label} className="bg-card p-5 rounded-2xl border border-border shadow-xs min-w-0">
-            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">{stat.label}</p>
-            <div className="flex items-baseline gap-2.5">
-              <h3 className="text-2xl font-black text-foreground">{stat.value}</h3>
-              <p className={cn("text-xs font-medium truncate", stat.color)}>{stat.trend}</p>
+          <div key={stat.label} className="bg-card p-3.5 sm:p-5 rounded-2xl border border-border/50 shadow-sm min-w-0">
+            <p className="text-[11px] sm:text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">{stat.label}</p>
+            <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+              <h3 className="text-2xl sm:text-3xl font-black text-foreground">{stat.value}</h3>
+              <p className={cn("text-[11px] sm:text-xs font-medium", stat.color)}>{stat.trend}</p>
             </div>
           </div>
         ))}
@@ -1225,7 +1228,7 @@ export function Hirings({ setActive }: HiringsProps = {}) {
 
       {/* Loading State */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 pb-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 pb-4">
           {[1, 2, 3].map((i) => (
             <div
               key={i}
@@ -1284,15 +1287,15 @@ export function Hirings({ setActive }: HiringsProps = {}) {
         </div>
       ) : (
         /* Grid of Job Cards */
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 pb-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 pb-4">
           {filteredJobs.map((job) => (
             <div
               key={job.id}
               className="bg-card rounded-2xl border border-border shadow-xs hover:shadow-md transition-all group flex flex-col min-w-0"
             >
-              <div className="p-5 border-b border-border/50 flex-1 flex flex-col">
+              <div className="p-4 sm:p-5 border-b border-border/50 flex-1 flex flex-col">
                 <div className="flex justify-between items-start gap-2 mb-3">
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2 min-w-0">
                     <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-muted text-foreground">
                       {job.department}
                     </span>
@@ -1335,7 +1338,7 @@ export function Hirings({ setActive }: HiringsProps = {}) {
                   )}
                 </div>
 
-                <h3 className="text-lg font-bold text-foreground group-hover:text-primary transition-colors line-clamp-1 mb-4">
+                <h3 className="text-lg font-bold text-foreground group-hover:text-primary transition-colors line-clamp-2 break-words mb-4">
                   {job.job_title}
                 </h3>
 
@@ -1376,8 +1379,8 @@ export function Hirings({ setActive }: HiringsProps = {}) {
               </div>
 
               {/* Card Footer: Hiring Manager & Actions */}
-              <div className="p-4 bg-muted/30 rounded-b-2xl flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5 min-w-0">
+              <div className="p-3 sm:p-4 bg-muted/30 rounded-b-2xl flex flex-wrap items-center justify-between gap-x-3 gap-y-2.5">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1 basis-[130px]">
                   {job.hiring_manager?.profile_picture ? (
                     <img
                       src={job.hiring_manager.profile_picture}
@@ -1399,7 +1402,7 @@ export function Hirings({ setActive }: HiringsProps = {}) {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 ml-auto">
                   <button
                     type="button"
                     onClick={() => setReferJob(job)}
@@ -1423,8 +1426,8 @@ export function Hirings({ setActive }: HiringsProps = {}) {
 
       {/* View Details Modal */}
       <Dialog open={!!selectedJob} onOpenChange={(open) => !open && setSelectedJob(null)}>
-        <DialogContent className="w-[calc(100vw-16px)] sm:w-full max-w-2xl p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
-          <div className="flex items-center justify-between px-6 py-5 border-b border-border/50 bg-muted/30">
+        <DialogContent className="w-[calc(100vw-16px)] sm:w-full max-w-2xl max-h-[80svh] sm:max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+          <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 sm:py-5 border-b border-border/50 bg-muted/30">
             <div className="min-w-0 pr-4">
               <div className="flex items-center gap-2 mb-1">
                 {selectedJob && renderStatusBadge(selectedJob.status)}
@@ -1447,7 +1450,7 @@ export function Hirings({ setActive }: HiringsProps = {}) {
           </div>
 
           {selectedJob && (
-            <div className="space-y-6 px-6 md:px-8 py-6 max-h-[75vh] overflow-y-auto">
+            <div className="space-y-6 px-4 sm:px-6 md:px-8 py-4 sm:py-6 overflow-y-auto min-h-0 flex-1 pb-8 sm:pb-6">
               {/* Badges strip */}
               <div className="flex flex-wrap gap-3">
                 <div className="bg-muted/60 px-3 py-1.5 rounded-xl flex items-center gap-2">
@@ -1596,7 +1599,7 @@ export function Hirings({ setActive }: HiringsProps = {}) {
 
                 return (
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                       <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
                         Submitted Referrals ({visibleReferrals.length})
                       </h4>
@@ -1604,7 +1607,7 @@ export function Hirings({ setActive }: HiringsProps = {}) {
                         {isStrictAdminOrHR ? "All team referrals" : "Your submitted referral(s)"}
                       </span>
                     </div>
-                    <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                    <div className="space-y-2.5 sm:max-h-60 sm:overflow-y-auto sm:pr-1">
                       {visibleReferrals.map((ref, idx) => {
                         const rawResume = ref.resume_url || (ref as any).resume || (ref as any).file_url || (ref as any).url;
                         const fullResumeUrl = getFullResumeUrl(rawResume);
@@ -1630,9 +1633,9 @@ export function Hirings({ setActive }: HiringsProps = {}) {
                             key={refId || idx}
                             className="p-3.5 bg-muted/30 border border-border/70 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
                           >
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2">
-                                <p className="font-bold text-foreground text-sm">{ref.candidate_name}</p>
+                            <div className="space-y-1 min-w-0">
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <p className="font-bold text-foreground text-sm break-words">{ref.candidate_name}</p>
                                 {canManageHirings ? (
                                   <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
@@ -1708,7 +1711,7 @@ export function Hirings({ setActive }: HiringsProps = {}) {
                                   </span>
                                 )}
                               </div>
-                              <p className="text-muted-foreground">{ref.candidate_email}</p>
+                              <p className="text-muted-foreground break-all">{ref.candidate_email}</p>
                               {ref.referred_by?.full_name && (
                                 <p className="text-[11px] text-muted-foreground/90">
                                   Referred by: <span className="font-semibold text-foreground">{ref.referred_by.full_name}</span>
@@ -1721,7 +1724,7 @@ export function Hirings({ setActive }: HiringsProps = {}) {
                                 </p>
                               )}
                             </div>
-                            <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
+                            <div className="flex flex-wrap items-center gap-2 sm:shrink-0 self-start sm:self-center">
                               {ref.linkedin_profile && (
                                 <a
                                   href={ref.linkedin_profile.startsWith("http") ? ref.linkedin_profile : `https://${ref.linkedin_profile}`}
@@ -1771,9 +1774,8 @@ export function Hirings({ setActive }: HiringsProps = {}) {
               })()}
 
               {/* Action buttons */}
-              <div className="pt-4 border-t border-border/50 flex flex-wrap items-center justify-between gap-3">
-                <div />
-                <div className="flex gap-2">
+              <div className="pt-4 border-t border-border/50 flex sm:justify-end">
+                <div className="grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto">
                   {canManageHirings && (
                     <>
                       <button
@@ -1783,7 +1785,7 @@ export function Hirings({ setActive }: HiringsProps = {}) {
                           setSelectedJob(null);
                           openEditModal(jobToEdit);
                         }}
-                        className="px-4 py-2 bg-muted hover:bg-muted/80 text-foreground text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+                        className="h-[42px] px-4 bg-muted hover:bg-muted/80 text-foreground text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
                       >
                         <Pencil className="w-3.5 h-3.5 text-primary" /> Update Job
                       </button>
@@ -1792,7 +1794,7 @@ export function Hirings({ setActive }: HiringsProps = {}) {
                         onClick={() => {
                           setJobToDelete(selectedJob);
                         }}
-                        className="px-4 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+                        className="h-[42px] px-4 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
                       >
                         <Trash2 className="w-3.5 h-3.5" /> Delete Job
                       </button>
@@ -1804,7 +1806,7 @@ export function Hirings({ setActive }: HiringsProps = {}) {
                       setReferJob(selectedJob);
                       setSelectedJob(null);
                     }}
-                    className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+                    className="col-span-2 order-first sm:order-none sm:col-span-1 h-[42px] px-4 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
                   >
                     <UserPlus className="w-3.5 h-3.5" /> Refer Candidate
                   </button>
@@ -1817,8 +1819,8 @@ export function Hirings({ setActive }: HiringsProps = {}) {
 
       {/* Refer a Friend Modal (Connected to backend API & resume upload) */}
       <Dialog open={!!referJob} onOpenChange={(open) => !open && setReferJob(null)}>
-        <DialogContent className="w-[calc(100vw-16px)] sm:w-full max-w-md p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
-          <div className="flex items-center justify-between px-6 py-5 border-b border-border/50 bg-muted/30">
+        <DialogContent className="w-[calc(100vw-16px)] sm:w-full max-w-md max-h-[92dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+          <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 sm:py-5 border-b border-border/50 bg-muted/30">
             <div className="min-w-0 pr-2">
               <h2 className="text-base sm:text-lg font-black tracking-tight truncate">
                 Refer for {referJob?.job_title}
@@ -1835,7 +1837,7 @@ export function Hirings({ setActive }: HiringsProps = {}) {
             </DialogClose>
           </div>
 
-          <form onSubmit={handleSubmitReferral} className="space-y-4 px-6 py-5 max-h-[75vh] overflow-y-auto">
+          <form onSubmit={handleSubmitReferral} className="space-y-4 px-4 sm:px-6 py-4 sm:py-5 overflow-y-auto min-h-0 flex-1">
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
                 Candidate Name *
@@ -1903,7 +1905,7 @@ export function Hirings({ setActive }: HiringsProps = {}) {
               />
             </div>
 
-            <div className="pt-3 border-t border-border/50 flex items-center justify-end gap-3">
+            <div className="pt-3 border-t border-border/50 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-3 [&>button]:w-full sm:[&>button]:w-auto [&>button]:justify-center [&>button]:h-[42px]">
               <button
                 type="button"
                 onClick={() => setReferJob(null)}
@@ -1927,7 +1929,7 @@ export function Hirings({ setActive }: HiringsProps = {}) {
       {/* Update Job Modal */}
       <Dialog open={!!editingJob} onOpenChange={(open) => !open && setEditingJob(null)}>
         <DialogContent className="w-[calc(100vw-16px)] sm:w-full sm:max-w-[560px] max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
-          <div className="flex items-center justify-between px-6 md:px-8 py-5 border-b border-border/50 bg-muted/30">
+          <div className="flex items-center justify-between px-4 sm:px-6 md:px-8 py-4 sm:py-5 border-b border-border/50 bg-muted/30">
             <div>
               <h2 className="text-xl md:text-2xl font-black tracking-tight">Update Job Posting</h2>
               <p className="text-xs text-muted-foreground mt-0.5">Edit requirements, hiring manager, or status</p>
@@ -1943,7 +1945,7 @@ export function Hirings({ setActive }: HiringsProps = {}) {
           </div>
 
           <form onSubmit={handleUpdateJob} className="flex flex-col min-h-0 max-h-[calc(90dvh-75px)]">
-            <div className="p-6 md:p-8 space-y-4 overflow-y-auto flex-1">
+            <div className="p-4 sm:p-6 md:p-8 space-y-4 overflow-y-auto flex-1">
               {/* Job Title */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
@@ -2083,7 +2085,7 @@ export function Hirings({ setActive }: HiringsProps = {}) {
               </div>
             </div>
 
-            <div className="px-6 md:px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
+            <div className="px-4 sm:px-6 md:px-8 py-3 sm:py-4 bg-muted/30 border-t border-border/50 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 shrink-0 [&>button]:w-full sm:[&>button]:w-auto [&>button]:justify-center [&>button]:h-[42px]">
               <button
                 type="button"
                 onClick={() => setEditingJob(null)}
@@ -2106,7 +2108,7 @@ export function Hirings({ setActive }: HiringsProps = {}) {
 
       {/* Delete Job Confirmation Dialog */}
       <Dialog open={!!jobToDelete} onOpenChange={(open) => !open && setJobToDelete(null)}>
-        <DialogContent className="w-[calc(100vw-16px)] sm:w-full max-w-md p-6 rounded-2xl gap-4 border-border/60 shadow-2xl bg-card">
+        <DialogContent className="w-[calc(100vw-16px)] sm:w-full max-w-md p-4 sm:p-6 rounded-2xl gap-4 border-border/60 shadow-2xl bg-card">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-600 flex items-center justify-center shrink-0">
               <AlertCircle className="w-5 h-5" />
@@ -2118,7 +2120,7 @@ export function Hirings({ setActive }: HiringsProps = {}) {
               </p>
             </div>
           </div>
-          <div className="flex justify-end gap-2.5 pt-2">
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-2.5 pt-2 [&>button]:w-full sm:[&>button]:w-auto [&>button]:justify-center [&>button]:h-[42px]">
             <button
               type="button"
               onClick={() => setJobToDelete(null)}

@@ -14,7 +14,6 @@ import {
   ExternalLink,
   Search,
   Filter,
-  RefreshCw,
   Loader2,
   Sparkles,
   ChevronDown,
@@ -704,61 +703,55 @@ export function Interviews({ setActive }: InterviewsProps = {}) {
   return (
     <div className="h-full flex flex-col space-y-6 animate-in fade-in slide-in-from-bottom-3 duration-300 w-full">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-black text-foreground tracking-tight">Interviews</h1>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-primary/10 text-primary border border-primary/20">
+      <div className="flex flex-col gap-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+            <h1 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">Interviews</h1>
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-primary/10 text-primary border border-primary/20 whitespace-nowrap">
               {schedules.length} scheduled
             </span>
           </div>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+          <p className="text-muted-foreground mt-1 text-sm font-medium">
             Dynamic recruitment pipeline, interview stages, and candidate schedules
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+        {/* Toolbar */}
+        <div className="flex flex-col lg:flex-row gap-3 lg:items-center bg-card border border-border/50 p-3 sm:p-4 rounded-2xl shadow-sm">
           <SearchInput
             placeholder="Search candidates or interviewer..."
             value={searchQuery}
             onChange={setSearchQuery}
-            className="w-full sm:w-64 flex-1 min-w-[200px]"
+            containerClassName="w-full sm:w-full md:w-full lg:flex-1 lg:max-w-md min-w-0"
+            className="h-[42px] py-0 bg-background"
           />
 
-          <button
-            type="button"
-            onClick={loadData}
-            disabled={loading}
-            className="p-2.5 bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground rounded-xl transition-colors cursor-pointer border border-border/60"
-            title="Refresh interviews"
-          >
-            <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              if (setActive) {
-                setActive("/recruitment/hirings");
-              }
-              if (typeof window !== "undefined") {
-                window.dispatchEvent(new CustomEvent("navigate_tab", { detail: "/recruitment/hirings" }));
-              }
-            }}
-            className="px-3.5 py-2 min-h-[40px] bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 rounded-xl text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-colors whitespace-nowrap cursor-pointer"
-          >
-            <Briefcase className="w-3.5 h-3.5" /> Hirings
-          </button>
-
-          {canManage && (
+          <div className="flex items-center gap-2 sm:gap-3 w-full lg:w-auto lg:ml-auto">
             <button
               type="button"
-              onClick={() => openScheduleModal()}
-              className="px-4 py-2 min-h-[40px] bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs sm:text-sm font-bold shadow-sm flex items-center gap-2 transition-colors whitespace-nowrap cursor-pointer"
+              onClick={() => {
+                if (setActive) {
+                  setActive("/recruitment/hirings");
+                }
+                if (typeof window !== "undefined") {
+                  window.dispatchEvent(new CustomEvent("navigate_tab", { detail: "/recruitment/hirings" }));
+                }
+              }}
+              className="h-[42px] flex-1 lg:flex-none px-4 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap cursor-pointer"
             >
-              <Plus className="w-4 h-4" /> Schedule Interview
+              <Briefcase className="w-4 h-4" /> Hirings
             </button>
-          )}
+
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => openScheduleModal()}
+                className="h-[42px] flex-[2] lg:flex-none px-4 sm:px-5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs sm:text-sm font-bold shadow-sm flex items-center justify-center gap-2 transition-colors whitespace-nowrap cursor-pointer"
+              >
+                <Plus className="w-4 h-4" /> Schedule Interview
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -770,8 +763,8 @@ export function Interviews({ setActive }: InterviewsProps = {}) {
           <p className="text-xs text-muted-foreground mt-1">Connecting to live candidate stages and schedules</p>
         </div>
       ) : (
-        <div className="flex-1 overflow-x-auto min-w-0 pb-4">
-          <div className="flex gap-4 sm:gap-5 min-w-max h-full items-start">
+        <div className="flex-1 overflow-x-auto min-w-0 pb-4 snap-x snap-mandatory sm:snap-none">
+          <div className="flex gap-3 sm:gap-5 min-w-max h-full items-start">
             {stages.map((stage, sIdx) => {
               const theme = STAGE_THEMES[sIdx % STAGE_THEMES.length] || { badge: "", card: "", ring: "" };
               const stageCandidates = filteredSchedules.filter(
@@ -783,7 +776,7 @@ export function Interviews({ setActive }: InterviewsProps = {}) {
                 <div
                   key={stage.id}
                   className={cn(
-                    "w-[290px] sm:w-[320px] flex flex-col bg-muted/30 rounded-2xl border border-border/70 p-3.5 transition-all min-h-[480px]",
+                    "w-[82vw] max-w-[320px] sm:w-[320px] snap-start shrink-0 flex flex-col bg-muted/30 rounded-2xl border border-border/70 p-3 sm:p-3.5 transition-all min-h-[320px] sm:min-h-[480px]",
                     isOver && "ring-2 ring-primary border-primary bg-primary/5 scale-[1.01]"
                   )}
                   onDragOver={(e) => handleDragOver(e, stage.id)}
@@ -792,7 +785,7 @@ export function Interviews({ setActive }: InterviewsProps = {}) {
                 >
                   {/* Stage Header */}
                   <div className="flex items-center justify-between mb-3 px-1">
-                    <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0 flex-1 pr-2">
                       {renamingStageId === stage.id ? (
                         <input
                           type="text"
@@ -804,7 +797,7 @@ export function Interviews({ setActive }: InterviewsProps = {}) {
                             if (e.key === "Enter") handleRenameStage(stage.id, stage.name);
                             if (e.key === "Escape") setRenamingStageId(null);
                           }}
-                          className="font-bold text-foreground bg-background border border-primary rounded-lg px-2 py-0.5 text-xs w-36 outline-none shadow-xs"
+                          className="font-bold text-foreground bg-background border border-primary rounded-lg px-2 py-0.5 text-xs w-full min-w-0 max-w-[160px] outline-none shadow-xs"
                         />
                       ) : (
                         <h3 className="font-bold text-sm text-foreground truncate">{stage.name}</h3>
@@ -848,7 +841,7 @@ export function Interviews({ setActive }: InterviewsProps = {}) {
                   </div>
 
                   {/* Stage Candidate Cards */}
-                  <div className="flex flex-col gap-2.5 flex-1 overflow-y-auto max-h-[calc(100vh-270px)] pr-0.5">
+                  <div className="flex flex-col gap-2.5 flex-1 overflow-y-auto max-h-[60vh] sm:max-h-[calc(100vh-270px)] pr-0.5">
                     {stageCandidates.map((candidate) => {
                       const meetUrl = candidate.meet_link?.trim();
                       const finalMeetUrl = meetUrl
@@ -966,7 +959,7 @@ export function Interviews({ setActive }: InterviewsProps = {}) {
 
             {/* Add Dynamic Stage Column */}
             {canManage && (
-              <div className="w-[280px] sm:w-[300px] flex flex-col shrink-0">
+              <div className="w-[82vw] max-w-[300px] sm:w-[300px] snap-start flex flex-col shrink-0">
                 {isAddingStage ? (
                   <div className="bg-card rounded-2xl border border-border p-4 shadow-sm space-y-3">
                     <p className="text-xs font-bold text-foreground">New Interview Stage</p>
@@ -1023,8 +1016,8 @@ export function Interviews({ setActive }: InterviewsProps = {}) {
 
       {/* Schedule / Edit Interview Modal */}
       <Dialog open={isScheduleOpen} onOpenChange={setIsScheduleOpen}>
-        <DialogContent className="w-[calc(100vw-16px)] sm:w-full max-w-lg p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
-          <div className="flex items-center justify-between px-6 py-5 border-b border-border/50 bg-muted/30">
+        <DialogContent className="w-[calc(100vw-16px)] sm:w-full max-w-lg max-h-[92dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+          <div className="flex items-start justify-between gap-3 px-4 sm:px-6 py-4 sm:py-5 border-b border-border/50 bg-muted/30 shrink-0">
             <div>
               <h2 className="text-lg sm:text-xl font-black tracking-tight text-foreground">
                 {editingSchedule ? "Edit Interview Schedule" : "Schedule Interview"}
@@ -1043,15 +1036,15 @@ export function Interviews({ setActive }: InterviewsProps = {}) {
             </DialogClose>
           </div>
 
-          <form onSubmit={handleSubmitSchedule} className="flex flex-col max-h-[80vh]">
-            <div className="p-6 space-y-4 overflow-y-auto flex-1">
+          <form onSubmit={handleSubmitSchedule} className="flex flex-col flex-1 min-h-0">
+            <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
               {/* Candidate Referral Context Banner */}
               {(formResumeUrl || formLinkedin) && (
-                <div className="p-3 bg-muted/40 border border-border/70 rounded-xl flex items-center justify-between gap-3 text-xs">
+                <div className="p-3 bg-muted/40 border border-border/70 rounded-xl flex flex-wrap items-center justify-between gap-2 sm:gap-3 text-xs">
                   <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                     Candidate Referral Attachments:
                   </span>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {formResumeUrl && (
                       <a
                         href={getFullResumeUrl(formResumeUrl)}
@@ -1090,7 +1083,7 @@ export function Interviews({ setActive }: InterviewsProps = {}) {
                     placeholder="e.g. John Doe"
                     value={formCandidateName}
                     onChange={(e) => setFormCandidateName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-muted/30 border border-border rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground"
+                    className="w-full h-[42px] px-3.5 bg-muted/30 border border-border rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -1102,7 +1095,7 @@ export function Interviews({ setActive }: InterviewsProps = {}) {
                     placeholder="e.g. candidate@example.com"
                     value={formCandidateEmail}
                     onChange={(e) => setFormCandidateEmail(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-muted/30 border border-border rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground"
+                    className="w-full h-[42px] px-3.5 bg-muted/30 border border-border rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground"
                   />
                 </div>
               </div>
@@ -1123,7 +1116,7 @@ export function Interviews({ setActive }: InterviewsProps = {}) {
                     );
                     setFormHiringId(matchingJob ? matchingJob.id : "");
                   }}
-                  className="w-full px-3.5 py-2.5 bg-muted/30 border border-border rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground cursor-pointer"
+                  className="w-full h-[42px] px-3.5 bg-muted/30 border border-border rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground cursor-pointer"
                 >
                   {jobOptions.length === 0 && (
                     <option value="" disabled>
@@ -1155,7 +1148,7 @@ export function Interviews({ setActive }: InterviewsProps = {}) {
                   required
                   value={formStageId}
                   onChange={(e) => setFormStageId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-muted/30 border border-border rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground cursor-pointer"
+                  className="w-full h-[42px] px-3.5 bg-muted/30 border border-border rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground cursor-pointer"
                 >
                   {stages.map((stg) => (
                     <option key={stg.id} value={stg.id}>
@@ -1166,8 +1159,8 @@ export function Interviews({ setActive }: InterviewsProps = {}) {
               </div>
 
               {/* Date & Time Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="space-y-1.5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="space-y-1.5 col-span-2 sm:col-span-1">
                   <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">
                     Date *
                   </label>
@@ -1176,7 +1169,7 @@ export function Interviews({ setActive }: InterviewsProps = {}) {
                     required
                     value={formDate}
                     onChange={(e) => setFormDate(e.target.value)}
-                    className="w-full h-10 px-3 bg-muted/30 border border-border rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground cursor-pointer"
+                    className="w-full h-[42px] px-3 bg-muted/30 border border-border rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground cursor-pointer"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -1188,7 +1181,7 @@ export function Interviews({ setActive }: InterviewsProps = {}) {
                     required
                     value={formStartTime}
                     onChange={(e) => handleStartTimeChange(e.target.value)}
-                    className="w-full h-10 px-3 bg-muted/30 border border-border rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground cursor-pointer"
+                    className="w-full h-[42px] px-3 bg-muted/30 border border-border rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground cursor-pointer"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -1200,7 +1193,7 @@ export function Interviews({ setActive }: InterviewsProps = {}) {
                     required
                     value={formEndTime}
                     onChange={(e) => handleEndTimeChange(e.target.value)}
-                    className="w-full h-10 px-3 bg-muted/30 border border-border rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground cursor-pointer"
+                    className="w-full h-[42px] px-3 bg-muted/30 border border-border rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground cursor-pointer"
                   />
                 </div>
               </div>
@@ -1215,7 +1208,7 @@ export function Interviews({ setActive }: InterviewsProps = {}) {
                   onChange={(val) => setFormInterviewer(val)}
                   options={interviewerSelectOptions}
                   placeholder="Select Interviewer (Search employee...)"
-                  className="w-full h-10 px-3.5 bg-muted/30 border border-border rounded-xl text-xs sm:text-sm font-medium"
+                  className="w-full h-[42px] px-3.5 bg-muted/30 border border-border rounded-xl text-xs sm:text-sm font-medium"
                 />
               </div>
 
@@ -1229,7 +1222,7 @@ export function Interviews({ setActive }: InterviewsProps = {}) {
                   placeholder="e.g. https://meet.google.com/abc-defg-hij"
                   value={formMeetLink}
                   onChange={(e) => setFormMeetLink(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-muted/30 border border-border rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground"
+                  className="w-full h-[42px] px-3.5 bg-muted/30 border border-border rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground"
                 />
               </div>
 
@@ -1249,7 +1242,7 @@ export function Interviews({ setActive }: InterviewsProps = {}) {
             </div>
 
             {/* Modal Actions */}
-            <div className="px-6 py-4 bg-muted/30 border-t border-border/50 flex items-center justify-end gap-2.5 mt-auto">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-muted/30 border-t border-border/50 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-2.5 mt-auto shrink-0 [&>button]:w-full sm:[&>button]:w-auto [&>button]:justify-center [&>button]:h-[42px]">
               <button
                 type="button"
                 onClick={() => setIsScheduleOpen(false)}
