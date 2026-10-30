@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { 
   X, Search, AlertTriangle, MessageSquareWarning, ShieldAlert, 
-  Plus, IndianRupee, Trophy, Trash2, RefreshCw, Loader2, Calendar, Pencil, Save
+  Plus, IndianRupee, Trophy, Trash2, Loader2, Calendar, Pencil, Save
 } from "lucide-react";
 import { DialogClose, Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
@@ -633,75 +633,67 @@ export function Penalties() {
     : dynamicMonthLeaderboard;
 
   return (
-    <div className="space-y-5 h-[calc(100vh-4rem)] flex flex-col overflow-hidden pb-0">
+    <div className="space-y-4 sm:space-y-5 lg:h-[calc(100vh-4rem)] flex flex-col lg:overflow-hidden pb-4 lg:pb-0">
       {/* Header / Stats */}
-      <div className="shrink-0 bg-card border border-border rounded-3xl p-6 shadow-sm relative overflow-hidden">
+      <div className="shrink-0 bg-card border border-border rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
           <ShieldAlert className="w-64 h-64 text-foreground" />
         </div>
         
-        <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div>
+        <div className="relative flex flex-col xl:flex-row xl:items-center justify-between gap-4 sm:gap-6">
+          <div className="min-w-0">
             <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-2xl font-black text-foreground tracking-tight">Penalties & Warnings</h1>
-              <button 
-                onClick={() => fetchPenaltiesData(true)} 
-                disabled={isRefreshing}
-                title="Refresh penalty data"
-                className="p-1.5 rounded-xl border border-border/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
-              >
-                <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin text-primary")} />
-              </button>
+              <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">Penalties & Warnings</h1>
             </div>
             <p className="text-sm text-muted-foreground max-w-xl">
               Track disciplinary actions and policy violations. Active penalties marked for payroll will automatically be factored into the payroll cycle.
             </p>
           </div>
           
-          <div className="flex flex-wrap gap-4">
-            <div className="bg-destructive/10 border border-destructive/20 rounded-2xl p-4 flex items-center gap-4 min-w-[150px]">
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-3 sm:gap-4">
+            <div className="bg-destructive/10 border border-destructive/20 rounded-2xl p-3 sm:p-4 flex flex-col items-start sm:flex-row sm:items-center gap-2 sm:gap-4 min-w-0 sm:min-w-[150px]">
               <div className="w-10 h-10 bg-background rounded-xl shadow-sm flex items-center justify-center text-destructive shrink-0">
                 <AlertTriangle className="w-5 h-5" />
               </div>
-              <div>
+              <div className="min-w-0 w-full">
                 <p className="text-xs font-bold text-destructive/70 uppercase tracking-wider mb-0.5">Active</p>
                 <p className="text-2xl font-black text-destructive leading-none">{activePenaltiesCount}</p>
               </div>
             </div>
             
-            <div className="bg-primary/10 border border-primary/20 rounded-2xl p-4 flex items-center gap-4 min-w-[150px]">
+            <div className="bg-primary/10 border border-primary/20 rounded-2xl p-3 sm:p-4 flex flex-col items-start sm:flex-row sm:items-center gap-2 sm:gap-4 min-w-0 sm:min-w-[150px]">
               <div className="w-10 h-10 bg-background rounded-xl shadow-sm flex items-center justify-center text-primary shrink-0">
                 <IndianRupee className="w-5 h-5" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs font-bold text-primary/70 uppercase tracking-wider mb-0.5">Payroll Impact</p>
-                <p className="text-2xl font-black text-primary leading-none">₹{totalDeductions.toLocaleString("en-IN")}</p>
+                <p className="text-xl sm:text-2xl font-black text-primary leading-none truncate">₹{totalDeductions.toLocaleString("en-IN")}</p>
               </div>
             </div>
 
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex items-center gap-4 min-w-[160px] flex-1 sm:flex-none">
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-3 sm:p-4 flex flex-col items-start sm:flex-row sm:items-center gap-2 sm:gap-4 min-w-0 sm:min-w-[160px] sm:flex-none">
               <div className="w-10 h-10 bg-background rounded-xl shadow-sm flex items-center justify-center text-amber-600 shrink-0">
                 <ShieldAlert className="w-5 h-5" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-bold text-amber-600/80 uppercase tracking-wider mb-0.5 truncate" title={maxViolationsEmp}>
+                <p className="text-xs font-bold text-amber-600/80 uppercase tracking-wider mb-0.5 break-words sm:truncate leading-tight" title={maxViolationsEmp}>
                   {maxViolationsEmp}
                 </p>
-                <p className="text-base font-black text-amber-700 leading-none truncate">
+                <p className="text-base font-black text-amber-700 leading-tight break-words sm:truncate">
                   {maxViolationsCount} Violations
                 </p>
               </div>
             </div>
 
-            <div className="bg-rose-500/10 border border-rose-500/20 rounded-2xl p-4 flex items-center gap-4 min-w-[160px] flex-1 sm:flex-none">
+            <div className="bg-rose-500/10 border border-rose-500/20 rounded-2xl p-3 sm:p-4 flex flex-col items-start sm:flex-row sm:items-center gap-2 sm:gap-4 min-w-0 sm:min-w-[160px] sm:flex-none">
               <div className="w-10 h-10 bg-background rounded-xl shadow-sm flex items-center justify-center text-rose-600 shrink-0">
                 <IndianRupee className="w-5 h-5" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-bold text-rose-600/80 uppercase tracking-wider mb-0.5 truncate" title={maxPenaltyEmp}>
+                <p className="text-xs font-bold text-rose-600/80 uppercase tracking-wider mb-0.5 break-words sm:truncate leading-tight" title={maxPenaltyEmp}>
                   {maxPenaltyEmp}
                 </p>
-                <p className="text-base font-black text-rose-700 leading-none truncate">
+                <p className="text-base font-black text-rose-700 leading-tight break-words sm:truncate">
                   ₹{maxPenaltyAmount.toLocaleString("en-IN")}
                 </p>
               </div>
@@ -711,18 +703,19 @@ export function Penalties() {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col lg:flex-row min-h-0 gap-6">
+      <div className="flex-1 flex flex-col lg:flex-row min-h-0 gap-4 sm:gap-6">
         {/* Left Column: Records List */}
-        <div className="flex-1 flex flex-col min-h-0 bg-card border border-border rounded-3xl shadow-sm overflow-hidden">
+        <div className="flex-1 flex flex-col min-h-[420px] lg:min-h-0 min-w-0 bg-card border border-border rounded-2xl sm:rounded-3xl shadow-sm overflow-hidden">
           {/* Toolbar */}
           <div className="p-4 border-b border-border flex flex-wrap items-center gap-3 bg-muted/30 shrink-0">
-            <div className="order-1 mr-auto flex flex-wrap items-center gap-2">
+            <div className="order-1 w-full sm:w-auto sm:mr-auto flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
+              <div className="grid grid-cols-3 sm:flex gap-2">
               {(["All", "Penalty", "Warning"] as const).map(tab => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   className={cn(
-                    "px-4 py-2 min-h-[44px] sm:min-h-0 inline-flex items-center rounded-xl text-sm font-bold whitespace-nowrap transition-all duration-200 border",
+                    "px-4 py-2 min-h-[44px] sm:min-h-0 inline-flex items-center justify-center rounded-xl text-sm font-bold whitespace-nowrap transition-all duration-200 border",
                     activeTab === tab 
                       ? "bg-primary text-primary-foreground border-primary shadow-md" 
                       : "bg-background text-muted-foreground border-border hover:border-border hover:bg-muted"
@@ -732,28 +725,32 @@ export function Penalties() {
                 </button>
               ))}
 
+              </div>
+
               <span className="text-border mx-1 hidden sm:inline">|</span>
 
+              <div className="grid grid-cols-4 sm:flex gap-1 sm:gap-2 bg-muted/50 sm:bg-transparent rounded-xl p-1 sm:p-0">
               {(["All", "Active", "Resolved", "Waived"] as const).map(st => (
                 <button
                   key={st}
                   onClick={() => setStatusFilter(st)}
                   className={cn(
-                    "px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all",
+                    "px-2 sm:px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap text-center transition-all",
                     statusFilter === st
-                      ? "bg-foreground/10 text-foreground font-bold"
+                      ? "bg-background sm:bg-foreground/10 shadow-sm sm:shadow-none text-foreground font-bold"
                       : "text-muted-foreground hover:text-foreground"
                   )}
                 >
                   {st}
                 </button>
               ))}
+              </div>
             </div>
             
-            <div className="order-3 w-full flex flex-wrap items-center gap-3">
+            <div className="order-3 w-full grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-3">
               {/* Employee Filter (admin/HR only — others locked to self) */}
               {isAdminOrHr && (
-              <div className="w-40 sm:w-44">
+              <div className="w-full sm:w-44">
                 <SearchableSelect
                   value={selectedEmployeeFilter}
                   onChange={(val) => setSelectedEmployeeFilter(String(val))}
@@ -768,7 +765,7 @@ export function Penalties() {
               )}
 
               {/* Penalty Type Filter */}
-              <div className="w-36 sm:w-40">
+              <div className="w-full sm:w-40">
                 <SearchableSelect
                   value={selectedTypeFilter}
                   onChange={(val) => setSelectedTypeFilter(String(val))}
@@ -782,15 +779,18 @@ export function Penalties() {
               </div>
 
               {/* Date Filter (single day or range) */}
+              <div className={cn("sm:col-span-1", isAdminOrHr && "col-span-2")}>
               <DateRangeFilter
                 value={dateRange}
                 onChange={(range) => setDateRange(range?.from ? range : undefined)}
                 placeholder="All Dates"
                 align="start"
-                className="h-[38px] px-3 text-xs sm:text-xs font-normal text-foreground bg-background border-border rounded-xl [&_span]:font-normal"
+                className="w-full sm:w-auto h-[38px] px-3 text-xs sm:text-xs font-normal text-foreground bg-background border-border rounded-xl [&_span]:font-normal"
               />
+              </div>
 
-              <div className="relative flex-1 min-w-[180px]">
+              <div className="col-span-2 sm:col-span-1 sm:flex-1 sm:min-w-[180px] flex items-center gap-2">
+              <div className="relative flex-1 min-w-0">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
                   type="text"
@@ -800,26 +800,40 @@ export function Penalties() {
                   className="w-full pl-9 pr-4 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                 />
               </div>
+              {!isAdminOrHr && !canCreatePenalty && (
+                <button
+                  onClick={() => setShowLeaderboard(!showLeaderboard)}
+                  title="Leaderboard"
+                  className={cn(
+                    "shrink-0 h-[38px] px-3 rounded-xl border border-border bg-card text-foreground hover:bg-muted font-bold text-xs flex items-center gap-1.5 shadow-sm",
+                    showLeaderboard && "bg-amber-500/10 text-amber-600 border-amber-500/30"
+                  )}
+                >
+                  <Trophy className="w-4 h-4" />
+                  Leaderboard
+                </button>
+              )}
+              </div>
             </div>
 
-            <div className="order-2 flex flex-wrap items-center gap-2">
+            <div className={cn("order-2 w-full sm:w-auto grid sm:flex sm:flex-wrap items-center gap-2", !isAdminOrHr && !canCreatePenalty && "!hidden", [true, isAdminOrHr, canCreatePenalty].filter(Boolean).length === 3 ? "grid-cols-3" : [true, isAdminOrHr, canCreatePenalty].filter(Boolean).length === 2 ? "grid-cols-2" : "flex [&>button]:w-auto [&>button]:px-4")}>
               <button
                 onClick={() => setShowLeaderboard(!showLeaderboard)}
                 className={cn(
-                  "px-3.5 py-2 rounded-xl border border-border bg-card text-foreground hover:bg-muted font-bold text-sm transition-all flex items-center gap-2 shadow-sm shrink-0", 
+                  "w-full sm:w-auto min-w-0 justify-center whitespace-nowrap px-2 sm:px-3.5 py-2.5 sm:py-2 rounded-xl border border-border bg-card text-foreground hover:bg-muted font-bold text-xs sm:text-sm transition-all flex items-center gap-1.5 sm:gap-2 shadow-sm", 
                   showLeaderboard && "bg-amber-500/10 text-amber-600 border-amber-500/30"
                 )}
               >
                 <Trophy className="w-4 h-4" />
-                <span className="hidden sm:inline">Leaderboard</span>
+                <span>Leaderboard</span>
               </button>
 
               {isAdminOrHr && (
                 <Dialog open={isTypeOpen} onOpenChange={open => { setIsTypeOpen(open); if (!open) resetTypeForm(); }}>
                   <DialogTrigger asChild>
-                    <button className="px-3.5 py-2 rounded-xl border border-border bg-card text-foreground hover:bg-muted font-bold text-sm transition-all flex items-center gap-2 shadow-sm shrink-0">
+                    <button className="w-full sm:w-auto min-w-0 justify-center whitespace-nowrap px-2 sm:px-3.5 py-2.5 sm:py-2 rounded-xl border border-border bg-card text-foreground hover:bg-muted font-bold text-xs sm:text-sm transition-all flex items-center gap-1.5 sm:gap-2 shadow-sm">
                       <ShieldAlert className="w-4 h-4" />
-                      <span className="hidden sm:inline">Penalty Types</span>
+                      <span className="sm:hidden">Types</span><span className="hidden sm:inline">Penalty Types</span>
                     </button>
                   </DialogTrigger>
                   <DialogContent className="w-[calc(100vw-24px)] sm:max-w-[860px] max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
@@ -995,9 +1009,9 @@ export function Penalties() {
               {canCreatePenalty && (
                 <Dialog open={isNewOpen} onOpenChange={setIsNewOpen}>
                   <DialogTrigger asChild>
-                    <button className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm shrink-0">
+                    <button className="w-full sm:w-auto min-w-0 whitespace-nowrap px-2 sm:px-4 py-2.5 sm:py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs sm:text-sm rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm">
                       <Plus className="w-4 h-4" />
-                      <span className="hidden sm:inline">Add Record</span>
+                      <span className="sm:hidden">Add</span><span className="hidden sm:inline">Add Record</span>
                     </button>
                   </DialogTrigger>
                     <DialogContent className="w-[calc(100vw-24px)] sm:max-w-[500px] max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
@@ -1311,7 +1325,7 @@ export function Penalties() {
 
         {/* Right Column: Leaderboard Card */}
         {showLeaderboard && (
-          <div className="w-full lg:w-80 bg-card border border-border rounded-3xl shadow-sm flex flex-col overflow-hidden shrink-0 animate-in slide-in-from-right duration-300">
+          <div className="w-full lg:w-80 max-h-[480px] lg:max-h-none bg-card border border-border rounded-2xl sm:rounded-3xl shadow-sm flex flex-col overflow-hidden shrink-0 animate-in slide-in-from-right duration-300">
             <div className="p-5 border-b border-border bg-muted/30 shrink-0 text-left">
               <div className="flex items-center gap-2">
                 <Trophy className="w-5 h-5 text-amber-500" />

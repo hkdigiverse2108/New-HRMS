@@ -507,17 +507,17 @@ export function Gallery() {
   }, [currentImageIndex, activeMediaItems.length]);
 
   return (
-    <div className="w-full space-y-8 animate-in fade-in duration-500">
+    <div className="w-full space-y-5 sm:space-y-8 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-foreground">Media Gallery</h1>
-          <p className="text-muted-foreground mt-2 font-medium">Company events, office tours, and team moments.</p>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-foreground">Media Gallery</h1>
+          <p className="text-muted-foreground mt-1 sm:mt-2 text-sm sm:text-base font-medium">Company events, office tours, and team moments.</p>
         </div>
         <div className="flex items-center gap-3">
           <button 
             onClick={handleOpenAddModal}
-            className="px-5 py-2.5 bg-primary text-primary-foreground font-bold text-sm rounded-xl hover:bg-primary/90 transition-all shadow-sm flex items-center gap-2"
+            className="min-h-[40px] sm:min-h-0 px-4 sm:px-5 py-2.5 bg-primary text-primary-foreground font-bold text-sm rounded-xl hover:bg-primary/90 transition-all shadow-sm flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
             Upload Media
@@ -547,7 +547,7 @@ export function Gallery() {
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-4 auto-rows-[220px] gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 auto-rows-[200px] sm:auto-rows-[220px] gap-3 sm:gap-5">
               {events.map((item, idx) => {
                 const coverImage = getCoverImage(item);
                 const mediaList = getUnifiedMediaItems(item);
@@ -558,8 +558,8 @@ export function Gallery() {
 
                 const isHero = idx === 0;
                 const cardSpan = isHero
-                  ? "md:col-span-2 md:row-span-2"
-                  : "md:col-span-1 md:row-span-1";
+                  ? "sm:col-span-2 sm:row-span-2"
+                  : "col-span-1 row-span-1";
 
                 return (
                   <div 
@@ -567,7 +567,7 @@ export function Gallery() {
                     onClick={() => setSelectedAlbum(item)}
                     className={cn(
                       "group relative overflow-hidden cursor-pointer shadow-lg hover:shadow-2xl hover:-translate-y-1 transition-all duration-500 border border-border/30 bg-slate-950",
-                      isHero ? "rounded-[2rem]" : "rounded-2xl",
+                      isHero ? "rounded-3xl sm:rounded-[2rem]" : "rounded-2xl",
                       cardSpan
                     )}
                   >
@@ -601,7 +601,7 @@ export function Gallery() {
                     <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
                     
                     {/* Bottom Info Overlay */}
-                    <div className={cn("absolute bottom-0 left-0 right-0 space-y-2", isHero ? "p-7" : "p-4")}>
+                    <div className={cn("absolute bottom-0 left-0 right-0 space-y-2", isHero ? "p-4 sm:p-7" : "p-3 sm:p-4")}>
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className={cn(
                           "bg-black/50 backdrop-blur-md rounded-lg border border-white/15 font-extrabold text-white uppercase tracking-wider flex items-center gap-1.5 shadow-sm",
@@ -620,8 +620,8 @@ export function Gallery() {
                         )}
                       </div>
                       <h3 className={cn(
-                        "font-black text-white leading-tight drop-shadow-lg tracking-tight",
-                        isHero ? "text-3xl sm:text-4xl" : "text-lg sm:text-xl"
+                        "font-black text-white leading-tight drop-shadow-lg tracking-tight line-clamp-2 break-words",
+                        isHero ? "text-xl sm:text-3xl lg:text-4xl" : "text-base sm:text-lg lg:text-xl"
                       )}>
                         {item.event_name}
                       </h3>
@@ -635,16 +635,16 @@ export function Gallery() {
       ) : (
         /* Selected Event Detail View (Inside View) */
         <div className="animate-in fade-in slide-in-from-right-4 duration-500 space-y-6">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-start sm:items-center justify-between gap-3 sm:gap-4">
+            <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
               <button 
                 onClick={() => setSelectedAlbum(null)}
-                className="p-3 bg-card hover:bg-muted border border-border/60 rounded-full transition-colors shadow-sm"
+                className="p-2.5 sm:p-3 shrink-0 bg-card hover:bg-muted border border-border/60 rounded-full transition-colors shadow-sm"
               >
                 <ArrowLeft className="w-5 h-5 text-foreground" />
               </button>
-              <div>
-                <h2 className="text-3xl font-black text-foreground">{selectedAlbum.event_name}</h2>
+              <div className="min-w-0">
+                <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-foreground break-words">{selectedAlbum.event_name}</h2>
                 <div className="flex items-center gap-3 mt-1 flex-wrap">
                   {selectedAlbum.date && (
                     <span className="text-muted-foreground font-medium flex items-center gap-1 text-sm">
@@ -661,7 +661,7 @@ export function Gallery() {
             </div>
 
             {/* Compact Icon-Only Action Buttons */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               {selectedAlbum.link && (
                 <a
                   href={selectedAlbum.link}
@@ -693,8 +693,8 @@ export function Gallery() {
           {/* Photo & Video Media Grid View */}
           {activeMediaItems.length > 0 ? (
             <div className="space-y-4">
-              <h3 className="text-lg font-bold text-foreground">Photos & Media ({activeMediaItems.length})</h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <h3 className="text-base sm:text-lg font-bold text-foreground">Photos & Media ({activeMediaItems.length})</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-4">
                 {activeMediaItems.map((media, idx) => {
                   // Only use media_type field to determine video — never infer from file_id alone
                   const isVid = media.media_type === "video" || isVideoUrl(media.url);
@@ -715,8 +715,8 @@ export function Gallery() {
                       {/* ▶ Play Overlay ONLY on actual video items */}
                       {isVid && (
                         <div className="absolute inset-0 bg-black/30 group-hover:bg-black/50 transition-all duration-300 flex items-center justify-center">
-                          <div className="w-16 h-16 rounded-full border-[3.5px] border-white bg-black/35 flex items-center justify-center text-white shadow-2xl group-hover:scale-110 group-hover:bg-black/55 transition-all duration-300">
-                            <Play className="w-8 h-8 text-white fill-white translate-x-0.5" />
+                          <div className="w-10 h-10 sm:w-16 sm:h-16 rounded-full border-[3px] sm:border-[3.5px] border-white bg-black/35 flex items-center justify-center text-white shadow-2xl group-hover:scale-110 group-hover:bg-black/55 transition-all duration-300">
+                            <Play className="w-5 h-5 sm:w-8 sm:h-8 text-white fill-white translate-x-0.5" />
                           </div>
                         </div>
                       )}
@@ -777,13 +777,13 @@ export function Gallery() {
             }}
           >
             {/* Top Bar Navigation & Actions */}
-            <div className="absolute top-6 right-6 flex items-center gap-3 z-20">
+            <div className="absolute top-3 right-3 sm:top-6 sm:right-6 flex items-center gap-2 sm:gap-3 z-20">
               {directMediaLink && (
                 <a
                   href={directMediaLink}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white transition-colors text-xs font-bold flex items-center gap-1.5 border border-white/20 shadow-md"
+                  className="px-3 sm:px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white transition-colors text-[11px] sm:text-xs font-bold flex items-center gap-1.5 border border-white/20 shadow-md"
                   title="Open Original Album / File"
                 >
                   <ExternalLink className="w-3.5 h-3.5" /> {directLinkLabel}
@@ -791,7 +791,7 @@ export function Gallery() {
               )}
               <button 
                 onClick={() => setCurrentImageIndex(null)}
-                className="p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors cursor-pointer border border-white/20 shadow-md"
+                className="p-2 sm:p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors cursor-pointer border border-white/20 shadow-md"
                 title="Close (Esc)"
               >
                 <X className="w-6 h-6" />
@@ -805,20 +805,20 @@ export function Gallery() {
                   e.stopPropagation();
                   setCurrentImageIndex((prev) => (prev! - 1 + activeMediaItems.length) % activeMediaItems.length);
                 }}
-                className="absolute left-4 sm:left-6 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors backdrop-blur-md z-20 cursor-pointer"
+                className="absolute left-2 sm:left-6 top-1/2 -translate-y-1/2 p-2 sm:p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors backdrop-blur-md z-20 cursor-pointer"
               >
-                <ChevronLeft className="w-8 h-8 text-white" />
+                <ChevronLeft className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
               </button>
             )}
 
             {/* Lightbox Center Content */}
             <div 
-              className="w-full max-w-5xl px-4 sm:px-12 flex flex-col items-center justify-center relative h-full pointer-events-auto"
+              className="w-full max-w-5xl px-10 sm:px-12 pt-14 sm:pt-0 flex flex-col items-center justify-center relative h-full pointer-events-auto"
               onClick={(e) => e.stopPropagation()}
             >
               {driveEmbedUrl ? (
                 /* Google Drive Preview Player (Handles both Drive Videos and Documents) */
-                <div className="w-full max-w-4xl h-[78vh] flex flex-col items-center justify-center relative">
+                <div className="w-full max-w-4xl h-[70dvh] sm:h-[78vh] flex flex-col items-center justify-center relative">
                   <iframe 
                     key={`drive-iframe-${currentImageIndex}-${fileId}`}
                     src={driveEmbedUrl} 
@@ -829,7 +829,7 @@ export function Gallery() {
                 </div>
               ) : isNativeVideoFile ? (
                 /* Native MP4 Video Player with Backend Range Streaming */
-                <div className="w-full max-w-4xl h-[78vh] flex flex-col items-center justify-center relative">
+                <div className="w-full max-w-4xl h-[70dvh] sm:h-[78vh] flex flex-col items-center justify-center relative">
                   <video 
                     key={`native-video-${currentImageIndex}`}
                     src={getVideoStreamUrl(currentUrl)} 
@@ -837,18 +837,18 @@ export function Gallery() {
                     autoPlay 
                     playsInline
                     preload="auto"
-                    className="max-w-full max-h-[78vh] object-contain rounded-xl shadow-2xl animate-in fade-in duration-300 bg-black"
+                    className="max-w-full max-h-[70dvh] sm:max-h-[78vh] object-contain rounded-xl shadow-2xl animate-in fade-in duration-300 bg-black"
                   />
                 </div>
               ) : (
                 /* Fullscreen Image View */
-                <div className="relative flex items-center justify-center max-w-full max-h-[82vh]">
+                <div className="relative flex items-center justify-center max-w-full max-h-[72dvh] sm:max-h-[82vh]">
                   <img 
                     src={currentUrl} 
                     alt={currentMedia.name || "Gallery Full View"} 
                     referrerPolicy="no-referrer"
                     onError={handleImageError}
-                    className="max-w-full max-h-[82vh] object-contain rounded-xl shadow-2xl animate-in fade-in zoom-in-95 duration-300"
+                    className="max-w-full max-h-[72dvh] sm:max-h-[82vh] object-contain rounded-xl shadow-2xl animate-in fade-in zoom-in-95 duration-300"
                   />
                 </div>
               )}
@@ -866,9 +866,9 @@ export function Gallery() {
                   e.stopPropagation();
                   setCurrentImageIndex((prev) => (prev! + 1) % activeMediaItems.length);
                 }}
-                className="absolute right-4 sm:right-6 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors backdrop-blur-md z-20 cursor-pointer"
+                className="absolute right-2 sm:right-6 top-1/2 -translate-y-1/2 p-2 sm:p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors backdrop-blur-md z-20 cursor-pointer"
               >
-                <ChevronRight className="w-8 h-8 text-white" />
+                <ChevronRight className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
               </button>
             )}
           </div>
@@ -877,16 +877,16 @@ export function Gallery() {
 
       {/* Add / Edit Modal Popup */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-card text-card-foreground border border-border/80 w-full max-w-2xl rounded-3xl shadow-2xl p-6 sm:p-8 animate-in fade-in zoom-in-95 duration-200 relative my-8">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-card text-card-foreground border border-border/80 w-full max-w-2xl rounded-3xl shadow-2xl p-4 sm:p-8 animate-in fade-in zoom-in-95 duration-200 relative my-3 sm:my-8">
             <button
               onClick={handleCloseModal}
-              className="absolute top-6 right-6 p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors"
+              className="absolute top-3 right-3 sm:top-6 sm:right-6 p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
 
-            <h2 className="text-2xl font-black tracking-tight mb-1">
+            <h2 className="text-xl sm:text-2xl font-black tracking-tight mb-1 pr-8">
               {editingItem ? "Edit Media Event" : "Upload New Media"}
             </h2>
             <p className="text-muted-foreground text-sm font-medium mb-6">
@@ -945,8 +945,8 @@ export function Gallery() {
                   </label>
                   <div className="space-y-2">
                     {formData.media_items.map((item, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-2.5 bg-muted/40 border border-border/60 rounded-xl gap-3">
-                        <span className="text-xs font-medium text-foreground truncate max-w-[240px]">
+                      <div key={idx} className="flex flex-wrap items-center justify-between p-2.5 bg-muted/40 border border-border/60 rounded-xl gap-2 sm:gap-3">
+                        <span className="text-xs font-medium text-foreground truncate min-w-0 flex-1 basis-full sm:basis-auto sm:max-w-[240px]">
                           {item.name || item.url}
                         </span>
                         <div className="flex items-center gap-2 flex-shrink-0">
@@ -989,7 +989,7 @@ export function Gallery() {
                 </div>
               )}
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-border/60">
+              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 pt-4 border-t border-border/60">
                 <button
                   type="button"
                   onClick={handleCloseModal}

@@ -593,12 +593,12 @@ export function DailyProgress() {
             />
           </div>
         )}
-        <div className="grid grid-cols-2 xl:grid-cols-[repeat(auto-fit,minmax(170px,1fr))] max-xl:min-[480px]:[&>*:last-child:nth-child(odd)]:col-span-2 gap-2 sm:gap-3 w-full 2xl:flex-1">
+        <div className="flex flex-nowrap items-center gap-2 w-full 2xl:flex-1 overflow-x-auto">
           {canFilterEmployees && (
             <>
               {/* "My Progress" only has the leader's own report, so no employee filter there */}
               {!(showLeaderTabs && leaderView === "my") && (
-                <div className="relative min-w-0 order-1 min-[480px]:order-none">
+                <div className="relative flex-1 min-w-[130px]">
                   <SearchableSelect
                     value={employeeFilter}
                     onChange={(val) => setEmployeeFilter(val)}
@@ -608,7 +608,7 @@ export function DailyProgress() {
                 </div>
               )}
               {(isAdmin || isHr) && (
-                <div className="relative min-w-0 order-3 col-span-2 min-[480px]:order-none min-[480px]:col-span-1">
+                <div className="relative flex-1 min-w-[130px]">
                   <SearchableSelect
                     value={departmentFilter}
                     onChange={(val) => setDepartmentFilter(val)}
@@ -620,7 +620,7 @@ export function DailyProgress() {
             </>
           )}
           {/* One picker: click a single day, or a start and an end day for a range */}
-          <div className="min-w-0 order-4 col-span-2 min-[480px]:order-none min-[480px]:col-span-1">
+          <div className="flex-[1.3] min-w-[170px]">
             <DateRangeFilter
               value={dateRangeValue}
               onChange={handleDateRangeChange}
@@ -628,7 +628,7 @@ export function DailyProgress() {
               className="w-full min-w-0 h-[42px] text-xs font-bold"
             />
           </div>
-          <div className="relative min-w-0 order-2 min-[480px]:order-none">
+          <div className="relative flex-1 min-w-[130px]">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10 pointer-events-none" />
             <SearchableSelect
               value={statusFilter}

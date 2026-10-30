@@ -850,8 +850,8 @@ export default function SeatingArrangementPage() {
   }, [user, realEmployees, data?.employees, desksState, checkIsMySeat]);
 
   return (
-    <div className="space-y-6 h-[calc(100vh-8rem)] flex flex-col">
-      <div className="flex flex-col gap-4">
+    <div className="space-y-4 sm:space-y-6 lg:h-[calc(100vh-8rem)] flex flex-col">
+      <div className="flex flex-col gap-3 sm:gap-4">
         {/* Floor Tabs */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
           {floors.map(f => (
@@ -859,7 +859,7 @@ export default function SeatingArrangementPage() {
               key={f}
               onClick={() => setActiveFloor(f)}
               className={cn(
-                "px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap transition-colors",
+                "px-3 sm:px-4 py-1.5 sm:py-2 shrink-0 rounded-lg font-bold text-xs sm:text-sm whitespace-nowrap transition-colors",
                 activeFloor === f 
                   ? "bg-primary text-primary-foreground" 
                   : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -881,9 +881,9 @@ export default function SeatingArrangementPage() {
             </button>
           )}
         </div>
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex items-center justify-between flex-wrap gap-3 sm:gap-4">
         {isAdminOrHR && (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             <Button
               variant={isLayoutEditMode ? "default" : "outline"}
               size="sm"
@@ -918,22 +918,22 @@ export default function SeatingArrangementPage() {
             )}
             
             {!isLayoutEditMode ? (
-              <div className="text-xs font-bold text-emerald-700 bg-emerald-100/80 backdrop-blur-sm border border-emerald-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm animate-in fade-in duration-200">
+              <div className="text-[11px] sm:text-xs font-bold text-emerald-700 bg-emerald-100/80 backdrop-blur-sm border border-emerald-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm animate-in fade-in duration-200">
                 <span className="w-2.5 h-2.5 bg-emerald-600 rounded-full animate-pulse flex-shrink-0"></span>
-                Admin Mode: Click any seat to change employee allotment
+                <span className="sm:hidden">Tap a seat to change allotment</span><span className="hidden sm:inline">Admin Mode: Click any seat to change employee allotment</span>
               </div>
             ) : (
-              <div className="text-xs font-bold text-brand-teal bg-brand-light/80 backdrop-blur-sm border border-brand-teal/20 px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm animate-in fade-in duration-200">
+              <div className="text-[11px] sm:text-xs font-bold text-brand-teal bg-brand-light/80 backdrop-blur-sm border border-brand-teal/20 px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm animate-in fade-in duration-200">
                 <span className="w-2.5 h-2.5 bg-brand-teal rounded-full animate-pulse flex-shrink-0"></span>
-                Layout Editor: Drag desks, click a desk to edit/delete
+                <span className="sm:hidden">Drag desks, tap to edit</span><span className="hidden sm:inline">Layout Editor: Drag desks, click a desk to edit/delete</span>
               </div>
             )}
           </div>
         )}
       </div>
       </div>
-      <div className="flex-1 overflow-x-auto touch-pan-x touch-pan-y min-w-0">
-        <div className="bg-[#e4dfcd] rounded-xl overflow-hidden shadow-sm relative min-h-[600px] min-w-[850px] border border-border">
+      <div className="flex-1 overflow-x-auto touch-pan-x touch-pan-y min-w-0 rounded-xl">
+        <div className="bg-[#e4dfcd] rounded-xl overflow-hidden shadow-sm relative min-h-[420px] sm:min-h-[600px] min-w-[850px] border border-border">
         {!isMounted ? (
           <div className="w-full h-full flex items-center justify-center bg-[#e4dfcd]">
             <div className="flex flex-col items-center gap-3">
@@ -944,7 +944,7 @@ export default function SeatingArrangementPage() {
         ) : (
           <>
             {/* Legend */}
-            <div className="absolute top-4 right-6 bg-white/90 backdrop-blur-md px-3 py-2 rounded-lg shadow-md flex flex-col gap-2 z-[100] text-sm font-medium border border-border/50">
+            <div className="sticky left-2 top-2 m-2 w-fit sm:m-0 sm:w-auto sm:absolute sm:left-auto sm:top-4 sm:right-6 bg-white/90 backdrop-blur-md px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg shadow-md flex flex-row sm:flex-col gap-3 sm:gap-2 z-[100] text-xs sm:text-sm font-medium border border-border/50">
               <div 
                 onClick={handleClearAllSeats}
                 className={cn(
@@ -1323,8 +1323,8 @@ export default function SeatingArrangementPage() {
 
       {/* Manage Seat Modal */}
       {selectedSeat && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform scale-100 transition-all">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-md max-h-[92dvh] flex flex-col overflow-hidden transform scale-100 transition-all">
             {/* Modal Header */}
             <div className="bg-slate-900 border-b border-slate-800 p-5 text-white flex items-center justify-between">
               <div>
@@ -1340,7 +1340,7 @@ export default function SeatingArrangementPage() {
             </div>
 
             {/* Modal Body */}
-            <div className="p-6 space-y-5">
+            <div className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1 min-h-0">
               {/* Status Select */}
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Seat Status</label>
@@ -1425,7 +1425,7 @@ export default function SeatingArrangementPage() {
                       <div className="space-y-1.5 pt-1 max-h-36 overflow-y-auto">
                         {empResList.map((res: any) => (
                           <div key={res._id || res.id} className="flex items-center justify-between bg-white border border-slate-200 rounded-lg p-2 font-mono text-[11px] shadow-2xs">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 min-w-0 flex-wrap">
                               <span className="font-bold text-slate-900">{res.resource_id || res.assetId}</span>
                               <span className="text-slate-600 font-sans font-medium">({res.category_name || res.name})</span>
                             </div>
@@ -1442,7 +1442,7 @@ export default function SeatingArrangementPage() {
             </div>
 
             {/* Modal Footer */}
-            <div className="bg-slate-100 p-4 border-t border-slate-200 flex items-center justify-end gap-3">
+            <div className="bg-slate-100 p-3 sm:p-4 border-t border-slate-200 flex items-center justify-end gap-2 sm:gap-3 shrink-0">
               <Button
                 variant="outline"
                 onClick={() => setSelectedSeat(null)}
@@ -1465,8 +1465,8 @@ export default function SeatingArrangementPage() {
       {selectedDeskForEdit && desksState.find(d => d.id === selectedDeskForEdit.id) && (() => {
         const editingDesk = desksState.find(d => d.id === selectedDeskForEdit.id)!;
         return (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform scale-100 transition-all">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-md max-h-[92dvh] flex flex-col overflow-hidden transform scale-100 transition-all">
               {/* Modal Header */}
               <div className="bg-slate-900 border-b border-slate-800 p-5 text-white flex items-center justify-between">
                 <div>
@@ -1488,7 +1488,7 @@ export default function SeatingArrangementPage() {
               </div>
 
               {/* Modal Body */}
-              <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+              <div className="p-4 sm:p-6 space-y-4 flex-1 min-h-0 overflow-y-auto">
 
                 {/* Seat Counts */}
                 <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-4">
@@ -1563,7 +1563,7 @@ export default function SeatingArrangementPage() {
                   {editingDesk.pcs && editingDesk.pcs.length > 0 ? (
                     <div className="space-y-2 max-h-32 overflow-y-auto pr-1">
                       {editingDesk.pcs.map((pc, idx) => (
-                        <div key={pc.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg border border-slate-100 animate-in fade-in duration-150">
+                        <div key={pc.id} className="flex items-center justify-between gap-2 p-2 bg-slate-50 rounded-lg border border-slate-100 animate-in fade-in duration-150">
                           <span className="text-xs font-bold text-slate-700">PC #{idx + 1}</span>
                           <button
                             type="button"
@@ -1609,7 +1609,7 @@ export default function SeatingArrangementPage() {
               </div>
 
               {/* Modal Footer */}
-              <div className="bg-slate-100 p-4 border-t border-slate-200 flex items-center justify-end gap-3">
+              <div className="bg-slate-100 p-3 sm:p-4 border-t border-slate-200 flex items-center justify-end gap-2 sm:gap-3 shrink-0">
                 <Button
                   variant="outline"
                   onClick={() => {

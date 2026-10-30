@@ -338,9 +338,9 @@ export function Remarks() {
   };
 
   return (
-    <div className="space-y-5 h-[calc(100vh-4rem)] flex flex-col overflow-hidden pb-0">
+    <div className="space-y-4 sm:space-y-5 flex flex-col pb-4">
       {/* Header/Stats */}
-      <div className="shrink-0 bg-white border border-border rounded-3xl p-6 shadow-sm relative">
+      <div className="shrink-0 bg-white border border-border rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm relative">
         <div className="absolute inset-0 overflow-hidden rounded-3xl pointer-events-none">
           <div className="absolute -top-12 -right-12 p-12 opacity-5 rotate-12">
             <MessageSquareHeart className="w-64 h-64 text-indigo-900" />
@@ -349,41 +349,41 @@ export function Remarks() {
 
         <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div>
-            <h1 className="text-2xl font-black text-foreground tracking-tight mb-2">Monthly Remarks & Feedback</h1>
-            <p className="text-sm text-muted-foreground max-w-xl">
+            <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight mb-1 sm:mb-2 pr-12 sm:pr-0">Monthly Remarks & Feedback</h1>
+            <p className="text-sm text-muted-foreground max-w-xl pr-12 sm:pr-0">
               {isAdmin ? "Review qualitative feedback and satisfaction scores." : "Submit your remarks here — admin questions will appear below."}
             </p>
           </div>
 
-          <div className="flex flex-wrap lg:flex-nowrap gap-4 items-center">
-            <div className="bg-primary/10 border border-indigo-100 rounded-2xl p-4 flex items-center gap-4 min-w-[160px] flex-1 lg:flex-initial">
-              <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center text-primary shrink-0">
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap lg:flex-nowrap gap-2 sm:gap-4 sm:items-center">
+            <div className="bg-primary/10 border border-indigo-100 rounded-2xl p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4 min-w-0 overflow-hidden sm:min-w-[160px] sm:flex-1 lg:flex-initial">
+              <div className="hidden min-[400px]:flex w-8 h-8 sm:w-10 sm:h-10 bg-white rounded-xl shadow-sm items-center justify-center text-primary shrink-0">
                 <CheckCircle2 className="w-5 h-5" />
               </div>
-              <div>
-                <p className="text-xs font-bold text-primary/70 uppercase tracking-wider mb-0.5">Submission Rate</p>
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs font-bold text-primary/70 uppercase tracking-wider mb-0.5 leading-tight">Submission Rate</p>
                 <div className="flex items-baseline gap-2">
-                  <p className="text-2xl font-black text-primary leading-none">{overview.submission_rate_percent}%</p>
+                  <p className="text-xl sm:text-2xl font-black text-primary leading-none">{overview.submission_rate_percent}%</p>
                   <span className="text-xs font-bold text-primary">{overview.submitted_count}/{overview.total_employees}</span>
                 </div>
               </div>
             </div>
 
-            <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 flex items-center gap-4 min-w-[160px] flex-1 lg:flex-initial">
-              <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center text-amber-500 shrink-0">
+            <div className="bg-amber-50 border border-amber-100 rounded-2xl p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4 min-w-0 overflow-hidden sm:min-w-[160px] sm:flex-1 lg:flex-initial">
+              <div className="hidden min-[400px]:flex w-8 h-8 sm:w-10 sm:h-10 bg-white rounded-xl shadow-sm items-center justify-center text-amber-500 shrink-0">
                 <TrendingUp className="w-5 h-5" />
               </div>
-              <div>
-                <p className="text-xs font-bold text-amber-600/70 uppercase tracking-wider mb-0.5">Avg Satisfaction</p>
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs font-bold text-amber-600/70 uppercase tracking-wider mb-0.5 leading-tight">Avg Satisfaction</p>
                 <div className="flex items-baseline gap-2">
-                  <p className="text-2xl font-black text-amber-700 leading-none">{overview.average_satisfaction}</p>
+                  <p className="text-xl sm:text-2xl font-black text-amber-700 leading-none">{overview.average_satisfaction}</p>
                   <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
                 </div>
               </div>
             </div>
 
             {/* Notification bell */}
-            <div className="relative">
+            <div className="absolute top-0 right-0 sm:static">
               <button
                 onClick={() => setIsBellOpen(v => !v)}
                 className="w-11 h-11 bg-white border border-border rounded-2xl shadow-sm flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors relative"
@@ -431,10 +431,10 @@ export function Remarks() {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-h-0 bg-white border border-border rounded-3xl shadow-sm overflow-hidden">
+      <div className="flex flex-col bg-white border border-border rounded-2xl sm:rounded-3xl shadow-sm overflow-hidden">
         {/* Toolbar */}
-        <div className="p-4 border-b border-border/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-muted/50/50 shrink-0">
-          <div className="relative w-full sm:max-w-xs">
+        <div className="p-3 sm:p-4 border-b border-border/50 flex flex-row items-center justify-between gap-2 sm:gap-4 bg-muted/50/50 shrink-0">
+          <div className="relative flex-1 min-w-0 sm:max-w-xs">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               type="text"
@@ -445,7 +445,7 @@ export function Remarks() {
             />
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             {isAdmin && (
               <button
                 onClick={() => { setShowMissing(v => !v); }}
@@ -469,8 +469,8 @@ export function Remarks() {
 
             {/* Send Reminders Dialog */}
             {isReminderOpen && (
-              <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setIsReminderOpen(false)}>
-                <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-[480px] overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+              <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" onClick={() => setIsReminderOpen(false)}>
+                <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-[480px] max-h-[92dvh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
                   <div className="flex items-center justify-between px-6 py-5 border-b border-border bg-muted/30">
                     <div>
                       <h3 className="text-lg font-black text-foreground tracking-tight">Send Reminders</h3>
@@ -500,7 +500,7 @@ export function Remarks() {
                     </button>
                   </div>
 
-                  <div className="p-4 max-h-[300px] overflow-y-auto space-y-1.5">
+                  <div className="p-4 max-h-[300px] flex-1 min-h-0 overflow-y-auto space-y-1.5">
                     {reminderTarget === "department" ? (
                       <>
                         <p className="text-[10px] font-black text-muted-foreground uppercase tracking-wider px-1 mb-2">
@@ -583,7 +583,7 @@ export function Remarks() {
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between px-5 py-4 border-t border-border bg-muted/20">
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-5 py-4 border-t border-border bg-muted/20">
                     <p className="text-[11px] text-muted-foreground font-semibold">
                       {reminderTarget === "department"
                         ? selectedDepts.length > 0 ? `${selectedDepts.length} dept(s) selected` : "All departments"
@@ -612,16 +612,16 @@ export function Remarks() {
               <DialogTrigger asChild>
                 <button
                   onClick={openNew}
-                  className="px-4 py-2.5 bg-primary hover:bg-primary text-primary-foreground font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm shrink-0"
+                  className="px-4 py-2.5 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 bg-primary hover:bg-primary text-primary-foreground font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm shrink-0"
                 >
                   <Plus className="w-4 h-4" />
                   <span className="hidden sm:inline">{isAdmin ? "Add Feedback" : "Submit Remark"}</span>
                 </button>
               </DialogTrigger>
               <DialogContent className="w-[calc(100vw-24px)] sm:max-w-[500px] max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
-                <div className="flex items-center justify-between px-6 md:px-8 py-6 border-b border-border/50 bg-muted/30">
+                <div className="flex items-center justify-between px-4 sm:px-6 md:px-8 py-4 sm:py-6 border-b border-border/50 bg-muted/30">
                   <div>
-                    <h2 className="text-xl md:text-2xl font-black tracking-tight">
+                    <h2 className="text-lg sm:text-xl md:text-2xl font-black tracking-tight">
                       {editingId ? "Edit Remark" : isAdmin ? "Add Manual Feedback/Remark" : "Submit Your Remark"}
                     </h2>
                     {!isAdmin && (
@@ -784,7 +784,7 @@ export function Remarks() {
                     )}
                   </div>
 
-                  <div className="px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
+                  <div className="px-4 sm:px-6 md:px-8 py-4 md:py-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3 mt-auto shrink-0">
                     <button
                       type="button"
                       onClick={() => { setIsNewOpen(false); setEditingId(null); }}
@@ -807,24 +807,24 @@ export function Remarks() {
         </div>
 
         {/* Grid List */}
-        <div className="flex-1 overflow-y-auto p-6 bg-muted/50/30">
+        <div className="p-3 sm:p-6 bg-muted/50/30">
           {isLoading ? (
             <p className="text-sm text-muted-foreground text-center py-16">Loading remarks...</p>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
               {filteredRemarks.length > 0 ? filteredRemarks.map(record => {
                 const canEdit = isAdmin || (record.submitted_by_id && record.submitted_by_id === myId);
                 return (
-                  <div key={record.id} className="bg-white p-5 rounded-2xl border border-border shadow-sm hover:shadow-md transition-shadow flex flex-col">
+                  <div key={record.id} className="bg-white p-4 sm:p-5 rounded-2xl border border-border shadow-sm hover:shadow-md transition-shadow flex flex-col min-w-0">
                     <div className="flex items-start justify-between gap-4 mb-4">
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
                         <img
                           src={`https://ui-avatars.com/api/?name=${encodeURIComponent(record.submitted_by_name || "U")}&background=random`}
                           alt={record.submitted_by_name || "User"}
-                          className="w-10 h-10 rounded-full border border-border object-cover"
+                          className="w-10 h-10 rounded-full border border-border object-cover shrink-0"
                         />
-                        <div>
-                          <h3 className="font-bold text-foreground leading-tight">{record.submitted_by_name || "Anonymous"}</h3>
+                        <div className="min-w-0">
+                          <h3 className="font-bold text-foreground leading-tight truncate">{record.submitted_by_name || "Anonymous"}</h3>
                           <p className="text-xs text-muted-foreground">{record.department || ""}</p>
                         </div>
                       </div>
@@ -848,7 +848,7 @@ export function Remarks() {
                       {Object.entries(record.custom_answers || {}).map(([k, v]) => (
                         <div key={k}>
                           <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">{answerLabel(String(k))}</h4>
-                          <p className="text-sm text-foreground/80 leading-relaxed">"{String(v)}"</p>
+                          <p className="text-sm text-foreground/80 leading-relaxed break-words">"{String(v)}"</p>
                         </div>
                       ))}
                       {Object.keys(record.custom_answers || {}).length === 0 && record.rating === 0 && (
