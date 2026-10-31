@@ -166,7 +166,15 @@ def sync_env_config(vite_api_url: str):
     try:
         public_dir = FRONTEND_DIR / "public"
         public_dir.mkdir(parents=True, exist_ok=True)
-        (public_dir / "env-config.js").write_text(script_content, encoding="utf-8")
+        env_file = public_dir / "env-config.js"
+        env_file.write_text(script_content, encoding="utf-8")
+
+        try:
+            import subprocess
+            subprocess.run(["git", "update-index", "--skip-worktree", "Frontend/public/env-config.js"], cwd=str(BASE_DIR), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(["git", "update-index", "--assume-unchanged", "Frontend/public/env-config.js"], cwd=str(BASE_DIR), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
 
         static_dir = FRONTEND_DIR / ".vercel" / "output" / "static"
         if static_dir.exists():

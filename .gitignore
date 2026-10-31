@@ -88,3 +88,7 @@ audio_transcript (17).md
 .agents
 
 ig-saas-full (1)
+
+# Dynamic runtime env configs
+Frontend/public/env-config.js
+Frontend/.vercel/output/static/env-config.js
