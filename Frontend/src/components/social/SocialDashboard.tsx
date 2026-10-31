@@ -32,7 +32,7 @@ export const SocialDashboard: React.FC<SocialDashboardProps> = ({
   return (
     <div className="space-y-6">
       {/* KPI Cards Strip */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {/* Card 1: Connected Profiles */}
         <div
           onClick={() => onNavigateTab("accounts")}
@@ -137,11 +137,11 @@ export const SocialDashboard: React.FC<SocialDashboardProps> = ({
       </div>
 
       {/* Quick Launch Shortcuts */}
-      <div className="p-6 rounded-2xl border border-border bg-card shadow-sm space-y-4">
+      <div className="p-4 sm:p-6 rounded-2xl border border-border bg-card shadow-sm space-y-4">
         <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
           Quick Launch Shortcuts
         </h4>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
           <button
             onClick={() => onNavigateTab("accounts")}
             className="p-3.5 rounded-xl border border-border hover:border-primary/40 hover:bg-muted/30 transition-all text-left flex items-center gap-3 group"
@@ -198,7 +198,7 @@ export const SocialDashboard: React.FC<SocialDashboardProps> = ({
 
       {/* Recent Activity Live Stream */}
       <div className="p-6 rounded-2xl border border-border bg-card shadow-sm space-y-4">
-        <div className="flex items-center justify-between pb-2 border-b border-border">
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-border">
           <div className="flex items-center gap-2">
             <Activity className="w-4 h-4 text-primary" />
             <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -226,15 +226,15 @@ export const SocialDashboard: React.FC<SocialDashboardProps> = ({
               return (
                 <div
                   key={evt.id}
-                  className="p-3 rounded-xl border border-border/60 bg-muted/20 hover:bg-muted/40 transition-colors flex items-center justify-between text-xs"
+                  className="p-3 rounded-xl border border-border/60 bg-muted/20 hover:bg-muted/40 transition-colors flex items-center justify-between gap-3 text-xs"
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
                     <div
-                      className={`w-2 h-2 rounded-full ${
+                      className={`w-2 h-2 shrink-0 rounded-full ${
                         isErr ? "bg-rose-500" : isWarn ? "bg-amber-500" : "bg-emerald-500"
                       }`}
                     />
-                    <div>
+                    <div className="min-w-0 break-words">
                       <span className="font-bold text-foreground mr-2">{evt.type}</span>
                       <span className="text-muted-foreground text-[11px]">{evt.message}</span>
                     </div>

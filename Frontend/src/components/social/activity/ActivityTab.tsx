@@ -114,11 +114,11 @@ export const ActivityTab: React.FC<ActivityTabProps> = ({
   return (
     <div className="space-y-6">
       {/* Sub-tab Switcher & Actions */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        <div className="flex items-center p-1 rounded-xl bg-muted/60 border border-border w-fit">
+      <div className="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3">
+        <div className="flex items-center p-1 rounded-xl bg-muted/60 border border-border w-fit max-w-full overflow-x-auto">
           <button
             onClick={() => setSubTab("logs")}
-            className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+            className={`flex items-center gap-2 whitespace-nowrap px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all ${
               subTab === "logs"
                 ? "bg-card text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
@@ -132,7 +132,7 @@ export const ActivityTab: React.FC<ActivityTabProps> = ({
           </button>
           <button
             onClick={() => setSubTab("pending")}
-            className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+            className={`flex items-center gap-2 whitespace-nowrap px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all ${
               subTab === "pending"
                 ? "bg-card text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
@@ -148,10 +148,11 @@ export const ActivityTab: React.FC<ActivityTabProps> = ({
           </button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
           {subTab === "logs" && (
             <>
               {/* Level Dropdown */}
+              <div className="min-w-0">
               <SocialDropdown
                 value={selectedLogLevel}
                 onChange={(val) => {
@@ -183,8 +184,10 @@ export const ActivityTab: React.FC<ActivityTabProps> = ({
                   },
                 ]}
               />
+              </div>
 
               {/* Event Type Dropdown */}
+              <div className="min-w-0">
               <SocialDropdown
                 value={selectedLogType}
                 onChange={(val) => {
@@ -204,17 +207,20 @@ export const ActivityTab: React.FC<ActivityTabProps> = ({
                   { value: "rate_limited", label: "Rate Limited" },
                 ]}
               />
+              </div>
 
               {/* Date Range Filter */}
+              <div className="min-w-0">
               <DateRangeFilter
                 value={dateRange}
                 onChange={setDateRange}
                 placeholder="Filter by Date"
                 className="h-9"
               />
+              </div>
 
               {/* Quick Search */}
-              <div className="relative min-w-[160px]">
+              <div className="relative w-44 max-w-full">
                 <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type="text"
@@ -225,6 +231,11 @@ export const ActivityTab: React.FC<ActivityTabProps> = ({
                 />
               </div>
 
+            </>
+          )}
+
+          <div className="flex items-center gap-2">
+            {subTab === "logs" && (
               <button
                 onClick={handleClear}
                 className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border border-border text-rose-500 hover:bg-rose-500/10 transition-colors"
@@ -233,29 +244,29 @@ export const ActivityTab: React.FC<ActivityTabProps> = ({
                 <Trash2 className="w-3.5 h-3.5" />
                 Clear Logs
               </button>
-            </>
-          )}
+            )}
 
-          {subTab === "pending" && (
+            {subTab === "pending" && (
+              <button
+                onClick={async () => {
+                  await onSweepPending();
+                  await onRefresh();
+                }}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border border-border hover:bg-muted transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Sweep Expired
+              </button>
+            )}
+
             <button
-              onClick={async () => {
-                await onSweepPending();
-                await onRefresh();
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border border-border hover:bg-muted transition-colors"
+              onClick={() => onRefresh()}
+              className="flex items-center justify-center p-2 rounded-xl border border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+              title="Refresh"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
-              Sweep Expired
+              <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
             </button>
-          )}
-
-          <button
-            onClick={() => onRefresh()}
-            className="p-2 rounded-xl border border-border text-muted-foreground hover:text-foreground hover:bg-muted"
-            title="Refresh"
-          >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
-          </button>
+          </div>
         </div>
       </div>
 
@@ -263,7 +274,7 @@ export const ActivityTab: React.FC<ActivityTabProps> = ({
       {subTab === "logs" && (
         <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full min-w-[760px] text-left text-xs">
               <thead className="bg-muted/50 border-b border-border text-muted-foreground font-semibold">
                 <tr>
                   <th className="py-3 px-4">Timestamp</th>
@@ -343,7 +354,7 @@ export const ActivityTab: React.FC<ActivityTabProps> = ({
           </div>
 
           {/* Pagination Footer */}
-          <div className="p-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+          <div className="p-3 border-t border-border flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
             <div>
               Showing {safeLogs.length} of {totalLogs} events
             </div>

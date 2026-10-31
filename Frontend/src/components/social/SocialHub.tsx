@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   LayoutDashboard,
   Instagram,
@@ -102,6 +102,19 @@ export const SocialHub: React.FC<SocialHubProps> = ({ initialPath, setActive }) 
     }
   }, [visibleTabs, activeTab]);
 
+  // Keep the selected tab centered in the horizontally scrollable tab bar
+  const navRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const el = navRef.current?.querySelector<HTMLElement>(`[data-tab="${activeTab}"]`);
+    if (el && navRef.current) {
+      const nav = navRef.current;
+      nav.scrollTo({
+        left: el.offsetLeft - (nav.clientWidth - el.offsetWidth) / 2,
+        behavior: "smooth",
+      });
+    }
+  }, [activeTab, visibleTabs.length]);
+
   const handleTabChange = (key: string) => {
     const validKey = (visibleTabs.some((t) => t.key === key) ? key : (visibleTabs[0]?.key || "dashboard")) as TabKey;
     setActiveTab(validKey);
@@ -201,16 +214,16 @@ export const SocialHub: React.FC<SocialHubProps> = ({ initialPath, setActive }) 
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 min-w-0 max-w-full">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5">
-            <div className="p-2.5 rounded-2xl bg-gradient-to-tr from-purple-600 via-pink-600 to-indigo-600 text-white shadow-md">
+            <div className="p-2.5 shrink-0 rounded-2xl bg-gradient-to-tr from-purple-600 via-pink-600 to-indigo-600 text-white shadow-md">
               <Instagram className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-2xl font-black tracking-tight text-foreground sm:text-3xl">
+              <h1 className="text-xl font-black tracking-tight text-foreground sm:text-2xl lg:text-3xl">
                 Social Automation Hub
               </h1>
               <p className="text-xs text-muted-foreground mt-0.5">
@@ -231,16 +244,17 @@ export const SocialHub: React.FC<SocialHubProps> = ({ initialPath, setActive }) 
 
       {/* Modern Tabs Navigation Bar: ONLY show if user has access to MORE THAN 1 tab */}
       {visibleTabs.length > 1 && (
-        <div className="border-b border-border">
-          <nav className="flex space-x-1 sm:space-x-2 overflow-x-auto pb-px" aria-label="Tabs">
+        <div className="border-b border-border -mx-1 px-1">
+          <nav ref={navRef} className="relative flex space-x-1 sm:space-x-2 overflow-x-auto overscroll-x-contain pb-px [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Tabs">
             {visibleTabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.key;
               return (
                 <button
                   key={tab.key}
+                  data-tab={tab.key}
                   onClick={() => handleTabChange(tab.key)}
-                  className={`flex items-center gap-2 py-3 px-3.5 border-b-2 font-bold text-xs whitespace-nowrap transition-all outline-none ${
+                  className={`flex shrink-0 items-center gap-2 py-3 px-3 sm:px-3.5 border-b-2 font-bold text-xs whitespace-nowrap transition-all outline-none ${
                     isActive
                       ? "border-primary text-primary"
                       : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30"

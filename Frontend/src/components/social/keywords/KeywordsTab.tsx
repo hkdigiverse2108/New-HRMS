@@ -182,9 +182,10 @@ export const KeywordsTab: React.FC<KeywordsTabProps> = ({
       </div>
 
       {/* Control Strip */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2 flex-1">
+      <div className="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
           {/* Account Filter */}
+          <div className="min-w-0 max-w-full">
           <SocialDropdown
             value={selectedAccountId}
             onChange={setSelectedAccountId}
@@ -201,8 +202,10 @@ export const KeywordsTab: React.FC<KeywordsTabProps> = ({
               })),
             ]}
           />
+          </div>
 
           {/* Scope Filter */}
+          <div className="min-w-0">
           <SocialDropdown
             value={scopeFilter}
             onChange={setScopeFilter}
@@ -223,17 +226,20 @@ export const KeywordsTab: React.FC<KeywordsTabProps> = ({
               },
             ]}
           />
+          </div>
 
           {/* Date Range Filter */}
+          <div className="min-w-0">
           <DateRangeFilter
             value={dateRange}
             onChange={setDateRange}
             placeholder="Filter by Date"
             className="h-9"
           />
+          </div>
 
           {/* Search */}
-          <div className="relative flex-1 min-w-[180px]">
+          <div className="relative w-48 max-w-full">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
@@ -246,7 +252,7 @@ export const KeywordsTab: React.FC<KeywordsTabProps> = ({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap [&>button]:whitespace-nowrap">
           <button
             onClick={() => onRefresh()}
             className="p-2 rounded-xl border border-border text-muted-foreground hover:text-foreground hover:bg-muted"

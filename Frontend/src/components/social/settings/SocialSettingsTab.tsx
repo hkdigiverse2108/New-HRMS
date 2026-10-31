@@ -150,7 +150,7 @@ export const SocialSettingsTab: React.FC<SocialSettingsTabProps> = ({
                 {copiedWebhook ? "Copied" : "Copy URL"}
               </button>
             </div>
-            <div className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-border bg-muted/40 font-mono text-foreground flex items-center justify-between">
+            <div className="w-full min-w-0 px-3.5 py-2.5 text-xs rounded-xl border border-border bg-muted/40 font-mono text-foreground flex items-center justify-between">
               <span className="truncate">{webhookUrl}</span>
             </div>
           </div>
@@ -376,14 +376,14 @@ export const SocialSettingsTab: React.FC<SocialSettingsTabProps> = ({
         </div>
 
         {/* Self-comments toggle */}
-        <div className="p-4 rounded-xl border border-border bg-muted/20 flex items-center justify-between">
-          <div>
+        <div className="p-4 rounded-xl border border-border bg-muted/20 flex items-center justify-between gap-3">
+          <div className="min-w-0">
             <div className="text-xs font-bold text-foreground">Allow Self Comments (Testing Mode)</div>
             <div className="text-[11px] text-muted-foreground">
               When enabled, the bot will trigger even when your own Instagram account comments on its own posts.
             </div>
           </div>
-          <label className="relative inline-flex items-center cursor-pointer">
+          <label className="relative inline-flex shrink-0 items-center cursor-pointer">
             <input
               type="checkbox"
               checked={allowSelfComments}

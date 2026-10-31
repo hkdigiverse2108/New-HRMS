@@ -132,7 +132,7 @@ export const SocialDropdown: React.FC<SocialDropdownProps> = ({
         <div
           className={cn(
             "absolute mt-1.5 py-1.5 rounded-2xl bg-popover/95 backdrop-blur-md border border-border shadow-xl z-50 animate-in fade-in-0 zoom-in-95 duration-100 scrollbar-thin overflow-hidden flex flex-col",
-            fullWidth ? "w-full min-w-[240px]" : "min-w-[200px] max-w-[320px]",
+            fullWidth ? "w-full min-w-[min(240px,calc(100vw-2rem))]" : "min-w-[min(200px,calc(100vw-2rem))] max-w-[min(320px,calc(100vw-2rem))]",
             align === "right" ? "right-0" : "left-0"
           )}
         >

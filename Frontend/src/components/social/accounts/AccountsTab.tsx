@@ -164,8 +164,8 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
       </div>
 
       {/* Action Header */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex flex-row items-center justify-between gap-2 sm:gap-3 pt-2">
+        <div className="relative flex-1 min-w-0 sm:max-w-sm">
           <input
             type="text"
             value={search}
@@ -175,7 +175,7 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
           />
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <button
             onClick={() => onRefresh()}
             className="p-2 rounded-xl border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -188,10 +188,11 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
               setEditingAccount(null);
               setIsModalOpen(true);
             }}
-            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-opacity shadow-sm"
+            className="flex items-center gap-1.5 whitespace-nowrap px-3 sm:px-3.5 py-2 text-xs font-semibold rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-opacity shadow-sm"
           >
             <Plus className="w-4 h-4" />
-            Connect Account
+            <span className="sm:hidden">Connect</span>
+            <span className="hidden sm:inline">Connect Account</span>
           </button>
         </div>
       </div>

@@ -128,7 +128,7 @@ export const BrandsTab: React.FC<BrandsTabProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Strip */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div>
           <h3 className="text-base font-bold text-foreground">Brand Guidelines & Voice Profiles</h3>
           <p className="text-xs text-muted-foreground">
@@ -146,7 +146,7 @@ export const BrandsTab: React.FC<BrandsTabProps> = ({
           </button>
           <button
             onClick={() => openModal(null)}
-            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-primary text-primary-foreground hover:opacity-90 shadow-sm"
+            className="flex items-center gap-1.5 whitespace-nowrap px-3.5 py-2 text-xs font-semibold rounded-xl bg-primary text-primary-foreground hover:opacity-90 shadow-sm"
           >
             <Plus className="w-4 h-4" />
             Add Brand Profile
