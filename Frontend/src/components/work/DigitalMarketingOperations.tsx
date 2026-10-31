@@ -1363,14 +1363,14 @@ export const DigitalMarketingOperations: React.FC<DigitalMarketingOperationsProp
 
       {/* MODAL 2: FULL-SCREEN INTERACTIVE DATA EXPLORER */}
       <Dialog open={isFullTableModalOpen} onOpenChange={setIsFullTableModalOpen}>
-        <DialogContent className="max-w-6xl w-[95vw] h-[90vh] bg-card border-border/60 rounded-3xl p-0 overflow-hidden shadow-2xl flex flex-col">
-          <div className="px-6 py-4 border-b border-border/50 bg-muted/20 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center font-black">
+        <DialogContent className="max-w-6xl w-[calc(100vw-1rem)] sm:w-[95vw] h-[92dvh] sm:h-[90vh] bg-card border-border/60 rounded-2xl sm:rounded-3xl p-0 overflow-hidden shadow-2xl flex flex-col">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 pr-12 sm:pr-14 border-b border-border/50 bg-muted/20 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 shrink-0">
+            <div className="flex items-center gap-3 min-w-0 flex-1 basis-60">
+              <div className="w-9 h-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center font-black shrink-0">
                 <Table2 className="w-5 h-5" />
               </div>
-              <div>
-                <DialogTitle className="text-base font-black text-foreground">
+              <div className="min-w-0">
+                <DialogTitle className="text-sm sm:text-base font-black text-foreground leading-snug">
                   All Campaigns Data Ledger (Full Screen)
                 </DialogTitle>
                 <p className="text-xs text-muted-foreground">
@@ -1382,7 +1382,7 @@ export const DigitalMarketingOperations: React.FC<DigitalMarketingOperationsProp
               <button
                 type="button"
                 onClick={exportLedgerToCSV}
-                className="px-3 py-1.5 text-xs font-bold rounded-xl bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border border-emerald-500/20 flex items-center gap-1.5"
+                className="px-3 py-1.5 text-xs font-bold rounded-xl bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border border-emerald-500/20 flex items-center gap-1.5 whitespace-nowrap"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Export CSV</span>
@@ -1391,16 +1391,16 @@ export const DigitalMarketingOperations: React.FC<DigitalMarketingOperationsProp
           </div>
 
           {/* Quick channel tabs inside full modal */}
-          <div className="px-6 py-2.5 bg-muted/30 border-b border-border/40 flex items-center justify-between gap-3 text-xs shrink-0">
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground font-bold">Channel:</span>
+          <div className="px-4 sm:px-6 py-2.5 bg-muted/30 border-b border-border/40 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-xs shrink-0">
+            <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar max-w-full">
+              <span className="text-muted-foreground font-bold shrink-0">Channel:</span>
               {["ALL", "META", "GOOGLE", "SEO"].map(cat => (
                 <button
                   key={cat}
                   type="button"
                   onClick={() => setActiveCategoryFilter(cat)}
                   className={cn(
-                    "px-2.5 py-1 rounded-lg text-xs font-bold transition",
+                    "px-2.5 py-1 rounded-lg text-xs font-bold transition whitespace-nowrap shrink-0",
                     activeCategoryFilter === cat
                       ? "bg-primary text-primary-foreground shadow-sm"
                       : "bg-card text-muted-foreground hover:text-foreground border border-border/40"
@@ -1410,7 +1410,7 @@ export const DigitalMarketingOperations: React.FC<DigitalMarketingOperationsProp
                 </button>
               ))}
             </div>
-            <div className="text-muted-foreground font-bold text-xs">
+            <div className="text-muted-foreground font-bold text-xs whitespace-nowrap">
               Showing <span className="text-foreground">{filteredRecords.length}</span> records
             </div>
           </div>
@@ -1453,6 +1453,13 @@ export const DigitalMarketingOperations: React.FC<DigitalMarketingOperationsProp
                     <td className="py-3 px-4 text-right font-mono font-black text-emerald-600">{rec.roas > 0 ? `${rec.roas}x` : "—"}</td>
                   </tr>
                 ))}
+                {filteredRecords.length === 0 && (
+                  <tr>
+                    <td colSpan={11} className="py-16 text-center text-sm font-semibold text-muted-foreground">
+                      No campaign records found for this filter.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

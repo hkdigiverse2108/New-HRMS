@@ -286,15 +286,15 @@ export function OtherTransactions() {
       {/* Header */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3 sm:gap-4">
         <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
-            <Users className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
+          <h1 className="text-lg sm:text-2xl font-black tracking-tight text-foreground flex items-center gap-2 leading-tight">
+            <Users className="w-5 h-5 sm:w-6 sm:h-6 text-primary shrink-0" />
             Client & External Transactions
           </h1>
           <p className="text-muted-foreground mt-1 text-xs sm:text-sm font-medium">
             Manage ledgers, track total inflows/outflows, and net balances per client or external entity.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 sm:gap-2.5 w-full xl:w-auto">
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-2.5 w-full xl:w-auto [&>button]:justify-center [&>button]:whitespace-nowrap">
           <button
             onClick={() => { resetBankForm(); setIsBanksOpen(true); }}
             className="px-3 sm:px-4 py-2 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center gap-2 text-xs sm:text-sm"
@@ -306,7 +306,7 @@ export function OtherTransactions() {
           </button>
           <button
             onClick={() => openAddTx()}
-            className="px-3 sm:px-4 py-2 bg-primary text-primary-foreground font-bold rounded-lg hover:opacity-90 transition-opacity shadow-sm flex items-center gap-2 text-xs sm:text-sm"
+            className="order-first sm:order-none col-span-2 sm:col-auto px-3 sm:px-4 py-2.5 sm:py-2 bg-primary text-primary-foreground font-bold rounded-lg hover:opacity-90 transition-opacity shadow-sm flex items-center gap-2 text-xs sm:text-sm"
           >
             <Plus className="w-4 h-4" /> Add Transaction
           </button>
@@ -314,7 +314,7 @@ export function OtherTransactions() {
       </div>
 
       {/* Accounts */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex items-center gap-2 overflow-x-auto sm:overflow-visible sm:flex-wrap pb-1 sm:pb-0 hide-scrollbar">
         {[
           { id: "all", label: "All Transactions", Icon: Users, count: transactions.length },
           ...bankAccounts.map((b) => ({ id: bankIdOf(b), label: bankLabel(b), Icon: Landmark, count: transactions.filter((t) => t.bankAccountId === bankIdOf(b)).length })),
@@ -322,7 +322,7 @@ export function OtherTransactions() {
           <button
             key={id}
             onClick={() => setSelectedAccount(id)}
-            className={`px-4 py-2.5 rounded-xl text-sm font-bold border transition-colors flex items-center gap-2 shadow-sm ${selectedAccount === id ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border/50 text-muted-foreground hover:text-foreground"}`}
+            className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold border transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap shrink-0 ${selectedAccount === id ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border/50 text-muted-foreground hover:text-foreground"}`}
           >
             <Icon className="w-4 h-4" /> {label}
             <span className={`text-xs px-2 py-0.5 rounded-full ${selectedAccount === id ? "bg-primary-foreground/20" : "bg-muted"}`}>{count}</span>

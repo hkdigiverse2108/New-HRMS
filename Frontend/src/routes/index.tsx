@@ -238,7 +238,7 @@ export function Index() {
               <div className="flex h-dvh overflow-hidden bg-gradient-to-br from-background via-background to-primary/5">
                 <AppSidebar active={active} setActive={setActive} />
                 <GlobalModalManager />
-                <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-3.5 sm:px-6 md:px-8 lg:px-10 pb-24 pt-20 md:pb-8 md:pt-8">
+                <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-3.5 sm:px-6 md:px-8 lg:px-10 pb-24 pt-[4.25rem] md:pb-8 md:pt-8">
                   <div className="mx-auto w-full max-w-[1600px] min-[1920px]:max-w-[1800px]">
                   {/* Main Dashboard */}
                   {basePath === "/dashboard" && <Dashboard setActive={setActive} onAction={handleQuickAction} />}

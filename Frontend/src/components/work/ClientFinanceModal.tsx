@@ -107,18 +107,18 @@ export const ClientFinanceModal: React.FC<ClientFinanceModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
-      <DialogContent className="max-w-2xl bg-card border-border/60 rounded-3xl p-0 overflow-hidden shadow-2xl">
+      <DialogContent className="w-[calc(100vw-1rem)] sm:w-full max-w-2xl max-h-[92dvh] flex flex-col gap-0 bg-card border-border/60 rounded-2xl sm:rounded-3xl p-0 overflow-hidden shadow-2xl">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-border/50 bg-muted/20 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 pr-12 sm:pr-14 border-b border-border/50 bg-muted/20 flex flex-wrap items-center justify-between gap-x-3 gap-y-2.5 shrink-0">
+          <div className="flex items-center gap-3 min-w-0 flex-1 basis-56">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold shrink-0">
               <IndianRupee className="w-5 h-5" />
             </div>
-            <div>
-              <DialogTitle className="text-base font-black text-foreground">
+            <div className="min-w-0">
+              <DialogTitle className="text-sm sm:text-base font-black text-foreground leading-snug">
                 Client Finance & Payment Ledger
               </DialogTitle>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground break-words">
                 {clientName} {companyName ? `(${companyName})` : ""}
               </p>
             </div>
@@ -126,16 +126,16 @@ export const ClientFinanceModal: React.FC<ClientFinanceModalProps> = ({
           <button
             type="button"
             onClick={() => setIsFormOpen(v => !v)}
-            className="px-3.5 py-1.5 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/90 transition shadow-sm flex items-center gap-1.5"
+            className="px-3.5 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/90 transition shadow-sm flex items-center gap-1.5 whitespace-nowrap shrink-0"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>{isFormOpen ? "Cancel" : "Add Payment"}</span>
           </button>
         </div>
 
-        <div className="p-6 space-y-5 text-xs">
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-5 text-xs flex-1 min-h-0 overflow-y-auto">
           {/* Top Total Banner */}
-          <div className="p-4 rounded-2xl bg-muted/20 border border-border/50 flex items-center justify-between">
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-muted/20 border border-border/50 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
             <div>
               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                 Total Collections Received
@@ -144,7 +144,7 @@ export const ClientFinanceModal: React.FC<ClientFinanceModalProps> = ({
                 ₹{totalReceived.toLocaleString("en-IN")}
               </h3>
             </div>
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 whitespace-nowrap">
               {payments.length} {payments.length === 1 ? "Payment" : "Payments"} Logged
             </span>
           </div>
@@ -232,7 +232,7 @@ export const ClientFinanceModal: React.FC<ClientFinanceModalProps> = ({
           )}
 
           {/* Payment List */}
-          <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+          <div className="space-y-2 pr-1">
             {payments.length === 0 ? (
               <p className="text-center py-8 text-muted-foreground font-semibold">
                 No payment entries recorded yet for this client.

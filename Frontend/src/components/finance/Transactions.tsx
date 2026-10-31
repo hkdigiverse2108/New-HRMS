@@ -594,9 +594,9 @@ export function Transactions() {
             Track Credit (Invoices) and Debt (Expenses) with dynamic balance calculations
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center gap-2 w-full 2xl:w-auto">
           {/* Setup & export */}
-          <button onClick={openOpeningBalances} title="Opening Balances" className="h-9 px-3 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center justify-center gap-2 text-sm whitespace-nowrap">
+          <button onClick={openOpeningBalances} title="Opening Balances" className="col-span-2 sm:col-auto h-9 px-3 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center justify-center gap-2 text-sm whitespace-nowrap">
             <Wallet className="w-4 h-4 text-amber-500 shrink-0" /><span>Opening Balances</span>
           </button>
           <button onClick={() => setIsManageBanksOpen(true)} title="Manage Banks" className="h-9 px-3 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center justify-center gap-2 text-sm whitespace-nowrap">
@@ -605,16 +605,16 @@ export function Transactions() {
           <button onClick={exportLedger} title="Export Ledger" className="h-9 px-3 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center justify-center gap-2 text-sm whitespace-nowrap">
             <Download className="w-4 h-4 text-indigo-500 shrink-0" /><span>Export Ledger</span>
           </button>
-          <span className="hidden sm:block w-px h-6 bg-border/60 mx-0.5" />
+          <span className="hidden sm:block w-px h-6 bg-border/60 mx-0.5 order-3" />
           <button
             onClick={openAddCredit}
-            className="h-9 px-3 sm:px-4 bg-primary text-primary-foreground font-bold rounded-lg hover:bg-primary/90 transition-colors shadow-sm flex items-center justify-center gap-1.5 text-xs sm:text-sm whitespace-nowrap"
+            className="order-first sm:order-4 h-10 sm:h-9 px-3 sm:px-4 bg-primary text-primary-foreground font-bold rounded-lg hover:bg-primary/90 transition-colors shadow-sm flex items-center justify-center gap-1.5 text-xs sm:text-sm whitespace-nowrap"
           >
             <Plus className="w-4 h-4 shrink-0" /> Add Credit
           </button>
           <button
             onClick={openAddDebt}
-            className="h-9 px-3 sm:px-4 bg-rose-600 text-white font-bold rounded-lg hover:bg-rose-700 transition-colors shadow-sm flex items-center justify-center gap-1.5 text-xs sm:text-sm whitespace-nowrap"
+            className="order-first sm:order-5 h-10 sm:h-9 px-3 sm:px-4 bg-rose-600 text-white font-bold rounded-lg hover:bg-rose-700 transition-colors shadow-sm flex items-center justify-center gap-1.5 text-xs sm:text-sm whitespace-nowrap"
           >
             <Plus className="w-4 h-4 shrink-0" /> Add Debt
           </button>
@@ -784,7 +784,7 @@ export function Transactions() {
         {/* Credit Table */}
         <div className="bg-card border border-border/50 rounded-2xl shadow-sm flex flex-col h-full min-w-0">
           <div className="p-3 sm:p-4 border-b border-border/50 flex flex-wrap justify-between items-center gap-3 bg-emerald-500/5 rounded-t-2xl">
-            <div className="flex gap-3 items-center">
+            <div className="flex gap-3 items-center min-w-0 flex-1 basis-56">
               <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
                 <ArrowDownLeft className="w-5 h-5" />
               </div>
@@ -795,7 +795,7 @@ export function Transactions() {
             </div>
             <button
               onClick={openAddCredit}
-              className="px-4 py-2 bg-primary text-primary-foreground font-bold rounded-lg hover:bg-primary/90 transition-colors shadow-sm flex items-center gap-2 text-sm shrink-0"
+              className="px-4 py-2 bg-primary text-primary-foreground font-bold rounded-lg hover:bg-primary/90 transition-colors shadow-sm flex items-center justify-center gap-2 text-sm shrink-0 w-full sm:w-auto"
             >
               <Plus className="w-4 h-4" /> Add Credit
             </button>
@@ -887,7 +887,7 @@ export function Transactions() {
         {/* Debt Table */}
         <div className="bg-card border border-border/50 rounded-2xl shadow-sm flex flex-col h-full min-w-0">
           <div className="p-3 sm:p-4 border-b border-border/50 flex flex-wrap justify-between items-center gap-3 bg-rose-500/5 rounded-t-2xl">
-            <div className="flex gap-3 items-center">
+            <div className="flex gap-3 items-center min-w-0 flex-1 basis-56">
               <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-sm">
                 <ArrowUpRight className="w-5 h-5" />
               </div>
@@ -898,7 +898,7 @@ export function Transactions() {
             </div>
             <button
               onClick={openAddDebt}
-              className="px-4 py-2 bg-rose-600 text-white font-bold rounded-lg hover:bg-rose-700 transition-colors shadow-sm flex items-center gap-2 text-sm shrink-0"
+              className="px-4 py-2 bg-rose-600 text-white font-bold rounded-lg hover:bg-rose-700 transition-colors shadow-sm flex items-center justify-center gap-2 text-sm shrink-0 w-full sm:w-auto"
             >
               <Plus className="w-4 h-4" /> Add Debt
             </button>

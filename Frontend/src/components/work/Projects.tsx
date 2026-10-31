@@ -5448,15 +5448,15 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   <div className="space-y-6">
                     {/* 1. Marketing Team Assignees (Multi-Select) */}
                     <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-base">📈</span>
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="flex items-start gap-2 min-w-0 flex-1 basis-56">
+                          <span className="text-base shrink-0 leading-tight">📈</span>
                           <div>
                             <h3 className="text-sm font-black text-foreground">Digital Marketing Operations (Multi-Select)</h3>
                             <p className="text-[11px] text-muted-foreground">Select one or more marketing specialists who manage campaigns & leads</p>
                           </div>
                         </div>
-                        <span className="text-xs font-bold text-primary px-2.5 py-0.5 rounded-full bg-primary/10 border border-primary/20">
+                        <span className="text-xs font-bold whitespace-nowrap shrink-0 text-primary px-2.5 py-0.5 rounded-full bg-primary/10 border border-primary/20">
                           {assigningMarketingAssignees.length} Selected
                         </span>
                       </div>
@@ -5501,15 +5501,15 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
                     {/* 2. Finance Manager Roles (Multi-Select) */}
                     <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-base">💰</span>
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="flex items-start gap-2 min-w-0 flex-1 basis-56">
+                          <span className="text-base shrink-0 leading-tight">💰</span>
                           <div>
                             <h3 className="text-sm font-black text-foreground">Finance & Payment Management (Multi-Select)</h3>
                             <p className="text-[11px] text-muted-foreground">Select team members who have permission to view & manage finance logs</p>
                           </div>
                         </div>
-                        <span className="text-xs font-bold text-emerald-600 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                        <span className="text-xs font-bold whitespace-nowrap shrink-0 text-emerald-600 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
                           {assigningFinanceAssignees.length} Selected
                         </span>
                       </div>
@@ -6517,24 +6517,26 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
       return (
         <>
-          <div className="w-full space-y-8 animate-in fade-in duration-500">
+          <div className="w-full space-y-5 sm:space-y-8 animate-in fade-in duration-500">
             {/* Detail View Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <div className="flex items-center gap-3 sm:gap-4 min-w-0 w-full md:w-auto">
+            <div className="flex flex-wrap justify-between items-center gap-x-4 gap-y-3">
+              <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1 basis-[20rem]">
+                <div className="flex flex-row items-center gap-2.5 sm:gap-4 shrink-0">
                 <button
                   onClick={() => {
                     setSelectedProjectId(null);
                     setSelectedClientId(null);
                   }}
-                  className="p-2.5 bg-card border border-border/60 rounded-xl hover:bg-muted/80 hover:text-primary transition-colors shadow-sm group"
+                  className="p-2 sm:p-2.5 bg-card border border-border/60 rounded-xl hover:bg-muted/80 hover:text-primary transition-colors shadow-sm group"
                   title="Back to Projects"
                 >
                   <ArrowLeft className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
                 </button>
                 {/* K5: highlighted client logo — project ni odakh logo uparthi */}
-                <BrandLogo src={client.logo} alt={client.name} size="w-14 h-14 sm:w-20 sm:h-20 shrink-0" />
-                <div className="min-w-0">
-                  <h1 className="text-xl sm:text-3xl font-black tracking-tight text-foreground leading-tight break-words">
+                <BrandLogo src={client.logo} alt={client.name} size="w-16 h-16 sm:w-20 sm:h-20 shrink-0" />
+                </div>
+                <div className="min-w-0 flex-1 flex flex-col justify-center">
+                  <h1 className="text-[clamp(1rem,0.55rem+1.6vw,1.875rem)] font-black tracking-tight text-foreground leading-tight break-words">
                     {project.name}{client?.companyName && client.companyName !== project.name ? ` (${client.companyName})` : ""}
                   </h1>
                   <div className="flex flex-wrap items-center gap-2 mt-2">
@@ -6550,7 +6552,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 w-full md:w-auto [&>button]:whitespace-nowrap [&>button]:px-3 [&>button]:py-1.5 sm:[&>button]:px-3.5 sm:[&>button]:py-2">
+              <div className="flex flex-wrap items-center justify-end flex-grow max-w-full gap-1.5 sm:gap-2 [&>button]:whitespace-nowrap [&>button]:flex-1 [&>button]:justify-center sm:[&>button]:flex-none [&>button]:px-3 [&>button]:py-2 sm:[&>button]:px-3.5">
                 {/* WhatsApp Group Link */}
                 <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-1 shadow-sm">
                   <button
@@ -6698,7 +6700,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
             {/* K13: Quick Links — brand na badha shortcuts ek j jagyae (go-to) (Hidden for Digital Marketing) */}
             {!isMarketingCategory(project.category) && (
-              <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar pb-1 [&>*]:shrink-0 [&>button]:whitespace-nowrap">
+              <div className="hidden md:flex items-center gap-2 overflow-x-auto hide-scrollbar pb-1 [&>*]:shrink-0 [&>button]:whitespace-nowrap">
                 <span className="text-[11px] font-black text-muted-foreground uppercase tracking-widest mr-1">Quick Links:</span>
                 {project.whatsapp_group_link ? (
                   <button
@@ -6957,7 +6959,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 />
               </div>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 xl:gap-8">
                 {(isSocialMediaCategory(project.category) && (!isMarketingCategory(project.category) || dmWorkspaceView === "social")) ? (() => {
                   const projectCalendar: CalendarItem[] = project.contentCalendar || [];
                   const now = new Date();
@@ -8488,7 +8490,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 })() : (
                   <>
                     {/* Left Col: Tasks / Kanban */}
-                    <div className="lg:col-span-2 space-y-6">
+                    <div className="xl:col-span-2 min-w-0 space-y-6">
                       {isDevCategory(project.category) ? (() => {
                         const projectModules: NonNullable<Project['modules']> = project.modules || [];
                         const activeModule = projectModules.find(m => m.id === selectedModuleId) || projectModules[0];
@@ -8732,13 +8734,13 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         return (
                           <div className="space-y-6 animate-in fade-in duration-300">
                             {/* Modules Header */}
-                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                              <div>
-                                <h2 className="text-xl font-bold tracking-tight">Module-wise Kanban</h2>
+                            <div className="flex flex-wrap justify-between items-center gap-x-4 gap-y-3">
+                              <div className="min-w-0">
+                                <h2 className="text-lg sm:text-xl font-bold tracking-tight">Module-wise Kanban</h2>
                                 <p className="text-xs text-muted-foreground mt-1">Drag and drop tasks across project status columns</p>
                               </div>
 
-                              <div className="flex gap-2 shrink-0">
+                              <div className="flex flex-wrap gap-2">
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -9564,16 +9566,16 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         );
                       })()}
                     </div>
-                    <div className="space-y-6">
-                      <h2 className="text-xl font-bold tracking-tight">Team Members</h2>
-                      <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-sm space-y-4">
+                    <div className="space-y-4 sm:space-y-6 min-w-0">
+                      <h2 className="text-lg sm:text-xl font-bold tracking-tight">Team Members</h2>
+                      <div className="bg-card border border-border/60 rounded-3xl p-4 sm:p-6 shadow-sm grid grid-cols-1 min-[560px]:grid-cols-2 xl:grid-cols-1 gap-3 sm:gap-4">
                         {project.team.map((member, i) => (
-                          <div key={i} className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl overflow-hidden bg-muted">
+                          <div key={i} className="flex items-center gap-3 min-w-0">
+                            <div className="w-10 h-10 rounded-xl overflow-hidden bg-muted shrink-0">
                               <img src={member.avatar} alt={member.name} className="w-full h-full object-cover" />
                             </div>
-                            <div>
-                              <p className="font-bold text-foreground text-sm">{member.name}</p>
+                            <div className="min-w-0">
+                              <p className="font-bold text-foreground text-sm truncate">{member.name}</p>
                               <p className="text-xs text-muted-foreground">Team Member</p>
                             </div>
                           </div>
@@ -9944,14 +9946,13 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 <div className="absolute inset-0 bg-black/80" />
                 {/* Modal Panel */}
                 <div
-                  className="relative z-10 w-[calc(100%-2rem)] max-w-[700px] bg-card border border-border/60 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden"
-                  style={{ height: '550px' }}
+                  className="relative z-10 w-[calc(100%-1rem)] sm:w-[calc(100%-2rem)] max-w-[700px] h-[92dvh] md:h-[550px] bg-card border border-border/60 rounded-2xl sm:rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden"
                   onClick={(e) => e.stopPropagation()}
                 >
                   {/* Header */}
-                  <div className="flex items-center justify-between px-8 py-6 border-b border-border/50 bg-muted/30 shrink-0">
-                    <div>
-                      <h2 className="text-xl md:text-2xl font-black tracking-tight">{editingCalendarItem ? "Edit Content Idea" : "New Content Idea"}</h2>
+                  <div className="flex items-start sm:items-center justify-between gap-3 px-4 sm:px-8 py-4 sm:py-6 border-b border-border/50 bg-muted/30 shrink-0">
+                    <div className="min-w-0">
+                      <h2 className="text-lg sm:text-xl md:text-2xl font-black tracking-tight">{editingCalendarItem ? "Edit Content Idea" : "New Content Idea"}</h2>
                       <p className="text-xs text-muted-foreground mt-1">Configure SMM posting slots, pipeline assets and approvals</p>
                     </div>
                     <button
@@ -9962,9 +9963,9 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     </button>
                   </div>
                   {/* Body */}
-                  <div className="flex flex-row overflow-hidden flex-1">
+                  <div className="flex flex-col md:flex-row overflow-hidden flex-1 min-h-0">
                     {/* Sidebar Tabs */}
-                    <div className="w-44 shrink-0 border-r border-border/50 bg-muted/20 p-3 flex flex-col gap-1 overflow-y-auto">
+                    <div className="w-full md:w-44 shrink-0 md:border-r border-b md:border-b-0 border-border/50 bg-muted/20 p-2 md:p-3 flex flex-row md:flex-col gap-1.5 md:gap-1 overflow-x-auto md:overflow-x-visible md:overflow-y-auto">
                       {([
                         { id: 'general', label: 'General Info', icon: <FileText className="w-4 h-4" /> },
                         { id: 'production', label: 'Production', icon: <Video className="w-4 h-4" /> },
@@ -9974,7 +9975,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                           key={tab.id}
                           onClick={() => setActiveCalendarTab(tab.id)}
                           className={cn(
-                            "flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold transition-all text-left w-full",
+                            "flex items-center gap-2.5 px-3 py-2 md:py-2.5 rounded-xl text-sm font-bold transition-all text-left md:w-full whitespace-nowrap shrink-0",
                             activeCalendarTab === tab.id
                               ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20"
                               : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -9986,7 +9987,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       ))}
                     </div>
                     {/* Tab Contents */}
-                    <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-5">
+                    <div className="flex-1 min-w-0 overflow-y-auto p-4 sm:p-6 md:p-8 space-y-5">
                       {activeCalendarTab === 'general' && (
                         <>
                           <div className="grid grid-cols-2 gap-4">
@@ -10056,7 +10057,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                           </div>
                           {/* Issues List inside Full Edit Modal */}
                           {editingCalendarItem && currentSelectedProject && (
-                            <div className="space-y-2 p-4 bg-rose-500/5 rounded-2xl border border-rose-500/20">
+                            <div className="space-y-2 p-3 sm:p-4 bg-rose-500/5 rounded-2xl border border-rose-500/20">
                               <h4 className="text-[10px] font-bold text-rose-600 uppercase tracking-wider block mb-1">Active Issues ({(calendarForm.issues || []).length})</h4>
                               <div className="space-y-1.5 max-h-[100px] overflow-y-auto pr-1">
                                 {((calendarForm.issues || [])).map((issue: any) => (
@@ -10075,7 +10076,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                   type="text"
                                   placeholder="Log a new issue..."
                                   id="modal_new_issue_input"
-                                  className="flex-1 px-3 py-1.5 bg-background border border-border/50 rounded-xl text-xs focus:outline-none font-semibold text-foreground"
+                                  className="flex-1 min-w-0 px-3 py-1.5 bg-background border border-border/50 rounded-xl text-xs focus:outline-none font-semibold text-foreground"
                                 />
                                 <button
                                   type="button"
@@ -10097,7 +10098,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                       input.value = "";
                                     }
                                   }}
-                                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl transition-colors shadow-sm"
+                                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl transition-colors shadow-sm shrink-0"
                                 >
                                   Log
                                 </button>
@@ -10341,7 +10342,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     </div>
                   </div>
                   {/* Footer */}
-                  <div className="px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
+                  <div className="px-4 sm:px-8 py-3 sm:py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-2 sm:gap-3 shrink-0">
                     <button onClick={() => { setIsAddCalendarItemModalOpen(false); setEditingCalendarItem(null); }} className="px-4 py-2 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors">Cancel</button>
                     <button
                       onClick={async () => {
@@ -11170,16 +11171,16 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 <div className="absolute inset-0 bg-black/80" />
                 {/* Modal Panel */}
                 <div
-                  className="relative z-10 w-[calc(100%-2rem)] max-w-[500px] bg-card border border-border/60 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden"
+                  className="relative z-10 w-[calc(100%-1.5rem)] sm:w-[calc(100%-2rem)] max-w-[500px] max-h-[92dvh] bg-card border border-border/60 rounded-3xl sm:rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden"
                   onClick={(e) => e.stopPropagation()}
                 >
                   {/* Header */}
-                  <div className="flex items-center justify-between px-8 py-6 border-b border-border/50 bg-muted/30 shrink-0">
-                    <div>
-                      <h2 className="text-lg font-black tracking-tight">Load Modules from Preset</h2>
+                  <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-8 py-4 sm:py-6 pr-14 sm:pr-8 border-b border-border/50 bg-muted/30 shrink-0">
+                    <div className="min-w-0">
+                      <h2 className="text-base sm:text-lg font-black tracking-tight">Load Modules from Preset</h2>
                       <p className="text-xs text-muted-foreground mt-1">Select a development template checklist to append</p>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 sm:static">
                       <button
                         onClick={() => {
                           setNewPresetForm({
@@ -11189,24 +11190,24 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                           });
                           setIsCreatePresetModalOpen(true);
                         }}
-                        className="px-3 py-1.5 bg-primary text-primary-foreground text-xs font-bold rounded-xl shadow-md hover:bg-primary/90 flex items-center gap-1"
+                        className="px-3 py-2 bg-primary text-primary-foreground text-xs font-bold rounded-xl shadow-md hover:bg-primary/90 flex items-center gap-1 whitespace-nowrap"
                       >
                         <Plus className="w-3.5 h-3.5" /> Create Template
                       </button>
                       <button
                         onClick={() => setIsPresetsModalOpen(false)}
-                        className="p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
+                        className="absolute top-3 right-3 sm:static p-2 text-muted-foreground hover:text-foreground/80 hover:bg-muted rounded-full transition-colors"
                       >
                         <X className="w-5 h-5" />
                       </button>
                     </div>
                   </div>
                   {/* Body */}
-                  <div className="p-8 space-y-4 max-h-[60vh] overflow-y-auto">
+                  <div className="p-4 sm:p-8 space-y-3 sm:space-y-4 flex-1 min-h-0 overflow-y-auto">
                     {presets.map((preset, index) => (
                       <div
                         key={index}
-                        className="p-5 border border-border/50 rounded-[2rem] hover:border-primary/30 bg-muted/20 hover:bg-muted/30 transition-all flex flex-col justify-between gap-4"
+                        className="p-4 sm:p-5 border border-border/50 rounded-3xl sm:rounded-[2rem] hover:border-primary/30 bg-muted/20 hover:bg-muted/30 transition-all flex flex-col justify-between gap-4"
                       >
                         <div>
                           <h3 className="text-sm font-bold text-foreground">⚙️ {preset.name}</h3>
@@ -11214,14 +11215,14 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
                           <div className="mt-3 flex flex-wrap gap-1.5">
                             {preset.modules.map((m: any, idx: number) => (
-                              <span key={idx} className="text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-lg">
+                              <span key={idx} className="text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-lg max-w-full break-words">
                                 📦 {m.name} ({m.tasks.length} tasks)
                               </span>
                             ))}
                           </div>
                         </div>
 
-                        <div className="flex justify-between items-center mt-2">
+                        <div className="flex flex-wrap justify-between items-center gap-2 mt-2">
                           <button
                             type="button"
                             onClick={() => {
@@ -11236,14 +11237,14 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                 }
                               });
                             }}
-                            className="text-xs font-bold text-rose-500 hover:text-rose-600 px-3 py-1.5 rounded-xl hover:bg-rose-500/10 transition-all"
+                            className="text-xs font-bold text-rose-500 hover:text-rose-600 px-3 py-2 rounded-xl hover:bg-rose-500/10 transition-all whitespace-nowrap"
                           >
                             Delete Template
                           </button>
                           <button
                             type="button"
                             onClick={() => handleApplyPreset(preset)}
-                            className="px-4 py-2 bg-primary text-primary-foreground text-xs font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all"
+                            className="px-4 py-2 bg-primary text-primary-foreground text-xs font-bold rounded-xl shadow-md hover:bg-primary/90 transition-all whitespace-nowrap"
                           >
                             Apply Template
                           </button>
@@ -11253,7 +11254,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   </div>
 
                   {/* Footer */}
-                  <div className="px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end shrink-0">
+                  <div className="px-4 sm:px-8 py-3 sm:py-4 bg-muted/30 border-t border-border/50 flex justify-end shrink-0">
                     <button
                       type="button"
                       onClick={() => setIsPresetsModalOpen(false)}
@@ -11369,13 +11370,13 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 <div className="absolute inset-0 bg-black/80" />
                 {/* Modal Panel */}
                 <div
-                  className="relative z-10 w-[calc(100%-2rem)] max-w-[500px] bg-card border border-border/60 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden"
+                  className="relative z-10 w-[calc(100%-1.5rem)] sm:w-[calc(100%-2rem)] max-w-[500px] max-h-[92dvh] bg-card border border-border/60 rounded-3xl sm:rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden"
                   onClick={(e) => e.stopPropagation()}
                 >
                   {/* Header */}
-                  <div className="flex items-center justify-between px-8 py-6 border-b border-border/50 bg-muted/30 shrink-0">
-                    <div>
-                      <h2 className="text-lg font-black tracking-tight">Create Preset Template</h2>
+                  <div className="flex items-start sm:items-center justify-between gap-3 px-4 sm:px-8 py-4 sm:py-6 border-b border-border/50 bg-muted/30 shrink-0">
+                    <div className="min-w-0">
+                      <h2 className="text-base sm:text-lg font-black tracking-tight">Create Preset Template</h2>
                       <p className="text-xs text-muted-foreground mt-1">Define custom reusable project modules & tasks checklist</p>
                     </div>
                     <button
@@ -11386,8 +11387,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     </button>
                   </div>
                   {/* Body */}
-                  <form onSubmit={handleSavePresetTemplate}>
-                    <div className="p-8 space-y-4 max-h-[60vh] overflow-y-auto">
+                  <form onSubmit={handleSavePresetTemplate} className="flex flex-col flex-1 min-h-0">
+                    <div className="p-4 sm:p-8 space-y-4 flex-1 min-h-0 overflow-y-auto">
                       <div>
                         <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Template Name <span className="text-rose-500">*</span></label>
                         <input
@@ -11425,7 +11426,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         </div>
 
                         {newPresetForm.modules.map((m, mIdx) => (
-                          <div key={mIdx} className="p-4 border border-border/50 rounded-2xl bg-muted/10 space-y-3">
+                          <div key={mIdx} className="p-3 sm:p-4 border border-border/50 rounded-2xl bg-muted/10 space-y-3">
                             <div className="flex justify-between items-center gap-2">
                               <input
                                 type="text"
@@ -11433,20 +11434,20 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                 placeholder="Module Name (e.g. Profile Setup)"
                                 value={m.name}
                                 onChange={(e) => updateModuleName(mIdx, e.target.value)}
-                                className="px-2.5 py-1.5 bg-card border border-border/50 rounded-xl text-xs focus:outline-none font-bold flex-1"
+                                className="px-2.5 py-2 bg-card border border-border/50 rounded-xl text-xs focus:outline-none font-bold flex-1 min-w-0"
                               />
                               {newPresetForm.modules.length > 1 && (
                                 <button
                                   type="button"
                                   onClick={() => removeModule(mIdx)}
-                                  className="text-xs text-rose-500 hover:text-rose-600 font-bold px-1.5"
+                                  className="text-xs text-rose-500 hover:text-rose-600 font-bold px-1.5 py-1 shrink-0"
                                 >
                                   Remove
                                 </button>
                               )}
                             </div>
 
-                            <div className="space-y-2 pl-4 border-l-2 border-border/30">
+                            <div className="space-y-2 pl-3 sm:pl-4 border-l-2 border-border/30">
                               <div className="flex justify-between items-center">
                                 <span className="text-[10px] font-bold text-muted-foreground">Tasks</span>
                                 <button
@@ -11466,13 +11467,13 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                     placeholder={`Task #${tIdx + 1} title`}
                                     value={t}
                                     onChange={(e) => updateTaskVal(mIdx, tIdx, e.target.value)}
-                                    className="px-2.5 py-1 bg-card border border-border/30 rounded-lg text-xs focus:outline-none font-semibold flex-1"
+                                    className="px-2.5 py-1.5 bg-card border border-border/30 rounded-lg text-xs focus:outline-none font-semibold flex-1 min-w-0"
                                   />
                                   {m.tasks.length > 1 && (
                                     <button
                                       type="button"
                                       onClick={() => removeTask(mIdx, tIdx)}
-                                      className="text-xs text-rose-500 hover:text-rose-600 font-bold px-1"
+                                      className="text-base leading-none text-rose-500 hover:text-rose-600 font-bold px-2 py-1 shrink-0"
                                     >
                                       &times;
                                     </button>
@@ -11486,7 +11487,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     </div>
 
                     {/* Footer */}
-                    <div className="px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
+                    <div className="px-4 sm:px-8 py-3 sm:py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-2 sm:gap-3 shrink-0">
                       <button
                         type="button"
                         onClick={() => setIsCreatePresetModalOpen(false)}
@@ -12342,11 +12343,11 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             </DialogContent>
           </Dialog>
           <Dialog open={isEditProjectModalOpen} onOpenChange={setIsEditProjectModalOpen}>
-            <DialogContent className="max-w-[90vw] md:max-w-[700px] p-0 overflow-hidden rounded-[2.5rem] border-border/60 shadow-2xl [&>button]:hidden bg-card flex flex-col h-[90vh] md:h-[550px] gap-0">
-              <div className="p-6 pb-4">
-                <div className="flex items-center justify-between px-6 md:px-8 py-6 border-b border-border/50 bg-muted/30">
-                  <div>
-                    <h2 className="text-xl md:text-2xl font-black tracking-tight">Edit Project</h2>
+            <DialogContent className="w-[calc(100vw-1rem)] sm:w-full max-w-[700px] p-0 overflow-hidden rounded-2xl sm:rounded-[2.5rem] border-border/60 shadow-2xl [&>button]:hidden bg-card flex flex-col h-[92dvh] md:h-[550px] gap-0">
+              <div className="p-2 sm:p-6 pb-2 sm:pb-4 shrink-0">
+                <div className="flex items-start sm:items-center justify-between gap-3 px-4 md:px-8 py-4 sm:py-6 border-b border-border/50 bg-muted/30 rounded-xl sm:rounded-none">
+                  <div className="min-w-0">
+                    <h2 className="text-lg sm:text-xl md:text-2xl font-black tracking-tight">Edit Project</h2>
                     <p className="text-xs text-muted-foreground mt-1">Modify project details, stats targets, and budgets</p>
                   </div>
                   <DialogClose asChild>
@@ -12357,9 +12358,9 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 </div>
               </div>
               {editingProject && (
-                <div className="flex flex-row overflow-hidden flex-1" style={{ maxHeight: 'calc(90vh - 130px)' }}>
+                <div className="flex flex-col md:flex-row overflow-hidden flex-1 min-h-0">
                   {/* Sidebar Tabs */}
-                  <div className="w-44 shrink-0 border-r border-border/50 bg-muted/20 p-3 flex flex-col gap-1 overflow-y-auto">
+                  <div className="w-full md:w-44 shrink-0 md:border-r border-b md:border-b-0 border-border/50 bg-muted/20 p-2 md:p-3 flex flex-row md:flex-col gap-1.5 md:gap-1 overflow-x-auto md:overflow-x-visible md:overflow-y-auto">
                     {([
                       { id: 'general', label: 'General', icon: <FolderGit2 className="w-4 h-4" /> },
                       { id: 'finance', label: 'Finance', icon: <IndianRupee className="w-4 h-4" /> },
@@ -12369,7 +12370,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         key={tab.id}
                         onClick={() => setActiveProjectTab(tab.id)}
                         className={cn(
-                          "flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold transition-all text-left w-full",
+                          "flex items-center gap-2.5 px-3 py-2 md:py-2.5 rounded-xl text-sm font-bold transition-all text-left md:w-full whitespace-nowrap shrink-0",
                           activeProjectTab === tab.id
                             ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20"
                             : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -12382,7 +12383,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   </div>
 
                   {/* Tab Content */}
-                  <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-5">
+                  <div className="flex-1 min-w-0 overflow-y-auto p-4 sm:p-6 md:p-8 space-y-5">
                     {activeProjectTab === 'general' && (
                       <>
                         <div className="space-y-2">
@@ -12948,20 +12949,20 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
     return (
       <>
-        <div className="w-full space-y-8 animate-in fade-in duration-500">
+        <div className="w-full space-y-5 sm:space-y-8 animate-in fade-in duration-500">
           {/* Detail View Header */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div className="flex items-center gap-4">
+          <div className="flex flex-wrap justify-between items-center gap-x-4 gap-y-3">
+            <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1 basis-[20rem]">
               <button
                 onClick={() => setSelectedClientId(null)}
-                className="p-2.5 bg-card border border-border/60 rounded-xl hover:bg-muted/80 hover:text-primary transition-colors shadow-sm group"
+                className="p-2 sm:p-2.5 shrink-0 bg-card border border-border/60 rounded-xl hover:bg-muted/80 hover:text-primary transition-colors shadow-sm group"
               >
                 <ArrowLeft className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
               </button>
               {/* K5: highlighted logo */}
-              <BrandLogo src={client.logo} alt={client.name} size="w-20 h-20" />
-              <div>
-                <h1 className="text-3xl font-black tracking-tight text-foreground leading-tight">{client.name}</h1>
+              <BrandLogo src={client.logo} alt={client.name} size="w-16 h-16 sm:w-20 sm:h-20 shrink-0" />
+              <div className="min-w-0">
+                <h1 className="text-[clamp(1.25rem,0.7rem+1.6vw,1.875rem)] font-black tracking-tight text-foreground leading-tight break-words">{client.name}</h1>
                 <span className="px-2 py-0.5 mt-1 inline-flex text-[10px] font-bold uppercase tracking-widest rounded-lg items-center gap-1.5 text-primary bg-primary/10">
                   <Circle className="w-1.5 h-1.5 fill-current" />
                   {client.status} Client
@@ -12969,12 +12970,12 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:justify-end sm:flex-grow items-center gap-2 sm:gap-3 w-full sm:w-auto max-w-full [&>button]:justify-center [&>button]:whitespace-nowrap">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-2 px-4 py-2.5 bg-card border border-border/60 text-foreground font-bold text-sm rounded-xl hover:bg-muted/80 transition-all shadow-sm">
+                  <button className="flex items-center justify-center gap-2 px-4 py-2.5 w-full sm:w-auto whitespace-nowrap bg-card border border-border/60 text-foreground font-bold text-sm rounded-xl hover:bg-muted/80 transition-all shadow-sm">
                     <Filter className="w-4 h-4 text-muted-foreground" />
-                    <span className="hidden sm:inline">Filter</span>
+                    <span>Filter</span>
                     {(projectFilterStatuses.length > 0 || projectFilterCategories.length > 0) && (
                       <span className="w-2 h-2 rounded-full bg-primary ml-1"></span>
                     )}
@@ -13039,7 +13040,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               {canCreateProject && (
                 <button onClick={() => setIsNewProjectModalOpen(true)} className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground font-bold text-sm rounded-xl hover:bg-primary/90 transition-all shadow-sm">
                   <Plus className="w-4 h-4" />
-                  <span className="hidden sm:inline">New Project</span>
+                  <span>New Project</span>
                 </button>
               )}
 
@@ -13058,12 +13059,12 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   {client.status === "Archived" ? (
                     <>
                       <ArchiveRestore className="w-3.5 h-3.5 text-emerald-600" />
-                      <span className="hidden sm:inline">Unarchive</span>
+                      <span>Unarchive</span>
                     </>
                   ) : (
                     <>
                       <Archive className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Archive</span>
+                      <span>Archive</span>
                     </>
                   )}
                 </button>
@@ -13077,52 +13078,52 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   title="Delete client and all projects permanently"
                 >
                   <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                  <span className="hidden sm:inline">Delete</span>
+                  <span>Delete</span>
                 </button>
               )}
             </div>
           </div>
 
           {/* Summary Section */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
-            <div className="bg-card border border-border/60 rounded-3xl p-5 flex flex-col justify-center shadow-sm">
-              <div className="flex items-center gap-3 mb-2">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
+            <div className="min-w-0 bg-card border border-border/60 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 flex flex-col justify-center shadow-sm">
+              <div className="flex items-center gap-2 sm:gap-3 mb-2">
                 <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
                   <FolderGit2 className="w-4 h-4" />
                 </div>
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Total Projects</p>
               </div>
-              <h3 className="text-2xl font-black text-foreground font-mono">{clientProjects.length}</h3>
+              <h3 className="text-lg sm:text-2xl font-black text-foreground font-mono break-words">{clientProjects.length}</h3>
             </div>
-            <div className="bg-card border border-border/60 rounded-3xl p-5 flex flex-col justify-center shadow-sm">
-              <div className="flex items-center gap-3 mb-2">
+            <div className="min-w-0 bg-card border border-border/60 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 flex flex-col justify-center shadow-sm">
+              <div className="flex items-center gap-2 sm:gap-3 mb-2">
                 <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
                   <IndianRupee className="w-4 h-4" />
                 </div>
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Total Budget</p>
               </div>
-              <h3 className="text-2xl font-black text-foreground font-mono">{client.totalBudget}</h3>
+              <h3 className="text-lg sm:text-2xl font-black text-foreground font-mono break-words">{client.totalBudget}</h3>
             </div>
-            <div className="bg-card border border-border/60 rounded-3xl p-5 flex flex-col justify-center shadow-sm">
-              <div className="flex items-center gap-3 mb-2">
+            <div className="min-w-0 bg-card border border-border/60 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 flex flex-col justify-center shadow-sm">
+              <div className="flex items-center gap-2 sm:gap-3 mb-2">
                 <div className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center shrink-0">
                   <TrendingUp className="w-4 h-4" />
                 </div>
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Outstanding</p>
               </div>
-              <h3 className="text-2xl font-black text-foreground font-mono">{client.outstandingPayment}</h3>
+              <h3 className="text-lg sm:text-2xl font-black text-foreground font-mono break-words">{client.outstandingPayment}</h3>
             </div>
-            <div className="bg-card border border-border/60 rounded-3xl p-5 flex flex-col justify-center shadow-sm">
-              <div className="flex items-center gap-3 mb-2">
+            <div className="min-w-0 bg-card border border-border/60 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 flex flex-col justify-center shadow-sm">
+              <div className="flex items-center gap-2 sm:gap-3 mb-2">
                 <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
                   <Calendar className="w-4 h-4" />
                 </div>
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Onboarded</p>
               </div>
-              <h3 className="text-2xl font-black text-foreground font-mono">{safeFormat(client.onboardingDate, "dd/MM/yyyy")}</h3>
+              <h3 className="text-lg sm:text-2xl font-black text-foreground font-mono break-words">{safeFormat(client.onboardingDate, "dd/MM/yyyy")}</h3>
             </div>
-            <div className="bg-card border border-border/60 rounded-3xl p-5 flex flex-col justify-center shadow-sm">
-              <div className="flex items-center gap-3 mb-2">
+            <div className="col-span-2 md:col-span-1 min-w-0 bg-card border border-border/60 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 flex flex-col justify-center shadow-sm">
+              <div className="flex items-center gap-2 sm:gap-3 mb-2">
                 <div className="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center shrink-0">
                   <Users className="w-4 h-4" />
                 </div>
@@ -13141,7 +13142,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           {/* Projects Grid for this Client */}
           <div>
             <h2 className="text-xl font-bold tracking-tight mb-4">Projects</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 min-[720px]:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
               {clientProjects.map((project) => (
                 <div
                   key={project.id}
@@ -13152,7 +13153,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     }
                     setSelectedProjectId(project.id);
                   }}
-                  className="group bg-card border border-border/60 rounded-3xl p-6 shadow-sm hover:shadow-xl hover:-translate-y-1 hover:border-primary/30 transition-all duration-300 relative overflow-hidden flex flex-col h-full cursor-pointer"
+                  className="group bg-card border border-border/60 rounded-3xl p-4 sm:p-6 shadow-sm hover:shadow-xl hover:-translate-y-1 hover:border-primary/30 transition-all duration-300 relative overflow-hidden flex flex-col h-full cursor-pointer"
                 >
                   {/* Background Accent */}
                   <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none transition-opacity opacity-0 group-hover:opacity-100"></div>
@@ -13227,7 +13228,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   </div>
 
                   <div className="relative z-10 mb-4">
-                    <h3 className="text-xl font-black tracking-tight text-foreground line-clamp-2 leading-tight">{project.name}</h3>
+                    <h3 className="text-lg sm:text-xl font-black tracking-tight text-foreground line-clamp-2 leading-tight break-words">{project.name}</h3>
                   </div>
 
                   {/* Finance Info */}
@@ -13272,7 +13273,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   </div>
 
                   {/* Footer */}
-                  <div className="flex justify-between items-center pt-4 border-t border-border/40 relative z-10">
+                  <div className="flex flex-wrap justify-between items-center gap-3 pt-4 border-t border-border/40 relative z-10">
                     <div className="flex -space-x-2">
                       {project.team.slice(0, 3).map((member, i) => (
                         <div key={i} className="w-8 h-8 rounded-full border-2 border-card overflow-hidden bg-muted relative shadow-sm">
@@ -13310,9 +13311,9 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           </div>
           {/* New Project Modal */}
           <Dialog open={isNewProjectModalOpen} onOpenChange={(open) => { setIsNewProjectModalOpen(open); if (!open) { setActiveProjectTab('general'); setShowNewProjectErrors(false); } }}>
-            <DialogContent className="sm:max-w-[700px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card max-h-[90vh]">
+            <DialogContent className="w-[calc(100vw-1rem)] sm:w-full sm:max-w-[700px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card max-h-[92dvh] flex flex-col">
               {/* Header */}
-              <div className="flex items-center justify-between px-6 md:px-8 py-5 border-b border-border/50 bg-muted/30 shrink-0">
+              <div className="flex items-start sm:items-center justify-between gap-3 px-4 md:px-8 py-4 sm:py-5 shrink-0 border-b border-border/50 bg-muted/30 shrink-0">
                 <div>
                   <h2 className="text-xl md:text-2xl font-black tracking-tight">New Project</h2>
                   <p className="text-sm text-muted-foreground mt-0.5">Fill in the details to create a new project.</p>
@@ -13324,9 +13325,9 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 </DialogClose>
               </div>
               {/* Body: sidebar + content */}
-              <div className="flex flex-row overflow-hidden" style={{ maxHeight: 'calc(90vh - 130px)' }}>
+              <div className="flex flex-col md:flex-row overflow-hidden flex-1 min-h-0">
                 {/* Sidebar Tabs */}
-                <div className="w-44 shrink-0 border-r border-border/50 bg-muted/20 p-3 flex flex-col gap-1 overflow-y-auto">
+                <div className="w-full md:w-44 shrink-0 md:border-r border-b md:border-b-0 border-border/50 bg-muted/20 p-2 md:p-3 flex flex-row md:flex-col gap-1.5 md:gap-1 overflow-x-auto md:overflow-x-visible md:overflow-y-auto">
                   {([
                     { id: 'general', label: 'General', icon: <FolderGit2 className="w-4 h-4" /> },
                     { id: 'finance', label: 'Finance', icon: <IndianRupee className="w-4 h-4" /> },
@@ -13335,7 +13336,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       key={tab.id}
                       onClick={() => setActiveProjectTab(tab.id)}
                       className={cn(
-                        "flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold transition-all text-left w-full",
+                        "flex items-center gap-2.5 px-3 py-2 md:py-2.5 rounded-xl text-sm font-bold transition-all text-left md:w-full whitespace-nowrap shrink-0",
                         activeProjectTab === tab.id
                           ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20"
                           : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -13347,7 +13348,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   ))}
                 </div>
                 {/* Tab Content */}
-                <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-5">
+                <div className="flex-1 min-w-0 overflow-y-auto p-4 sm:p-6 md:p-8 space-y-5">
                   {activeProjectTab === 'general' && (
                     <>
                       <div className="space-y-2">
@@ -13767,11 +13768,11 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
           {/* Edit Project Modal */}
           <Dialog open={isEditProjectModalOpen} onOpenChange={setIsEditProjectModalOpen}>
-            <DialogContent className="max-w-[90vw] md:max-w-[700px] p-0 overflow-hidden rounded-[2.5rem] border-border/60 shadow-2xl [&>button]:hidden bg-card flex flex-col h-[90vh] md:h-[550px] gap-0">
-              <div className="p-6 pb-4">
-                <div className="flex items-center justify-between px-6 md:px-8 py-6 border-b border-border/50 bg-muted/30">
-                  <div>
-                    <h2 className="text-xl md:text-2xl font-black tracking-tight">Edit Project</h2>
+            <DialogContent className="w-[calc(100vw-1rem)] sm:w-full max-w-[700px] p-0 overflow-hidden rounded-2xl sm:rounded-[2.5rem] border-border/60 shadow-2xl [&>button]:hidden bg-card flex flex-col h-[92dvh] md:h-[550px] gap-0">
+              <div className="p-2 sm:p-6 pb-2 sm:pb-4 shrink-0">
+                <div className="flex items-start sm:items-center justify-between gap-3 px-4 md:px-8 py-4 sm:py-6 border-b border-border/50 bg-muted/30 rounded-xl sm:rounded-none">
+                  <div className="min-w-0">
+                    <h2 className="text-lg sm:text-xl md:text-2xl font-black tracking-tight">Edit Project</h2>
                     <p className="text-xs text-muted-foreground mt-1">Modify project details, stats targets, and budgets</p>
                   </div>
                   <DialogClose asChild>
@@ -13782,9 +13783,9 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 </div>
               </div>
               {editingProject && (
-                <div className="flex flex-row overflow-hidden flex-1" style={{ maxHeight: 'calc(90vh - 130px)' }}>
+                <div className="flex flex-col md:flex-row overflow-hidden flex-1 min-h-0">
                   {/* Sidebar Tabs */}
-                  <div className="w-44 shrink-0 border-r border-border/50 bg-muted/20 p-3 flex flex-col gap-1 overflow-y-auto">
+                  <div className="w-full md:w-44 shrink-0 md:border-r border-b md:border-b-0 border-border/50 bg-muted/20 p-2 md:p-3 flex flex-row md:flex-col gap-1.5 md:gap-1 overflow-x-auto md:overflow-x-visible md:overflow-y-auto">
                     {([
                       { id: 'general', label: 'General', icon: <FolderGit2 className="w-4 h-4" /> },
                       ...(canUserAccessFinance(editingProject) ? [{ id: 'finance' as const, label: 'Finance', icon: <IndianRupee className="w-4 h-4" /> }] : []),
@@ -13794,7 +13795,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         key={tab.id}
                         onClick={() => setActiveProjectTab(tab.id)}
                         className={cn(
-                          "flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold transition-all text-left w-full",
+                          "flex items-center gap-2.5 px-3 py-2 md:py-2.5 rounded-xl text-sm font-bold transition-all text-left md:w-full whitespace-nowrap shrink-0",
                           activeProjectTab === tab.id
                             ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20"
                             : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -13807,7 +13808,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   </div>
 
                   {/* Tab Content */}
-                  <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-5">
+                  <div className="flex-1 min-w-0 overflow-y-auto p-4 sm:p-6 md:p-8 space-y-5">
                     {activeProjectTab === 'general' && (
                       <>
                         <div className="space-y-2">
@@ -14350,7 +14351,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 w-full sm:w-auto whitespace-nowrap shrink-0 bg-card border border-border/60 text-foreground font-bold text-sm rounded-xl hover:bg-muted/80 transition-all shadow-sm">
+              <button className="flex items-center justify-center gap-2 px-2.5 sm:px-4 h-[42px] w-full sm:w-auto whitespace-nowrap shrink-0 bg-card border border-border/60 text-foreground font-bold text-sm rounded-xl hover:bg-muted/80 transition-all shadow-sm">
                 <Filter className="w-4 h-4 text-muted-foreground" />
                 <span>Filter & Sort</span>
                 {clientFilterCategories.length > 0 && (
@@ -14450,13 +14451,13 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           <button
             type="button"
             onClick={() => setIsPendingBrandsModalOpen(true)}
-            className="flex items-center justify-center gap-2 px-3 sm:px-3.5 py-2.5 w-full sm:w-auto whitespace-nowrap shrink-0 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-bold text-sm rounded-xl transition-all shadow-sm relative group"
+            className="flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 h-[42px] w-full sm:w-auto whitespace-nowrap shrink-0 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-bold text-sm rounded-xl transition-all shadow-sm relative group"
             title="Brands awaiting Creative Team assignment"
           >
             <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
-            <span>Pending Brands</span>
+            <span className="truncate">Pending Brands</span>
             {pendingProjects.length > 0 && (
-              <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-xs font-black shadow-sm">
+              <span className="min-w-[1.5rem] h-6 px-1.5 inline-flex items-center justify-center rounded-full bg-amber-500 text-white text-xs font-black leading-none shadow-sm">
                 {pendingProjects.length}
               </span>
             )}
@@ -14509,14 +14510,14 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       </div>
 
       {/* Category KPIs */}
-      <div className="flex flex-wrap gap-3 sm:gap-4 pt-2 sm:pt-4 pb-2">
+      <div className="grid grid-cols-2 min-[560px]:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6 gap-3 sm:gap-4 pt-2 sm:pt-4 pb-2">
         {categoryStats.map((stat, i) => (
-          <div key={i} className="flex-1 min-w-[140px] bg-card border border-border/60 rounded-3xl p-4 sm:p-5 shadow-sm flex flex-col justify-center transition-all hover:shadow-lg hover:-translate-y-1 relative overflow-hidden group">
+          <div key={i} className="min-w-0 bg-card border border-border/60 rounded-3xl p-3.5 sm:p-5 shadow-sm flex flex-col justify-center transition-all hover:shadow-lg hover:-translate-y-1 relative overflow-hidden group">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary/50 to-primary/20 opacity-0 group-hover:opacity-100 transition-opacity" />
             <div className="absolute -right-4 -bottom-4 w-16 h-16 bg-primary/5 rounded-full blur-2xl group-hover:bg-primary/10 transition-colors" />
             <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-2 truncate relative z-10" title={stat.category}>{stat.category}</p>
             <div className="flex items-baseline gap-1.5 relative z-10">
-              <p className="text-3xl font-black text-foreground tracking-tighter">{stat.count}</p>
+              <p className="text-2xl sm:text-3xl font-black text-foreground tracking-tighter">{stat.count}</p>
               <p className="text-[10px] font-medium text-muted-foreground mb-1 uppercase">{stat.unitLabel}</p>
             </div>
           </div>
@@ -14530,7 +14531,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             key={tab}
             onClick={() => selectTab(tab)}
             className={cn(
-              "px-5 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-300",
+              "px-4 sm:px-5 py-2 rounded-full text-sm font-bold whitespace-nowrap shrink-0 transition-all duration-300",
               activeTab === tab && !showBrandDivision
                 ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
                 : "bg-card text-foreground/70 hover:bg-muted/80 border border-border/40"
@@ -14542,7 +14543,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         <button
           onClick={() => setShowBrandDivision(v => !v)}
           className={cn(
-            "px-5 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-300",
+            "px-4 sm:px-5 py-2 rounded-full text-sm font-bold whitespace-nowrap shrink-0 transition-all duration-300",
             showBrandDivision
               ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
               : "bg-card text-foreground/70 hover:bg-muted/80 border border-dashed border-border/60"
@@ -14658,7 +14659,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           </div>
 
           {/* Members Brand Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4 sm:gap-6">
+          <div className="grid grid-cols-1 min-[720px]:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
             {brandDivisionData.map((item) => (
               <div
                 key={item.employee.id}
@@ -14715,7 +14716,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         </div>
 
                         {/* Contact & Open Actions */}
-                        <div className="flex items-center justify-between pt-1 border-t border-border/30 text-xs">
+                        <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-border/30 text-xs">
                           <div className="flex items-center gap-2">
                             {client?.phone && (
                               <a
@@ -14771,7 +14772,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         </div>
       ) : PROJECT_TABS.includes(activeTab) ? (
         /* K1: Projects Grid (Active / Archived) - Merged by client/brand in UI (Issue 6) */
-        <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4 sm:gap-6 pt-2 items-start">
+        <div className="grid grid-cols-1 min-[720px]:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 pt-2 items-start">
           {groupedProjects.map((group) => {
             const dp = getDateProgress(group.startDate, group.endDate);
             return (
@@ -14791,7 +14792,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
                 <div className="flex justify-between items-start gap-2 mb-5 relative z-10">
                   {/* K5: highlighted logo */}
-                  <BrandLogo src={group.client?.logo} alt={group.displayName} size="w-20 h-20" />
+                  <BrandLogo src={group.client?.logo} alt={group.displayName} size="w-16 h-16 sm:w-20 sm:h-20 shrink-0" />
                   <div className="flex flex-wrap justify-end items-center gap-1.5">
                     {/* Dynamic Finance button (K10 / Audio transcript [27:01]) */}
                     {canUserAccessFinance(group) && (
@@ -14875,7 +14876,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 </div>
 
                 <div className="relative z-10 mb-4">
-                  <h3 className="text-xl font-black tracking-tight text-foreground line-clamp-2 leading-tight group-hover:text-primary transition-colors">
+                  <h3 className="text-lg sm:text-xl font-black tracking-tight text-foreground line-clamp-2 leading-tight break-words group-hover:text-primary transition-colors">
                     {group.displayName}{group.client?.companyName && group.client.companyName !== group.displayName ? ` (${group.client.companyName})` : ""}
                   </h3>
                   <div className="flex flex-wrap items-center gap-2 mt-3">
@@ -15048,7 +15049,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       </div>
 
                       {/* Contact & Open Actions */}
-                      <div className="flex items-center justify-between pt-1 border-t border-border/30 text-xs">
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-border/30 text-xs">
                         <div className="flex items-center gap-2 min-w-0">
                           {group.client?.phone && (
                             <a
@@ -15139,7 +15140,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         </div>
       ) : (
         /* Clients Grid */
-        <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4 sm:gap-6 pt-2">
+        <div className="grid grid-cols-1 min-[720px]:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 pt-2">
           {filteredClients.map((client) => (
             <div
               key={client.id}
@@ -15156,11 +15157,11 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               {/* Background Accent */}
               <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-primary/[0.03] to-transparent rounded-t-[2rem] pointer-events-none transition-opacity opacity-0 group-hover:opacity-100"></div>
 
-              <div className="flex justify-between items-start mb-5 relative z-10">
+              <div className="flex justify-between items-start gap-2 mb-5 relative z-10">
                 {/* K5: highlighted logo */}
-                <BrandLogo src={client.logo} alt={client.name} size="w-20 h-20" />
+                <BrandLogo src={client.logo} alt={client.name} size="w-16 h-16 sm:w-20 sm:h-20 shrink-0" />
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex flex-wrap justify-end items-center gap-1.5">
                   {canUserAccessFinance(client) && (
                     <button
                       type="button"
@@ -15280,7 +15281,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               </div>
 
               <div className="relative z-10 mb-6 flex-grow">
-                <h3 className="text-xl font-black tracking-tight text-foreground line-clamp-2 leading-tight group-hover:text-primary transition-colors">
+                <h3 className="text-lg sm:text-xl font-black tracking-tight text-foreground line-clamp-2 leading-tight break-words group-hover:text-primary transition-colors">
                   {client.name}{client.companyName && client.companyName !== client.name ? ` (${client.companyName})` : ""}
                 </h3>
 
@@ -15307,12 +15308,12 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               )}
 
               {/* Footer Summary */}
-              <div className="flex justify-between items-end pt-5 border-t border-border/40 relative z-10">
-                <div className="flex flex-col">
+              <div className="flex justify-between items-end gap-3 pt-5 border-t border-border/40 relative z-10">
+                <div className="flex flex-col min-w-0">
                   <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Total Budget</span>
                   <span className="text-base font-black text-foreground mt-0.5 font-mono">{client.totalBudget}</span>
                 </div>
-                <div className="flex flex-col text-right">
+                <div className="flex flex-col text-right min-w-0">
                   <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Outstanding</span>
                   <span className="text-base font-black text-rose-500 mt-0.5 font-mono">{client.outstandingPayment}</span>
                 </div>
@@ -15331,7 +15332,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
       {/* New Client Modal */}
       <Dialog open={isNewClientModalOpen} onOpenChange={setIsNewClientModalOpen}>
-        <DialogContent className="max-w-5xl p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+        <DialogContent className="w-[calc(100vw-1rem)] sm:w-full max-w-5xl max-h-[94dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
           <div className="flex items-center justify-between px-8 py-6 border-b border-border/50 bg-muted/30">
             <div>
               <h2 className="text-2xl font-black tracking-tight">Add Client</h2>
@@ -15345,9 +15346,9 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             </button>
           </div>
 
-          <div className="flex flex-col md:flex-row h-[70vh] max-h-[800px]">
+          <div className="flex flex-col md:flex-row flex-1 min-h-0 h-[70vh] max-h-[800px]">
             {/* Sidebar Tabs */}
-            <div className="w-full md:w-64 bg-muted/20 border-r border-border/50 p-4 space-y-2 overflow-y-auto shrink-0">
+            <div className="w-full md:w-64 bg-muted/20 md:border-r border-b md:border-b-0 border-border/50 p-2 md:p-4 flex md:block gap-2 md:space-y-2 overflow-x-auto md:overflow-x-visible md:overflow-y-auto shrink-0">
               {clientTabs.map(tab => {
                 const Icon = tab.icon;
                 const isActive = activeClientTab === tab.id;
@@ -15357,7 +15358,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     type="button"
                     onClick={() => setActiveClientTab(tab.id as ClientTab)}
                     className={cn(
-                      "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all",
+                      "md:w-full flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-3 rounded-xl text-sm font-bold whitespace-nowrap shrink-0 transition-all",
                       isActive
                         ? "bg-primary text-primary-foreground shadow-md"
                         : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -15372,7 +15373,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             </div>
 
             {/* Form Content */}
-            <div className="flex-1 overflow-y-auto p-8 relative">
+            <div className="flex-1 min-w-0 overflow-y-auto p-4 sm:p-8 relative">
               <div className="space-y-8">
                 {activeClientTab === 'general' && (
                   <div className="space-y-6">
@@ -15558,8 +15559,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       </Dialog>
       {/* K9: Landing standalone New Project — client pela (select), pachhi project */}
       <Dialog open={isLandingProjectOpen} onOpenChange={setIsLandingProjectOpen}>
-        <DialogContent className="sm:max-w-[560px] p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
-          <div className="flex items-center justify-between px-6 md:px-8 py-5 border-b border-border/50 bg-muted/30">
+        <DialogContent className="w-[calc(100vw-1rem)] sm:w-full sm:max-w-[560px] max-h-[94dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+          <div className="flex items-center justify-between gap-3 px-4 sm:px-6 md:px-8 py-3 sm:py-5 border-b border-border/50 bg-muted/30 shrink-0">
             <div>
               <h2 className="text-xl md:text-2xl font-black tracking-tight">New Project</h2>
               <p className="text-sm text-muted-foreground mt-0.5">Select a client first, then project details.</p>
@@ -15571,7 +15572,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               <X className="w-5 h-5" />
             </button>
           </div>
-          <div className="p-6 md:p-8 space-y-5 overflow-y-auto max-h-[70vh]">
+          <div className="p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-5 overflow-y-auto flex-1 min-h-0">
             <div className="space-y-2">
               <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Client *</label>
               <div className="flex gap-2">
@@ -15735,7 +15736,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               />
             </div>
           </div>
-          <div className="px-6 md:px-8 py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 shrink-0">
+          <div className="px-4 sm:px-6 md:px-8 py-3 sm:py-4 bg-muted/30 border-t border-border/50 flex justify-end gap-2 sm:gap-3 shrink-0">
             <button
               onClick={() => setIsLandingProjectOpen(false)}
               className="px-5 py-2.5 rounded-xl font-bold text-muted-foreground hover:bg-muted transition-colors"
@@ -15761,7 +15762,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       </Dialog>
       {/* Edit Client Modal */}
       <Dialog open={isEditClientModalOpen} onOpenChange={setIsEditClientModalOpen}>
-        <DialogContent className="max-w-5xl p-0 overflow-hidden rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
+        <DialogContent className="w-[calc(100vw-1rem)] sm:w-full max-w-5xl max-h-[94dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
           <div className="flex items-center justify-between px-8 py-6 border-b border-border/50 bg-muted/30">
             <div>
               <h2 className="text-2xl font-black tracking-tight">Edit Client</h2>
@@ -15776,9 +15777,9 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           </div>
 
           {editingClient && (
-            <div className="flex flex-col md:flex-row h-[70vh] max-h-[800px]">
+            <div className="flex flex-col md:flex-row flex-1 min-h-0 h-[70vh] max-h-[800px]">
               {/* Sidebar Tabs */}
-              <div className="w-full md:w-64 bg-muted/20 border-r border-border/50 p-4 space-y-2 overflow-y-auto shrink-0">
+              <div className="w-full md:w-64 bg-muted/20 md:border-r border-b md:border-b-0 border-border/50 p-2 md:p-4 flex md:block gap-2 md:space-y-2 overflow-x-auto md:overflow-x-visible md:overflow-y-auto shrink-0">
                 {clientTabs.map(tab => {
                   const Icon = tab.icon;
                   const isActive = activeClientTab === tab.id;
@@ -15788,7 +15789,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       type="button"
                       onClick={() => setActiveClientTab(tab.id as ClientTab)}
                       className={cn(
-                        "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all",
+                        "md:w-full flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-3 rounded-xl text-sm font-bold whitespace-nowrap shrink-0 transition-all",
                         isActive
                           ? "bg-primary text-primary-foreground shadow-md"
                           : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -15803,7 +15804,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               </div>
 
               {/* Form Content */}
-              <div className="flex-1 overflow-y-auto p-8 relative">
+              <div className="flex-1 min-w-0 overflow-y-auto p-4 sm:p-8 relative">
                 <div className="space-y-8">
                   {activeClientTab === 'general' && (
                     <div className="space-y-6">
