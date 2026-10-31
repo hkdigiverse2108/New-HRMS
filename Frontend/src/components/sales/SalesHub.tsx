@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { 
   LayoutDashboard, 
@@ -80,6 +80,16 @@ export function SalesHub({ initialTab = "dashboard", setActive, onAction, isNew 
     }
   }, [visibleTabs, activeTab, setActiveTab]);
 
+  // Keep the selected tab visible inside the horizontally scrollable pill bar
+  const tabBarRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const bar = tabBarRef.current;
+    const activeBtn = bar?.querySelector<HTMLElement>('[data-active="true"]');
+    if (!bar || !activeBtn) return;
+    const target = activeBtn.offsetLeft - (bar.clientWidth - activeBtn.offsetWidth) / 2;
+    bar.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
+  }, [activeTab, visibleTabs.length]);
+
   return (
     <div className="space-y-4 sm:space-y-6 min-w-0">
       {/* Top Header & Integrated Sub-Navigation Tabs */}
@@ -95,7 +105,7 @@ export function SalesHub({ initialTab = "dashboard", setActive, onAction, isNew 
 
         {/* Tab Pills: ONLY show if user has access to MORE THAN 1 tab */}
         {visibleTabs.length > 1 && (
-          <div className="flex items-center gap-1 overflow-x-auto max-w-full scrollbar-none bg-muted/60 p-1 rounded-xl border border-border/60">
+          <div ref={tabBarRef} className="relative flex items-center gap-1 overflow-x-auto max-w-full scrollbar-none bg-muted/60 p-1 rounded-xl border border-border/60">
             {visibleTabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -103,6 +113,7 @@ export function SalesHub({ initialTab = "dashboard", setActive, onAction, isNew 
                 <button
                   key={tab.id}
                   type="button"
+                  data-active={isActive}
                   onClick={() => {
                     setActiveTab(tab.id);
                     if (setActive) {

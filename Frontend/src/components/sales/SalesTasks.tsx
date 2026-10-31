@@ -255,13 +255,13 @@ export function SalesTasks({ onAction }: { onAction?: (action: string) => void }
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex flex-wrap gap-1.5">
+      <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 scrollbar-none sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
         {(["all", "overdue", "today", "upcoming", "completed"] as const).map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
             className={cn(
-              "rounded-full px-3.5 py-1.5 min-h-[44px] sm:min-h-0 text-xs font-semibold capitalize transition-colors",
+              "shrink-0 whitespace-nowrap rounded-full px-4 h-10 sm:h-8 text-xs font-semibold capitalize transition-colors",
               filter === f ? "bg-emerald-600 text-white" : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
             )}
           >

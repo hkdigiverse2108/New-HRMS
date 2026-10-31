@@ -298,60 +298,60 @@ export function SalesPipeline({ onAction }: { onAction?: (action: string) => voi
         </p>
       </div>
 
-      {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
-        <div className="flex-1 max-w-sm">
+      {/* Toolbar — search, filters, view toggle and Add Deal in one row (wraps on small screens) */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="w-full sm:w-auto sm:min-w-[200px] sm:flex-1 [&_input]:h-11 sm:[&_input]:h-10">
           <SearchInput
             value={search}
             onChange={setSearch}
             placeholder="Search deals…"
-            className="w-full"
+            containerClassName="sm:w-full md:w-full"
+            className="w-full bg-background border-border shadow-none"
           />
         </div>
 
-        <div className="flex rounded-xl border border-border bg-muted/40 p-0.5 self-start sm:self-auto overflow-x-auto">
-          {([
-            ["kanban", LayoutGrid, "Kanban"],
-            ["table", Table2, "Table"],
-            ["timeline", Clock, "Timeline"],
-          ] as const).map(([v, Icon, label]) => (
-            <button
-              key={v}
-              onClick={() => setView(v)}
-              className={cn(
-                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap min-h-[44px] sm:min-h-0",
-                view === v ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <Icon className="h-3.5 w-3.5" /> {label}
-            </button>
-          ))}
-        </div>
-
-        <button onClick={() => onAction?.("Add Lead")} className="flex items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 shrink-0 w-full sm:w-auto min-h-[44px] sm:min-h-0">
-          <Plus className="h-4 w-4" /> Add Deal
-        </button>
-      </div>
-
-      {/* Filters — business category / source / date-wise */}
-      <div className="flex flex-wrap items-center gap-2">
-        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="min-h-[44px] sm:min-h-0 sm:h-9 flex-1 sm:flex-none min-w-[140px] text-xs font-semibold border border-border rounded-xl px-2.5 bg-background">
+        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="h-11 w-[calc(33.333%-0.34rem)] min-w-0 truncate sm:h-10 sm:w-auto sm:min-w-[130px] text-xs font-semibold border border-border rounded-xl px-2 sm:px-3 bg-background cursor-pointer">
           <option value="all">All Categories</option>
           {availableCategories.map((c: string) => <option key={c} value={c}>{c}</option>)}
         </select>
-        <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className="min-h-[44px] sm:min-h-0 sm:h-9 flex-1 sm:flex-none min-w-[140px] text-xs font-semibold border border-border rounded-xl px-2.5 bg-background">
+        <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className="h-11 w-[calc(33.333%-0.34rem)] min-w-0 truncate sm:h-10 sm:w-auto sm:min-w-[130px] text-xs font-semibold border border-border rounded-xl px-2 sm:px-3 bg-background cursor-pointer">
           <option value="all">All Sources</option>
           {availableSources.map((s: string) => <option key={s} value={s}>{s}</option>)}
         </select>
-        <select value={dateFilter} onChange={(e) => setDateFilter(e.target.value as any)} className="min-h-[44px] sm:min-h-0 sm:h-9 flex-1 sm:flex-none min-w-[140px] text-xs font-semibold border border-border rounded-xl px-2.5 bg-background">
+        <select value={dateFilter} onChange={(e) => setDateFilter(e.target.value as any)} className="h-11 w-[calc(33.333%-0.34rem)] min-w-0 truncate sm:h-10 sm:w-auto sm:min-w-[130px] text-xs font-semibold border border-border rounded-xl px-2 sm:px-3 bg-background cursor-pointer">
           <option value="all">All Dates</option>
           <option value="today">Today</option>
           <option value="this_month">This Month</option>
           <option value="last_month">Last Month</option>
         </select>
         {(categoryFilter !== "all" || sourceFilter !== "all" || dateFilter !== "all") && (
-          <button onClick={() => { setCategoryFilter("all"); setSourceFilter("all"); setDateFilter("all"); }} className="h-9 px-3 text-xs font-bold rounded-xl border border-border bg-muted/50 hover:bg-muted">Clear</button>
+          <button onClick={() => { setCategoryFilter("all"); setSourceFilter("all"); setDateFilter("all"); }} className="h-11 sm:h-10 px-4 text-xs font-bold rounded-xl border border-border bg-muted/50 hover:bg-muted">Clear</button>
         )}
+
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <div className="flex h-11 min-w-0 flex-1 items-center rounded-xl border border-border bg-muted/40 p-0.5 sm:h-10 sm:flex-none">
+            {([
+              ["kanban", LayoutGrid, "Kanban"],
+              ["table", Table2, "Table"],
+              ["timeline", Clock, "Timeline"],
+            ] as const).map(([v, Icon, label]) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={cn(
+                  "flex h-full flex-1 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition-colors whitespace-nowrap sm:flex-none sm:px-3",
+                  view === v ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Icon className="h-3.5 w-3.5 shrink-0" /> {label}
+              </button>
+            ))}
+          </div>
+
+          <button onClick={() => onAction?.("Add Lead")} className="flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 sm:h-10">
+            <Plus className="h-4 w-4" /> Add Deal
+          </button>
+        </div>
       </div>
 
       {/* Content */}

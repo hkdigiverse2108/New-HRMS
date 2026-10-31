@@ -1639,8 +1639,8 @@ export function SalesLeads({
   return (
     <div className="space-y-6">
       {/* Top Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
           <h1 className="text-2xl font-black tracking-tight sm:text-3xl text-foreground">
             Sales Board
           </h1>
@@ -1648,12 +1648,12 @@ export function SalesLeads({
             Complete pipeline management, client conversions, follow-up reminders, and target tracking.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="grid grid-cols-3 items-center gap-2 sm:flex sm:shrink-0">
           <Button
             variant="outline"
             size="sm"
             onClick={() => setIsBulkImportOpen(true)}
-            className="gap-1.5 text-xs font-bold min-h-[44px] sm:min-h-0 sm:h-9"
+            className="gap-1.5 whitespace-nowrap px-2 sm:px-3 text-xs font-bold h-11 sm:h-9"
           >
             <Upload className="w-3.5 h-3.5" /> Import CSV
           </Button>
@@ -1661,14 +1661,14 @@ export function SalesLeads({
             variant="outline"
             size="sm"
             onClick={handleExportCSV}
-            className="gap-1.5 text-xs font-bold min-h-[44px] sm:min-h-0 sm:h-9"
+            className="gap-1.5 whitespace-nowrap px-2 sm:px-3 text-xs font-bold h-11 sm:h-9"
           >
             <Download className="w-3.5 h-3.5" /> Export CSV
           </Button>
           <Button
             size="sm"
             onClick={() => onAction?.("Add Lead")}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 text-xs font-bold min-h-[44px] sm:min-h-0 sm:h-9 shadow-sm"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 whitespace-nowrap px-2 sm:px-3 text-xs font-bold h-11 sm:h-9 shadow-sm"
           >
             <Plus className="w-4 h-4" /> Add Lead
           </Button>
@@ -1697,18 +1697,18 @@ export function SalesLeads({
       {activeTab !== "targets" && (
         <form
           onSubmit={handleQuickAdd}
-          className="bg-card p-3 rounded-2xl border border-border shadow-xs grid grid-cols-2 gap-2.5 sm:flex sm:flex-wrap sm:items-center sm:gap-3"
+          className="bg-card p-3 rounded-2xl border border-border shadow-xs grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:flex lg:items-center lg:gap-3"
         >
-          <div className="col-span-2 sm:col-span-1 sm:flex-1 sm:min-w-[200px]">
+          <div className="col-span-2 sm:col-span-4 lg:flex-1 lg:min-w-[200px]">
             <input
               type="text"
               placeholder="Company / Contact Name (Optional)..."
               value={quickAddName}
               onChange={(e) => setQuickAddName(e.target.value)}
-              className="w-full min-h-[44px] sm:min-h-0 text-xs font-semibold bg-muted/40 border border-border rounded-xl px-3 py-2 outline-none focus:border-emerald-500 focus:bg-background transition-all placeholder:text-muted-foreground text-foreground"
+              className="w-full h-11 sm:h-9 text-xs font-semibold bg-muted/40 border border-border rounded-xl px-3 py-2 outline-none focus:border-emerald-500 focus:bg-background transition-all placeholder:text-muted-foreground text-foreground"
             />
           </div>
-          <div className="col-span-2 sm:col-span-1 w-full sm:w-[200px]">
+          <div className="col-span-2 sm:col-span-1 w-full lg:w-[200px]">
             <input
               ref={phoneInputRef}
               type="tel"
@@ -1718,12 +1718,12 @@ export function SalesLeads({
               value={quickAddPhone}
               onChange={(e) => setQuickAddPhone(e.target.value.replace(/[^0-9]/g, "").slice(0, 12))}
               onKeyDown={(e) => { if (!/[0-9]/.test(e.key) && !["Backspace", "Delete", "ArrowLeft", "ArrowRight", "Tab", "Enter"].includes(e.key)) e.preventDefault(); }}
-              className="w-full min-h-[44px] sm:min-h-0 text-xs font-semibold bg-muted/40 border border-border rounded-xl px-3 py-2 outline-none focus:border-emerald-500 focus:bg-background transition-all placeholder:text-muted-foreground text-foreground"
+              className="w-full h-11 sm:h-9 text-xs font-semibold bg-muted/40 border border-border rounded-xl px-3 py-2 outline-none focus:border-emerald-500 focus:bg-background transition-all placeholder:text-muted-foreground text-foreground"
             />
           </div>
-          <div className="w-full sm:w-[160px]">
+          <div className="col-span-1 w-full lg:w-[160px]">
             <Select value={quickAddCategory} onValueChange={setQuickAddCategory}>
-              <SelectTrigger className="min-h-[44px] sm:min-h-0 sm:h-9 text-xs font-semibold bg-muted/40 border-border">
+              <SelectTrigger className="h-11 sm:h-9 text-xs font-semibold bg-muted/40 border-border">
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
               <SelectContent>
@@ -1736,9 +1736,9 @@ export function SalesLeads({
               </SelectContent>
             </Select>
           </div>
-          <div className="w-full sm:w-[150px]">
+          <div className="col-span-1 w-full lg:w-[150px]">
             <Select value={quickAddSource} onValueChange={setQuickAddSource}>
-              <SelectTrigger className="min-h-[44px] sm:min-h-0 sm:h-9 text-xs font-semibold bg-muted/40 border-border">
+              <SelectTrigger className="h-11 sm:h-9 text-xs font-semibold bg-muted/40 border-border">
                 <SelectValue placeholder="Source" />
               </SelectTrigger>
               <SelectContent>
@@ -1753,7 +1753,7 @@ export function SalesLeads({
           <Button
             type="submit"
             disabled={isQuickAdding || !quickAddPhone.trim()}
-            className="col-span-2 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold px-4 w-full sm:w-auto justify-center min-h-[44px] sm:min-h-0 sm:h-9 rounded-xl gap-1.5 transition-all shadow-xs"
+            className="col-span-2 sm:col-span-1 lg:shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold px-4 w-full lg:w-auto justify-center whitespace-nowrap h-11 sm:h-9 rounded-xl gap-1.5 transition-all shadow-xs"
           >
             <Plus className="w-3.5 h-3.5" />
             {isQuickAdding ? "Adding..." : "Quick Add"}

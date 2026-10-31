@@ -663,18 +663,18 @@ export function SalesSettings() {
         {/* Pipeline Stages Tab */}
         {activeTab === "Pipeline Stages" && (
           <div className="animate-in fade-in slide-in-from-bottom-2 space-y-6 text-left">
-            <div className="flex flex-col sm:flex-row items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-3">
               <input
                 type="text"
                 placeholder="e.g. Contract Signed"
                 value={newStageName}
                 onChange={(e) => setNewStageName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAddStage()}
-                className="w-full sm:w-80 rounded-xl border border-border bg-white px-4 py-2.5 text-xs outline-none focus:ring-2 focus:ring-emerald-500/20 font-semibold text-foreground"
+                className="h-11 min-w-0 flex-1 sm:h-10 sm:max-w-sm rounded-xl border border-border bg-white px-4 text-xs outline-none focus:ring-2 focus:ring-emerald-500/20 font-semibold text-foreground"
               />
               <button
                 onClick={handleAddStage}
-                className="flex w-full sm:w-auto items-center justify-center gap-1.5 rounded-xl bg-primary px-5 py-2.5 text-xs font-bold text-primary-foreground transition-all hover:bg-primary/90 shadow-sm"
+                className="flex h-11 shrink-0 sm:h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-primary px-4 sm:px-5 text-xs font-bold text-primary-foreground transition-all hover:bg-primary/90 shadow-sm"
               >
                 <Plus className="h-4 w-4" /> Add Stage
               </button>
