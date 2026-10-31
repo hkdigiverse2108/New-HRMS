@@ -85,27 +85,99 @@ class ContentService:
         if not team:
             return
             
-        topic = item_data.get("topic_title", "Untitled")
+        topic_title_val = str(item_data.get("topic_title") or "").strip()
+        topic_desc_val = str(item_data.get("topic_description") or item_data.get("concept") or "").strip()
+
+        if topic_title_val and topic_title_val.lower() not in ["untitled", "untitled idea", "none"]:
+            topic = topic_title_val
+        elif topic_desc_val and topic_desc_val.lower() not in ["untitled", "untitled idea", "none"]:
+            topic = topic_desc_val
+        elif topic_title_val:
+            topic = topic_title_val
+        elif topic_desc_val:
+            topic = topic_desc_val
+        else:
+            topic = "Untitled Idea"
         content_type = item_data.get("content_type", "Content")
         is_post_type = content_type in ["Post", "Carousel", "Story"]
         
-        def _check_link_done(obj):
-            if not isinstance(obj, dict):
+        def _is_not_required(val) -> bool:
+            if not val:
                 return False
-            lnk = str(obj.get("link") or "").strip().lower()
-            if not lnk or lnk in ["-", "--", "---", "n/a", "na", "none", "null", "not required", "not req"]:
+            if isinstance(val, dict):
+                lnk = str(val.get("link") or "").strip().lower()
+                st = str(val.get("status") or "").strip().lower()
+                for s in [lnk, st]:
+                    if not s:
+                        continue
+                    if s in [
+                        "not required", "not req", "not_required", "not-required",
+                        "no need", "no needed", "no script", "no req", "none required",
+                        "client provide", "clinet provide"
+                    ] or "not required" in s or "no need" in s or "no script" in s or "client provide" in s or "clinet provide" in s:
+                        return True
                 return False
-            return len(lnk) >= 3
+            s = str(val).strip().lower()
+            return (
+                s in [
+                    "not required", "not req", "not_required", "not-required",
+                    "no need", "no needed", "no script", "no req", "none required",
+                    "client provide", "clinet provide"
+                ]
+                or "not required" in s
+                or "no need" in s
+                or "no script" in s
+                or "client provide" in s
+                or "clinet provide" in s
+            )
+
+        def _check_has_content(val):
+            """
+            Audio Transcript:
+            'એક પણ કેરેક્ટર એની અંદર લખ્યો હોય ને, તો ઈ કમ્પલીટેડ ગણાય જાય.
+             ઈ એમ્પ્ટી હોય ને તો જ બાકી હોય... એની અંદર હાવ ખાલી, કોરે કોરું કાંઈ છે જ નહીં,
+             નલ (Null) છે અથવા તો ખાલી છે અથવા તો એમ્પ્ટી છે, તો તે ઈ ટાસ્ક બાકી ગણાય.
+             અને જેવો ઈ ટાસ્કની અંદર લિંક નંખાઈ જાય એટલે ઈ ટાસ્ક પૂરો થઈ ગયો ગણાય.
+             એની અંદર લિંક નાખે, એક ડેશ મારી દે, એક નાનો અમથો વર્ડ લખી નાખે, Not Required લખ્યું છે, તો ઈ બધું પૂરું થઈ ગયું ગણાય.'
+            """
+            if val is None:
+                return False
+            if isinstance(val, dict):
+                lnk = str(val.get("link") or "").strip()
+                return len(lnk) > 0
+            s = str(val).strip()
+            return len(s) > 0
+
+        def _is_role_not_required(role: str) -> bool:
+            if is_post_type and role == "reel_editing":
+                return True
+            if content_type == "Reel" and role == "post_graphics":
+                return True
+            if role == "scripting":
+                return _is_not_required(item_data.get("script"))
+            if role == "shoot_videography":
+                return _is_not_required(item_data.get("shoot"))
+            if role == "thumbnail":
+                return _is_not_required(item_data.get("thumbnail"))
+            if role in ["reel_editing", "post_graphics"]:
+                return _is_not_required(item_data.get("editing"))
+            if role == "caption":
+                return _is_not_required(item_data.get("caption_text")) or _is_not_required(item_data.get("caption"))
+            if role == "approval_qc":
+                return _is_not_required(item_data.get("approval_status"))
+            if role == "posting_publisher":
+                return _is_not_required(item_data.get("instagram_link"))
+            return False
 
         roles_mapping = {
-            "scripting": {"date_field": ["script", "date"], "is_completed": lambda d: _check_link_done(d.get("script")), "title": f"Scripting - {topic} ({content_type})"},
-            "reel_editing": {"date_field": ["editing", "date"], "is_completed": lambda d: _check_link_done(d.get("editing")), "title": f"Editing - {topic} ({content_type})"},
-            "post_graphics": {"date_field": ["editing", "date"], "is_completed": lambda d: _check_link_done(d.get("editing")), "title": f"Graphics - {topic} ({content_type})"},
-            "shoot_videography": {"date_field": ["shoot", "date"], "is_completed": lambda d: _check_link_done(d.get("shoot")), "title": f"Shoot - {topic} ({content_type})"},
-            "thumbnail": {"date_field": ["thumbnail", "date"], "is_completed": lambda d: _check_link_done(d.get("thumbnail")), "title": f"Thumbnail - {topic} ({content_type})"},
-            "approval_qc": {"date_field": ["caption_date"], "is_completed": lambda d: d.get("approval_status") == "Approved", "title": f"Approval/QC - {topic} ({content_type})"},
-            "posting_publisher": {"date_field": ["schedule_date"], "is_completed": lambda d: bool(d.get("instagram_link")), "title": f"Posting - {topic} ({content_type})"},
-            "caption": {"date_field": ["caption_date"], "is_completed": lambda d: bool(d.get("caption_text")), "title": f"Caption - {topic} ({content_type})"}
+            "scripting": {"date_field": ["script", "date"], "is_completed": lambda d: _check_has_content(d.get("script")), "title": f"Scripting - {topic} ({content_type})"},
+            "reel_editing": {"date_field": ["editing", "date"], "is_completed": lambda d: _check_has_content(d.get("editing")), "title": f"Editing - {topic} ({content_type})"},
+            "post_graphics": {"date_field": ["editing", "date"], "is_completed": lambda d: _check_has_content(d.get("editing")), "title": f"Graphics - {topic} ({content_type})"},
+            "shoot_videography": {"date_field": ["shoot", "date"], "is_completed": lambda d: _check_has_content(d.get("shoot")), "title": f"Shoot - {topic} ({content_type})"},
+            "thumbnail": {"date_field": ["thumbnail", "date"], "is_completed": lambda d: _check_has_content(d.get("thumbnail")), "title": f"Thumbnail - {topic} ({content_type})"},
+            "approval_qc": {"date_field": ["caption_date"], "is_completed": lambda d: str(d.get("approval_status") or "").strip().lower() == "approved", "title": f"Approval/QC - {topic} ({content_type})"},
+            "posting_publisher": {"date_field": ["schedule_date"], "is_completed": lambda d: _check_has_content(d.get("instagram_link")) or _check_has_content(d.get("actual_posting_date")), "title": f"Posting - {topic} ({content_type})"},
+            "caption": {"date_field": ["caption_date"], "is_completed": lambda d: _check_has_content(d.get("caption_text")) or _check_has_content(d.get("caption")), "title": f"Caption - {topic} ({content_type})"}
         }
 
         role_to_subcat = {
@@ -121,35 +193,25 @@ class ContentService:
         
         from app.services.task import TaskService
         from app.schemas.task import TaskCreate, TaskStatus
+        from app.repository.task import TaskRepository
         
         for role, mapping in roles_mapping.items():
-            emp_id = team.get(role)
-            # If not assigned in creative_team, fallback to cc_creator or other so tasks are not lost!
-            if not emp_id:
-                emp_id = team.get("cc_creator") or team.get("other") or ""
-            if not emp_id:
+            # If stage is Not Required, DELETE any existing task and DO NOT create any new task!
+            if _is_role_not_required(role):
+                existing_tasks = await TaskRepository.get_all(content_item_id=item_id, creative_role=role)
+                if existing_tasks and existing_tasks.get("data"):
+                    for t in existing_tasks["data"]:
+                        await TaskRepository.soft_delete(str(t["_id"]))
                 continue
 
-            # Exclude roles not needed per content type
-            if is_post_type:
-                if role == "reel_editing":
-                    continue
-                # Audio 19: Only skip if explicitly 'Not Required'. If empty/null (e.g. user cleared Not Required), it IS pending!
-                if role == "scripting":
-                    link = str((item_data.get("script") or {}).get("link") or "").strip().lower()
-                    if link == "not required":
-                        continue
-                if role == "shoot_videography":
-                    link = str((item_data.get("shoot") or {}).get("link") or "").strip().lower()
-                    if link == "not required":
-                        continue
-                if role == "thumbnail":
-                    link = str((item_data.get("thumbnail") or {}).get("link") or "").strip().lower()
-                    if link == "not required":
-                        continue
-            elif content_type == "Reel":
-                if role == "post_graphics":
-                    continue
+            emp_id = team.get(role)
+            # If a role is not assigned in creative_team (e.g. Approval on ErthGlow), DO NOT create or retain ghost task!
+            if not emp_id:
+                existing_tasks = await TaskRepository.get_all(content_item_id=item_id, creative_role=role)
+                if existing_tasks and existing_tasks.get("data"):
+                    for t in existing_tasks["data"]:
+                        await TaskRepository.soft_delete(str(t["_id"]))
+                continue
                 
             date_val = item_data
             for key in mapping["date_field"]:
@@ -178,6 +240,9 @@ class ContentService:
                 task_id = str(task["_id"])
                 update_payload = {}
                 
+                new_title = mapping.get("title")
+                if new_title and task.get("title") != new_title:
+                    update_payload["title"] = new_title
                 if date_str and task.get("due_date") != date_str:
                     update_payload["due_date"] = date_str
                 if not task.get("sub_category"):
@@ -208,7 +273,8 @@ class ContentService:
                     sub_category=role_to_subcat.get(role, "General"),
                     content_item_id=str(item_id),
                     project_id=str(project.get("_id")),
-                    creative_role=role
+                    creative_role=role,
+                    status=TaskStatus.COMPLETED if is_completed else TaskStatus.TODO
                 )
                 await TaskService.create_task(task_create, assigned_by)
 
@@ -411,6 +477,17 @@ class ContentService:
         existing = await ContentRepository.get_by_id(item_id)
         deleted = await ContentRepository.soft_delete(item_id)
         
+        if deleted:
+            from app.database.db import get_database
+            from datetime import datetime
+            from app.redis.service import clear_pattern
+            db = get_database()
+            await db["tasks"].update_many(
+                {"content_item_id": item_id},
+                {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}}
+            )
+            await clear_pattern("tasks:*")
+
         if deleted and existing and current_user_id:
             from app.services.activity import ActivityService, ActivityAction
             topic = existing.get("topic_title", "Untitled")

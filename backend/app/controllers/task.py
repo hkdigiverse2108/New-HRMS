@@ -192,10 +192,14 @@ async def get_all_tasks(
     
     is_admin_or_hr = role in ["Admin", "Subadmin", "HR"] or str(user_dept or "").strip().upper() == "HR"
     
+    is_my_tasks = (view == "me" or view == "my_tasks")
+    
     # Strict "My Tasks" handling: ONLY tasks where assigned_to == current employee
-    if view == "me" or view == "my_tasks":
+    if is_my_tasks:
         assigned_to = emp_id
         involved_emp_id = None
+        team_employee_ids = None
+        department = None
     elif not is_admin_or_hr:
         desig_lower = str(designation or "").lower()
         is_leader = "team leader" in desig_lower or "head" in desig_lower
@@ -212,9 +216,10 @@ async def get_all_tasks(
             # Regular staff (Senior, Junior, Intern) are strictly restricted to My Tasks
             assigned_to = emp_id
             involved_emp_id = None
+            team_employee_ids = None
 
-    # If department filter is explicitly requested
-    if department and department != "All":
+    # If department filter is explicitly requested (only for team/all views, never restrict My Tasks)
+    if not is_my_tasks and department and department != "All":
         from app.repository.employee import EmployeeRepository
         dept_emps = await EmployeeRepository.get_all_employees(department=department, limit=1000)
         dept_emp_ids = [str(e["_id"]) for e in dept_emps.get("data", [])]
@@ -279,6 +284,8 @@ async def get_task_stats(
     project_id: Optional[str] = Query(None, description="Filter by project ID"),
     priority: Optional[str] = Query(None, description="Filter by priority"),
     search: Optional[str] = Query(None, description="Search term"),
+    timeline_filter: Optional[str] = Query(None, description="Timeline filter ('today', 'overdue', 'upcoming', 'pending', 'client_issue', 'all')"),
+    status: Optional[str] = Query(None, description="Status filter"),
     current_user: dict = Depends(get_current_employee)
 ):
     role = current_user.get("work_details", {}).get("system_role", "Employee")
@@ -290,9 +297,13 @@ async def get_task_stats(
     team_employee_ids = None
     is_admin_or_hr = role in ["Admin", "Subadmin", "HR"] or str(user_dept or "").strip().upper() == "HR"
 
-    if view == "me" or view == "my_tasks":
+    is_my_tasks = (view == "me" or view == "my_tasks")
+
+    if is_my_tasks:
         assigned_to = emp_id
         involved_emp_id = None
+        team_employee_ids = None
+        department = None
     elif not is_admin_or_hr:
         desig_lower = str(designation or "").lower()
         is_leader = "team leader" in desig_lower or "head" in desig_lower
@@ -304,8 +315,9 @@ async def get_task_stats(
             # Regular staff (Senior, Junior, Intern) are strictly restricted to My Tasks
             assigned_to = emp_id
             involved_emp_id = None
+            team_employee_ids = None
 
-    if department and department != "All":
+    if not is_my_tasks and department and department != "All":
         from app.repository.employee import EmployeeRepository
         dept_emps = await EmployeeRepository.get_all_employees(department=department, limit=1000)
         dept_emp_ids = [str(e["_id"]) for e in dept_emps.get("data", [])]
@@ -314,7 +326,7 @@ async def get_task_stats(
         else:
             team_employee_ids = dept_emp_ids
     
-    cache_key = f"tasks:stats:{involved_emp_id or 'all'}:{target_date or 'today'}:{assigned_to or 'all'}:{assigned_by or 'all'}:{task_category or 'all'}:{priority or 'all'}:{search or ''}"
+    cache_key = f"tasks:stats:{involved_emp_id or 'all'}:{target_date or 'today'}:{assigned_to or 'all'}:{assigned_by or 'all'}:{task_category or 'all'}:{sub_category or 'all'}:{project_id or 'all'}:{priority or 'all'}:{search or ''}:{timeline_filter or 'all'}:{status or 'all'}"
     cached = await get_cache(cache_key)
     if cached is not None:
         return cached
@@ -329,7 +341,9 @@ async def get_task_stats(
         sub_category=sub_category,
         project_id=project_id,
         priority=priority,
-        search=search
+        search=search,
+        timeline_filter=timeline_filter,
+        status=status
     )
     await set_cache(cache_key, result, ttl=60)
     return result

@@ -15,6 +15,7 @@ logger = logging.getLogger("redis_service")
 redis_client = redis.from_url(
     settings.REDIS_URL,
     decode_responses=True,
+    protocol=2,
     # Fast-fail when Redis is down (else retries add ~4s per cache op).
     socket_connect_timeout=1,
     socket_timeout=1,

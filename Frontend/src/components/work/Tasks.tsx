@@ -225,13 +225,14 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   const [allProjects, setAllProjects] = useState<{ label: string; value: string; depts: string[] }[]>([]);
 
   const CREATIVE_SUBCATEGORIES = useMemo(() => [
-    "Script",
-    "Shoot",
-    "Caption",
-    "Thumbnail",
-    "Editing",
-    "Approval",
-    "Posting"
+    { id: "Script", label: "Script" },
+    { id: "Shoot", label: "Shoot" },
+    { id: "Editing", label: "Video Editing" },
+    { id: "Post/Graphics", label: "Post / Graphics" },
+    { id: "Caption", label: "Caption" },
+    { id: "Thumbnail", label: "Thumbnail" },
+    { id: "Approval", label: "Approval" },
+    { id: "Posting", label: "Posting" },
   ], []);
 
   // Audio 19: Designation-based access: Admin, Head, and Team Leader get All Tasks; others locked to My Tasks
@@ -514,19 +515,21 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
         params.append("priority", priorityFilter.toLowerCase());
       }
 
+      const isMyTasksMode = mainViewMode === "my_tasks" || scopeFilter === "my_tasks";
+
       if (categoryFilter && categoryFilter !== "All") {
         params.append("task_category", categoryFilter);
       }
 
-      if (departmentFilter && departmentFilter !== "All") {
+      if (!isMyTasksMode && departmentFilter && departmentFilter !== "All") {
         params.append("department", departmentFilter);
       }
 
-      if (assignedToFilter && assignedToFilter !== "All") {
+      if (!isMyTasksMode && assignedToFilter && assignedToFilter !== "All") {
         params.append("assigned_to", assignedToFilter);
       }
 
-      if (assignedByFilter && assignedByFilter !== "All") {
+      if (!isMyTasksMode && assignedByFilter && assignedByFilter !== "All") {
         params.append("assigned_by", assignedByFilter);
       }
 
@@ -542,7 +545,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
         params.append("search", debouncedSearch.trim());
       }
 
-      if (mainViewMode === "my_tasks" || scopeFilter === "my_tasks") {
+      if (isMyTasksMode) {
         params.append("view", "me");
       } else if (scopeFilter === "assigned_by_me") {
         params.append("assigned_by", currentUserId || "");
@@ -555,20 +558,20 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
       // Dynamic Filter-Wise Stats Calculation
       const statsParams = new URLSearchParams();
       statsParams.append("target_date", todayDateStr);
-      if (mainViewMode === "my_tasks" || scopeFilter === "my_tasks") {
+      if (isMyTasksMode) {
         statsParams.append("view", "me");
       } else if (scopeFilter === "assigned_by_me") {
         statsParams.append("assigned_by", currentUserId || "");
       } else {
         statsParams.append("view", "all");
       }
-      if (departmentFilter && departmentFilter !== "All") {
+      if (!isMyTasksMode && departmentFilter && departmentFilter !== "All") {
         statsParams.append("department", departmentFilter);
       }
-      if (assignedToFilter && assignedToFilter !== "All") {
+      if (!isMyTasksMode && assignedToFilter && assignedToFilter !== "All") {
         statsParams.append("assigned_to", assignedToFilter);
       }
-      if (assignedByFilter && assignedByFilter !== "All") {
+      if (!isMyTasksMode && assignedByFilter && assignedByFilter !== "All") {
         statsParams.append("assigned_by", assignedByFilter);
       }
       if (categoryFilter && categoryFilter !== "All") {
@@ -586,6 +589,12 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
       }
       if (projectFilter && projectFilter !== "All") {
         statsParams.append("project_id", projectFilter);
+      }
+      if (timeframeFilter && timeframeFilter !== "all") {
+        statsParams.append("timeline_filter", timeframeFilter);
+      }
+      if (statusFilter && statusFilter !== "All") {
+        statsParams.append("status", statusFilter);
       }
 
       const [tasksRes, statsRes] = await Promise.allSettled([
@@ -676,6 +685,9 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
           client_issue: statsRes.value.client_issue || 0,
           pending: statsRes.value.pending || 0,
         });
+        if (statsRes.value.sub_categories) {
+          setCreativeStageCounts(statsRes.value.sub_categories);
+        }
       }
     } catch (e) {
       console.error("Failed to load tasks data:", e);
@@ -701,30 +713,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     projectFilter,
   ]);
 
-  // Audio 19: Keep stable stage counts across creative subcategories so badges don't collapse to 0 when filtered
-  useEffect(() => {
-    if (subCategoryFilter === "All" && tasks.length > 0) {
-      const counts: Record<string, number> = { All: totalServerTasks || tasks.length };
-      CREATIVE_SUBCATEGORIES.forEach(sc => {
-        const scLower = sc.toLowerCase();
-        counts[sc] = tasks.filter(t => {
-          const subCat = (t.subCategory || "").toLowerCase();
-          const role = (t.creativeDetails?.role || (t as any).creative_role || "").toLowerCase();
-          const title = (t.title || "").toLowerCase();
-          if (subCat === scLower) return true;
-          if (scLower === "script" && (role.includes("script") || title.includes("script"))) return true;
-          if (scLower === "shoot" && (role.includes("shoot") || title.includes("shoot"))) return true;
-          if (scLower === "editing" && (role.includes("edit") || title.includes("edit"))) return true;
-          if (scLower === "thumbnail" && (role.includes("thumb") || title.includes("thumb"))) return true;
-          if (scLower === "caption" && (role.includes("caption") || title.includes("caption"))) return true;
-          if (scLower === "approval" && (role.includes("approval") || title.includes("approv"))) return true;
-          if (scLower === "posting" && (role.includes("post") || title.includes("post"))) return true;
-          return false;
-        }).length;
-      });
-      setCreativeStageCounts(counts);
-    }
-  }, [tasks, subCategoryFilter, totalServerTasks, CREATIVE_SUBCATEGORIES]);
+
 
   useEffect(() => {
     fetchEmployees();
@@ -1127,11 +1116,32 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     if (cId) {
       localStorage.setItem("hrms_cc_highlight_id", String(cId));
     }
+    const rawBackendAny = task.rawBackend as any;
+    const rawDate =
+      task.dueDate ||
+      task.rawDueDate ||
+      task.rawBackend?.due_date ||
+      rawBackendAny?.schedule_date ||
+      rawBackendAny?.content_item_details?.schedule_date ||
+      rawBackendAny?.content_item_details?.postingDate;
+    if (rawDate && typeof rawDate === "string") {
+      let ym = "";
+      if (/^\d{4}-\d{2}/.test(rawDate)) {
+        ym = rawDate.slice(0, 7);
+      } else if (/^\d{2}[-/]\d{2}[-/]\d{4}/.test(rawDate)) {
+        const parts = rawDate.split(/[-/]/);
+        if (parts.length === 3 && parts[2] && parts[1] && parts[2].length === 4) {
+          ym = `${parts[2]}-${parts[1].padStart(2, "0")}`;
+        }
+      }
+      if (ym) {
+        localStorage.setItem("hrms_cc_target_month", ym);
+      }
+    }
     if (setActive) {
       setActive("/work/projects");
-    } else {
-      window.dispatchEvent(new CustomEvent("navigate_tab", { detail: "/work/projects" }));
     }
+    window.dispatchEvent(new CustomEvent("navigate_tab", { detail: "/work/projects" }));
   };
 
   // Open Edit Modal (Task 8: block editing for auto/transferred tasks unless Admin/HR)
@@ -1501,6 +1511,15 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
               onClick={() => {
                 setMainViewMode("my_tasks");
                 setScopeFilter("my_tasks");
+                setDepartmentFilter("All");
+                setAssignedToFilter("All");
+                setAssignedByFilter("All");
+                setSubCategoryFilter("All");
+                setProjectFilter("All");
+                setCategoryFilter("All");
+                setStatusFilter("All");
+                setSearchQuery("");
+                setCurrentPage(1);
               }}
               className={cn(
                 "px-3.5 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 whitespace-nowrap",
@@ -1517,6 +1536,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                 onClick={() => {
                   setMainViewMode("all_tasks");
                   setScopeFilter("all");
+                  setCurrentPage(1);
                 }}
                 className={cn(
                   "px-3.5 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 whitespace-nowrap",
@@ -1707,42 +1727,25 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
               </span>
             </button>
             {CREATIVE_SUBCATEGORIES.map((sc) => {
-              const scLower = sc.toLowerCase();
-              const currentCount = tasks.filter(t => {
-                const subCat = (t.subCategory || "").toLowerCase();
-                const role = (t.creativeDetails?.role || (t as any).creative_role || "").toLowerCase();
-                const title = (t.title || "").toLowerCase();
-                if (subCat === scLower) return true;
-                if (scLower === "script" && (role.includes("script") || title.includes("script"))) return true;
-                if (scLower === "shoot" && (role.includes("shoot") || title.includes("shoot"))) return true;
-                if (scLower === "editing" && (role.includes("edit") || title.includes("edit"))) return true;
-                if (scLower === "thumbnail" && (role.includes("thumb") || title.includes("thumb"))) return true;
-                if (scLower === "caption" && (role.includes("caption") || title.includes("caption"))) return true;
-                if (scLower === "approval" && (role.includes("approval") || title.includes("approv"))) return true;
-                if (scLower === "posting" && (role.includes("post") || title.includes("post"))) return true;
-                return false;
-              }).length;
-
-              const displayCount = subCategoryFilter === "All"
-                ? currentCount
-                : (subCategoryFilter.toLowerCase() === scLower ? (totalServerTasks || currentCount) : (creativeStageCounts[sc] ?? currentCount));
+              const isSelected = subCategoryFilter.toLowerCase() === sc.id.toLowerCase() || subCategoryFilter.toLowerCase() === sc.label.toLowerCase();
+              const displayCount = creativeStageCounts[sc.id] ?? creativeStageCounts[sc.label] ?? 0;
 
               return (
                 <button
-                  key={sc}
+                  key={sc.id}
                   type="button"
-                  onClick={() => setSubCategoryFilter(subCategoryFilter.toLowerCase() === scLower ? "All" : sc)}
+                  onClick={() => setSubCategoryFilter(isSelected ? "All" : sc.id)}
                   className={cn(
                     "px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer",
-                    subCategoryFilter.toLowerCase() === scLower
+                    isSelected
                       ? "bg-primary text-primary-foreground shadow-xs ring-1 ring-primary/40"
                       : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground border border-border/40"
                   )}
                 >
-                  <span>{sc}</span>
+                  <span>{sc.label}</span>
                   <span className={cn(
                     "px-1.5 py-0.2 rounded-full text-[9px] font-black",
-                    subCategoryFilter.toLowerCase() === scLower
+                    isSelected
                       ? "bg-white/20 text-white"
                       : "bg-muted text-muted-foreground"
                   )}>
@@ -2480,7 +2483,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-pink-600 uppercase tracking-wider block flex items-center justify-between">
                     <span>Subcategory</span>
-                    <span className="text-[9px] font-bold text-muted-foreground">(7 Stages)</span>
+                    <span className="text-[9px] font-bold text-muted-foreground">(8 Stages)</span>
                   </label>
                   <SearchableSelect
                     value={taskFormSubCategory}
@@ -2488,11 +2491,12 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                     options={[
                       { label: "1. Script", value: "Script" },
                       { label: "2. Shoot", value: "Shoot" },
-                      { label: "3. Caption", value: "Caption" },
-                      { label: "4. Thumbnail", value: "Thumbnail" },
-                      { label: "5. Editing", value: "Editing" },
-                      { label: "6. Approval", value: "Approval" },
-                      { label: "7. Posting", value: "Posting" },
+                      { label: "3. Video Editing", value: "Editing" },
+                      { label: "4. Post / Graphics", value: "Post/Graphics" },
+                      { label: "5. Caption", value: "Caption" },
+                      { label: "6. Thumbnail", value: "Thumbnail" },
+                      { label: "7. Approval", value: "Approval" },
+                      { label: "8. Posting", value: "Posting" },
                     ]}
                     className="w-full h-[38px] text-xs font-bold border-pink-500/30"
                   />
