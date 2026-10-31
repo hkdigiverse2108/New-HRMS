@@ -284,8 +284,8 @@ export function OtherTransactions() {
     <div className="w-full space-y-6 animate-in fade-in duration-500 pb-12 relative min-w-0">
 
       {/* Header */}
-      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
-        <div>
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3 sm:gap-4">
+        <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
             <Users className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
             Client & External Transactions
@@ -342,7 +342,7 @@ export function OtherTransactions() {
       </div>
 
       {/* Summary */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 sm:gap-4 grid-cols-1 min-[560px]:grid-cols-2 xl:grid-cols-3">
         {[
           {
             label: "Total Inflow", value: totalInflow, Icon: ArrowUpRight,
@@ -362,7 +362,7 @@ export function OtherTransactions() {
               <div className={`text-xs font-bold mb-1.5 ${text}`}>{label}</div>
               {loading
                 ? <Skeleton className="h-8 w-40" />
-                : <div className={`text-2xl sm:text-3xl font-black truncate ${text}`}>{value < 0 ? "-" : ""}₹{formatINR(Math.abs(value))}</div>}
+                : <div className={`text-2xl sm:text-3xl font-black break-words ${text}`}>{value < 0 ? "-" : ""}₹{formatINR(Math.abs(value))}</div>}
             </div>
             <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${iconBox}`}>
               <Icon className="w-5 h-5" />

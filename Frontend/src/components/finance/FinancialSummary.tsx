@@ -24,8 +24,8 @@ export function FinancialSummary() {
     <div className="w-full space-y-6 animate-in fade-in duration-500 pb-12 min-w-0">
       
       {/* Header */}
-      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
-        <div>
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3 sm:gap-4">
+        <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
             <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
             Financial Summary & Actuals

@@ -77,7 +77,7 @@ const toSlices = (rows: [string, Totals][], type: "credit" | "debit"): Slice[] =
 
 const AXIS_TICK = { fontSize: 11, fill: "var(--muted-foreground)" };
 const TOOLTIP_STYLE = { backgroundColor: "var(--card)", borderColor: "var(--border)", borderRadius: "12px", color: "var(--foreground)", fontSize: 12, boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" };
-const FILTER_SELECT = "w-[170px] h-[34px] pl-3 pr-3 bg-background border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer";
+const FILTER_SELECT = "flex-1 min-w-0 sm:flex-none sm:w-[170px] h-[34px] pl-3 pr-3 bg-background border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer";
 
 // Width of a card on large screens (12-column grid); full width below that
 const SPAN: Record<number, string> = { 4: "xl:col-span-4", 5: "xl:col-span-5", 6: "xl:col-span-6", 7: "xl:col-span-7", 8: "xl:col-span-8", 12: "xl:col-span-12" };
@@ -343,8 +343,8 @@ export function FinanceReport() {
   return (
     <div className="w-full space-y-6 animate-in fade-in duration-500 pb-12 relative min-w-0">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
+        <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl font-black tracking-tight text-foreground">Finance Report</h1>
           <p className="text-muted-foreground mt-1 text-xs sm:text-sm font-medium">Complete overview of company income, expenses, categories, brands and accounts</p>
         </div>
@@ -358,17 +358,20 @@ export function FinanceReport() {
         <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-muted-foreground pl-1 sm:pl-2">
           <Filter className="w-4 h-4" /> Filters:
         </div>
-        <DateRangeFilter dateRange={dateRange} onChange={setDateRange} placeholder="Filter by transaction date" className="w-full sm:w-auto" />
-        <div className="flex items-center gap-2 text-xs sm:text-sm">
-          <span className="text-muted-foreground font-medium">Account:</span>
+        <div className="flex items-center gap-2 text-xs sm:text-sm w-full sm:w-auto">
+          <span className="sm:hidden text-muted-foreground font-medium w-16 shrink-0">Date:</span>
+          <DateRangeFilter dateRange={dateRange} onChange={setDateRange} placeholder="Filter by transaction date" className="flex-1 min-w-0 sm:flex-none h-[34px]" />
+        </div>
+        <div className="flex items-center gap-2 text-xs sm:text-sm w-full sm:w-auto">
+          <span className="text-muted-foreground font-medium w-16 sm:w-auto shrink-0">Account:</span>
           <SearchableSelect value={account} onChange={setAccount} options={accountOptions} className={FILTER_SELECT} />
         </div>
-        <div className="flex items-center gap-2 text-xs sm:text-sm">
-          <span className="text-muted-foreground font-medium">Category:</span>
+        <div className="flex items-center gap-2 text-xs sm:text-sm w-full sm:w-auto">
+          <span className="text-muted-foreground font-medium w-16 sm:w-auto shrink-0">Category:</span>
           <SearchableSelect value={category} onChange={setCategory} options={categoryOptions} className={FILTER_SELECT} />
         </div>
-        <div className="flex items-center gap-2 text-xs sm:text-sm">
-          <span className="text-muted-foreground font-medium">Brand:</span>
+        <div className="flex items-center gap-2 text-xs sm:text-sm w-full sm:w-auto">
+          <span className="text-muted-foreground font-medium w-16 sm:w-auto shrink-0">Brand:</span>
           <SearchableSelect value={brand} onChange={setBrand} options={brandOptions} className={FILTER_SELECT} />
         </div>
       </div>
@@ -378,7 +381,7 @@ export function FinanceReport() {
         {cards.map((c) => (
           <div key={c.label} className="bg-card border border-border/50 rounded-2xl p-4 shadow-sm flex flex-col min-w-0 [container-type:inline-size]">
             <div className="flex items-center justify-between gap-2 mb-3">
-              <div className="text-muted-foreground font-extrabold text-[10px] uppercase tracking-widest truncate">{c.label}</div>
+              <div className="text-muted-foreground font-extrabold text-[10px] uppercase tracking-widest leading-tight">{c.label}</div>
               <c.icon className="w-4 h-4 text-muted-foreground shrink-0" />
             </div>
             {loading ? <Skeleton className="h-8 w-32 mb-2" /> : (
@@ -394,7 +397,7 @@ export function FinanceReport() {
       </div>
 
       {/* Charts — card widths follow how much each chart has to show */}
-      <div className="grid grid-cols-12 gap-6">
+      <div className="grid grid-cols-12 gap-4 sm:gap-6">
         {/* Money in vs out */}
         <ChartCard span={12} icon={<BarChart3 className="w-4 h-4" />} title="Monthly Credit vs Debit" subtitle="Income and expenses for each month">
           {hasData ? <CreditDebitBars data={monthlyChart} xKey="month" height={300} /> : <EmptyChart loading={loading} height={300} />}

@@ -6520,7 +6520,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           <div className="w-full space-y-8 animate-in fade-in duration-500">
             {/* Detail View Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3 sm:gap-4 min-w-0 w-full md:w-auto">
                 <button
                   onClick={() => {
                     setSelectedProjectId(null);
@@ -6532,12 +6532,12 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   <ArrowLeft className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
                 </button>
                 {/* K5: highlighted client logo — project ni odakh logo uparthi */}
-                <BrandLogo src={client.logo} alt={client.name} size="w-20 h-20" />
-                <div>
-                  <h1 className="text-3xl font-black tracking-tight text-foreground leading-tight">
+                <BrandLogo src={client.logo} alt={client.name} size="w-14 h-14 sm:w-20 sm:h-20 shrink-0" />
+                <div className="min-w-0">
+                  <h1 className="text-xl sm:text-3xl font-black tracking-tight text-foreground leading-tight break-words">
                     {project.name}{client?.companyName && client.companyName !== project.name ? ` (${client.companyName})` : ""}
                   </h1>
-                  <div className="flex items-center gap-2 mt-2">
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
                     <span className={cn("px-2 py-0.5 inline-flex text-[10px] font-bold uppercase tracking-widest rounded-lg items-center gap-1.5", getStatusColor(project.status))}>
                       <Circle className="w-1.5 h-1.5 fill-current" />
                       {project.status}
@@ -6550,7 +6550,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 w-full md:w-auto [&>button]:whitespace-nowrap [&>button]:px-3 [&>button]:py-1.5 sm:[&>button]:px-3.5 sm:[&>button]:py-2">
                 {/* WhatsApp Group Link */}
                 <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-1 shadow-sm">
                   <button
@@ -6653,7 +6653,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-xl hover:bg-primary/90 transition-all shadow-sm"
                 >
                   <Edit2 className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Edit</span>
+                  <span>Edit</span>
                 </button>
 
                 {isAdminOrHr && (
@@ -6698,7 +6698,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
             {/* K13: Quick Links — brand na badha shortcuts ek j jagyae (go-to) (Hidden for Digital Marketing) */}
             {!isMarketingCategory(project.category) && (
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar pb-1 [&>*]:shrink-0 [&>button]:whitespace-nowrap">
                 <span className="text-[11px] font-black text-muted-foreground uppercase tracking-widest mr-1">Quick Links:</span>
                 {project.whatsapp_group_link ? (
                   <button

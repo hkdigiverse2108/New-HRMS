@@ -585,25 +585,25 @@ export function Transactions() {
     <div className="w-full space-y-4 animate-in fade-in duration-500 pb-12 relative min-w-0">
 
       {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+      <div className="flex flex-col 2xl:flex-row 2xl:items-center justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl font-black tracking-tight text-foreground leading-tight">
             Financial Ledger Management
           </h1>
-          <p className="text-muted-foreground mt-0.5 text-xs sm:text-sm font-medium truncate">
+          <p className="text-muted-foreground mt-0.5 text-xs sm:text-sm font-medium">
             Track Credit (Invoices) and Debt (Expenses) with dynamic balance calculations
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Setup & export: icon buttons, labels show on very wide screens */}
-          <button onClick={openOpeningBalances} title="Opening Balances" className="h-9 px-2.5 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center justify-center gap-2 text-sm whitespace-nowrap">
-            <Wallet className="w-4 h-4 text-amber-500 shrink-0" /><span className="hidden 2xl:inline">Opening Balances</span>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Setup & export */}
+          <button onClick={openOpeningBalances} title="Opening Balances" className="h-9 px-3 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center justify-center gap-2 text-sm whitespace-nowrap">
+            <Wallet className="w-4 h-4 text-amber-500 shrink-0" /><span>Opening Balances</span>
           </button>
-          <button onClick={() => setIsManageBanksOpen(true)} title="Manage Banks" className="h-9 px-2.5 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center justify-center gap-2 text-sm whitespace-nowrap">
-            <Landmark className="w-4 h-4 text-primary shrink-0" /><span className="hidden 2xl:inline">Manage Banks</span>
+          <button onClick={() => setIsManageBanksOpen(true)} title="Manage Banks" className="h-9 px-3 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center justify-center gap-2 text-sm whitespace-nowrap">
+            <Landmark className="w-4 h-4 text-primary shrink-0" /><span>Manage Banks</span>
           </button>
-          <button onClick={exportLedger} title="Export Ledger" className="h-9 px-2.5 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center justify-center gap-2 text-sm whitespace-nowrap">
-            <Download className="w-4 h-4 text-indigo-500 shrink-0" /><span className="hidden 2xl:inline">Export Ledger</span>
+          <button onClick={exportLedger} title="Export Ledger" className="h-9 px-3 bg-background border border-border/50 text-foreground font-bold rounded-lg hover:bg-muted/50 transition-colors shadow-sm flex items-center justify-center gap-2 text-sm whitespace-nowrap">
+            <Download className="w-4 h-4 text-indigo-500 shrink-0" /><span>Export Ledger</span>
           </button>
           <span className="hidden sm:block w-px h-6 bg-border/60 mx-0.5" />
           <button
@@ -622,10 +622,10 @@ export function Transactions() {
       </div>
 
       {/* Account Tabs & Search */}
-      <div className="flex flex-col md:flex-row justify-between gap-3 sm:gap-4 bg-muted/30 p-2 rounded-2xl border border-border/50">
-        <div className="flex flex-wrap sm:flex-nowrap gap-2">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 sm:gap-4 bg-muted/30 p-2 rounded-2xl border border-border/50">
+        <div className="flex flex-wrap gap-2 min-w-0">
           <button
-            className={`flex-1 sm:flex-initial h-10 px-4 sm:px-6 text-xs sm:text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeAccountTab === "overview"
+            className={`flex-1 sm:flex-initial h-10 px-3 sm:px-5 xl:px-6 text-xs sm:text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeAccountTab === "overview"
               ? "bg-background shadow-sm text-foreground"
               : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
               }`}
@@ -634,7 +634,7 @@ export function Transactions() {
             <LayoutGrid className={`w-4 h-4 ${activeAccountTab === "overview" ? "text-primary" : ""}`} /> Overview
           </button>
           <button
-            className={`flex-1 sm:flex-initial h-10 px-4 sm:px-6 text-xs sm:text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeAccountTab === "bank"
+            className={`flex-1 sm:flex-initial h-10 px-3 sm:px-5 xl:px-6 text-xs sm:text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeAccountTab === "bank"
               ? "bg-background shadow-sm text-foreground"
               : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
               }`}
@@ -643,7 +643,7 @@ export function Transactions() {
             <Building2 className={`w-4 h-4 ${activeAccountTab === "bank" ? "text-primary" : ""}`} /> Bank Acc Management
           </button>
           <button
-            className={`flex-1 sm:flex-initial h-10 px-4 sm:px-6 text-xs sm:text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeAccountTab === "cash"
+            className={`flex-1 sm:flex-initial h-10 px-3 sm:px-5 xl:px-6 text-xs sm:text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeAccountTab === "cash"
               ? "bg-background shadow-sm text-foreground"
               : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
               }`}
@@ -656,7 +656,7 @@ export function Transactions() {
           placeholder="Search invoices, expenses, narratives..."
           value={searchQuery}
           onChange={setSearchQuery}
-          containerClassName="w-full md:w-96"
+          containerClassName="w-full xl:w-80 2xl:w-96 shrink-0"
         />
       </div>
 
@@ -684,35 +684,38 @@ export function Transactions() {
       )}
 
       {/* Filters */}
-      <div className="bg-background border border-border/50 rounded-2xl p-3 shadow-sm flex flex-wrap items-center gap-3 sm:gap-4">
+      <div className="bg-background border border-border/50 rounded-2xl p-3 shadow-sm flex flex-wrap items-center gap-2.5 sm:gap-4">
         <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-muted-foreground pl-1 sm:pl-2">
           <Filter className="w-4 h-4" /> Filters:
         </div>
 
-        <DateRangeFilter
-          dateRange={dateRange}
-          onChange={setDateRange}
-          placeholder="Filter by transaction date"
-          className="w-full sm:w-[250px] h-[34px]"
-        />
-
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <span className="text-xs sm:text-sm font-medium text-muted-foreground">Category:</span>
-          <SearchableSelect
-            value={filterCategory}
-            onChange={setFilterCategory}
-            options={categoryOptions}
-            className="flex-1 sm:flex-none sm:w-[180px] h-[34px] px-3 bg-background border border-border/70 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+          <span className="sm:hidden text-xs font-medium text-muted-foreground w-16 shrink-0">Date:</span>
+          <DateRangeFilter
+            dateRange={dateRange}
+            onChange={setDateRange}
+            placeholder="Filter by transaction date"
+            className="flex-1 min-w-0 sm:flex-none sm:w-[250px] h-[34px]"
           />
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <span className="text-xs sm:text-sm font-medium text-muted-foreground">Brand:</span>
+          <span className="text-xs sm:text-sm font-medium text-muted-foreground w-16 sm:w-auto shrink-0">Category:</span>
+          <SearchableSelect
+            value={filterCategory}
+            onChange={setFilterCategory}
+            options={categoryOptions}
+            className="flex-1 min-w-0 sm:flex-none sm:w-[180px] h-[34px] px-3 bg-background border border-border/70 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <span className="text-xs sm:text-sm font-medium text-muted-foreground w-16 sm:w-auto shrink-0">Brand:</span>
           <SearchableSelect
             value={filterBrand}
             onChange={setFilterBrand}
             options={brandFilterOptions}
-            className="flex-1 sm:flex-none sm:w-[160px] h-[34px] px-3 bg-background border border-border/70 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+            className="flex-1 min-w-0 sm:flex-none sm:w-[160px] h-[34px] px-3 bg-background border border-border/70 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
           />
         </div>
 
@@ -727,14 +730,14 @@ export function Transactions() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:gap-4 grid-cols-1 min-[560px]:grid-cols-2 xl:grid-cols-4">
 
         <div className="bg-card border border-border/50 rounded-2xl p-5 shadow-sm relative overflow-hidden">
           <div className="absolute -right-4 -top-4 w-24 h-24 bg-amber-500/10 rounded-full blur-2xl" />
           <div className="text-muted-foreground font-extrabold text-[10px] uppercase tracking-widest mb-4">
             {activeAccountTab === "overview" ? "Total Opening Balance" : activeAccountTab === "bank" ? "Opening Balance" : "Opening Cash Balance"}
           </div>
-          {loading ? <Skeleton className="h-9 w-36 mb-4" /> : <div className="text-3xl font-black text-foreground mb-4">₹{formatINR(openingBalance)}</div>}
+          {loading ? <Skeleton className="h-9 w-36 mb-4" /> : <div className="text-2xl sm:text-3xl font-black text-foreground mb-4 break-words">₹{formatINR(openingBalance)}</div>}
           <button onClick={openOpeningBalances} className="text-amber-600 font-bold text-xs flex items-center gap-1 hover:text-amber-700 transition-colors">
             {openingLocked ? "View Opening Balance" : "Configure Opening Balance"} <ArrowRight className="w-3 h-3" />
           </button>
@@ -743,14 +746,14 @@ export function Transactions() {
         <div className="bg-card border border-border/50 rounded-2xl p-5 shadow-sm relative overflow-hidden">
           <div className="absolute -right-4 -top-4 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl" />
           <div className="text-muted-foreground font-extrabold text-[10px] uppercase tracking-widest mb-4 max-w-[140px] leading-tight">Transaction Total Credit</div>
-          {loading ? <Skeleton className="h-9 w-36 mb-4" /> : <div className="text-3xl font-black text-emerald-600 mb-4">+₹{formatINR(totalCredit)}</div>}
+          {loading ? <Skeleton className="h-9 w-36 mb-4" /> : <div className="text-2xl sm:text-3xl font-black text-emerald-600 mb-4 break-words">+₹{formatINR(totalCredit)}</div>}
           {loading ? <Skeleton className="h-4 w-40" /> : <div className="text-muted-foreground font-medium text-xs">{creditTransactions.length} credit entries ({syncedCount} synced)</div>}
         </div>
 
         <div className="bg-card border border-border/50 rounded-2xl p-5 shadow-sm relative overflow-hidden">
           <div className="absolute -right-4 -top-4 w-24 h-24 bg-rose-500/10 rounded-full blur-2xl" />
           <div className="text-muted-foreground font-extrabold text-[10px] uppercase tracking-widest mb-4 max-w-[140px] leading-tight">Transaction Total Debt</div>
-          {loading ? <Skeleton className="h-9 w-36 mb-4" /> : <div className="text-3xl font-black text-rose-600 mb-4">-₹{formatINR(totalDebt)}</div>}
+          {loading ? <Skeleton className="h-9 w-36 mb-4" /> : <div className="text-2xl sm:text-3xl font-black text-rose-600 mb-4 break-words">-₹{formatINR(totalDebt)}</div>}
           {loading ? <Skeleton className="h-4 w-40" /> : <div className="text-muted-foreground font-medium text-xs">{debitTransactions.length} expense entries recorded</div>}
         </div>
 
@@ -766,7 +769,7 @@ export function Transactions() {
                 <span className="text-sm font-bold text-primary-foreground">₹</span>
               </div>
             </div>
-            {loading ? <Skeleton className="h-10 w-44 mb-3 bg-primary-foreground/20" /> : <div className="text-4xl font-black mb-3 text-primary-foreground">₹{formatINR(closingBalance)}</div>}
+            {loading ? <Skeleton className="h-10 w-44 mb-3 bg-primary-foreground/20" /> : <div className="text-3xl sm:text-4xl font-black mb-3 text-primary-foreground break-words">₹{formatINR(closingBalance)}</div>}
             <div className="text-primary-foreground/70 font-medium text-[10px] leading-tight opacity-90 max-w-[180px]">
               {activeAccountTab === "overview" ? "Bank + Cash: Opening + Credit - Debt" : "Opening Balance + Total Credit - Total Debt"}
             </div>
@@ -776,11 +779,11 @@ export function Transactions() {
       </div>
 
       {/* Side-by-Side Tables */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
 
         {/* Credit Table */}
-        <div className="bg-card border border-border/50 rounded-2xl shadow-sm flex flex-col h-full">
-          <div className="p-4 border-b border-border/50 flex justify-between items-center bg-emerald-500/5 rounded-t-2xl">
+        <div className="bg-card border border-border/50 rounded-2xl shadow-sm flex flex-col h-full min-w-0">
+          <div className="p-3 sm:p-4 border-b border-border/50 flex flex-wrap justify-between items-center gap-3 bg-emerald-500/5 rounded-t-2xl">
             <div className="flex gap-3 items-center">
               <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
                 <ArrowDownLeft className="w-5 h-5" />
@@ -882,8 +885,8 @@ export function Transactions() {
         </div>
 
         {/* Debt Table */}
-        <div className="bg-card border border-border/50 rounded-2xl shadow-sm flex flex-col h-full">
-          <div className="p-4 border-b border-border/50 flex justify-between items-center bg-rose-500/5 rounded-t-2xl">
+        <div className="bg-card border border-border/50 rounded-2xl shadow-sm flex flex-col h-full min-w-0">
+          <div className="p-3 sm:p-4 border-b border-border/50 flex flex-wrap justify-between items-center gap-3 bg-rose-500/5 rounded-t-2xl">
             <div className="flex gap-3 items-center">
               <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-sm">
                 <ArrowUpRight className="w-5 h-5" />
