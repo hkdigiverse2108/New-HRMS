@@ -170,6 +170,10 @@ interface TaskItem {
 
   id: string;
 
+  projectId?: string | undefined;
+
+  brandName?: string | undefined;
+
   title: string;
 
   description: string;
@@ -253,6 +257,56 @@ interface TaskFormErrors {
   assignee?: string | undefined;
 
 }
+
+export const cleanBrandName = (raw: string): string => {
+  if (!raw) return "-";
+  let clean = raw.trim();
+  clean = clean.replace(/\s*-\s*(Creative|Digital Marketing|Marketing|Development|WA Automation|CRM Software|HRM System).*$/i, "");
+  return clean.trim() || raw;
+};
+
+export const getTaskBrandName = (t: any, projectsList?: Array<{ label: string; value: string }>): string => {
+  if (t?.client_details?.company_name && String(t.client_details.company_name).trim()) {
+    return cleanBrandName(String(t.client_details.company_name).trim());
+  }
+  if (t?.project_details?.client_details?.company_name && String(t.project_details.client_details.company_name).trim()) {
+    return cleanBrandName(String(t.project_details.client_details.company_name).trim());
+  }
+  const pName = String(t?.project_details?.project_name || t?.project_name || "").trim();
+  if (pName && pName !== "Development Project" && pName !== "Untitled Project") {
+    return cleanBrandName(pName);
+  }
+  const pid = String(t?.project_id || t?.projectId || "");
+  if (pid && projectsList && projectsList.length > 0) {
+    const found = projectsList.find(p => p.value === pid);
+    if (found?.label) {
+      const parts = found.label.split("•");
+      const firstPart = parts[0]?.trim();
+      if (firstPart) return cleanBrandName(firstPart);
+    }
+  }
+  const title = String(t?.title || "").trim();
+  const bracketMatch = title.match(/^\[(.*?)\]/);
+  if (bracketMatch && bracketMatch[1]) {
+    const tag = bracketMatch[1].trim();
+    if (tag && !["client issue", "pending", "task"].includes(tag.toLowerCase())) {
+      return cleanBrandName(tag);
+    }
+  }
+  const dashMatch = title.match(/^([A-Za-z0-9&'\s]+?)\s*-\s*(.+)$/);
+  if (dashMatch && dashMatch[1]) {
+    const candidate = dashMatch[1].trim();
+    const reservedWords = [
+      "shoot", "script", "graphics", "editing", "post", "reel", "reels", 
+      "caption", "thumbnail", "approval", "posting", "daily task", "task",
+      "general", "client issue", "pending", "in progress", "todo", "done"
+    ];
+    if (!reservedWords.includes(candidate.toLowerCase()) && candidate.length > 1) {
+      return cleanBrandName(candidate);
+    }
+  }
+  return "-";
+};
 
 const formatDateDMY = (dateVal?: string | Date | null): string => {
 
@@ -579,7 +633,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
   useEffect(() => {
 
-    if (!showProjectFilter || allProjects.length > 0) return;
+    if (allProjects.length > 0) return;
 
     let cancelled = false;
 
@@ -705,6 +759,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
   const [taskFormRecurrence, setTaskFormRecurrence] = useState("none");
 
+  const [taskFormProject, setTaskFormProject] = useState<string>("");
+
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [formErrors, setFormErrors] = useState<TaskFormErrors>({});
@@ -745,6 +801,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
       setTaskFormRecurrence("none");
 
+      setTaskFormProject("");
+
       setFormErrors({});
 
       setIsNewTaskOpen(true);
@@ -782,6 +840,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
       setTaskFormAssignee(currentUserId || employees[0]?.id || "");
 
       setTaskFormRecurrence("none");
+
+      setTaskFormProject("");
 
       setFormErrors({});
 
@@ -1198,9 +1258,15 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
           const assignedByName = t.assigned_by_details?.employee_name || "Management";
 
+          const brandName = getTaskBrandName(t, allProjects);
+
           return {
 
             id: String(t._id || t.id),
+
+            projectId: String(t.project_id || t.project_details?._id || t.project_details?.id || ""),
+
+            brandName,
 
             title: t.title || "Untitled Task",
 
@@ -1590,6 +1656,12 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
         }
 
+        let quickProjId: string | undefined = undefined;
+        if (brandPrefix) {
+          const matchedP = allProjects.find(p => p.label.toLowerCase().includes(brandPrefix.toLowerCase()));
+          if (matchedP) quickProjId = matchedP.value;
+        }
+
         return {
 
           title,
@@ -1597,6 +1669,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
           due_date: t.dueDate,
 
           assigned_to: [assigneeId],
+
+          project_id: quickProjId,
 
         };
 
@@ -1683,6 +1757,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
         recurrence: taskFormRecurrence,
 
         task_category: taskFormCategory,
+
+        project_id: taskFormProject || undefined,
 
       };
 
@@ -2197,6 +2273,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     setTaskFormAssignee(task.assignedToId);
 
     setTaskFormRecurrence(task.recurrence || "none");
+
+    setTaskFormProject(task.projectId || task.projectDetails?._id || task.projectDetails?.id || "");
 
     setFormErrors({});
 
@@ -3886,6 +3964,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
                   <SortableHeader label="Task Details" sortKey="title" currentSort={sortConfig} onSort={requestSort} className="px-6 py-3.5 text-xs font-bold text-muted-foreground uppercase tracking-wider" />
 
+                  <SortableHeader label="Brand" sortKey="brandName" currentSort={sortConfig} onSort={requestSort} className="px-5 py-3.5 text-xs font-bold text-muted-foreground uppercase tracking-wider" />
+
                   <SortableHeader label="Status" sortKey="status" currentSort={sortConfig} onSort={requestSort} className="px-5 py-3.5 text-xs font-bold text-muted-foreground uppercase tracking-wider" />
 
                   <SortableHeader label="Priority" sortKey="priority" currentSort={sortConfig} onSort={requestSort} className="px-4 py-3.5 text-xs font-bold text-muted-foreground uppercase tracking-wider" />
@@ -4048,6 +4128,21 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
                         </div>
 
+                      </td>
+
+                      {/* Brand Column */}
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        {task.brandName && task.brandName !== "-" ? (
+                          <span 
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 text-[11px] font-black tracking-tight"
+                            title={task.brandName}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                            <span className="max-w-[130px] truncate">{task.brandName}</span>
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground/40 text-xs font-semibold pl-2 select-none">-</span>
+                        )}
                       </td>
 
                       {/* Status & Review Approval */}
@@ -4668,9 +4763,39 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
             </div>
 
-            {/* Category & Subcategory */}
+            {/* Brand / Project & Category */}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+              <div className="space-y-1">
+
+                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-wider block">
+
+                  Brand / Project <span className="text-muted-foreground/60 text-[9px] font-normal">(Optional)</span>
+
+                </label>
+
+                <SearchableSelect
+
+                  value={taskFormProject}
+
+                  onChange={(val) => setTaskFormProject(val)}
+
+                  options={[
+
+                    { label: "None / Internal", value: "" },
+
+                    ...allProjects.map((p) => ({ label: p.label, value: p.value }))
+
+                  ]}
+
+                  placeholder="Select brand / project..."
+
+                  className="w-full h-[38px] text-xs font-semibold"
+
+                />
+
+              </div>
 
               <div className="space-y-1">
 
@@ -5571,6 +5696,18 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                       <span className="text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-md flex items-center gap-1">
 
                         <ExternalLink className="w-3 h-3" /> Auto-Assigned (Content Calendar)
+
+                      </span>
+
+                    )}
+
+                    {inspectingTask.brandName && inspectingTask.brandName !== "-" && (
+
+                      <span className="text-[10px] font-black bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-md flex items-center gap-1">
+
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+
+                        Brand: {inspectingTask.brandName}
 
                       </span>
 

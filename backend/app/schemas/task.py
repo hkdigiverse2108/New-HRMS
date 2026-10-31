@@ -165,6 +165,7 @@ class TaskQuickAssign(BaseModel):
     due_date: Optional[date] = None
     assigned_to: list[str] = Field(..., min_length=1, description="List of Employee IDs to assign the task to")
     assigned_by: Optional[str] = None
+    project_id: Optional[str] = None
 
 
 class TaskResponse(TaskBase):

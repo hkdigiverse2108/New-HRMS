@@ -379,6 +379,7 @@ class TaskService:
                     "assigned_to": assignee,
                     "assigned_by": task_assigned_by,
                     "created_by": task_assigned_by,
+                    "project_id": getattr(task, "project_id", None),
                     "activity_history": [{
                         "action": "created",
                         "performed_by": task_assigned_by,
