@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "react";
 import * as XLSX from "xlsx";
 import { usePersistentState } from "@/hooks/usePersistentState";
-import { X, Search, Plus, Filter, Check, MoreHorizontal, LayoutGrid, List, Briefcase, Calendar, Clock, Star, Circle, Trash2, Edit2, Archive, ArchiveRestore, ArrowLeft, Users, IndianRupee, FolderGit2, CheckCircle2, Settings2, TrendingUp, MousePointerClick, Target, BarChart3, ChevronDown, User, Building2, CreditCard, FileText, ChevronRight, Video, Instagram, Layers, MessageSquare, Key, Copy, Eye, EyeOff, ExternalLink, Phone, ShieldCheck, Sparkles, Share2, AlertCircle, Sliders, Loader2, UserPlus, UserX, ChevronLeft, Download, Printer, Upload, FileSpreadsheet } from "lucide-react";
+import { X, Search, Plus, Filter, Check, MoreHorizontal, LayoutGrid, List, Briefcase, Calendar, Clock, Star, Circle, Trash2, Edit2, Archive, ArchiveRestore, ArrowLeft, Users, IndianRupee, FolderGit2, CheckCircle2, Settings2, TrendingUp, MousePointerClick, Target, BarChart3, ChevronDown, User, Building2, CreditCard, FileText, ChevronRight, Video, Instagram, Layers, MessageSquare, Key, Copy, Eye, EyeOff, ExternalLink, Phone, ShieldCheck, Sparkles, Share2, AlertCircle, Sliders, Loader2, UserPlus, UserX, ChevronLeft, Download, Printer, Upload, FileSpreadsheet, History } from "lucide-react";
 import { toast } from "@/lib/toast";
 import { cn, formatDate, formatPersonName } from "@/lib/utils";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -22,6 +22,7 @@ import { DigitalMarketingOperations, MarketingRecord } from "./DigitalMarketingO
 
 import { ClientFinanceModal } from "./ClientFinanceModal";
 import { ClientFollowupModal, FollowupLogEntry } from "./ClientFollowupModal";
+import { ActivityHistoryModal, ActivityHistoryEvent } from "./ActivityHistoryModal";
 
 type ProjectStatus = "In Progress" | "In Review" | "Completed" | "On Hold";
 type ClientStatus = "Active" | "Archived";
@@ -183,6 +184,7 @@ interface CalendarItem {
   postingLinkOfIg?: string | undefined;
   actualPostingDate?: string | undefined;
   remark?: string | undefined;
+  logs?: any[] | undefined;
   issues?: {
     id: string;
     text: string;
@@ -230,6 +232,7 @@ export const mapBackendContentToCalendarItem = (item: any): CalendarItem => {
     postingLinkOfIg: item.instagram_link || "",
     actualPostingDate: item.actual_posting_date ? String(item.actual_posting_date).split("T")[0] : "",
     remark: item.remark || "",
+    logs: item.logs || [],
     issues: (item.issues || []).map((iss: any, idx: number) =>
       typeof iss === 'string'
         ? { id: `iss-${idx}`, text: iss, timestamp: "", role: "Shoot", author: "Team", isClientIssue: true, isPending: false, issueType: "client_issue" }
@@ -3453,6 +3456,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   // SMM Content Calendar States
   const [isAddCalendarItemModalOpen, setIsAddCalendarItemModalOpen] = useState(false);
   const [editingCalendarItem, setEditingCalendarItem] = useState<CalendarItem | null>(null);
+  const [selectedCcHistoryItem, setSelectedCcHistoryItem] = useState<CalendarItem | null>(null);
   const [calendarTypeFilter, setCalendarTypeFilter] = useState("All");
   const [calendarStatusFilter, setCalendarStatusFilter] = useState("All");
   const [activeCalendarTab, setActiveCalendarTab] = useState<'general' | 'production' | 'publishing'>('general');
@@ -7980,6 +7984,16 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                                   <button
                                                     onClick={(e) => {
                                                       e.stopPropagation();
+                                                      setSelectedCcHistoryItem(item);
+                                                    }}
+                                                    className="p-1.5 text-muted-foreground hover:text-[#0D9488] hover:bg-muted rounded-lg transition-colors border border-border/30 shadow-sm bg-card"
+                                                    title="Row Activity History"
+                                                  >
+                                                    <History className="w-3.5 h-3.5" />
+                                                  </button>
+                                                  <button
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
                                                       setConfirmModalState({
                                                         isOpen: true,
                                                         title: "Delete Content Idea",
@@ -9649,6 +9663,55 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             )}
 
           </div>
+          {/* SMM Content Calendar Row Activity History Modal */}
+          {selectedCcHistoryItem && (() => {
+            const rawLogs = selectedCcHistoryItem.logs || [];
+            const logsList = rawLogs.length > 0 ? rawLogs : [
+              {
+                userName: selectedCcHistoryItem.brand_person_details?.employee_name || "Admin",
+                action: "Row created",
+                timestamp: selectedCcHistoryItem.postingDate || new Date().toISOString(),
+                details: "Initial entry created in Content Calendar"
+              }
+            ];
+
+            const events: ActivityHistoryEvent[] = logsList.map((log: any, idx: number) => {
+              const actionLabel = (log.action || "ROW UPDATED").toUpperCase().replace("ROW ", "");
+              const isCreate = actionLabel === "CREATED";
+              const lines = log.details
+                ? String(log.details).split("\n").map((s: string) => s.trim()).filter(Boolean)
+                : [];
+
+              return {
+                id: `cclog-${idx}`,
+                timestamp: log.timestamp || new Date().toISOString(),
+                action: log.action || "updated",
+                badgeLabel: actionLabel,
+                performedBy: log.userName || "Management",
+                lines,
+                type: isCreate ? "create" : "update",
+              };
+            });
+
+            events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+            return (
+              <ActivityHistoryModal
+                open={!!selectedCcHistoryItem}
+                onOpenChange={(open) => !open && setSelectedCcHistoryItem(null)}
+                modalTitle="Content Row Activity History"
+                brandName={project?.name || "Content Calendar"}
+                category="Content Calendar"
+                deliverableType={selectedCcHistoryItem.type}
+                title={selectedCcHistoryItem.topic || "Untitled Idea"}
+                currentStatus={selectedCcHistoryItem.status}
+                assignedToName={selectedCcHistoryItem.brand_person_details?.employee_name}
+                dueDate={selectedCcHistoryItem.postingDate ? formatDate(selectedCcHistoryItem.postingDate) : undefined}
+                events={events}
+              />
+            );
+          })()}
+
           {/* SMM Content Calendar Settings Modal */}
           {isCalendarSettingsOpen && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">

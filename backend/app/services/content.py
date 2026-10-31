@@ -1,5 +1,5 @@
 from typing import Optional
-from datetime import timedelta
+from datetime import timedelta, datetime
 from app.repository.content import ContentRepository
 from app.repository.project import ProjectRepository
 from app.repository.employee import EmployeeRepository
@@ -80,7 +80,7 @@ class ContentService:
         return await ContentRepository.update_settings(project_id, data_dict)
 
     @staticmethod
-    async def _sync_tasks_for_content(item_id: str, item_data: dict, project: dict, current_user_id: Optional[str] = None):
+    async def _sync_tasks_for_content(item_id: str, item_data: dict, project: dict, current_user_id: Optional[str] = None, existing_item: Optional[dict] = None):
         team = project.get("creative_team")
         if not team:
             return
@@ -245,11 +245,55 @@ class ContentService:
             })
             
             # Use the current user who triggered the action, or fallback to 'system'
-            assigned_by = current_user_id if current_user_id else "system"
+            assigned_by = current_user_id
+            if not assigned_by or assigned_by == "system":
+                cc_creator = team.get("cc_creator")
+                if cc_creator and str(cc_creator).strip():
+                    assigned_by = str(cc_creator).strip()
+                elif item_data.get("brand_person"):
+                    assigned_by = str(item_data.get("brand_person")).strip()
+                elif project.get("assigned_employee_id"):
+                    assigned_by = str(project.get("assigned_employee_id")).strip()
+                elif project.get("created_by"):
+                    assigned_by = str(project.get("created_by")).strip()
+                else:
+                    assigned_by = "6aaa2a034b106fd0c7cac04d"
             
+            # Determine link / deliverable for this specific role
+            stage_link_key = None
+            new_stage_val = None
+            old_stage_val = None
+
+            if role == "posting_publisher":
+                stage_link_key = "postingLinkOfIg"
+                new_stage_val = item_data.get("instagram_link")
+                old_stage_val = existing_item.get("instagram_link") if existing_item else None
+            elif role in ["reel_editing", "post_graphics"]:
+                stage_link_key = "finalReelLink" if content_type == "Reel" else "finalPostLink"
+                new_stage_val = (item_data.get("editing") or {}).get("link") if isinstance(item_data.get("editing"), dict) else None
+                old_stage_val = (existing_item.get("editing") or {}).get("link") if existing_item and isinstance(existing_item.get("editing"), dict) else None
+            elif role == "scripting":
+                stage_link_key = "scriptLink"
+                new_stage_val = (item_data.get("script") or {}).get("link") if isinstance(item_data.get("script"), dict) else None
+                old_stage_val = (existing_item.get("script") or {}).get("link") if existing_item and isinstance(existing_item.get("script"), dict) else None
+            elif role == "shoot_videography":
+                stage_link_key = "shootLink"
+                new_stage_val = (item_data.get("shoot") or {}).get("link") if isinstance(item_data.get("shoot"), dict) else None
+                old_stage_val = (existing_item.get("shoot") or {}).get("link") if existing_item and isinstance(existing_item.get("shoot"), dict) else None
+            elif role == "thumbnail":
+                stage_link_key = "thumbnailLink"
+                new_stage_val = (item_data.get("thumbnail") or {}).get("link") if isinstance(item_data.get("thumbnail"), dict) else None
+                old_stage_val = (existing_item.get("thumbnail") or {}).get("link") if existing_item and isinstance(existing_item.get("thumbnail"), dict) else None
+            elif role == "caption":
+                stage_link_key = "caption"
+                new_stage_val = item_data.get("caption_text") or ((item_data.get("caption") or {}).get("link") if isinstance(item_data.get("caption"), dict) else None)
+                old_stage_val = existing_item.get("caption_text") if existing_item else None
+
             if task:
                 task_id = str(task["_id"])
                 update_payload = {}
+                task_changes = []
+                status_changed_desc = None
                 
                 new_title = mapping.get("title")
                 if new_title and task.get("title") != new_title:
@@ -260,13 +304,66 @@ class ContentService:
                     update_payload["sub_category"] = role_to_subcat.get(role, "General")
                 if task.get("assigned_to") != emp_id:
                     update_payload["assigned_to"] = emp_id
+
+                # Link change check
+                if stage_link_key and str(old_stage_val or "").strip() != str(new_stage_val or "").strip():
+                    if old_stage_val:
+                        task_changes.append(f"• '{stage_link_key}' changed from '{old_stage_val}' to '{new_stage_val or ''}'")
+                    else:
+                        task_changes.append(f"• '{stage_link_key}' changed to '{new_stage_val or ''}'")
                     
+                    creative = dict(task.get("creative_details") or {})
+                    creative["link"] = new_stage_val
+                    creative["stage"] = role
+                    creative[stage_link_key] = new_stage_val
+                    update_payload["creative_details"] = creative
+
+                # Remark change check
+                old_rem = existing_item.get("remark") if existing_item else None
+                new_rem = item_data.get("remark")
+                if str(old_rem or "").strip() != str(new_rem or "").strip():
+                    if old_rem:
+                        task_changes.append(f"• 'remark' changed from '{old_rem}' to '{new_rem or ''}'")
+                    else:
+                        task_changes.append(f"• 'remark' changed to '{new_rem or ''}'")
+                    creative = dict(task.get("creative_details") or (update_payload.get("creative_details") or {}))
+                    creative["remark"] = new_rem
+                    update_payload["creative_details"] = creative
+                    
+                # Status change check
                 if is_completed and task.get("status") not in ["completed", "done"]:
                     update_payload["status"] = "completed"
+                    status_changed_desc = f"• 'status' changed from '{task.get('status', 'todo')}' to 'completed' (Link uploaded in Content Calendar)"
                 elif not is_completed and task.get("status") in ["completed", "done"]:
                     update_payload["status"] = "todo"
+                    status_changed_desc = f"• 'status' changed from 'completed' to 'todo' (Link removed in Content Calendar)"
+
+                # Other fields changes
+                for up_k in ["title", "due_date", "sub_category", "assigned_to"]:
+                    if up_k in update_payload:
+                        old_v = task.get(up_k)
+                        new_v = update_payload[up_k]
+                        if str(old_v or "") != str(new_v or ""):
+                            task_changes.append(f"• '{up_k}' changed to '{new_v}' (Content Calendar Sync)")
                     
-                if update_payload:
+                if update_payload or task_changes or status_changed_desc:
+                    now = datetime.utcnow()
+                    act_history = list(task.get("activity_history") or [])
+                    if status_changed_desc:
+                        act_history.append({
+                            "action": "status_changed",
+                            "performed_by": assigned_by,
+                            "timestamp": now,
+                            "details": status_changed_desc
+                        })
+                    if task_changes:
+                        act_history.append({
+                            "action": "updated",
+                            "performed_by": assigned_by,
+                            "timestamp": now,
+                            "details": "\n".join(task_changes)
+                        })
+                    update_payload["activity_history"] = act_history
                     await TaskRepository.update(task_id, update_payload)
             else:
                 # Create new task
@@ -278,6 +375,15 @@ class ContentService:
                 else:
                     due_date_obj = None
                     
+                creative = {
+                    "link": new_stage_val,
+                    "stage": role
+                }
+                if stage_link_key:
+                    creative[stage_link_key] = new_stage_val
+                if item_data.get("remark"):
+                    creative["remark"] = item_data.get("remark")
+
                 task_create = TaskCreate(
                     title=mapping["title"],
                     assigned_to=emp_id,
@@ -287,6 +393,7 @@ class ContentService:
                     content_item_id=str(item_id),
                     project_id=str(project.get("_id")),
                     creative_role=role,
+                    creative_details=creative,
                     status="completed" if is_completed else "todo"
                 )
                 await TaskService.create_task(task_create, assigned_by)
@@ -333,6 +440,25 @@ class ContentService:
                 if not insert_data[stg].get("link"):
                     insert_data[stg]["link"] = "Not Required"
 
+
+        user_name = "Admin"
+        lookup_uid = current_user_id or project.get("creative_team", {}).get("cc_creator") or project.get("assigned_employee_id")
+        if lookup_uid:
+            from app.repository.employee import EmployeeRepository
+            emp = await EmployeeRepository.get_employee_by_id(str(lookup_uid))
+            if emp:
+                personal = emp.get("personal_info", {})
+                first = (personal.get("first_name") or "").strip()
+                last = (personal.get("last_name") or "").strip()
+                user_name = f"{first} {last}".strip() or emp.get("name") or "Admin"
+
+
+        insert_data["logs"] = [{
+            "userName": user_name,
+            "action": "Row created",
+            "timestamp": datetime.utcnow().isoformat(),
+            "details": "Initial entry created"
+        }]
 
         created_item = await ContentRepository.create(insert_data)
         if created_item:
@@ -480,12 +606,94 @@ class ContentService:
                     performed_by=current_user_id
                 )
                     
+        # 1. Content Calendar Row Activity History logging on Content Item itself
+        user_name = "Admin"
+        lookup_uid = current_user_id or project.get("creative_team", {}).get("cc_creator") or project.get("assigned_employee_id")
+        if lookup_uid:
+            from app.repository.employee import EmployeeRepository
+            emp = await EmployeeRepository.get_employee_by_id(str(lookup_uid))
+            if emp:
+                personal = emp.get("personal_info", {})
+                first = (personal.get("first_name") or "").strip()
+                last = (personal.get("last_name") or "").strip()
+                user_name = f"{first} {last}".strip() or emp.get("name") or "Admin"
+
+
+        if existing_item:
+            row_changes = []
+            
+            # Instagram posting link
+            if "instagram_link" in data_dict:
+                old_ig = existing_item.get("instagram_link") or ""
+                new_ig = data_dict.get("instagram_link") or ""
+                if old_ig != new_ig:
+                    row_changes.append(f"• 'postingLinkOfIg' changed to '{new_ig}'")
+                    
+            # Editing link
+            if "editing" in data_dict and isinstance(data_dict["editing"], dict):
+                old_ed = (existing_item.get("editing") or {}).get("link") or ""
+                new_ed = (data_dict.get("editing") or {}).get("link") or ""
+                if old_ed != new_ed:
+                    row_changes.append(f"• 'finalReelLink' changed to '{new_ed}'")
+
+            # Script link
+            if "script" in data_dict and isinstance(data_dict["script"], dict):
+                old_sc = (existing_item.get("script") or {}).get("link") or ""
+                new_sc = (data_dict.get("script") or {}).get("link") or ""
+                if old_sc != new_sc:
+                    row_changes.append(f"• 'scriptLink' changed to '{new_sc}'")
+
+            # Shoot link
+            if "shoot" in data_dict and isinstance(data_dict["shoot"], dict):
+                old_sh = (existing_item.get("shoot") or {}).get("link") or ""
+                new_sh = (data_dict.get("shoot") or {}).get("link") or ""
+                if old_sh != new_sh:
+                    row_changes.append(f"• 'shootLink' changed to '{new_sh}'")
+
+            # Thumbnail link
+            if "thumbnail" in data_dict and isinstance(data_dict["thumbnail"], dict):
+                old_th = (existing_item.get("thumbnail") or {}).get("link") or ""
+                new_th = (data_dict.get("thumbnail") or {}).get("link") or ""
+                if old_th != new_th:
+                    row_changes.append(f"• 'thumbnailLink' changed to '{new_th}'")
+
+            # Caption text
+            if "caption_text" in data_dict:
+                old_cp = existing_item.get("caption_text") or ""
+                new_cp = data_dict.get("caption_text") or ""
+                if old_cp != new_cp:
+                    row_changes.append(f"• 'caption' changed to '{new_cp}'")
+
+            # Remark
+            if "remark" in data_dict:
+                old_rm = existing_item.get("remark") or ""
+                new_rm = data_dict.get("remark") or ""
+                if old_rm != new_rm:
+                    row_changes.append(f"• 'remark' changed to '{new_rm}'")
+
+            # Dates & Topic
+            if "schedule_date" in data_dict and str(data_dict["schedule_date"]) != str(existing_item.get("schedule_date")):
+                row_changes.append(f"• 'schedule_date' changed to '{data_dict['schedule_date']}'")
+            if "approval_status" in data_dict and str(data_dict["approval_status"]) != str(existing_item.get("approval_status")):
+                row_changes.append(f"• 'approval_status' changed to '{data_dict['approval_status']}'")
+
+            if row_changes:
+                now_iso = datetime.utcnow().isoformat()
+                logs = list(existing_item.get("logs") or [])
+                logs.append({
+                    "userName": user_name,
+                    "action": "Row updated",
+                    "timestamp": now_iso,
+                    "details": "\n".join(row_changes)
+                })
+                data_dict["logs"] = logs
+
         updated_item = await ContentRepository.update(item_id, data_dict)
         if updated_item:
             from app.services.project import ProjectService
             project = await ProjectService.get_project_by_id(updated_item.get("project_id"))
             if project:
-                await ContentService._sync_tasks_for_content(item_id, updated_item, project, current_user_id)
+                await ContentService._sync_tasks_for_content(item_id, updated_item, project, current_user_id, existing_item=existing_item)
         return updated_item
 
     @staticmethod

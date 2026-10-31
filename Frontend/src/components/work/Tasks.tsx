@@ -8,7 +8,7 @@ import {
 
   CheckCircle2, AlertCircle, Hourglass, ArrowRightLeft, RefreshCw, Zap, Trash2,
 
-  Search, ShieldAlert, Check, ChevronDown, UserCheck, Flame, Repeat, Info, History, ExternalLink,
+  Search, ShieldAlert, Check, ChevronDown, UserCheck, Flame, Repeat, Info, History, ExternalLink, Loader2,
 
   ChevronLeft, ChevronRight
 
@@ -39,6 +39,7 @@ import { useAuth } from "@/components/auth/AuthContext";
 import { api } from "@/lib/api";
 
 import { hasModulePermission, isUserAdmin } from "@/lib/permissions";
+import { ActivityHistoryModal, ActivityHistoryEvent } from "./ActivityHistoryModal";
 
 type TaskStatus = "Todo" | "In Progress" | "In Review" | "Done";
 
@@ -917,6 +918,36 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
   const [selectedHistoryTask, setSelectedHistoryTask] = useState<TaskItem | null>(null);
 
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+
+  const [freshHistoryData, setFreshHistoryData] = useState<any>(null);
+
+  useEffect(() => {
+    if (!selectedHistoryTask?.id) {
+      setFreshHistoryData(null);
+      return;
+    }
+    let isCurrent = true;
+    setIsHistoryLoading(true);
+    api.get<any>(`/tasks/${selectedHistoryTask.id}`, { showLoader: false })
+      .then((res) => {
+        if (!isCurrent) return;
+        const taskData = (res as any)?.data || res;
+        if (taskData) {
+          setFreshHistoryData(taskData);
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not fetch fresh task history", err);
+      })
+      .finally(() => {
+        if (isCurrent) setIsHistoryLoading(false);
+      });
+    return () => {
+      isCurrent = false;
+    };
+  }, [selectedHistoryTask?.id]);
+
   // Fetch Employees (include admins and all staff)
 
   const fetchEmployees = useCallback(async () => {
@@ -1256,7 +1287,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
           const assignedToName = t.assigned_to_details?.employee_name || "Unassigned";
 
-          const assignedByName = t.assigned_by_details?.employee_name || "Management";
+          const assignedByName = t.assigned_by_details?.employee_name || "Het Mangukiya";
 
           const brandName = getTaskBrandName(t, allProjects);
 
@@ -5938,346 +5969,98 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
       </Dialog>
 
       {/* Dedicated Task History & Activity Audit Trail Modal */}
-
-      <Dialog open={!!selectedHistoryTask} onOpenChange={(open) => !open && setSelectedHistoryTask(null)}>
-
-        <DialogContent className="w-[calc(100vw-16px)] sm:w-full max-w-xl p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] border-border/60 shadow-2xl [&>button]:hidden bg-card flex flex-col max-h-[85vh]">
-
-          {selectedHistoryTask && (
-
-            <div className="flex flex-col h-full overflow-hidden">
-
-              <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 bg-muted/30 shrink-0">
-
-                <div className="space-y-1">
-
-                  <div className="flex items-center gap-2">
-
-                    <History className="w-4 h-4 text-primary" />
-
-                    <h2 className="text-base font-black tracking-tight">Task History & Activity Trail</h2>
-
-                  </div>
-
-                  <p className="text-xs text-muted-foreground truncate max-w-sm font-medium">
-
-                    {selectedHistoryTask.title}
-
-                  </p>
-
-                </div>
-
-                <DialogClose asChild>
-
-                  <button className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors">
-
-                    <X className="w-5 h-5" />
-
-                  </button>
-
-                </DialogClose>
-
-              </div>
-
-              <div className="p-6 space-y-5 overflow-y-auto flex-1">
-
-                {/* Meta summary card */}
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 rounded-2xl bg-muted/30 border border-border/40 text-xs">
-
-                  <div>
-
-                    <span className="text-[10px] text-muted-foreground font-black uppercase tracking-wider block mb-1">Status</span>
-
-                    <span className="font-bold text-foreground bg-card px-2 py-0.5 rounded-lg border border-border/60 inline-block text-[11px]">
-
-                      {selectedHistoryTask.status}
-
-                    </span>
-
-                  </div>
-
-                  <div>
-
-                    <span className="text-[10px] text-muted-foreground font-black uppercase tracking-wider block mb-1">Assigned By</span>
-
-                    <span className="font-bold text-foreground truncate block">{selectedHistoryTask.assignedByName}</span>
-
-                  </div>
-
-                  <div>
-
-                    <span className="text-[10px] text-muted-foreground font-black uppercase tracking-wider block mb-1">Assigned To</span>
-
-                    <span className="font-bold text-foreground truncate block">{selectedHistoryTask.assignedToName}</span>
-
-                  </div>
-
-                  <div>
-
-                    <span className="text-[10px] text-muted-foreground font-black uppercase tracking-wider block mb-1">Recurrence</span>
-
-                    <span className="font-bold text-foreground capitalize truncate block">
-
-                      {selectedHistoryTask.recurrence === "daily" ? "Daily Routine" : selectedHistoryTask.recurrence === "weekly" ? "Weekly Task" : selectedHistoryTask.recurrence === "monthly" ? "Monthly Task" : "One-time"}
-
-                    </span>
-
-                  </div>
-
-                </div>
-
-                {/* Timeline audit trail */}
-
-                <div className="space-y-3">
-
-                  <h4 className="text-[11px] font-black text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-
-                    <Clock className="w-3.5 h-3.5 text-primary" /> Activity Audit Trail
-
-                  </h4>
-
-                  {(() => {
-
-                    const events: Array<{
-
-                      id: string;
-
-                      timestamp: string;
-
-                      action: string;
-
-                      performedBy: string;
-
-                      details?: string | undefined;
-
-                      type: "create" | "status" | "transfer" | "approve" | "reject" | "update";
-
-                    }> = [];
-
-                    // 1. Add activityHistory
-
-                    (selectedHistoryTask.activityHistory || []).forEach((act, idx) => {
-
-                      let type: "create" | "status" | "transfer" | "approve" | "reject" | "update" = "update";
-
-                      if (act.action === "created") type = "create";
-
-                      else if (act.action === "status_changed") type = "status";
-
-                      else if (act.action.startsWith("transfer")) type = "transfer";
-
-                      else if (act.action === "approved") type = "approve";
-
-                      else if (act.action === "rejected_review") type = "reject";
-
-                      events.push({
-
-                        id: `act-${idx}`,
-
-                        timestamp: act.timestamp,
-
-                        action: act.action,
-
-                        performedBy: act.performed_by_name || "Management",
-
-                        details: act.details,
-
-                        type,
-
-                      });
-
-                    });
-
-                    // 2. Add transferHistory
-
-                    (selectedHistoryTask.transferHistory || []).forEach((trans, idx) => {
-
-                      events.push({
-
-                        id: `trans-${idx}`,
-
-                        timestamp: trans.transferred_at,
-
-                        action: `transfer_${trans.status}`,
-
-                        performedBy: trans.to_employee_details?.employee_name || "Colleague",
-
-                        details: `Transferred from ${trans.from_employee_details?.employee_name || "Colleague"} to ${trans.to_employee_details?.employee_name || "Colleague"}${trans.reason ? `. Reason: "${trans.reason}"` : ""}`,
-
-                        type: "transfer",
-
-                      });
-
-                    });
-
-                    // Fallback if no activity recorded yet (legacy tasks)
-
-                    if (events.length === 0) {
-
-                      events.push({
-
-                        id: "initial-task",
-
-                        timestamp: selectedHistoryTask.rawDueDate || new Date().toISOString(),
-
-                        action: "created",
-
-                        performedBy: selectedHistoryTask.assignedByName,
-
-                        details: `Task created and assigned to ${selectedHistoryTask.assignedToName}`,
-
-                        type: "create",
-
-                      });
-
-                    }
-
-                    // Sort chronologically (most recent first)
-
-                    events.sort((a, b) => {
-
-                      const tA = new Date(a.timestamp).getTime();
-
-                      const tB = new Date(b.timestamp).getTime();
-
-                      return tB - tA;
-
-                    });
-
-                    return (
-
-                      <div className="relative pl-6 space-y-4 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-[2px] before:bg-border/60">
-
-                        {events.map((ev) => {
-
-                          const dateObj = new Date(ev.timestamp);
-
-                          const formattedTime = !isNaN(dateObj.getTime())
-
-                            ? `${formatDate(dateObj)}, ${format(dateObj, "hh:mm a")}`
-
-                            : String(ev.timestamp);
-
-                          return (
-
-                            <div key={ev.id} className="relative group">
-
-                              {/* Dot Icon */}
-
-                              <div className={cn(
-
-                                "absolute -left-6 top-1 w-4 h-4 rounded-full border-2 border-card flex items-center justify-center text-white",
-
-                                ev.type === "create" && "bg-blue-500 ring-2 ring-blue-500/20",
-
-                                ev.type === "status" && "bg-amber-500 ring-2 ring-amber-500/20",
-
-                                ev.type === "transfer" && "bg-purple-500 ring-2 ring-purple-500/20",
-
-                                ev.type === "approve" && "bg-emerald-500 ring-2 ring-emerald-500/20",
-
-                                ev.type === "reject" && "bg-rose-500 ring-2 ring-rose-500/20",
-
-                                ev.type === "update" && "bg-slate-500 ring-2 ring-slate-500/20"
-
-                              )}>
-
-                                <span className="w-1.5 h-1.5 rounded-full bg-white block" />
-
-                              </div>
-
-                              <div className="bg-muted/20 border border-border/40 hover:border-border/80 rounded-xl p-3 space-y-1 transition-colors">
-
-                                <div className="flex items-center justify-between gap-2">
-
-                                  <div className="flex items-center gap-1.5">
-
-                                    <span className="font-bold text-xs text-foreground">{ev.performedBy}</span>
-
-                                    <span className={cn(
-
-                                      "text-[10px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider",
-
-                                      ev.type === "create" && "bg-blue-500/10 text-blue-600",
-
-                                      ev.type === "status" && "bg-amber-500/10 text-amber-600",
-
-                                      ev.type === "transfer" && "bg-purple-500/10 text-purple-600",
-
-                                      ev.type === "approve" && "bg-emerald-500/10 text-emerald-600",
-
-                                      ev.type === "reject" && "bg-rose-500/10 text-rose-600",
-
-                                      ev.type === "update" && "bg-muted text-muted-foreground"
-
-                                    )}>
-
-                                      {ev.action.replace(/_/g, " ")}
-
-                                    </span>
-
-                                  </div>
-
-                                  <span className="text-[10px] text-muted-foreground font-semibold">
-
-                                    {formattedTime}
-
-                                  </span>
-
-                                </div>
-
-                                {ev.details && (
-
-                                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-
-                                    {ev.details}
-
-                                  </p>
-
-                                )}
-
-                              </div>
-
-                            </div>
-
-                          );
-
-                        })}
-
-                      </div>
-
-                    );
-
-                  })()}
-
-                </div>
-
-              </div>
-
-              <div className="px-6 py-3 border-t border-border/50 bg-muted/30 flex items-center justify-end shrink-0">
-
-                <button
-
-                  onClick={() => setSelectedHistoryTask(null)}
-
-                  className="px-5 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-xl"
-
-                >
-
-                  Close
-
-                </button>
-
-              </div>
-
-            </div>
-
-          )}
-
-        </DialogContent>
-
-      </Dialog>
+      {selectedHistoryTask && (() => {
+        const activeData = freshHistoryData || selectedHistoryTask;
+        const events: ActivityHistoryEvent[] = [];
+
+        // 1. Process activity_history
+        const rawActivity = (freshHistoryData?.activity_history || selectedHistoryTask.activityHistory || []);
+        rawActivity.forEach((act: any, idx: number) => {
+          let type: "create" | "status" | "transfer" | "approve" | "reject" | "update" = "update";
+          let badgeLabel = (act.action || "UPDATED").replace(/_/g, " ").toUpperCase();
+          if (act.action === "created") {
+            type = "create";
+            badgeLabel = "CREATED";
+          } else if (act.action === "status_changed") {
+            type = "status";
+            badgeLabel = "STATUS CHANGED";
+          } else if (act.action?.startsWith("transfer")) {
+            type = "transfer";
+            badgeLabel = act.action.replace(/_/g, " ").toUpperCase();
+          } else if (act.action === "approved") {
+            type = "approve";
+            badgeLabel = "APPROVED";
+          } else if (act.action === "rejected_review" || act.action === "revision_requested") {
+            type = "reject";
+            badgeLabel = "REVISION REQUESTED";
+          } else if (act.action === "updated") {
+            badgeLabel = "UPDATED";
+          }
+
+          const rawLines = act.details
+            ? String(act.details).split("\n").map((s: string) => s.trim()).filter(Boolean)
+            : [];
+
+          events.push({
+            id: `act-${idx}`,
+            timestamp: act.timestamp,
+            action: act.action,
+            badgeLabel,
+            performedBy: act.performed_by_name || "Management",
+            lines: rawLines,
+            type,
+          });
+        });
+
+        // 2. Process transfer_history
+        const rawTransfers = (freshHistoryData?.transfer_history || selectedHistoryTask.transferHistory || []);
+        rawTransfers.forEach((trans: any, idx: number) => {
+          events.push({
+            id: `trans-${idx}`,
+            timestamp: trans.transferred_at,
+            action: `transfer_${trans.status || "completed"}`,
+            badgeLabel: `TRANSFER ${(trans.status || "COMPLETED").toUpperCase()}`,
+            performedBy: trans.to_employee_details?.employee_name || "Colleague",
+            lines: [
+              `Transferred from ${trans.from_employee_details?.employee_name || "Colleague"} to ${trans.to_employee_details?.employee_name || "Colleague"}${trans.reason ? `. Reason: "${trans.reason}"` : ""}`
+            ],
+            type: "transfer",
+          });
+        });
+
+        // 3. Fallback if empty
+        if (events.length === 0) {
+          events.push({
+            id: "initial-task",
+            timestamp: (activeData as any)?.created_at || selectedHistoryTask.rawDueDate || new Date().toISOString(),
+            action: "created",
+            badgeLabel: "CREATED",
+            performedBy: (activeData as any)?.assigned_by_details?.employee_name || selectedHistoryTask.assignedByName || "Het Mangukiya",
+            lines: [`Task created and assigned to ${selectedHistoryTask.assignedToName}`],
+            type: "create",
+          });
+        }
+
+        // 4. Sort chronologically (most recent first)
+        events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+        return (
+          <ActivityHistoryModal
+            open={!!selectedHistoryTask}
+            onOpenChange={(open) => !open && setSelectedHistoryTask(null)}
+            modalTitle="Task Activity Timeline"
+            brandName={selectedHistoryTask.brandName}
+            category={selectedHistoryTask.taskCategory}
+            title={selectedHistoryTask.title}
+            currentStatus={selectedHistoryTask.status}
+            assignedToName={selectedHistoryTask.assignedToName}
+            assignedByName={selectedHistoryTask.assignedByName}
+            dueDate={selectedHistoryTask.dueDate}
+            isLoading={isHistoryLoading}
+            events={events}
+          />
+        );
+      })()}
 
     </div>
 

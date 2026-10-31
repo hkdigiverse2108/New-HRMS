@@ -412,7 +412,8 @@ class ProjectService:
                                 creative_role="cc_creator",
                                 description=f"Plan and create Content Calendar posting ideas for {proj_name}"
                             )
-                            await TaskService.create_task(task_create, current_user_id or "system")
+                            creator_id = current_user_id or (old_project.get("created_by") if old_project else None) or "6aaa2a034b106fd0c7cac04d"
+                            await TaskService.create_task(task_create, creator_id)
             except Exception as e:
                 import logging
                 logging.getLogger(__name__).warning(f"Error transferring tasks during creative team reassign: {e}")

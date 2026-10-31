@@ -123,6 +123,8 @@ class ContentRepository:
 
     @classmethod
     async def get_by_id(cls, item_id: str):
+        if not item_id or not ObjectId.is_valid(str(item_id)):
+            return None
         collection = await cls.get_collection()
         item = await collection.find_one({"_id": ObjectId(item_id), "is_deleted": False})
         if item:

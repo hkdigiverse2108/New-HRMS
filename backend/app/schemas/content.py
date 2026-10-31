@@ -57,6 +57,8 @@ class ContentItemBase(BaseModel):
     approved_by: Optional[str] = None # Employee ID
     
     actual_posting_date: Optional[date] = None
+    remark: Optional[str] = None
+    logs: List[Any] = Field(default_factory=list)
 
 class ContentItemCreate(ContentItemBase):
     pass
@@ -79,6 +81,8 @@ class ContentItemUpdate(BaseModel):
     approval_status: Optional[ContentStatus] = None
     approved_by: Optional[str] = None
     actual_posting_date: Optional[date] = None
+    remark: Optional[str] = None
+    logs: Optional[List[Any]] = None
 
 class DateRangeConfig(BaseModel):
     start_date: date

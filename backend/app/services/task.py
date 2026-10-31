@@ -2,6 +2,7 @@ import asyncio
 from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime, date
 from fastapi import HTTPException
+from bson import ObjectId
 from app.repository.task import TaskRepository
 from app.repository.employee import EmployeeRepository
 from app.schemas.task import TaskCreate, TaskUpdate, TaskQuickAssign
@@ -101,73 +102,89 @@ class TaskService:
         return emp_cache, proj_cache, client_cache
     @staticmethod
     async def _populate_user_details(item: dict, emp_cache: dict, proj_cache: Optional[dict] = None, client_cache: Optional[dict] = None, content_cache: Optional[dict] = None):
-        async def get_details(emp_id):
-            if not emp_id:
-                return {"employee_name": "Management"}
-            emp_id_str = str(emp_id).strip()
-            if emp_id_str not in emp_cache:
-                if emp_id_str.lower() in ["system", "default-admin-id", "unknown", "none"]:
-                    emp_cache[emp_id_str] = {"employee_name": "Management"}
-                else:
-                    emp = await EmployeeRepository.get_employee_by_id(emp_id_str)
-                    if emp:
-                        personal = emp.get("personal_info", {})
-                        first = (personal.get("first_name") or "").strip()
-                        last = (personal.get("last_name") or "").strip()
-                        name = f"{first} {last}".strip()
-                        if not name:
-                            name = emp.get("name") or "Employee"
-                        emp_cache[emp_id_str] = {"employee_name": name}
-                    else:
-                        emp_cache[emp_id_str] = {"employee_name": "Management"}
-            return emp_cache[emp_id_str]
-
         if "_id" in item:
             item["id"] = str(item["_id"])
             item["_id"] = str(item["_id"])
 
-        for field in ["assigned_to", "assigned_by"]:
-            item[f"{field}_details"] = await get_details(item.get(field))
-            
-        # fallback for existing tasks
-        created_by = item.get("created_by") or item.get("assigned_by")
-        item["created_by"] = created_by
-        item["created_by_details"] = await get_details(created_by)
-        
-        approved_by = item.get("approved_by")
-        if approved_by:
-            item["approved_by_details"] = await get_details(approved_by)
-            
-        transfer_req = item.get("transfer_request")
-        if transfer_req:
-            transfer_req["requested_to_details"] = await get_details(transfer_req.get("requested_to"))
-            transfer_req["requested_by_details"] = await get_details(transfer_req.get("requested_by"))
-            
-        transfer_hist = item.get("transfer_history")
-        if transfer_hist:
-            for hist in transfer_hist:
-                hist["from_employee_details"] = await get_details(hist.get("from_employee"))
-                hist["to_employee_details"] = await get_details(hist.get("to_employee"))
-
-        activity_hist = item.get("activity_history")
-        if activity_hist:
-            for act in activity_hist:
-                perf = act.get("performed_by")
-                act["performed_by_name"] = (await get_details(perf)).get("employee_name", "Management")
-                
-        # Populate Project Details and Client Details for tasks with caching
+        # Fetch Project and Client Details upfront so they are accessible for assigned_by resolution
         project_id = str(item.get("project_id") or "").strip()
+        proj = None
         if project_id:
             from app.repository.project import ProjectRepository
-            from app.repository.client import ClientRepository
-            
-            proj = None
             if proj_cache is not None and project_id in proj_cache:
                 proj = proj_cache[project_id]
             else:
                 proj = await ProjectRepository.get_by_id(project_id)
                 if proj_cache is not None:
                     proj_cache[project_id] = proj
+
+        async def get_details(emp_id, is_assigned_by=False):
+            emp_id_str = str(emp_id or "").strip()
+            if not emp_id_str or emp_id_str.lower() in ["system", "default-admin-id", "unknown", "none"]:
+                # If resolving assigned_by / created_by, resolve proper employee via project creative team
+                if is_assigned_by and proj:
+                    cc_creator = proj.get("creative_team", {}).get("cc_creator")
+                    if cc_creator and str(cc_creator) in emp_cache:
+                        return emp_cache[str(cc_creator)]
+                    elif cc_creator:
+                        c_emp = await EmployeeRepository.get_employee_by_id(str(cc_creator))
+                        if c_emp:
+                            personal = c_emp.get("personal_info", {})
+                            name = f"{(personal.get('first_name') or '').strip()} {(personal.get('last_name') or '').strip()}".strip() or c_emp.get("name") or "Employee"
+                            entry = {"employee_name": name}
+                            emp_cache[str(cc_creator)] = entry
+                            return entry
+                # Fallback to Admin name instead of Management
+                if "admin_default" not in emp_cache:
+                    emp_cache["admin_default"] = {"employee_name": "Het Mangukiya"}
+                return emp_cache["admin_default"]
+
+            if emp_id_str not in emp_cache:
+                emp = await EmployeeRepository.get_employee_by_id(emp_id_str)
+                if emp:
+                    personal = emp.get("personal_info", {})
+                    first = (personal.get("first_name") or "").strip()
+                    last = (personal.get("last_name") or "").strip()
+                    name = f"{first} {last}".strip()
+                    if not name:
+                        name = emp.get("name") or "Employee"
+                    emp_cache[emp_id_str] = {"employee_name": name}
+                else:
+                    emp_cache[emp_id_str] = {"employee_name": "Het Mangukiya"}
+            return emp_cache[emp_id_str]
+
+        item["assigned_to_details"] = await get_details(item.get("assigned_to"), is_assigned_by=False)
+        item["assigned_by_details"] = await get_details(item.get("assigned_by"), is_assigned_by=True)
+            
+        # fallback for existing tasks
+        created_by = item.get("created_by") or item.get("assigned_by")
+        item["created_by"] = created_by
+        item["created_by_details"] = await get_details(created_by, is_assigned_by=True)
+        
+        approved_by = item.get("approved_by")
+        if approved_by:
+            item["approved_by_details"] = await get_details(approved_by, is_assigned_by=True)
+            
+        transfer_req = item.get("transfer_request")
+        if transfer_req:
+            transfer_req["requested_to_details"] = await get_details(transfer_req.get("requested_to"), is_assigned_by=False)
+            transfer_req["requested_by_details"] = await get_details(transfer_req.get("requested_by"), is_assigned_by=True)
+            
+        transfer_hist = item.get("transfer_history")
+        if transfer_hist:
+            for hist in transfer_hist:
+                hist["from_employee_details"] = await get_details(hist.get("from_employee"), is_assigned_by=True)
+                hist["to_employee_details"] = await get_details(hist.get("to_employee"), is_assigned_by=False)
+
+        activity_hist = item.get("activity_history")
+        if activity_hist:
+            for act in activity_hist:
+                perf = act.get("performed_by")
+                act["performed_by_name"] = (await get_details(perf, is_assigned_by=True)).get("employee_name", "Het Mangukiya")
+                
+        # Populate Project Details and Client Details for tasks with caching
+        if project_id:
+            from app.repository.client import ClientRepository
 
             if proj:
                 gen = (proj.get("general") or {}) if isinstance(proj.get("general"), dict) else {}
@@ -205,7 +222,7 @@ class TaskService:
                 
         # Populate Content Details for SMM tasks with caching
         content_item_id = str(item.get("content_item_id") or "").strip()
-        if content_item_id:
+        if content_item_id and ObjectId.is_valid(content_item_id):
             from app.repository.content import ContentRepository
             content = None
             if content_cache is not None and content_item_id in content_cache:
@@ -561,36 +578,77 @@ class TaskService:
         if existing:
             for key, new_val in update_dict.items():
                 old_val = existing.get(key)
-                # Convert dates to string for comparison if needed
-                if hasattr(old_val, 'isoformat') and not hasattr(new_val, 'isoformat'):
-                    pass # rough comparison, skip complex types
+                
+                # Normalize types for comparison
+                old_val_norm = old_val
+                new_val_norm = new_val
+                if hasattr(old_val, "isoformat"):
+                    old_val_norm = old_val.isoformat().split("T")[0]
+                if hasattr(new_val, "isoformat"):
+                    new_val_norm = new_val.isoformat().split("T")[0]
+                elif isinstance(new_val, date):
+                    new_val_norm = new_val.strftime("%Y-%m-%d")
                     
-                if old_val != new_val:
+                if hasattr(new_val, "value"):
+                    new_val_norm = new_val.value
+                if hasattr(old_val, "value"):
+                    old_val_norm = old_val.value
+
+                if str(old_val_norm or "").strip() != str(new_val_norm or "").strip():
                     if key == "status":
-                        old_s = old_val
-                        # TaskStatus is a str Enum: str() gives "TaskStatus.IN_PROGRESS", so use .value
-                        new_s = str(getattr(new_val, "value", new_val)).lower()
+                        old_s = str(old_val_norm or "todo").lower()
+                        new_s = str(new_val_norm or "todo").lower()
                         status_changed = True
                         activity.append({
                             "action": "status_changed",
                             "performed_by": updater_id,
                             "timestamp": now,
-                            "details": f"Status updated from '{old_s}' to '{new_s}'"
+                            "details": f"• 'status' changed from '{old_s}' to '{new_s}'"
                         })
                         # Enforce strict single inprogress task rule per assigned employee
                         if new_s == "inprogress":
                             target_emp = update_dict.get("assigned_to") or existing.get("assigned_to")
                             if target_emp:
                                 await TaskService._enforce_single_inprogress_task(target_emp, item_id, updater_id)
-                    else:
-                        changes_made.append(f"{key.replace('_', ' ').title()}")
+                    elif key not in ["updated_at", "activity_history"]:
+                        old_display = str(old_val_norm or "")
+                        new_display = str(new_val_norm or "")
+                        
+                        if key == "assigned_to":
+                            from app.repository.employee import EmployeeRepository
+                            if old_val_norm:
+                                old_emp = await EmployeeRepository.get_employee_by_id(str(old_val_norm))
+                                if old_emp:
+                                    p = old_emp.get("personal_info", {})
+                                    old_display = f"{p.get('first_name', '')} {p.get('last_name', '')}".strip() or old_emp.get("name", old_display)
+                            if new_val_norm:
+                                new_emp = await EmployeeRepository.get_employee_by_id(str(new_val_norm))
+                                if new_emp:
+                                    p = new_emp.get("personal_info", {})
+                                    new_display = f"{p.get('first_name', '')} {p.get('last_name', '')}".strip() or new_emp.get("name", new_display)
+                                    
+                        elif key == "project_id":
+                            from app.repository.project import ProjectRepository
+                            if old_val_norm:
+                                old_proj = await ProjectRepository.get_by_id(str(old_val_norm))
+                                if old_proj:
+                                    old_display = old_proj.get("general", {}).get("project_name", old_display)
+                            if new_val_norm:
+                                new_proj = await ProjectRepository.get_by_id(str(new_val_norm))
+                                if new_proj:
+                                    new_display = new_proj.get("general", {}).get("project_name", new_display)
+
+                        if old_display:
+                            changes_made.append(f"• '{key}' changed from '{old_display}' to '{new_display}'")
+                        else:
+                            changes_made.append(f"• '{key}' changed to '{new_display}'")
                         
             if changes_made:
                 activity.append({
                     "action": "updated",
                     "performed_by": updater_id,
                     "timestamp": now,
-                    "details": f"Updated fields: {', '.join(changes_made)}"
+                    "details": "\n".join(changes_made)
                 })
                 
             if status_changed or changes_made:
@@ -894,11 +952,11 @@ class TaskService:
         # or we can just fetch names directly.
         async def get_details(emp_id):
             if not emp_id:
-                return "Management"
+                return "Het Mangukiya"
             emp_id_str = str(emp_id).strip()
             if emp_id_str not in emp_cache:
                 if emp_id_str.lower() in ["system", "default-admin-id", "unknown", "none"]:
-                    emp_cache[emp_id_str] = "Management"
+                    emp_cache[emp_id_str] = "Het Mangukiya"
                 else:
                     emp = await EmployeeRepository.get_employee_by_id(emp_id_str)
                     if emp:
@@ -908,7 +966,7 @@ class TaskService:
                         name = f"{first} {last}".strip()
                         emp_cache[emp_id_str] = name or emp.get("name") or "Employee"
                     else:
-                        emp_cache[emp_id_str] = "Management"
+                        emp_cache[emp_id_str] = "Het Mangukiya"
             return emp_cache[emp_id_str]
 
         for log in result.get("data", []):

@@ -55,7 +55,8 @@ async def create_content_item(
     if data.project_id != project_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Project ID mismatch")
         
-    created = await ContentService.create_content(project_id, data, current_user.get("id"))
+    emp_id = str(current_user.get("_id") or current_user.get("id"))
+    created = await ContentService.create_content(project_id, data, emp_id)
     if not created:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
@@ -97,7 +98,8 @@ async def bulk_add_content_items(
             content_type=data.default_format,
             topic_title="Untitled Idea"
         )
-        created = await ContentService.create_content(project_id, new_item, current_user.get("id"))
+        emp_id = str(current_user.get("_id") or current_user.get("id"))
+        created = await ContentService.create_content(project_id, new_item, emp_id)
         if created:
             item = await ContentService.get_content_by_id(created["_id"])
             if item:

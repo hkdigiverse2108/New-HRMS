@@ -143,7 +143,8 @@ async def update_project(project_id: str, data: ProjectUpdate, current_user: dic
     if not item or item.get("is_deleted"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
         
-    updated = await ProjectService.update_project(project_id, data, current_user.get("id"))
+    emp_id = str(current_user.get("_id") or current_user.get("id"))
+    updated = await ProjectService.update_project(project_id, data, current_user_id=emp_id)
     if not updated:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to update project")
 
