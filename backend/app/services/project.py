@@ -532,9 +532,20 @@ class ProjectService:
         existing = await ProjectRepository.get_by_id(project_id)
         res = await ProjectRepository.delete(project_id)
         if res:
-            await clear_pattern("projects:list:*")
+            try:
+                from app.database.db import get_database
+                from bson import ObjectId
+                db = get_database()
+                t_query = {"$or": [{"project_id": str(project_id)}]}
+                if ObjectId.is_valid(str(project_id)):
+                    t_query["$or"].append({"project_id": ObjectId(str(project_id))})
+                await db["tasks"].update_many(t_query, {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}})
+            except Exception:
+                pass
+            await clear_pattern("projects:*")
+            await clear_pattern("tasks:*")
             await delete_cache(f"project:{project_id}")
-            await clear_pattern("clients:list:*")
+            await clear_pattern("clients:*")
             if existing and existing.get("client_id"):
                 await delete_cache(f"client:{existing['client_id']}")
         return res

@@ -275,6 +275,8 @@ async def get_task_stats(
     assigned_by: Optional[str] = Query(None, description="Filter by assigned_by employee ID"),
     department: Optional[str] = Query(None, description="Filter by department"),
     task_category: Optional[str] = Query(None, description="Filter by task category"),
+    sub_category: Optional[str] = Query(None, description="Filter by sub category"),
+    project_id: Optional[str] = Query(None, description="Filter by project ID"),
     priority: Optional[str] = Query(None, description="Filter by priority"),
     search: Optional[str] = Query(None, description="Search term"),
     current_user: dict = Depends(get_current_employee)
@@ -324,6 +326,8 @@ async def get_task_stats(
         assigned_by=assigned_by,
         team_employee_ids=team_employee_ids,
         task_category=task_category,
+        sub_category=sub_category,
+        project_id=project_id,
         priority=priority,
         search=search
     )

@@ -81,9 +81,9 @@ class DigitalMarketingStats(BaseModel):
     cpl: Optional[float] = None
 
 class ProjectGeneralDetails(BaseModel):
-    project_name: str = Field(..., description="Name of the project")
+    project_name: str = Field(default="Untitled Project", description="Name of the project")
     description: Optional[str] = None
-    category: str = Field(..., description="Category or comma-separated departments of the project")
+    category: str = Field(default="Creative", description="Category or comma-separated departments of the project")
     status: ProjectStatus = Field(default=ProjectStatus.NOT_STARTED, description="Current status of the project")
     priority: ProjectPriority = Field(default=ProjectPriority.MEDIUM)
     start_date: Optional[date] = Field(default=None, description="Project start date")

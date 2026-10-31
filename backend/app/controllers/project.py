@@ -177,9 +177,9 @@ async def delete_project(project_id: str, current_user: dict = Depends(get_curre
     if not item or item.get("is_deleted"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
         
-    role = current_user.get("work_details", {}).get("system_role", "Employee")
-    if role not in ["Admin", "Subadmin", "HR"]:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to delete this project")
+    role = str(current_user.get("work_details", {}).get("system_role") or current_user.get("role") or "").strip().lower()
+    if role not in ["admin", "superadmin", "subadmin"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Admin can delete projects")
         
     success = await ProjectService.delete_project(project_id)
     if not success:

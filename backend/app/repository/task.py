@@ -81,7 +81,12 @@ class TaskRepository:
             archived_proj_ids.append(str(p["_id"]))
             archived_proj_ids.append(p["_id"])
 
-        and_conditions = [{"is_deleted": is_deleted}, {"is_archived": {"$ne": True}}]
+        and_conditions = [
+            {"is_deleted": is_deleted}, 
+            {"is_archived": {"$ne": True}},
+            # Audio 19: Completed automated content calendar tasks are fully done and dropped from the active backlog
+            {"$nor": [{"content_item_id": {"$exists": True, "$ne": None}, "status": {"$in": ["completed", "done"]}}]}
+        ]
         if archived_proj_ids:
             and_conditions.append({"project_id": {"$nin": archived_proj_ids}})
         
@@ -169,6 +174,7 @@ class TaskRepository:
 
         start_of_today = datetime(ref_date.year, ref_date.month, ref_date.day)
         end_of_today = datetime(ref_date.year, ref_date.month, ref_date.day, 23, 59, 59, 999999)
+        today_str = ref_date.strftime("%Y-%m-%d")
 
         if timeline_filter:
             tf = timeline_filter.lower().strip()
@@ -177,15 +183,22 @@ class TaskRepository:
                 and_conditions.append({
                     "$or": [
                         {"due_date": {"$gte": start_of_today, "$lte": end_of_today}},
+                        {"due_date": today_str},
                         {
-                            "due_date": {"$lt": start_of_today},
+                            "$or": [
+                                {"due_date": {"$lt": start_of_today}},
+                                {"due_date": {"$type": "string", "$lt": today_str}}
+                            ],
                             "status": {"$nin": ["completed", "done"]}
                         }
                     ]
                 })
             elif tf == "overdue":
                 and_conditions.append({
-                    "due_date": {"$lt": start_of_today},
+                    "$or": [
+                        {"due_date": {"$lt": start_of_today}},
+                        {"due_date": {"$type": "string", "$lt": today_str}}
+                    ],
                     "status": {"$nin": ["completed", "done"]}
                 })
             elif tf == "pending":
@@ -198,7 +211,10 @@ class TaskRepository:
                 })
             elif tf == "upcoming":
                 and_conditions.append({
-                    "due_date": {"$gt": end_of_today},
+                    "$or": [
+                        {"due_date": {"$gt": end_of_today}},
+                        {"due_date": {"$type": "string", "$gt": today_str}}
+                    ],
                     "status": {"$nin": ["completed", "done"]}
                 })
             elif tf == "client_issue":
@@ -295,6 +311,8 @@ class TaskRepository:
         assigned_by: Optional[str] = None,
         team_employee_ids: Optional[list[str]] = None,
         task_category: Optional[str] = None,
+        sub_category: Optional[str] = None,
+        project_id: Optional[str] = None,
         priority: Optional[str] = None,
         search: Optional[str] = None
     ):
@@ -308,7 +326,12 @@ class TaskRepository:
             archived_proj_ids.append(str(p["_id"]))
             archived_proj_ids.append(p["_id"])
 
-        base_query = {"is_deleted": False, "is_archived": {"$ne": True}}
+        base_query = {
+            "is_deleted": False, 
+            "is_archived": {"$ne": True},
+            # Audio 19: Exclude completed automated tasks from stats entirely
+            "$nor": [{"content_item_id": {"$exists": True, "$ne": None}, "status": {"$in": ["completed", "done"]}}]
+        }
         if archived_proj_ids:
             base_query["project_id"] = {"$nin": archived_proj_ids}
         if involved_emp_id:
@@ -333,6 +356,30 @@ class TaskRepository:
             base_query["priority"] = priority.lower()
         if search and search.strip():
             base_query["title"] = {"$regex": search.strip(), "$options": "i"}
+        if project_id and project_id != "All":
+            base_query["project_id"] = project_id
+        if sub_category and sub_category != "All":
+            import re as _re
+            stage = sub_category.strip()
+            stage_roles = {
+                "script": ["scripting"],
+                "scripting": ["scripting"],
+                "shoot": ["shoot_videography"],
+                "editing": ["reel_editing", "post_graphics"],
+                "thumbnail": ["thumbnail"],
+                "caption": ["caption"],
+                "approval": ["approval_qc"],
+                "posting": ["posting_publisher"],
+                "post/graphics": ["post_graphics"],
+                "post graphics": ["post_graphics"],
+                "graphics": ["post_graphics"],
+                "brand person": ["brand_person"],
+            }
+            stage_or = [{"sub_category": {"$regex": f"^{_re.escape(stage)}$", "$options": "i"}}]
+            roles = stage_roles.get(stage.lower())
+            if roles:
+                stage_or.append({"creative_role": {"$in": roles}})
+            base_query["$or"] = stage_or
         
         if target_date:
             try:
@@ -344,6 +391,7 @@ class TaskRepository:
 
         start_of_today = datetime(ref_date.year, ref_date.month, ref_date.day)
         end_of_today = datetime(ref_date.year, ref_date.month, ref_date.day, 23, 59, 59, 999999)
+        today_str = ref_date.strftime("%Y-%m-%d")
 
         # Single round-trip facet with filter-wise KPIs
         facet_res = await collection.aggregate([
@@ -353,10 +401,10 @@ class TaskRepository:
                 "todo": [{"$match": {"status": "todo"}}, {"$count": "n"}],
                 "inprogress": [{"$match": {"status": "inprogress"}}, {"$count": "n"}],
                 "inreview": [{"$match": {"status": {"$in": ["inreview", "review"]}}}, {"$count": "n"}],
-                "completed": [{"$match": {"status": {"$in": ["completed", "done"]}}}, {"$count": "n"}],
-                "today": [{"$match": {"due_date": {"$gte": start_of_today, "$lte": end_of_today}}}, {"$count": "n"}],
-                "overdue": [{"$match": {"due_date": {"$lt": start_of_today}, "status": {"$nin": ["completed", "done"]}}}, {"$count": "n"}],
-                "upcoming": [{"$match": {"due_date": {"$gt": end_of_today}, "status": {"$nin": ["completed", "done"]}}}, {"$count": "n"}],
+                "completed": [{"$match": {"status": {"$in": ["completed", "done"]}, "content_item_id": {"$in": [None, ""]}}}, {"$count": "n"}],
+                "today": [{"$match": {"$or": [{"due_date": {"$gte": start_of_today, "$lte": end_of_today}}, {"due_date": today_str}]}}, {"$count": "n"}],
+                "overdue": [{"$match": {"$or": [{"due_date": {"$lt": start_of_today}}, {"due_date": {"$type": "string", "$lt": today_str}}], "status": {"$nin": ["completed", "done"]}}}, {"$count": "n"}],
+                "upcoming": [{"$match": {"$or": [{"due_date": {"$gt": end_of_today}}, {"due_date": {"$type": "string", "$gt": today_str}}], "status": {"$nin": ["completed", "done"]}}}, {"$count": "n"}],
                 "client_issue": [{"$match": {"$or": [{"task_category": "Client Issue"}, {"title": {"$regex": "^\\[client issue\\]", "$options": "i"}}, {"is_client_issue": True}]}}, {"$count": "n"}],
                 "pending": [{"$match": {"$or": [{"task_category": "Pending"}, {"title": {"$regex": "^\\[pending\\]", "$options": "i"}}, {"is_pending_issue": True}]}}, {"$count": "n"}]
             }},

@@ -162,19 +162,15 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   const currentUserId = String(anyUser?._id || anyUser?.id || "");
   const userRole = String(anyUser?.role || anyUser?.work_details?.system_role || "Employee").toLowerCase();
   const userDepartment = String(anyUser?.work_details?.department || anyUser?.department || "").trim();
-  // Role-only: decides who gets the My Tasks / All Tasks views
-  const isAdminOrHRRole = isUserAdmin(user) || userRole === "admin" || userRole === "superadmin" || userRole === "hr" || userRole === "subadmin" || (userDepartment && userDepartment.toLowerCase() === "hr");
-  // Role OR "/tasks update" permission: still drives edit / delete powers
-  const isAdminOrHR = isAdminOrHRRole || hasModulePermission(user, "/tasks", "update");
+  // Audio 19: All Tasks is strictly for Head, Team Leader, and Admin regardless of department.
+  // Everyone else defaults strictly to My Tasks and cannot view All Tasks.
+  const isAdmin = isUserAdmin(user) || userRole === "admin" || userRole === "superadmin";
   const userDesignation = String(anyUser?.work_details?.designation || anyUser?.designation || "").trim().toLowerCase();
-
-  // Role checks requested by user:
-  // 1. Team Leader (only if not Admin/HR):
-  const isTeamLeader = !isAdminOrHRRole && (userDesignation.includes("team leader") || userRole.includes("team leader"));
-  // 2. Head / Admin / HR:
-  const isHead = isAdminOrHRRole || (!isTeamLeader && (userDesignation.includes("head") || userRole.includes("head")));
-  // 3. Neither Head nor Team Leader (Other employees):
+  const isTeamLeader = userDesignation.includes("team leader") || userDesignation.includes("teamlead") || userDesignation.includes("leader") || userRole.includes("team leader");
+  const isHead = isAdmin || userDesignation.includes("head") || userRole.includes("head");
   const isOther = !isTeamLeader && !isHead;
+  const isAdminOrHRRole = isAdmin || isHead || userRole === "hr" || (userDepartment && userDepartment.toLowerCase() === "hr");
+  const isAdminOrHR = isAdminOrHRRole || hasModulePermission(user, "/tasks", "update");
 
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [stats, setStats] = useState({
@@ -224,6 +220,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   // K15: category filter (transcript — category field)
   const [categoryFilter, setCategoryFilter] = useState<string>("All");
   const [subCategoryFilter, setSubCategoryFilter] = useState<string>("All");
+  const [creativeStageCounts, setCreativeStageCounts] = useState<Record<string, number>>({});
   const [projectFilter, setProjectFilter] = useState<string>("All");
   const [allProjects, setAllProjects] = useState<{ label: string; value: string; depts: string[] }[]>([]);
 
@@ -237,9 +234,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     "Posting"
   ], []);
 
-  // Strict My Tasks vs All Tasks Access: Regular staff (Senior, Junior, Intern) are locked to My Tasks
-  // Only Admin, HR, Head and Team Leader get My Tasks / All Tasks; everyone else sees just their own tasks
-  const canViewAllTasks = isAdminOrHRRole || isHead || isTeamLeader;
+  // Audio 19: Designation-based access: Admin, Head, and Team Leader get All Tasks; others locked to My Tasks
+  const canViewAllTasks = isAdmin || isHead || isTeamLeader;
   const [savedViewMode, setSavedViewMode] = usePersistentState<"my_tasks" | "all_tasks">("tasks.view", canViewAllTasks ? "all_tasks" : "my_tasks");
   const mainViewMode = canViewAllTasks ? savedViewMode : "my_tasks";
   const setMainViewMode = (mode: "my_tasks" | "all_tasks") => {
@@ -584,6 +580,13 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
       if (debouncedSearch.trim()) {
         statsParams.append("search", debouncedSearch.trim());
       }
+      // Audio 19: Sync sub_category & project_id to stats API so KPIs update dynamically
+      if (subCategoryFilter && subCategoryFilter !== "All") {
+        statsParams.append("sub_category", subCategoryFilter);
+      }
+      if (projectFilter && projectFilter !== "All") {
+        statsParams.append("project_id", projectFilter);
+      }
 
       const [tasksRes, statsRes] = await Promise.allSettled([
         api.get<{ data?: BackendTask[]; total?: number }>(`/tasks?${queryString}`, { showLoader: false }),
@@ -697,6 +700,31 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     subCategoryFilter,
     projectFilter,
   ]);
+
+  // Audio 19: Keep stable stage counts across creative subcategories so badges don't collapse to 0 when filtered
+  useEffect(() => {
+    if (subCategoryFilter === "All" && tasks.length > 0) {
+      const counts: Record<string, number> = { All: totalServerTasks || tasks.length };
+      CREATIVE_SUBCATEGORIES.forEach(sc => {
+        const scLower = sc.toLowerCase();
+        counts[sc] = tasks.filter(t => {
+          const subCat = (t.subCategory || "").toLowerCase();
+          const role = (t.creativeDetails?.role || (t as any).creative_role || "").toLowerCase();
+          const title = (t.title || "").toLowerCase();
+          if (subCat === scLower) return true;
+          if (scLower === "script" && (role.includes("script") || title.includes("script"))) return true;
+          if (scLower === "shoot" && (role.includes("shoot") || title.includes("shoot"))) return true;
+          if (scLower === "editing" && (role.includes("edit") || title.includes("edit"))) return true;
+          if (scLower === "thumbnail" && (role.includes("thumb") || title.includes("thumb"))) return true;
+          if (scLower === "caption" && (role.includes("caption") || title.includes("caption"))) return true;
+          if (scLower === "approval" && (role.includes("approval") || title.includes("approv"))) return true;
+          if (scLower === "posting" && (role.includes("post") || title.includes("post"))) return true;
+          return false;
+        }).length;
+      });
+      setCreativeStageCounts(counts);
+    }
+  }, [tasks, subCategoryFilter, totalServerTasks, CREATIVE_SUBCATEGORIES]);
 
   useEffect(() => {
     fetchEmployees();
@@ -1613,19 +1641,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                 />
               </div>
 
-            {/* Stage filter: Creative only */}
-            {showCreativeFilters && (
-              <div className="flex flex-col items-stretch sm:flex-row sm:items-center gap-1 sm:gap-1.5 min-w-0">
-                <span className="text-[10px] font-bold text-muted-foreground uppercase">Stage:</span>
-                <SearchableSelect
-                  value={subCategoryFilter}
-                  onChange={(val) => setSubCategoryFilter(val)}
-                  options={STAGE_OPTIONS}
-                  placeholder="All Stages"
-                  className="w-full sm:w-[150px] h-[32px] text-xs font-semibold"
-                />
-              </div>
-            )}
+
 
             {/* Project filter: any selected department, lists that department's projects */}
             {showProjectFilter && (
@@ -1687,31 +1703,50 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                 "px-1.5 py-0.2 rounded-full text-[9px] font-black",
                 subCategoryFilter === "All" ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
               )}>
-                {tasks.length}
+                {subCategoryFilter === "All" ? (totalServerTasks || tasks.length) : (creativeStageCounts["All"] ?? (totalServerTasks || tasks.length))}
               </span>
             </button>
             {CREATIVE_SUBCATEGORIES.map((sc) => {
-              const count = tasks.filter(t => (t.subCategory || "").toLowerCase() === sc.toLowerCase()).length;
+              const scLower = sc.toLowerCase();
+              const currentCount = tasks.filter(t => {
+                const subCat = (t.subCategory || "").toLowerCase();
+                const role = (t.creativeDetails?.role || (t as any).creative_role || "").toLowerCase();
+                const title = (t.title || "").toLowerCase();
+                if (subCat === scLower) return true;
+                if (scLower === "script" && (role.includes("script") || title.includes("script"))) return true;
+                if (scLower === "shoot" && (role.includes("shoot") || title.includes("shoot"))) return true;
+                if (scLower === "editing" && (role.includes("edit") || title.includes("edit"))) return true;
+                if (scLower === "thumbnail" && (role.includes("thumb") || title.includes("thumb"))) return true;
+                if (scLower === "caption" && (role.includes("caption") || title.includes("caption"))) return true;
+                if (scLower === "approval" && (role.includes("approval") || title.includes("approv"))) return true;
+                if (scLower === "posting" && (role.includes("post") || title.includes("post"))) return true;
+                return false;
+              }).length;
+
+              const displayCount = subCategoryFilter === "All"
+                ? currentCount
+                : (subCategoryFilter.toLowerCase() === scLower ? (totalServerTasks || currentCount) : (creativeStageCounts[sc] ?? currentCount));
+
               return (
                 <button
                   key={sc}
                   type="button"
-                  onClick={() => setSubCategoryFilter(sc)}
+                  onClick={() => setSubCategoryFilter(subCategoryFilter.toLowerCase() === scLower ? "All" : sc)}
                   className={cn(
                     "px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer",
-                    subCategoryFilter.toLowerCase() === sc.toLowerCase()
-                      ? "bg-primary text-primary-foreground shadow-xs"
+                    subCategoryFilter.toLowerCase() === scLower
+                      ? "bg-primary text-primary-foreground shadow-xs ring-1 ring-primary/40"
                       : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground border border-border/40"
                   )}
                 >
                   <span>{sc}</span>
                   <span className={cn(
                     "px-1.5 py-0.2 rounded-full text-[9px] font-black",
-                    subCategoryFilter.toLowerCase() === sc.toLowerCase()
+                    subCategoryFilter.toLowerCase() === scLower
                       ? "bg-white/20 text-white"
                       : "bg-muted text-muted-foreground"
                   )}>
-                    {count}
+                    {displayCount}
                   </span>
                 </button>
               );
