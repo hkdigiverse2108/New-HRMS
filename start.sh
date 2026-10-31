@@ -10,6 +10,10 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Prevent git from tracking or conflicting on runtime env-config.js
+git update-index --skip-worktree Frontend/public/env-config.js 2>/dev/null || true
+git update-index --assume-unchanged Frontend/public/env-config.js 2>/dev/null || true
+
 VENV_DIR="$SCRIPT_DIR/backend/venv"
 
 # 1. Auto-create venv if it doesn't exist

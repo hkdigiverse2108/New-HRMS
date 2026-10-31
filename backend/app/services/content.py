@@ -133,20 +133,24 @@ class ContentService:
 
         def _check_has_content(val):
             """
-            Audio Transcript:
-            'એક પણ કેરેક્ટર એની અંદર લખ્યો હોય ને, તો ઈ કમ્પલીટેડ ગણાય જાય.
-             ઈ એમ્પ્ટી હોય ને તો જ બાકી હોય... એની અંદર હાવ ખાલી, કોરે કોરું કાંઈ છે જ નહીં,
-             નલ (Null) છે અથવા તો ખાલી છે અથવા તો એમ્પ્ટી છે, તો તે ઈ ટાસ્ક બાકી ગણાય.
-             અને જેવો ઈ ટાસ્કની અંદર લિંક નંખાઈ જાય એટલે ઈ ટાસ્ક પૂરો થઈ ગયો ગણાય.
-             એની અંદર લિંક નાખે, એક ડેશ મારી દે, એક નાનો અમથો વર્ડ લખી નાખે, Not Required લખ્યું છે, તો ઈ બધું પૂરું થઈ ગયું ગણાય.'
+            Check if a deliverable stage actually has content/link submitted.
+            If link is empty or placeholder ('-', '--', 'n/a', 'none', 'null'), it is pending.
+            If a valid link is submitted or status is 'Done'/'Completed', it is completed.
             """
             if val is None:
                 return False
             if isinstance(val, dict):
+                st = str(val.get("status") or "").strip().lower()
+                if st in ["done", "completed"]:
+                    return True
                 lnk = str(val.get("link") or "").strip()
-                return len(lnk) > 0
+                if not lnk or lnk.lower() in ["-", "--", "---", "n/a", "none", "null"]:
+                    return False
+                return True
             s = str(val).strip()
-            return len(s) > 0
+            if not s or s.lower() in ["-", "--", "---", "n/a", "none", "null"]:
+                return False
+            return True
 
         def _is_role_not_required(role: str) -> bool:
             if is_post_type and role == "reel_editing":
@@ -192,25 +196,30 @@ class ContentService:
         }
         
         from app.services.task import TaskService
-        from app.schemas.task import TaskCreate, TaskStatus
+        from app.schemas.task import TaskCreate
         from app.repository.task import TaskRepository
+        from app.database.db import get_database
+        from datetime import datetime
         
+        db = get_database()
+        task_col = db["tasks"]
+
         for role, mapping in roles_mapping.items():
             # If stage is Not Required, DELETE any existing task and DO NOT create any new task!
             if _is_role_not_required(role):
-                existing_tasks = await TaskRepository.get_all(content_item_id=item_id, creative_role=role)
-                if existing_tasks and existing_tasks.get("data"):
-                    for t in existing_tasks["data"]:
-                        await TaskRepository.soft_delete(str(t["_id"]))
+                await task_col.update_many(
+                    {"content_item_id": str(item_id), "creative_role": role, "is_deleted": False},
+                    {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}}
+                )
                 continue
 
             emp_id = team.get(role)
             # If a role is not assigned in creative_team (e.g. Approval on ErthGlow), DO NOT create or retain ghost task!
             if not emp_id:
-                existing_tasks = await TaskRepository.get_all(content_item_id=item_id, creative_role=role)
-                if existing_tasks and existing_tasks.get("data"):
-                    for t in existing_tasks["data"]:
-                        await TaskRepository.soft_delete(str(t["_id"]))
+                await task_col.update_many(
+                    {"content_item_id": str(item_id), "creative_role": role, "is_deleted": False},
+                    {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}}
+                )
                 continue
                 
             date_val = item_data
@@ -228,15 +237,17 @@ class ContentService:
             
             is_completed = mapping["is_completed"](item_data)
             
-            # Check if task already exists for this content and role
-            from app.repository.task import TaskRepository
-            existing_tasks = await TaskRepository.get_all(content_item_id=item_id, creative_role=role)
+            # Find existing active task for this content and role (regardless of status)
+            task = await task_col.find_one({
+                "content_item_id": str(item_id),
+                "creative_role": role,
+                "is_deleted": False
+            })
             
             # Use the current user who triggered the action, or fallback to 'system'
             assigned_by = current_user_id if current_user_id else "system"
             
-            if existing_tasks and existing_tasks.get("data"):
-                task = existing_tasks["data"][0]
+            if task:
                 task_id = str(task["_id"])
                 update_payload = {}
                 
@@ -247,17 +258,19 @@ class ContentService:
                     update_payload["due_date"] = date_str
                 if not task.get("sub_category"):
                     update_payload["sub_category"] = role_to_subcat.get(role, "General")
+                if task.get("assigned_to") != emp_id:
+                    update_payload["assigned_to"] = emp_id
                     
-                if is_completed and task.get("status") != TaskStatus.COMPLETED:
-                    update_payload["status"] = TaskStatus.COMPLETED
-                elif not is_completed and task.get("status") == TaskStatus.COMPLETED:
-                    update_payload["status"] = TaskStatus.TODO
+                if is_completed and task.get("status") not in ["completed", "done"]:
+                    update_payload["status"] = "completed"
+                elif not is_completed and task.get("status") in ["completed", "done"]:
+                    update_payload["status"] = "todo"
                     
                 if update_payload:
                     await TaskRepository.update(task_id, update_payload)
             else:
                 # Create new task
-                from datetime import datetime, date as py_date
+                from datetime import date as py_date
                 if isinstance(date_val, (py_date, datetime)):
                     due_date_obj = date_val if isinstance(date_val, py_date) and not isinstance(date_val, datetime) else date_val.date()
                 elif date_str:
@@ -274,9 +287,12 @@ class ContentService:
                     content_item_id=str(item_id),
                     project_id=str(project.get("_id")),
                     creative_role=role,
-                    status=TaskStatus.COMPLETED if is_completed else TaskStatus.TODO
+                    status="completed" if is_completed else "todo"
                 )
                 await TaskService.create_task(task_create, assigned_by)
+
+        from app.redis.service import clear_pattern
+        await clear_pattern("tasks:*")
 
     @staticmethod
     async def create_content(project_id: str, data: ContentItemCreate, current_user_id: Optional[str] = None):

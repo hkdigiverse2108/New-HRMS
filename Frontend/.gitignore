@@ -44,3 +44,6 @@ build/
 
 package-lock.json
 .last_build_api_url
+# Dynamic runtime env configs
+public/env-config.js
+.vercel/output/static/env-config.js

@@ -5,6 +5,7 @@ from enum import Enum
 
 class TaskStatus(str, Enum):
     TO_DO = "todo"
+    TODO = "todo"
     IN_PROGRESS = "inprogress"
     IN_REVIEW = "inreview"
     BUGS = "bugs"
