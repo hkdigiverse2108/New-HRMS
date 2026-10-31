@@ -75,7 +75,6 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   // Phone/tablet only: the calendars panel is collapsed until opened from the header
-  const [showPanel, setShowPanel] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(isNew || false);
   const [selectedDateForCreate, setSelectedDateForCreate] = useState<Date>(new Date());
   const [editingEvent, setEditingEvent] = useState<ScheduleEvent | null>(null);
@@ -592,15 +591,6 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
           )}
 
           <button
-            type="button"
-            onClick={() => setShowPanel((v) => !v)}
-            aria-expanded={showPanel}
-            className="xl:hidden flex items-center gap-1.5 px-3 py-1.5 whitespace-nowrap shrink-0 text-xs sm:text-sm font-semibold rounded-lg border border-border bg-white hover:bg-muted text-foreground transition-colors shadow-sm"
-          >
-            Calendars <ChevronDown className={cn("w-4 h-4 transition-transform", showPanel && "rotate-180")} />
-          </button>
-
-          <button
             onClick={() => openCreate(currentDate)}
             className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 whitespace-nowrap shrink-0 bg-primary text-primary-foreground text-xs sm:text-sm font-semibold rounded-lg hover:bg-primary transition-colors shadow-sm">
             <Plus className="w-4 h-4" /> Create
@@ -610,10 +600,10 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
 
       <div className="flex flex-col xl:flex-row flex-1 xl:overflow-hidden">
         {/* Sidebar: below the calendar on phone/tablet, left panel on desktop */}
-        <aside className={cn("order-first xl:order-none w-full xl:w-72 border-b xl:border-b-0 xl:border-r border-border xl:flex flex-col shrink-0 bg-muted/20 select-none max-h-[70dvh] overflow-y-auto xl:max-h-none xl:overflow-visible", showPanel ? "flex" : "hidden")}>
+        <aside className="order-last xl:order-none w-full xl:w-72 border-t xl:border-t-0 xl:border-r border-border flex flex-col md:grid md:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)] xl:flex shrink-0 bg-muted/20 select-none xl:overflow-visible">
           {/* Pinned / Stuck Mini Calendar at top (never scrolls out of view) */}
-          <div className="shrink-0 p-3.5 border-b border-border/80 bg-white flex justify-center">
-            <div className="w-full max-w-sm xl:max-w-none">
+          <div className="shrink-0 p-3.5 border-b md:border-b-0 md:border-r xl:border-r-0 xl:border-b border-border/80 bg-white flex justify-center">
+            <div className="w-full max-w-sm md:max-w-none">
             <MiniCalendar
               mode="single"
               selected={currentDate}
@@ -636,7 +626,7 @@ export function Schedule({ isNew }: { isNew?: boolean }) {
           </div>
 
           {/* Scrollable Categories & Team Calendars below */}
-          <div className="flex-1 xl:overflow-y-auto p-4 space-y-6 hide-scrollbar">
+          <div className="flex-1 min-w-0 xl:overflow-y-auto p-4 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-6 content-start xl:flex xl:flex-col xl:space-y-6 hide-scrollbar">
             <div className="space-y-4">
               <div className="flex items-center justify-between group cursor-pointer">
                 <h3 className="text-sm font-bold text-foreground">My Calendars</h3>
