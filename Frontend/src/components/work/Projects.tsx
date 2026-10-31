@@ -909,16 +909,37 @@ const syncSocialMediaTasksForProject = (project: any, calendarItems: any[]) => {
     const topicText = item.topic || "Untitled Idea";
     const typeLabel = item.type || "Content";
     const assigned = item.assignedTo || undefined;
-    const isLinkFilled = (link?: string) => {
-      const s = String(link || "").trim();
-      return s !== "" && s.toLowerCase() !== "not required";
+    const isPlaceholder = (link?: string) => {
+      if (!link) return true;
+      const s = String(link).trim().toLowerCase();
+      return !s || s === "-" || s === "--" || s === "---" || s === "n/a" || s === "na" || s === "none" || s === "null";
     };
     const isLinkNotReq = (link?: string) => {
-      return String(link || "").trim().toLowerCase() === "not required";
+      if (!link) return false;
+      const s = String(link).trim().toLowerCase();
+      return (
+        s === "not required" ||
+        s === "not req" ||
+        s === "not_required" ||
+        s === "no need" ||
+        s === "no needed" ||
+        s === "no script" ||
+        s === "client provide" ||
+        s === "clinet provide" ||
+        s.includes("not required") ||
+        s.includes("no need") ||
+        s.includes("no script") ||
+        s.includes("client provide")
+      );
+    };
+    const isLinkFilled = (link?: string) => {
+      if (!link) return false;
+      if (isPlaceholder(link) || isLinkNotReq(link)) return false;
+      return String(link).trim().length >= 3;
     };
 
-    // Audio 19: Only push tasks that are actually pending (link not filled and not "not required").
-    // If user deleted "Not Required" (making it empty), it is pending and pushed!
+    // If stage is Not Required, NEVER push a task!
+    // If link is a placeholder ("-", "--", "n/a", "none") or empty, it IS pending and pushed!
     if (item.scriptDate && !isLinkNotReq(item.scriptLink) && !isLinkFilled(item.scriptLink)) {
       newGeneratedTasks.push({
         id: `sm-cal-script-${item.id}`,
@@ -939,7 +960,8 @@ const syncSocialMediaTasksForProject = (project: any, calendarItems: any[]) => {
         assignedToName: assigned
       });
     }
-    if (item.editingStart && !isLinkFilled(item.editingDriveLink)) {
+    const editLink = item.finalReelLink || item.finalPostLink || item.editingDriveLink;
+    if (item.editingStart && !isLinkNotReq(editLink) && !isLinkFilled(editLink)) {
       newGeneratedTasks.push({
         id: `sm-cal-edit-${item.id}`,
         title: `🎬 Edit: ${typeLabel} - ${topicText}`,
@@ -949,7 +971,7 @@ const syncSocialMediaTasksForProject = (project: any, calendarItems: any[]) => {
         assignedToName: assigned
       });
     }
-    if (item.captionDate && item.approvalStatus !== "Approved") {
+    if (item.captionDate && item.approvalStatus !== "Approved" && !isLinkNotReq(item.approvalStatus)) {
       newGeneratedTasks.push({
         id: `sm-cal-approve-${item.id}`,
         title: `✅ Approve: ${typeLabel} - ${topicText}`,
@@ -969,7 +991,7 @@ const syncSocialMediaTasksForProject = (project: any, calendarItems: any[]) => {
         assignedToName: assigned
       });
     }
-    if (item.postingDate && !isLinkFilled(item.postingLinkOfIg)) {
+    if (item.postingDate && !isLinkNotReq(item.postingLinkOfIg) && !isLinkFilled(item.postingLinkOfIg)) {
       newGeneratedTasks.push({
         id: `sm-cal-post-${item.id}`,
         title: `📢 Posting: ${typeLabel} - ${topicText}`,
@@ -2285,7 +2307,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   const [isPendingBrandsModalOpen, setIsPendingBrandsModalOpen] = useState(false);
 
   // Feature 4: Monthly Target vs Completed Content KPI + Custom Date Range
-  const [calendarMonthFilter, setCalendarMonthFilter] = useState<string>("Current");
+  const [calendarMonthFilter, setCalendarMonthFilter] = useState<string>(() => (typeof window !== "undefined" && localStorage.getItem("hrms_cc_target_month")) || "Current");
   const [ccCustomStartDate, setCcCustomStartDate] = useState<string>("");
   const [ccCustomEndDate, setCcCustomEndDate] = useState<string>("");
   const [isUploadingCCExcel, setIsUploadingCCExcel] = useState(false);
@@ -2562,10 +2584,14 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       if (e.detail === "/work/projects") {
         const highlightId = typeof window !== "undefined" ? localStorage.getItem("hrms_cc_highlight_id") : null;
         const savedProjId = typeof window !== "undefined" ? localStorage.getItem("hrms_selected_project_id") : null;
-        if (highlightId && savedProjId) {
+        const targetMonth = typeof window !== "undefined" ? localStorage.getItem("hrms_cc_target_month") : null;
+        if (savedProjId) {
           setSelectedProjectId(savedProjId);
           setProjectSubTab("workspace");
           setDmWorkspaceView("social");
+          if (targetMonth) {
+            setCalendarMonthFilter(targetMonth);
+          }
           return;
         }
         setSelectedClientId(null);
@@ -2625,6 +2651,26 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     const highlightId = localStorage.getItem("hrms_cc_highlight_id");
     if (!highlightId) return;
 
+    const targetMonth = localStorage.getItem("hrms_cc_target_month");
+    const curProj = projects.find(p => String(p.id) === String(selectedProjectId));
+    if (curProj?.contentCalendar) {
+      const item = curProj.contentCalendar.find((ci: any) => String(ci.id || ci._id) === String(highlightId));
+      if (item) {
+        if (item.postingDate && /^\d{4}-\d{2}/.test(item.postingDate)) {
+          const m = item.postingDate.slice(0, 7);
+          setCalendarMonthFilter(m);
+        } else if (targetMonth) {
+          setCalendarMonthFilter(targetMonth);
+        } else {
+          setCalendarMonthFilter("All");
+        }
+      } else if (targetMonth) {
+        setCalendarMonthFilter(targetMonth);
+      }
+    } else if (targetMonth) {
+      setCalendarMonthFilter(targetMonth);
+    }
+
     let attempts = 0;
     const maxAttempts = 25; // check over 10 seconds while calendar data finishes loading
     const interval = setInterval(() => {
@@ -2652,6 +2698,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           );
         }, 5000);
         localStorage.removeItem("hrms_cc_highlight_id");
+        localStorage.removeItem("hrms_cc_target_month");
       } else if (attempts >= maxAttempts) {
         clearInterval(interval);
       }
@@ -2934,7 +2981,17 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     const today = new Date();
     setCustomDateRange({ from: s > today ? today : s, to: e < today ? e : today });
     setCampaignDateRange("Custom");
-    setCalendarMonthFilter(getProjectMonths(p.startDate, p.endDate, today).def);
+    const targetMonth = typeof window !== "undefined" ? localStorage.getItem("hrms_cc_target_month") : null;
+    const highlightId = typeof window !== "undefined" ? localStorage.getItem("hrms_cc_highlight_id") : null;
+    let itemMonth: string | null = null;
+    if (highlightId && p?.contentCalendar) {
+      const item = p.contentCalendar.find((ci: any) => String(ci.id || ci._id) === String(highlightId));
+      if (item && item.postingDate && /^\d{4}-\d{2}/.test(item.postingDate)) {
+        itemMonth = item.postingDate.slice(0, 7);
+      }
+    }
+    const defMonth = targetMonth || itemMonth || getProjectMonths(p.startDate, p.endDate, today).def;
+    setCalendarMonthFilter(defMonth);
     // F8: report month default = running month
     setReportMonth(getProjectMonths(p.startDate, p.endDate, today).def);
   }, [selectedProjectId]);
@@ -6986,6 +7043,10 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     .map(([value, label]) => ({ value, label }));
 
                   const filteredCalendar = projectCalendar.filter(item => {
+                    const highlightId = typeof window !== "undefined" ? localStorage.getItem("hrms_cc_highlight_id") : null;
+                    if (highlightId && (String(item.id) === String(highlightId) || String((item as any)._id) === String(highlightId))) {
+                      return true;
+                    }
                     if (calendarTypeFilter !== "All" && item.type !== calendarTypeFilter) return false;
                     if (calendarStatusFilter !== "All" && item.status !== calendarStatusFilter) return false;
                     if (calendarMonthFilter === "Current") {

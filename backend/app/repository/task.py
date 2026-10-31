@@ -108,7 +108,15 @@ class TaskRepository:
             and_conditions.append({"assigned_to": {"$in": team_employee_ids}})
             
         if assigned_to:
-            and_conditions.append({"assigned_to": assigned_to})
+            match_assignees = [str(assigned_to)]
+            if ObjectId.is_valid(str(assigned_to)):
+                match_assignees.append(ObjectId(str(assigned_to)))
+            and_conditions.append({
+                "$or": [
+                    {"assigned_to": {"$in": match_assignees}},
+                    {"transfer_request.requested_to": {"$in": match_assignees}, "transfer_request.status": "pending"}
+                ]
+            })
         if assigned_by:
             and_conditions.append({"assigned_by": assigned_by})
         if status and status != "All":
@@ -146,19 +154,35 @@ class TaskRepository:
                 "scripting": ["scripting"],
                 "shoot": ["shoot_videography"],
                 "editing": ["reel_editing"],
+                "video editing": ["reel_editing"],
+                "reel editing": ["reel_editing"],
+                "video": ["reel_editing"],
+                "post/graphics": ["post_graphics"],
+                "post graphics": ["post_graphics"],
+                "graphics": ["post_graphics"],
+                "post": ["post_graphics"],
                 "thumbnail": ["thumbnail"],
                 "caption": ["caption"],
                 "approval": ["approval_qc"],
                 "posting": ["posting_publisher"],
-                "post/graphics": ["post_graphics"],
-                "post graphics": ["post_graphics"],
-                "graphics": ["post_graphics"],
                 "brand person": ["brand_person"],
             }
-            stage_or = [{"sub_category": {"$regex": f"^{_re.escape(stage)}$", "$options": "i"}}]
-            roles = stage_roles.get(stage.lower())
-            if roles:
-                stage_or.append({"creative_role": {"$in": roles}})
+            s_lower = stage.lower()
+            if s_lower in ["editing", "video editing", "reel editing", "video"]:
+                stage_or = [
+                    {"sub_category": {"$regex": "^(editing|video editing|reel editing)$", "$options": "i"}},
+                    {"creative_role": "reel_editing"}
+                ]
+            elif s_lower in ["post/graphics", "post graphics", "graphics", "post"]:
+                stage_or = [
+                    {"sub_category": {"$regex": "^(post/graphics|post graphics|graphics|post)$", "$options": "i"}},
+                    {"creative_role": "post_graphics"}
+                ]
+            else:
+                stage_or = [{"sub_category": {"$regex": f"^{_re.escape(stage)}$", "$options": "i"}}]
+                roles = stage_roles.get(s_lower)
+                if roles:
+                    stage_or.append({"creative_role": {"$in": roles}})
             and_conditions.append({"$or": stage_or})
             
         if search and search.strip():
@@ -314,7 +338,9 @@ class TaskRepository:
         sub_category: Optional[str] = None,
         project_id: Optional[str] = None,
         priority: Optional[str] = None,
-        search: Optional[str] = None
+        search: Optional[str] = None,
+        timeline_filter: Optional[str] = None,
+        status: Optional[str] = None
     ):
         collection = await cls.get_collection()
         
@@ -326,60 +352,48 @@ class TaskRepository:
             archived_proj_ids.append(str(p["_id"]))
             archived_proj_ids.append(p["_id"])
 
-        base_query = {
-            "is_deleted": False, 
-            "is_archived": {"$ne": True},
+        common_conditions = [
+            {"is_deleted": False},
+            {"is_archived": {"$ne": True}},
             # Audio 19: Exclude completed automated tasks from stats entirely
-            "$nor": [{"content_item_id": {"$exists": True, "$ne": None}, "status": {"$in": ["completed", "done"]}}]
-        }
+            {"$nor": [{"content_item_id": {"$exists": True, "$ne": None}, "status": {"$in": ["completed", "done"]}}]}
+        ]
         if archived_proj_ids:
-            base_query["project_id"] = {"$nin": archived_proj_ids}
+            common_conditions.append({"project_id": {"$nin": archived_proj_ids}})
         if involved_emp_id:
-            base_query["$or"] = [
-                {"assigned_to": involved_emp_id},
-                {"assigned_by": involved_emp_id},
-                {"transfer_request.requested_to": involved_emp_id},
-                {"transfer_request.requested_by": involved_emp_id},
-                {"transfer_history.to_employee": involved_emp_id},
-                {"transfer_history.from_employee": involved_emp_id},
-            ]
+            common_conditions.append({
+                "$or": [
+                    {"assigned_to": involved_emp_id},
+                    {"assigned_by": involved_emp_id},
+                    {"transfer_request.requested_to": involved_emp_id},
+                    {"transfer_request.requested_by": involved_emp_id},
+                    {"transfer_history.to_employee": involved_emp_id},
+                    {"transfer_history.from_employee": involved_emp_id},
+                ]
+            })
         
         if assigned_to:
-            base_query["assigned_to"] = assigned_to
+            match_assignees = [str(assigned_to)]
+            if ObjectId.is_valid(str(assigned_to)):
+                match_assignees.append(ObjectId(str(assigned_to)))
+            common_conditions.append({
+                "$or": [
+                    {"assigned_to": {"$in": match_assignees}},
+                    {"transfer_request.requested_to": {"$in": match_assignees}, "transfer_request.status": "pending"}
+                ]
+            })
         if assigned_by:
-            base_query["assigned_by"] = assigned_by
+            common_conditions.append({"assigned_by": assigned_by})
         if team_employee_ids is not None:
-            base_query["assigned_to"] = {"$in": team_employee_ids}
+            common_conditions.append({"assigned_to": {"$in": team_employee_ids}})
         if task_category and task_category != "All":
-            base_query["task_category"] = task_category
+            common_conditions.append({"task_category": task_category})
         if priority and priority != "All":
-            base_query["priority"] = priority.lower()
+            common_conditions.append({"priority": priority.lower()})
         if search and search.strip():
-            base_query["title"] = {"$regex": search.strip(), "$options": "i"}
+            common_conditions.append({"title": {"$regex": search.strip(), "$options": "i"}})
         if project_id and project_id != "All":
-            base_query["project_id"] = project_id
-        if sub_category and sub_category != "All":
-            import re as _re
-            stage = sub_category.strip()
-            stage_roles = {
-                "script": ["scripting"],
-                "scripting": ["scripting"],
-                "shoot": ["shoot_videography"],
-                "editing": ["reel_editing", "post_graphics"],
-                "thumbnail": ["thumbnail"],
-                "caption": ["caption"],
-                "approval": ["approval_qc"],
-                "posting": ["posting_publisher"],
-                "post/graphics": ["post_graphics"],
-                "post graphics": ["post_graphics"],
-                "graphics": ["post_graphics"],
-                "brand person": ["brand_person"],
-            }
-            stage_or = [{"sub_category": {"$regex": f"^{_re.escape(stage)}$", "$options": "i"}}]
-            roles = stage_roles.get(stage.lower())
-            if roles:
-                stage_or.append({"creative_role": {"$in": roles}})
-            base_query["$or"] = stage_or
+            common_conditions.append({"project_id": project_id})
         
         if target_date:
             try:
@@ -393,21 +407,152 @@ class TaskRepository:
         end_of_today = datetime(ref_date.year, ref_date.month, ref_date.day, 23, 59, 59, 999999)
         today_str = ref_date.strftime("%Y-%m-%d")
 
-        # Single round-trip facet with filter-wise KPIs
+        today_work_cond = {
+            "$or": [
+                {"due_date": {"$gte": start_of_today, "$lte": end_of_today}},
+                {"due_date": today_str},
+                {
+                    "$or": [
+                        {"due_date": {"$lt": start_of_today}},
+                        {"due_date": {"$type": "string", "$lt": today_str}}
+                    ],
+                    "status": {"$nin": ["completed", "done"]}
+                }
+            ]
+        }
+        overdue_cond = {
+            "$or": [
+                {"due_date": {"$lt": start_of_today}},
+                {"due_date": {"$type": "string", "$lt": today_str}}
+            ],
+            "status": {"$nin": ["completed", "done"]}
+        }
+        upcoming_cond = {
+            "$or": [
+                {"due_date": {"$gt": end_of_today}},
+                {"due_date": {"$type": "string", "$gt": today_str}}
+            ],
+            "status": {"$nin": ["completed", "done"]}
+        }
+        client_issue_cond = {
+            "$or": [
+                {"task_category": "Client Issue"},
+                {"title": {"$regex": "^\\[client issue\\]", "$options": "i"}},
+                {"is_client_issue": True}
+            ]
+        }
+        pending_cond = {
+            "$or": [
+                {"task_category": "Pending"},
+                {"title": {"$regex": "^\\[pending\\]", "$options": "i"}},
+                {"is_pending_issue": True}
+            ]
+        }
+
+        stage_matchers = {
+            "Script": {"$or": [{"sub_category": {"$regex": "^script", "$options": "i"}}, {"creative_role": "scripting"}]},
+            "Shoot": {"$or": [{"sub_category": {"$regex": "^shoot", "$options": "i"}}, {"creative_role": "shoot_videography"}]},
+            "Editing": {"$or": [{"sub_category": {"$regex": "^(editing|video editing|reel editing)$", "$options": "i"}}, {"creative_role": "reel_editing"}]},
+            "Post/Graphics": {"$or": [{"sub_category": {"$regex": "^(post/graphics|post graphics|graphics|post)$", "$options": "i"}}, {"creative_role": "post_graphics"}]},
+            "Caption": {"$or": [{"sub_category": {"$regex": "^caption", "$options": "i"}}, {"creative_role": "caption"}]},
+            "Thumbnail": {"$or": [{"sub_category": {"$regex": "^thumb", "$options": "i"}}, {"creative_role": "thumbnail"}]},
+            "Approval": {"$or": [{"sub_category": {"$regex": "^approval", "$options": "i"}}, {"creative_role": "approval_qc"}]},
+            "Posting": {"$or": [{"sub_category": {"$regex": "^posting", "$options": "i"}}, {"creative_role": "posting_publisher"}]}
+        }
+
+        timeline_cond = None
+        if timeline_filter:
+            tf = timeline_filter.lower().strip()
+            if tf == "today":
+                timeline_cond = today_work_cond
+            elif tf == "overdue":
+                timeline_cond = overdue_cond
+            elif tf == "upcoming":
+                timeline_cond = upcoming_cond
+            elif tf == "client_issue":
+                timeline_cond = client_issue_cond
+            elif tf == "pending":
+                timeline_cond = pending_cond
+
+        status_cond = None
+        if status and status != "All":
+            raw_st = status.lower().replace(" ", "").replace("_", "")
+            if raw_st in ["todo"]:
+                status_cond = {"status": "todo"}
+            elif raw_st in ["inprogress"]:
+                status_cond = {"status": "inprogress"}
+            elif raw_st in ["inreview", "review"]:
+                status_cond = {"status": {"$in": ["inreview", "review"]}}
+            elif raw_st in ["completed", "done"]:
+                status_cond = {"status": {"$in": ["completed", "done"]}}
+
+        def make_stage_match(stage_name: Optional[str] = None):
+            conds = []
+            if timeline_cond:
+                conds.append(timeline_cond)
+            if status_cond:
+                conds.append(status_cond)
+            if stage_name and stage_name in stage_matchers:
+                conds.append(stage_matchers[stage_name])
+            if not conds:
+                return {}
+            if len(conds) == 1:
+                return conds[0]
+            return {"$and": conds}
+
+        # Build subcategory matcher for KPI cards if a subcategory is selected
+        sub_cat_match = None
+        if sub_category and sub_category != "All":
+            sc_lower = sub_category.strip().lower()
+            if sc_lower in ["editing", "video editing", "reel editing", "video"]:
+                sub_cat_match = stage_matchers["Editing"]
+            elif sc_lower in ["post/graphics", "post graphics", "graphics", "post"]:
+                sub_cat_match = stage_matchers["Post/Graphics"]
+            else:
+                matched_stage = None
+                for s_name in stage_matchers:
+                    if s_name.lower() in sc_lower or sc_lower in s_name.lower():
+                        matched_stage = s_name
+                        break
+                if matched_stage:
+                    sub_cat_match = stage_matchers[matched_stage]
+                else:
+                    import re as _re
+                    sub_cat_match = {"sub_category": {"$regex": f"^{_re.escape(sub_category.strip())}$", "$options": "i"}}
+
+        def make_kpi_match(kpi_cond: dict):
+            if sub_cat_match:
+                return {"$and": [sub_cat_match, kpi_cond]}
+            return kpi_cond
+
+        # Single round-trip facet with filter-wise KPIs and dynamic stage counts
+        facet_def = {
+            "total": ([{"$match": sub_cat_match}] if sub_cat_match else []) + [{"$count": "n"}],
+            "todo": [{"$match": make_kpi_match({"status": "todo"})}, {"$count": "n"}],
+            "inprogress": [{"$match": make_kpi_match({"status": "inprogress"})}, {"$count": "n"}],
+            "inreview": [{"$match": make_kpi_match({"status": {"$in": ["inreview", "review"]}})}, {"$count": "n"}],
+            "completed": [{"$match": make_kpi_match({"status": {"$in": ["completed", "done"]}, "content_item_id": {"$in": [None, ""]}})}, {"$count": "n"}],
+            "today": [{"$match": make_kpi_match({"$or": [{"due_date": {"$gte": start_of_today, "$lte": end_of_today}}, {"due_date": today_str}]})}, {"$count": "n"}],
+            "overdue": [{"$match": make_kpi_match(overdue_cond)}, {"$count": "n"}],
+            "upcoming": [{"$match": make_kpi_match(upcoming_cond)}, {"$count": "n"}],
+            "client_issue": [{"$match": make_kpi_match(client_issue_cond)}, {"$count": "n"}],
+            "pending": [{"$match": make_kpi_match(pending_cond)}, {"$count": "n"}],
+            # Stage breakdowns (stable counts independent of single subcategory selection)
+            "sc_all": [{"$match": make_stage_match()}, {"$count": "n"}],
+            "sc_script": [{"$match": make_stage_match("Script")}, {"$count": "n"}],
+            "sc_shoot": [{"$match": make_stage_match("Shoot")}, {"$count": "n"}],
+            "sc_editing": [{"$match": make_stage_match("Editing")}, {"$count": "n"}],
+            "sc_post_graphics": [{"$match": make_stage_match("Post/Graphics")}, {"$count": "n"}],
+            "sc_caption": [{"$match": make_stage_match("Caption")}, {"$count": "n"}],
+            "sc_thumbnail": [{"$match": make_stage_match("Thumbnail")}, {"$count": "n"}],
+            "sc_approval": [{"$match": make_stage_match("Approval")}, {"$count": "n"}],
+            "sc_posting": [{"$match": make_stage_match("Posting")}, {"$count": "n"}],
+        }
+
+        root_match = {"$and": common_conditions} if len(common_conditions) > 1 else common_conditions[0]
         facet_res = await collection.aggregate([
-            {"$match": base_query},
-            {"$facet": {
-                "total": [{"$count": "n"}],
-                "todo": [{"$match": {"status": "todo"}}, {"$count": "n"}],
-                "inprogress": [{"$match": {"status": "inprogress"}}, {"$count": "n"}],
-                "inreview": [{"$match": {"status": {"$in": ["inreview", "review"]}}}, {"$count": "n"}],
-                "completed": [{"$match": {"status": {"$in": ["completed", "done"]}, "content_item_id": {"$in": [None, ""]}}}, {"$count": "n"}],
-                "today": [{"$match": {"$or": [{"due_date": {"$gte": start_of_today, "$lte": end_of_today}}, {"due_date": today_str}]}}, {"$count": "n"}],
-                "overdue": [{"$match": {"$or": [{"due_date": {"$lt": start_of_today}}, {"due_date": {"$type": "string", "$lt": today_str}}], "status": {"$nin": ["completed", "done"]}}}, {"$count": "n"}],
-                "upcoming": [{"$match": {"$or": [{"due_date": {"$gt": end_of_today}}, {"due_date": {"$type": "string", "$gt": today_str}}], "status": {"$nin": ["completed", "done"]}}}, {"$count": "n"}],
-                "client_issue": [{"$match": {"$or": [{"task_category": "Client Issue"}, {"title": {"$regex": "^\\[client issue\\]", "$options": "i"}}, {"is_client_issue": True}]}}, {"$count": "n"}],
-                "pending": [{"$match": {"$or": [{"task_category": "Pending"}, {"title": {"$regex": "^\\[pending\\]", "$options": "i"}}, {"is_pending_issue": True}]}}, {"$count": "n"}]
-            }},
+            {"$match": root_match},
+            {"$facet": facet_def},
         ]).to_list(length=1)
 
         def _n(key: str) -> int:
@@ -427,7 +572,22 @@ class TaskRepository:
             "overdue": _n("overdue"),
             "upcoming": _n("upcoming"),
             "client_issue": _n("client_issue"),
-            "pending": _n("pending")
+            "pending": _n("pending"),
+            "sub_categories": {
+                "All": _n("sc_all"),
+                "Script": _n("sc_script"),
+                "Shoot": _n("sc_shoot"),
+                "Editing": _n("sc_editing"),
+                "Video Editing": _n("sc_editing"),
+                "Post/Graphics": _n("sc_post_graphics"),
+                "Post Graphics": _n("sc_post_graphics"),
+                "Post": _n("sc_post_graphics"),
+                "Graphics": _n("sc_post_graphics"),
+                "Caption": _n("sc_caption"),
+                "Thumbnail": _n("sc_thumbnail"),
+                "Approval": _n("sc_approval"),
+                "Posting": _n("sc_posting")
+            }
         }
         
     @classmethod
