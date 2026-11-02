@@ -541,7 +541,7 @@ export function SalesReports({ onAction }: { onAction?: (action: string) => void
       <body>
         <div class="print-bar">
           <div>
-            <strong>Antigravity HRMS</strong> &middot; Executive ${currentTitle}
+            <strong>HK Digiverse LLP</strong> &middot; Executive ${currentTitle}
           </div>
           <button class="print-btn" onclick="window.print()">Print / Save as PDF</button>
         </div>
@@ -550,7 +550,7 @@ export function SalesReports({ onAction }: { onAction?: (action: string) => void
 
         <div class="header">
           <div>
-            <div class="brand-title">ANTIGRAVITY DIGITAL ENTERPRISE &middot; HRMS</div>
+            <div class="brand-title">HK DIGIVERSE LLP</div>
             <div class="report-subtitle">${currentTitle.toUpperCase()} &mdash; EXECUTIVE SUMMARY</div>
           </div>
           <div class="meta-info">
