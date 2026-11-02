@@ -215,7 +215,7 @@ class ContentService:
 
             emp_id = team.get(role)
             # If a role is not assigned in creative_team (e.g. Approval on ErthGlow), DO NOT create or retain ghost task!
-            if not emp_id:
+            if not emp_id or not str(emp_id).strip():
                 await task_col.update_many(
                     {"content_item_id": str(item_id), "creative_role": role, "is_deleted": False},
                     {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}}
