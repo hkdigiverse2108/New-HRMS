@@ -44,14 +44,14 @@ export function ConfirmModal({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="w-[calc(100vw-24px)] sm:w-full max-w-md p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
-          <div className={`flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-5 border-b border-border/50 ${headerBgClass}`}>
+          <div className={`flex items-center justify-between w-full min-w-0 px-4 sm:px-6 py-3.5 sm:py-5 border-b border-border/50 ${headerBgClass}`}>
             <div className="flex items-center gap-3 min-w-0 pr-2">
               <div className={`p-2 rounded-xl shrink-0 ${iconBgClass}`}>
                 {isRestore ? <RotateCcw className="w-5 h-5" /> : isInfo ? <Info className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
               </div>
               <div className="min-w-0">
-                <h2 className="text-base sm:text-xl font-black text-foreground truncate">{title}</h2>
-                {itemName && <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 truncate">Confirm {actionNoun} of {itemName}</p>}
+                <h2 className="text-base sm:text-xl font-black text-foreground break-words">{title}</h2>
+                {itemName && <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 break-words [overflow-wrap:anywhere] line-clamp-2">Confirm {actionNoun} of {itemName}</p>}
               </div>
             </div>
             <button 
@@ -62,8 +62,8 @@ export function ConfirmModal({
             </button>
           </div>
 
-          <div className="p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 overflow-y-auto max-h-[70vh]">
-            <p className="text-foreground/80 text-xs sm:text-sm leading-relaxed">
+          <div className="w-full min-w-0 p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 overflow-y-auto max-h-[70vh]">
+            <p className="text-foreground/80 text-xs sm:text-sm leading-relaxed break-words [overflow-wrap:anywhere]">
               {description}
             </p>
 
