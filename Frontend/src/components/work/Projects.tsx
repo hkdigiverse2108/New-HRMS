@@ -3702,6 +3702,13 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     const cleanMonthPart = ccMonthLabel.replace(/[^a-zA-Z0-9_-]+/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "");
     const safeFilename = `${cleanFilePrefix}_Content_Calendar_${cleanMonthPart}_${isPortrait ? "Portrait" : "Landscape"}.pdf`;
 
+    // Only real URLs count as links; text like "Not Required" or "-" must not show in the PDF
+    const cleanLink = (raw: any): string => {
+      const v = String(raw ?? "").trim();
+      if (!v || /\s/.test(v)) return "";
+      return /^(https?:\/\/|www\.)\S+/i.test(v) || /^[^\s/]+\.[a-z]{2,}(\/\S*)?$/i.test(v) ? v : "";
+    };
+
     const columnsMap: Record<string, (item: any) => string> = {
       "Schedule": (i) => {
         const formattedDate = formatDayMonthYear(i.postingDate);
@@ -3713,35 +3720,35 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       "Brand Person": (i) => i.brand_person || "-",
       "Script": (i) => {
         const formattedDate = formatDayMonthYear(i.scriptDate);
-        const url = (i.scriptLink || "").trim();
+        const url = cleanLink(i.scriptLink);
         const linkHtml = url ? `<a href="${url.startsWith("http") ? url : "https://" + url}" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 700; display: inline-block; margin-left: 2px;">[Link]</a>` : "";
         if (formattedDate === "-" && !linkHtml) return "-";
         return `${formattedDate === "-" ? "" : formattedDate} ${linkHtml}`.trim();
       },
       "Shoot": (i) => {
         const formattedDate = formatDayMonthYear(i.shootDate);
-        const url = (i.shootLink || "").trim();
+        const url = cleanLink(i.shootLink);
         const linkHtml = url ? `<a href="${url.startsWith("http") ? url : "https://" + url}" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 700; display: inline-block; margin-left: 2px;">[Link]</a>` : "";
         if (formattedDate === "-" && !linkHtml) return "-";
         return `${formattedDate === "-" ? "" : formattedDate} ${linkHtml}`.trim();
       },
       "Editing": (i) => {
         const formattedDate = formatDayMonthYear(i.editingDate);
-        const rawUrl = (i.finalPostLink || i.finalReelLink || "").trim();
+        const rawUrl = cleanLink(i.finalPostLink) || cleanLink(i.finalReelLink);
         const linkHtml = rawUrl ? `<a href="${rawUrl.startsWith("http") ? rawUrl : "https://" + rawUrl}" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 700; display: inline-block; margin-left: 2px;">[Draft]</a>` : "";
         if (formattedDate === "-" && !linkHtml) return "-";
         return `${formattedDate === "-" ? "" : formattedDate} ${linkHtml}`.trim();
       },
       "Thumbnail": (i) => {
         const formattedDate = formatDayMonthYear(i.thumbnailDate);
-        const url = (i.thumbnailLink || "").trim();
+        const url = cleanLink(i.thumbnailLink);
         const linkHtml = url ? `<a href="${url.startsWith("http") ? url : "https://" + url}" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 700; display: inline-block; margin-left: 2px;">[Link]</a>` : "";
         if (formattedDate === "-" && !linkHtml) return "-";
         return `${formattedDate === "-" ? "" : formattedDate} ${linkHtml}`.trim();
       },
       "Caption": (i) => i.caption || "-",
       "Final Link": (i) => {
-        const rawUrl = (i.finalPostLink || i.finalReelLink || i.postingLinkOfIg || "").trim();
+        const rawUrl = cleanLink(i.finalPostLink) || cleanLink(i.finalReelLink) || cleanLink(i.postingLinkOfIg);
         if (!rawUrl || rawUrl === "-") return "-";
         const url = rawUrl.startsWith("http") ? rawUrl : "https://" + rawUrl;
         return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 700;">View Post</a>`;
@@ -3772,28 +3779,40 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     const totalColWeight = selectedCols.reduce((sum, col) => sum + (colWeights[col] || 10), 0);
     const numCols = selectedCols.length;
 
-    let tableFontSize = "9px";
-    let cellPadding = "5px 4px";
-    if (isPortrait) {
-      if (numCols >= 9) {
-        tableFontSize = "7px";
-        cellPadding = "3px 2px";
-      } else if (numCols >= 7) {
-        tableFontSize = "8px";
-        cellPadding = "4px 3px";
-      } else {
-        tableFontSize = "8.5px";
-        cellPadding = "5px 4px";
-      }
-    } else {
-      if (numCols >= 9) {
-        tableFontSize = "8.5px";
-        cellPadding = "5px 4px";
-      } else {
-        tableFontSize = "9.5px";
-        cellPadding = "6px 5px";
-      }
+    let tableFontSize = isPortrait ? "10px" : "10.5px";
+    let cellPadding = "9px 6px";
+    if (isPortrait && numCols >= 9) {
+      tableFontSize = "8.5px";
+      cellPadding = "8px 4px";
+    } else if (isPortrait && numCols >= 7) {
+      tableFontSize = "9px";
+      cellPadding = "8px 5px";
+    } else if (!isPortrait && numCols >= 9) {
+      tableFontSize = "9.5px";
+      cellPadding = "8px 5px";
     }
+
+    // Resolve live theme primary (oklch) to rgb, since html2canvas can't read CSS variables
+    let themeRgb: [number, number, number] = [22, 163, 74];
+    try {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--primary)";
+      document.body.appendChild(probe);
+      const cssColor = getComputedStyle(probe).color;
+      document.body.removeChild(probe);
+      const cv = document.createElement("canvas");
+      cv.width = cv.height = 1;
+      const ctx = cv.getContext("2d", { willReadFrequently: true });
+      if (ctx && cssColor) {
+        ctx.fillStyle = "#000";
+        ctx.fillStyle = cssColor;
+        ctx.fillRect(0, 0, 1, 1);
+        const d = ctx.getImageData(0, 0, 1, 1).data;
+        themeRgb = [d[0] ?? 22, d[1] ?? 163, d[2] ?? 74];
+      }
+    } catch { /* keep fallback */ }
+    const [tr, tg, tb] = themeRgb;
+    const themeSolid = `rgb(${tr}, ${tg}, ${tb})`;
 
     const pdfCss = `
       * { box-sizing: border-box !important; }
@@ -3801,208 +3820,138 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         margin: 0 !important;
         padding: 0 !important;
         background: #ffffff !important;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
-        color: #0f172a !important;
+        font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+        color: #18181b !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
         width: 100% !important;
       }
       .cc-pdf-wrapper {
         width: 100% !important;
-        max-width: 100% !important;
         background: #ffffff !important;
-        padding: ${isPortrait ? "8mm 8mm" : "10mm 10mm"} !important;
-        box-sizing: border-box !important;
+        padding: ${isPortrait ? "10mm 8mm" : "10mm 10mm"} !important;
       }
       .header-banner {
-        background-color: #059669 !important;
-        background: linear-gradient(135deg, #059669 0%, #0d9488 50%, #0284c7 100%) !important;
-        color: #ffffff !important;
-        border-radius: 8px !important;
-        padding: ${isPortrait ? "10px 14px" : "14px 18px"} !important;
-        margin-bottom: ${isPortrait ? "8px" : "12px"} !important;
-        display: flex !important;
-        justify-content: space-between !important;
-        align-items: center !important;
-        box-sizing: border-box !important;
-        width: 100% !important;
+        background-color: ${themeSolid} !important;
+        border-radius: 6px !important;
+        padding: 16px 18px !important;
+        margin-bottom: 12px !important;
+        text-align: center !important;
       }
       .header-banner h1 {
         margin: 0 !important;
-        font-size: ${isPortrait ? "15px" : "18px"} !important;
-        font-weight: 800 !important;
-        letter-spacing: -0.01em !important;
+        font-size: ${isPortrait ? "22px" : "26px"} !important;
+        font-weight: 700 !important;
         color: #ffffff !important;
         word-break: break-word !important;
       }
       .header-banner p {
-        margin: 3px 0 0 0 !important;
-        color: rgba(255, 255, 255, 0.95) !important;
-        font-size: ${isPortrait ? "8.5px" : "10.5px"} !important;
+        margin: 6px 0 0 0 !important;
+        color: rgba(255, 255, 255, 0.92) !important;
+        font-size: ${isPortrait ? "12px" : "14px"} !important;
         font-weight: 500 !important;
-        line-height: 1.3 !important;
-      }
-      .badge-pill {
-        display: inline-block !important;
-        padding: 4px 10px !important;
-        background: rgba(255, 255, 255, 0.25) !important;
-        color: #ffffff !important;
-        border: 1px solid rgba(255, 255, 255, 0.45) !important;
-        border-radius: 9999px !important;
-        font-weight: 800 !important;
-        font-size: ${isPortrait ? "8.5px" : "10px"} !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.04em !important;
-        white-space: nowrap !important;
       }
       .stats-grid {
-        display: grid !important;
-        grid-template-columns: repeat(4, 1fr) !important;
-        gap: ${isPortrait ? "6px" : "10px"} !important;
-        margin-bottom: ${isPortrait ? "8px" : "12px"} !important;
+        display: flex !important;
+        gap: 8px !important;
+        margin-bottom: 12px !important;
         width: 100% !important;
-        box-sizing: border-box !important;
       }
       .stat-card {
-        background: #ffffff !important;
-        border: 1px solid #e2e8f0 !important;
+        flex: 1 !important;
+        border: 1px solid #d4d4d8 !important;
         border-radius: 6px !important;
-        padding: ${isPortrait ? "5px 6px" : "7px 10px"} !important;
-        display: flex !important;
-        flex-direction: column !important;
-        justify-content: center !important;
-        box-sizing: border-box !important;
+        padding: 8px 12px !important;
+        background: #ffffff !important;
+        text-align: left !important;
       }
       .stat-card .num {
-        font-size: ${isPortrait ? "13px" : "16px"} !important;
-        font-weight: 900 !important;
-        color: #0f172a !important;
-        line-height: 1.1 !important;
+        font-size: ${isPortrait ? "18px" : "20px"} !important;
+        font-weight: 800 !important;
+        line-height: 1.2 !important;
+        color: #18181b !important;
       }
       .stat-card .lbl {
-        font-size: ${isPortrait ? "7px" : "8px"} !important;
+        font-size: ${isPortrait ? "8px" : "9px"} !important;
+        font-weight: 700 !important;
         text-transform: uppercase !important;
         letter-spacing: 0.04em !important;
-        color: #64748b !important;
-        font-weight: 800 !important;
-        margin-top: 1px !important;
+        color: #52525b !important;
+        margin-top: 2px !important;
       }
       .stat-card.published .num { color: #059669 !important; }
       .stat-card.approved .num { color: #4f46e5 !important; }
       .stat-card.pending .num { color: #d97706 !important; }
       table {
         width: 100% !important;
-        max-width: 100% !important;
+        min-width: 100% !important;
+        margin: 0 !important;
         border-collapse: collapse !important;
         table-layout: fixed !important;
-        margin-top: 4px !important;
         background: #ffffff !important;
-        border: 1px solid #cbd5e1 !important;
-        box-sizing: border-box !important;
-        page-break-inside: auto !important;
       }
       tr { page-break-inside: avoid !important; }
       th {
-        background-color: #0f172a !important;
-        color: #ffffff !important;
+        background-color: #f4f4f5 !important;
+        color: #27272a !important;
         font-weight: 800 !important;
         text-align: center !important;
         padding: ${cellPadding} !important;
         font-size: ${tableFontSize} !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.02em !important;
-        border: 1px solid #334155 !important;
-        overflow-wrap: break-word !important;
+        border: 1px solid #d4d4d8 !important;
+        overflow-wrap: anywhere !important;
         word-break: break-word !important;
         vertical-align: middle !important;
-        box-sizing: border-box !important;
       }
       td {
         padding: ${cellPadding} !important;
-        border: 1px solid #cbd5e1 !important;
+        border: 1px solid #d4d4d8 !important;
         vertical-align: middle !important;
-        line-height: 1.25 !important;
-        color: #334155 !important;
+        line-height: 1.5 !important;
+        color: #27272a !important;
         font-size: ${tableFontSize} !important;
-        overflow-wrap: break-word !important;
+        overflow-wrap: anywhere !important;
         word-break: break-word !important;
         text-align: center !important;
-        box-sizing: border-box !important;
+        background: #ffffff !important;
       }
+      td.left { text-align: left !important; }
       td a {
-        color: #0284c7 !important;
+        color: #2563eb !important;
         text-decoration: underline !important;
-        font-weight: 700 !important;
-      }
-      tr:nth-child(even) td { background-color: #f8fafc !important; }
-      .status-tag {
-        display: inline-block !important;
-        padding: 2px 5px !important;
-        border-radius: 9999px !important;
-        font-size: ${isPortrait ? "6.5px" : "7.5px"} !important;
-        font-weight: 800 !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.02em !important;
-        white-space: normal !important;
-        word-break: break-word !important;
-        line-height: 1.15 !important;
-      }
-      .status-published { background: #dcfce7 !important; color: #166534 !important; border: 1px solid #bbf7d0 !important; }
-      .status-approved { background: #e0e7ff !important; color: #3730a3 !important; border: 1px solid #c7d2fe !important; }
-      .status-progress { background: #e0f2fe !important; color: #075985 !important; border: 1px solid #bae6fd !important; }
-      .status-todo { background: #fef3c7 !important; color: #92400e !important; border: 1px solid #fde68a !important; }
-      .footer-strip {
-        margin-top: 12px !important;
-        display: flex !important;
-        justify-content: space-between !important;
-        align-items: center !important;
-        color: #94a3b8 !important;
-        font-size: ${isPortrait ? "7.5px" : "9px"} !important;
         font-weight: 600 !important;
-        padding-top: 6px !important;
-        border-top: 1px dashed #cbd5e1 !important;
-        box-sizing: border-box !important;
-        width: 100% !important;
       }
+      tr:nth-child(even) td { background-color: #fafafa !important; }
+      .status-tag {
+        font-weight: 700 !important;
+        white-space: normal !important;
+      }
+      .status-published { color: #15803d !important; }
+      .status-approved { color: #4338ca !important; }
+      .status-progress { color: #0369a1 !important; }
+      .status-todo { color: #b45309 !important; }
     `;
 
+    const leftCols = ["Topic / Concept", "Caption"];
     const innerHtml = `
       <div class="header-banner">
-        <div style="flex: 1; min-width: 0; padding-right: 10px;">
+        <div style="width: 100%; text-align: center;">
           <h1>${combinedTitle}</h1>
-          <p>
-            <span style="display: inline-block; background: rgba(255,255,255,0.22); color: #ffffff; padding: 1.5px 7px; border-radius: 4px; font-weight: 800; margin-right: 6px;">Month: ${ccMonthLabel}</span>
-            <span>Content Calendar (${isPortrait ? "Portrait" : "Landscape"}) • Generated: ${formatDayMonthYear(new Date().toISOString())} • Total: ${items.length} items</span>
-          </p>
-        </div>
-        <div style="flex-shrink: 0;">
-          <span class="badge-pill">${category}</span>
+          <p>Content Calendar • ${ccMonthLabel}</p>
         </div>
       </div>
       <div class="stats-grid">
-        <div class="stat-card">
-          <div class="num">${items.length}</div>
-          <div class="lbl">Total Deliverables</div>
-        </div>
-        <div class="stat-card published">
-          <div class="num">${items.filter((i: any) => String(i.status || '').toLowerCase().includes('publish')).length}</div>
-          <div class="lbl">Published Items</div>
-        </div>
-        <div class="stat-card approved">
-          <div class="num">${items.filter((i: any) => String(i.status || '').toLowerCase().includes('approved')).length}</div>
-          <div class="lbl">Approved & Ready</div>
-        </div>
-        <div class="stat-card pending">
-          <div class="num">${items.filter((i: any) => !String(i.status || '').toLowerCase().includes('publish') && !String(i.status || '').toLowerCase().includes('approved')).length}</div>
-          <div class="lbl">In Progress / To Do</div>
-        </div>
+        <div class="stat-card"><div class="num">${items.length}</div><div class="lbl">Total Deliverables</div></div>
+        <div class="stat-card published"><div class="num">${items.filter((i: any) => String(i.status || '').toLowerCase().includes('publish')).length}</div><div class="lbl">Published Items</div></div>
+        <div class="stat-card approved"><div class="num">${items.filter((i: any) => String(i.status || '').toLowerCase().includes('approved')).length}</div><div class="lbl">Approved & Ready</div></div>
+        <div class="stat-card pending"><div class="num">${items.filter((i: any) => !String(i.status || '').toLowerCase().includes('publish') && !String(i.status || '').toLowerCase().includes('approved')).length}</div><div class="lbl">In Progress / To Do</div></div>
       </div>
-      <table>
+      <table style="width:100%;">
         <thead>
           <tr>
             ${selectedCols.map(col => {
               const pct = (((colWeights[col] || 10) / totalColWeight) * 100).toFixed(1);
-              return `<th style="width: ${pct}%;">${col}</th>`;
+              return `<th class="${leftCols.includes(col) ? "left" : ""}" style="width: ${pct}%;">${col}</th>`;
             }).join('')}
           </tr>
         </thead>
@@ -4017,16 +3966,12 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   const cls = st.includes("published") ? "status-published" : st.includes("approved") ? "status-approved" : st.includes("progress") ? "status-progress" : "status-todo";
                   return `<td><span class="status-tag ${cls}">${val}</span></td>`;
                 }
-                return `<td>${val}</td>`;
+                return `<td class="${leftCols.includes(col) && String(val).trim() !== "-" ? "left" : ""}">${val}</td>`;
               }).join('')}
             </tr>
           `).join('')}
         </tbody>
       </table>
-      <div class="footer-strip">
-        <span>© ${new Date().getFullYear()} ${combinedTitle} • Content Calendar (${ccMonthLabel}) • Generated via HRMS Content Hub</span>
-        <span>Confidential & Proprietary</span>
-      </div>
     `;
 
     if (mode === "download") {
@@ -4048,16 +3993,77 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           margin: 0 auto;
           overflow: hidden;
         `;
+        // Styles must be live in the container too: html2pdf measures link positions from the live DOM
         container.innerHTML = `
+          <style>#cc-pdf-export-container { ${pdfCss} }</style>
           <div class="cc-pdf-wrapper">
             ${innerHtml}
           </div>
         `;
         document.body.appendChild(container);
 
+        // Paginate by whole rows: measure live row heights, then rebuild one block per page
+        // (header + table head repeated) so no row is ever cut across a page boundary.
+        const mmToPx = (mm: number) => (mm * 96) / 25.4;
+        const availH = mmToPx(isPortrait ? 297 : 210) - mmToPx(10) * 2 - 14;
+        const wrapperEl = container.querySelector(".cc-pdf-wrapper") as HTMLElement | null;
+        const bannerEl = wrapperEl?.querySelector(".header-banner") as HTMLElement | null;
+        const statsEl = wrapperEl?.querySelector(".stats-grid") as HTMLElement | null;
+        const tableEl = wrapperEl?.querySelector("table") as HTMLTableElement | null;
+        const theadEl = tableEl?.querySelector("thead") as HTMLElement | null;
+        const styleEl = container.querySelector("style");
+        if (wrapperEl && bannerEl && statsEl && tableEl && theadEl && styleEl) {
+          const rowEls = Array.from(tableEl.querySelectorAll("tbody tr")) as HTMLElement[];
+          const blockH = (el: HTMLElement) => {
+            const cs = getComputedStyle(el);
+            return el.getBoundingClientRect().height + parseFloat(cs.marginTop || "0") + parseFloat(cs.marginBottom || "0");
+          };
+          const headH = theadEl.getBoundingClientRect().height;
+          const rowHs = rowEls.map(r => r.getBoundingClientRect().height);
+          const pageRows: number[][] = [[]];
+          let used = blockH(bannerEl) + blockH(statsEl) + headH;
+          rowEls.forEach((_, idx) => {
+            const h = rowHs[idx] ?? 0;
+            let cur = pageRows[pageRows.length - 1] as number[];
+            if (used + h > availH && cur.length > 0) {
+              cur = [];
+              pageRows.push(cur);
+              used = headH;
+            }
+            cur.push(idx);
+            used += h;
+          });
+
+          const frag = document.createDocumentFragment();
+          pageRows.forEach((idxs, pi) => {
+            const w = document.createElement("div");
+            w.className = "cc-pdf-wrapper";
+            if (pi === 0) {
+              w.appendChild(bannerEl);
+              w.appendChild(statsEl);
+            }
+            const t = tableEl.cloneNode(false) as HTMLTableElement;
+            t.appendChild(theadEl.cloneNode(true));
+            const tb = document.createElement("tbody");
+            idxs.forEach(i => tb.appendChild(rowEls[i] as HTMLElement));
+            t.appendChild(tb);
+            w.appendChild(t);
+            if (pi > 0) {
+              const br = document.createElement("div");
+              br.className = "html2pdf__page-break";
+              frag.appendChild(br);
+            }
+            frag.appendChild(w);
+          });
+          container.innerHTML = "";
+          container.appendChild(styleEl);
+          container.appendChild(frag);
+        }
+
         const opt = {
           margin: 0,
           filename: safeFilename,
+          enableLinks: true,
           image: { type: 'jpeg', quality: 0.98 },
           html2canvas: {
             scale: 2,
@@ -4080,7 +4086,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             }
           },
           jsPDF: { unit: 'mm', format: 'a4', orientation: isPortrait ? 'portrait' : 'landscape' },
-          pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', '.stat-card', '.header-banner'] }
+          pagebreak: { mode: ['legacy'] }
         };
 
         await html2pdf().set(opt).from(container).save();
@@ -6581,8 +6587,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         <>
           <div className="w-full space-y-5 sm:space-y-8 animate-in fade-in duration-500">
             {/* Detail View Header */}
-            <div className="flex flex-wrap justify-between items-center gap-x-4 gap-y-3">
-              <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1 basis-[20rem]">
+            <div className="flex flex-col gap-4 sm:gap-5 rounded-2xl border border-border/50 bg-card/60 p-4 sm:p-5 shadow-sm">
+              <div className="flex items-center gap-3 sm:gap-4 min-w-0 w-full">
                 <div className="flex flex-row items-center gap-2.5 sm:gap-4 shrink-0">
                 <button
                   onClick={() => {
@@ -6595,10 +6601,10 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   <ArrowLeft className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
                 </button>
                 {/* K5: highlighted client logo — project ni odakh logo uparthi */}
-                <BrandLogo src={client.logo} alt={client.name} size="w-16 h-16 sm:w-20 sm:h-20 shrink-0" />
+                <BrandLogo src={client.logo} alt={client.name} size="w-14 h-14 sm:w-20 sm:h-20 shrink-0" />
                 </div>
                 <div className="min-w-0 flex-1 flex flex-col justify-center">
-                  <h1 className="text-[clamp(1rem,0.55rem+1.6vw,1.875rem)] font-black tracking-tight text-foreground leading-tight break-words">
+                  <h1 className="text-[clamp(1.125rem,0.8rem+1.3vw,1.75rem)] font-black tracking-tight text-foreground leading-tight break-words">
                     {project.name}{client?.companyName && client.companyName !== project.name ? ` (${client.companyName})` : ""}
                   </h1>
                   <div className="flex flex-wrap items-center gap-2 mt-2">
@@ -6614,7 +6620,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-end flex-grow max-w-full gap-1.5 sm:gap-2 [&>button]:whitespace-nowrap [&>button]:flex-1 [&>button]:justify-center sm:[&>button]:flex-none [&>button]:px-3 [&>button]:py-2 sm:[&>button]:px-3.5">
+              <div className="flex flex-wrap items-center justify-start w-full gap-2 pt-4 border-t border-border/50 [&>button]:whitespace-nowrap [&>button]:flex-1 [&>button]:justify-center sm:[&>button]:flex-none [&>button]:px-3 [&>button]:py-2 sm:[&>button]:px-3.5">
                 {/* WhatsApp Group Link */}
                 <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-1 shadow-sm">
                   <button
@@ -9818,7 +9824,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
             return (
               <div className="fixed inset-0 z-[200] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-                <div className="bg-card w-full max-w-md rounded-[2rem] border border-border/60 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+                <div className="bg-card w-full max-w-lg rounded-2xl border border-border/60 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
                   <div className="flex items-center justify-between px-6 py-5 border-b border-border/50">
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-primary/10 text-primary rounded-xl">
@@ -9852,7 +9858,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                           <SelectItem value="last15" className="text-xs font-semibold">Last 15 Days</SelectItem>
                           <SelectItem value="last30" className="text-xs font-semibold">Last 30 Days</SelectItem>
                           <SelectItem value="All" className="text-xs font-semibold">All Months</SelectItem>
-                          <SelectItem value="custom" className="text-xs font-semibold">📅 Custom Date Range</SelectItem>
+                          <SelectItem value="custom" className="text-xs font-semibold">Custom Date Range</SelectItem>
                         </SelectContent>
                       </Select>
                       {pdfMonthFilter === "custom" && (
@@ -9962,7 +9968,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                               : "bg-muted/20 border-border/40 text-muted-foreground hover:bg-muted/40"
                           )}
                         >
-                          <span>📄 Portrait (Default)</span>
+                          <span>Portrait</span>
                         </button>
                         <button
                           type="button"
@@ -9974,7 +9980,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                               : "bg-muted/20 border-border/40 text-muted-foreground hover:bg-muted/40"
                           )}
                         >
-                          <span>📑 Landscape</span>
+                          <span>Landscape</span>
                         </button>
                       </div>
                     </div>
