@@ -4005,7 +4005,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         // Paginate by whole rows: measure live row heights, then rebuild one block per page
         // (header + table head repeated) so no row is ever cut across a page boundary.
         const mmToPx = (mm: number) => (mm * 96) / 25.4;
-        const availH = mmToPx(isPortrait ? 297 : 210) - mmToPx(10) * 2 - 14;
+        const availH = mmToPx(isPortrait ? 296 : 209) - mmToPx(10) * 2 - 14;
         const wrapperEl = container.querySelector(".cc-pdf-wrapper") as HTMLElement | null;
         const bannerEl = wrapperEl?.querySelector(".header-banner") as HTMLElement | null;
         const statsEl = wrapperEl?.querySelector(".stats-grid") as HTMLElement | null;
@@ -4038,6 +4038,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           pageRows.forEach((idxs, pi) => {
             const w = document.createElement("div");
             w.className = "cc-pdf-wrapper";
+            w.style.cssText = `height: ${isPortrait ? 296 : 209}mm; overflow: hidden;`;
             if (pi === 0) {
               w.appendChild(bannerEl);
               w.appendChild(statsEl);
@@ -4048,11 +4049,6 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             idxs.forEach(i => tb.appendChild(rowEls[i] as HTMLElement));
             t.appendChild(tb);
             w.appendChild(t);
-            if (pi > 0) {
-              const br = document.createElement("div");
-              br.className = "html2pdf__page-break";
-              frag.appendChild(br);
-            }
             frag.appendChild(w);
           });
           container.innerHTML = "";
@@ -4063,7 +4059,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         const opt = {
           margin: 0,
           filename: safeFilename,
-          enableLinks: true,
+          enableLinks: false,
           image: { type: 'jpeg', quality: 0.98 },
           html2canvas: {
             scale: 2,
@@ -4086,10 +4082,44 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             }
           },
           jsPDF: { unit: 'mm', format: 'a4', orientation: isPortrait ? 'portrait' : 'landscape' },
-          pagebreak: { mode: ['legacy'] }
+          pagebreak: { mode: [] }
         };
 
-        await html2pdf().set(opt).from(container).save();
+        // One wrapper = one A4 sheet (no slicing, so no row is ever cut). Links are added per page by hand.
+        const pageEls = Array.from(container.querySelectorAll(".cc-pdf-wrapper")) as HTMLElement[];
+        const pageLinks: { page: number; x: number; y: number; w: number; h: number; url: string }[] = [];
+        const pageWidthMm = isPortrait ? 210 : 297;
+        pageEls.forEach((pageEl, pi) => {
+          const pr = pageEl.getBoundingClientRect();
+          const k = pageWidthMm / pr.width;
+          pageEl.querySelectorAll("a").forEach((a) => {
+            const url = (a as HTMLAnchorElement).href;
+            Array.from(a.getClientRects()).forEach((r) => {
+              pageLinks.push({ page: pi + 1, x: (r.left - pr.left) * k, y: (r.top - pr.top) * k, w: r.width * k, h: r.height * k, url });
+            });
+          });
+        });
+
+        let worker = html2pdf().set(opt).from(pageEls[0] as HTMLElement).toPdf();
+        for (const pageEl of pageEls.slice(1)) {
+          worker = worker
+            .get("pdf")
+            .then((pdf: any) => {
+              pdf.addPage();
+            })
+            .from(pageEl)
+            .toContainer()
+            .toCanvas()
+            .toPdf();
+        }
+        worker = worker.get("pdf").then((pdf: any) => {
+          pageLinks.forEach((l) => {
+            pdf.setPage(l.page);
+            pdf.link(l.x, l.y, l.w, l.h, { url: l.url });
+          });
+          pdf.setPage(pageEls.length);
+        });
+        await worker.save();
         setIsPdfExportModalOpen(false);
         toast.success("PDF downloaded successfully!");
         return;
