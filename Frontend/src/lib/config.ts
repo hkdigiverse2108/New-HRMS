@@ -54,6 +54,17 @@ export function getApiUrl(): string {
 
 export const API_URL = resolveApiUrl();
 
+export function getMediaUrl(url: string | null | undefined): string {
+  if (!url || typeof url !== "string" || !url.trim() || url === "null" || url === "undefined") {
+    return "";
+  }
+  const clean = url.trim();
+  if (clean.startsWith("http://") || clean.startsWith("https://") || clean.startsWith("data:") || clean.startsWith("blob:")) {
+    return clean;
+  }
+  const apiBase = resolveApiUrl();
+  return clean.startsWith("/") ? `${apiBase}${clean}` : `${apiBase}/${clean}`;
+}
 
 export function uiAvatar(name: string) {
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'User')}&background=random`;

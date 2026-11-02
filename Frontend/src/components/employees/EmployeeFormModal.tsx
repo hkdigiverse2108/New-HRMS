@@ -1,5 +1,10 @@
 import { useState, useEffect, useRef } from "react";
-import { User, Briefcase, FileText, Check, ChevronRight, Upload, X, MapPin, Phone, Mail, Building2, CreditCard, ShieldAlert, AlertCircle, Lock, Camera } from "lucide-react";
+import { User, Briefcase, FileText, Check, ChevronRight, Upload, X, MapPin, Phone, Mail, Building2, CreditCard, ShieldAlert, AlertCircle, Lock, Camera, FolderOpen } from "lucide-react";
+
+import { ImageLibraryModal } from "@/components/common/ImageLibraryModal";
+
+import { ConfirmModal } from "@/components/ui/confirm-modal";
+import { useAuth } from "@/components/auth/AuthContext";
 import { getAvatarUrl, handleAvatarError } from "@/lib/config";
 import { DialogClose,  Dialog, DialogContent  } from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/select";
@@ -403,6 +408,12 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
+  const [isPhotoLibraryOpen, setIsPhotoLibraryOpen] = useState(false);
+
+  const [showPhotoRemoveConfirm, setShowPhotoRemoveConfirm] = useState(false);
+  const { user } = useAuth();
+  const isAdmin = (user?.role || "").toLowerCase() === "admin" || (user?.role || "").toLowerCase() === "superadmin";
+
   const handleImageUpload = async (file: File) => {
     if (!file) return;
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'];
@@ -543,10 +554,10 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                     </div>
                   </div>
 
-                  {/* Profile Picture Uploader (Optional - મરજિયાત નથી) */}
-                  <div className="p-4 rounded-2xl bg-muted/20 border border-border/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div className="flex items-center gap-4 min-w-0">
-                      <div className="relative group w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden bg-background border-2 border-primary/20 shadow-md flex items-center justify-center shrink-0 ring-4 ring-primary/5">
+                  {/* Profile Picture Bar (Compact & Responsive) */}
+                  <div className="p-3 sm:p-3.5 rounded-2xl bg-muted/20 border border-border/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="relative group w-12 h-12 rounded-xl overflow-hidden bg-background border border-primary/20 shadow-xs flex items-center justify-center shrink-0 ring-2 ring-primary/10">
                         <img
                           src={getAvatarUrl(formData.profile_photo || formData.avatar, formData.name || formData.firstName || "Employee")}
                           alt={formData.name || "Employee"}
@@ -555,33 +566,28 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                         />
                         {isUploadingPhoto && (
                           <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center">
-                            <Loader2 className="w-5 h-5 text-white animate-spin" />
+                            <Loader2 className="w-4 h-4 text-white animate-spin" />
                           </div>
                         )}
                       </div>
 
-                      <div className="min-w-0 space-y-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <label className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-1.5">
-                            <Camera className="w-4 h-4 text-primary" />
-                            <span>Profile Picture</span>
-                          </label>
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/60">
-                            Optional
+                      <div className="min-w-0 flex items-center gap-2 flex-wrap">
+                        <label className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-1.5 whitespace-nowrap">
+                          <Camera className="w-3.5 h-3.5 text-primary shrink-0" />
+                          <span>Profile Picture</span>
+                        </label>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/60 shrink-0">
+                          Optional
+                        </span>
+                        {(formData.profile_photo || formData.avatar) && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 shrink-0">
+                            Active
                           </span>
-                          {(formData.profile_photo || formData.avatar) && (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                              Custom Photo Active
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-muted-foreground">
-                          Upload employee portrait (JPG, PNG, WebP, SVG, Max 5MB). If omitted, standard initials avatar is used.
-                        </p>
+                        )}
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0 self-stretch sm:self-auto justify-end">
+                    <div className="flex flex-wrap items-center gap-2 shrink-0 self-stretch sm:self-auto justify-end">
                       <input
                         ref={photoInputRef}
                         type="file"
@@ -592,11 +598,23 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                           if (file) handleImageUpload(file);
                         }}
                       />
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => setIsPhotoLibraryOpen(true)}
+                          className="px-3 py-1.5 bg-background hover:bg-muted text-foreground/80 hover:text-foreground font-semibold text-xs rounded-xl border border-border shadow-2xs transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer"
+                          title="Choose from previously uploaded photos (Admin Only)"
+                        >
+                          <FolderOpen className="w-3.5 h-3.5 text-primary" />
+                          <span>Choose from Uploads</span>
+                        </button>
+                      )}
+
                       <button
                         type="button"
                         disabled={isUploadingPhoto}
                         onClick={() => photoInputRef.current?.click()}
-                        className="px-3.5 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 shrink-0 active:scale-95 cursor-pointer disabled:opacity-50"
+                        className="px-3 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 shrink-0 active:scale-95 cursor-pointer disabled:opacity-50"
                       >
                         {isUploadingPhoto ? (
                           <>
@@ -614,16 +632,9 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                       {(formData.profile_photo || formData.avatar) && (
                         <button
                           type="button"
-                          onClick={() => {
-                            setFormData(prev => ({
-                              ...prev,
-                              avatar: "",
-                              profile_photo: ""
-                            }));
-                            toast.info("Profile photo removed. Standard avatar will be used.");
-                          }}
-                          className="px-3 py-2 text-xs font-semibold text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 rounded-xl transition-colors border border-rose-500/20 flex items-center gap-1 shrink-0 cursor-pointer"
-                          title="Remove custom photo"
+                          onClick={() => setShowPhotoRemoveConfirm(true)}
+                          className="px-2.5 py-1.5 text-xs font-semibold text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 rounded-xl transition-colors border border-rose-500/20 flex items-center gap-1 shrink-0 cursor-pointer"
+                          title="Remove custom photo (requires confirmation)"
                         >
                           <X className="w-3.5 h-3.5" />
                           <span>Remove</span>
@@ -1388,9 +1399,40 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
             </div>
           </div>
       </DialogContent>
-    </Dialog>
+      {/* Image Library Modal for Reusing Photos */}
+      <ImageLibraryModal
+        isOpen={isPhotoLibraryOpen}
+        onClose={() => setIsPhotoLibraryOpen(false)}
+        onSelect={(selectedUrl) => {
+          setFormData(prev => ({
+            ...prev,
+            avatar: selectedUrl,
+            profile_photo: selectedUrl
+          }));
+        }}
+        currentValue={formData.profile_photo || formData.avatar}
+        defaultFolder="employee"
+        title="Select Employee Profile Photo from Uploads"
+      />
 
-    {/* Gallery Picker REMOVED (profile photos removed) */}
+      {/* Confirmation Modal Before Photo Removal */}
+      <ConfirmModal
+        isOpen={showPhotoRemoveConfirm}
+        onClose={() => setShowPhotoRemoveConfirm(false)}
+        onConfirm={() => {
+          setFormData(prev => ({
+            ...prev,
+            avatar: "",
+            profile_photo: ""
+          }));
+          toast.info("Profile photo removed. Standard avatar will be used.");
+        }}
+        title="Remove Profile Photo?"
+        description="Are you sure you want to remove this profile photo? The employee will use the default initials avatar instead."
+        confirmText="Remove Photo"
+        variant="destructive"
+      />
+    </Dialog>
   </>
   );
 }

@@ -1,8 +1,14 @@
 import React, { useRef, useState } from "react";
-import { Upload, X, Image as ImageIcon, Link as LinkIcon, RotateCcw, Check } from "lucide-react";
+import { Upload, X, Image as ImageIcon, Link as LinkIcon, RotateCcw, Check, FolderOpen } from "lucide-react";
+
+import { ImageLibraryModal } from "@/components/common/ImageLibraryModal";
+
+import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { api } from "@/lib/api";
 import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
+import { getMediaUrl } from "@/lib/config";
+import { useAuth } from "@/components/auth/AuthContext";
 
 export interface LogoUploadFieldProps {
   label?: string;
@@ -28,10 +34,16 @@ export function LogoUploadField({
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [urlDraft, setUrlDraft] = useState(value || "");
 
+  const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const { user } = useAuth();
+  const isAdmin = (user?.role || "").toLowerCase() === "admin" || (user?.role || "").toLowerCase() === "superadmin";
+
   const seed = encodeURIComponent(String(fallbackSeed || "brand").slice(0, 24) || "brand");
   const fallbackUrl = `https://api.dicebear.com/7.x/identicon/svg?seed=${seed}`;
   const hasCustomLogo = Boolean(value && typeof value === "string" && value.trim() !== "");
-  const displaySrc = hasCustomLogo ? (value as string) : fallbackUrl;
+  const displaySrc = hasCustomLogo ? getMediaUrl(value as string) : fallbackUrl;
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -148,6 +160,18 @@ export function LogoUploadField({
               )}
             </button>
 
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setIsLibraryOpen(true)}
+                className="px-3 py-1.5 bg-background hover:bg-muted text-foreground/80 hover:text-foreground font-semibold text-xs rounded-xl border border-border shadow-2xs transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer"
+                title="Browse and reuse previously uploaded logos (Admin Only)"
+              >
+                <FolderOpen className="w-3.5 h-3.5 text-primary" />
+                <span>Choose from Uploads</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => {
@@ -163,9 +187,9 @@ export function LogoUploadField({
             {hasCustomLogo && (
               <button
                 type="button"
-                onClick={handleReset}
-                className="px-2.5 py-1.5 text-xs text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 rounded-xl transition-colors flex items-center gap-1 shrink-0 font-medium"
-                title="Remove custom logo and revert to default"
+                onClick={() => setShowResetConfirm(true)}
+                className="px-2.5 py-1.5 text-xs text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 rounded-xl transition-colors flex items-center gap-1 shrink-0 font-medium cursor-pointer"
+                title="Remove custom logo and revert to default (requires confirmation)"
               >
                 <RotateCcw className="w-3 h-3" />
                 <span>Reset to Default</span>
@@ -198,6 +222,29 @@ export function LogoUploadField({
           </p>
         </div>
       </div>
+      {/* Image Library Modal for Reusing Uploaded Files */}
+      <ImageLibraryModal
+        isOpen={isLibraryOpen}
+        onClose={() => setIsLibraryOpen(false)}
+        onSelect={(selectedUrl) => {
+          onChange(selectedUrl);
+          setUrlDraft(selectedUrl);
+        }}
+        currentValue={value}
+        defaultFolder={folder === "clients" ? "clients" : folder === "projects" ? "projects" : "all"}
+        title={`Select ${label || "Logo"} from Uploads`}
+      />
+
+      {/* Confirmation Modal Before Resetting to Default */}
+      <ConfirmModal
+        isOpen={showResetConfirm}
+        onClose={() => setShowResetConfirm(false)}
+        onConfirm={handleReset}
+        title="Reset Logo to Default?"
+        description="Are you sure you want to remove this custom logo? It will revert to the default brand icon."
+        confirmText="Reset to Default"
+        variant="destructive"
+      />
     </div>
   );
 }

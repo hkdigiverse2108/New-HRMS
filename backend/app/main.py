@@ -140,14 +140,14 @@ app.add_middleware(ImageRouteMiddleware)
 from fastapi.staticfiles import StaticFiles
 from app.config import ROOT_DIR
 
-# Root uploads & images folders
-IMAGES_DIR = ROOT_DIR / "images"
-IMAGES_DIR.mkdir(parents=True, exist_ok=True)
-
+# Root unified uploads storage folder (single folder architecture)
 UPLOADS_DIR = ROOT_DIR / "uploads"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-(UPLOADS_DIR / "invoices").mkdir(parents=True, exist_ok=True)
-(UPLOADS_DIR / "quotations").mkdir(parents=True, exist_ok=True)
+IMAGES_DIR = UPLOADS_DIR # Unified single storage folder
+
+# Ensure standard subfolders exist
+for _sub in ("projects", "clients", "employee", "chat_documents", "invoices", "quotations", "settings", "documents", "common"):
+    (UPLOADS_DIR / _sub).mkdir(parents=True, exist_ok=True)
 
 # Register API routes FIRST so FastAPI matches endpoint routes before static file mounts
 app.include_router(auth_router)

@@ -7,11 +7,15 @@ from fastapi import APIRouter, UploadFile, File, Form, Query, HTTPException, sta
 from app.config import ROOT_DIR
 from app.redis.service import get_cache, set_cache, clear_pattern, make_list_key
 
-# Root images directory (outside frontend and backend)
-IMAGES_DIR = ROOT_DIR / "images"
-IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+# Root unified uploads storage directory (single folder with subfolders)
+UPLOADS_DIR = ROOT_DIR / "uploads"
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+IMAGES_DIR = UPLOADS_DIR # Unified reference
 
-ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"}
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"}
+DOC_EXTENSIONS = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".txt"}
+MEDIA_EXTENSIONS = {".mp4", ".webm", ".mp3", ".wav", ".ogg"}
+ALLOWED_EXTENSIONS = IMAGE_EXTENSIONS | DOC_EXTENSIONS | MEDIA_EXTENSIONS
 
 router = APIRouter(prefix="/images", tags=["Images"])
 upload_router = APIRouter(tags=["Images"])
@@ -34,14 +38,14 @@ async def upload_image(
     Auto-creates the subfolder if it does not exist.
     """
     folder_name = get_safe_folder(folder)
-    target_dir = IMAGES_DIR / folder_name
+    target_dir = UPLOADS_DIR / folder_name
     target_dir.mkdir(parents=True, exist_ok=True)
 
     file_ext = Path(file.filename or "").suffix.lower()
     if not file_ext or file_ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid image format. Allowed formats: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
+            detail=f"Invalid file format. Allowed formats: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
         )
 
     unique_filename = f"{folder_name}_{uuid.uuid4().hex[:12]}{file_ext}"
@@ -53,20 +57,22 @@ async def upload_image(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to save image: {str(e)}"
+            detail=f"Failed to save file: {str(e)}"
         )
     finally:
         file.file.close()
 
     # Invalidate images cache
     await clear_pattern("images:*")
+    await clear_pattern("uploads:*")
 
-    # POSIX relative url (e.g. /images/employee/employee_12345.png)
-    file_url = f"/images/{folder_name}/{unique_filename}"
+    # POSIX relative url (unified /uploads/ path)
+    file_url = f"/uploads/{folder_name}/{unique_filename}"
 
     return {
         "status": "success",
         "url": file_url,
+        "file_url": file_url,
         "filename": unique_filename,
         "folder": folder_name,
         "size": dest_path.stat().st_size
@@ -93,7 +99,7 @@ async def list_images(
 
     results = []
     
-    if folder:
+    if folder and folder.strip().lower() not in ("all", "", "none"):
         folder_name = get_safe_folder(folder)
         sub_dirs = [IMAGES_DIR / folder_name]
     else:
@@ -104,17 +110,32 @@ async def list_images(
     for dir_path in sub_dirs:
         if not dir_path.exists():
             continue
-        rel_folder = dir_path.name if dir_path != IMAGES_DIR else ""
+        rel_folder = dir_path.name if dir_path != UPLOADS_DIR else ""
         for file_path in dir_path.iterdir():
             if file_path.is_file() and file_path.suffix.lower() in ALLOWED_EXTENSIONS:
                 stat = file_path.stat()
-                url_path = f"/images/{rel_folder}/{file_path.name}" if rel_folder else f"/images/{file_path.name}"
+                ext = file_path.suffix.lower()
+                if ext in IMAGE_EXTENSIONS:
+                    ftype = "image"
+                elif ext == ".pdf":
+                    ftype = "pdf"
+                elif ext in {".doc", ".docx", ".txt", ".xls", ".xlsx"}:
+                    ftype = "doc"
+                elif ext in {".mp4", ".webm"}:
+                    ftype = "video"
+                elif ext in {".mp3", ".wav", ".ogg"}:
+                    ftype = "audio"
+                else:
+                    ftype = "other"
+
+                url_path = f"/uploads/{rel_folder}/{file_path.name}" if rel_folder else f"/uploads/{file_path.name}"
                 results.append({
                     "filename": file_path.name,
                     "url": url_path,
                     "folder": rel_folder or "root",
                     "size": stat.st_size,
-                    "created_at": stat.st_mtime
+                    "created_at": stat.st_mtime,
+                    "file_type": ftype
                 })
 
     # Sort newest first
@@ -152,13 +173,13 @@ async def delete_image(
 
     clean_url = clean_url.strip("/")
     parts = [p for p in clean_url.split("/") if p and p != ".."]
-    if parts and parts[0] == "images":
+    if parts and parts[0] in ("images", "uploads"):
         parts = parts[1:]
 
     if not parts:
         return {"status": "skipped", "message": "Invalid path"}
 
-    file_path = IMAGES_DIR.joinpath(*parts)
+    file_path = UPLOADS_DIR.joinpath(*parts)
 
     # If single filename provided without folder, search under common subfolders
     if not file_path.exists() and len(parts) == 1:

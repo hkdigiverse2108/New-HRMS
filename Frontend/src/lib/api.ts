@@ -311,9 +311,9 @@ export const api = {
   /**
    * Common method to list images by folder for re-use
    */
-  listImages: async (folder?: string): Promise<Array<{ filename: string; url: string; folder: string }>> => {
-    const query = folder ? `?folder=${encodeURIComponent(folder)}` : "";
-    const res = await apiRequest<{ data: Array<{ filename: string; url: string; folder: string }> }>(
+  listImages: async (folder?: string): Promise<Array<{ filename: string; url: string; folder: string; size?: number; created_at?: number }>> => {
+    const query = folder && folder !== "all" ? `?folder=${encodeURIComponent(folder)}` : "";
+    const res = await apiRequest<{ data: Array<{ filename: string; url: string; folder: string; size?: number; created_at?: number }> }>(
       `/images/list${query}`,
       { showLoader: false, showErrorToast: false }
     );

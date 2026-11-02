@@ -21,7 +21,7 @@ from app.redis.service import (
 from app.config import ROOT_DIR
 
 # Root images folder (outside frontend and backend)
-IMAGES_DIR = ROOT_DIR / "images"
+IMAGES_DIR = ROOT_DIR / "uploads"
 IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"}
 
@@ -87,7 +87,7 @@ async def upload_employee_image(file: UploadFile = File(...)):
     finally:
         file.file.close()
 
-    image_url = f"/images/employee/{unique_filename}"
+    image_url = f"/uploads/employee/{unique_filename}"
     return {
         "status": "success",
         "url": image_url,

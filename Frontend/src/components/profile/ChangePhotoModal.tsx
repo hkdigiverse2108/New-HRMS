@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Camera, UploadCloud, X, Check, Loader2, RefreshCw, AlertCircle } from "lucide-react";
+import { Camera, UploadCloud, X, Check, Loader2, RefreshCw, AlertCircle, FolderOpen } from "lucide-react";
+import { ImageLibraryModal } from "@/components/common/ImageLibraryModal";
+import { useAuth } from "@/components/auth/AuthContext";
 import { api } from "@/lib/api";
 import { toast } from "@/lib/toast";
 import { getAvatarUrl, handleAvatarError } from "@/lib/config";
@@ -28,6 +30,10 @@ export function ChangePhotoModal({
   const [isSaving, setIsSaving] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+  const { user } = useAuth();
+  const isAdmin = (user?.role || "").toLowerCase() === "admin" || (user?.role || "").toLowerCase() === "superadmin";
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Clean up preview object URL on unmount or file change
@@ -270,6 +276,19 @@ export function ChangePhotoModal({
             )}
           </div>
 
+          {isAdmin && (
+            <div className="flex items-center justify-center">
+              <button
+                type="button"
+                onClick={() => setIsLibraryOpen(true)}
+                className="px-3.5 py-2 rounded-xl border border-border/80 bg-muted/30 hover:bg-muted text-foreground text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer w-full justify-center"
+              >
+                <FolderOpen className="w-3.5 h-3.5 text-primary" />
+                <span>Choose from Stored Uploads</span>
+              </button>
+            </div>
+          )}
+
           {errorMsg && (
             <div className="p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 rounded-xl flex items-center gap-2.5 text-xs text-red-600 dark:text-red-400 font-medium">
               <AlertCircle className="w-4 h-4 shrink-0" />
@@ -319,6 +338,29 @@ export function ChangePhotoModal({
           </button>
         </div>
       </DialogContent>
+      <ImageLibraryModal
+        isOpen={isLibraryOpen}
+        onClose={() => setIsLibraryOpen(false)}
+        onSelect={async (selectedUrl) => {
+          try {
+            setIsSaving(true);
+            await api.put(`/employees/${employeeId}`, {
+              personal_info: { profile_photo: selectedUrl },
+              profile_photo: selectedUrl
+            });
+            toast.success("Profile photo updated from library!");
+            onPhotoSaved(selectedUrl);
+            onClose();
+          } catch (err: any) {
+            toast.error(err?.message || "Failed to update photo");
+          } finally {
+            setIsSaving(false);
+          }
+        }}
+        currentValue={currentPhotoUrl}
+        defaultFolder="employee"
+        title="Choose Profile Photo from Library"
+      />
     </Dialog>
   );
 }

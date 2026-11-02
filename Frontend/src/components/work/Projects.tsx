@@ -25,6 +25,7 @@ import { ClientFollowupModal, FollowupLogEntry } from "./ClientFollowupModal";
 import { ActivityHistoryModal, ActivityHistoryEvent } from "./ActivityHistoryModal";
 import { ContentTextOrLinkCell, isLikelyUrl } from "./ContentTextOrLinkCell";
 import { LogoUploadField } from "./LogoUploadField";
+import { getMediaUrl, getAvatarUrl, uiAvatar } from "@/lib/config";
 
 type ProjectStatus = "In Progress" | "In Review" | "Completed" | "On Hold";
 type ClientStatus = "Active" | "Archived";
@@ -486,13 +487,20 @@ const UserAvatar = ({
   const charCode = (name || "U").charCodeAt(0) + (name || "U").length;
   const colorClass = colors[charCode % colors.length];
 
-  const hasValidSrc = Boolean(avatar && typeof avatar === "string" && avatar.trim() !== "" && !imgError);
+  const resolvedAvatar = useMemo(() => {
+    if (!avatar || typeof avatar !== "string" || !avatar.trim() || avatar.includes("dicebear") || avatar.includes("ui-avatars")) {
+      return "";
+    }
+    return getAvatarUrl(avatar, name || "User");
+  }, [avatar, name]);
+
+  const hasValidSrc = Boolean(resolvedAvatar && !imgError);
 
   return (
     <div className={cn("relative rounded-full overflow-hidden shrink-0 flex items-center justify-center font-bold text-[10px] border select-none", size, colorClass, className)}>
       {hasValidSrc ? (
         <img
-          src={avatar || undefined}
+          src={resolvedAvatar}
           alt={name || "User Avatar"}
           className="w-full h-full object-cover"
           onError={() => setImgError(true)}
@@ -577,10 +585,11 @@ const BrandLogo = ({
 }) => {
   const seed = encodeURIComponent(String(alt || "brand").slice(0, 24) || "brand");
   const fallback = `https://api.dicebear.com/7.x/identicon/svg?seed=${seed}`;
+  const resolvedSrc = getMediaUrl(src);
   return (
     <div className={cn(size, rounded, "border-2 border-primary/30 overflow-hidden shadow-md shadow-primary/10 bg-white p-1 ring-2 ring-primary/10 shrink-0", className)}>
       <img
-        src={src && String(src).trim() !== "" ? src : fallback}
+        src={resolvedSrc || fallback}
         alt={alt || "Brand logo"}
         className="w-full h-full object-cover rounded-xl"
         onError={(e) => {
@@ -1742,15 +1751,28 @@ const mapBackendProject = (bp: any): Project => {
   else if (rawPri === "low") pri = "Low";
 
   const teamMembers: { name: string; avatar: string; employeeId?: string }[] = [];
+  const memberKeySet = new Set<string>();
+
+  const addUniqueMember = (name: string, rawAvatar: string | undefined, empId: string | undefined) => {
+    const cleanName = (name || "").replace(/\s*\([^)]*\)$/, '').trim();
+    if (!cleanName || cleanName.toLowerCase() === "team member") return;
+    const key = (empId || cleanName).toLowerCase();
+    if (memberKeySet.has(key)) return;
+    memberKeySet.add(key);
+
+    const resolvedAvatar = rawAvatar ? getAvatarUrl(rawAvatar, cleanName) : uiAvatar(cleanName);
+    teamMembers.push({
+      name: cleanName,
+      avatar: resolvedAvatar,
+      employeeId: empId || ""
+    });
+  };
+
   if (bp.creative_team_details) {
     Object.entries(bp.creative_team_details).forEach(([role, detail]: [string, any]) => {
       const addDetail = (d: any) => {
         if (d && d.employee_name) {
-          teamMembers.push({
-            name: `${d.employee_name} (${role})`,
-            avatar: d.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(d.employee_name)}`,
-            employeeId: d.employee_id || d.id || ""
-          });
+          addUniqueMember(d.employee_name, d.avatar, d.employee_id || d.id);
         }
       };
       if (Array.isArray(detail)) {
@@ -1763,16 +1785,12 @@ const mapBackendProject = (bp: any): Project => {
   if (bp.marketing_assignees_details && Array.isArray(bp.marketing_assignees_details)) {
     bp.marketing_assignees_details.forEach((m: any) => {
       if (m && m.employee_name) {
-        teamMembers.push({
-          name: `${m.employee_name} (Marketing)`,
-          avatar: m.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(m.employee_name)}`,
-          employeeId: m.id || m.employee_id || ""
-        });
+        addUniqueMember(m.employee_name, m.avatar, m.id || m.employee_id);
       }
     });
   }
   if (teamMembers.length === 0) {
-    teamMembers.push({ name: "Team Member", avatar: "https://api.dicebear.com/7.x/adventurer/svg?seed=Team" });
+    teamMembers.push({ name: "Team Member", avatar: uiAvatar("Team") });
   }
 
   // Renewal periods (backend date_ranges) — latest (last) = default effective dates
@@ -4693,6 +4711,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           start_date: newProjectStartDate,
           end_date: newProjectEndDate,
           team_deadline: newProjectTeamDeadline || undefined,
+          logo: newProjectLogo.trim() || undefined,
           creative_stats: {
             standard_posts: numPost > 0,
             post_count_per_month: numPost,
@@ -4830,6 +4849,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           progress: editingProject.progress,
           start_date: editingProject.startDate,
           end_date: editingProject.endDate,
+          logo: editingProject.logo !== undefined ? editingProject.logo : undefined,
           creative_stats: {
             post_count_per_month: Number(editingProject.post) || 0,
             reel_count_per_month: Number(editingProject.reel) || 0,
@@ -5323,21 +5343,69 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       const endDate = endDates[endDates.length - 1] || primaryProject.endDate;
 
       const teamMap = new Map<string, { name: string; avatar: string; employeeId?: string }>();
+
       subProjects.forEach(p => {
+        // 1. From creativeTeam role assignments
+        if (p.creativeTeam && typeof p.creativeTeam === "object") {
+          Object.entries(p.creativeTeam).forEach(([role, empVal]) => {
+            if (!empVal) return;
+            const ids = Array.isArray(empVal)
+              ? empVal
+              : String(empVal).split(",").map(x => x.trim()).filter(Boolean);
+            ids.forEach(id => {
+              const emp = employees.find(e => String(e.id) === String(id) || String((e as any)._id) === String(id));
+              const personKey = (emp ? String(emp.id) : String(id)).toLowerCase();
+              if (!teamMap.has(personKey)) {
+                const displayName = emp?.name || p.creativeTeamDetails?.[role]?.employee_name || "Member";
+                const rawPhoto = emp?.profile_photo || emp?.avatar || p.creativeTeamDetails?.[role]?.avatar;
+                teamMap.set(personKey, {
+                  name: displayName,
+                  avatar: rawPhoto ? getAvatarUrl(rawPhoto, displayName) : uiAvatar(displayName),
+                  employeeId: emp ? String(emp.id) : String(id)
+                });
+              }
+            });
+          });
+        }
+
+        // 2. From marketing_assignees
+        if (Array.isArray(p.marketing_assignees)) {
+          p.marketing_assignees.forEach(mId => {
+            if (!mId) return;
+            const emp = employees.find(e => String(e.id) === String(mId) || String((e as any)._id) === String(mId));
+            const personKey = (emp ? String(emp.id) : String(mId)).toLowerCase();
+            if (!teamMap.has(personKey)) {
+              const displayName = emp?.name || "Marketing";
+              const rawPhoto = emp?.profile_photo || emp?.avatar;
+              teamMap.set(personKey, {
+                name: displayName,
+                avatar: rawPhoto ? getAvatarUrl(rawPhoto, displayName) : uiAvatar(displayName),
+                employeeId: emp ? String(emp.id) : String(mId)
+              });
+            }
+          });
+        }
+
+        // 3. From p.team
         (p.team || []).forEach(m => {
-          const mName = (m.name || "").trim();
-          if (mName && !teamMap.has(mName.toLowerCase())) {
-            const cleanName = mName.replace(/\s*\([^)]*\)$/, '').trim().toLowerCase();
-            const matchedEmp = employees.find(e =>
-              ((m as any).employeeId && (String(e.id) === String((m as any).employeeId) || String((e as any)._id) === String((m as any).employeeId))) ||
-              e.name.trim().toLowerCase() === cleanName ||
-              cleanName.includes(e.name.trim().toLowerCase())
-            );
-            const realPhoto = matchedEmp?.profile_photo || matchedEmp?.avatar || m.avatar;
-            const hasRealPhoto = Boolean(realPhoto && typeof realPhoto === "string" && !realPhoto.includes("dicebear") && !realPhoto.includes("ui-avatars"));
-            teamMap.set(mName.toLowerCase(), {
-              ...m,
-              avatar: hasRealPhoto ? realPhoto : m.avatar
+          const rawName = (m.name || "").trim();
+          if (!rawName || rawName.toLowerCase() === "team member") return;
+          const cleanName = rawName.replace(/\s*\([^)]*\)$/, '').trim();
+          const matchedEmp = employees.find(e =>
+            ((m as any).employeeId && (String(e.id) === String((m as any).employeeId) || String((e as any)._id) === String((m as any).employeeId))) ||
+            (cleanName && e.name.trim().toLowerCase() === cleanName.toLowerCase())
+          );
+          const personKey = (matchedEmp?.id
+            ? String(matchedEmp.id)
+            : ((m as any).employeeId ? String((m as any).employeeId) : cleanName)).toLowerCase();
+
+          if (!teamMap.has(personKey)) {
+            const displayName = matchedEmp?.name || cleanName;
+            const rawPhoto = matchedEmp?.profile_photo || matchedEmp?.avatar || (!m.avatar?.includes("dicebear") ? m.avatar : "");
+            teamMap.set(personKey, {
+              name: displayName,
+              avatar: rawPhoto ? getAvatarUrl(rawPhoto, displayName) : uiAvatar(displayName),
+              employeeId: matchedEmp ? String(matchedEmp.id) : (m as any).employeeId
             });
           }
         });
@@ -6355,7 +6423,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       <div key={proj.id} className="p-4 rounded-2xl border border-border/60 bg-card hover:border-amber-500/30 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
                         <div className="flex items-center gap-3.5">
                           <div className="w-12 h-12 rounded-xl border border-border/50 overflow-hidden bg-white p-1 shrink-0">
-                            <img src={projClient?.logo || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=80"} alt={proj.name} className="w-full h-full object-cover rounded-lg" />
+                            <img src={getMediaUrl(projClient?.logo) || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=80"} alt={proj.name} className="w-full h-full object-cover rounded-lg" onError={(e) => { (e.currentTarget as HTMLImageElement).src = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=80"; }} />
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
@@ -7165,10 +7233,10 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         const emps = ids.map(id => employees.find(e => String(e.id) === String(id) || String((e as any)._id) === String(id))).filter(Boolean);
                         if (emps.length === 1) {
                           memberName = emps[0]?.name || "1 Member";
-                          displayAvatar = emps[0]?.avatar;
+                          displayAvatar = emps[0]?.profile_photo || emps[0]?.avatar;
                         } else {
                           memberName = `${emps[0]?.name || "Member"} +${emps.length - 1}`;
-                          displayAvatar = emps[0]?.avatar;
+                          displayAvatar = emps[0]?.profile_photo || emps[0]?.avatar;
                         }
                       } else {
                         memberName = "Unassigned";
@@ -7177,7 +7245,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       const emp = assignedId ? employees.find(e => String(e.id) === String(assignedId) || String((e as any)._id) === String(assignedId)) : null;
                       memberName = emp?.name || detail?.employee_name || (assignedId ? "Assigned" : "Unassigned");
                       isAssigned = !!assignedId || !!detail?.employee_name;
-                      displayAvatar = emp?.avatar;
+                      displayAvatar = emp?.profile_photo || emp?.avatar || detail?.avatar;
                     }
 
                     return (
@@ -13733,7 +13801,15 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     <div className="flex -space-x-2">
                       {project.team.slice(0, 3).map((member, i) => (
                         <div key={i} className="w-8 h-8 rounded-full border-2 border-card overflow-hidden bg-muted relative shadow-sm">
-                          <img src={member.avatar} alt={member.name} className="w-full h-full object-cover" />
+                          <img
+                            src={getAvatarUrl(member.avatar, member.name)}
+                            alt={member.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              const clean = member.name.replace(/\s*\([^)]*\)$/, '').trim();
+                              (e.currentTarget as HTMLImageElement).src = uiAvatar(clean);
+                            }}
+                          />
                         </div>
                       ))}
                       {project.team.length > 3 && (
@@ -15166,7 +15242,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-center gap-2.5 min-w-0">
                             <div className="w-8 h-8 rounded-lg border border-border/50 overflow-hidden bg-white p-0.5 shrink-0">
-                              <img src={client?.logo || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=80"} alt={project.name} className="w-full h-full object-cover rounded-md" />
+                              <img src={getMediaUrl(client?.logo) || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=80"} alt={project.name} className="w-full h-full object-cover rounded-md" onError={(e) => { (e.currentTarget as HTMLImageElement).src = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=80"; }} />
                             </div>
                             <div className="min-w-0">
                               <h4 className="text-xs font-bold text-foreground truncate">{project.name}</h4>
@@ -15418,16 +15494,21 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                           title={t.name}
                         >
                           <img
-                            src={t.avatar}
+                            src={getAvatarUrl(t.avatar, t.name)}
                             alt={t.name}
                             className="w-full h-full object-cover"
                             onError={(e) => {
                               const clean = t.name.replace(/\s*\([^)]*\)$/, '').trim();
-                              (e.currentTarget as HTMLImageElement).src = `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(clean)}`;
+                              (e.currentTarget as HTMLImageElement).src = uiAvatar(clean);
                             }}
                           />
                         </div>
                       ))}
+                      {group.team.length > 5 && (
+                        <div className="w-8 h-8 rounded-full border-2 border-white bg-muted flex items-center justify-center text-[10px] font-bold text-muted-foreground z-10 shadow-sm ring-1 ring-border/20">
+                          +{group.team.length - 5}
+                        </div>
+                      )}
                     </div>
                     <span className="text-xs font-bold text-muted-foreground">{group.team.length} Members</span>
                   </div>

@@ -70,7 +70,7 @@ async def upload_chat_file(file: UploadFile = File(...)):
     with target_path.open("wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
         
-    file_url = f"/images/chat_documents/{unique_filename}"
+    file_url = f"/uploads/chat_documents/{unique_filename}"
     
     # Ensure correct content_type is returned
     resp_content_type = file.content_type
