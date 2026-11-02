@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
-import { User, Briefcase, FileText, Check, ChevronRight, Upload, X, MapPin, Phone, Mail, Building2, CreditCard, ShieldAlert, AlertCircle, Lock } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { User, Briefcase, FileText, Check, ChevronRight, Upload, X, MapPin, Phone, Mail, Building2, CreditCard, ShieldAlert, AlertCircle, Lock, Camera } from "lucide-react";
+import { getAvatarUrl, handleAvatarError } from "@/lib/config";
 import { DialogClose,  Dialog, DialogContent  } from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/select";
 import { Employee, EmployeeStatus } from "./employee-data";
@@ -235,6 +236,8 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
         hasEmployment: false,
         employmentStartDate: "",
         activelyUsingHRMS: true,
+        avatar: "",
+        profile_photo: "",
         requiredDocuments: []
       });
     }
@@ -359,6 +362,8 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
       phone: (formData.phone || "").trim(),
       role: formData.role || "Employee",
       department: formData.department || "Development",
+      avatar: formData.profile_photo || formData.avatar || "",
+      profile_photo: formData.profile_photo || formData.avatar || "",
     };
 
     try {
@@ -395,7 +400,38 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
     }
   };
 
-  // Profile photo REMOVED (no need) — initials avatar everywhere.
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+
+  const handleImageUpload = async (file: File) => {
+    if (!file) return;
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Please select a valid image (JPG, PNG, WebP, GIF, SVG).");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image file size should not exceed 5MB.");
+      return;
+    }
+    try {
+      setIsUploadingPhoto(true);
+      const res = await api.uploadImage(file, "employee");
+      if (res?.url) {
+        setFormData(prev => ({
+          ...prev,
+          avatar: res.url,
+          profile_photo: res.url
+        }));
+        toast.success("Profile photo uploaded successfully!");
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to upload profile photo");
+    } finally {
+      setIsUploadingPhoto(false);
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    }
+  };
 
   const tabs = [
     { id: 'personal', label: 'Personal Info', icon: User },
@@ -505,7 +541,95 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, isSe
                       <h3 className="text-lg font-black">Personal Information</h3>
                       <p className="text-sm text-muted-foreground">Basic identity and contact details.</p>
                     </div>
-                    {/* Profile photo REMOVED (no need) — initials avatar everywhere. */}
+                  </div>
+
+                  {/* Profile Picture Uploader (Optional - મરજિયાત નથી) */}
+                  <div className="p-4 rounded-2xl bg-muted/20 border border-border/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div className="relative group w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden bg-background border-2 border-primary/20 shadow-md flex items-center justify-center shrink-0 ring-4 ring-primary/5">
+                        <img
+                          src={getAvatarUrl(formData.profile_photo || formData.avatar, formData.name || formData.firstName || "Employee")}
+                          alt={formData.name || "Employee"}
+                          className="w-full h-full object-cover"
+                          onError={handleAvatarError}
+                        />
+                        {isUploadingPhoto && (
+                          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center">
+                            <Loader2 className="w-5 h-5 text-white animate-spin" />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <label className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-1.5">
+                            <Camera className="w-4 h-4 text-primary" />
+                            <span>Profile Picture</span>
+                          </label>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/60">
+                            Optional
+                          </span>
+                          {(formData.profile_photo || formData.avatar) && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                              Custom Photo Active
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          Upload employee portrait (JPG, PNG, WebP, SVG, Max 5MB). If omitted, standard initials avatar is used.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0 self-stretch sm:self-auto justify-end">
+                      <input
+                        ref={photoInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/svg+xml,image/gif"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleImageUpload(file);
+                        }}
+                      />
+                      <button
+                        type="button"
+                        disabled={isUploadingPhoto}
+                        onClick={() => photoInputRef.current?.click()}
+                        className="px-3.5 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 shrink-0 active:scale-95 cursor-pointer disabled:opacity-50"
+                      >
+                        {isUploadingPhoto ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Uploading...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>{formData.profile_photo || formData.avatar ? "Change Photo" : "Upload Photo"}</span>
+                          </>
+                        )}
+                      </button>
+
+                      {(formData.profile_photo || formData.avatar) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormData(prev => ({
+                              ...prev,
+                              avatar: "",
+                              profile_photo: ""
+                            }));
+                            toast.info("Profile photo removed. Standard avatar will be used.");
+                          }}
+                          className="px-3 py-2 text-xs font-semibold text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 rounded-xl transition-colors border border-rose-500/20 flex items-center gap-1 shrink-0 cursor-pointer"
+                          title="Remove custom photo"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          <span>Remove</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                   
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
