@@ -91,6 +91,7 @@ class ProjectGeneralDetails(BaseModel):
     team_deadline: Optional[date] = None
     creative_stats: Optional[CreativeStats] = None
     digital_marketing_stats: Optional[DigitalMarketingStats] = None
+    logo: Optional[str] = None
 
     @field_validator('category', mode='before')
     def parse_category(cls, v):
@@ -387,6 +388,7 @@ class ProjectBase(BaseModel):
     is_archived: bool = False
     marketing_assignees: Optional[list[str]] = []
     currency: Optional[str] = "INR"
+    logo: Optional[str] = None
 
 class ProjectCreate(ProjectBase):
     pass
@@ -403,6 +405,7 @@ class ProjectGeneralUpdate(BaseModel):
     team_deadline: Optional[date] = None
     creative_stats: Optional[CreativeStats] = None
     digital_marketing_stats: Optional[DigitalMarketingStats] = None
+    logo: Optional[str] = None
 
     @field_validator('category', mode='before')
     def parse_category(cls, v):
@@ -482,6 +485,7 @@ class ProjectUpdate(BaseModel):
     is_archived: Optional[bool] = None
     marketing_assignees: Optional[list[str]] = None
     currency: Optional[str] = None
+    logo: Optional[str] = None
 
 class ProjectResponse(ProjectBase):
     id: str = Field(alias="_id")

@@ -24,6 +24,7 @@ import { ClientFinanceModal } from "./ClientFinanceModal";
 import { ClientFollowupModal, FollowupLogEntry } from "./ClientFollowupModal";
 import { ActivityHistoryModal, ActivityHistoryEvent } from "./ActivityHistoryModal";
 import { ContentTextOrLinkCell } from "./ContentTextOrLinkCell";
+import { LogoUploadField } from "./LogoUploadField";
 
 type ProjectStatus = "In Progress" | "In Review" | "Completed" | "On Hold";
 type ClientStatus = "Active" | "Archived";
@@ -71,6 +72,7 @@ interface Project {
   id: string;
   clientId: string;
   name: string;
+  logo?: string | undefined;
   description?: string | undefined;
   category: string;
   status: ProjectStatus;
@@ -1710,7 +1712,7 @@ const mapBackendClient = (bc: any): Client => {
     gstin: bc.gstin || "",
     department: depts.join(", "),
     remarks: bc.additional_notes || "",
-    logo: `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(bc.company_name || bc.contact_person_name || "Client")}`,
+    logo: bc.logo || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(bc.company_name || bc.contact_person_name || "Client")}`,
     totalBudget: `₹${(stats.total_budget || 0).toLocaleString("en-IN")}`,
     outstandingPayment: `₹${(stats.outstanding_amount || 0).toLocaleString("en-IN")}`,
     onboardingDate: bc.created_at ? (bc.created_at.split("T")[0] ?? "") : "",
@@ -1739,13 +1741,32 @@ const mapBackendProject = (bp: any): Project => {
   else if (rawPri === "high") pri = "High";
   else if (rawPri === "low") pri = "Low";
 
-  const teamMembers: { name: string; avatar: string }[] = [];
+  const teamMembers: { name: string; avatar: string; employeeId?: string }[] = [];
   if (bp.creative_team_details) {
     Object.entries(bp.creative_team_details).forEach(([role, detail]: [string, any]) => {
-      if (detail && detail.employee_name) {
+      const addDetail = (d: any) => {
+        if (d && d.employee_name) {
+          teamMembers.push({
+            name: `${d.employee_name} (${role})`,
+            avatar: d.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(d.employee_name)}`,
+            employeeId: d.employee_id || d.id || ""
+          });
+        }
+      };
+      if (Array.isArray(detail)) {
+        detail.forEach(addDetail);
+      } else {
+        addDetail(detail);
+      }
+    });
+  }
+  if (bp.marketing_assignees_details && Array.isArray(bp.marketing_assignees_details)) {
+    bp.marketing_assignees_details.forEach((m: any) => {
+      if (m && m.employee_name) {
         teamMembers.push({
-          name: `${detail.employee_name} (${role})`,
-          avatar: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(detail.employee_name)}`
+          name: `${m.employee_name} (Marketing)`,
+          avatar: m.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(m.employee_name)}`,
+          employeeId: m.id || m.employee_id || ""
         });
       }
     });
@@ -1770,6 +1791,7 @@ const mapBackendProject = (bp: any): Project => {
     id: String(bp._id || bp.id),
     clientId: String(bp.client_id || ""),
     name: gen.project_name || "Project",
+    logo: bp.logo || gen.logo || "",
     description: gen.description || "",
     category: (() => {
       const rawCat = (gen.category || "").trim();
@@ -3375,6 +3397,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   const [newProjectMarketingAssignees, setNewProjectMarketingAssignees] = useState<string[]>([]);
   const [newProjectFinanceAssignees, setNewProjectFinanceAssignees] = useState<string[]>([]);
   const [newProjectDevAssignees, setNewProjectDevAssignees] = useState<string[]>([]);
+  const [newProjectLogo, setNewProjectLogo] = useState("");
   const [isEditClientModalOpen, setIsEditClientModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [showEditClientErrors, setShowEditClientErrors] = useState(false);
@@ -3391,6 +3414,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     department: "",
     status: "Active" as ClientStatus,
     salesFocused: "",
+    logo: "",
 
     remarks: "",
     dailyFollowup: "No",
@@ -4366,6 +4390,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         state_ut: newClientFormData.state?.trim() || undefined,
         gstin: newClientFormData.gstin?.trim() || undefined,
         additional_notes: newClientFormData.remarks?.trim() || undefined,
+        logo: newClientFormData.logo?.trim() || undefined,
       };
       if (depts.length > 0) {
         payload.service_details = { departments: depts };
@@ -4403,6 +4428,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         state_ut: editingClient.state?.trim() || undefined,
         gstin: editingClient.gstin?.trim() || undefined,
         additional_notes: editingClient.remarks?.trim() || undefined,
+        logo: editingClient.logo?.trim() || undefined,
       };
       if (depts.length > 0) {
         payload.service_details = { departments: depts };
@@ -4480,6 +4506,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           amount_received: numReceived,
           next_payment_date: newProjectNextPaymentDate || undefined,
         },
+        ...(newProjectLogo.trim() ? { logo: newProjectLogo.trim() } : {}),
         // First period = initial dates
         date_ranges: (newProjectStartDate && newProjectEndDate)
           ? [{ start_date: newProjectStartDate, end_date: newProjectEndDate }]
@@ -4507,6 +4534,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       setNewProjectMarketingAssignees([]);
       setNewProjectFinanceAssignees([]);
       setNewProjectDevAssignees([]);
+      setNewProjectLogo("");
       setActiveProjectTab('general');
       setShowNewProjectErrors(false);
       setIsNewProjectModalOpen(false);
@@ -4532,6 +4560,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     const cleanReceived = String(project.amountReceived || "").replace(/[^0-9.]/g, "");
     setEditingProject({
       ...project,
+      logo: project.logo || "",
       category: cat,
       budget: cleanBudget,
       amountReceived: cleanReceived,
@@ -4622,6 +4651,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           ? editingProject.finance_assignees
           : (editingProject.creativeTeam?.finance ? editingProject.creativeTeam.finance.split(",").map((x: string) => x.trim()).filter(Boolean) : []),
         ...(editingProject.creativeTeam ? { creative_team: editingProject.creativeTeam } : {}),
+        logo: editingProject.logo !== undefined ? editingProject.logo : undefined,
       };
 
       const updatedProjectId = editingProject.id;
@@ -4642,6 +4672,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             progress: editingProject.progress,
             startDate: editingProject.startDate,
             endDate: editingProject.endDate,
+            logo: editingProject.logo,
             marketing_assignees: editingProject.marketing_assignees || [],
             finance_assignees: (editingProject.finance_assignees && Array.isArray(editingProject.finance_assignees))
               ? editingProject.finance_assignees
@@ -5075,12 +5106,23 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       const startDate = startDates[0] || primaryProject.startDate;
       const endDate = endDates[endDates.length - 1] || primaryProject.endDate;
 
-      const teamMap = new Map<string, { name: string; avatar: string }>();
+      const teamMap = new Map<string, { name: string; avatar: string; employeeId?: string }>();
       subProjects.forEach(p => {
         (p.team || []).forEach(m => {
           const mName = (m.name || "").trim();
           if (mName && !teamMap.has(mName.toLowerCase())) {
-            teamMap.set(mName.toLowerCase(), m);
+            const cleanName = mName.replace(/\s*\([^)]*\)$/, '').trim().toLowerCase();
+            const matchedEmp = employees.find(e =>
+              ((m as any).employeeId && (String(e.id) === String((m as any).employeeId) || String((e as any)._id) === String((m as any).employeeId))) ||
+              e.name.trim().toLowerCase() === cleanName ||
+              cleanName.includes(e.name.trim().toLowerCase())
+            );
+            const realPhoto = matchedEmp?.profile_photo || matchedEmp?.avatar || m.avatar;
+            const hasRealPhoto = Boolean(realPhoto && typeof realPhoto === "string" && !realPhoto.includes("dicebear") && !realPhoto.includes("ui-avatars"));
+            teamMap.set(mName.toLowerCase(), {
+              ...m,
+              avatar: hasRealPhoto ? realPhoto : m.avatar
+            });
           }
         });
       });
@@ -12576,6 +12618,14 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   <div className="flex-1 min-w-0 overflow-y-auto p-4 sm:p-6 md:p-8 space-y-5">
                     {activeProjectTab === 'general' && (
                       <>
+                        <LogoUploadField
+                          label="Project Brand Logo"
+                          value={editingProject.logo}
+                          fallbackSeed={editingProject.name || "Project"}
+                          onChange={(url) => setEditingProject({ ...editingProject, logo: url })}
+                          folder="projects"
+                          helperText="Upload custom logo for this project. If blank, it inherits the client's logo or default icon."
+                        />
                         <div className="space-y-2">
                           <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Project Name <span className="text-red-500">*</span></label>
                           <input
@@ -13541,6 +13591,14 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 <div className="flex-1 min-w-0 overflow-y-auto p-4 sm:p-6 md:p-8 space-y-5">
                   {activeProjectTab === 'general' && (
                     <>
+                      <LogoUploadField
+                        label="Project Brand Logo"
+                        value={newProjectLogo}
+                        fallbackSeed={newProjectName || "Project"}
+                        onChange={(url) => setNewProjectLogo(url)}
+                        folder="projects"
+                        helperText="Upload custom logo for this project. If blank, it inherits the client's logo or default icon."
+                      />
                       <div className="space-y-2">
                         <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Project Name <span className="text-red-500">*</span></label>
                         <input
@@ -14001,6 +14059,14 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   <div className="flex-1 min-w-0 overflow-y-auto p-4 sm:p-6 md:p-8 space-y-5">
                     {activeProjectTab === 'general' && (
                       <>
+                        <LogoUploadField
+                          label="Project Brand Logo"
+                          value={editingProject.logo}
+                          fallbackSeed={editingProject.name || "Project"}
+                          onChange={(url) => setEditingProject({ ...editingProject, logo: url })}
+                          folder="projects"
+                          helperText="Upload custom logo for this project. If blank, it inherits the client's logo or default icon."
+                        />
                         <div className="space-y-2">
                           <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Project Name <span className="text-red-500">*</span></label>
                           <input
@@ -14982,7 +15048,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
                 <div className="flex justify-between items-start gap-2 mb-5 relative z-10">
                   {/* K5: highlighted logo */}
-                  <BrandLogo src={group.client?.logo} alt={group.displayName} size="w-16 h-16 sm:w-20 sm:h-20 shrink-0" />
+                  <BrandLogo src={group.primaryProject?.logo || group.client?.logo} alt={group.displayName} size="w-16 h-16 sm:w-20 sm:h-20 shrink-0" />
                   <div className="flex flex-wrap justify-end items-center gap-1.5">
                     {/* Dynamic Finance button (K10 / Audio transcript [27:01]) */}
                     {canUserAccessFinance(group) && (
@@ -15130,7 +15196,21 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   <div className="flex items-center gap-3 mb-4 relative z-10">
                     <div className="flex -space-x-2">
                       {group.team.slice(0, 5).map((t, idx) => (
-                        <img key={idx} src={t.avatar} className="w-8 h-8 rounded-full border-2 border-white shadow-sm" title={t.name} />
+                        <div
+                          key={idx}
+                          className="w-8 h-8 rounded-full border-2 border-white shadow-sm overflow-hidden bg-muted flex items-center justify-center shrink-0 ring-1 ring-border/20"
+                          title={t.name}
+                        >
+                          <img
+                            src={t.avatar}
+                            alt={t.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              const clean = t.name.replace(/\s*\([^)]*\)$/, '').trim();
+                              (e.currentTarget as HTMLImageElement).src = `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(clean)}`;
+                            }}
+                          />
+                        </div>
                       ))}
                     </div>
                     <span className="text-xs font-bold text-muted-foreground">{group.team.length} Members</span>
@@ -15226,7 +15306,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div className="w-8 h-8 rounded-lg border border-border/50 overflow-hidden bg-white p-0.5 shrink-0">
-                            <BrandLogo src={group.client?.logo} alt={sp.name} size="w-full h-full" rounded="rounded-md" />
+                            <BrandLogo src={sp.logo || group.client?.logo} alt={sp.name} size="w-full h-full" rounded="rounded-md" />
                           </div>
                           <div className="min-w-0">
                             <h4 className="text-xs font-bold text-foreground truncate">{sp.name}</h4>
@@ -15570,6 +15650,14 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     <h3 className="text-lg font-black tracking-tight text-foreground flex items-center gap-2">
                       <User className="w-5 h-5 text-primary" /> General Information
                     </h3>
+                    <LogoUploadField
+                      label="Client / Company Logo"
+                      value={newClientFormData.logo}
+                      fallbackSeed={newClientFormData.companyName || newClientFormData.name || "Client"}
+                      onChange={(url) => handleClientFormChange('logo', url, false)}
+                      folder="clients"
+                      helperText="Upload official company logo. If left blank, a unique geometric identicon is automatically generated."
+                    />
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
                         <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Contact Person Name <span className="text-red-500">*</span></label>
@@ -15796,6 +15884,15 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 className={"w-full px-4 h-[42px] bg-muted/50 border rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all " + (showNewProjectErrors && !newProjectName.trim() ? "border-red-500 ring-1 ring-red-500" : "border-border/50")}
               />
             </div>
+            {/* Project Brand Logo */}
+            <LogoUploadField
+              label="Project Brand Logo"
+              value={newProjectLogo}
+              fallbackSeed={newProjectName || clients.find(c => c.id === landingProjectClientId)?.name || "Project"}
+              onChange={(url) => setNewProjectLogo(url)}
+              folder="projects"
+              helperText="Upload custom logo for this project. If blank, it inherits the client's logo or default icon."
+            />
             <div className="space-y-2">
               <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Department *</label>
               <Select value={newProjectCategory} onValueChange={(val) => setNewProjectCategory(val)}>
@@ -16001,6 +16098,14 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       <h3 className="text-lg font-black tracking-tight text-foreground flex items-center gap-2">
                         <User className="w-5 h-5 text-primary" /> General Information
                       </h3>
+                      <LogoUploadField
+                        label="Client / Company Logo"
+                        value={editingClient.logo}
+                        fallbackSeed={editingClient.companyName || editingClient.name || "Client"}
+                        onChange={(url) => handleClientFormChange('logo', url, true)}
+                        folder="clients"
+                        helperText="Upload official company logo. If left blank, a unique geometric identicon is automatically generated."
+                      />
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
                           <label className="text-[12px] font-bold text-foreground/80 uppercase tracking-wider">Contact Person Name <span className="text-red-500">*</span></label>

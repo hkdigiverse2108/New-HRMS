@@ -1317,13 +1317,13 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
             assignedToName,
 
-            assignedToAvatar: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(assignedToName)}`,
+            assignedToAvatar: (t.assigned_to_details as any)?.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(assignedToName)}`,
 
             assignedById: String(t.assigned_by || ""),
 
             assignedByName,
 
-            assignedByAvatar: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(assignedByName)}`,
+            assignedByAvatar: (t.assigned_by_details as any)?.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(assignedByName)}`,
 
             recurrence: t.recurrence || "none",
 

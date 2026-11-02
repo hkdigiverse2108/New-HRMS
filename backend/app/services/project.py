@@ -41,10 +41,21 @@ class ProjectService:
                 if emp:
                     personal = emp.get("personal_info", {})
                     name = f"{personal.get('first_name', '')} {personal.get('last_name', '')}".strip() or "Employee"
-                    emp_cache[emp_id_str] = name
+                    photo = emp.get("profile_photo") or personal.get("profile_photo") or emp.get("avatar") or ""
+                    emp_cache[emp_id_str] = {
+                        "id": emp_id_str,
+                        "employee_id": emp_id_str,
+                        "employee_name": name,
+                        "avatar": photo
+                    }
                 else:
-                    emp_cache[emp_id_str] = emp_id_str
-            return {"employee_name": emp_cache[emp_id_str]}
+                    emp_cache[emp_id_str] = {
+                        "id": emp_id_str,
+                        "employee_id": emp_id_str,
+                        "employee_name": emp_id_str,
+                        "avatar": ""
+                    }
+            return emp_cache[emp_id_str]
             
         details = {}
         for role, emp_id in team_dict.items():
@@ -74,7 +85,7 @@ class ProjectService:
             if a_id:
                 info = await get_emp_name(a_id)
                 if info:
-                    m_details.append({"id": str(a_id), "employee_name": info.get("employee_name")})
+                    m_details.append({"id": str(a_id), "employee_id": str(a_id), "employee_name": info.get("employee_name"), "avatar": info.get("avatar", "")})
         item["marketing_assignees_details"] = m_details
 
     @staticmethod

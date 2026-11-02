@@ -16,6 +16,7 @@ class ClientBase(BaseModel):
     gstin: Optional[str] = None
     service_details: Optional[ServiceDetails] = None
     additional_notes: Optional[str] = None
+    logo: Optional[str] = None
 
 class ClientCreate(ClientBase):
     pass
@@ -30,6 +31,7 @@ class ClientUpdate(BaseModel):
     gstin: Optional[str] = None
     service_details: Optional[ServiceDetails] = None
     additional_notes: Optional[str] = None
+    logo: Optional[str] = None
 
 class ClientStats(BaseModel):
     total_projects: int = 0
