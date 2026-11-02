@@ -382,7 +382,9 @@ async def get_all_tasks(
 
     
 
-    is_admin_or_hr = role in ["Admin", "Subadmin", "HR"] or str(user_dept or "").strip().upper() == "HR"
+    is_operational = "operation" in str(user_dept or "").strip().lower()
+
+    is_admin_or_hr = role in ["Admin", "Subadmin", "HR"] or str(user_dept or "").strip().upper() == "HR" or is_operational
 
     
 
@@ -522,7 +524,11 @@ async def get_deleted_tasks(
 
     role = current_user.get("work_details", {}).get("system_role", "Employee")
 
-    if role not in ["Admin", "Subadmin", "HR"]:
+    user_dept = str(current_user.get("work_details", {}).get("department", "") or "").strip().lower()
+
+    is_operational = "operation" in user_dept
+
+    if role not in ["Admin", "Subadmin", "HR"] and not is_operational:
 
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Admin/HR can view deleted tasks")
 
@@ -592,7 +598,9 @@ async def get_task_stats(
 
     team_employee_ids = None
 
-    is_admin_or_hr = role in ["Admin", "Subadmin", "HR"] or str(user_dept or "").strip().upper() == "HR"
+    is_operational = "operation" in str(user_dept or "").strip().lower()
+
+    is_admin_or_hr = role in ["Admin", "Subadmin", "HR"] or str(user_dept or "").strip().upper() == "HR" or is_operational
 
 
 
@@ -726,9 +734,17 @@ async def get_task_by_id(task_id: str, current_user: dict = Depends(get_current_
 
     emp_id = str(current_user.get("_id") or current_user.get("id"))
 
-    
+    user_dept = str(current_user.get("work_details", {}).get("department", "") or "").strip().lower()
 
-    if role not in ["Admin", "Subadmin", "HR"]:
+    designation = str(current_user.get("work_details", {}).get("designation", "")).lower()
+
+    is_leader = "team leader" in designation or "head" in designation
+
+    is_operational = "operation" in user_dept
+
+    is_admin_or_hr = role in ["Admin", "Subadmin", "HR"] or str(user_dept or "").strip().upper() == "HR" or is_operational
+
+    if not is_admin_or_hr and not is_leader:
 
         if item.get("assigned_to") != emp_id and item.get("assigned_by") != emp_id:
 
@@ -780,9 +796,11 @@ async def update_task(task_id: str, data: TaskUpdate, current_user: dict = Depen
 
     emp_id = str(current_user.get("_id") or current_user.get("id"))
 
-    
+    user_dept = str(current_user.get("work_details", {}).get("department", "") or "").strip().lower()
 
-    if role not in ["Admin", "Subadmin", "HR"]:
+    is_operational = "operation" in user_dept
+
+    if role not in ["Admin", "Subadmin", "HR"] and not is_operational:
 
         if item.get("assigned_to") != emp_id and item.get("assigned_by") != emp_id:
 
@@ -866,9 +884,11 @@ async def delete_task(task_id: str, current_user: dict = Depends(get_current_emp
 
     emp_id = str(current_user.get("_id") or current_user.get("id"))
 
-    
+    user_dept = str(current_user.get("work_details", {}).get("department", "") or "").strip().lower()
 
-    if role not in ["Admin", "Subadmin", "HR"]:
+    is_operational = "operation" in user_dept
+
+    if role not in ["Admin", "Subadmin", "HR"] and not is_operational:
 
         # Only the creator/assigner can delete, not the assignee.
 
@@ -1170,9 +1190,13 @@ async def approve_task(task_id: str, current_user: dict = Depends(get_current_em
 
     
 
+    user_dept = str(current_user.get("work_details", {}).get("department", "") or "").strip().lower()
+
+    is_operational = "operation" in user_dept
+
     # Assigner or Admin/HR can approve
 
-    if role not in ["Admin", "Subadmin", "HR"] and item.get("assigned_by") != emp_id:
+    if role not in ["Admin", "Subadmin", "HR"] and not is_operational and item.get("assigned_by") != emp_id:
 
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the task assigner or Admin/HR can approve this task")
 
@@ -1208,9 +1232,11 @@ async def reject_review_task(task_id: str, data: Optional[RejectReviewPayload] =
 
     emp_id = str(current_user.get("_id") or current_user.get("id"))
 
-    
+    user_dept = str(current_user.get("work_details", {}).get("department", "") or "").strip().lower()
 
-    if role not in ["Admin", "Subadmin", "HR"] and item.get("assigned_by") != emp_id:
+    is_operational = "operation" in user_dept
+
+    if role not in ["Admin", "Subadmin", "HR"] and not is_operational and item.get("assigned_by") != emp_id:
 
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the task assigner or Admin/HR can reject review")
 

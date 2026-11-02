@@ -55,7 +55,8 @@ async def get_all_projects(
     work_details = current_user.get("work_details", {}) or {}
     user_role = str(current_user.get("role", "") or work_details.get("system_role", "") or current_user.get("system_role", "")).strip().lower()
     user_dept = str(current_user.get("department", "") or work_details.get("department", ""))
-    is_admin_or_hr = user_role in ["admin", "superadmin", "hr", "subadmin"]
+    is_operational = "operation" in user_dept.lower()
+    is_admin_or_hr = user_role in ["admin", "superadmin", "hr", "subadmin"] or is_operational
     effective_category = category
     if not is_admin_or_hr and user_dept and not category:
         effective_category = user_dept
@@ -473,8 +474,9 @@ async def get_project_tasks(
     
     involved_emp_id = None
     team_employee_ids = None
+    is_operational = "operation" in str(department or "").strip().lower()
     
-    if role not in ["Admin", "Subadmin", "HR"]:
+    if role not in ["Admin", "Subadmin", "HR"] and not is_operational:
         is_leader = str(designation).lower() in ["team leader", "head"]
         if is_leader and view == "team":
             from app.repository.employee import EmployeeRepository
@@ -530,7 +532,9 @@ async def create_project_task(project_id: str, data: TaskCreate, current_user: d
     if not data.assigned_to:
         data.assigned_to = assigned_by
         
-    if role not in ["Admin", "Subadmin", "HR"] and designation not in ["team leader", "head"]:
+    user_dept = str(current_user.get("work_details", {}).get("department", "") or "").strip().lower()
+    is_operational = "operation" in user_dept
+    if role not in ["Admin", "Subadmin", "HR"] and designation not in ["team leader", "head"] and not is_operational:
         if data.assigned_to != assigned_by:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are only allowed to assign tasks to yourself.")
             
@@ -551,7 +555,9 @@ async def update_project_task(project_id: str, task_id: str, data: TaskUpdate, c
     role = current_user.get("work_details", {}).get("system_role", "Employee")
     designation = str(current_user.get("work_details", {}).get("designation", "")).lower()
     
-    if role not in ["Admin", "Subadmin", "HR"]:
+    user_dept = str(current_user.get("work_details", {}).get("department", "") or "").strip().lower()
+    is_operational = "operation" in user_dept
+    if role not in ["Admin", "Subadmin", "HR"] and not is_operational:
         if item.get("assigned_to") != emp_id and item.get("assigned_by") != emp_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to update this task")
             

@@ -383,7 +383,9 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
   const isOther = !isTeamLeader && !isHead;
 
-  const isAdminOrHRRole = isAdmin || isHead || userRole === "hr" || (userDepartment && userDepartment.toLowerCase() === "hr");
+  const isOperational = userDepartment.toLowerCase().includes("operation");
+
+  const isAdminOrHRRole = isAdmin || isHead || isOperational || userRole === "hr" || (userDepartment && userDepartment.toLowerCase() === "hr");
 
   const isAdminOrHR = isAdminOrHRRole || hasModulePermission(user, "/tasks", "update");
 
@@ -504,7 +506,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
   // Audio 19: Designation-based access: Admin, Head, and Team Leader get All Tasks; others locked to My Tasks
 
-  const canViewAllTasks = isAdmin || isHead || isTeamLeader;
+  const canViewAllTasks = isAdmin || isHead || isTeamLeader || isOperational;
 
   const [savedViewMode, setSavedViewMode] = usePersistentState<"my_tasks" | "all_tasks">("tasks.view", canViewAllTasks ? "all_tasks" : "my_tasks");
 
@@ -3115,7 +3117,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
             {/* Department Filter (Visible only for Head / Admin, NOT Team Leader and NOT other employees) */}
 
-            {mainViewMode === "all_tasks" && isHead && (
+            {mainViewMode === "all_tasks" && (isHead || isOperational) && (
 
               <div className="flex flex-col items-stretch sm:flex-row sm:items-center gap-1 sm:gap-1.5 min-w-0">
 
@@ -3141,7 +3143,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
             {/* Dual Filters: Assigned To AND Assigned By (Visible for Head / Admin and Team Leader) */}
 
-            {mainViewMode === "all_tasks" && (isHead || isTeamLeader) && (
+            {mainViewMode === "all_tasks" && (isHead || isTeamLeader || isOperational) && (
 
               <>
 
