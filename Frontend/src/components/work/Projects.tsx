@@ -3701,6 +3701,13 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     const cleanMonthPart = ccMonthLabel.replace(/[^a-zA-Z0-9_-]+/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "");
     const safeFilename = `${cleanFilePrefix}_Content_Calendar_${cleanMonthPart}_${isPortrait ? "Portrait" : "Landscape"}.pdf`;
 
+    // Only real URLs count as links; text like "Not Required" or "-" must not show in the PDF
+    const cleanLink = (raw: any): string => {
+      const v = String(raw ?? "").trim();
+      if (!v || /\s/.test(v)) return "";
+      return /^(https?:\/\/|www\.)\S+/i.test(v) || /^[^\s/]+\.[a-z]{2,}(\/\S*)?$/i.test(v) ? v : "";
+    };
+
     const columnsMap: Record<string, (item: any) => string> = {
       "Schedule": (i) => {
         const formattedDate = formatDayMonthYear(i.postingDate);
@@ -3712,35 +3719,35 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       "Brand Person": (i) => i.brand_person || "-",
       "Script": (i) => {
         const formattedDate = formatDayMonthYear(i.scriptDate);
-        const url = (i.scriptLink || "").trim();
+        const url = cleanLink(i.scriptLink);
         const linkHtml = url ? `<a href="${url.startsWith("http") ? url : "https://" + url}" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 700; display: inline-block; margin-left: 2px;">[Link]</a>` : "";
         if (formattedDate === "-" && !linkHtml) return "-";
         return `${formattedDate === "-" ? "" : formattedDate} ${linkHtml}`.trim();
       },
       "Shoot": (i) => {
         const formattedDate = formatDayMonthYear(i.shootDate);
-        const url = (i.shootLink || "").trim();
+        const url = cleanLink(i.shootLink);
         const linkHtml = url ? `<a href="${url.startsWith("http") ? url : "https://" + url}" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 700; display: inline-block; margin-left: 2px;">[Link]</a>` : "";
         if (formattedDate === "-" && !linkHtml) return "-";
         return `${formattedDate === "-" ? "" : formattedDate} ${linkHtml}`.trim();
       },
       "Editing": (i) => {
         const formattedDate = formatDayMonthYear(i.editingDate);
-        const rawUrl = (i.finalPostLink || i.finalReelLink || "").trim();
+        const rawUrl = cleanLink(i.finalPostLink) || cleanLink(i.finalReelLink);
         const linkHtml = rawUrl ? `<a href="${rawUrl.startsWith("http") ? rawUrl : "https://" + rawUrl}" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 700; display: inline-block; margin-left: 2px;">[Draft]</a>` : "";
         if (formattedDate === "-" && !linkHtml) return "-";
         return `${formattedDate === "-" ? "" : formattedDate} ${linkHtml}`.trim();
       },
       "Thumbnail": (i) => {
         const formattedDate = formatDayMonthYear(i.thumbnailDate);
-        const url = (i.thumbnailLink || "").trim();
+        const url = cleanLink(i.thumbnailLink);
         const linkHtml = url ? `<a href="${url.startsWith("http") ? url : "https://" + url}" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 700; display: inline-block; margin-left: 2px;">[Link]</a>` : "";
         if (formattedDate === "-" && !linkHtml) return "-";
         return `${formattedDate === "-" ? "" : formattedDate} ${linkHtml}`.trim();
       },
       "Caption": (i) => i.caption || "-",
       "Final Link": (i) => {
-        const rawUrl = (i.finalPostLink || i.finalReelLink || i.postingLinkOfIg || "").trim();
+        const rawUrl = cleanLink(i.finalPostLink) || cleanLink(i.finalReelLink) || cleanLink(i.postingLinkOfIg);
         if (!rawUrl || rawUrl === "-") return "-";
         const url = rawUrl.startsWith("http") ? rawUrl : "https://" + rawUrl;
         return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 700;">View Post</a>`;
@@ -3994,6 +4001,64 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         `;
         document.body.appendChild(container);
 
+        // Paginate by whole rows: measure live row heights, then rebuild one block per page
+        // (header + table head repeated) so no row is ever cut across a page boundary.
+        const mmToPx = (mm: number) => (mm * 96) / 25.4;
+        const availH = mmToPx(isPortrait ? 297 : 210) - mmToPx(10) * 2 - 14;
+        const wrapperEl = container.querySelector(".cc-pdf-wrapper") as HTMLElement | null;
+        const bannerEl = wrapperEl?.querySelector(".header-banner") as HTMLElement | null;
+        const statsEl = wrapperEl?.querySelector(".stats-grid") as HTMLElement | null;
+        const tableEl = wrapperEl?.querySelector("table") as HTMLTableElement | null;
+        const theadEl = tableEl?.querySelector("thead") as HTMLElement | null;
+        const styleEl = container.querySelector("style");
+        if (wrapperEl && bannerEl && statsEl && tableEl && theadEl && styleEl) {
+          const rowEls = Array.from(tableEl.querySelectorAll("tbody tr")) as HTMLElement[];
+          const blockH = (el: HTMLElement) => {
+            const cs = getComputedStyle(el);
+            return el.getBoundingClientRect().height + parseFloat(cs.marginTop || "0") + parseFloat(cs.marginBottom || "0");
+          };
+          const headH = theadEl.getBoundingClientRect().height;
+          const rowHs = rowEls.map(r => r.getBoundingClientRect().height);
+          const pageRows: number[][] = [[]];
+          let used = blockH(bannerEl) + blockH(statsEl) + headH;
+          rowEls.forEach((_, idx) => {
+            const h = rowHs[idx] ?? 0;
+            let cur = pageRows[pageRows.length - 1] as number[];
+            if (used + h > availH && cur.length > 0) {
+              cur = [];
+              pageRows.push(cur);
+              used = headH;
+            }
+            cur.push(idx);
+            used += h;
+          });
+
+          const frag = document.createDocumentFragment();
+          pageRows.forEach((idxs, pi) => {
+            const w = document.createElement("div");
+            w.className = "cc-pdf-wrapper";
+            if (pi === 0) {
+              w.appendChild(bannerEl);
+              w.appendChild(statsEl);
+            }
+            const t = tableEl.cloneNode(false) as HTMLTableElement;
+            t.appendChild(theadEl.cloneNode(true));
+            const tb = document.createElement("tbody");
+            idxs.forEach(i => tb.appendChild(rowEls[i] as HTMLElement));
+            t.appendChild(tb);
+            w.appendChild(t);
+            if (pi > 0) {
+              const br = document.createElement("div");
+              br.className = "html2pdf__page-break";
+              frag.appendChild(br);
+            }
+            frag.appendChild(w);
+          });
+          container.innerHTML = "";
+          container.appendChild(styleEl);
+          container.appendChild(frag);
+        }
+
         const opt = {
           margin: 0,
           filename: safeFilename,
@@ -4020,7 +4085,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             }
           },
           jsPDF: { unit: 'mm', format: 'a4', orientation: isPortrait ? 'portrait' : 'landscape' },
-          pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', '.stat-card', '.header-banner'] }
+          pagebreak: { mode: ['legacy'] }
         };
 
         await html2pdf().set(opt).from(container).save();
@@ -6521,8 +6586,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         <>
           <div className="w-full space-y-5 sm:space-y-8 animate-in fade-in duration-500">
             {/* Detail View Header */}
-            <div className="flex flex-wrap justify-between items-center gap-x-4 gap-y-3">
-              <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1 basis-[20rem]">
+            <div className="flex flex-col gap-4 sm:gap-5 rounded-2xl border border-border/50 bg-card/60 p-4 sm:p-5 shadow-sm">
+              <div className="flex items-center gap-3 sm:gap-4 min-w-0 w-full">
                 <div className="flex flex-row items-center gap-2.5 sm:gap-4 shrink-0">
                 <button
                   onClick={() => {
@@ -6535,10 +6600,10 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   <ArrowLeft className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
                 </button>
                 {/* K5: highlighted client logo — project ni odakh logo uparthi */}
-                <BrandLogo src={client.logo} alt={client.name} size="w-16 h-16 sm:w-20 sm:h-20 shrink-0" />
+                <BrandLogo src={client.logo} alt={client.name} size="w-14 h-14 sm:w-20 sm:h-20 shrink-0" />
                 </div>
                 <div className="min-w-0 flex-1 flex flex-col justify-center">
-                  <h1 className="text-[clamp(1rem,0.55rem+1.6vw,1.875rem)] font-black tracking-tight text-foreground leading-tight break-words">
+                  <h1 className="text-[clamp(1.125rem,0.8rem+1.3vw,1.75rem)] font-black tracking-tight text-foreground leading-tight break-words">
                     {project.name}{client?.companyName && client.companyName !== project.name ? ` (${client.companyName})` : ""}
                   </h1>
                   <div className="flex flex-wrap items-center gap-2 mt-2">
@@ -6554,7 +6619,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-end flex-grow max-w-full gap-1.5 sm:gap-2 [&>button]:whitespace-nowrap [&>button]:flex-1 [&>button]:justify-center sm:[&>button]:flex-none [&>button]:px-3 [&>button]:py-2 sm:[&>button]:px-3.5">
+              <div className="flex flex-wrap items-center justify-start w-full gap-2 pt-4 border-t border-border/50 [&>button]:whitespace-nowrap [&>button]:flex-1 [&>button]:justify-center sm:[&>button]:flex-none [&>button]:px-3 [&>button]:py-2 sm:[&>button]:px-3.5">
                 {/* WhatsApp Group Link */}
                 <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-1 shadow-sm">
                   <button
