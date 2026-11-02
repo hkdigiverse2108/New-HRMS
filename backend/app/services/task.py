@@ -131,7 +131,8 @@ class TaskService:
                         if c_emp:
                             personal = c_emp.get("personal_info", {})
                             name = f"{(personal.get('first_name') or '').strip()} {(personal.get('last_name') or '').strip()}".strip() or c_emp.get("name") or "Employee"
-                            entry = {"employee_name": name}
+                            photo = c_emp.get("profile_photo") or personal.get("profile_photo") or c_emp.get("avatar") or ""
+                            entry = {"employee_name": name, "avatar": photo, "id": str(cc_creator)}
                             emp_cache[str(cc_creator)] = entry
                             return entry
                 # Fallback to Admin name instead of Management
@@ -148,9 +149,10 @@ class TaskService:
                     name = f"{first} {last}".strip()
                     if not name:
                         name = emp.get("name") or "Employee"
-                    emp_cache[emp_id_str] = {"employee_name": name}
+                    photo = emp.get("profile_photo") or personal.get("profile_photo") or emp.get("avatar") or ""
+                    emp_cache[emp_id_str] = {"employee_name": name, "avatar": photo, "id": emp_id_str}
                 else:
-                    emp_cache[emp_id_str] = {"employee_name": "Het Mangukiya"}
+                    emp_cache[emp_id_str] = {"employee_name": "Het Mangukiya", "avatar": "", "id": emp_id_str}
             return emp_cache[emp_id_str]
 
         item["assigned_to_details"] = await get_details(item.get("assigned_to"), is_assigned_by=False)
