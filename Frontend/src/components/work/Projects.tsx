@@ -23,6 +23,7 @@ import { DigitalMarketingOperations, MarketingRecord } from "./DigitalMarketingO
 import { ClientFinanceModal } from "./ClientFinanceModal";
 import { ClientFollowupModal, FollowupLogEntry } from "./ClientFollowupModal";
 import { ActivityHistoryModal, ActivityHistoryEvent } from "./ActivityHistoryModal";
+import { ContentTextOrLinkCell } from "./ContentTextOrLinkCell";
 
 type ProjectStatus = "In Progress" | "In Review" | "Completed" | "On Hold";
 type ClientStatus = "Active" | "Archived";
@@ -7873,7 +7874,14 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                               <td className="py-2 px-5 text-center whitespace-nowrap">
                                                 <div className="flex flex-col items-center gap-1">
                                                   <InlineDate field="scriptDate" value={item.scriptDate} />
-                                                  <InlineLink field="scriptLink" value={item.scriptLink} label="📄 Script" cc="bg-primary/10 hover:bg-primary/20 text-primary border-primary/20" />
+                                                  <ContentTextOrLinkCell
+                                                    field="scriptLink"
+                                                    value={item.scriptLink}
+                                                    label="Script"
+                                                    item={item}
+                                                    onSave={saveInlineEdit}
+                                                    isExpanded={isExpanded}
+                                                  />
                                                 </div>
                                               </td>
 
@@ -7913,7 +7921,14 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                               <td className={cn("py-2 px-5 text-center", isExpanded ? "min-w-[200px]" : "min-w-[150px] max-w-[200px]")}>
                                                 <div className="flex flex-col items-center gap-1">
                                                   <InlineDate field="captionDate" value={item.captionDate} />
-                                                  <InlineText field="caption" value={item.caption} placeholder="+ caption" cls={cn("text-muted-foreground text-[11px] leading-normal", isExpanded ? "whitespace-pre-wrap" : "line-clamp-1")} />
+                                                  <ContentTextOrLinkCell
+                                                    field="caption"
+                                                    value={item.caption}
+                                                    label="Caption"
+                                                    item={item}
+                                                    onSave={saveInlineEdit}
+                                                    isExpanded={isExpanded}
+                                                  />
                                                 </div>
                                               </td>
 
@@ -10354,8 +10369,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                               />
                             </div>
                             <div>
-                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Script Link</label>
-                              <input type="text" value={calendarForm.scriptLink || ""} onChange={(e) => setCalendarForm({ ...calendarForm, scriptLink: e.target.value })} placeholder="Docs script Link" className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Script (Link or Full Copy)</label>
+                              <textarea rows={2} value={calendarForm.scriptLink || ""} onChange={(e) => setCalendarForm({ ...calendarForm, scriptLink: e.target.value })} placeholder="Paste Google Docs link or script draft..." className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none resize-y font-sans whitespace-pre-wrap" />
                             </div>
                           </div>
                           <div className="grid grid-cols-2 gap-4">
@@ -10440,8 +10455,23 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                             </div>
                           </div>
                           <div>
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Caption Text &amp; Hashtags</label>
-                            <textarea value={calendarForm.caption || ""} onChange={(e) => setCalendarForm({ ...calendarForm, caption: e.target.value })} placeholder="Write finalized copy and hashtags here..." rows={3} className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none resize-none font-medium" />
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Caption Text, Hashtags or Docs Link</label>
+                              {calendarForm.caption && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(calendarForm.caption.trim());
+                                    toast.success("Caption copied (Clean spacing preserved)!");
+                                  }}
+                                  className="text-[10px] text-primary hover:underline font-bold flex items-center gap-1"
+                                >
+                                  <Copy className="w-2.5 h-2.5" />
+                                  <span>Copy Clean</span>
+                                </button>
+                              )}
+                            </div>
+                            <textarea value={calendarForm.caption || ""} onChange={(e) => setCalendarForm({ ...calendarForm, caption: e.target.value })} placeholder="Write finalized copy, hashtags, emojis, or paste Google Docs link..." rows={6} className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none resize-y font-sans whitespace-pre-wrap leading-relaxed" />
                           </div>
                           <div className="grid grid-cols-2 gap-4">
                             <div>

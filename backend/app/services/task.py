@@ -374,8 +374,6 @@ class TaskService:
                 print(f"[TASK NOTIF ERROR] {ne}")
 
         status_value = getattr(insert_data.get("status"), "value", insert_data.get("status"))
-        if str(status_value or "").lower() == "inprogress" and insert_data.get("assigned_to"):
-            await TaskService._enforce_single_inprogress_task(insert_data["assigned_to"], created_id, assigned_by)
 
         await clear_pattern("tasks:*")
         return created
@@ -539,31 +537,8 @@ class TaskService:
 
     @staticmethod
     async def _enforce_single_inprogress_task(employee_id: str, current_task_id: str, updater_id: Optional[str] = None):
-        if not employee_id:
-            return
-        collection = await TaskRepository.get_collection()
-        now = datetime.utcnow()
-        emp_id_str = str(employee_id).strip()
-        
-        cursor = collection.find({
-            "is_deleted": False,
-            "assigned_to": emp_id_str,
-            "status": "inprogress"
-        })
-        async for other_task in cursor:
-            other_id = str(other_task.get("_id") or other_task.get("id"))
-            if other_id != str(current_task_id):
-                act_hist = list(other_task.get("activity_history") or [])
-                act_hist.append({
-                    "action": "status_changed",
-                    "performed_by": updater_id or "System",
-                    "timestamp": now,
-                    "details": "Status automatically changed from 'inprogress' to 'todo' because another task was set to in-progress"
-                })
-                await collection.update_one(
-                    {"_id": other_task["_id"]},
-                    {"$set": {"status": "todo", "activity_history": act_hist, "updated_at": now}}
-                )
+        # Multiple in-progress tasks are allowed simultaneously per employee
+        return
 
     @staticmethod
     async def update_task(item_id: str, update_data: TaskUpdate, updater_id: Optional[str] = None):
@@ -605,11 +580,8 @@ class TaskService:
                             "timestamp": now,
                             "details": f"• 'status' changed from '{old_s}' to '{new_s}'"
                         })
-                        # Enforce strict single inprogress task rule per assigned employee
-                        if new_s == "inprogress":
-                            target_emp = update_dict.get("assigned_to") or existing.get("assigned_to")
-                            if target_emp:
-                                await TaskService._enforce_single_inprogress_task(target_emp, item_id, updater_id)
+                        # Multiple in-progress tasks are supported per employee
+                        pass
                     elif key not in ["updated_at", "activity_history"]:
                         old_display = str(old_val_norm or "")
                         new_display = str(new_val_norm or "")
