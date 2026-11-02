@@ -585,3 +585,326 @@ async def delete_project_task(project_id: str, task_id: str, current_user: dict 
 
 
 
+
+
+# ==============================================================================
+# PROJECT DOCS / KNOWLEDGE BASE (Audio Transcript [00:07-01:09]: "i" button)
+# ==============================================================================
+from bson import ObjectId
+from app.database.db import get_database
+import uuid
+from datetime import datetime
+
+DEFAULT_PROJECT_DOCS = [
+    {
+        "id": "doc_usp_overview",
+        "title": "Brand USP & Overview",
+        "content": "## Brand Overview\nWrite or paste the client brand background here.\n\n### Unique Selling Proposition (USP)\n- Core USP 1\n- Core USP 2\n\n### Primary Offering\nKey products or services provided by the client.",
+        "updated_at": None,
+        "updated_by": None
+    },
+    {
+        "id": "doc_guidelines_tone",
+        "title": "Brand Guidelines & Tone of Voice",
+        "content": "## Visual & Tone Guidelines\n- Tone: Professional / Premium / Friendly\n- Brand Colors & Aesthetics\n- Do's and Don'ts for copies and creatives",
+        "updated_at": None,
+        "updated_by": None
+    },
+    {
+        "id": "doc_target_audience",
+        "title": "Target Audience & Demographics",
+        "content": "## Ideal Customer Profile (ICP)\n- Age Group: \n- Location / Geographies: \n- Pain Points & Desires: ",
+        "updated_at": None,
+        "updated_by": None
+    },
+    {
+        "id": "doc_strategy_offers",
+        "title": "Offers, Pricing & Strategy",
+        "content": "## Conversion Offers & Hooks\n- Hero Lead Magnet / Offer: \n- Pricing Tiers: \n- CTA Strategy: ",
+        "updated_at": None,
+        "updated_by": None
+    }
+]
+
+@router.get("/{project_id}/docs")
+async def get_project_docs(project_id: str, current_user: dict = Depends(get_current_employee)):
+    db = get_database()
+    query = {"_id": ObjectId(project_id)} if ObjectId.is_valid(project_id) else {"_id": project_id}
+    project = await db["projects"].find_one(query, {"docs": 1, "name": 1})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    docs = project.get("docs")
+    if not docs or not isinstance(docs, list) or len(docs) == 0:
+        docs = DEFAULT_PROJECT_DOCS
+    return {"status": "success", "data": docs}
+
+@router.put("/{project_id}/docs")
+async def update_project_docs(project_id: str, body: dict, current_user: dict = Depends(get_current_employee)):
+    db = get_database()
+    query = {"_id": ObjectId(project_id)} if ObjectId.is_valid(project_id) else {"_id": project_id}
+    pages = body.get("pages", [])
+    emp_name = current_user.get("name") or current_user.get("personal_info", {}).get("first_name", "Team Member")
+    now_iso = datetime.utcnow().isoformat()
+    for p in pages:
+        if not p.get("id"):
+            p["id"] = f"page_{uuid.uuid4().hex[:8]}"
+        p["updated_at"] = now_iso
+        p["updated_by"] = emp_name
+    await db["projects"].update_one(query, {"$set": {"docs": pages, "updated_at": datetime.utcnow()}})
+    await clear_pattern(f"projects:{project_id}:*")
+    return {"status": "success", "data": pages}
+
+
+# ==============================================================================
+# MARKETING WORKFLOW STEPS (Audio Transcript [01:09-02:36]: "Set Steps by Assignee Person")
+# ==============================================================================
+
+DEFAULT_MARKETING_STEPS = [
+    {
+        "id": "step_1",
+        "order": 1,
+        "title": "Client Onboarding & Requirement Gathering",
+        "description": "Collect brand USP, target geographies, primary offer & KPIs from client.",
+        "assigned_to": "",
+        "assigned_to_name": "",
+        "due_date": "",
+        "is_completed": False,
+        "completed_at": None,
+        "completed_by": None,
+        "notes": ""
+    },
+    {
+        "id": "step_2",
+        "order": 2,
+        "title": "Ad Accounts & Asset Handover",
+        "description": "Gain admin/partner access to Meta Business Manager, Ad Accounts, Pixel, GTM, Domain Verification & Google Ads.",
+        "assigned_to": "",
+        "assigned_to_name": "",
+        "due_date": "",
+        "is_completed": False,
+        "completed_at": None,
+        "completed_by": None,
+        "notes": ""
+    },
+    {
+        "id": "step_3",
+        "order": 3,
+        "title": "Audience & Competitor Intelligence",
+        "description": "Analyze top 3 competitor ad libraries, research target audience interests, demographics & keywords.",
+        "assigned_to": "",
+        "assigned_to_name": "",
+        "due_date": "",
+        "is_completed": False,
+        "completed_at": None,
+        "completed_by": None,
+        "notes": ""
+    },
+    {
+        "id": "step_4",
+        "order": 4,
+        "title": "Creative Strategy & Ad Copywriting",
+        "description": "Draft high-converting ad copy (Primary text, Headlines, CTAs) and submit creative briefs to design/video team.",
+        "assigned_to": "",
+        "assigned_to_name": "",
+        "due_date": "",
+        "is_completed": False,
+        "completed_at": None,
+        "completed_by": None,
+        "notes": ""
+    },
+    {
+        "id": "step_5",
+        "order": 5,
+        "title": "Campaign Build & Conversion Tracking Setup",
+        "description": "Build campaigns in Ads Manager, setup instant lead forms / landing pages, and test tracking pixels.",
+        "assigned_to": "",
+        "assigned_to_name": "",
+        "due_date": "",
+        "is_completed": False,
+        "completed_at": None,
+        "completed_by": None,
+        "notes": ""
+    },
+    {
+        "id": "step_6",
+        "order": 6,
+        "title": "Campaign Launch & Day-1 Health Check",
+        "description": "Review ad approval status, verify initial delivery, check lead notifications and webhook routing.",
+        "assigned_to": "",
+        "assigned_to_name": "",
+        "due_date": "",
+        "is_completed": False,
+        "completed_at": None,
+        "completed_by": None,
+        "notes": ""
+    },
+    {
+        "id": "step_7",
+        "order": 7,
+        "title": "Weekly Optimization, Scaling & Client Reporting",
+        "description": "Analyze CPL, CTR, ROAS, prune underperforming ad sets, scale winning creatives & share performance reports.",
+        "assigned_to": "",
+        "assigned_to_name": "",
+        "due_date": "",
+        "is_completed": False,
+        "completed_at": None,
+        "completed_by": None,
+        "notes": ""
+    }
+]
+
+@router.get("/{project_id}/marketing-steps")
+async def get_marketing_steps(project_id: str, current_user: dict = Depends(get_current_employee)):
+    db = get_database()
+    query = {"_id": ObjectId(project_id)} if ObjectId.is_valid(project_id) else {"_id": project_id}
+    project = await db["projects"].find_one(query, {"marketing_steps": 1})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    steps = project.get("marketing_steps")
+    if not steps or not isinstance(steps, list) or len(steps) == 0:
+        steps = DEFAULT_MARKETING_STEPS
+    return {"status": "success", "data": steps}
+
+@router.put("/{project_id}/marketing-steps")
+async def update_marketing_steps(project_id: str, body: dict, current_user: dict = Depends(get_current_employee)):
+    db = get_database()
+    query = {"_id": ObjectId(project_id)} if ObjectId.is_valid(project_id) else {"_id": project_id}
+    steps = body.get("steps", [])
+    await db["projects"].update_one(query, {"$set": {"marketing_steps": steps, "updated_at": datetime.utcnow()}})
+    await clear_pattern(f"projects:{project_id}:*")
+    return {"status": "success", "data": steps}
+
+
+# ==============================================================================
+# MARKETING MILESTONES / GOALS & BUDGET (Audio Transcript [02:36-03:48]: "Set Goal & Budget Type Wise & Aslo Enter Month Wise")
+# ==============================================================================
+
+@router.get("/{project_id}/marketing-goals")
+async def get_marketing_goals(project_id: str, current_user: dict = Depends(get_current_employee)):
+    db = get_database()
+    query = {"_id": ObjectId(project_id)} if ObjectId.is_valid(project_id) else {"_id": project_id}
+    project = await db["projects"].find_one(query, {"marketing_goals": 1, "daily_marketing_stats": 1})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    goals = project.get("marketing_goals", []) or []
+    stats = project.get("daily_marketing_stats", []) or []
+
+    for g in goals:
+        g_cat = str(g.get("category", "ALL")).upper()
+        g_sub = str(g.get("sub_type", "")).strip()
+        g_month = str(g.get("month", "")).strip()
+        g_start = str(g.get("start_date", "")).strip()
+        g_end = str(g.get("end_date", "")).strip()
+
+        matched_stats = []
+        for s in stats:
+            s_date = str(s.get("date", ""))[:10]
+            s_cat = str(s.get("category", "")).upper()
+            s_sub = str(s.get("sub_type", "")).strip()
+
+            if g_cat not in ("ALL", "BLENDED") and s_cat != g_cat:
+                continue
+            if g_sub and s_sub and g_sub != s_sub:
+                continue
+
+            if g_month and not s_date.startswith(g_month):
+                continue
+            if g_start and s_date < g_start:
+                continue
+            if g_end and s_date > g_end:
+                continue
+
+            matched_stats.append(s)
+
+        act_spend = sum(float(s.get("spend") or 0) for s in matched_stats)
+        act_revenue = sum(float(s.get("revenue") or 0) for s in matched_stats)
+        act_leads = sum(int(s.get("results") or 0) for s in matched_stats)
+        act_roas = round(act_revenue / act_spend, 2) if act_spend > 0 else 0.0
+
+        g["actual_spend"] = act_spend
+        g["actual_revenue"] = act_revenue
+        g["actual_leads"] = act_leads
+        g["actual_roas"] = act_roas
+
+        tgt_spend = float(g.get("target_spend") or 0)
+        tgt_revenue = float(g.get("target_revenue") or 0)
+        tgt_leads = int(g.get("target_leads") or 0)
+
+        g["spend_pct"] = round((act_spend / tgt_spend) * 100, 1) if tgt_spend > 0 else 0
+        g["revenue_pct"] = round((act_revenue / tgt_revenue) * 100, 1) if tgt_revenue > 0 else 0
+        g["leads_pct"] = round((act_leads / tgt_leads) * 100, 1) if tgt_leads > 0 else 0
+
+        if tgt_revenue > 0:
+            if act_revenue >= tgt_revenue:
+                g["status"] = "achieved"
+            elif g["revenue_pct"] >= 70:
+                g["status"] = "on_track"
+            else:
+                g["status"] = "in_progress"
+        elif tgt_leads > 0:
+            if act_leads >= tgt_leads:
+                g["status"] = "achieved"
+            elif g["leads_pct"] >= 70:
+                g["status"] = "on_track"
+            else:
+                g["status"] = "in_progress"
+        else:
+            g["status"] = "in_progress"
+
+    return {"status": "success", "data": goals}
+
+@router.post("/{project_id}/marketing-goals", status_code=201)
+async def create_marketing_goal(project_id: str, body: dict, current_user: dict = Depends(get_current_employee)):
+    db = get_database()
+    query = {"_id": ObjectId(project_id)} if ObjectId.is_valid(project_id) else {"_id": project_id}
+    goal_id = f"goal_{uuid.uuid4().hex[:10]}"
+    emp_name = current_user.get("name") or current_user.get("personal_info", {}).get("first_name", "Admin")
+    goal = {
+        "id": goal_id,
+        "title": str(body.get("title") or "Monthly Performance Goal").strip(),
+        "category": str(body.get("category") or "ALL").upper().strip(),
+        "sub_type": str(body.get("sub_type") or "").strip(),
+        "month": str(body.get("month") or datetime.utcnow().strftime("%Y-%m")).strip(),
+        "start_date": str(body.get("start_date") or "").strip(),
+        "end_date": str(body.get("end_date") or "").strip(),
+        "target_spend": float(body.get("target_spend") or 0),
+        "target_revenue": float(body.get("target_revenue") or 0),
+        "target_leads": int(body.get("target_leads") or 0),
+        "target_roas": float(body.get("target_roas") or 0),
+        "notes": str(body.get("notes") or "").strip(),
+        "created_at": datetime.utcnow().isoformat(),
+        "created_by": emp_name
+    }
+    await db["projects"].update_one(query, {"$push": {"marketing_goals": goal}, "$set": {"updated_at": datetime.utcnow()}})
+    await clear_pattern(f"projects:{project_id}:*")
+    return {"status": "success", "data": goal}
+
+@router.put("/{project_id}/marketing-goals/{goal_id}")
+async def update_marketing_goal(project_id: str, goal_id: str, body: dict, current_user: dict = Depends(get_current_employee)):
+    db = get_database()
+    query = {"_id": ObjectId(project_id)} if ObjectId.is_valid(project_id) else {"_id": project_id}
+    project = await db["projects"].find_one(query, {"marketing_goals": 1})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    goals = project.get("marketing_goals", []) or []
+    updated = False
+    for g in goals:
+        if g.get("id") == goal_id:
+            for k in ["title", "category", "sub_type", "month", "start_date", "end_date", "target_spend", "target_revenue", "target_leads", "target_roas", "notes"]:
+                if k in body:
+                    g[k] = body[k]
+            updated = True
+            break
+    if not updated:
+        raise HTTPException(status_code=404, detail="Goal not found")
+    await db["projects"].update_one(query, {"$set": {"marketing_goals": goals, "updated_at": datetime.utcnow()}})
+    await clear_pattern(f"projects:{project_id}:*")
+    return {"status": "success", "data": goals}
+
+@router.delete("/{project_id}/marketing-goals/{goal_id}")
+async def delete_marketing_goal(project_id: str, goal_id: str, current_user: dict = Depends(get_current_employee)):
+    db = get_database()
+    query = {"_id": ObjectId(project_id)} if ObjectId.is_valid(project_id) else {"_id": project_id}
+    await db["projects"].update_one(query, {"$pull": {"marketing_goals": {"id": goal_id}}, "$set": {"updated_at": datetime.utcnow()}})
+    await clear_pattern(f"projects:{project_id}:*")
+    return {"status": "success", "message": "Goal deleted successfully"}

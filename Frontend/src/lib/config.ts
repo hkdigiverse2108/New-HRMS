@@ -82,7 +82,7 @@ export function getAvatarUrl(url: string | null | undefined, fallbackName: strin
   if (clean.startsWith("/")) {
     return `${apiBase}${clean}`;
   }
-  return `${apiBase}/images/employee/${clean}`;
+  return `${apiBase}/uploads/employee/${clean}`;
 }
 
 // <img onError={handleAvatarError} /> — legacy /images/* paths whose files are

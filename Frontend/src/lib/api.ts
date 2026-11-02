@@ -282,7 +282,7 @@ export const api = {
     formData.append("file", file);
     formData.append("folder", folder);
 
-    return apiRequest<{ url: string; filename: string }>("/images/upload", {
+    return apiRequest<{ url: string; filename: string }>("/upload", {
       method: "POST",
       body: formData,
       showLoader: true,
@@ -294,13 +294,13 @@ export const api = {
     if (!url || typeof url !== "string") return;
     const query = `?url=${encodeURIComponent(url)}`;
     try {
-      return await apiRequest(`/images/delete${query}`, {
+      return await apiRequest(`/uploads/delete${query}`, {
         method: "DELETE",
         showLoader: false,
         showErrorToast: false,
       });
     } catch {
-      return await apiRequest(`/images${query}`, {
+      return await apiRequest(`/uploads${query}`, {
         method: "DELETE",
         showLoader: false,
         showErrorToast: false,
@@ -314,7 +314,7 @@ export const api = {
   listImages: async (folder?: string): Promise<Array<{ filename: string; url: string; folder: string; size?: number; created_at?: number }>> => {
     const query = folder && folder !== "all" ? `?folder=${encodeURIComponent(folder)}` : "";
     const res = await apiRequest<{ data: Array<{ filename: string; url: string; folder: string; size?: number; created_at?: number }> }>(
-      `/images/list${query}`,
+      `/uploads/list${query}`,
       { showLoader: false, showErrorToast: false }
     );
     return res.data || [];

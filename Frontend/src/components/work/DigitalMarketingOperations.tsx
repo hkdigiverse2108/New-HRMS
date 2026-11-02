@@ -29,6 +29,9 @@ import {
   Loader2,
   Building2,
   SlidersHorizontal,
+  ListChecks,
+  Target,
+  BookOpen,
 } from "lucide-react";
 import {
   BarChart,
@@ -49,6 +52,9 @@ import { cn } from "@/lib/utils";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ExecutivePerformanceReportModal } from "./ExecutivePerformanceReportModal";
+import { ProjectDocsModal } from "./ProjectDocsModal";
+import { MarketingStepsModal } from "./MarketingStepsModal";
+import { MarketingGoalsModal } from "./MarketingGoalsModal";
 
 import {
   Select,
@@ -125,6 +131,9 @@ export const DigitalMarketingOperations: React.FC<DigitalMarketingOperationsProp
   onCloseReport,
 }) => {
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isDocsModalOpen, setIsDocsModalOpen] = useState(false);
+  const [isStepsModalOpen, setIsStepsModalOpen] = useState(false);
+  const [isGoalsModalOpen, setIsGoalsModalOpen] = useState(false);
 
   // Currency state (INR / USD)
   const [currency, setCurrency] = useState<"INR" | "USD">("INR");
@@ -600,6 +609,39 @@ export const DigitalMarketingOperations: React.FC<DigitalMarketingOperationsProp
             <span className="hidden sm:inline">Full Table</span>
           </button>
 
+          {/* Project Docs (i) Trigger (Audio Transcript [00:07-01:09]) */}
+          <button
+            type="button"
+            onClick={() => setIsDocsModalOpen(true)}
+            className="px-3.5 py-2 text-xs font-bold rounded-xl border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-700 dark:text-blue-400 transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+            title="Brand Knowledge Base & Project Docs (USP, Guidelines, Offers)"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+            <span>Docs (i)</span>
+          </button>
+
+          {/* Marketing Steps Trigger (Audio Transcript [01:09-02:36]: Steps by Assignee) */}
+          <button
+            type="button"
+            onClick={() => setIsStepsModalOpen(true)}
+            className="px-3.5 py-2 text-xs font-bold rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+            title="Digital Marketing Workflow Steps by Assignee Person"
+          >
+            <ListChecks className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Steps</span>
+          </button>
+
+          {/* Milestones & Goals Trigger (Audio Transcript [02:36-03:48]: Target vs Actual) */}
+          <button
+            type="button"
+            onClick={() => setIsGoalsModalOpen(true)}
+            className="px-3.5 py-2 text-xs font-bold rounded-xl border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-400 transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+            title="Set Goals & Monthly Budget Spending Targets (Type-wise & Month-wise)"
+          >
+            <Target className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Milestones</span>
+          </button>
+
           {/* Export Data / Executive Report Trigger */}
           <button
             type="button"
@@ -1007,6 +1049,14 @@ export const DigitalMarketingOperations: React.FC<DigitalMarketingOperationsProp
                           title="Edit Record"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsGoalsModalOpen(true)}
+                          className="p-1 text-muted-foreground hover:text-indigo-600 rounded-lg transition"
+                          title="View Milestones & Goals (Target vs Actual)"
+                        >
+                          <Target className="w-3.5 h-3.5 text-indigo-500" />
                         </button>
                         <button
                           type="button"
@@ -1465,6 +1515,34 @@ export const DigitalMarketingOperations: React.FC<DigitalMarketingOperationsProp
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* MODAL: PROJECT DOCS / BRAND KNOWLEDGE BASE (i-button) */}
+      <ProjectDocsModal
+        isOpen={isDocsModalOpen}
+        onClose={() => setIsDocsModalOpen(false)}
+        projectId={projectId}
+        projectName={clientName}
+        clientName={companyName}
+      />
+
+      {/* MODAL: MARKETING WORKFLOW STEPS BY ASSIGNEE */}
+      <MarketingStepsModal
+        isOpen={isStepsModalOpen}
+        onClose={() => setIsStepsModalOpen(false)}
+        projectId={projectId}
+        projectName={clientName}
+        clientName={companyName}
+      />
+
+      {/* MODAL: MARKETING MILESTONES & TARGET GOALS */}
+      <MarketingGoalsModal
+        isOpen={isGoalsModalOpen}
+        onClose={() => setIsGoalsModalOpen(false)}
+        projectId={projectId}
+        projectName={clientName}
+        clientName={companyName}
+        currency={currency}
+      />
 
       {/* Executive Client Performance Intelligence Report Modal with Live Records */}
       <ExecutivePerformanceReportModal

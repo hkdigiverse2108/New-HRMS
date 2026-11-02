@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "react";
 import * as XLSX from "xlsx";
 import { usePersistentState } from "@/hooks/usePersistentState";
-import { X, Search, Plus, Filter, Check, MoreHorizontal, LayoutGrid, List, Briefcase, Calendar, Clock, Star, Circle, Trash2, Edit2, Archive, ArchiveRestore, ArrowLeft, Users, IndianRupee, FolderGit2, CheckCircle2, Settings2, TrendingUp, MousePointerClick, Target, BarChart3, ChevronDown, User, Building2, CreditCard, FileText, ChevronRight, Video, Instagram, Layers, MessageSquare, Key, Copy, Eye, EyeOff, ExternalLink, Phone, ShieldCheck, Sparkles, Share2, AlertCircle, Sliders, Loader2, UserPlus, UserX, ChevronLeft, Download, Printer, Upload, FileSpreadsheet, History } from "lucide-react";
+import { X, Search, Plus, Filter, Check, MoreHorizontal, LayoutGrid, List, Briefcase, Calendar, Clock, Star, Circle, Trash2, Edit2, Archive, ArchiveRestore, ArrowLeft, Users, IndianRupee, FolderGit2, CheckCircle2, Settings2, TrendingUp, MousePointerClick, Target, BarChart3, ChevronDown, User, Building2, CreditCard, FileText, ChevronRight, Video, Instagram, Layers, MessageSquare, Key, Copy, Eye, EyeOff, ExternalLink, Phone, ShieldCheck, Sparkles, Share2, AlertCircle, Sliders, Loader2, UserPlus, UserX, ChevronLeft, Download, Printer, Upload, FileSpreadsheet, History, Info } from "lucide-react";
 import { toast } from "@/lib/toast";
 import { cn, formatDate, formatPersonName } from "@/lib/utils";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -19,6 +19,7 @@ import { useEmployeesContext } from "@/components/employees/EmployeeContext";
 import { useAuth } from "@/components/auth/AuthContext";
 import { useModulePermissions } from "@/hooks/useModulePermissions";
 import { DigitalMarketingOperations, MarketingRecord } from "./DigitalMarketingOperations";
+import { ProjectDocsModal } from "./ProjectDocsModal";
 
 import { ClientFinanceModal } from "./ClientFinanceModal";
 import { ClientFollowupModal, FollowupLogEntry } from "./ClientFollowupModal";
@@ -1863,6 +1864,8 @@ const mapBackendProject = (bp: any): Project => {
 
 export function Projects({ isNew }: { isNew?: boolean }) {
   const [projectSubTab, setProjectSubTab] = useState<"workspace" | "logs">("workspace");
+  const [isProjectDocsOpen, setIsProjectDocsOpen] = useState(false);
+  const [selectedDocProject, setSelectedDocProject] = useState<any>(null);
   const [isBulkAdd, setIsBulkAdd] = useState(false);
   const [bulkStatsEntries, setBulkStatsEntries] = useState<{ [campaignName: string]: { reach: string, impressions: string, leads: string, followers: string, revenue: string, spend: string } }>({});
 
@@ -5228,6 +5231,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         const matchesCompany = (projClient?.companyName || "").toLowerCase().includes(query);
         if (!matchesName && !matchesClient && !matchesCompany) return false;
       }
+      if (clientFilterCategories.length > 0 && !clientFilterCategories.includes(project.category)) return false;
       return true;
     });
 
@@ -5271,12 +5275,13 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       primaryProject: Project;
     }> = [];
 
-    groupsMap.forEach((subProjects, groupKey) => {
+    groupsMap.forEach((rawSubProjects, groupKey) => {
+      if (!rawSubProjects || rawSubProjects.length === 0) return;
+      const subProjects = clientFilterCategories.length > 0
+        ? rawSubProjects.filter(p => clientFilterCategories.includes(p.category))
+        : rawSubProjects;
+
       if (!subProjects || subProjects.length === 0) return;
-      if (clientFilterCategories.length > 0) {
-        const hasMatchingCat = subProjects.some(p => clientFilterCategories.includes(p.category));
-        if (!hasMatchingCat) return;
-      }
 
       const projClient = clients.find(c => subProjects.some(p => p.clientId === c.id));
 
@@ -6929,6 +6934,18 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             </div>
           </div>
         )}
+
+        {/* Universal Project Docs (i) Modal (Audio Transcript [00:07-01:09]) */}
+        <ProjectDocsModal
+          isOpen={isProjectDocsOpen}
+          onClose={() => {
+            setIsProjectDocsOpen(false);
+            setSelectedDocProject(null);
+          }}
+          projectId={selectedDocProject?.id || ""}
+          projectName={selectedDocProject?.name || ""}
+          clientName={clients.find(c => c.id === selectedDocProject?.clientId)?.name}
+        />
       </>
     );
   };
@@ -7008,6 +7025,20 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     <Edit2 className="w-3 h-3" />
                   </button>
                 </div>
+
+                {/* Universal Project Docs (i) button (Audio transcript [00:07-01:09]) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedDocProject(project);
+                    setIsProjectDocsOpen(true);
+                  }}
+                  className="flex items-center gap-2 px-3.5 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-700 dark:text-blue-400 border border-blue-500/20 font-bold text-xs rounded-xl transition-all shadow-sm cursor-pointer"
+                  title="Brand Knowledge Base & Project Docs (USP, Guidelines, Strategy)"
+                >
+                  <Info className="w-3.5 h-3.5" />
+                  <span>Docs (i)</span>
+                </button>
 
                 {/* Client Credentials */}
                 <button
@@ -13457,7 +13488,9 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             description={confirmModalState.description}
             itemName={confirmModalState.itemName}
           />
-          {renderSmmModals()}
+    
+
+      {renderSmmModals()}
 
         </>
       );
@@ -14864,7 +14897,9 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           description={confirmModalState.description}
           itemName={confirmModalState.itemName}
         />
-        {renderSmmModals()}
+  
+
+      {renderSmmModals()}
       </>
     );
   }
@@ -15342,6 +15377,20 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   {/* K5: highlighted logo */}
                   <BrandLogo src={group.primaryProject?.logo || group.client?.logo} alt={group.displayName} size="w-16 h-16 sm:w-20 sm:h-20 shrink-0" />
                   <div className="flex flex-wrap justify-end items-center gap-1.5">
+                    {/* Universal Project Docs (i) button (Audio transcript [00:07-01:09]) */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedDocProject(group.primaryProject);
+                        setIsProjectDocsOpen(true);
+                      }}
+                      className="p-1.5 text-blue-600 hover:bg-blue-500/10 rounded-lg transition-colors border border-blue-500/20 bg-background/50 backdrop-blur-sm cursor-pointer"
+                      title="Project Docs & Brand Knowledge Base (i)"
+                    >
+                      <Info className="w-3.5 h-3.5" />
+                    </button>
+
                     {/* Dynamic Finance button (K10 / Audio transcript [27:01]) */}
                     {canUserAccessFinance(group) && (
                       <button
@@ -16653,6 +16702,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           }}
         />
       )}
+
+
 
       {renderSmmModals()}
     </div>

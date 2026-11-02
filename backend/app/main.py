@@ -82,6 +82,12 @@ async def lifespan(app: FastAPI):
         await init_database_presets_and_admin(db.db)
         await seed_social_defaults(db.db)
         SocialScheduler.start_scheduler()
+        # Automated Disk and Database Uploads Migration (images/ -> uploads/)
+        try:
+            from app.database.migration_uploads import run_uploads_and_disk_migration
+            await run_uploads_and_disk_migration(db.db)
+        except Exception as me:
+            print(f"[STARTUP WARNING] Uploads migration notice: {me}")
         # Hot-path indexes for dashboard ONE-API (idempotent)
         try:
             await db.db["tasks"].create_index([("is_deleted", 1), ("status", 1)])
@@ -127,11 +133,11 @@ class ImageRouteMiddleware:
     async def __call__(self, scope: Scope, receive: Receive, send: Send):
         if scope["type"] == "http":
             path = scope.get("path", "")
-            if path in ("/images/upload", "/images/upload/"):
+            if path in ("/images/upload", "/images/upload/", "/uploads/upload", "/uploads/upload/"):
                 scope["path"] = "/upload"
-            elif path in ("/images/list", "/images/list/"):
+            elif path in ("/images/list", "/images/list/", "/uploads/list", "/uploads/list/"):
                 scope["path"] = "/api/images/list"
-            elif path in ("/images/delete", "/images/delete/"):
+            elif path in ("/images/delete", "/images/delete/", "/uploads/delete", "/uploads/delete/"):
                 scope["path"] = "/api/images/delete"
         await self.app(scope, receive, send)
 

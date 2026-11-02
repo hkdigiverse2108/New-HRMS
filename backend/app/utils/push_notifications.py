@@ -108,9 +108,9 @@ def resolve_avatar_url(avatar_url: Optional[str]) -> Optional[str]:
     # If it's a relative path without leading slash
     if not clean.startswith("/"):
         if clean.startswith("employee_") or clean.endswith((".png", ".jpg", ".jpeg", ".webp")):
-            clean = f"/images/employee/{clean}"
+            clean = f"/uploads/employee/{clean}"
         else:
-            clean = f"/images/{clean}"
+            clean = f"/uploads/{clean}"
 
     return f"{base_url}{clean}"
 
