@@ -23,7 +23,7 @@ import { DigitalMarketingOperations, MarketingRecord } from "./DigitalMarketingO
 import { ClientFinanceModal } from "./ClientFinanceModal";
 import { ClientFollowupModal, FollowupLogEntry } from "./ClientFollowupModal";
 import { ActivityHistoryModal, ActivityHistoryEvent } from "./ActivityHistoryModal";
-import { ContentTextOrLinkCell } from "./ContentTextOrLinkCell";
+import { ContentTextOrLinkCell, isLikelyUrl } from "./ContentTextOrLinkCell";
 
 type ProjectStatus = "In Progress" | "In Review" | "Completed" | "On Hold";
 type ClientStatus = "Active" | "Archived";
@@ -3746,7 +3746,20 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         if (formattedDate === "-" && !linkHtml) return "-";
         return `${formattedDate === "-" ? "" : formattedDate} ${linkHtml}`.trim();
       },
-      "Caption": (i) => i.caption || "-",
+      "Caption": (i) => {
+        // A caption that is itself a link (Docs / Drive URL) shows as a clickable [Link]
+        const capRaw = String(i.caption || "").trim();
+        if (isLikelyUrl(capRaw)) {
+          const capUrl = (capRaw.startsWith("http") ? capRaw : "https://" + capRaw).replace(/"/g, "%22");
+          return `<a href="${capUrl}" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 700;">[Link]</a>`;
+        }
+        // Short preview only; the full caption stays in the app (hover tooltip / Copy Clean Caption)
+        const flat = String(i.caption || "").replace(/\s+/g, " ").trim();
+        if (!flat || flat === "-") return "-";
+        const short = flat.length > 38 ? `${flat.slice(0, 38).trimEnd()}...` : flat;
+        const safe = short.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        return safe;
+      },
       "Final Link": (i) => {
         const rawUrl = cleanLink(i.finalPostLink) || cleanLink(i.finalReelLink) || cleanLink(i.postingLinkOfIg);
         if (!rawUrl || rawUrl === "-") return "-";
@@ -3776,8 +3789,10 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       "Status": 9,
     };
 
-    const totalColWeight = selectedCols.reduce((sum, col) => sum + (colWeights[col] || 10), 0);
-    const numCols = selectedCols.length;
+    const showCaptions = pdfSelectedColumns.includes("Caption"); // full captions, exactly as typed (line breaks / spacing kept), listed below the table
+    const tableCols = [...selectedCols];
+    const totalColWeight = tableCols.reduce((sum, col) => sum + (colWeights[col] || 10), 0);
+    const numCols = tableCols.length;
 
     let tableFontSize = isPortrait ? "10px" : "10.5px";
     let cellPadding = "9px 6px";
@@ -3921,6 +3936,34 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         text-decoration: underline !important;
         font-weight: 600 !important;
       }
+      .cap-section { margin-top: 14px !important; }
+      .cap-title {
+        font-size: ${isPortrait ? "13px" : "15px"} !important;
+        font-weight: 800 !important;
+        color: #18181b !important;
+        padding-bottom: 4px !important;
+        margin-bottom: 4px !important;
+        border-bottom: 1px solid #d4d4d8 !important;
+      }
+      .cap-head {
+        font-size: ${isPortrait ? "10px" : "11px"} !important;
+        font-weight: 700 !important;
+        color: #3f3f46 !important;
+        margin: 10px 0 4px 0 !important;
+      }
+      .cap-para {
+        font-size: ${isPortrait ? "10px" : "11px"} !important;
+        line-height: 1.6 !important;
+        color: #27272a !important;
+        white-space: pre-wrap !important;
+        overflow-wrap: anywhere !important;
+        text-align: left !important;
+        padding: 8px 10px !important;
+        margin-bottom: 6px !important;
+        background: #fafafa !important;
+        border: 1px solid #e4e4e7 !important;
+        border-radius: 4px !important;
+      }
       tr:nth-child(even) td { background-color: #fafafa !important; }
       .status-tag {
         font-weight: 700 !important;
@@ -3933,6 +3976,25 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     `;
 
     const leftCols = ["Topic / Concept", "Caption"];
+    const escHtml = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    let captionUnitsHtml = "";
+    if (showCaptions) {
+      let first = true;
+      items.forEach((it: any, itIdx: number) => {
+        const cap = String(it.caption || "").replace(/\r\n/g, "\n").trim();
+        if (!cap || cap === "-" || isLikelyUrl(cap)) return;
+        const head = `<div class="cap-head">${escHtml(formatDayMonthYear(it.postingDate))}${it.postingDay ? ` (${escHtml(String(it.postingDay))})` : ""} &bull; ${escHtml(String(it.topic || "-"))}</div>`;
+        const blocks: string[] = [];
+        cap.split(/\n\s*\n/).forEach((b: string) => {
+          if (b.length <= 1500) blocks.push(b);
+          else b.split("\n").forEach((line: string) => { if (line.trim()) blocks.push(line); });
+        });
+        blocks.forEach((b, bi) => {
+          captionUnitsHtml += `<div class="cap-unit"${bi === 0 ? ` data-cap-id="${itIdx}"` : ""}>${first ? '<div class="cap-title">Full Captions (select the text to copy)</div>' : ""}${bi === 0 ? head : ""}<div class="cap-para">${escHtml(b)}</div></div>`;
+          first = false;
+        });
+      });
+    }
     const innerHtml = `
       <div class="header-banner">
         <div style="width: 100%; text-align: center;">
@@ -3949,16 +4011,16 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       <table style="width:100%;">
         <thead>
           <tr>
-            ${selectedCols.map(col => {
+            ${tableCols.map(col => {
               const pct = (((colWeights[col] || 10) / totalColWeight) * 100).toFixed(1);
               return `<th class="${leftCols.includes(col) ? "left" : ""}" style="width: ${pct}%;">${col}</th>`;
             }).join('')}
           </tr>
         </thead>
         <tbody>
-          ${items.map(item => `
+          ${items.map((item, itemIdx) => `
             <tr>
-              ${selectedCols.map(col => {
+              ${tableCols.map(col => {
                 const fn = columnsMap[col];
                 const val = fn ? fn(item) : "";
                 if (col === "Status") {
@@ -3966,12 +4028,15 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   const cls = st.includes("published") ? "status-published" : st.includes("approved") ? "status-approved" : st.includes("progress") ? "status-progress" : "status-todo";
                   return `<td><span class="status-tag ${cls}">${val}</span></td>`;
                 }
-                return `<td class="${leftCols.includes(col) && String(val).trim() !== "-" ? "left" : ""}">${val}</td>`;
+                const fullCap = col === "Caption" ? String((item as any).caption || "").replace(/\r\n/g, "\n").trim() : "";
+                const capAttr = fullCap && fullCap !== "-" && !isLikelyUrl(fullCap) ? ` data-cap="${encodeURIComponent(fullCap)}" data-cap-id="${itemIdx}"` : "";
+                return `<td class="${leftCols.includes(col) && String(val).trim() !== "-" ? "left" : ""}"${capAttr}>${val}</td>`;
               }).join('')}
             </tr>
           `).join('')}
         </tbody>
       </table>
+      ${captionUnitsHtml ? `<div class="cap-section">${captionUnitsHtml}</div>` : ""}
     `;
 
     if (mode === "download") {
@@ -4002,8 +4067,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         `;
         document.body.appendChild(container);
 
-        // Paginate by whole rows: measure live row heights, then rebuild one block per page
-        // (header + table head repeated) so no row is ever cut across a page boundary.
+        // Paginate by whole rows / caption blocks: measure live heights, then rebuild one fixed A4
+        // sheet per page (table head repeated) so nothing is ever cut across a page boundary.
         const mmToPx = (mm: number) => (mm * 96) / 25.4;
         const availH = mmToPx(isPortrait ? 296 : 209) - mmToPx(10) * 2 - 14;
         const wrapperEl = container.querySelector(".cc-pdf-wrapper") as HTMLElement | null;
@@ -4014,28 +4079,42 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         const styleEl = container.querySelector("style");
         if (wrapperEl && bannerEl && statsEl && tableEl && theadEl && styleEl) {
           const rowEls = Array.from(tableEl.querySelectorAll("tbody tr")) as HTMLElement[];
+          const capEls = Array.from(wrapperEl.querySelectorAll(".cap-unit")) as HTMLElement[];
           const blockH = (el: HTMLElement) => {
             const cs = getComputedStyle(el);
             return el.getBoundingClientRect().height + parseFloat(cs.marginTop || "0") + parseFloat(cs.marginBottom || "0");
           };
           const headH = theadEl.getBoundingClientRect().height;
           const rowHs = rowEls.map(r => r.getBoundingClientRect().height);
-          const pageRows: number[][] = [[]];
+          const capHs = capEls.map(blockH);
+          const pageSets: { rows: number[]; caps: number[] }[] = [{ rows: [], caps: [] }];
           let used = blockH(bannerEl) + blockH(statsEl) + headH;
           rowEls.forEach((_, idx) => {
             const h = rowHs[idx] ?? 0;
-            let cur = pageRows[pageRows.length - 1] as number[];
-            if (used + h > availH && cur.length > 0) {
-              cur = [];
-              pageRows.push(cur);
+            let cur = pageSets[pageSets.length - 1] as { rows: number[]; caps: number[] };
+            if (used + h > availH && cur.rows.length > 0) {
+              cur = { rows: [], caps: [] };
+              pageSets.push(cur);
               used = headH;
             }
-            cur.push(idx);
+            cur.rows.push(idx);
             used += h;
+          });
+          capEls.forEach((_, idx) => {
+            const h = capHs[idx] ?? 0;
+            let cur = pageSets[pageSets.length - 1] as { rows: number[]; caps: number[] };
+            const extra = cur.caps.length === 0 ? 14 : 0;
+            if ((idx === 0 || used + extra + h > availH) && (cur.rows.length > 0 || cur.caps.length > 0)) {
+              cur = { rows: [], caps: [] };
+              pageSets.push(cur);
+              used = 0;
+            }
+            used += (cur.caps.length === 0 ? 14 : 0) + h;
+            cur.caps.push(idx);
           });
 
           const frag = document.createDocumentFragment();
-          pageRows.forEach((idxs, pi) => {
+          pageSets.forEach((set, pi) => {
             const w = document.createElement("div");
             w.className = "cc-pdf-wrapper";
             w.style.cssText = `height: ${isPortrait ? 296 : 209}mm; overflow: hidden;`;
@@ -4043,12 +4122,20 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               w.appendChild(bannerEl);
               w.appendChild(statsEl);
             }
-            const t = tableEl.cloneNode(false) as HTMLTableElement;
-            t.appendChild(theadEl.cloneNode(true));
-            const tb = document.createElement("tbody");
-            idxs.forEach(i => tb.appendChild(rowEls[i] as HTMLElement));
-            t.appendChild(tb);
-            w.appendChild(t);
+            if (set.rows.length > 0) {
+              const t = tableEl.cloneNode(false) as HTMLTableElement;
+              t.appendChild(theadEl.cloneNode(true));
+              const tb = document.createElement("tbody");
+              set.rows.forEach(i => tb.appendChild(rowEls[i] as HTMLElement));
+              t.appendChild(tb);
+              w.appendChild(t);
+            }
+            if (set.caps.length > 0) {
+              const sec = document.createElement("div");
+              sec.className = "cap-section";
+              set.caps.forEach(i => sec.appendChild(capEls[i] as HTMLElement));
+              w.appendChild(sec);
+            }
             frag.appendChild(w);
           });
           container.innerHTML = "";
@@ -4056,6 +4143,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           container.appendChild(frag);
         }
 
+        const pageWidthMm = isPortrait ? 210 : 297;
+        const renderedRects: { links: { x: number; y: number; w: number; h: number; url: string }[]; caps: { x: number; y: number; w: number; h: number }[] }[] = [];
         const opt = {
           margin: 0,
           filename: safeFilename,
@@ -4079,6 +4168,26 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               const baseStyle = clonedDoc.createElement("style");
               baseStyle.textContent = pdfCss;
               clonedDoc.head.appendChild(baseStyle);
+
+              // Measure links / caption cells in the very DOM that is drawn into the PDF (the live DOM is a few
+              // mm off), one entry per rendered page, in render order.
+              const renderedPage = (clonedDoc.querySelector(".html2pdf__container .cc-pdf-wrapper") || clonedDoc.querySelector(".cc-pdf-wrapper")) as HTMLElement | null;
+              const entry: { links: { x: number; y: number; w: number; h: number; url: string }[]; caps: { x: number; y: number; w: number; h: number }[] } = { links: [], caps: [] };
+              if (renderedPage) {
+                const rr = renderedPage.getBoundingClientRect();
+                const kk = pageWidthMm / rr.width;
+                renderedPage.querySelectorAll("a").forEach((a) => {
+                  const url = (a as HTMLAnchorElement).href;
+                  Array.from(a.getClientRects()).forEach((r) => {
+                    entry.links.push({ x: (r.left - rr.left) * kk, y: (r.top - rr.top) * kk, w: r.width * kk, h: r.height * kk, url });
+                  });
+                });
+                renderedPage.querySelectorAll("td[data-cap]").forEach((td) => {
+                  const r = td.getBoundingClientRect();
+                  entry.caps.push({ x: (r.left - rr.left) * kk, y: (r.top - rr.top) * kk, w: r.width * kk, h: r.height * kk });
+                });
+              }
+              renderedRects.push(entry);
             }
           },
           jsPDF: { unit: 'mm', format: 'a4', orientation: isPortrait ? 'portrait' : 'landscape' },
@@ -4088,7 +4197,6 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         // One wrapper = one A4 sheet (no slicing, so no row is ever cut). Links are added per page by hand.
         const pageEls = Array.from(container.querySelectorAll(".cc-pdf-wrapper")) as HTMLElement[];
         const pageLinks: { page: number; x: number; y: number; w: number; h: number; url: string }[] = [];
-        const pageWidthMm = isPortrait ? 210 : 297;
         pageEls.forEach((pageEl, pi) => {
           const pr = pageEl.getBoundingClientRect();
           const k = pageWidthMm / pr.width;
@@ -4096,6 +4204,64 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             const url = (a as HTMLAnchorElement).href;
             Array.from(a.getClientRects()).forEach((r) => {
               pageLinks.push({ page: pi + 1, x: (r.left - pr.left) * k, y: (r.top - pr.top) * k, w: r.width * k, h: r.height * k, url });
+            });
+          });
+        });
+
+        // The page is an image, so add an invisible text layer on top of each caption: makes it selectable / copyable
+        const textLayers: { page: number; x: number; y: number; w: number; px: number; text: string }[] = [];
+        pageEls.forEach((pageEl, pi) => {
+          const pr = pageEl.getBoundingClientRect();
+          const k = pageWidthMm / pr.width;
+          pageEl.querySelectorAll(".cap-para").forEach((el) => {
+            const r = el.getBoundingClientRect();
+            const px = parseFloat(getComputedStyle(el).fontSize || "10");
+            textLayers.push({
+              page: pi + 1,
+              x: (r.left - pr.left + 10) * k,
+              y: (r.top - pr.top + 8) * k,
+              w: (r.width - 20) * k,
+              px,
+              text: (el.textContent || "")
+                .replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"')
+                .replace(/[\u2013\u2014]/g, "-").replace(/\u2026/g, "...")
+                .replace(/[^\x09\x0A\x20-\xFF]/g, ""),
+            });
+          });
+        });
+
+        // Full caption: invisible text under the short preview (select + copy) and a note (hover tooltip)
+        const capTargets: Record<string, { page: number; y: number }> = {};
+        pageEls.forEach((pageEl, pi) => {
+          const pr = pageEl.getBoundingClientRect();
+          const k = pageWidthMm / pr.width;
+          pageEl.querySelectorAll(".cap-unit[data-cap-id]").forEach((u) => {
+            capTargets[u.getAttribute("data-cap-id") || ""] = { page: pi + 1, y: (u.getBoundingClientRect().top - pr.top) * k };
+          });
+        });
+        const capLayers: { raw: string; id: string; tip: string; page: number; x: number; y: number; w: number; h: number; text: string }[] = [];
+        pageEls.forEach((pageEl, pi) => {
+          const pr = pageEl.getBoundingClientRect();
+          const k = pageWidthMm / pr.width;
+          pageEl.querySelectorAll("td[data-cap]").forEach((td) => {
+            const r = td.getBoundingClientRect();
+            const raw = decodeURIComponent(td.getAttribute("data-cap") || "");
+            // Tooltip text: keep every character (emoji / Gujarati). Acrobat wraps the box itself and caps its
+            // height, so no manual wrapping and no blank lines (they only waste visible lines).
+            const tip = raw.replace(/[ \t]+\n/g, "\n").replace(/\n{2,}/g, "\n");
+            capLayers.push({
+              raw,
+              id: td.getAttribute("data-cap-id") || "",
+              tip,
+              page: pi + 1,
+              x: (r.left - pr.left) * k,
+              y: (r.top - pr.top) * k,
+              w: r.width * k,
+              h: r.height * k,
+              text: raw
+                .replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"')
+                .replace(/[\u2013\u2014]/g, "-").replace(/\u2026/g, "...")
+                .replace(/[^\x09\x0A\x20-\xFF]/g, ""),
             });
           });
         });
@@ -4113,10 +4279,60 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             .toPdf();
         }
         worker = worker.get("pdf").then((pdf: any) => {
-          pageLinks.forEach((l) => {
-            pdf.setPage(l.page);
-            pdf.link(l.x, l.y, l.w, l.h, { url: l.url });
+          renderedRects.forEach((entry, pi) => {
+            pdf.setPage(pi + 1);
+            entry.links.forEach((l) => pdf.link(l.x, l.y, l.w, l.h, { url: l.url }));
           });
+          const capSeen: Record<number, number> = {};
+          capLayers.forEach((c) => {
+            const n = capSeen[c.page] ?? 0;
+            capSeen[c.page] = n + 1;
+            const r = renderedRects[c.page - 1]?.caps[n];
+            if (r) {
+              c.x = r.x;
+              c.y = r.y;
+              c.w = r.w;
+              c.h = r.h;
+            }
+          });
+          try {
+            capLayers.forEach((c, ci) => {
+              pdf.setPage(c.page);
+              // Full caption as invisible text (Ctrl+A, Ctrl+C in the viewer copies it)
+              pdf.setFontSize(1);
+              pdf.setLineHeightFactor(1.1);
+              pdf.text(c.text, c.x + 1, c.y + 1, { maxWidth: Math.max(c.w - 2, 5), baseline: "top", renderingMode: "invisible" });
+              // Invisible form-field over the whole cell: hovering anywhere on the caption shows the full text as a tooltip (no icon)
+              const field = new pdf.AcroFormPushButton();
+              field.fieldName = `cap_${ci}`;
+              field.Rect = [c.x, c.y, c.w, c.h];
+              field.hasAppearanceStream = false;
+              field.borderWidth = 0;
+              field.F = 4;
+              const baseKeys = field.getKeyValueListForStream;
+              field.getKeyValueListForStream = function () {
+                const list = baseKeys.call(this);
+                // UTF-16BE hex string so emoji / non-Latin letters show in the tooltip
+                let hex = "FEFF";
+                for (let i = 0; i < c.tip.length; i++) hex += c.tip.charCodeAt(i).toString(16).padStart(4, "0");
+                list.push({ key: "TU", value: `<${hex}>` });
+                return list;
+              };
+              pdf.addField(field);
+            });
+          } catch (e) {
+            console.warn("Caption copy/tooltip layer skipped:", e);
+          }
+          try {
+            textLayers.forEach((t) => {
+              pdf.setPage(t.page);
+              pdf.setFontSize(t.px * 0.75);
+              pdf.setLineHeightFactor(1.6);
+              pdf.text(t.text, t.x, t.y, { maxWidth: t.w, baseline: "top", renderingMode: "invisible" });
+            });
+          } catch (e) {
+            console.warn("Caption text layer skipped:", e);
+          }
           pdf.setPage(pageEls.length);
         });
         await worker.save();
