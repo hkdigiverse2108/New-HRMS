@@ -1,287 +1,289 @@
-from fastapi import FastAPI
-from contextlib import asynccontextmanager
-from app.redis.service import redis_client
-from app.database.db import connect_to_mongo, close_mongo_connection, db
-from app.controllers.employee import router as employee_router
-from app.controllers.auth import router as auth_router
-from app.controllers.department import router as department_router
-from app.controllers.recycle_bin import router as recycle_bin_router
-from app.controllers.invoice_service import router as invoice_service_router
-from app.controllers.sub_department import router as sub_department_router
-from app.controllers.designation import router as designation_router
-from app.controllers.access_control import router as access_control_router
-from app.controllers.image import router as image_router, upload_router
-from app.controllers.attendance import router as attendance_router
-from app.controllers.leave import router as leave_router
-from app.controllers.penalty import router as penalty_router
-from app.controllers.task import router as task_router
-from app.controllers.client import router as client_router
-from app.controllers.project import router as project_router
-from app.controllers.content import router as content_router
-from app.controllers.activity import router as activity_router
-from app.controllers.research import router as research_router
-from app.controllers.remark import router as remark_router
-from app.controllers.notification import router as notification_router
-from app.controllers.push_notifications import router as push_notifications_router
-from app.controllers.daily_progress import router as daily_progress_router
-from app.controllers.chat import router as chat_router
-from app.controllers.dashboard import router as dashboard_router
-from app.controllers.schedule import router as schedule_router
-from app.controllers.booking import booking_router, public_booking_router
-from app.controllers.preset import router as preset_router
-from app.controllers.invoice import router as invoice_router
-from app.controllers.bank_account import router as bank_account_router
-from app.controllers.transaction import router as transaction_router
-from app.controllers.other_transaction import router as other_transaction_router
-from app.controllers.finance_lock import router as finance_lock_router
-from app.controllers.otp_copy import router as otp_copy_router
-from app.controllers.quotation import router as quotation_router
-from app.controllers.settings import router as settings_router
-from app.controllers.payroll import router as payroll_router
-from app.controllers.salary import router as salary_router
-from app.controllers.bonus_deduction import router as bonus_deduction_router
-from app.controllers.overtime import router as overtime_router
-from app.controllers.work_timeline import router as work_timeline_router
-from app.controllers.sales import router as sales_router
-from app.controllers.document_type import router as document_type_router
-from app.controllers.document_template import router as document_template_router
-from app.controllers.generated_document import router as generated_document_router
-from app.controllers.submitted_document import router as submitted_document_router
-from app.controllers.letter_request import router as letter_request_router
-from app.controllers.gallery import router as gallery_router
-from app.controllers.resource_category import router as resource_category_router
-from app.controllers.resource_inventory import router as resource_inventory_router
-from app.controllers.seating import router as seating_router, global_seating_router
-from app.controllers.hiring import router as hiring_router
-from app.controllers.interview import router as interview_router
-from app.controllers.social_webhook import router as social_webhook_router
-from app.controllers.social import router as social_router
-from app.controllers.election import router as election_router
-from app.controllers.eom import router as eom_router
-from app.models.employee import setup_employee_indexes
-from app.models.department import setup_department_indexes
-from app.models.sub_department import setup_sub_department_indexes
-from app.models.designation import setup_designation_indexes
-from app.models.penalty import setup_penalty_indexes
-from app.models.social import setup_social_indexes
-from app.database.default_presets import init_database_presets_and_admin
-from app.database.seed_social_data import seed_social_defaults
-from app.services.social.scheduler import SocialScheduler
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup events
-    await connect_to_mongo()
-    try:
-        await setup_employee_indexes(db.db)
-        await setup_department_indexes(db.db)
-        await setup_sub_department_indexes(db.db)
-        await setup_designation_indexes(db.db)
-        await setup_penalty_indexes(db.db)
-        await setup_social_indexes(db.db)
-        await init_database_presets_and_admin(db.db)
-        await seed_social_defaults(db.db)
-        SocialScheduler.start_scheduler()
-        # Automated Disk and Database Uploads Migration (images/ -> uploads/)
-        try:
-            from app.database.migration_uploads import run_uploads_and_disk_migration
-            await run_uploads_and_disk_migration(db.db)
-        except Exception as me:
-            print(f"[STARTUP WARNING] Uploads migration notice: {me}")
-        # Hot-path indexes for dashboard ONE-API (idempotent)
-        try:
-            await db.db["tasks"].create_index([("is_deleted", 1), ("status", 1)])
-            await db.db["tasks"].create_index([("is_deleted", 1), ("due_date", 1)])
-            await db.db["tasks"].create_index([("assigned_to", 1), ("is_deleted", 1)])
-            await db.db["projects"].create_index([("is_deleted", 1)])
-            await db.db["projects"].create_index([("general.status", 1)])
-            await db.db["content_items"].create_index([("project_id", 1), ("is_deleted", 1), ("schedule_date", 1)])
-            await db.db["content_items"].create_index([("project_id", 1), ("schedule_date", 1)])
-            await db.db["content_items"].create_index([("project_id", 1), ("content_type", 1)])
-            await db.db["content_settings"].create_index([("project_id", 1)], unique=True)
-            await db.db["notifications"].create_index([("recipient_id", 1), ("is_read", 1), ("created_at", -1)])
-            await db.db["remarks"].create_index([("submitted_by_id", 1)])
-        except Exception as ie:
-            print(f"[STARTUP WARNING] dashboard index notice: {ie}")
-    except Exception as e:
-        print(f"[STARTUP WARNING] Database startup initialization notice: {e}")
-    yield
-    # Shutdown events
-    SocialScheduler.stop_scheduler()
-    await close_mongo_connection()
-
-from fastapi.middleware.cors import CORSMiddleware
-
-app = FastAPI(title="New-HRMS", lifespan=lifespan, redirect_slashes=False)
-
-# Enable CORS for all origins (including file://, null, and localhost)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origin_regex=r".*",
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-from starlette.types import ASGIApp, Scope, Receive, Send
-
-class ImageRouteMiddleware:
-    """Redirects API endpoints from /images/* prefix so StaticFiles mount doesn't intercept them with 405."""
-    def __init__(self, app: ASGIApp):
-        self.app = app
-
-    async def __call__(self, scope: Scope, receive: Receive, send: Send):
-        if scope["type"] == "http":
-            path = scope.get("path", "")
-            if path in ("/images/upload", "/images/upload/", "/uploads/upload", "/uploads/upload/"):
-                scope["path"] = "/upload"
-            elif path in ("/images/list", "/images/list/", "/uploads/list", "/uploads/list/"):
-                scope["path"] = "/api/images/list"
-            elif path in ("/images/delete", "/images/delete/", "/uploads/delete", "/uploads/delete/"):
-                scope["path"] = "/api/images/delete"
-        await self.app(scope, receive, send)
-
-app.add_middleware(ImageRouteMiddleware)
-
-from fastapi.staticfiles import StaticFiles
-from app.config import ROOT_DIR
-
-# Root unified uploads storage folder (single folder architecture)
-UPLOADS_DIR = ROOT_DIR / "uploads"
-UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-IMAGES_DIR = UPLOADS_DIR # Unified single storage folder
-
-# Ensure standard subfolders exist
-for _sub in ("projects", "clients", "employee", "chat_documents", "invoices", "quotations", "settings", "documents", "common"):
-    (UPLOADS_DIR / _sub).mkdir(parents=True, exist_ok=True)
-
-# Register API routes FIRST so FastAPI matches endpoint routes before static file mounts
-app.include_router(auth_router)
-app.include_router(employee_router)
-app.include_router(department_router)
-app.include_router(recycle_bin_router)
-app.include_router(invoice_service_router)
-app.include_router(sub_department_router)
-app.include_router(designation_router)
-app.include_router(access_control_router)
-app.include_router(image_router)
-app.include_router(upload_router)
-app.include_router(attendance_router)
-app.include_router(leave_router)
-app.include_router(penalty_router)
-app.include_router(task_router)
-app.include_router(client_router)
-app.include_router(project_router)
-app.include_router(content_router)
-app.include_router(activity_router)
-app.include_router(research_router)
-app.include_router(remark_router)
-app.include_router(notification_router)
-app.include_router(push_notifications_router)
-app.include_router(daily_progress_router)
-app.include_router(chat_router)
-app.include_router(dashboard_router)
-app.include_router(schedule_router)
-app.include_router(booking_router)
-app.include_router(public_booking_router)
-app.include_router(preset_router)
-app.include_router(invoice_router)
-app.include_router(bank_account_router)
-app.include_router(transaction_router)
-app.include_router(other_transaction_router)
-app.include_router(finance_lock_router)
-app.include_router(otp_copy_router)
-app.include_router(quotation_router)
-app.include_router(settings_router)
-app.include_router(payroll_router)
-app.include_router(salary_router)
-app.include_router(bonus_deduction_router)
-app.include_router(overtime_router)
-app.include_router(work_timeline_router)
-app.include_router(sales_router)
-app.include_router(document_type_router)
-app.include_router(document_template_router)
-app.include_router(generated_document_router)
-app.include_router(submitted_document_router)
-app.include_router(letter_request_router)
-app.include_router(gallery_router)
-app.include_router(resource_category_router)
-app.include_router(resource_inventory_router)
-app.include_router(seating_router)
-app.include_router(global_seating_router)
-app.include_router(hiring_router)
-app.include_router(interview_router)
-app.include_router(social_webhook_router)
-app.include_router(social_router)
-app.include_router(election_router)
-app.include_router(eom_router)
-
-from starlette.responses import Response
-from starlette.exceptions import HTTPException as StarletteHTTPException
-
-class SafeStaticFiles(StaticFiles):
-    """Serves static files; if an image is missing, serves a clean SVG placeholder with 200 OK to avoid 404 console spam."""
-    async def get_response(self, path: str, scope):
-        try:
-            response = await super().get_response(path, scope)
-            if response.status_code == 404:
-                raise StarletteHTTPException(status_code=404)
-            return response
-        except (StarletteHTTPException, Exception) as exc:
-            status_code = getattr(exc, "status_code", None)
-            if status_code == 404 or isinstance(exc, FileNotFoundError):
-                svg = (
-                    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">'
-                    '<rect width="100" height="100" rx="20" fill="#6366f1"/>'
-                    '<text x="50" y="55" font-family="sans-serif" font-size="36" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="middle">HR</text>'
-                    '</svg>'
-                )
-                return Response(content=svg, media_type="image/svg+xml", status_code=200)
-            raise
-
-# Mount static image & uploads paths AFTER API routes
-app.mount("/images", SafeStaticFiles(directory=str(IMAGES_DIR)), name="images")
-app.mount("/uploads", SafeStaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
-
-@app.get("/")
-async def root():
-    return {"message": "Welcome to New-HRMS API"}
-
-@app.get("/clear-cache")
-async def clear_all_cache():
-    """Flushes Redis cache and in-memory cache directly via API"""
-    try:
-        from app.redis.service import clear_pattern, _memory_cache
-        _memory_cache.clear()
-        await clear_pattern("projects:*")
-        await clear_pattern("clients:*")
-        await clear_pattern("tasks:*")
-        await clear_pattern("*")
-        return {"status": "success", "message": "All Redis and in-memory cache cleared successfully!"}
-    except Exception as e:
-        return {"status": "error", "message": f"Failed to clear cache: {str(e)}"}
-
-@app.get("/test-redis")
-async def test_redis():
-    try:
-        await redis_client.set("test_key", "Redis is successfully connected!")
-        value = await redis_client.get("test_key")
-        return {"status": "success", "message": value}
-    except Exception as e:
-        return {"status": "error", "message": f"Failed to connect to Redis: {str(e)}"}
-
-@app.get("/test-mongo")
-async def test_mongo():
-    try:
-        # Ping the database to check connection
-        await db.client.admin.command('ping')
-        return {"status": "success", "message": "MongoDB is successfully connected!"}
-    except Exception as e:
-        return {"status": "error", "message": f"Failed to connect to MongoDB: {str(e)}"}
-
-if __name__ == "__main__":
-    import uvicorn
-    from app.config import settings
-    uvicorn.run("app.main:app", host="0.0.0.0", port=settings.PORT, reload=True)
-
-# reload trigger
+import asyncio
+from fastapi import FastAPI
+from contextlib import asynccontextmanager
+from app.redis.service import redis_client
+from app.database.db import connect_to_mongo, close_mongo_connection, db
+from app.controllers.employee import router as employee_router
+from app.controllers.auth import router as auth_router
+from app.controllers.department import router as department_router
+from app.controllers.recycle_bin import router as recycle_bin_router
+from app.controllers.invoice_service import router as invoice_service_router
+from app.controllers.sub_department import router as sub_department_router
+from app.controllers.designation import router as designation_router
+from app.controllers.access_control import router as access_control_router
+from app.controllers.image import router as image_router, upload_router
+from app.controllers.attendance import router as attendance_router
+from app.controllers.leave import router as leave_router
+from app.controllers.penalty import router as penalty_router
+from app.controllers.task import router as task_router
+from app.controllers.client import router as client_router
+from app.controllers.project import router as project_router
+from app.controllers.content import router as content_router
+from app.controllers.activity import router as activity_router
+from app.controllers.research import router as research_router
+from app.controllers.remark import router as remark_router
+from app.controllers.notification import router as notification_router
+from app.controllers.push_notifications import router as push_notifications_router
+from app.controllers.daily_progress import router as daily_progress_router
+from app.controllers.chat import router as chat_router
+from app.controllers.dashboard import router as dashboard_router
+from app.controllers.schedule import router as schedule_router
+from app.controllers.booking import booking_router, public_booking_router
+from app.controllers.preset import router as preset_router
+from app.controllers.invoice import router as invoice_router
+from app.controllers.bank_account import router as bank_account_router
+from app.controllers.transaction import router as transaction_router
+from app.controllers.other_transaction import router as other_transaction_router
+from app.controllers.finance_lock import router as finance_lock_router
+from app.controllers.otp_copy import router as otp_copy_router
+from app.controllers.quotation import router as quotation_router
+from app.controllers.settings import router as settings_router
+from app.controllers.payroll import router as payroll_router
+from app.controllers.salary import router as salary_router
+from app.controllers.bonus_deduction import router as bonus_deduction_router
+from app.controllers.overtime import router as overtime_router
+from app.controllers.work_timeline import router as work_timeline_router
+from app.controllers.sales import router as sales_router
+from app.controllers.document_type import router as document_type_router
+from app.controllers.document_template import router as document_template_router
+from app.controllers.generated_document import router as generated_document_router
+from app.controllers.submitted_document import router as submitted_document_router
+from app.controllers.letter_request import router as letter_request_router
+from app.controllers.gallery import router as gallery_router
+from app.controllers.resource_category import router as resource_category_router
+from app.controllers.resource_inventory import router as resource_inventory_router
+from app.controllers.seating import router as seating_router, global_seating_router
+from app.controllers.hiring import router as hiring_router
+from app.controllers.interview import router as interview_router
+from app.controllers.social_webhook import router as social_webhook_router
+from app.controllers.social import router as social_router
+from app.controllers.election import router as election_router
+from app.controllers.eom import router as eom_router
+from app.models.employee import setup_employee_indexes
+from app.models.department import setup_department_indexes
+from app.models.sub_department import setup_sub_department_indexes
+from app.models.designation import setup_designation_indexes
+from app.models.penalty import setup_penalty_indexes
+from app.models.social import setup_social_indexes
+from app.database.default_presets import init_database_presets_and_admin
+from app.database.seed_social_data import seed_social_defaults
+from app.services.social.scheduler import SocialScheduler
+
+async def _init_background_indexes(database):
+    """Run non-blocking index verification concurrently in background so server starts instantly."""
+    try:
+        await asyncio.gather(
+            setup_employee_indexes(database),
+            setup_department_indexes(database),
+            setup_sub_department_indexes(database),
+            setup_designation_indexes(database),
+            setup_penalty_indexes(database),
+            setup_social_indexes(database),
+            database["tasks"].create_index([("is_deleted", 1), ("status", 1)]),
+            database["tasks"].create_index([("is_deleted", 1), ("due_date", 1)]),
+            database["tasks"].create_index([("assigned_to", 1), ("is_deleted", 1)]),
+            database["projects"].create_index([("is_deleted", 1)]),
+            database["projects"].create_index([("general.status", 1)]),
+            database["content_items"].create_index([("project_id", 1), ("is_deleted", 1), ("schedule_date", 1)]),
+            database["content_items"].create_index([("project_id", 1), ("schedule_date", 1)]),
+            database["content_items"].create_index([("project_id", 1), ("content_type", 1)]),
+            database["content_settings"].create_index([("project_id", 1)], unique=True),
+            database["notifications"].create_index([("recipient_id", 1), ("is_read", 1), ("created_at", -1)]),
+            database["remarks"].create_index([("submitted_by_id", 1)]),
+            return_exceptions=True
+        )
+    except Exception as ie:
+        pass
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup events: connect to database, seed presets, and start background workers
+    await connect_to_mongo()
+    try:
+        await init_database_presets_and_admin(db.db)
+        await seed_social_defaults(db.db)
+        SocialScheduler.start_scheduler()
+        # Launch indexes non-blocking in background so HTTP server is READY immediately (< 2s)
+        asyncio.create_task(_init_background_indexes(db.db))
+    except Exception as e:
+        print(f"[STARTUP WARNING] Database startup initialization notice: {e}")
+    yield
+    # Shutdown events
+    SocialScheduler.stop_scheduler()
+    await close_mongo_connection()
+
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI(title="New-HRMS", lifespan=lifespan, redirect_slashes=False)
+
+# Enable CORS for all origins (including file://, null, and localhost)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r".*",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+from starlette.types import ASGIApp, Scope, Receive, Send
+
+class ImageRouteMiddleware:
+    """Redirects API endpoints from /images/* prefix so StaticFiles mount doesn't intercept them with 405."""
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send):
+        if scope["type"] == "http":
+            path = scope.get("path", "")
+            if path in ("/images/upload", "/images/upload/", "/uploads/upload", "/uploads/upload/"):
+                scope["path"] = "/upload"
+            elif path in ("/images/list", "/images/list/", "/uploads/list", "/uploads/list/"):
+                scope["path"] = "/api/images/list"
+            elif path in ("/images/delete", "/images/delete/", "/uploads/delete", "/uploads/delete/"):
+                scope["path"] = "/api/images/delete"
+        await self.app(scope, receive, send)
+
+app.add_middleware(ImageRouteMiddleware)
+
+from fastapi.staticfiles import StaticFiles
+from app.config import ROOT_DIR
+
+# Root unified uploads storage folder (single folder architecture)
+UPLOADS_DIR = ROOT_DIR / "uploads"
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+IMAGES_DIR = UPLOADS_DIR # Unified single storage folder
+
+# Ensure standard subfolders exist
+for _sub in ("projects", "clients", "employee", "chat_documents", "invoices", "quotations", "settings", "documents", "common"):
+    (UPLOADS_DIR / _sub).mkdir(parents=True, exist_ok=True)
+
+# Register API routes FIRST so FastAPI matches endpoint routes before static file mounts
+app.include_router(auth_router)
+app.include_router(employee_router)
+app.include_router(department_router)
+app.include_router(recycle_bin_router)
+app.include_router(invoice_service_router)
+app.include_router(sub_department_router)
+app.include_router(designation_router)
+app.include_router(access_control_router)
+app.include_router(image_router)
+app.include_router(upload_router)
+app.include_router(attendance_router)
+app.include_router(leave_router)
+app.include_router(penalty_router)
+app.include_router(task_router)
+app.include_router(client_router)
+app.include_router(project_router)
+app.include_router(content_router)
+app.include_router(activity_router)
+app.include_router(research_router)
+app.include_router(remark_router)
+app.include_router(notification_router)
+app.include_router(push_notifications_router)
+app.include_router(daily_progress_router)
+app.include_router(chat_router)
+app.include_router(dashboard_router)
+app.include_router(schedule_router)
+app.include_router(booking_router)
+app.include_router(public_booking_router)
+app.include_router(preset_router)
+app.include_router(invoice_router)
+app.include_router(bank_account_router)
+app.include_router(transaction_router)
+app.include_router(other_transaction_router)
+app.include_router(finance_lock_router)
+app.include_router(otp_copy_router)
+app.include_router(quotation_router)
+app.include_router(settings_router)
+app.include_router(payroll_router)
+app.include_router(salary_router)
+app.include_router(bonus_deduction_router)
+app.include_router(overtime_router)
+app.include_router(work_timeline_router)
+app.include_router(sales_router)
+app.include_router(document_type_router)
+app.include_router(document_template_router)
+app.include_router(generated_document_router)
+app.include_router(submitted_document_router)
+app.include_router(letter_request_router)
+app.include_router(gallery_router)
+app.include_router(resource_category_router)
+app.include_router(resource_inventory_router)
+app.include_router(seating_router)
+app.include_router(global_seating_router)
+app.include_router(hiring_router)
+app.include_router(interview_router)
+app.include_router(social_webhook_router)
+app.include_router(social_router)
+app.include_router(election_router)
+app.include_router(eom_router)
+
+from starlette.responses import Response
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+class SafeStaticFiles(StaticFiles):
+    """Serves static files; if an image is missing, serves a clean SVG placeholder with 200 OK to avoid 404 console spam."""
+    async def get_response(self, path: str, scope):
+        try:
+            response = await super().get_response(path, scope)
+            if response.status_code == 404:
+                raise StarletteHTTPException(status_code=404)
+            return response
+        except (StarletteHTTPException, Exception) as exc:
+            status_code = getattr(exc, "status_code", None)
+            if status_code == 404 or isinstance(exc, FileNotFoundError):
+                svg = (
+                    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">'
+                    '<rect width="100" height="100" rx="20" fill="#6366f1"/>'
+                    '<text x="50" y="55" font-family="sans-serif" font-size="36" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="middle">HR</text>'
+                    '</svg>'
+                )
+                return Response(content=svg, media_type="image/svg+xml", status_code=200)
+            raise
+
+# Mount static image & uploads paths AFTER API routes
+app.mount("/images", SafeStaticFiles(directory=str(IMAGES_DIR)), name="images")
+app.mount("/uploads", SafeStaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
+
+@app.get("/")
+async def root():
+    return {"message": "Welcome to New-HRMS API"}
+
+@app.get("/clear-cache")
+async def clear_all_cache():
+    """Flushes Redis cache and in-memory cache directly via API"""
+    try:
+        from app.redis.service import clear_pattern, _memory_cache
+        _memory_cache.clear()
+        await clear_pattern("projects:*")
+        await clear_pattern("clients:*")
+        await clear_pattern("tasks:*")
+        await clear_pattern("*")
+        return {"status": "success", "message": "All Redis and in-memory cache cleared successfully!"}
+    except Exception as e:
+        return {"status": "error", "message": f"Failed to clear cache: {str(e)}"}
+
+@app.get("/test-redis")
+async def test_redis():
+    try:
+        await redis_client.set("test_key", "Redis is successfully connected!")
+        value = await redis_client.get("test_key")
+        return {"status": "success", "message": value}
+    except Exception as e:
+        return {"status": "error", "message": f"Failed to connect to Redis: {str(e)}"}
+
+@app.get("/test-mongo")
+async def test_mongo():
+    try:
+        # Ping the database to check connection
+        await db.client.admin.command('ping')
+        return {"status": "success", "message": "MongoDB is successfully connected!"}
+    except Exception as e:
+        return {"status": "error", "message": f"Failed to connect to MongoDB: {str(e)}"}
+
+if __name__ == "__main__":
+    import uvicorn
+    from app.config import settings
+    uvicorn.run("app.main:app", host="0.0.0.0", port=settings.PORT, reload=True)
+
+# reload trigger

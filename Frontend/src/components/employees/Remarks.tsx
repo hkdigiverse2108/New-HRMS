@@ -6,7 +6,10 @@ import { cn, formatDate } from "@/lib/utils";
 import { SearchableSelect } from "@/components/ui/select";
 import { api } from "@/lib/api";
 import { useAuth } from "@/components/auth/AuthContext";
+import { useModulePermissions } from "@/hooks/useModulePermissions";
 import { useEmployeesContext } from "@/components/employees/EmployeeContext";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
+import { getAvatarUrl, handleAvatarError } from "@/lib/config";
 
 interface RemarkItem {
   id: string;
@@ -69,7 +72,8 @@ export function Remarks() {
   const myName = String((user as any)?.name || "Employee");
   const myDept = String((user as any)?.department || "");
   const roleRaw = String((user as any)?.role || (user as any)?.work_details?.system_role || "").toLowerCase();
-  const isAdmin = ["admin", "super admin", "superadmin"].includes(roleRaw) || myId === "default-admin-id";
+  const { canCreate, canUpdate, canDelete, isAdmin: permAdmin } = useModulePermissions("/remarks");
+  const isAdmin = permAdmin || ["admin", "super admin", "superadmin"].includes(roleRaw) || myId === "default-admin-id";
 
   const [remarks, setRemarks] = useState<RemarkItem[]>([]);
   const [overview, setOverview] = useState({ total_employees: 0, submitted_count: 0, submission_rate_percent: 0, average_satisfaction: 0 });
@@ -84,10 +88,19 @@ export function Remarks() {
   const [isNewOpen, setIsNewOpen] = useState(false);
   const [formEmpId, setFormEmpId] = useState("");
   const [newScore, setNewScore] = useState(5);
-  const [showName, setShowName] = useState(false);
+  const [showName, setShowName] = useState(true);
+  const [feedbackText, setFeedbackText] = useState("");
   const [customAnswers, setCustomAnswers] = useState<Record<string, string>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Delete confirmation modal state
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    isOpen: boolean;
+    id: string | null;
+    name?: string;
+    isQuestion?: boolean;
+  }>({ isOpen: false, id: null });
 
   // Admin manage questions
   const [isManageQOpen, setIsManageQOpen] = useState(false);
@@ -193,15 +206,24 @@ export function Remarks() {
   };
 
   const openNew = () => {
+    if (!canCreate) {
+      toast.error("You do not have permission to create remarks.");
+      return;
+    }
     setEditingId(null);
     setFormEmpId(isAdmin ? "" : myId);
     setNewScore(5);
-    setShowName(false);
+    setShowName(true);
+    setFeedbackText("");
     setCustomAnswers({});
     setIsNewOpen(true);
   };
 
   const openEdit = (r: RemarkItem) => {
+    if (!canUpdate) {
+      toast.error("You do not have permission to edit remarks.");
+      return;
+    }
     setEditingId(r.id);
     setFormEmpId(r.employee_id);
     setNewScore(Math.max(1, Math.min(5, r.rating || 5)));
@@ -209,18 +231,42 @@ export function Remarks() {
     const ans: Record<string, string> = {};
     Object.entries(r.custom_answers || {}).forEach(([k, v]) => { ans[k] = String(v ?? ""); });
     setCustomAnswers(ans);
+    setFeedbackText(
+      r.custom_answers?.["Feedback"] ||
+      r.custom_answers?.["feedback"] ||
+      r.custom_answers?.["Remark"] ||
+      r.custom_answers?.["remark"] ||
+      ""
+    );
     setIsNewOpen(true);
   };
 
   const handleSubmitRemark = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (editingId && !canUpdate) {
+      toast.error("You do not have permission to edit remarks.");
+      return;
+    }
+    if (!editingId && !canCreate) {
+      toast.error("You do not have permission to create remarks.");
+      return;
+    }
     const empId = isAdmin ? formEmpId : myId;
     if (!empId) {
       toast.error("Please select an employee.");
       return;
     }
+    if (!feedbackText.trim() && Object.values(customAnswers).every(v => !v.trim())) {
+      toast.error("Please enter your remark / feedback.");
+      return;
+    }
     for (const q of questions) {
-      if (q.required && !(customAnswers[q.id] ?? "").trim() && !(customAnswers[q.label] ?? "").trim()) {
+      if (
+        !["feedback", "remark"].includes(q.label.toLowerCase()) &&
+        q.required &&
+        !(customAnswers[q.id] ?? "").trim() &&
+        !(customAnswers[q.label] ?? "").trim()
+      ) {
         toast.error(`"${q.label}" is compulsory.`);
         return;
       }
@@ -228,12 +274,16 @@ export function Remarks() {
     const empRec = employees.find(x => String(x.id) === String(empId));
     setIsSaving(true);
     try {
+      const mergedAnswers: Record<string, string> = { ...customAnswers };
+      if (feedbackText.trim()) {
+        mergedAnswers["Feedback"] = feedbackText.trim();
+      }
       const body: any = {
         employee_id: String(empId),
         department: empRec?.department || myDept || undefined,
         rating: newScore,
         show_name: showName,
-        custom_answers: customAnswers,
+        custom_answers: mergedAnswers,
       };
       if (editingId) {
         await api.put(`/remarks/${editingId}`, body);
@@ -244,6 +294,7 @@ export function Remarks() {
       }
       setIsNewOpen(false);
       setEditingId(null);
+      setFeedbackText("");
       setCustomAnswers({});
       fetchRemarks(showMissing);
       fetchOverview();
@@ -254,15 +305,49 @@ export function Remarks() {
     }
   };
 
-  const handleDeleteRemark = async (id: string) => {
-    if (!window.confirm("Aa remark delete karvi?")) return;
-    try {
-      await api.delete(`/remarks/${id}`, { showErrorToast: false });
-      toast.success("Remark deleted");
-      fetchRemarks(showMissing);
-      fetchOverview();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to delete remark");
+  const openDeleteRemarkConfirm = (id: string, name?: string) => {
+    if (!canDelete) {
+      toast.error("You do not have permission to delete remarks.");
+      return;
+    }
+    setDeleteConfirm({
+      isOpen: true,
+      id,
+      name: name ? `feedback from ${name}` : "this feedback",
+      isQuestion: false,
+    });
+  };
+
+  const openDeleteQuestionConfirm = (id: string, label?: string) => {
+    setDeleteConfirm({
+      isOpen: true,
+      id,
+      name: label ? `question "${label}"` : "this question",
+      isQuestion: true,
+    });
+  };
+
+  const handleExecuteDelete = async () => {
+    if (!deleteConfirm.id) return;
+    const { id, isQuestion } = deleteConfirm;
+    setDeleteConfirm({ isOpen: false, id: null });
+    if (isQuestion) {
+      try {
+        await api.delete(`/remarks/questions/${id}`, { showErrorToast: false });
+        fetchQuestions();
+        toast.success("Question deleted");
+      } catch (err: any) {
+        toast.error(err?.message || "Failed to delete question");
+      }
+    } else {
+      try {
+        await api.delete(`/remarks/${id}`, { showErrorToast: false });
+        toast.success("Remark deleted");
+        fetchRemarks(showMissing);
+        fetchOverview();
+      } catch (err: any) {
+        toast.error(err?.message || "Failed to delete remark");
+      }
     }
   };
 
@@ -282,17 +367,6 @@ export function Remarks() {
       toast.success("Question added — employees ne deshse");
     } catch (err: any) {
       toast.error(err?.message || "Failed to add question");
-    }
-  };
-
-  const removeQuestion = async (id: string) => {
-    if (!window.confirm("Aa question delete karvi?")) return;
-    try {
-      await api.delete(`/remarks/questions/${id}`, { showErrorToast: false });
-      fetchQuestions();
-      toast.success("Question deleted");
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to delete question");
     }
   };
 
@@ -609,15 +683,17 @@ export function Remarks() {
             )}
 
             <Dialog open={isNewOpen} onOpenChange={(open) => { setIsNewOpen(open); if (!open) setEditingId(null); }}>
-              <DialogTrigger asChild>
-                <button
-                  onClick={openNew}
-                  className="px-4 py-2.5 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 bg-primary hover:bg-primary text-primary-foreground font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm shrink-0"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span className="hidden sm:inline">{isAdmin ? "Add Feedback" : "Submit Remark"}</span>
-                </button>
-              </DialogTrigger>
+              {canCreate && (
+                <DialogTrigger asChild>
+                  <button
+                    onClick={openNew}
+                    className="px-4 py-2.5 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 bg-primary hover:bg-primary text-primary-foreground font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm shrink-0"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span className="hidden sm:inline">{isAdmin ? "Add Feedback" : "Submit Remark"}</span>
+                  </button>
+                </DialogTrigger>
+              )}
               <DialogContent className="w-[calc(100vw-24px)] sm:max-w-[500px] max-h-[90dvh] flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] gap-0 border-border/60 shadow-2xl [&>button]:hidden bg-card">
                 <div className="flex items-center justify-between px-4 sm:px-6 md:px-8 py-4 sm:py-6 border-b border-border/50 bg-muted/30">
                   <div>
@@ -682,8 +758,23 @@ export function Remarks() {
                       </div>
                     </div>
 
-                    {/* Dynamic questions from backend (admin adds → employee sees) */}
-                    {questions.map(q => (
+                    {/* Main Remark / Feedback textarea */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">
+                        Remark / Feedback <span className="text-destructive">*</span>
+                      </label>
+                      <textarea
+                        required
+                        rows={3}
+                        placeholder="Write your remarks or feedback here..."
+                        value={feedbackText}
+                        onChange={e => setFeedbackText(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
+                      />
+                    </div>
+
+                    {/* Dynamic additional questions from admin (if any) */}
+                    {questions.filter(q => !["feedback", "remark"].includes(q.label.toLowerCase())).map(q => (
                       <div key={q.id} className="space-y-2">
                         <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">
                           {q.label}{q.required && <span className="text-destructive ml-1">*</span>}
@@ -698,9 +789,6 @@ export function Remarks() {
                         />
                       </div>
                     ))}
-                    {questions.length === 0 && (
-                      <p className="text-xs text-muted-foreground/70 italic">No questions yet — admin will add them from Manage Questions.</p>
-                    )}
 
                     <label className="flex items-center gap-2 text-xs font-bold cursor-pointer text-foreground/80">
                       <input
@@ -732,7 +820,7 @@ export function Remarks() {
                               </div>
                               <button
                                 type="button"
-                                onClick={() => removeQuestion(q.id)}
+                                onClick={() => openDeleteQuestionConfirm(q.id, q.label)}
                                 className="p-1 hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-lg transition-colors shrink-0"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -813,16 +901,31 @@ export function Remarks() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
               {filteredRemarks.length > 0 ? filteredRemarks.map(record => {
-                const canEdit = isAdmin || (record.submitted_by_id && record.submitted_by_id === myId);
+                const isOwnerOrAdmin = isAdmin || (record.submitted_by_id && record.submitted_by_id === myId);
+                const showEditBtn = isOwnerOrAdmin && canUpdate;
+                const showDeleteBtn = isOwnerOrAdmin && canDelete;
                 return (
                   <div key={record.id} className="bg-white p-4 sm:p-5 rounded-2xl border border-border shadow-sm hover:shadow-md transition-shadow flex flex-col min-w-0">
                     <div className="flex items-start justify-between gap-4 mb-4">
                       <div className="flex items-center gap-3 min-w-0">
-                        <img
-                          src={`https://ui-avatars.com/api/?name=${encodeURIComponent(record.submitted_by_name || "U")}&background=random`}
-                          alt={record.submitted_by_name || "User"}
-                          className="w-10 h-10 rounded-full border border-border object-cover shrink-0"
-                        />
+                        {(() => {
+                          const emp = employees.find(
+                            e =>
+                              (record.employee_id && String(e.id) === String(record.employee_id)) ||
+                              (record.submitted_by_id && String(e.id) === String(record.submitted_by_id)) ||
+                              (record.submitted_by_name && e.name.trim().toLowerCase() === record.submitted_by_name.trim().toLowerCase())
+                          );
+                          const photoUrl = (record as any).submitted_by_photo || emp?.profile_photo || emp?.avatar;
+                          const avatarSrc = getAvatarUrl(photoUrl, record.submitted_by_name || "User");
+                          return (
+                            <img
+                              src={avatarSrc}
+                              alt={record.submitted_by_name || "User"}
+                              onError={handleAvatarError}
+                              className="w-10 h-10 rounded-full border border-border object-cover shrink-0"
+                            />
+                          );
+                        })()}
                         <div className="min-w-0">
                           <h3 className="font-bold text-foreground leading-tight truncate">{record.submitted_by_name || "Anonymous"}</h3>
                           <p className="text-xs text-muted-foreground">{record.department || ""}</p>
@@ -856,20 +959,30 @@ export function Remarks() {
                       )}
                     </div>
 
-                    {canEdit && !record.missing && (
+                    {(showEditBtn || showDeleteBtn) && !record.missing && (
                       <div className="flex items-center gap-2 mt-4 pt-3 border-t border-border/40">
-                        <button
-                          onClick={() => openEdit(record)}
-                          className="flex-1 px-3 py-1.5 text-xs font-bold rounded-xl border border-border hover:bg-muted transition-colors flex items-center justify-center gap-1.5"
-                        >
-                          <Pencil className="w-3.5 h-3.5" /> Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeleteRemark(record.id)}
-                          className="flex-1 px-3 py-1.5 text-xs font-bold rounded-xl border border-border hover:bg-destructive/10 hover:text-destructive transition-colors flex items-center justify-center gap-1.5"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" /> Delete
-                        </button>
+                        {showEditBtn && (
+                          <button
+                            onClick={() => openEdit(record)}
+                            className={cn(
+                              "px-3 py-1.5 text-xs font-bold rounded-xl border border-border hover:bg-muted transition-colors flex items-center justify-center gap-1.5",
+                              showDeleteBtn ? "flex-1" : "w-full"
+                            )}
+                          >
+                            <Pencil className="w-3.5 h-3.5" /> Edit
+                          </button>
+                        )}
+                        {showDeleteBtn && (
+                          <button
+                            onClick={() => openDeleteRemarkConfirm(record.id, record.submitted_by_name || undefined)}
+                            className={cn(
+                              "px-3 py-1.5 text-xs font-bold rounded-xl border border-border hover:bg-destructive/10 hover:text-destructive transition-colors flex items-center justify-center gap-1.5",
+                              showEditBtn ? "flex-1" : "w-full"
+                            )}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> Delete
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -887,6 +1000,18 @@ export function Remarks() {
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={deleteConfirm.isOpen}
+        onClose={() => setDeleteConfirm({ isOpen: false, id: null })}
+        onConfirm={handleExecuteDelete}
+        title={deleteConfirm.isQuestion ? "Delete Question" : "Delete Remark"}
+        description="Are you sure you want to delete this? This action cannot be undone."
+        itemName={deleteConfirm.name}
+        confirmText="Delete"
+        variant="destructive"
+      />
     </div>
   );
 }

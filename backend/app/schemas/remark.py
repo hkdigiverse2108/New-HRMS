@@ -23,11 +23,13 @@ class RemarkUpdate(BaseModel):
     department: Optional[str] = None
     rating: Optional[int] = Field(None, ge=0, le=5)
     show_name: Optional[bool] = None
+    custom_answers: Optional[dict] = None
 
 class RemarkResponse(RemarkBase):
     id: str = Field(alias="_id")
     submitted_by_id: Optional[str] = None
     submitted_by_name: Optional[str] = None
+    submitted_by_photo: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
