@@ -595,36 +595,7 @@ from app.database.db import get_database
 import uuid
 from datetime import datetime
 
-DEFAULT_PROJECT_DOCS = [
-    {
-        "id": "doc_usp_overview",
-        "title": "Brand USP & Overview",
-        "content": "## Brand Overview\nWrite or paste the client brand background here.\n\n### Unique Selling Proposition (USP)\n- Core USP 1\n- Core USP 2\n\n### Primary Offering\nKey products or services provided by the client.",
-        "updated_at": None,
-        "updated_by": None
-    },
-    {
-        "id": "doc_guidelines_tone",
-        "title": "Brand Guidelines & Tone of Voice",
-        "content": "## Visual & Tone Guidelines\n- Tone: Professional / Premium / Friendly\n- Brand Colors & Aesthetics\n- Do's and Don'ts for copies and creatives",
-        "updated_at": None,
-        "updated_by": None
-    },
-    {
-        "id": "doc_target_audience",
-        "title": "Target Audience & Demographics",
-        "content": "## Ideal Customer Profile (ICP)\n- Age Group: \n- Location / Geographies: \n- Pain Points & Desires: ",
-        "updated_at": None,
-        "updated_by": None
-    },
-    {
-        "id": "doc_strategy_offers",
-        "title": "Offers, Pricing & Strategy",
-        "content": "## Conversion Offers & Hooks\n- Hero Lead Magnet / Offer: \n- Pricing Tiers: \n- CTA Strategy: ",
-        "updated_at": None,
-        "updated_by": None
-    }
-]
+DEFAULT_PROJECT_DOCS = []
 
 @router.get("/{project_id}/docs")
 async def get_project_docs(project_id: str, current_user: dict = Depends(get_current_employee)):
@@ -634,8 +605,8 @@ async def get_project_docs(project_id: str, current_user: dict = Depends(get_cur
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     docs = project.get("docs")
-    if not docs or not isinstance(docs, list) or len(docs) == 0:
-        docs = DEFAULT_PROJECT_DOCS
+    if not docs or not isinstance(docs, list):
+        docs = []
     return {"status": "success", "data": docs}
 
 @router.put("/{project_id}/docs")
@@ -659,99 +630,7 @@ async def update_project_docs(project_id: str, body: dict, current_user: dict = 
 # MARKETING WORKFLOW STEPS (Audio Transcript [01:09-02:36]: "Set Steps by Assignee Person")
 # ==============================================================================
 
-DEFAULT_MARKETING_STEPS = [
-    {
-        "id": "step_1",
-        "order": 1,
-        "title": "Client Onboarding & Requirement Gathering",
-        "description": "Collect brand USP, target geographies, primary offer & KPIs from client.",
-        "assigned_to": "",
-        "assigned_to_name": "",
-        "due_date": "",
-        "is_completed": False,
-        "completed_at": None,
-        "completed_by": None,
-        "notes": ""
-    },
-    {
-        "id": "step_2",
-        "order": 2,
-        "title": "Ad Accounts & Asset Handover",
-        "description": "Gain admin/partner access to Meta Business Manager, Ad Accounts, Pixel, GTM, Domain Verification & Google Ads.",
-        "assigned_to": "",
-        "assigned_to_name": "",
-        "due_date": "",
-        "is_completed": False,
-        "completed_at": None,
-        "completed_by": None,
-        "notes": ""
-    },
-    {
-        "id": "step_3",
-        "order": 3,
-        "title": "Audience & Competitor Intelligence",
-        "description": "Analyze top 3 competitor ad libraries, research target audience interests, demographics & keywords.",
-        "assigned_to": "",
-        "assigned_to_name": "",
-        "due_date": "",
-        "is_completed": False,
-        "completed_at": None,
-        "completed_by": None,
-        "notes": ""
-    },
-    {
-        "id": "step_4",
-        "order": 4,
-        "title": "Creative Strategy & Ad Copywriting",
-        "description": "Draft high-converting ad copy (Primary text, Headlines, CTAs) and submit creative briefs to design/video team.",
-        "assigned_to": "",
-        "assigned_to_name": "",
-        "due_date": "",
-        "is_completed": False,
-        "completed_at": None,
-        "completed_by": None,
-        "notes": ""
-    },
-    {
-        "id": "step_5",
-        "order": 5,
-        "title": "Campaign Build & Conversion Tracking Setup",
-        "description": "Build campaigns in Ads Manager, setup instant lead forms / landing pages, and test tracking pixels.",
-        "assigned_to": "",
-        "assigned_to_name": "",
-        "due_date": "",
-        "is_completed": False,
-        "completed_at": None,
-        "completed_by": None,
-        "notes": ""
-    },
-    {
-        "id": "step_6",
-        "order": 6,
-        "title": "Campaign Launch & Day-1 Health Check",
-        "description": "Review ad approval status, verify initial delivery, check lead notifications and webhook routing.",
-        "assigned_to": "",
-        "assigned_to_name": "",
-        "due_date": "",
-        "is_completed": False,
-        "completed_at": None,
-        "completed_by": None,
-        "notes": ""
-    },
-    {
-        "id": "step_7",
-        "order": 7,
-        "title": "Weekly Optimization, Scaling & Client Reporting",
-        "description": "Analyze CPL, CTR, ROAS, prune underperforming ad sets, scale winning creatives & share performance reports.",
-        "assigned_to": "",
-        "assigned_to_name": "",
-        "due_date": "",
-        "is_completed": False,
-        "completed_at": None,
-        "completed_by": None,
-        "notes": ""
-    }
-]
+DEFAULT_MARKETING_STEPS = []
 
 @router.get("/{project_id}/marketing-steps")
 async def get_marketing_steps(project_id: str, current_user: dict = Depends(get_current_employee)):
@@ -761,8 +640,8 @@ async def get_marketing_steps(project_id: str, current_user: dict = Depends(get_
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     steps = project.get("marketing_steps")
-    if not steps or not isinstance(steps, list) or len(steps) == 0:
-        steps = DEFAULT_MARKETING_STEPS
+    if not steps or not isinstance(steps, list):
+        steps = []
     return {"status": "success", "data": steps}
 
 @router.put("/{project_id}/marketing-steps")

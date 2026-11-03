@@ -745,12 +745,7 @@ const INITIAL_PROJECTS: Project[] = [
       {
         id: "mod-milestones",
         name: "Milestones",
-        tasks: [
-          { id: "ms-1", title: "Requirement Analysis", status: "completed", dueDate: "25/09/2026", assignedToName: "Alex" },
-          { id: "ms-2", title: "Design Phase", status: "completed", dueDate: "02/10/2026", assignedToName: "Sarah" },
-          { id: "ms-3", title: "Development Sprint 1", status: "todo", dueDate: "09/10/2026", assignedToName: "Mike" },
-          { id: "ms-4", title: "QA & Testing", status: "todo", dueDate: "16/10/2026", assignedToName: "Alex" }
-        ]
+        tasks: []
       }
     ]
   },
@@ -1810,7 +1805,7 @@ const mapBackendProject = (bp: any): Project => {
     id: String(bp._id || bp.id),
     clientId: String(bp.client_id || ""),
     name: gen.project_name || "Project",
-    logo: bp.logo || gen.logo || "",
+    logo: bp.logo || gen.logo || (bp as any).brand_logo || (gen as any).brand_logo || (bp as any).project_logo || (gen as any).project_logo || (bp as any).logo_url || (gen as any).logo_url || "",
     description: gen.description || "",
     category: (() => {
       const rawCat = (gen.category || "").trim();
@@ -5479,7 +5474,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     || (currentProject ? {
       id: currentProject.clientId || "c-default",
       name: "Client",
-      logo: "https://api.dicebear.com/7.x/identicon/svg?seed=Client",
+      logo: currentProject.logo || "https://api.dicebear.com/7.x/identicon/svg?seed=Client",
       totalBudget: currentProject.budget || "₹0",
       outstandingPayment: "₹0",
       onboardingDate: currentProject.startDate || "",
@@ -6428,7 +6423,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       <div key={proj.id} className="p-4 rounded-2xl border border-border/60 bg-card hover:border-amber-500/30 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
                         <div className="flex items-center gap-3.5">
                           <div className="w-12 h-12 rounded-xl border border-border/50 overflow-hidden bg-white p-1 shrink-0">
-                            <img src={getMediaUrl(projClient?.logo) || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=80"} alt={proj.name} className="w-full h-full object-cover rounded-lg" onError={(e) => { (e.currentTarget as HTMLImageElement).src = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=80"; }} />
+                            <img src={getMediaUrl(proj.logo || projClient?.logo) || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=80"} alt={proj.name} className="w-full h-full object-cover rounded-lg" onError={(e) => { (e.currentTarget as HTMLImageElement).src = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=80"; }} />
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
@@ -6973,8 +6968,18 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 >
                   <ArrowLeft className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
                 </button>
-                {/* K5: highlighted client logo — project ni odakh logo uparthi */}
-                <BrandLogo src={client.logo} alt={client.name} size="w-14 h-14 sm:w-20 sm:h-20 shrink-0" />
+                {/* K5: highlighted project/client brand logo */}
+                <BrandLogo
+                  src={
+                    (project.logo && typeof project.logo === "string" && project.logo.trim() && !project.logo.includes("dicebear"))
+                      ? project.logo
+                      : (client?.logo && typeof client.logo === "string" && client.logo.trim() && !client.logo.includes("dicebear"))
+                        ? client.logo
+                        : (project.logo || client?.logo || "")
+                  }
+                  alt={project.name || client?.name || "Project"}
+                  size="w-14 h-14 sm:w-20 sm:h-20 shrink-0"
+                />
                 </div>
                 <div className="min-w-0 flex-1 flex flex-col justify-center">
                   <h1 className="text-[clamp(1.125rem,0.8rem+1.3vw,1.75rem)] font-black tracking-tight text-foreground leading-tight break-words">
@@ -9771,12 +9776,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                           milestonesModule = projectModules[0] || {
                             id: "mod-milestones",
                             name: "Milestones",
-                            tasks: [
-                              { id: "ms-1", title: "Requirement Analysis", status: "completed", dueDate: "25/09/2026", assignedToName: "Alex" },
-                              { id: "ms-2", title: "Design Phase", status: "completed", dueDate: "02/10/2026", assignedToName: "Sarah" },
-                              { id: "ms-3", title: "Development Sprint 1", status: "todo", dueDate: "09/10/2026", assignedToName: "Mike" },
-                              { id: "ms-4", title: "QA & Testing", status: "todo", dueDate: "16/10/2026", assignedToName: "Alex" },
-                            ]
+                            tasks: []
                           };
                         }
                         const milestones = milestonesModule.tasks || [];
@@ -15277,7 +15277,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-center gap-2.5 min-w-0">
                             <div className="w-8 h-8 rounded-lg border border-border/50 overflow-hidden bg-white p-0.5 shrink-0">
-                              <img src={getMediaUrl(client?.logo) || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=80"} alt={project.name} className="w-full h-full object-cover rounded-md" onError={(e) => { (e.currentTarget as HTMLImageElement).src = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=80"; }} />
+                              <img src={getMediaUrl(project.logo || client?.logo) || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=80"} alt={project.name} className="w-full h-full object-cover rounded-md" onError={(e) => { (e.currentTarget as HTMLImageElement).src = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=80"; }} />
                             </div>
                             <div className="min-w-0">
                               <h4 className="text-xs font-bold text-foreground truncate">{project.name}</h4>

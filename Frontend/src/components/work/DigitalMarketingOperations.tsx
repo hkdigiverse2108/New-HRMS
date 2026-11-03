@@ -47,6 +47,7 @@ import {
   Legend,
 } from "recharts";
 import { toast } from "@/lib/toast";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -134,6 +135,15 @@ export const DigitalMarketingOperations: React.FC<DigitalMarketingOperationsProp
   const [isDocsModalOpen, setIsDocsModalOpen] = useState(false);
   const [isStepsModalOpen, setIsStepsModalOpen] = useState(false);
   const [isGoalsModalOpen, setIsGoalsModalOpen] = useState(false);
+  const [deleteRecordConfirm, setDeleteRecordConfirm] = useState<{
+    isOpen: boolean;
+    recordId: string;
+    campaignName: string;
+  }>({
+    isOpen: false,
+    recordId: "",
+    campaignName: "",
+  });
 
   // Currency state (INR / USD)
   const [currency, setCurrency] = useState<"INR" | "USD">("INR");
@@ -353,8 +363,17 @@ export const DigitalMarketingOperations: React.FC<DigitalMarketingOperationsProp
   };
 
   // Delete Record
-  const handleDeleteRecord = async (recordId: string) => {
-    if (!confirm("Are you sure you want to delete this marketing entry?")) return;
+  const requestDeleteRecord = (recordId: string, campaignName: string) => {
+    setDeleteRecordConfirm({
+      isOpen: true,
+      recordId,
+      campaignName,
+    });
+  };
+
+  const handleConfirmDeleteRecord = async () => {
+    const recordId = deleteRecordConfirm.recordId;
+    setDeleteRecordConfirm(prev => ({ ...prev, isOpen: false }));
     try {
       await api.delete(`/projects/${projectId}/marketing-stats/${recordId}`);
       toast.success("Record deleted successfully");
@@ -1060,7 +1079,7 @@ export const DigitalMarketingOperations: React.FC<DigitalMarketingOperationsProp
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDeleteRecord(rec.id)}
+                          onClick={() => requestDeleteRecord(rec.id, rec.name || "Marketing Record")}
                           className="p-1 text-muted-foreground hover:text-rose-600 rounded-lg transition"
                           title="Delete Record"
                         >
@@ -1526,23 +1545,27 @@ export const DigitalMarketingOperations: React.FC<DigitalMarketingOperationsProp
       />
 
       {/* MODAL: MARKETING WORKFLOW STEPS BY ASSIGNEE */}
-      <MarketingStepsModal
-        isOpen={isStepsModalOpen}
-        onClose={() => setIsStepsModalOpen(false)}
-        projectId={projectId}
-        projectName={clientName}
-        clientName={companyName}
-      />
+      {isStepsModalOpen && (
+        <MarketingStepsModal
+          isOpen={isStepsModalOpen}
+          onClose={() => setIsStepsModalOpen(false)}
+          projectId={projectId}
+          projectName={clientName}
+          clientName={companyName}
+        />
+      )}
 
       {/* MODAL: MARKETING MILESTONES & TARGET GOALS */}
-      <MarketingGoalsModal
-        isOpen={isGoalsModalOpen}
-        onClose={() => setIsGoalsModalOpen(false)}
-        projectId={projectId}
-        projectName={clientName}
-        clientName={companyName}
-        currency={currency}
-      />
+      {isGoalsModalOpen && (
+        <MarketingGoalsModal
+          isOpen={isGoalsModalOpen}
+          onClose={() => setIsGoalsModalOpen(false)}
+          projectId={projectId}
+          projectName={clientName}
+          clientName={companyName}
+          currency={currency}
+        />
+      )}
 
       {/* Executive Client Performance Intelligence Report Modal with Live Records */}
       <ExecutivePerformanceReportModal
@@ -1554,6 +1577,17 @@ export const DigitalMarketingOperations: React.FC<DigitalMarketingOperationsProp
         clientName={clientName}
         companyName={companyName}
         records={records}
+      />
+      {/* Confirm Delete Marketing Record Modal */}
+      <ConfirmModal
+        isOpen={deleteRecordConfirm.isOpen}
+        onClose={() => setDeleteRecordConfirm(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={handleConfirmDeleteRecord}
+        title="Delete Marketing Entry"
+        description="Are you sure you want to delete this marketing entry? This action cannot be undone."
+        itemName={deleteRecordConfirm.campaignName}
+        confirmText="Delete Record"
+        variant="destructive"
       />
     </div>
   );

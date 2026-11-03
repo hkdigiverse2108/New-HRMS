@@ -58,7 +58,12 @@ export function getMediaUrl(url: string | null | undefined): string {
   if (!url || typeof url !== "string" || !url.trim() || url === "null" || url === "undefined") {
     return "";
   }
-  const clean = url.trim();
+  let clean = url.trim();
+  if (clean.startsWith("/images/")) {
+    clean = "/uploads/" + clean.slice(8);
+  } else if (clean.startsWith("images/")) {
+    clean = "uploads/" + clean.slice(7);
+  }
   if (clean.startsWith("http://") || clean.startsWith("https://") || clean.startsWith("data:") || clean.startsWith("blob:")) {
     return clean;
   }
