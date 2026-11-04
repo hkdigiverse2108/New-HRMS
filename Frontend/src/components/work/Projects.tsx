@@ -2196,9 +2196,9 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   // Client creation is strictly Admin only (employees cannot see or add clients)
   const canCreateClient = isAdmin;
 
-  // Only Admin can see all projects; all employees strictly see only projects they are assigned to / have access to
-  const canSeeAllProjects = isAdmin;
-  const [projectScope, setProjectScope] = useState<"all" | "my">(() => isAdmin ? "all" : "my");
+  // My Projects / All Projects switcher available to everyone
+  const canSeeAllProjects = true;
+  const [projectScope, setProjectScope] = useState<"all" | "my">("all");
 
   const visibleTabs = useMemo(() => {
     return isAdmin ? TABS : PROJECT_TABS;
@@ -2261,11 +2261,9 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   }, [user]);
 
   const isUserAssignedToClient = useCallback((client: Client): boolean => {
-    if (canSeeAllProjects && projectScope === "all") return true;
-    const currentId = String(user?.id || (user as any)?._id || (user as any)?.employee_id || (user as any)?.employeeId || "").trim();
-    if (client.assignedEmployeeId && String(client.assignedEmployeeId) === currentId) return true;
-    return projects.some(p => p.clientId === client.id && isUserAssignedToProject(p));
-  }, [user, canSeeAllProjects, projectScope, projects, isUserAssignedToProject]);
+    if (isAdmin) return true;
+    return false;
+  }, [isAdmin]);
 
   // K10 / Transcript [27:01]: Dynamic Finance Access
   // Admin has full access; employees only if assigned to Finance role in the project
@@ -5164,33 +5162,33 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   // Audio 19: Scope-aware accessible projects and clients for KPIs
   const userAccessibleProjects = useMemo(() => {
     return projects.filter(project => {
-      if (!(canSeeAllProjects && projectScope === "all")) {
+      if (projectScope === "my") {
         if (!isUserAssignedToProject(project)) return false;
       }
       return true;
     });
-  }, [projects, canSeeAllProjects, projectScope, isUserAssignedToProject]);
+  }, [projects, projectScope, isUserAssignedToProject]);
 
   const userAccessibleClients = useMemo(() => {
     return clients.filter(client => isUserAssignedToClient(client));
   }, [clients, isUserAssignedToClient]);
 
   const availableFilterCategories = useMemo(() => {
-    if (isAdmin) return categories;
+    if (isAdmin || projectScope === "all") return categories;
     const userCats = Array.from(new Set(userAccessibleProjects.map(p => p.category).filter(Boolean)));
     const matched = categories.filter(c => userCats.some(uc => uc.toLowerCase() === c.toLowerCase()));
     const extra = userCats.filter(uc => !categories.some(c => c.toLowerCase() === uc.toLowerCase()));
     return [...matched, ...extra];
-  }, [isAdmin, categories, userAccessibleProjects]);
+  }, [isAdmin, categories, projectScope, userAccessibleProjects]);
 
   useEffect(() => {
-    if (!isAdmin && availableFilterCategories.length <= 1 && clientFilterCategories.length > 0) {
+    if (!isAdmin && projectScope === "my" && availableFilterCategories.length <= 1 && clientFilterCategories.length > 0) {
       setClientFilterCategories([]);
     }
-  }, [isAdmin, availableFilterCategories.length, clientFilterCategories.length]);
+  }, [isAdmin, projectScope, availableFilterCategories.length, clientFilterCategories.length]);
 
   const categoryStats = useMemo(() => {
-    const activeCategories = (isAdmin ? categories : availableFilterCategories).filter(c => c.toLowerCase() !== "sales");
+    const activeCategories = (isAdmin || projectScope === "all" ? categories : availableFilterCategories).filter(c => c.toLowerCase() !== "sales");
 
     if (isProjectTabActive) {
       const activeProjList = userAccessibleProjects.filter(p => activeTab === "Archived Projects" ? p.is_archived : !p.is_archived);
@@ -5200,7 +5198,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
           count: activeProjList.filter(p => p.category === cat).length,
           unitLabel: "Projects"
         }))
-        .filter(c => isAdmin || c.count > 0);
+        .filter(c => isAdmin || projectScope === "all" || c.count > 0);
       return [
         { category: "Total Projects", count: activeProjList.length, unitLabel: "Projects" },
         ...catCounts
@@ -5252,7 +5250,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   // Projects landing lists backed by is_archived flag (Completed projects stay in active view if not archived)
   // On Hold sorted last
   const filteredProjects = projects.filter(project => {
-    if (!(canSeeAllProjects && projectScope === "all")) {
+    if (projectScope === "my") {
       if (!isUserAssignedToProject(project)) return false;
     }
     if (activeTab === "Active Projects" && project.is_archived) return false;
@@ -5270,7 +5268,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   // Consolidate duplicate projects under the same client/brand in the UI landing grid (Issue 6)
   const groupedProjects = useMemo(() => {
     const matchedProjects = projects.filter(project => {
-      if (!(canSeeAllProjects && projectScope === "all")) {
+      if (projectScope === "my") {
         if (!isUserAssignedToProject(project)) return false;
       }
       if (activeTab === "Active Projects" && project.is_archived) return false;
@@ -5528,7 +5526,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       if (aHold !== bHold) return aHold - bHold;
       return a.displayName.localeCompare(b.displayName);
     });
-  }, [projects, clients, activeTab, searchQuery, clientFilterCategories, canSeeAllProjects, projectScope, isUserAssignedToProject]);
+  }, [projects, clients, activeTab, searchQuery, clientFilterCategories, projectScope, isUserAssignedToProject]);
 
   const currentProject = selectedProjectId ? (projects.find(p => p.id === selectedProjectId) || null) : null;
   const currentClient = (selectedClientId ? clients.find(c => c.id === selectedClientId) : null)
@@ -5556,10 +5554,10 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       }
       return baseClean(p.name) === curBase;
     }).filter(p => {
-      if (canSeeAllProjects && projectScope === "all") return true;
-      return isUserAssignedToProject(p);
+      if (projectScope === "my") return isUserAssignedToProject(p);
+      return true;
     });
-  }, [currentProject, projects, canSeeAllProjects, projectScope, isUserAssignedToProject]);
+  }, [currentProject, projects, projectScope, isUserAssignedToProject]);
 
   const currentMonthStats = useMemo(() => {
     if (!currentProject) return { targetPosts: 8, targetReels: 8, completedPosts: 0, completedReels: 0, totalTarget: 16, totalCompleted: 0 };

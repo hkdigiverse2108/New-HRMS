@@ -154,7 +154,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (parts[1]) {
           const payload = JSON.parse(atob(parts[1]));
           if (payload?.exp && payload.exp * 1000 < Date.now()) {
-            removeAuthToken();
+            if (typeof window !== "undefined") {
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+      } catch (e) {
+        console.error("Storage clear error on logout:", e);
+      }
+    }
+    removeAuthToken();
             setToken(null);
             setUser(null);
             setIsLoading(false);
@@ -171,7 +179,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     const handleUnauthorized = () => {
-      removeAuthToken();
+      if (typeof window !== "undefined") {
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+      } catch (e) {
+        console.error("Storage clear error on logout:", e);
+      }
+    }
+    removeAuthToken();
       setToken(null);
       setUser(null);
       toast.error("Your session has expired. Please log in again.", { id: "session-expired" });
@@ -340,6 +356,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+      } catch (e) {
+        console.error("Storage clear error on logout:", e);
+      }
+    }
     removeAuthToken();
     setToken(null);
     setUser(null);

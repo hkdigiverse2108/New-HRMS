@@ -18,7 +18,12 @@ export const setAuthToken = (token: string): void => {
 
 export const removeAuthToken = (): void => {
   if (typeof window === "undefined") return;
-  localStorage.removeItem(TOKEN_STORAGE_KEY);
+  try {
+    localStorage.clear();
+    sessionStorage.clear();
+  } catch {
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+  }
   localStorage.removeItem(USER_STORAGE_KEY);
   window.dispatchEvent(new Event("hrms:auth-changed"));
 };

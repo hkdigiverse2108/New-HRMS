@@ -121,7 +121,7 @@ class TaskRepository:
                         {"assigned_to": {"$in": team_employee_ids}},
                         {"sub_category": {"$in": creative_subcats}},
                         {"creative_role": {"$exists": True, "$ne": None, "$ne": ""}},
-                        {"title": {"$regex": "\\((shoot|editing|script|post|graphics|caption|thumbnail|thumb|approval|posting)\\)", "$options": "i"}},
+                        {"title": {"$regex": "(\\((shoot|editing|script|post|graphics|caption|thumbnail|thumb|approval|posting)\\)|^posting\\b)", "$options": "i"}},
                         {"department": {"$regex": "^creative", "$options": "i"}}
                     ]
                 })
@@ -171,7 +171,7 @@ class TaskRepository:
                         {"task_category": {"$in": ["Creative", "SMM", "Content Calendar"]}},
                         {"sub_category": {"$exists": True, "$ne": None, "$ne": ""}},
                         {"creative_role": {"$exists": True, "$ne": None, "$ne": ""}},
-                        {"title": {"$regex": "\\((shoot|editing|script|post|graphics|caption|thumbnail|approval|posting)\\)", "$options": "i"}}
+                        {"title": {"$regex": "(\\((shoot|editing|script|post|graphics|caption|thumbnail|approval|posting)\\)|^posting\\b)", "$options": "i"}}
                     ]
                 })
             else:
@@ -184,7 +184,7 @@ class TaskRepository:
                     "$or": [
                         {"sub_category": {"$regex": "^(script|shoot|editing|video editing|reel editing|post/graphics|post graphics|graphics|post|caption|thumb|approval|posting)", "$options": "i"}},
                         {"creative_role": {"$in": ["scripting", "shoot_videography", "reel_editing", "post_graphics", "caption", "thumbnail", "approval_qc", "posting_publisher"]}},
-                        {"title": {"$regex": "\\((shoot|editing|script|post|graphics|caption|thumbnail|thumb|approval|posting)\\)", "$options": "i"}}
+                        {"title": {"$regex": "(\\((shoot|editing|script|post|graphics|caption|thumbnail|thumb|approval|posting)\\)|^posting\\b)", "$options": "i"}}
                     ]
                 })
             elif s_clean in ["editing", "video editing", "reel editing", "video"]:
@@ -202,7 +202,7 @@ class TaskRepository:
             elif "approval" in s_clean:
                 and_conditions.append({"$or": [{"sub_category": {"$regex": "^approval", "$options": "i"}}, {"creative_role": "approval_qc"}, {"title": {"$regex": "\\(approval\\)", "$options": "i"}}]})
             elif "posting" in s_clean:
-                and_conditions.append({"$or": [{"sub_category": {"$regex": "^posting", "$options": "i"}}, {"creative_role": "posting_publisher"}, {"title": {"$regex": "\\(posting\\)", "$options": "i"}}]})
+                and_conditions.append({"$or": [{"sub_category": {"$regex": "^posting", "$options": "i"}}, {"creative_role": "posting_publisher"}, {"title": {"$regex": "(\\(posting\\)|^posting\\b)", "$options": "i"}}]})
             else:
                 and_conditions.append({"sub_category": {"$regex": f"^{_re.escape(sub_category.strip())}$", "$options": "i"}})
             
@@ -425,7 +425,7 @@ class TaskRepository:
                 dept_assign_match,
                 {"sub_category": {"$in": creative_subcats}},
                 {"creative_role": {"$exists": True, "$ne": None, "$ne": ""}},
-                {"title": {"$regex": "\\((shoot|editing|script|post|graphics|caption|thumbnail|thumb|approval|posting)\\)", "$options": "i"}},
+                {"title": {"$regex": "(\\((shoot|editing|script|post|graphics|caption|thumbnail|thumb|approval|posting)\\)|^posting\\b)", "$options": "i"}},
                 {"department": {"$regex": "^creative", "$options": "i"}}
             ]
         } if team_employee_ids is not None else None
@@ -436,7 +436,7 @@ class TaskRepository:
                         {"task_category": {"$in": ["Creative", "SMM", "Content Calendar"]}},
                         {"sub_category": {"$exists": True, "$ne": None, "$ne": ""}},
                         {"creative_role": {"$exists": True, "$ne": None, "$ne": ""}},
-                        {"title": {"$regex": "\\((shoot|editing|script|post|graphics|caption|thumbnail|thumb|approval|posting)\\)", "$options": "i"}}
+                        {"title": {"$regex": "(\\((shoot|editing|script|post|graphics|caption|thumbnail|thumb|approval|posting)\\)|^posting\\b)", "$options": "i"}}
                     ]
                 })
             else:
@@ -549,7 +549,7 @@ class TaskRepository:
             "Posting": {"$or": [
                 {"sub_category": {"$regex": "^posting", "$options": "i"}},
                 {"creative_role": "posting_publisher"},
-                {"title": {"$regex": "\\(posting\\)", "$options": "i"}}
+                {"title": {"$regex": "(\\(posting\\)|^posting\\b)", "$options": "i"}}
             ]}
         }
 

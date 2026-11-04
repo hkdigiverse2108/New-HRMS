@@ -3172,6 +3172,10 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                         const effLower = effectiveDept.toLowerCase().trim();
                         return employees.filter(e => {
                           const eDept = (e.department || "").toLowerCase().trim();
+                          if (effLower === "creative") {
+                            const nameLower = (e.name || "").toLowerCase();
+                            if (nameLower.includes("tanvi") || e.id === "6abc98e2edafab0976cd60d4") return true;
+                          }
                           return eDept === effLower || eDept.includes(effLower);
                         });
                       })()).map(e => ({ label: e.name, value: e.id }))
