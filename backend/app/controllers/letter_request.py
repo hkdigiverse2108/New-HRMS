@@ -7,33 +7,16 @@ from app.schemas.letter_request import (
 from app.services.letter_request import LetterRequestService
 from app.controllers.auth import get_current_employee
 from app.redis.service import get_cache, set_cache, clear_pattern, make_list_key
+from app.controllers.submitted_document import is_admin_or_hr_user
 
 router = APIRouter(prefix="/letter-requests", tags=["Letter Requests Workflow"])
 
 async def is_admin_or_hr(user: dict) -> bool:
-    if not user:
-        return False
-    work = user.get("work_details", {}) or {}
-    role = str(work.get("system_role") or user.get("system_role") or user.get("role") or "").strip().lower()
-    dept = str(work.get("department") or user.get("department") or "").strip().lower()
-    desig = str(work.get("designation") or user.get("designation") or "").strip().lower()
+    return await is_admin_or_hr_user(user)
 
-    if any(r in role for r in ["admin", "superadmin", "super admin", "subadmin", "sub admin", "hr", "hr manager"]):
-        return True
-    if dept == "hr" or "hr" in dept or dept == "human resources" or "human resources" in dept:
-        return True
-    if "hr" in desig or "human resource" in desig:
-        return True
-    try:
-        from app.controllers.auth import resolve_effective_permissions_for_employee
-        perms = await resolve_effective_permissions_for_employee(user)
-        for mod in ("/employees/documents", "/documents", "/employees/documents/generate", "/documents/generate"):
-            p = perms.get(mod, {}) or {}
-            if p.get("all") or p.get("read") or p.get("update") or p.get("create"):
-                return True
-    except Exception:
-        pass
-    return False
+async def check_admin_or_hr(user: dict):
+    if not await is_admin_or_hr(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Admin or HR can perform this action")
 
 @router.post("", response_model=LetterRequestResponse, status_code=status.HTTP_201_CREATED)
 async def create_letter_request(
@@ -43,7 +26,10 @@ async def create_letter_request(
     # If not admin/hr, enforce requesting only for oneself
     emp_id = str(current_user.get("_id") or current_user.get("id"))
     if not await is_admin_or_hr(current_user):
+        # Employees can only request for themselves, and the request always starts as Pending
         data.employee_id = emp_id
+        data.status = "Pending"
+        data.generated_document_id = None
 
     created = await LetterRequestService.create_request(data, current_user)
     if not created:
@@ -95,7 +81,7 @@ async def get_letter_request_by_id(
     cached = await get_cache(cache_key)
     if cached is not None:
         emp_id = str(current_user.get("_id") or current_user.get("id"))
-        if not is_admin_or_hr(current_user) and cached.get("employee_id") != emp_id:
+        if not await is_admin_or_hr(current_user) and cached.get("employee_id") != emp_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
         return cached
 
@@ -104,7 +90,7 @@ async def get_letter_request_by_id(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Letter request not found")
 
     emp_id = str(current_user.get("_id") or current_user.get("id"))
-    if not is_admin_or_hr(current_user) and req.get("employee_id") != emp_id:
+    if not await is_admin_or_hr(current_user) and req.get("employee_id") != emp_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     await set_cache(cache_key, req, ttl=120)
@@ -121,8 +107,13 @@ async def update_letter_request(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Letter request not found")
 
     emp_id = str(current_user.get("_id") or current_user.get("id"))
-    if not is_admin_or_hr(current_user) and req.get("employee_id") != emp_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    if not await is_admin_or_hr(current_user):
+        if req.get("employee_id") != emp_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        if req.get("status") != "Pending":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only pending requests can be edited")
+        # Employees may only change their own request details, never the workflow fields
+        data = LetterRequestUpdate(needed_by_date=data.needed_by_date, reason=data.reason)
 
     updated = await LetterRequestService.update_request(item_id, data)
     if not updated:
@@ -156,9 +147,7 @@ async def approve_letter_request(
     if not req or req.get("is_deleted"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Letter request not found")
 
-    emp_id = str(current_user.get("_id") or current_user.get("id"))
-    if not is_admin_or_hr(current_user) and req.get("employee_id") != emp_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    await check_admin_or_hr(current_user)
 
     updated = await LetterRequestService.approve_request(item_id, current_user)
     if not updated:
@@ -177,9 +166,7 @@ async def reject_letter_request(
     if not req or req.get("is_deleted"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Letter request not found")
 
-    emp_id = str(current_user.get("_id") or current_user.get("id"))
-    if not is_admin_or_hr(current_user) and req.get("employee_id") != emp_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    await check_admin_or_hr(current_user)
 
     reason = input_data.reason if input_data else None
     updated = await LetterRequestService.reject_request(item_id, reason)
@@ -199,8 +186,11 @@ async def delete_letter_request(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Letter request not found")
 
     emp_id = str(current_user.get("_id") or current_user.get("id"))
-    if not is_admin_or_hr(current_user) and req.get("employee_id") != emp_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    if not await is_admin_or_hr(current_user):
+        if req.get("employee_id") != emp_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        if req.get("status") != "Pending":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only pending requests can be cancelled")
 
     success = await LetterRequestService.delete_request(item_id)
     if not success:
