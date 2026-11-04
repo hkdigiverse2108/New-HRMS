@@ -45,7 +45,7 @@ export function OfficialLetters({ onNavigate }: { onNavigate?: ((path: string) =
   // Modal State
   const [isAddMode, setIsAddMode] = useState(false);
   const [selectedEmpId, setSelectedEmpId] = useState("");
-  const [newLetterType, setNewLetterType] = useState("Relieving Letter");
+  const [newLetterType, setNewLetterType] = useState("");
   const [newReason, setNewReason] = useState("");
   const [newNeededBy, setNewNeededBy] = useState("");
 
@@ -135,14 +135,14 @@ export function OfficialLetters({ onNavigate }: { onNavigate?: ((path: string) =
     } else {
       setSelectedEmpId("");
     }
-    setNewLetterType(templates[0]?.name || "Relieving Letter");
+    setNewLetterType(templates[0]?.name || "");
     setNewReason("");
     setNewNeededBy("");
     setIsAddMode(true);
   };
 
   const handleCreateRequest = async () => {
-    if (!newReason.trim() || !newNeededBy) return;
+    if (!newLetterType || !newReason.trim() || !newNeededBy) return;
     
     setIsSubmitting(true);
     try {
@@ -150,6 +150,7 @@ export function OfficialLetters({ onNavigate }: { onNavigate?: ((path: string) =
         needed_by_date: newNeededBy,
         reason: newReason.trim(),
         letter_type: newLetterType,
+        template_id: templates.find((t) => t.name === newLetterType)?.id,
       };
 
       if (isAdminOrHR && selectedEmpId && selectedEmpId !== "manual") {
@@ -270,10 +271,9 @@ export function OfficialLetters({ onNavigate }: { onNavigate?: ((path: string) =
   };
 
   const letterTypeOptions = useMemo(() => {
-    const defaultTypes = ["Relieving Letter", "Salary Certificate", "Employment Proof", "Offer Letter", "Experience Letter", "NOC Letter"];
-    const templateNames = templates.map((t) => t.name);
-    const combined = Array.from(new Set([...defaultTypes, ...templateNames]));
-    return combined.map((name) => ({ label: name, value: name }));
+    // Only letters that have a template in Document Templates can be requested
+    const templateNames = Array.from(new Set(templates.map((t) => t.name)));
+    return templateNames.map((name) => ({ label: name, value: name }));
   }, [templates]);
 
   return (
@@ -380,7 +380,7 @@ export function OfficialLetters({ onNavigate }: { onNavigate?: ((path: string) =
             </button>
             <button 
               onClick={handleCreateRequest}
-              disabled={!newReason.trim() || !newNeededBy || isSubmitting}
+              disabled={!newLetterType || !newReason.trim() || !newNeededBy || isSubmitting}
               className="px-6 py-2 bg-primary text-primary-foreground hover:bg-primary/90 font-bold rounded-xl transition-colors disabled:opacity-50 shadow-sm flex items-center gap-2"
             >
               {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
@@ -577,6 +577,14 @@ export function OfficialLetters({ onNavigate }: { onNavigate?: ((path: string) =
                                     <Trash2 className="w-4 h-4" />
                                   </button>
                                 </>
+                              ) : req.status === "Pending" ? (
+                                <button
+                                  title="Cancel Request"
+                                  onClick={() => handleDelete(req.id)}
+                                  className="p-2 min-w-[36px] min-h-[36px] inline-flex items-center justify-center text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-colors"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
                               ) : !req.pdf_url && req.status !== "Sent" && !req.content && !req.generated_document_id ? (
                                 <span className="text-xs text-muted-foreground font-mono px-2 py-1">-</span>
                               ) : null}

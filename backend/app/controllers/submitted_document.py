@@ -1,4 +1,5 @@
 import os
+import re
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from typing import Optional, List
@@ -10,6 +11,8 @@ from app.redis.service import get_cache, set_cache, clear_pattern, make_list_key
 
 router = APIRouter(prefix="/submitted-documents", tags=["Submitted Employee Documents Portal"])
 
+_HR_WORD = re.compile(r"\bhr\b")
+
 def is_admin_or_hr_sync(user: dict) -> bool:
     if not user:
         return False
@@ -18,27 +21,20 @@ def is_admin_or_hr_sync(user: dict) -> bool:
     dept = str(work.get("department") or user.get("department") or "").strip().lower()
     desig = str(work.get("designation") or user.get("designation") or "").strip().lower()
 
-    if any(r in role for r in ["admin", "superadmin", "super admin", "subadmin", "sub admin", "hr", "hr manager"]):
+    if any(r in role for r in ["admin", "superadmin", "super admin", "subadmin", "sub admin"]) or _HR_WORD.search(role):
         return True
-    if dept == "hr" or "hr" in dept or dept == "human resources" or "human resources" in dept:
+    # Whole-word match so names like "Three D" or "Shree" are not mistaken for HR
+    if _HR_WORD.search(dept) or "human resource" in dept:
         return True
-    if "hr" in desig or "human resource" in desig:
+    if _HR_WORD.search(desig) or "human resource" in desig:
         return True
     return False
 
 async def is_admin_or_hr_user(user: dict) -> bool:
-    if is_admin_or_hr_sync(user):
-        return True
-    try:
-        from app.controllers.auth import resolve_effective_permissions_for_employee
-        perms = await resolve_effective_permissions_for_employee(user)
-        for mod in ("/employees/documents", "/documents", "/employees/documents/generate", "/documents/generate"):
-            p = perms.get(mod, {}) or {}
-            if p.get("all") or p.get("read") or p.get("update") or p.get("create"):
-                return True
-    except Exception:
-        pass
-    return False
+    # Only Admin / HR by role, department or designation. Module permissions are not
+    # used here: the saved Employee presets grant full Document Center access, which
+    # would let every employee manage everyone's documents.
+    return is_admin_or_hr_sync(user)
 
 async def check_admin_or_hr_role(user: dict):
     if not await is_admin_or_hr_user(user):

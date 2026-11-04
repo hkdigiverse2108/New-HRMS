@@ -17,37 +17,32 @@ export function isUserAdmin(user: UserProfile | null): boolean {
 
 /**
  * Determines if the user is an Admin or HR / Authorized Document Manager.
- * Checks admin status, HR role, HR/Human Resources department or designation,
- * and dynamic module permissions for documents.
+ * Checks admin status, HR role, and HR/Human Resources department or designation.
  */
 export function isUserAdminOrHR(user: UserProfile | null): boolean {
   if (!user) return false;
   if (isUserAdmin(user)) return true;
 
+  // Whole-word "hr" match so names like "Three D" or "Shree" are not mistaken for HR
+  const isHrWord = (v: string) => /\bhr\b/.test(v);
+
   const role = String(user.role || (user as any).system_role || (user as any).work_details?.system_role || "").toLowerCase().trim();
-  if (["admin", "superadmin", "super admin", "subadmin", "sub admin", "hr", "hr manager"].some(r => role.includes(r))) {
+  if (["admin", "superadmin", "super admin", "subadmin", "sub admin"].some(r => role.includes(r)) || isHrWord(role)) {
     return true;
   }
 
   const dept = String(user.department || (user as any).work_details?.department || "").toLowerCase().trim();
-  if (dept === "hr" || dept.includes("hr") || dept === "human resources" || dept.includes("human resources")) {
+  if (isHrWord(dept) || dept.includes("human resource")) {
     return true;
   }
 
   const desig = String(user.designation || (user as any).work_details?.designation || "").toLowerCase().trim();
-  if (desig.includes("hr") || desig.includes("human resource")) {
+  if (isHrWord(desig) || desig.includes("human resource")) {
     return true;
   }
 
-  // Check module permissions for documents
-  if (
-    hasModulePermission(user, "/employees/documents", "read") ||
-    hasModulePermission(user, "/documents", "read") ||
-    hasModulePermission(user, "/employees/documents/generate", "read")
-  ) {
-    return true;
-  }
-
+  // Module permissions are deliberately not checked: department presets grant every
+  // employee full Document Center access so they can submit their own documents
   return false;
 }
 
