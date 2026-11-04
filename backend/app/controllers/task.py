@@ -660,9 +660,9 @@ async def get_task_stats(
 
             team_employee_ids = dept_emp_ids
 
-    
-
-    cache_key = f"tasks:stats:{involved_emp_id or 'all'}:{target_date or 'today'}:{assigned_to or 'all'}:{assigned_by or 'all'}:{task_category or 'all'}:{sub_category or 'all'}:{project_id or 'all'}:{priority or 'all'}:{search or ''}:{timeline_filter or 'all'}:{status or 'all'}"
+    dept_key = department or 'all'
+    team_key = f"team_{len(team_employee_ids)}" if team_employee_ids is not None else 'all'
+    cache_key = f"tasks:stats:{involved_emp_id or 'all'}:{target_date or 'today'}:{assigned_to or 'all'}:{assigned_by or 'all'}:{task_category or 'all'}:{sub_category or 'all'}:{project_id or 'all'}:{priority or 'all'}:{search or ''}:{timeline_filter or 'all'}:{status or 'all'}:{dept_key}:{team_key}"
 
     cached = await get_cache(cache_key)
 

@@ -267,14 +267,14 @@ export const cleanBrandName = (raw: string): string => {
 };
 
 export const getTaskBrandName = (t: any, projectsList?: Array<{ label: string; value: string }>): string => {
-  if (t?.client_details?.company_name && String(t.client_details.company_name).trim()) {
-    return cleanBrandName(String(t.client_details.company_name).trim());
-  }
-  if (t?.project_details?.client_details?.company_name && String(t.project_details.client_details.company_name).trim()) {
-    return cleanBrandName(String(t.project_details.client_details.company_name).trim());
-  }
-  const pName = String(t?.project_details?.project_name || t?.project_name || "").trim();
-  if (pName && pName !== "Development Project" && pName !== "Untitled Project") {
+  // 1. Primary: Project name from individual project edit (project_details or projectsList)
+  const pName = String(
+    t?.project_details?.general?.project_name || 
+    t?.project_details?.project_name || 
+    t?.project_name || 
+    ""
+  ).trim();
+  if (pName && pName !== "Development Project" && pName !== "Untitled Project" && pName !== "Project") {
     return cleanBrandName(pName);
   }
   const pid = String(t?.project_id || t?.projectId || "");
@@ -283,8 +283,15 @@ export const getTaskBrandName = (t: any, projectsList?: Array<{ label: string; v
     if (found?.label) {
       const parts = found.label.split("•");
       const firstPart = parts[0]?.trim();
-      if (firstPart) return cleanBrandName(firstPart);
+      if (firstPart && firstPart !== "Untitled Project") return cleanBrandName(firstPart);
     }
+  }
+  // 2. Secondary: Client company name fallback
+  if (t?.client_details?.company_name && String(t.client_details.company_name).trim()) {
+    return cleanBrandName(String(t.client_details.company_name).trim());
+  }
+  if (t?.project_details?.client_details?.company_name && String(t.project_details.client_details.company_name).trim()) {
+    return cleanBrandName(String(t.project_details.client_details.company_name).trim());
   }
   const title = String(t?.title || "").trim();
   const bracketMatch = title.match(/^\[(.*?)\]/);
@@ -522,7 +529,11 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
   };
 
-  const [departmentFilter, setDepartmentFilter] = useState<string>("All");
+  // If TL or Department Head (not Admin or Operational), default/lock department to their own department
+  const userOwnDept = (userDepartment || "").trim();
+  const isCompanyWideAdmin = isAdmin || isOperational;
+  const initialDept = !isCompanyWideAdmin && userOwnDept ? userOwnDept : "All";
+  const [departmentFilter, setDepartmentFilter] = useState<string>(initialDept);
 
   const [assignedToFilter, setAssignedToFilter] = useState<string>("All");
 
@@ -558,13 +569,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
       deptLower.includes("creative") ||
 
-      departmentFilter === "All" ||
-
-      catLower.includes("creative") ||
-
-      categoryFilter === "All" ||
-
-      tasks.some(t => (t.taskCategory || "").toLowerCase().includes("creative") || t.subCategory)
+      catLower.includes("creative")
 
     );
 
@@ -722,7 +727,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
   const taskCategories = useMemo(() => {
 
-    const defaultCategories = ["All", "General", "Development", "Design", "Marketing", "SMM", "Content Calendar", "Client Issue", "Pending", "Sales", "Operations"];
+    const defaultCategories = ["All", "Creative", "General", "Development", "Design", "Marketing", "SMM", "Content Calendar", "Client Issue", "Pending", "Sales", "Operations"];
 
     const s = new Set<string>(defaultCategories);
 
@@ -3117,7 +3122,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
             {/* Department Filter (Visible only for Head / Admin, NOT Team Leader and NOT other employees) */}
 
-            {mainViewMode === "all_tasks" && (isHead || isOperational) && (
+            {mainViewMode === "all_tasks" && (isAdmin || isOperational) && (
 
               <div className="flex flex-col items-stretch sm:flex-row sm:items-center gap-1 sm:gap-1.5 min-w-0">
 
@@ -3161,7 +3166,15 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
                       { label: "All Assignees", value: "All" },
 
-                      ...(isTeamLeader ? teamLeaderEmployees : employees).map(e => ({ label: e.name, value: e.id }))
+                      ...((() => {
+                        const effectiveDept = (!isAdmin && !isOperational) ? userDepartment : (departmentFilter !== "All" ? departmentFilter : null);
+                        if (!effectiveDept) return employees;
+                        const effLower = effectiveDept.toLowerCase().trim();
+                        return employees.filter(e => {
+                          const eDept = (e.department || "").toLowerCase().trim();
+                          return eDept === effLower || eDept.includes(effLower);
+                        });
+                      })()).map(e => ({ label: e.name, value: e.id }))
 
                     ]}
 
@@ -3343,13 +3356,13 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
               type="button"
 
-              onClick={() => setSubCategoryFilter("All")}
+              onClick={() => setSubCategoryFilter(subCategoryFilter === "all_creative" ? "All" : "all_creative")}
 
               className={cn(
 
                 "px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer",
 
-                subCategoryFilter === "All"
+                (subCategoryFilter === "all_creative" || subCategoryFilter === "All")
 
                   ? "bg-primary text-primary-foreground shadow-xs"
 
@@ -3365,11 +3378,11 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
                 "px-1.5 py-0.2 rounded-full text-[9px] font-black",
 
-                subCategoryFilter === "All" ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+                (subCategoryFilter === "all_creative" || subCategoryFilter === "All") ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
 
               )}>
 
-                {subCategoryFilter === "All" ? (totalServerTasks || tasks.length) : (creativeStageCounts["All"] ?? (totalServerTasks || tasks.length))}
+                {creativeStageCounts["All"] ?? CREATIVE_SUBCATEGORIES.reduce((acc, sc) => acc + (creativeStageCounts[sc.id] ?? 0), 0)}
 
               </span>
 
@@ -4164,14 +4177,14 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                       </td>
 
                       {/* Brand Column */}
-                      <td className="px-5 py-4 whitespace-nowrap">
+                      <td className="px-5 py-4">
                         {task.brandName && task.brandName !== "-" ? (
                           <span 
                             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 text-[11px] font-black tracking-tight"
                             title={task.brandName}
                           >
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                            <span className="max-w-[130px] truncate">{task.brandName}</span>
+                            <span className="whitespace-normal leading-tight font-bold">{task.brandName}</span>
                           </span>
                         ) : (
                           <span className="text-muted-foreground/40 text-xs font-semibold pl-2 select-none">-</span>

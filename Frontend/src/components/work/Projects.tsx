@@ -153,6 +153,7 @@ interface Project {
   }[] | undefined;
   custom_statuses?: string[] | undefined;
   is_archived?: boolean | undefined;
+  is_deleted?: boolean | undefined;
   marketing_assignees?: string[] | undefined;
   marketing_assignees_details?: any[] | undefined;
   finance_assignees?: string[] | undefined;
@@ -1103,6 +1104,20 @@ const CalendarIssuesCell = ({
     return currentUserId;
   };
 
+  const mapRoleToSubCategory = (role?: string): string => {
+    if (!role) return "Creative";
+    const r = role.toLowerCase();
+    if (r.includes("shoot") || r.includes("videography")) return "Shoot";
+    if (r.includes("edit") || r.includes("reel")) return "Editing";
+    if (r.includes("script")) return "Script";
+    if (r.includes("post") || r.includes("graphic")) return "Post/Graphics";
+    if (r.includes("caption")) return "Caption";
+    if (r.includes("thumb")) return "Thumbnail";
+    if (r.includes("approval") || r.includes("qc")) return "Approval";
+    if (r.includes("posting") || r.includes("publish")) return "Posting";
+    return role;
+  };
+
   const handleAddIssue = async () => {
     if (!newIssueText.trim()) return;
     const now = new Date();
@@ -1124,6 +1139,9 @@ const CalendarIssuesCell = ({
           priority: isClient ? "High" : "Medium",
           status: "Todo",
           task_category: isClient ? "Client Issue" : "Pending",
+          sub_category: mapRoleToSubCategory(selectedRole),
+          is_client_issue: isClient,
+          is_pending_issue: !isClient,
           due_date: todayYMD,
           project_id: project.id,
           content_item_id: item.id,
@@ -1188,6 +1206,9 @@ const CalendarIssuesCell = ({
           await api.put(`/tasks/${newTaskId}`, {
             title: `[${isClient ? 'Client Issue' : 'Pending'}] ${ideaTitle} (${targetIssue.role || 'Creative'}): ${targetIssue.text}`,
             task_category: isClient ? "Client Issue" : "Pending",
+            sub_category: mapRoleToSubCategory(targetIssue.role),
+            is_client_issue: isClient,
+            is_pending_issue: !isClient,
             priority: isClient ? "High" : "Medium",
           }, { showErrorToast: false });
         } else {
@@ -1198,6 +1219,9 @@ const CalendarIssuesCell = ({
             priority: isClient ? "High" : "Medium",
             status: "Todo",
             task_category: isClient ? "Client Issue" : "Pending",
+            sub_category: mapRoleToSubCategory(targetIssue.role),
+            is_client_issue: isClient,
+            is_pending_issue: !isClient,
             due_date: todayYMD,
             project_id: project.id,
             content_item_id: item.id,
@@ -2166,13 +2190,30 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     return !isHead && (desig.includes("team leader") || desig.includes("lead") || desig.includes("tl") || role.includes("team leader"));
   }, [user, isHead]);
 
-  // Audio 19: New Client & New Project strictly Admin, Head and Team Leader only
-  const canCreateProject = isAdmin || isHead || isTl;
-  const canCreateClient = isAdmin || isHead || isTl;
+  // User Access & Creation Rules:
+  // Project creation strictly respects Access Control permissions (or Admin)
+  const canCreateProject = isAdmin || Boolean(projectPerms.canCreate);
+  // Client creation is strictly Admin only (employees cannot see or add clients)
+  const canCreateClient = isAdmin;
 
-  // Admin / HR / Head / Team Leader can switch between My Projects and All Projects; everyone else sees only assigned projects
-  const canSeeAllProjects = isAdminOrHr || isHead || isTl;
-  const [projectScope, setProjectScope] = useState<"all" | "my">("all");
+  // Only Admin can see all projects; all employees strictly see only projects they are assigned to / have access to
+  const canSeeAllProjects = isAdmin;
+  const [projectScope, setProjectScope] = useState<"all" | "my">(() => isAdmin ? "all" : "my");
+
+  const visibleTabs = useMemo(() => {
+    return isAdmin ? TABS : PROJECT_TABS;
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      if (activeTab === "Active Clients" || activeTab === "Archived Clients") {
+        setActiveTab("Active Projects");
+      }
+      if (showBrandDivision) {
+        setShowBrandDivision(false);
+      }
+    }
+  }, [isAdmin, activeTab, setActiveTab, showBrandDivision]);
 
   // True only when the current user is actually assigned to the project (role does not matter here)
   const isUserAssignedToProject = useCallback((project: Project): boolean => {
@@ -5134,16 +5175,32 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     return clients.filter(client => isUserAssignedToClient(client));
   }, [clients, isUserAssignedToClient]);
 
+  const availableFilterCategories = useMemo(() => {
+    if (isAdmin) return categories;
+    const userCats = Array.from(new Set(userAccessibleProjects.map(p => p.category).filter(Boolean)));
+    const matched = categories.filter(c => userCats.some(uc => uc.toLowerCase() === c.toLowerCase()));
+    const extra = userCats.filter(uc => !categories.some(c => c.toLowerCase() === uc.toLowerCase()));
+    return [...matched, ...extra];
+  }, [isAdmin, categories, userAccessibleProjects]);
+
+  useEffect(() => {
+    if (!isAdmin && availableFilterCategories.length <= 1 && clientFilterCategories.length > 0) {
+      setClientFilterCategories([]);
+    }
+  }, [isAdmin, availableFilterCategories.length, clientFilterCategories.length]);
+
   const categoryStats = useMemo(() => {
-    const activeCategories = categories.filter(c => c.toLowerCase() !== "sales");
+    const activeCategories = (isAdmin ? categories : availableFilterCategories).filter(c => c.toLowerCase() !== "sales");
 
     if (isProjectTabActive) {
       const activeProjList = userAccessibleProjects.filter(p => activeTab === "Archived Projects" ? p.is_archived : !p.is_archived);
-      const catCounts = activeCategories.map(cat => ({
-        category: cat,
-        count: activeProjList.filter(p => p.category === cat).length,
-        unitLabel: "Projects"
-      }));
+      const catCounts = activeCategories
+        .map(cat => ({
+          category: cat,
+          count: activeProjList.filter(p => p.category === cat).length,
+          unitLabel: "Projects"
+        }))
+        .filter(c => isAdmin || c.count > 0);
       return [
         { category: "Total Projects", count: activeProjList.length, unitLabel: "Projects" },
         ...catCounts
@@ -14996,7 +15053,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               <div className="px-2 py-1.5 text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1 flex justify-between items-center">
                 <span>Status</span>
               </div>
-              {TABS.map(tab => (
+              {visibleTabs.map(tab => (
                 <DropdownMenuItem
                   key={tab}
                   onSelect={(e) => { e.preventDefault(); selectTab(tab); }}
@@ -15043,7 +15100,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               </DropdownMenuItem>
               <DropdownMenuSeparator className="bg-border/50 my-2" />
               <div className="px-2 py-1.5 text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">Project Category</div>
-              {categories.map(cat => (
+              {(isAdmin ? categories : availableFilterCategories).map(cat => (
                 <DropdownMenuItem
                   key={cat}
                   onSelect={(e) => {
@@ -15061,7 +15118,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   {clientFilterCategories.includes(cat) && <CheckCircle2 className="w-4 h-4" />}
                 </DropdownMenuItem>
               ))}
-              {(clientFilterCategories.length > 0 || clientSort !== "name" || activeTab !== TABS[0]) && (
+              {(clientFilterCategories.length > 0 || clientSort !== "name" || activeTab !== visibleTabs[0]) && (
                 <>
                   <DropdownMenuSeparator className="bg-border/50 my-2" />
                   <DropdownMenuItem
@@ -15069,7 +15126,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       e.preventDefault();
                       setClientFilterCategories([]);
                       setClientSort("name");
-                      selectTab(TABS[0] ?? "Active Projects");
+                      selectTab(visibleTabs[0] ?? "Active Projects");
                     }}
                     className="rounded-xl cursor-pointer py-2 focus:bg-rose-500/10 focus:text-rose-500 text-rose-500 font-bold transition-colors flex items-center justify-center"
                   >
@@ -15080,21 +15137,23 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Feature 3: Pending Brands Button */}
-          <button
-            type="button"
-            onClick={() => setIsPendingBrandsModalOpen(true)}
-            className="flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 h-[42px] w-full sm:w-auto whitespace-nowrap shrink-0 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-bold text-sm rounded-xl transition-all shadow-sm relative group"
-            title="Brands awaiting Creative Team assignment"
-          >
-            <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
-            <span className="truncate">Pending Brands</span>
-            {pendingProjects.length > 0 && (
-              <span className="min-w-[1.5rem] h-6 px-1.5 inline-flex items-center justify-center rounded-full bg-amber-500 text-white text-xs font-black leading-none shadow-sm">
-                {pendingProjects.length}
-              </span>
-            )}
-          </button>
+          {/* Feature 3: Pending Brands Button (Admin only) */}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setIsPendingBrandsModalOpen(true)}
+              className="flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 h-[42px] w-full sm:w-auto whitespace-nowrap shrink-0 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-bold text-sm rounded-xl transition-all shadow-sm relative group"
+              title="Brands awaiting Creative Team assignment"
+            >
+              <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
+              <span className="truncate">Pending Brands</span>
+              {pendingProjects.length > 0 && (
+                <span className="min-w-[1.5rem] h-6 px-1.5 inline-flex items-center justify-center rounded-full bg-amber-500 text-white text-xs font-black leading-none shadow-sm">
+                  {pendingProjects.length}
+                </span>
+              )}
+            </button>
+          )}
 
           {/* My Projects / All Projects switcher (Admin, HR, Head, Team Leader) */}
           {canSeeAllProjects && (
@@ -15157,9 +15216,9 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         ))}
       </div>
 
-      {/* Tabs (K1: 4 landing tabs + Brand Division toggle) */}
+      {/* Tabs (Admin: 4 landing tabs + Brand Division toggle; Non-admin: 2 Project tabs) */}
       <div className="flex gap-2 border-b border-border/40 pb-4 overflow-x-auto hide-scrollbar">
-        {TABS.map(tab => (
+        {visibleTabs.map(tab => (
           <button
             key={tab}
             onClick={() => selectTab(tab)}
@@ -15173,24 +15232,28 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             {tab}
           </button>
         ))}
-        <button
-          onClick={() => setShowBrandDivision(v => !v)}
-          className={cn(
-            "px-4 sm:px-5 py-2 rounded-full text-sm font-bold whitespace-nowrap shrink-0 transition-all duration-300",
-            showBrandDivision
-              ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
-              : "bg-card text-foreground/70 hover:bg-muted/80 border border-dashed border-border/60"
-          )}
-        >
-          Brand Division
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setShowBrandDivision(v => !v)}
+            className={cn(
+              "px-4 sm:px-5 py-2 rounded-full text-sm font-bold whitespace-nowrap shrink-0 transition-all duration-300",
+              showBrandDivision
+                ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
+                : "bg-card text-foreground/70 hover:bg-muted/80 border border-dashed border-border/60"
+            )}
+          >
+            Brand Division
+          </button>
+        )}
       </div>
 
       {/* K2: Department-wise filter chips (project showcase). Synced with the
-          Filter-dropdown category selection (single-select). */}
-      {PROJECT_TABS.includes(activeTab) && !showBrandDivision && (
+          Filter-dropdown category selection (single-select).
+          Rule: If user only has access to 1 brand/category, do NOT show this filter.
+          Only show when there is MORE than 1 accessible category. */}
+      {PROJECT_TABS.includes(activeTab) && !showBrandDivision && availableFilterCategories.length > 1 && (
         <div className="flex gap-2 overflow-x-auto hide-scrollbar py-1">
-          {["All", ...categories].map(cat => {
+          {["All", ...availableFilterCategories].map(cat => {
             const selected = cat === "All"
               ? clientFilterCategories.length === 0
               : clientFilterCategories.length === 1 && clientFilterCategories[0] === cat;

@@ -195,7 +195,7 @@ class TaskService:
                 proj_summary = {
                     "_id": str(proj.get("_id") or project_id),
                     "id": str(proj.get("_id") or project_id),
-                    "project_name": gen.get("project_name", "Development Project"),
+                    "project_name": gen.get("project_name") or proj.get("name") or proj.get("title") or "Project",
                     "category": str(gen.get("category", "Development")),
                     "status": str(gen.get("status", "In Progress")),
                     "client_id": client_id if client_id else None
@@ -839,7 +839,8 @@ class TaskService:
         timeline_filter: Optional[str] = None,
         status: Optional[str] = None
     ):
-        cache_key = f"tasks:stats:{involved_emp_id or 'all'}:{target_date or 'today'}:{assigned_to or 'all'}:{assigned_by or 'all'}:{task_category or 'all'}:{sub_category or 'all'}:{project_id or 'all'}:{priority or 'all'}:{search or ''}:{timeline_filter or 'all'}:{status or 'all'}"
+        team_key = f"team_{len(team_employee_ids)}" if team_employee_ids is not None else 'all'
+        cache_key = f"tasks:stats:{involved_emp_id or 'all'}:{target_date or 'today'}:{assigned_to or 'all'}:{assigned_by or 'all'}:{task_category or 'all'}:{sub_category or 'all'}:{project_id or 'all'}:{priority or 'all'}:{search or ''}:{timeline_filter or 'all'}:{status or 'all'}:{team_key}"
         cached = await get_cache(cache_key)
         if cached is not None:
             return cached

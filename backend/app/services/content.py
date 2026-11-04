@@ -237,12 +237,30 @@ class ContentService:
             
             is_completed = mapping["is_completed"](item_data)
             
-            # Find existing active task for this content and role (regardless of status)
-            task = await task_col.find_one({
+            # Find all active tasks for this content item and role (regardless of status)
+            tasks_cursor = task_col.find({
                 "content_item_id": str(item_id),
                 "creative_role": role,
                 "is_deleted": False
-            })
+            }).sort("created_at", 1)
+            matching_tasks = await tasks_cursor.to_list(length=100)
+
+            task = None
+            if matching_tasks:
+                completed_tasks = [t for t in matching_tasks if t.get("status") in ["completed", "done"]]
+                if completed_tasks:
+                    task = completed_tasks[0]
+                    redundant_tasks = [t for t in matching_tasks if str(t["_id"]) != str(task["_id"])]
+                else:
+                    task = matching_tasks[0]
+                    redundant_tasks = matching_tasks[1:]
+
+                if redundant_tasks:
+                    dup_ids = [t["_id"] for t in redundant_tasks]
+                    await task_col.update_many(
+                        {"_id": {"$in": dup_ids}},
+                        {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}}
+                    )
             
             # Use the current user who triggered the action, or fallback to 'system'
             assigned_by = current_user_id
@@ -317,6 +335,12 @@ class ContentService:
                     creative["stage"] = role
                     creative[stage_link_key] = new_stage_val
                     update_payload["creative_details"] = creative
+                elif stage_link_key and new_stage_val and not (task.get("creative_details") or {}).get("link"):
+                    creative = dict(task.get("creative_details") or {})
+                    creative["link"] = new_stage_val
+                    creative["stage"] = role
+                    creative[stage_link_key] = new_stage_val
+                    update_payload["creative_details"] = creative
 
                 # Remark change check
                 old_rem = existing_item.get("remark") if existing_item else None
@@ -366,6 +390,10 @@ class ContentService:
                     update_payload["activity_history"] = act_history
                     await TaskRepository.update(task_id, update_payload)
             else:
+                # If stage is already completed / has valid link or content, DO NOT recreate a new task!
+                if is_completed:
+                    continue
+
                 # Create new task
                 from datetime import date as py_date
                 if isinstance(date_val, (py_date, datetime)):
