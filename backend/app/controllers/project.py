@@ -58,8 +58,8 @@ async def get_all_projects(
     is_operational = "operation" in user_dept.lower()
     is_admin_or_hr = user_role in ["admin", "superadmin", "hr", "subadmin"] or is_operational
     effective_category = category
-    if not is_admin_or_hr and user_dept and not category:
-        effective_category = user_dept
+    # Note: Removed forced filtering by user_dept so employees with project access/assignments
+    # across multiple categories (e.g. Creative/CC, Development, Digital Marketing) can see their projects.
 
     cache_key = make_list_key(
         "projects",

@@ -5306,9 +5306,14 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         return pName.startsWith(dName) || dName.startsWith(pName);
       });
 
+      // Prioritize subproject the user is assigned to (especially Creative/CC if user has Creative role)
+      const userAssignedCreativeSub = subProjects.find(p => (p.category === "Creative" || isSocialMediaCategory(p.category)) && isUserAssignedToProject(p));
+      const userAssignedSub = subProjects.find(p => isUserAssignedToProject(p));
+      const creativeSub = subProjects.find(p => p.category === "Creative" || isSocialMediaCategory(p.category));
+
       const primaryProject = (clientFilterCategories.length > 0
         ? subProjects.find(p => clientFilterCategories.includes(p.category))
-        : null) || exactNameMatch || prefixNameMatch || subProjects.find(p => p.status !== "Completed") || subProjects[0];
+        : null) || userAssignedCreativeSub || userAssignedSub || creativeSub || exactNameMatch || prefixNameMatch || subProjects.find(p => p.status !== "Completed") || subProjects[0];
 
       if (!primaryProject) return;
 
@@ -5482,6 +5487,22 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       status: "Active" as ClientStatus,
       contacts: []
     } : null);
+
+  const sisterProjects = useMemo(() => {
+    if (!currentProject) return [];
+    const baseClean = (name: string) => name.replace(/\s*-\s*(Creative|Digital Marketing|Development|Sales|SMM|SEO).*$/i, '').trim().toLowerCase();
+    const curBase = baseClean(currentProject.name);
+    return projects.filter(p => {
+      if (p.is_deleted) return false;
+      if (currentProject.clientId && p.clientId && currentProject.clientId !== "c-default" && p.clientId !== "c-default") {
+        if (p.clientId === currentProject.clientId) return true;
+      }
+      return baseClean(p.name) === curBase;
+    }).filter(p => {
+      if (canSeeAllProjects && projectScope === "all") return true;
+      return isUserAssignedToProject(p);
+    });
+  }, [currentProject, projects, canSeeAllProjects, projectScope, isUserAssignedToProject]);
 
   const currentMonthStats = useMemo(() => {
     if (!currentProject) return { targetPosts: 8, targetReels: 8, completedPosts: 0, completedReels: 0, totalTarget: 16, totalCompleted: 0 };
@@ -6995,6 +7016,35 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       {project.category || "General"}
                     </span>
                   </div>
+
+                  {sisterProjects.length > 1 && (
+                    <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mr-1">Brand Division:</span>
+                      {sisterProjects.map(sp => {
+                        const isCurrent = sp.id === project.id;
+                        const isCreative = sp.category === "Creative" || isSocialMediaCategory(sp.category);
+                        const isDM = isMarketingCategory(sp.category);
+                        const isDev = isDevCategory(sp.category);
+                        const label = isCreative ? "🎨 Creative (CC)" : isDM ? "📈 Digital Marketing" : isDev ? "💻 Development" : sp.category || sp.name;
+                        return (
+                          <button
+                            key={sp.id}
+                            type="button"
+                            onClick={() => setSelectedProjectId(sp.id)}
+                            className={cn(
+                              "px-2.5 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer border",
+                              isCurrent
+                                ? "bg-primary text-primary-foreground border-primary shadow-xs font-black"
+                                : "bg-card hover:bg-muted text-muted-foreground hover:text-foreground border-border/60"
+                            )}
+                            title={`Switch to ${sp.name}`}
+                          >
+                            <span>{label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
 
