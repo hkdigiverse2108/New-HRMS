@@ -10,11 +10,30 @@ from app.redis.service import get_cache, set_cache, clear_pattern, make_list_key
 
 router = APIRouter(prefix="/letter-requests", tags=["Letter Requests Workflow"])
 
-def is_admin_or_hr(user: dict) -> bool:
+async def is_admin_or_hr(user: dict) -> bool:
+    if not user:
+        return False
     work = user.get("work_details", {}) or {}
     role = str(work.get("system_role") or user.get("system_role") or user.get("role") or "").strip().lower()
     dept = str(work.get("department") or user.get("department") or "").strip().lower()
-    return any(r in role for r in ["admin", "subadmin", "superadmin", "hr"]) or dept == "hr"
+    desig = str(work.get("designation") or user.get("designation") or "").strip().lower()
+
+    if any(r in role for r in ["admin", "superadmin", "super admin", "subadmin", "sub admin", "hr", "hr manager"]):
+        return True
+    if dept == "hr" or "hr" in dept or dept == "human resources" or "human resources" in dept:
+        return True
+    if "hr" in desig or "human resource" in desig:
+        return True
+    try:
+        from app.controllers.auth import resolve_effective_permissions_for_employee
+        perms = await resolve_effective_permissions_for_employee(user)
+        for mod in ("/employees/documents", "/documents", "/employees/documents/generate", "/documents/generate"):
+            p = perms.get(mod, {}) or {}
+            if p.get("all") or p.get("read") or p.get("update") or p.get("create"):
+                return True
+    except Exception:
+        pass
+    return False
 
 @router.post("", response_model=LetterRequestResponse, status_code=status.HTTP_201_CREATED)
 async def create_letter_request(
@@ -23,7 +42,7 @@ async def create_letter_request(
 ):
     # If not admin/hr, enforce requesting only for oneself
     emp_id = str(current_user.get("_id") or current_user.get("id"))
-    if not is_admin_or_hr(current_user):
+    if not await is_admin_or_hr(current_user):
         data.employee_id = emp_id
 
     created = await LetterRequestService.create_request(data, current_user)
@@ -43,7 +62,7 @@ async def get_all_letter_requests(
     emp_id = str(current_user.get("_id") or current_user.get("id"))
     
     # If standard Employee, force filter by their own employee_id
-    if not is_admin_or_hr(current_user):
+    if not await is_admin_or_hr(current_user):
         employee_id = emp_id
 
     cache_key = make_list_key(
@@ -118,7 +137,7 @@ async def send_document_for_request(
     send_data: SendDocumentRequest,
     current_user: dict = Depends(get_current_employee)
 ):
-    if not is_admin_or_hr(current_user):
+    if not await is_admin_or_hr(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Admin or HR can send documents for requests")
 
     updated = await LetterRequestService.send_document(item_id, send_data, current_user)

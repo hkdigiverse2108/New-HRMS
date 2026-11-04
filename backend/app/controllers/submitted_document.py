@@ -10,12 +10,40 @@ from app.redis.service import get_cache, set_cache, clear_pattern, make_list_key
 
 router = APIRouter(prefix="/submitted-documents", tags=["Submitted Employee Documents Portal"])
 
-def check_admin_or_hr_role(user: dict):
-    work = user.get("work_details", {})
-    role = str(work.get("system_role") or user.get("system_role", "Employee")).strip()
-    if role.lower() not in ["admin", "subadmin", "hr", "hr manager"]:
+def is_admin_or_hr_sync(user: dict) -> bool:
+    if not user:
+        return False
+    work = user.get("work_details", {}) or {}
+    role = str(work.get("system_role") or user.get("system_role") or user.get("role") or "").strip().lower()
+    dept = str(work.get("department") or user.get("department") or "").strip().lower()
+    desig = str(work.get("designation") or user.get("designation") or "").strip().lower()
+
+    if any(r in role for r in ["admin", "superadmin", "super admin", "subadmin", "sub admin", "hr", "hr manager"]):
+        return True
+    if dept == "hr" or "hr" in dept or dept == "human resources" or "human resources" in dept:
+        return True
+    if "hr" in desig or "human resource" in desig:
+        return True
+    return False
+
+async def is_admin_or_hr_user(user: dict) -> bool:
+    if is_admin_or_hr_sync(user):
+        return True
+    try:
+        from app.controllers.auth import resolve_effective_permissions_for_employee
+        perms = await resolve_effective_permissions_for_employee(user)
+        for mod in ("/employees/documents", "/documents", "/employees/documents/generate", "/documents/generate"):
+            p = perms.get(mod, {}) or {}
+            if p.get("all") or p.get("read") or p.get("update") or p.get("create"):
+                return True
+    except Exception:
+        pass
+    return False
+
+async def check_admin_or_hr_role(user: dict):
+    if not await is_admin_or_hr_user(user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Admin or HR can upload and manage employee submitted documents")
-    return role
+    return True
 
 @router.post("", response_model=SubmittedDocumentResponse, status_code=status.HTTP_201_CREATED)
 async def create_submitted_document_json(
@@ -23,7 +51,7 @@ async def create_submitted_document_json(
     current_user: dict = Depends(get_current_employee)
 ):
     """Creates a submitted document record using JSON body."""
-    check_admin_or_hr_role(current_user)
+    await check_admin_or_hr_role(current_user)
 
     created = await SubmittedDocumentService.create_submitted_document(
         employee_id=data.employee_id,
@@ -50,7 +78,7 @@ async def upload_submitted_document_file(
     current_user: dict = Depends(get_current_employee)
 ):
     """Creates a submitted document record with file scan upload using multipart/form-data."""
-    check_admin_or_hr_role(current_user)
+    await check_admin_or_hr_role(current_user)
 
     file_bytes = None
     orig_filename = None
@@ -119,9 +147,8 @@ async def get_all_submitted_documents(
     limit: Optional[int] = Query(None, ge=1, le=1000, description="Items per page limit"),
     current_user: dict = Depends(get_current_employee)
 ):
-    work = current_user.get("work_details", {})
-    role = str(work.get("system_role") or current_user.get("system_role", "Employee")).strip().lower()
-    if role not in ["admin", "subadmin", "hr", "hr manager"]:
+    can_view_all = await is_admin_or_hr_user(current_user)
+    if not can_view_all:
         # Standard employee can only see their own documents
         employee_id = str(current_user.get("_id", ""))
 
@@ -163,7 +190,7 @@ async def download_submitted_document_file(
     # Security check: User can view if Admin/HR or if document belongs to logged-in employee
     is_admin = False
     try:
-        check_admin_or_hr_role(current_user)
+        await check_admin_or_hr_role(current_user)
         is_admin = True
     except HTTPException:
         pass
@@ -194,7 +221,7 @@ async def get_submitted_document_by_id(
     if cached is not None:
         is_admin = False
         try:
-            check_admin_or_hr_role(current_user)
+            await check_admin_or_hr_role(current_user)
             is_admin = True
         except HTTPException:
             pass
@@ -209,7 +236,7 @@ async def get_submitted_document_by_id(
 
     is_admin = False
     try:
-        check_admin_or_hr_role(current_user)
+        await check_admin_or_hr_role(current_user)
         is_admin = True
     except HTTPException:
         pass
@@ -227,7 +254,7 @@ async def update_submitted_document(
     data: SubmittedDocumentUpdate,
     current_user: dict = Depends(get_current_employee)
 ):
-    check_admin_or_hr_role(current_user)
+    await check_admin_or_hr_role(current_user)
     item = await SubmittedDocumentService.get_by_id(item_id)
     if not item or item.get("is_deleted"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submitted document not found")
@@ -250,7 +277,7 @@ async def delete_submitted_document(
     item_id: str,
     current_user: dict = Depends(get_current_employee)
 ):
-    check_admin_or_hr_role(current_user)
+    await check_admin_or_hr_role(current_user)
     item = await SubmittedDocumentService.get_by_id(item_id)
     if not item or item.get("is_deleted"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submitted document not found")

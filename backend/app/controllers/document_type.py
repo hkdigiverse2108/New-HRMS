@@ -7,19 +7,42 @@ from app.redis.service import get_cache, set_cache, clear_pattern, make_list_key
 
 router = APIRouter(prefix="/document-types", tags=["Document Types"])
 
-def check_admin_or_hr_role(user: dict):
-    work = user.get("work_details", {})
-    role = str(work.get("system_role") or user.get("system_role", "Employee")).strip()
-    if role.lower() not in ["admin", "subadmin", "hr", "hr manager"]:
+async def is_admin_or_hr_user(user: dict) -> bool:
+    if not user:
+        return False
+    work = user.get("work_details", {}) or {}
+    role = str(work.get("system_role") or user.get("system_role") or user.get("role") or "").strip().lower()
+    dept = str(work.get("department") or user.get("department") or "").strip().lower()
+    desig = str(work.get("designation") or user.get("designation") or "").strip().lower()
+
+    if any(r in role for r in ["admin", "superadmin", "super admin", "subadmin", "sub admin", "hr", "hr manager"]):
+        return True
+    if dept == "hr" or "hr" in dept or dept == "human resources" or "human resources" in dept:
+        return True
+    if "hr" in desig or "human resource" in desig:
+        return True
+    try:
+        from app.controllers.auth import resolve_effective_permissions_for_employee
+        perms = await resolve_effective_permissions_for_employee(user)
+        for mod in ("/employees/documents", "/documents", "/employees/documents/generate", "/documents/generate"):
+            p = perms.get(mod, {}) or {}
+            if p.get("all") or p.get("read") or p.get("update") or p.get("create"):
+                return True
+    except Exception:
+        pass
+    return False
+
+async def check_admin_or_hr_role(user: dict):
+    if not await is_admin_or_hr_user(user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Admin or HR can manage document types")
-    return role
+    return True
 
 @router.post("", response_model=DocumentTypeResponse, status_code=status.HTTP_201_CREATED)
 async def create_document_type(
     data: DocumentTypeCreate,
     current_user: dict = Depends(get_current_employee)
 ):
-    check_admin_or_hr_role(current_user)
+    await check_admin_or_hr_role(current_user)
     created = await DocumentTypeService.create_document_type(data, current_user)
     await clear_pattern("document_types:*")
     return created
@@ -71,7 +94,7 @@ async def update_document_type(
     data: DocumentTypeUpdate,
     current_user: dict = Depends(get_current_employee)
 ):
-    check_admin_or_hr_role(current_user)
+    await check_admin_or_hr_role(current_user)
     item = await DocumentTypeService.get_by_id(item_id)
     if not item or item.get("is_deleted"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document type not found")
@@ -88,7 +111,7 @@ async def delete_document_type(
     item_id: str,
     current_user: dict = Depends(get_current_employee)
 ):
-    check_admin_or_hr_role(current_user)
+    await check_admin_or_hr_role(current_user)
     item = await DocumentTypeService.get_by_id(item_id)
     if not item or item.get("is_deleted"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document type not found")

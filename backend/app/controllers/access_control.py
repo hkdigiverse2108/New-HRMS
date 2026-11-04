@@ -83,8 +83,15 @@ async def get_available_departments():
     db = get_database()
     depts = await db["departments"].find({"is_deleted": {"$ne": True}}).to_list(100)
     if depts:
-        return [d["name"] for d in depts if d.get("name")]
-    return ["HR", "Development", "Management", "Python", "Sales", "Creative", "Product", "Digital Marketing", "Finance"]
+        seen = set()
+        out = []
+        for d in depts:
+            name = str(d.get("name", "")).strip()
+            if name and name not in seen:
+                seen.add(name)
+                out.append(name)
+        return out
+    return ["HR", "Development", "Management", "Python", "Sales", "Creative", "Product", "Digital Marketing", "Finance", "Operational"]
 
 # ==========================================
 # Permission Presets API Endpoints (Department & Role Wise)

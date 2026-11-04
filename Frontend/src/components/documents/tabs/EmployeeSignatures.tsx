@@ -6,9 +6,11 @@ import { useEmployeesContext } from "@/components/employees/EmployeeContext";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Employee } from "@/components/employees/employee-data";
 import { useAuth } from "@/components/auth/AuthContext";
+import { isUserAdminOrHR } from "@/lib/permissions";
 import { api } from "@/lib/api";
 import { toast } from "@/lib/toast";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
+import { SearchableSelect } from "@/components/ui/select";
 
 export function EmployeeSignatures() {
   const { employees, refreshEmployees } = useEmployeesContext();
@@ -24,11 +26,7 @@ export function EmployeeSignatures() {
   const [sigToDelete, setSigToDelete] = useState<Employee | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const isAdminOrHr =
-    authUser?.role === "Admin" ||
-    Boolean((authUser as any)?.is_superuser) ||
-    (authUser as any)?.department?.toLowerCase() === "hr" ||
-    (authUser as any)?.designation?.toLowerCase().includes("hr");
+  const isAdminOrHr = isUserAdminOrHR(authUser);
 
   const handleDeleteSignature = async () => {
     if (!sigToDelete) return;
@@ -162,30 +160,28 @@ export function EmployeeSignatures() {
 
         <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full lg:w-auto">
           {/* Status Filter */}
-          <select
+          <SearchableSelect
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as any)}
-            className="py-2.5 px-4 bg-card border border-border/60 rounded-2xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
-          >
-            <option value="All">All Statuses ({totalEmployees})</option>
-            <option value="Signed">Signature Added ({signedCount})</option>
-            <option value="Pending">Pending Signature ({pendingCount})</option>
-          </select>
+            onChange={(val) => setStatusFilter(val as any)}
+            options={[
+              { label: `All Statuses (${totalEmployees})`, value: "All" },
+              { label: `Signature Added (${signedCount})`, value: "Signed" },
+              { label: `Pending Signature (${pendingCount})`, value: "Pending" },
+            ]}
+            className="w-full sm:w-[210px] h-[40px] text-xs font-bold bg-card border border-border/60 rounded-2xl"
+          />
 
           {/* Department Filter */}
           {departments.length > 0 && (
-            <select
+            <SearchableSelect
               value={departmentFilter}
-              onChange={(e) => setDepartmentFilter(e.target.value)}
-              className="py-2.5 px-4 bg-card border border-border/60 rounded-2xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
-            >
-              <option value="All">All Departments</option>
-              {departments.map((dept) => (
-                <option key={dept} value={dept}>
-                  {dept}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setDepartmentFilter(val)}
+              options={[
+                { label: "All Departments", value: "All" },
+                ...departments.map((dept) => ({ label: dept, value: dept })),
+              ]}
+              className="w-full sm:w-[190px] h-[40px] text-xs font-bold bg-card border border-border/60 rounded-2xl"
+            />
           )}
         </div>
       </div>

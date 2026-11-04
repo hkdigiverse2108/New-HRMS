@@ -6,6 +6,7 @@ import { SortableHeader } from "@/components/ui/sortable-header";
 import { useEmployeesContext } from "@/components/employees/EmployeeContext";
 import { Employee } from "@/components/employees/employee-data";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { SearchableSelect } from "@/components/ui/select";
 import { toast } from "@/lib/toast";
 
 export type ContractStatus = "Pending" | "Verified" | "Rejected";
@@ -153,16 +154,17 @@ export function VerifyContracts() {
         </div>
 
         <div className="flex items-center gap-3 w-full sm:w-auto">
-          <select
+          <SearchableSelect
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as any)}
-            className="w-full sm:w-auto py-2.5 px-4 bg-card border border-border/60 rounded-2xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all cursor-pointer"
-          >
-            <option value="All">All Statuses ({totalContracts})</option>
-            <option value="Pending">Pending Verification ({pendingCount})</option>
-            <option value="Verified">Verified ({verifiedCount})</option>
-            <option value="Rejected">Rejected ({rejectedCount})</option>
-          </select>
+            onChange={(val) => setStatusFilter(val as any)}
+            options={[
+              { label: `All Statuses (${totalContracts})`, value: "All" },
+              { label: `Pending Verification (${pendingCount})`, value: "Pending" },
+              { label: `Verified (${verifiedCount})`, value: "Verified" },
+              { label: `Rejected (${rejectedCount})`, value: "Rejected" },
+            ]}
+            className="w-full sm:w-[220px] h-[40px] text-xs font-bold bg-card border border-border/60 rounded-2xl"
+          />
         </div>
       </div>
 

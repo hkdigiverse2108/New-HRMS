@@ -2,6 +2,7 @@ import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { ArrowLeft, Download, Send, Printer, User, FileText, Sparkles, Settings2, Loader2 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { SearchableSelect } from "@/components/ui/select";
+import { DatePicker } from "@/components/ui/date-picker";
 import { api } from "@/lib/api";
 import { toast } from "@/lib/toast";
 import { getApiUrl } from "@/lib/config";
@@ -1239,13 +1240,23 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
                           </span>
                         )}
                       </label>
-                      <input
-                        type={isDateType ? "date" : "text"}
-                        value={isDateType ? formatValueForDateInput(currentVal || "") : (currentVal || "")}
-                        onChange={(e) => handleVarChange(varKey, e.target.value)}
-                        placeholder={`Enter ${fieldLabel}...`}
-                        className="w-full px-3.5 py-2 bg-background border border-border/50 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none font-medium transition-all cursor-pointer"
-                      />
+                      {isDateType ? (
+                        <DatePicker
+                          value={formatValueForDateInput(currentVal || "")}
+                          onChange={(val) => handleVarChange(varKey, val)}
+                          displayFormat="dd-MM-yyyy"
+                          placeholder={`Select ${fieldLabel}...`}
+                          className="w-full h-[40px] px-3.5 bg-background border border-border/50 rounded-xl text-sm font-medium"
+                        />
+                      ) : (
+                        <input
+                          type="text"
+                          value={currentVal || ""}
+                          onChange={(e) => handleVarChange(varKey, e.target.value)}
+                          placeholder={`Enter ${fieldLabel}...`}
+                          className="w-full px-3.5 py-2 bg-background border border-border/50 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none font-medium transition-all"
+                        />
+                      )}
                     </div>
                   );
                 })}

@@ -10,7 +10,7 @@ import {
   PenTool
 } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthContext";
-import { isUserAdmin } from "@/lib/permissions";
+import { isUserAdmin, isUserAdminOrHR } from "@/lib/permissions";
 import { SubmittedDocuments } from "./tabs/SubmittedDocuments";
 import { OfficialLetters } from "./tabs/OfficialLetters";
 import { DocumentTypes } from "./tabs/DocumentTypes";
@@ -30,9 +30,7 @@ const TABS = [
 export function Documents({ setActive }: { setActive?: (path: string) => void }) {
   const { user } = useAuth();
 
-  const userRole = String((user as any)?.role || (user as any)?.work_details?.system_role || (user as any)?.system_role || "").toLowerCase();
-  const userDept = String((user as any)?.department || (user as any)?.work_details?.department || "").toLowerCase();
-  const isAdminOrHR = isUserAdmin(user) || ["admin", "subadmin", "superadmin", "hr", "hr manager"].some(r => userRole.includes(r)) || userDept === "hr";
+  const isAdminOrHR = isUserAdminOrHR(user);
 
   const visibleTabs = TABS.filter(tab => {
     if (["types", "templates", "contracts", "signatures"].includes(tab.id)) {

@@ -128,9 +128,11 @@ export function AccessControl() {
   const loadInitialData = async () => {
     setIsLoading(true);
     try {
-      // 1. Fetch system modules
+      // 1. Fetch system modules FIRST so they are immediately available for permission rendering
+      let loadedMods: SystemModule[] = [];
       const mods = await api.get<SystemModule[]>("/permissions/modules", { showErrorToast: false });
       if (mods && mods.length > 0) {
+        loadedMods = mods;
         setModules(mods);
       }
 
@@ -142,8 +144,8 @@ export function AccessControl() {
           id: String(e._id || e.id),
           name: formatPersonName(e.personal_info) || e.name || "Employee",
           email: e.personal_info?.email_address || e.email || "",
-          department: e.work_details?.department || "",
-          designation: e.work_details?.designation || "",
+          department: (e.work_details?.department || "").trim(),
+          designation: (e.work_details?.designation || "").trim(),
           role: e.work_details?.system_role || "Employee",
         }));
         setEmployees(empList);
@@ -153,10 +155,12 @@ export function AccessControl() {
       }
 
       // 3. Fetch available departments
+      let deptsList = availableDepartments;
       try {
         const deptsRes = await api.get<string[]>("/permissions/departments", { showErrorToast: false });
         if (deptsRes && Array.isArray(deptsRes) && deptsRes.length > 0) {
-          setAvailableDepartments(deptsRes);
+          deptsList = deptsRes.map((d: string) => d.trim()).filter(Boolean);
+          setAvailableDepartments(deptsList);
         }
       } catch (err) {
         console.warn("Error fetching departments", err);
@@ -171,6 +175,14 @@ export function AccessControl() {
       } catch (err) {
         console.warn("Error fetching roles", err);
       }
+
+      // 5. Instantly load the initial tab data with loaded modules
+      if (activeTab === "departments") {
+        const deptToLoad = selectedDepartment || deptsList[0] || "HR";
+        await loadDepartmentPresetPermissions(deptToLoad, loadedMods);
+      } else if (activeTab === "employees" && selectedEmployeeId) {
+        await loadEmployeePermissions(selectedEmployeeId, loadedMods);
+      }
     } catch (err) {
       console.error("Failed to load access control data", err);
     } finally {
@@ -180,21 +192,30 @@ export function AccessControl() {
 
   // Load permissions when selected employee changes
   useEffect(() => {
-    if (activeTab === "employees" && selectedEmployeeId) {
-      loadEmployeePermissions(selectedEmployeeId);
+    if (activeTab === "employees" && selectedEmployeeId && modules.length > 0) {
+      loadEmployeePermissions(selectedEmployeeId, modules);
     }
   }, [selectedEmployeeId, activeTab]);
 
   // Load preset permissions when selected department changes
   useEffect(() => {
-    if (activeTab === "departments" && selectedDepartment) {
-      loadDepartmentPresetPermissions(selectedDepartment);
+    if (activeTab === "departments" && selectedDepartment && modules.length > 0) {
+      loadDepartmentPresetPermissions(selectedDepartment, modules);
     }
   }, [selectedDepartment, activeTab]);
 
-  const loadEmployeePermissions = async (empId: string) => {
+  const loadEmployeePermissions = async (empId: string, modulesList?: SystemModule[]) => {
     setIsLoading(true);
     try {
+      let targetModules = modulesList && modulesList.length > 0 ? modulesList : modules;
+      if (!targetModules || targetModules.length === 0) {
+        const fetchedMods = await api.get<SystemModule[]>("/permissions/modules", { showErrorToast: false });
+        if (fetchedMods && fetchedMods.length > 0) {
+          targetModules = fetchedMods;
+          setModules(fetchedMods);
+        }
+      }
+
       const res = await api.get<any>(`/permissions/${empId}`, { showErrorToast: false });
       setEmpInheritanceInfo({
         isCustom: Boolean(res?.is_custom),
@@ -204,7 +225,7 @@ export function AccessControl() {
       const rawPerms = res?.module_permissions || {};
       const formatted: Record<string, PermissionFlags> = {};
       
-      modules.forEach(m => {
+      targetModules.forEach(m => {
         const p = rawPerms[m.id] || {};
         formatted[m.id] = {
           read: Boolean(p.read || p.all),
@@ -222,14 +243,24 @@ export function AccessControl() {
     }
   };
 
-  const loadDepartmentPresetPermissions = async (deptName: string) => {
+  const loadDepartmentPresetPermissions = async (deptName: string, modulesList?: SystemModule[]) => {
     setIsLoading(true);
     try {
-      const res = await api.get<any>(`/permissions/presets/department/${encodeURIComponent(deptName)}`, { showErrorToast: false });
+      let targetModules = modulesList && modulesList.length > 0 ? modulesList : modules;
+      if (!targetModules || targetModules.length === 0) {
+        const fetchedMods = await api.get<SystemModule[]>("/permissions/modules", { showErrorToast: false });
+        if (fetchedMods && fetchedMods.length > 0) {
+          targetModules = fetchedMods;
+          setModules(fetchedMods);
+        }
+      }
+
+      const cleanDept = deptName.trim();
+      const res = await api.get<any>(`/permissions/presets/department/${encodeURIComponent(cleanDept)}`, { showErrorToast: false });
       const rawPerms = res?.module_permissions || {};
       const formatted: Record<string, PermissionFlags> = {};
       
-      modules.forEach(m => {
+      targetModules.forEach(m => {
         const p = rawPerms[m.id] || {};
         formatted[m.id] = {
           read: Boolean(p.read || p.all),
@@ -633,7 +664,10 @@ export function AccessControl() {
                     <button
                       key={dept}
                       type="button"
-                      onClick={() => setSelectedDepartment(dept)}
+                      onClick={() => {
+                        setSelectedDepartment(dept);
+                        loadDepartmentPresetPermissions(dept);
+                      }}
                       className={cn(
                         "p-3 rounded-xl border text-left transition-all relative overflow-hidden flex flex-col justify-between",
                         selectedDepartment === dept

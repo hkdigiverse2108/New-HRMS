@@ -22,7 +22,8 @@ import {
   Loader2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { SearchableSelect } from "@/components/ui/select";
+import { SearchableSelect, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DatePicker } from "@/components/ui/date-picker";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { SearchInput } from "@/components/common/SearchInput";
@@ -31,7 +32,7 @@ import { useAuth } from "@/components/auth/AuthContext";
 import { API_URL, getAvatarUrl, handleAvatarError } from "@/lib/config";
 import { toast } from "@/lib/toast";
 import { api } from "@/lib/api";
-import { hasModulePermission, isUserAdmin } from "@/lib/permissions";
+import { hasModulePermission, isUserAdmin, isUserAdminOrHR } from "@/lib/permissions";
 import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog";
 
 type DocStatus = "Accepted" | "Pending Review" | "Pending to Submit" | "Rejected" | "Returned to Employee";
@@ -66,9 +67,7 @@ export function SubmittedDocuments() {
   const { employees, updateEmployee } = useEmployeesContext();
   const { user } = useAuth();
 
-  const userRole = String((user as any)?.role || (user as any)?.work_details?.system_role || (user as any)?.system_role || "").toLowerCase();
-  const userDept = String((user as any)?.department || (user as any)?.work_details?.department || "").toLowerCase();
-  const isAdminOrHR = isUserAdmin(user) || ["admin", "subadmin", "superadmin", "hr", "hr manager"].some(r => userRole.includes(r)) || userDept === "hr";
+  const isAdminOrHR = isUserAdminOrHR(user);
 
   const [backendDocs, setBackendDocs] = useState<SubmittedDocItem[]>([]);
   const [docTypes, setDocTypes] = useState<DocTypeItem[]>([]);
@@ -712,29 +711,29 @@ export function SubmittedDocuments() {
             />
           )}
 
-          <select
+          <SearchableSelect
             value={filterType}
-            onChange={e => setFilterType(e.target.value)}
-            className="w-full 2xl:w-auto min-w-0 px-2 sm:px-3 h-9 sm:h-[40px] text-[11px] sm:text-xs font-bold bg-card border border-border/50 rounded-xl focus:outline-none truncate"
-          >
-            <option value="all">All Types</option>
-            <option value="deposit">Security Deposits Only</option>
-            {docTypes.map(t => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </select>
+            onChange={setFilterType}
+            options={[
+              { label: "All Types", value: "all" },
+              { label: "Security Deposits Only", value: "deposit" },
+              ...docTypes.map(t => ({ label: t.name, value: t.id }))
+            ]}
+            className="col-span-1 min-w-0 w-full 2xl:w-[190px] h-9 sm:h-[40px] text-[11px] sm:text-xs font-bold bg-card border border-border/50 rounded-xl"
+          />
 
-          <select
+          <SearchableSelect
             value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
-            className="w-full 2xl:w-auto min-w-0 px-2 sm:px-3 h-9 sm:h-[40px] text-[11px] sm:text-xs font-bold bg-card border border-border/50 rounded-xl focus:outline-none truncate"
-          >
-            <option value="all">All Status</option>
-            <option value="Pending to Submit">Pending to Submit</option>
-            <option value="Accepted">Accepted</option>
-            <option value="Rejected">Rejected</option>
-            <option value="Returned to Employee">Returned to Employee</option>
-          </select>
+            onChange={setStatusFilter}
+            options={[
+              { label: "All Status", value: "all" },
+              { label: "Pending to Submit", value: "Pending to Submit" },
+              { label: "Accepted", value: "Accepted" },
+              { label: "Rejected", value: "Rejected" },
+              { label: "Returned to Employee", value: "Returned to Employee" }
+            ]}
+            className="col-span-1 min-w-0 w-full 2xl:w-[170px] h-9 sm:h-[40px] text-[11px] sm:text-xs font-bold bg-card border border-border/50 rounded-xl"
+          />
 
           {isAdminOrHR && (
             <button
@@ -847,22 +846,28 @@ export function SubmittedDocuments() {
                             </div>
                           )
                         ) : isAdminOrHR ? (
-                          <select
+                          <Select
                             value={doc.status}
-                            onChange={(e) => handleInlineStatusChange(doc, e.target.value)}
-                            className={cn(
-                              "px-2.5 py-1 rounded-lg text-xs font-bold border cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20 transition-colors",
-                              doc.status === "Accepted" ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/20 hover:bg-emerald-500/20" :
-                              doc.status === "Rejected" ? "bg-rose-500/10 text-rose-700 border-rose-500/20 hover:bg-rose-500/20" :
-                              doc.status === "Returned to Employee" ? "bg-amber-500/10 text-amber-700 border-amber-500/20 hover:bg-amber-500/20" :
-                              "bg-slate-500/10 text-slate-700 border-slate-500/20 hover:bg-slate-500/20"
-                            )}
+                            onValueChange={(val) => handleInlineStatusChange(doc, val)}
                           >
-                            <option value="Pending to Submit" className="bg-background text-foreground font-semibold">Pending to Submit</option>
-                            <option value="Accepted" className="bg-background text-foreground font-semibold">Accepted</option>
-                            <option value="Rejected" className="bg-background text-foreground font-semibold">Rejected</option>
-                            <option value="Returned to Employee" className="bg-background text-foreground font-semibold">Returned to Employee</option>
-                          </select>
+                            <SelectTrigger
+                              className={cn(
+                                "h-7 w-[165px] px-2.5 py-0.5 rounded-lg text-xs font-bold border transition-colors shadow-none",
+                                doc.status === "Accepted" ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/20 hover:bg-emerald-500/20" :
+                                doc.status === "Rejected" ? "bg-rose-500/10 text-rose-700 border-rose-500/20 hover:bg-rose-500/20" :
+                                doc.status === "Returned to Employee" ? "bg-amber-500/10 text-amber-700 border-amber-500/20 hover:bg-amber-500/20" :
+                                "bg-slate-500/10 text-slate-700 border-slate-500/20 hover:bg-slate-500/20"
+                              )}
+                            >
+                              <SelectValue placeholder="Select status" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-popover border border-border/60 shadow-lg rounded-xl z-50">
+                              <SelectItem value="Pending to Submit" className="text-xs font-semibold cursor-pointer">Pending to Submit</SelectItem>
+                              <SelectItem value="Accepted" className="text-xs font-semibold text-emerald-600 cursor-pointer">Accepted</SelectItem>
+                              <SelectItem value="Rejected" className="text-xs font-semibold text-rose-600 cursor-pointer">Rejected</SelectItem>
+                              <SelectItem value="Returned to Employee" className="text-xs font-semibold text-amber-600 cursor-pointer">Returned to Employee</SelectItem>
+                            </SelectContent>
+                          </Select>
                         ) : (
                           <span className={cn(
                             "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border",
@@ -879,12 +884,15 @@ export function SubmittedDocuments() {
                       {/* Date Column (Inline Editable for Admin/HR) */}
                       <td className="p-4 text-xs font-semibold text-muted-foreground">
                         {isAdminOrHR ? (
-                          <input
-                            type="date"
-                            value={doc.uploadDate && doc.uploadDate !== "-" ? doc.uploadDate : ""}
-                            onChange={(e) => handleInlineDateChange(doc, e.target.value)}
-                            className="px-2 py-1 bg-background hover:bg-muted/50 border border-border/50 rounded-lg text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-colors cursor-pointer"
-                          />
+                          <div className="w-[130px]">
+                            <DatePicker
+                              value={doc.uploadDate && doc.uploadDate !== "-" ? doc.uploadDate : ""}
+                              onChange={(newDate) => handleInlineDateChange(doc, newDate)}
+                              displayFormat="dd-MM-yyyy"
+                              placeholder="dd-mm-yyyy"
+                              className="h-7 text-xs font-semibold px-2 py-0.5 rounded-lg border-border/50 bg-background hover:bg-muted/50"
+                            />
+                          </div>
                         ) : (
                           doc.uploadDate || "-"
                         )}
@@ -984,16 +992,13 @@ export function SubmittedDocuments() {
               <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
                 Document Type *
               </label>
-              <select
+              <SearchableSelect
                 value={uploadDocTypeId}
-                onChange={e => setUploadDocTypeId(e.target.value)}
-                className="w-full px-3 py-2.5 bg-background border border-border/50 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20"
-              >
-                <option value="">-- Choose Document Type --</option>
-                {docTypes.map(t => (
-                  <option key={t.id} value={t.id}>{t.name} {t.isRequired ? "(Mandatory)" : ""}</option>
-                ))}
-              </select>
+                onChange={setUploadDocTypeId}
+                options={docTypes.map(t => ({ label: `${t.name} ${t.isRequired ? "(Mandatory)" : ""}`, value: t.id }))}
+                placeholder="Choose Document Type..."
+                className="w-full h-[40px] text-xs font-semibold bg-background border border-border/50 rounded-xl"
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -1001,11 +1006,12 @@ export function SubmittedDocuments() {
                 <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
                   Document Date
                 </label>
-                <input
-                  type="date"
+                <DatePicker
                   value={uploadDate}
-                  onChange={e => setUploadDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-background border border-border/50 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  onChange={setUploadDate}
+                  displayFormat="dd-MM-yyyy"
+                  placeholder="dd-mm-yyyy"
+                  className="w-full h-[40px] text-xs font-semibold px-3 py-2 bg-background border border-border/50 rounded-xl"
                 />
               </div>
 
@@ -1013,16 +1019,17 @@ export function SubmittedDocuments() {
                 <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
                   Status
                 </label>
-                <select
+                <SearchableSelect
                   value={uploadStatus}
-                  onChange={e => setUploadStatus(e.target.value as DocStatus)}
-                  className="w-full px-3 py-2 bg-background border border-border/50 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20"
-                >
-                  <option value="Accepted">Accepted</option>
-                  <option value="Pending Review">Pending Review</option>
-                  <option value="Rejected">Rejected</option>
-                  <option value="Returned to Employee">Returned to Employee</option>
-                </select>
+                  onChange={(val) => setUploadStatus(val as DocStatus)}
+                  options={[
+                    { label: "Accepted", value: "Accepted" },
+                    { label: "Pending Review", value: "Pending Review" },
+                    { label: "Rejected", value: "Rejected" },
+                    { label: "Returned to Employee", value: "Returned to Employee" }
+                  ]}
+                  className="w-full h-[40px] text-xs font-semibold bg-background border border-border/50 rounded-xl"
+                />
               </div>
             </div>
           </div>
@@ -1077,16 +1084,16 @@ export function SubmittedDocuments() {
                 <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
                   Document Type
                 </label>
-                <select
+                <SearchableSelect
                   value={editDocTypeId}
-                  onChange={e => setEditDocTypeId(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-background border border-border/50 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20"
-                >
-                  <option value="">{editingDoc.documentName}</option>
-                  {docTypes.map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
+                  onChange={setEditDocTypeId}
+                  options={[
+                    ...(editDocTypeId ? [] : [{ label: editingDoc.documentName, value: "" }]),
+                    ...docTypes.map(t => ({ label: t.name, value: t.id }))
+                  ]}
+                  placeholder={editingDoc.documentName || "Select Document Type..."}
+                  className="w-full h-[40px] text-xs font-semibold bg-background border border-border/50 rounded-xl"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1094,11 +1101,12 @@ export function SubmittedDocuments() {
                   <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
                     Date
                   </label>
-                  <input
-                    type="date"
+                  <DatePicker
                     value={editDate}
-                    onChange={e => setEditDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-background border border-border/50 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    onChange={setEditDate}
+                    displayFormat="dd-MM-yyyy"
+                    placeholder="dd-mm-yyyy"
+                    className="w-full h-[40px] text-xs font-semibold px-3 py-2 bg-background border border-border/50 rounded-xl"
                   />
                 </div>
 
@@ -1106,16 +1114,17 @@ export function SubmittedDocuments() {
                   <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
                     Status
                   </label>
-                  <select
+                  <SearchableSelect
                     value={editStatus}
-                    onChange={e => setEditStatus(e.target.value as DocStatus)}
-                    className="w-full px-3 py-2 bg-background border border-border/50 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  >
-                    <option value="Accepted">Accepted</option>
-                    <option value="Pending Review">Pending Review</option>
-                    <option value="Rejected">Rejected</option>
-                    <option value="Returned to Employee">Returned to Employee</option>
-                  </select>
+                    onChange={(val) => setEditStatus(val as DocStatus)}
+                    options={[
+                      { label: "Accepted", value: "Accepted" },
+                      { label: "Pending Review", value: "Pending Review" },
+                      { label: "Rejected", value: "Rejected" },
+                      { label: "Returned to Employee", value: "Returned to Employee" }
+                    ]}
+                    className="w-full h-[40px] text-xs font-semibold bg-background border border-border/50 rounded-xl"
+                  />
                 </div>
               </div>
             </div>

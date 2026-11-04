@@ -16,6 +16,42 @@ export function isUserAdmin(user: UserProfile | null): boolean {
 }
 
 /**
+ * Determines if the user is an Admin or HR / Authorized Document Manager.
+ * Checks admin status, HR role, HR/Human Resources department or designation,
+ * and dynamic module permissions for documents.
+ */
+export function isUserAdminOrHR(user: UserProfile | null): boolean {
+  if (!user) return false;
+  if (isUserAdmin(user)) return true;
+
+  const role = String(user.role || (user as any).system_role || (user as any).work_details?.system_role || "").toLowerCase().trim();
+  if (["admin", "superadmin", "super admin", "subadmin", "sub admin", "hr", "hr manager"].some(r => role.includes(r))) {
+    return true;
+  }
+
+  const dept = String(user.department || (user as any).work_details?.department || "").toLowerCase().trim();
+  if (dept === "hr" || dept.includes("hr") || dept === "human resources" || dept.includes("human resources")) {
+    return true;
+  }
+
+  const desig = String(user.designation || (user as any).work_details?.designation || "").toLowerCase().trim();
+  if (desig.includes("hr") || desig.includes("human resource")) {
+    return true;
+  }
+
+  // Check module permissions for documents
+  if (
+    hasModulePermission(user, "/employees/documents", "read") ||
+    hasModulePermission(user, "/documents", "read") ||
+    hasModulePermission(user, "/employees/documents/generate", "read")
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Known system parent modules that group distinct child sub-modules in Access Control.
  * A parent read permission on these groups does NOT grant read to its children.
  * Only explicit child permission OR parent `all` (Full Access) grants child access.

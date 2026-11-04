@@ -3,11 +3,12 @@ import { Plus, Filter, FileText, CheckCircle2, XCircle, Clock, X, Download, Eye,
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { cn, formatPersonName } from "@/lib/utils";
 import { SearchableSelect } from "@/components/ui/select";
+import { DatePicker } from "@/components/ui/date-picker";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { SearchInput } from "@/components/common/SearchInput";
 import { useAuth } from "@/components/auth/AuthContext";
-import { isUserAdmin } from "@/lib/permissions";
+import { isUserAdmin, isUserAdminOrHR } from "@/lib/permissions";
 import { api } from "@/lib/api";
 import { toast } from "@/lib/toast";
 
@@ -32,9 +33,7 @@ interface LetterRequestItem {
 
 export function OfficialLetters({ onNavigate }: { onNavigate?: ((path: string) => void) | undefined }) {
   const { user } = useAuth();
-  const userRole = String((user as any)?.role || (user as any)?.work_details?.system_role || (user as any)?.system_role || "").toLowerCase();
-  const userDept = String((user as any)?.department || (user as any)?.work_details?.department || "").toLowerCase();
-  const isAdminOrHR = isUserAdmin(user) || ["admin", "subadmin", "superadmin", "hr", "hr manager"].some(r => userRole.includes(r)) || userDept === "hr";
+  const isAdminOrHR = isUserAdminOrHR(user);
 
   const [search, setSearch] = useState("");
   const [requests, setRequests] = useState<LetterRequestItem[]>([]);
@@ -351,12 +350,13 @@ export function OfficialLetters({ onNavigate }: { onNavigate?: ((path: string) =
 
             <div>
               <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Needed By Date *</label>
-              <input
-                type="date"
+              <DatePicker
                 value={newNeededBy}
-                onChange={(e) => setNewNeededBy(e.target.value)}
-                min={new Date().toISOString().split("T")[0]}
-                className="w-full px-4 py-2.5 bg-background border border-border/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-medium"
+                onChange={(val) => setNewNeededBy(val)}
+                minDate={new Date()}
+                displayFormat="dd-MM-yyyy"
+                placeholder="dd-mm-yyyy"
+                className="w-full h-[42px] px-4 bg-background border border-border/50 rounded-xl text-sm font-medium"
               />
             </div>
 
