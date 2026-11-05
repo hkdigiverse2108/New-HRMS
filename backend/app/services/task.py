@@ -312,6 +312,86 @@ class TaskService:
         if not insert_data.get("priority"):
             insert_data["priority"] = "medium"
 
+        # Content Calendar Issue Deduplication:
+        # A content item stage (content_item_id, sub_category) can only have ONE active issue task!
+        # If an active issue task already exists (e.g. earlier Client Issue or Pending):
+        # We update that single task with the latest reason, category, and status instead of creating a duplicate!
+        cid = insert_data.get("content_item_id")
+        sc = insert_data.get("sub_category")
+        is_issue_task = (
+            insert_data.get("task_category") in ["Client Issue", "Pending"]
+            or insert_data.get("is_client_issue") is True
+            or insert_data.get("is_pending_issue") is True
+            or str(title).lower().startswith("[client issue]")
+            or str(title).lower().startswith("[pending]")
+        )
+
+        if cid and is_issue_task:
+            collection = await TaskRepository.get_collection()
+            existing_cursor = collection.find({
+                "content_item_id": cid,
+                "is_deleted": False,
+                "$or": [
+                    {"task_category": {"$in": ["Client Issue", "Pending"]}},
+                    {"is_client_issue": True},
+                    {"is_pending_issue": True},
+                    {"title": {"$regex": r"^\[(client issue|pending)\]", "$options": "i"}}
+                ]
+            }).sort("created_at", -1)
+            existing_issues = await existing_cursor.to_list(length=100)
+
+            target_sc = (sc or "").strip().lower()
+            matching_issues = []
+            for ei in existing_issues:
+                ei_sc = (ei.get("sub_category") or "").strip().lower()
+                ei_title = (ei.get("title") or "").strip().lower()
+                if not target_sc or ei_sc == target_sc or f"({target_sc})" in ei_title:
+                    matching_issues.append(ei)
+
+            if matching_issues:
+                primary = matching_issues[0]
+                redundant = matching_issues[1:]
+
+                # Soft-delete any older redundant duplicate tasks
+                if redundant:
+                    red_ids = [r["_id"] for r in redundant]
+                    await collection.update_many(
+                        {"_id": {"$in": red_ids}},
+                        {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}}
+                    )
+
+                primary_id = str(primary["_id"])
+                update_fields = {
+                    "title": insert_data.get("title") or primary.get("title"),
+                    "description": insert_data.get("description") or primary.get("description"),
+                    "task_category": insert_data.get("task_category", primary.get("task_category")),
+                    "sub_category": insert_data.get("sub_category") or primary.get("sub_category"),
+                    "is_client_issue": insert_data.get("is_client_issue", False),
+                    "is_pending_issue": insert_data.get("is_pending_issue", False),
+                    "reason_for_pending": insert_data.get("reason_for_pending") or primary.get("reason_for_pending"),
+                    "priority": insert_data.get("priority") or primary.get("priority", "medium"),
+                    "status": insert_data.get("status") or "todo",
+                    "updated_at": datetime.utcnow()
+                }
+                if insert_data.get("due_date"):
+                    update_fields["due_date"] = insert_data["due_date"]
+                if insert_data.get("assigned_to"):
+                    update_fields["assigned_to"] = insert_data["assigned_to"]
+
+                act_history = list(primary.get("activity_history") or [])
+                act_history.append({
+                    "action": "updated",
+                    "performed_by": assigned_by,
+                    "timestamp": datetime.utcnow(),
+                    "details": f"Updated {update_fields['task_category']} with latest reason: {update_fields.get('reason_for_pending')}"
+                })
+                update_fields["activity_history"] = act_history
+
+                await TaskRepository.update(primary_id, update_fields)
+                await clear_pattern("tasks:*")
+                updated_task = await TaskRepository.get_by_id(primary_id)
+                return updated_task
+
         # Deduplication: Prevent duplicate active tasks for the same employee
         assigned_to = insert_data.get("assigned_to")
         title = (insert_data.get("title") or "").strip()

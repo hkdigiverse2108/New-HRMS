@@ -54,6 +54,111 @@ class TaskRepository:
             data["_id"] = str(inserted_id)
         return data_list
 
+    STAGE_MATCHERS = {
+        "Script": {"$or": [
+            {"sub_category": {"$regex": "^script", "$options": "i"}},
+            {"creative_role": "scripting"},
+            {"title": {"$regex": "\\(script\\)", "$options": "i"}}
+        ]},
+        "Shoot": {"$or": [
+            {"sub_category": {"$regex": "^shoot", "$options": "i"}},
+            {"creative_role": "shoot_videography"},
+            {"title": {"$regex": "\\(shoot\\)", "$options": "i"}}
+        ]},
+        "Editing": {"$or": [
+            {"sub_category": {"$regex": "^(editing|video editing|reel editing)$", "$options": "i"}},
+            {"creative_role": "reel_editing"},
+            {"title": {"$regex": "\\(editing\\)", "$options": "i"}}
+        ]},
+        "Post/Graphics": {"$or": [
+            {"sub_category": {"$regex": "^(post/graphics|post graphics|graphics|post)$", "$options": "i"}},
+            {"creative_role": "post_graphics"},
+            {"title": {"$regex": "\\(post\\s*/?\\s*graphics\\)", "$options": "i"}}
+        ]},
+        "Caption": {"$or": [
+            {"sub_category": {"$regex": "^caption", "$options": "i"}},
+            {"creative_role": "caption"},
+            {"title": {"$regex": "\\(caption\\)", "$options": "i"}}
+        ]},
+        "Thumbnail": {"$or": [
+            {"sub_category": {"$regex": "^thumb", "$options": "i"}},
+            {"creative_role": "thumbnail"},
+            {"title": {"$regex": "\\(thumbnail\\)", "$options": "i"}}
+        ]},
+        "Approval": {"$or": [
+            {"sub_category": {"$regex": "^approval", "$options": "i"}},
+            {"creative_role": "approval_qc"},
+            {"title": {"$regex": "\\(approval\\)", "$options": "i"}}
+        ]},
+        "Posting": {"$or": [
+            {"sub_category": {"$regex": "^posting", "$options": "i"}},
+            {"creative_role": "posting_publisher"},
+            {"title": {"$regex": "(\\(posting\\)|^posting\\b)", "$options": "i"}}
+        ]}
+    }
+
+    @classmethod
+    async def _get_issue_nor_clauses(cls, collection):
+        try:
+            issue_cursor = collection.find({
+                "is_deleted": False,
+                "content_item_id": {"$exists": True, "$ne": None, "$ne": ""},
+                "$or": [
+                    {"task_category": {"$in": ["Client Issue", "Pending"]}},
+                    {"is_client_issue": True},
+                    {"is_pending_issue": True},
+                    {"title": {"$regex": "^\\[(client issue|pending)\\]", "$options": "i"}}
+                ]
+            }, {"content_item_id": 1, "sub_category": 1, "creative_role": 1, "title": 1})
+            issue_tasks = await issue_cursor.to_list(length=2000)
+
+            def _detect_stage(t):
+                sc = (t.get("sub_category") or "").strip().lower()
+                role = (t.get("creative_role") or "").strip().lower()
+                title = (t.get("title") or "").strip().lower()
+
+                if "script" in sc or role == "scripting" or "(script)" in title:
+                    return "Script"
+                if "shoot" in sc or role == "shoot_videography" or "(shoot)" in title:
+                    return "Shoot"
+                if any(x in sc for x in ["editing", "video editing", "reel editing"]) or role == "reel_editing" or "(editing)" in title:
+                    return "Editing"
+                if any(x in sc for x in ["post/graphics", "post graphics", "graphics", "post"]) or role == "post_graphics" or "(post" in title:
+                    return "Post/Graphics"
+                if "caption" in sc or role == "caption" or "(caption)" in title:
+                    return "Caption"
+                if "thumb" in sc or role == "thumbnail" or "(thumbnail)" in title:
+                    return "Thumbnail"
+                if "approval" in sc or role == "approval_qc" or "(approval)" in title:
+                    return "Approval"
+                if "posting" in sc or role == "posting_publisher" or "(posting)" in title or title.startswith("posting"):
+                    return "Posting"
+                return None
+
+            issue_nor_clauses = []
+            seen_pairs = set()
+            for it in issue_tasks:
+                cid = it.get("content_item_id")
+                if not cid:
+                    continue
+                stage = _detect_stage(it)
+                pair_key = (cid, stage)
+                if pair_key in seen_pairs:
+                    continue
+                seen_pairs.add(pair_key)
+
+                if stage and stage in cls.STAGE_MATCHERS:
+                    issue_nor_clauses.append({
+                        "content_item_id": cid,
+                        "$or": cls.STAGE_MATCHERS[stage]["$or"]
+                    })
+                else:
+                    issue_nor_clauses.append({"content_item_id": cid})
+            return issue_nor_clauses
+        except Exception as e:
+            logger.error(f"Error computing issue nor clauses: {e}")
+            return []
+
     @classmethod
     async def get_all(
         cls, 
@@ -242,6 +347,12 @@ class TaskRepository:
             "status": {"$nin": ["client_issue", "pending", "Client Issue", "Pending"]},
             "title": {"$not": {"$regex": "^\\[(client issue|pending)\\]", "$options": "i"}}
         }
+
+        is_issue_timeline = bool(timeline_filter and timeline_filter.lower().strip() in ["client_issue", "pending"])
+        if not is_issue_timeline:
+            issue_nor_clauses = await cls._get_issue_nor_clauses(collection)
+            if issue_nor_clauses:
+                and_conditions.append({"$nor": issue_nor_clauses})
 
         if timeline_filter:
             tf = timeline_filter.lower().strip()
@@ -581,6 +692,11 @@ class TaskRepository:
         }
 
         timeline_cond = None
+        is_issue_timeline = bool(timeline_filter and timeline_filter.lower().strip() in ["client_issue", "pending"])
+        issue_nor_clauses = []
+        if not is_issue_timeline:
+            issue_nor_clauses = await cls._get_issue_nor_clauses(collection)
+
         if timeline_filter:
             tf = timeline_filter.lower().strip()
             if tf == "today":
@@ -618,6 +734,8 @@ class TaskRepository:
                     conds.append(creative_issue_match)
             else:
                 conds.append(exclude_issue_cond)
+                if issue_nor_clauses:
+                    conds.append({"$nor": issue_nor_clauses})
                 if dept_assign_match:
                     conds.append(dept_assign_match)
                 if timeline_cond:
@@ -663,20 +781,26 @@ class TaskRepository:
 
         # Single round-trip facet with filter-wise KPIs and dynamic stage counts
         # Client Issue and Pending are strictly separated from normal KPIs
-        def _match_with_dept(cond: dict):
+        def _match_with_dept(cond: dict, exclude_twins: bool = True):
+            parts = []
             if dept_assign_match:
-                return {"$and": [dept_assign_match, cond]}
-            return cond
+                parts.append(dept_assign_match)
+            parts.append(cond)
+            if exclude_twins and issue_nor_clauses:
+                parts.append({"$nor": issue_nor_clauses})
+            if len(parts) == 1:
+                return parts[0]
+            return {"$and": parts}
 
         facet_def = {
-            "total": [{"$match": _match_with_dept(exclude_issue_cond)}, {"$count": "n"}],
-            "todo": [{"$match": _match_with_dept({"$and": [{"status": "todo"}, exclude_issue_cond]})}, {"$count": "n"}],
-            "inprogress": [{"$match": _match_with_dept({"$and": [{"status": "inprogress"}, exclude_issue_cond]})}, {"$count": "n"}],
-            "inreview": [{"$match": _match_with_dept({"$and": [{"status": {"$in": ["inreview", "review"]}}, exclude_issue_cond]})}, {"$count": "n"}],
-            "completed": [{"$match": _match_with_dept({"$and": [{"status": {"$in": ["completed", "done"]}, "content_item_id": {"$in": [None, ""]}}, exclude_issue_cond]})}, {"$count": "n"}],
-            "today": [{"$match": _match_with_dept({"$and": [today_work_cond, exclude_issue_cond]})}, {"$count": "n"}],
-            "overdue": [{"$match": _match_with_dept({"$and": [overdue_cond, exclude_issue_cond]})}, {"$count": "n"}],
-            "upcoming": [{"$match": _match_with_dept({"$and": [upcoming_cond, exclude_issue_cond]})}, {"$count": "n"}],
+            "total": [{"$match": _match_with_dept(exclude_issue_cond, exclude_twins=True)}, {"$count": "n"}],
+            "todo": [{"$match": _match_with_dept({"$and": [{"status": "todo"}, exclude_issue_cond]}, exclude_twins=True)}, {"$count": "n"}],
+            "inprogress": [{"$match": _match_with_dept({"$and": [{"status": "inprogress"}, exclude_issue_cond]}, exclude_twins=True)}, {"$count": "n"}],
+            "inreview": [{"$match": _match_with_dept({"$and": [{"status": {"$in": ["inreview", "review"]}}, exclude_issue_cond]}, exclude_twins=True)}, {"$count": "n"}],
+            "completed": [{"$match": _match_with_dept({"$and": [{"status": {"$in": ["completed", "done"]}, "content_item_id": {"$in": [None, ""]}}, exclude_issue_cond]}, exclude_twins=True)}, {"$count": "n"}],
+            "today": [{"$match": _match_with_dept({"$and": [today_work_cond, exclude_issue_cond]}, exclude_twins=True)}, {"$count": "n"}],
+            "overdue": [{"$match": _match_with_dept({"$and": [overdue_cond, exclude_issue_cond]}, exclude_twins=True)}, {"$count": "n"}],
+            "upcoming": [{"$match": _match_with_dept({"$and": [upcoming_cond, exclude_issue_cond]}, exclude_twins=True)}, {"$count": "n"}],
             "client_issue": [{"$match": {"$and": [creative_issue_match, client_issue_cond]} if creative_issue_match else client_issue_cond}, {"$count": "n"}],
             "pending": [{"$match": {"$and": [creative_issue_match, pending_cond]} if creative_issue_match else pending_cond}, {"$count": "n"}],
             # Stage breakdowns (stable counts independent of single subcategory selection)

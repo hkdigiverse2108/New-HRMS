@@ -1126,9 +1126,20 @@ const CalendarIssuesCell = ({
     const cleanText = newIssueText.trim();
     const issueId = `issue-${Date.now()}`;
 
-    let createdTaskId: string | undefined = undefined;
+    let activeTaskId: string | undefined = undefined;
 
-    // Automatically create a Task in Task Management if Client Issue or Pending is selected
+    // Audio 24: Mutually Exclusive latest state per role!
+    // A role can only have ONE active issue task in Task Management.
+    // If a task already exists for this role, we UPDATE it with the latest reason, category & status.
+    const roleIssues = issuesList.filter((iss: any) =>
+      (iss.role || "").trim().toLowerCase() === selectedRole.trim().toLowerCase()
+    );
+    const existingTaskIds = roleIssues
+      .map((iss: any) => iss.taskId)
+      .filter((tid: any) => Boolean(tid) && String(tid).trim() !== "");
+    const primaryTaskId = existingTaskIds[existingTaskIds.length - 1];
+    const redundantTaskIds = existingTaskIds.slice(0, -1);
+
     if (issueType !== "normal") {
       try {
         const ideaTitle = item.topic || "Content Idea";
@@ -1148,12 +1159,33 @@ const CalendarIssuesCell = ({
           content_item_id: item.id,
           assigned_to: getAssigneeForRole(selectedRole),
         };
-        const res: any = await api.post("/tasks", taskPayload, { showErrorToast: false });
-        if (res?._id || res?.id) {
-          createdTaskId = String(res._id || res.id);
+
+        if (primaryTaskId) {
+          try {
+            await api.put(`/tasks/${primaryTaskId}`, taskPayload, { showErrorToast: false });
+            activeTaskId = primaryTaskId;
+          } catch {
+            const res: any = await api.post("/tasks", taskPayload, { showErrorToast: false });
+            if (res?._id || res?.id) activeTaskId = String(res._id || res.id);
+          }
+        } else {
+          const res: any = await api.post("/tasks", taskPayload, { showErrorToast: false });
+          if (res?._id || res?.id) activeTaskId = String(res._id || res.id);
+        }
+
+        // Clean up any older redundant duplicate tasks for this role
+        for (const dupId of redundantTaskIds) {
+          if (dupId !== activeTaskId) {
+            api.delete(`/tasks/${dupId}`, { showErrorToast: false }).catch(() => {});
+          }
         }
       } catch (err) {
-        console.warn("Could not create Task for Content Calendar issue:", err);
+        console.warn("Could not sync Task for Content Calendar issue:", err);
+      }
+    } else {
+      // If switching this stage to Normal remark, delete any existing issue task
+      for (const tid of existingTaskIds) {
+        api.delete(`/tasks/${tid}`, { showErrorToast: false }).catch(() => {});
       }
     }
 
@@ -1166,11 +1198,22 @@ const CalendarIssuesCell = ({
       isClientIssue: issueType === "client_issue",
       isPending: issueType === "pending",
       issueType: issueType,
-      taskId: createdTaskId,
+      taskId: activeTaskId,
       timestamp: dateStr
     };
 
-    const updatedIssues = [...issuesList, newIssue];
+    // All past history entries stay in issuesList with their timestamps & text!
+    // But only the latest entry holds the active status and taskId
+    const updatedIssues = [
+      ...issuesList.map((iss: any) => {
+        if ((iss.role || "").trim().toLowerCase() === selectedRole.trim().toLowerCase()) {
+          return { ...iss, isClientIssue: false, isPending: false, taskId: undefined };
+        }
+        return iss;
+      }),
+      newIssue
+    ];
+
     const updatedCalendar = projectCalendar.map((x: any) =>
       x.id === item.id ? { ...x, issues: updatedIssues } : x
     );
@@ -1186,52 +1229,60 @@ const CalendarIssuesCell = ({
   };
 
   const handleUpdateIssueType = async (issueId: string, nextType: "client_issue" | "pending" | "normal") => {
-    const targetIssue = issuesList.find(i => i.id === issueId);
+    const targetIssue = issuesList.find((i: any) => i.id === issueId);
     if (!targetIssue) return;
+    const targetRole = targetIssue.role || "Scripting";
 
-    let newTaskId = targetIssue.taskId;
+    // Collect all task IDs for this role
+    const roleIssues = issuesList.filter((i: any) => (i.role || "").trim().toLowerCase() === targetRole.trim().toLowerCase());
+    const existingTaskIds = roleIssues
+      .map((iss: any) => iss.taskId)
+      .filter((tid: any) => Boolean(tid) && String(tid).trim() !== "");
+    let activeTaskId = targetIssue.taskId || existingTaskIds[existingTaskIds.length - 1];
 
-    // Delete existing task if switching to normal
-    if (nextType === "normal" && newTaskId) {
-      api.delete(`/tasks/${newTaskId}`, { showErrorToast: false }).catch(() => {});
-      newTaskId = undefined;
-    } else if (nextType !== "normal") {
+    if (nextType === "normal") {
+      for (const tid of existingTaskIds) {
+        api.delete(`/tasks/${tid}`, { showErrorToast: false }).catch(() => {});
+      }
+      activeTaskId = undefined;
+    } else {
       try {
         const now = new Date();
         const todayYMD = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
         const ideaTitle = item.topic || "Content Idea";
         const isClient = nextType === "client_issue";
+        const taskPayload = {
+          title: `[${isClient ? 'Client Issue' : 'Pending'}] ${ideaTitle} (${targetRole}): ${targetIssue.text}`,
+          description: `${isClient ? 'Client Issue' : 'Pending Task'} reported from Content Calendar (${project.name || project.title || 'Project'} - ${ideaTitle})\nRole/Phase: ${targetRole}\nAdded by: ${currentUserName}\nRemark: "${targetIssue.text}"`,
+          priority: isClient ? "High" : "Medium",
+          status: "Todo",
+          task_category: isClient ? "Client Issue" : "Pending",
+          sub_category: mapRoleToSubCategory(targetRole),
+          is_client_issue: isClient,
+          is_pending_issue: !isClient,
+          reason_for_pending: targetIssue.text,
+          due_date: todayYMD,
+          project_id: project.id,
+          content_item_id: item.id,
+          assigned_to: getAssigneeForRole(targetRole),
+        };
 
-        if (newTaskId) {
-          // Update existing task
-          await api.put(`/tasks/${newTaskId}`, {
-            title: `[${isClient ? 'Client Issue' : 'Pending'}] ${ideaTitle} (${targetIssue.role || 'Creative'}): ${targetIssue.text}`,
-            task_category: isClient ? "Client Issue" : "Pending",
-            sub_category: mapRoleToSubCategory(targetIssue.role),
-            is_client_issue: isClient,
-            is_pending_issue: !isClient,
-            reason_for_pending: targetIssue.text,
-            priority: isClient ? "High" : "Medium",
-          }, { showErrorToast: false });
+        if (activeTaskId) {
+          try {
+            await api.put(`/tasks/${activeTaskId}`, taskPayload, { showErrorToast: false });
+          } catch {
+            const res: any = await api.post("/tasks", taskPayload, { showErrorToast: false });
+            if (res?._id || res?.id) activeTaskId = String(res._id || res.id);
+          }
         } else {
-          // Create new task
-          const res: any = await api.post("/tasks", {
-            title: `[${isClient ? 'Client Issue' : 'Pending'}] ${ideaTitle} (${targetIssue.role || 'Creative'}): ${targetIssue.text}`,
-            description: `${isClient ? 'Client Issue' : 'Pending Task'} reported from Content Calendar (${project.name || project.title || 'Project'} - ${ideaTitle})\nRole/Phase: ${targetIssue.role}\nAdded by: ${currentUserName}\nRemark: "${targetIssue.text}"`,
-            priority: isClient ? "High" : "Medium",
-            status: "Todo",
-            task_category: isClient ? "Client Issue" : "Pending",
-            sub_category: mapRoleToSubCategory(targetIssue.role),
-            is_client_issue: isClient,
-            is_pending_issue: !isClient,
-            reason_for_pending: targetIssue.text,
-            due_date: todayYMD,
-            project_id: project.id,
-            content_item_id: item.id,
-            assigned_to: getAssigneeForRole(targetIssue.role || "Scripting"),
-          }, { showErrorToast: false });
-          if (res?._id || res?.id) {
-            newTaskId = String(res._id || res.id);
+          const res: any = await api.post("/tasks", taskPayload, { showErrorToast: false });
+          if (res?._id || res?.id) activeTaskId = String(res._id || res.id);
+        }
+
+        // Clean up redundant tasks
+        for (const tid of existingTaskIds) {
+          if (tid !== activeTaskId) {
+            api.delete(`/tasks/${tid}`, { showErrorToast: false }).catch(() => {});
           }
         }
       } catch (err) {
@@ -1239,17 +1290,22 @@ const CalendarIssuesCell = ({
       }
     }
 
-    const updatedIssues = issuesList.map(iss =>
-      iss.id === issueId
-        ? {
-            ...iss,
-            isClientIssue: nextType === "client_issue",
-            isPending: nextType === "pending",
-            issueType: nextType,
-            taskId: newTaskId
-          }
-        : iss
-    );
+    const updatedIssues = issuesList.map((iss: any) => {
+      if (iss.id === issueId) {
+        return {
+          ...iss,
+          isClientIssue: nextType === "client_issue",
+          isPending: nextType === "pending",
+          issueType: nextType,
+          taskId: activeTaskId
+        };
+      }
+      if ((iss.role || "").trim().toLowerCase() === targetRole.trim().toLowerCase()) {
+        return { ...iss, isClientIssue: false, isPending: false, taskId: undefined };
+      }
+      return iss;
+    });
+
     const updatedCalendar = projectCalendar.map((x: any) =>
       x.id === item.id ? { ...x, issues: updatedIssues } : x
     );
@@ -1262,8 +1318,8 @@ const CalendarIssuesCell = ({
   };
 
   const handleRemoveIssue = (issueId: string) => {
-    const issueObj = issuesList.find(i => i.id === issueId);
-    const updatedIssues = issuesList.filter(i => i.id !== issueId);
+    const issueObj = issuesList.find((i: any) => i.id === issueId);
+    const updatedIssues = issuesList.filter((i: any) => i.id !== issueId);
     const updatedCalendar = projectCalendar.map((x: any) =>
       x.id === item.id ? { ...x, issues: updatedIssues } : x
     );
@@ -1282,8 +1338,23 @@ const CalendarIssuesCell = ({
     }
   };
 
-  const activeClientIssues = myIssuesList.filter(i => i.isClientIssue === true || (i.isClientIssue !== false && !i.isPending));
-  const activePendingIssues = myIssuesList.filter(i => i.isPending === true);
+  // Group by distinct role to only consider the latest entry per role for badge counts
+  const latestByRole = useMemo(() => {
+    const map = new Map<string, any>();
+    for (const iss of myIssuesList) {
+      const roleKey = (iss.role || "General").trim().toLowerCase();
+      map.set(roleKey, iss);
+    }
+    return Array.from(map.values());
+  }, [myIssuesList]);
+
+  const activeClientIssues = useMemo(() => {
+    return latestByRole.filter((i: any) => i.isClientIssue === true || (i.issueType === "client_issue" && !i.isPending));
+  }, [latestByRole]);
+
+  const activePendingIssues = useMemo(() => {
+    return latestByRole.filter((i: any) => i.isPending === true || i.issueType === "pending");
+  }, [latestByRole]);
 
   return (
     <Popover>

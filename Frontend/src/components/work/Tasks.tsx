@@ -573,18 +573,15 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
     if (departmentFilter !== "All" && !deptLower.includes("creative")) return false;
 
     return (
-
+      isAdmin ||
+      timeframeFilter === "client_issue" ||
+      timeframeFilter === "pending" ||
       dLower.includes("creative") ||
-
       desigLower.includes("creative") ||
-
       deptLower.includes("creative") ||
-
       catLower.includes("creative")
-
     );
-
-  }, [userDepartment, userDesignation, departmentFilter, categoryFilter, subCategoryFilter, tasks]);
+  }, [userDepartment, userDesignation, departmentFilter, categoryFilter, subCategoryFilter, tasks, isAdmin, timeframeFilter]);
 
   // Stage / Project filters show only when the Creative department (or category) is selected
 
