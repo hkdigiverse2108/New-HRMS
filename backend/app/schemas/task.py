@@ -81,6 +81,8 @@ class TaskBase(BaseModel):
     is_client_issue: Optional[bool] = None
     is_pending_issue: Optional[bool] = None
     reason_for_pending: Optional[str] = None
+    department: Optional[str] = Field(default=None, description="Department for the task, e.g. Other Work, Creative, Development")
+    is_custom: Optional[bool] = Field(default=False, description="Flag indicating if the task was manually created as custom work during punch-in/tracking")
 
     @field_validator('status', mode='before')
     @classmethod
@@ -139,6 +141,8 @@ class TaskUpdate(BaseModel):
     activity_history: Optional[list[dict]] = None
     history_assigned_to: Optional[str] = None
     history_assigned_by: Optional[str] = None
+    department: Optional[str] = None
+    is_custom: Optional[bool] = None
 
     @field_validator('status', mode='before')
     @classmethod

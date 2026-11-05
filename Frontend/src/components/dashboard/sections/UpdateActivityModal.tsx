@@ -497,7 +497,9 @@ export function UpdateActivityModal({
               assigned_to: employeeId,
               due_date: todayStr,
               description: `Created during Punch-In activity tracking (${taskToSave.taskType})`,
-              task_category: taskToSave.taskType === "Research" ? "Research" : "General",
+              task_category: "Other Work",
+              department: "Other Work",
+              is_custom: true,
             }, { showErrorToast: false });
             if (res?._id || res?.id) {
               taskToSave.taskId = String(res._id || res.id);

@@ -439,25 +439,20 @@ async def get_all_tasks(
     # If department filter is explicitly requested (only for team/all views, never restrict My Tasks)
 
     if not is_my_tasks and department and department != "All":
-
-        from app.repository.employee import EmployeeRepository
-
-        dept_emps = await EmployeeRepository.get_all_employees(department=department, limit=1000)
-
-        dept_emp_ids = [str(e["_id"]) for e in dept_emps.get("data", [])]
-
-        if department.lower() == "creative":
-            # Posting is a part of Creative even if assigned to Tanvi (HR)
-            if "6abc98e2edafab0976cd60d4" not in dept_emp_ids:
-                dept_emp_ids.append("6abc98e2edafab0976cd60d4")
-
-        if team_employee_ids is not None:
-
-            team_employee_ids = list(set(team_employee_ids).intersection(set(dept_emp_ids)))
-
+        if department.lower() in ["other work", "other"]:
+            team_employee_ids = None
         else:
-
-            team_employee_ids = dept_emp_ids
+            from app.repository.employee import EmployeeRepository
+            dept_emps = await EmployeeRepository.get_all_employees(department=department, limit=1000)
+            dept_emp_ids = [str(e["_id"]) for e in dept_emps.get("data", [])]
+            if department.lower() == "creative":
+                # Posting is a part of Creative even if assigned to Tanvi (HR)
+                if "6abc98e2edafab0976cd60d4" not in dept_emp_ids:
+                    dept_emp_ids.append("6abc98e2edafab0976cd60d4")
+            if team_employee_ids is not None:
+                team_employee_ids = list(set(team_employee_ids).intersection(set(dept_emp_ids)))
+            else:
+                team_employee_ids = dept_emp_ids
 
 
 
@@ -499,7 +494,9 @@ async def get_all_tasks(
 
         team_employee_ids=team_employee_ids,
 
-        sub_category=sub_category
+        sub_category=sub_category,
+
+        department=department
 
     )
 
@@ -655,63 +652,42 @@ async def get_task_stats(
 
 
     if not is_my_tasks and department and department != "All":
-
-        from app.repository.employee import EmployeeRepository
-
-        dept_emps = await EmployeeRepository.get_all_employees(department=department, limit=1000)
-
-        dept_emp_ids = [str(e["_id"]) for e in dept_emps.get("data", [])]
-
-        if department.lower() == "creative":
-            if "6abc98e2edafab0976cd60d4" not in dept_emp_ids:
-                dept_emp_ids.append("6abc98e2edafab0976cd60d4")
-
-        if team_employee_ids is not None:
-
-            team_employee_ids = list(set(team_employee_ids).intersection(set(dept_emp_ids)))
-
+        if department.lower() in ["other work", "other"]:
+            team_employee_ids = None
         else:
-
-            team_employee_ids = dept_emp_ids
+            from app.repository.employee import EmployeeRepository
+            dept_emps = await EmployeeRepository.get_all_employees(department=department, limit=1000)
+            dept_emp_ids = [str(e["_id"]) for e in dept_emps.get("data", [])]
+            if department.lower() == "creative":
+                if "6abc98e2edafab0976cd60d4" not in dept_emp_ids:
+                    dept_emp_ids.append("6abc98e2edafab0976cd60d4")
+            if team_employee_ids is not None:
+                team_employee_ids = list(set(team_employee_ids).intersection(set(dept_emp_ids)))
+            else:
+                team_employee_ids = dept_emp_ids
 
     dept_key = department or 'all'
     team_key = f"team_{len(team_employee_ids)}" if team_employee_ids is not None else 'all'
     cache_key = f"tasks:stats:{involved_emp_id or 'all'}:{target_date or 'today'}:{assigned_to or 'all'}:{assigned_by or 'all'}:{task_category or 'all'}:{sub_category or 'all'}:{project_id or 'all'}:{priority or 'all'}:{search or ''}:{timeline_filter or 'all'}:{status or 'all'}:{dept_key}:{team_key}"
 
     cached = await get_cache(cache_key)
-
     if cached is not None:
-
         return cached
 
-
-
     result = await TaskService.get_task_stats(
-
         involved_emp_id=involved_emp_id,
-
         target_date=target_date,
-
         assigned_to=assigned_to,
-
         assigned_by=assigned_by,
-
         team_employee_ids=team_employee_ids,
-
         task_category=task_category,
-
         sub_category=sub_category,
-
         project_id=project_id,
-
         priority=priority,
-
         search=search,
-
         timeline_filter=timeline_filter,
-
-        status=status
-
+        status=status,
+        department=department
     )
 
     await set_cache(cache_key, result, ttl=60)

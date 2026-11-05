@@ -182,7 +182,8 @@ class TaskRepository:
         end_date: Optional[date] = None,
         search: Optional[str] = None,
         team_employee_ids: Optional[list[str]] = None,
-        sub_category: Optional[str] = None
+        sub_category: Optional[str] = None,
+        department: Optional[str] = None
     ):
         collection = await cls.get_collection()
         
@@ -232,6 +233,26 @@ class TaskRepository:
                 })
             else:
                 and_conditions.append({"assigned_to": {"$in": team_employee_ids}})
+
+        if department and department != "All":
+            if department.lower() in ["other work", "other"]:
+                and_conditions.append({
+                    "$or": [
+                        {"department": {"$in": ["Other Work", "Other", "other work", "other"]}},
+                        {"task_category": {"$in": ["Other Work", "Other", "other work", "other"]}},
+                        {"is_custom": True},
+                        {"description": {"$regex": "Created during Punch-In activity tracking", "$options": "i"}}
+                    ]
+                })
+            else:
+                and_conditions.append({
+                    "$and": [
+                        {"department": {"$nin": ["Other Work", "Other", "other work", "other"]}},
+                        {"task_category": {"$nin": ["Other Work", "Other", "other work", "other"]}},
+                        {"is_custom": {"$ne": True}},
+                        {"description": {"$not": {"$regex": "Created during Punch-In activity tracking", "$options": "i"}}}
+                    ]
+                })
             
         if assigned_to:
             match_assignees = [str(assigned_to)]
@@ -512,7 +533,8 @@ class TaskRepository:
         priority: Optional[str] = None,
         search: Optional[str] = None,
         timeline_filter: Optional[str] = None,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        department: Optional[str] = None
     ):
         collection = await cls.get_collection()
         
@@ -556,7 +578,28 @@ class TaskRepository:
             })
         if assigned_by:
             common_conditions.append({"assigned_by": assigned_by})
-        dept_assign_match = {"assigned_to": {"$in": team_employee_ids}} if team_employee_ids is not None else None
+        if department and department != "All":
+            if department.lower() in ["other work", "other"]:
+                dept_assign_match = {
+                    "$or": [
+                        {"department": {"$in": ["Other Work", "Other", "other work", "other"]}},
+                        {"task_category": {"$in": ["Other Work", "Other", "other work", "other"]}},
+                        {"is_custom": True},
+                        {"description": {"$regex": "Created during Punch-In activity tracking", "$options": "i"}}
+                    ]
+                }
+            else:
+                dept_assign_match = {
+                    "$and": [
+                        ({"assigned_to": {"$in": team_employee_ids}} if team_employee_ids is not None else {}),
+                        {"department": {"$nin": ["Other Work", "Other", "other work", "other"]}},
+                        {"task_category": {"$nin": ["Other Work", "Other", "other work", "other"]}},
+                        {"is_custom": {"$ne": True}},
+                        {"description": {"$not": {"$regex": "Created during Punch-In activity tracking", "$options": "i"}}}
+                    ]
+                }
+        else:
+            dept_assign_match = {"assigned_to": {"$in": team_employee_ids}} if team_employee_ids is not None else None
         creative_subcats = ["Script", "Shoot", "Editing", "Video Editing", "Reel Editing", "Post/Graphics", "Post Graphics", "Post", "Graphics", "Caption", "Thumbnail", "Approval", "Posting"]
         creative_issue_match = {
             "$or": [

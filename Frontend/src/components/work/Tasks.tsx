@@ -1522,7 +1522,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
     });
 
-    ["Creative", "Development", "SMM", "Video Editing", "HR"].forEach((d) => deptSet.add(d));
+    ["Creative", "Development", "SMM", "Video Editing", "HR", "Other Work"].forEach((d) => deptSet.add(d));
 
     return ["All", ...Array.from(deptSet).sort()];
 
@@ -3178,6 +3178,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                         const effectiveDept = departmentFilter !== "All" ? departmentFilter : null;
                         if (!effectiveDept) return employees;
                         const effLower = effectiveDept.toLowerCase().trim();
+                        if (effLower.includes("other")) return employees;
                         return employees.filter(e => {
                           const eDept = (e.department || "").toLowerCase().trim();
                           if (effLower === "creative") {
@@ -4419,7 +4420,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                           <div className="flex flex-col min-w-0">
                             <span className="font-bold text-foreground truncate">{task.assignedToName}</span>
                             {(() => {
-                              const dept = task.department || empMap.get(task.assignedToId)?.department || (task.rawBackend as any)?.department;
+                              const isCustomTask = (task as any).is_custom || (task.rawBackend as any)?.is_custom || (task.description || "").includes("Created during Punch-In activity tracking");
+                              const dept = isCustomTask ? "Other Work" : (task.department || (task.rawBackend as any)?.department || empMap.get(task.assignedToId)?.department);
                               return dept ? (
                                 <span className="text-[10px] text-muted-foreground font-semibold leading-tight">{dept}</span>
                               ) : null;
@@ -5853,7 +5855,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                     )}
 
                     {(() => {
-                      const dept = inspectingTask.department || empMap.get(inspectingTask.assignedToId)?.department || (inspectingTask.rawBackend as any)?.department;
+                      const isCustomTask = (inspectingTask as any).is_custom || (inspectingTask.rawBackend as any)?.is_custom || (inspectingTask.description || "").includes("Created during Punch-In activity tracking");
+                      const dept = isCustomTask ? "Other Work" : (inspectingTask.department || (inspectingTask.rawBackend as any)?.department || empMap.get(inspectingTask.assignedToId)?.department);
                       return dept ? (
                         <span className="text-[10px] font-bold bg-muted px-2 py-0.5 rounded-md text-muted-foreground border border-border/50">
                           Dept: {dept}

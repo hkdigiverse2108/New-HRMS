@@ -398,6 +398,10 @@ class TaskService:
         due_date = insert_data.get("due_date")
         desc = insert_data.get("description") or ""
         is_punch_in_task = "Created during Punch-In activity tracking" in desc
+        if is_punch_in_task or insert_data.get("is_custom") or insert_data.get("department") in ["Other Work", "Other"]:
+            insert_data["department"] = "Other Work"
+            insert_data["task_category"] = "Other Work"
+            insert_data["is_custom"] = True
 
         if assigned_to and title:
             import re
@@ -520,7 +524,8 @@ class TaskService:
         end_date: Optional[date] = None,
         search: Optional[str] = None,
         team_employee_ids: Optional[list[str]] = None,
-        sub_category: Optional[str] = None
+        sub_category: Optional[str] = None,
+        department: Optional[str] = None
     ):
         cache_key = make_list_key(
             "tasks",
@@ -544,7 +549,8 @@ class TaskService:
             end_date=end_date.isoformat() if end_date else None,
             search=search,
             team_employee_ids=",".join(team_employee_ids) if team_employee_ids else None,
-            sub_category=sub_category
+            sub_category=sub_category,
+            department=department
         )
         cached = await get_cache(cache_key)
         if cached is not None:
@@ -577,7 +583,8 @@ class TaskService:
             end_date,
             search,
             team_employee_ids,
-            sub_category
+            sub_category,
+            department=department
         )
         
         items = result.get("data", [])
@@ -901,10 +908,12 @@ class TaskService:
         priority: Optional[str] = None,
         search: Optional[str] = None,
         timeline_filter: Optional[str] = None,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        department: Optional[str] = None
     ):
         team_key = f"team_{len(team_employee_ids)}" if team_employee_ids is not None else 'all'
-        cache_key = f"tasks:stats:{involved_emp_id or 'all'}:{target_date or 'today'}:{assigned_to or 'all'}:{assigned_by or 'all'}:{task_category or 'all'}:{sub_category or 'all'}:{project_id or 'all'}:{priority or 'all'}:{search or ''}:{timeline_filter or 'all'}:{status or 'all'}:{team_key}"
+        dept_key = department or 'all'
+        cache_key = f"tasks:stats:{involved_emp_id or 'all'}:{target_date or 'today'}:{assigned_to or 'all'}:{assigned_by or 'all'}:{task_category or 'all'}:{sub_category or 'all'}:{project_id or 'all'}:{priority or 'all'}:{search or ''}:{timeline_filter or 'all'}:{status or 'all'}:{dept_key}:{team_key}"
         cached = await get_cache(cache_key)
         if cached is not None:
             return cached
@@ -924,7 +933,8 @@ class TaskService:
             priority=priority,
             search=search,
             timeline_filter=timeline_filter,
-            status=status
+            status=status,
+            department=department
         )
         await set_cache(cache_key, stats, ttl=60)
         return stats

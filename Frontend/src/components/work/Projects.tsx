@@ -1062,7 +1062,7 @@ const CalendarIssuesCell = ({
 
   const [newIssueText, setNewIssueText] = useState("");
   const [selectedRole, setSelectedRole] = useState("Scripting");
-  const [issueType, setIssueType] = useState<"client_issue" | "pending" | "normal">("client_issue");
+  const [issueType, setIssueType] = useState<"client_issue" | "pending" | "normal">("normal");
   const issuesList = item.issues || [];
 
   // 8 Creative Stages per audio specification
@@ -1077,18 +1077,16 @@ const CalendarIssuesCell = ({
     "Posting"
   ] as const;
 
-  // Issue 1: Only show remarks/issues authored by the current person
-  const myIssuesList = useMemo(() => {
-    return issuesList.filter((issue: any) => {
-      if (issue.authorId && currentUserId) {
-        return String(issue.authorId) === currentUserId;
-      }
-      if (issue.author && currentUserName) {
-        return issue.author.trim().toLowerCase() === currentUserName.trim().toLowerCase();
-      }
-      return false;
-    });
-  }, [issuesList, currentUserId, currentUserName]);
+  const isSuperAdminOrHR = ["admin", "subadmin", "hr"].includes(
+    String((user as any)?.role || (user as any)?.work_details?.system_role || "").toLowerCase()
+  );
+
+  const canDeleteIssue = (issue: any) => {
+    if (isSuperAdminOrHR) return true;
+    if (issue.authorId && currentUserId) return String(issue.authorId) === currentUserId;
+    if (issue.author && currentUserName) return issue.author.trim().toLowerCase() === currentUserName.trim().toLowerCase();
+    return false;
+  };
 
   const getAssigneeForRole = (role: string) => {
     const r = role.toLowerCase();
@@ -1106,15 +1104,15 @@ const CalendarIssuesCell = ({
 
   const mapRoleToSubCategory = (role?: string): string => {
     if (!role) return "Creative";
-    const r = role.toLowerCase();
+    const r = role.toLowerCase().trim();
+    if (r.includes("posting") || r.includes("publish")) return "Posting";
+    if (r.includes("post graphic") || r.includes("graphic")) return "Post/Graphics";
     if (r.includes("shoot") || r.includes("videography")) return "Shoot";
     if (r.includes("edit") || r.includes("reel")) return "Editing";
     if (r.includes("script")) return "Script";
-    if (r.includes("post") || r.includes("graphic")) return "Post/Graphics";
     if (r.includes("caption")) return "Caption";
     if (r.includes("thumb")) return "Thumbnail";
-    if (r.includes("approval") || r.includes("qc")) return "Approval";
-    if (r.includes("posting") || r.includes("publish")) return "Posting";
+    if (r.includes("approval") || r.includes("brand") || r.includes("qc")) return "Approval";
     return role;
   };
 
@@ -1341,12 +1339,12 @@ const CalendarIssuesCell = ({
   // Group by distinct role to only consider the latest entry per role for badge counts
   const latestByRole = useMemo(() => {
     const map = new Map<string, any>();
-    for (const iss of myIssuesList) {
+    for (const iss of issuesList) {
       const roleKey = (iss.role || "General").trim().toLowerCase();
       map.set(roleKey, iss);
     }
     return Array.from(map.values());
-  }, [myIssuesList]);
+  }, [issuesList]);
 
   const activeClientIssues = useMemo(() => {
     return latestByRole.filter((i: any) => i.isClientIssue === true || (i.issueType === "client_issue" && !i.isPending));
@@ -1365,7 +1363,7 @@ const CalendarIssuesCell = ({
             ? "bg-rose-500/10 text-rose-600 border-rose-500/30 hover:bg-rose-500/20"
             : activePendingIssues.length > 0
               ? "bg-amber-500/10 text-amber-600 border-amber-500/30 hover:bg-amber-500/20"
-              : myIssuesList.length > 0
+              : issuesList.length > 0
                 ? "bg-blue-500/10 text-blue-600 border-blue-500/30 hover:bg-blue-500/20"
                 : "bg-muted/60 text-muted-foreground hover:bg-muted border-border/40"
         )}>
@@ -1373,8 +1371,8 @@ const CalendarIssuesCell = ({
             ? `⚠️ ${activeClientIssues.length} Client Issue${activeClientIssues.length > 1 ? 's' : ''}`
             : activePendingIssues.length > 0
               ? `⏳ ${activePendingIssues.length} Pending`
-              : myIssuesList.length > 0
-                ? `💬 ${myIssuesList.length} Remark${myIssuesList.length > 1 ? 's' : ''}`
+              : issuesList.length > 0
+                ? `💬 ${issuesList.length} Remark${issuesList.length > 1 ? 's' : ''}`
                 : "+ Remark"}
         </button>
       </PopoverTrigger>
@@ -1382,16 +1380,16 @@ const CalendarIssuesCell = ({
         <div className="space-y-3">
           <div className="flex justify-between items-center border-b border-border/40 pb-2">
             <div>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">My Remarks &amp; Issues ({myIssuesList.length})</h4>
-              <p className="text-[10px] text-muted-foreground">Private notes visible only to you ({currentUserName})</p>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">Remarks &amp; Issues ({issuesList.length})</h4>
+              <p className="text-[10px] text-muted-foreground">Team remarks and status for this content idea</p>
             </div>
           </div>
 
           <div className="space-y-2 max-h-[190px] overflow-y-auto pr-1">
-            {myIssuesList.length === 0 ? (
-              <p className="text-[10px] text-muted-foreground italic font-medium py-2 text-center">No remarks added by you yet.</p>
+            {issuesList.length === 0 ? (
+              <p className="text-[10px] text-muted-foreground italic font-medium py-2 text-center">No remarks added yet.</p>
             ) : (
-              myIssuesList.map((issue) => {
+              issuesList.map((issue) => {
                 const isClient = issue.isClientIssue === true || (issue.isClientIssue !== false && !issue.isPending);
                 const isPend = issue.isPending === true;
                 const currentType = isClient ? "client_issue" : isPend ? "pending" : "normal";
@@ -1421,13 +1419,15 @@ const CalendarIssuesCell = ({
                       </div>
                       <div className="flex items-center gap-1">
                         <span className="text-[9px] text-muted-foreground font-mono">{issue.timestamp}</span>
-                        <button
-                          onClick={() => handleRemoveIssue(issue.id)}
-                          className="p-1 text-muted-foreground hover:text-rose-600 transition-colors"
-                          title="Delete issue"
-                        >
-                          ✕
-                        </button>
+                        {canDeleteIssue(issue) && (
+                          <button
+                            onClick={() => handleRemoveIssue(issue.id)}
+                            className="p-1 text-muted-foreground hover:text-rose-600 transition-colors"
+                            title="Delete issue"
+                          >
+                            ✕
+                          </button>
+                        )}
                       </div>
                     </div>
 
