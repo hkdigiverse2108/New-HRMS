@@ -175,6 +175,48 @@ export function Index() {
     return () => window.removeEventListener("navigate_tab", handleNavigateTab);
   }, []);
 
+  // Listen for Service Worker push notification clicks and redirect accordingly
+  useEffect(() => {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+
+    const handleServiceWorkerMessage = (event: MessageEvent) => {
+      const data = event.data;
+      if (!data) return;
+
+      if (data.type === "NOTIFICATION_CLICK") {
+        const rawUrl = data.url || data.data?.url;
+        if (rawUrl) {
+          try {
+            const urlObj = new URL(rawUrl, window.location.origin);
+            const targetPath = urlObj.pathname + urlObj.search;
+            if (targetPath && targetPath !== "/") {
+              setActive(targetPath);
+              window.dispatchEvent(new CustomEvent("navigate_tab", { detail: targetPath }));
+            } else if (data.data?.channel_id) {
+              const chatPath = `/chat?channel=${data.data.channel_id}`;
+              setActive(chatPath);
+              window.dispatchEvent(new CustomEvent("navigate_tab", { detail: chatPath }));
+            }
+          } catch {
+            setActive(rawUrl);
+            window.dispatchEvent(new CustomEvent("navigate_tab", { detail: rawUrl }));
+          }
+        } else if (data.data?.channel_id) {
+          const chatPath = `/chat?channel=${data.data.channel_id}`;
+          setActive(chatPath);
+          window.dispatchEvent(new CustomEvent("navigate_tab", { detail: chatPath }));
+        }
+      } else if (data.type === "OPEN_MEETING_SUMMON") {
+        window.dispatchEvent(new CustomEvent("open_meeting_summon", { detail: data.summonData }));
+      }
+    };
+
+    navigator.serviceWorker.addEventListener("message", handleServiceWorkerMessage);
+    return () => {
+      navigator.serviceWorker.removeEventListener("message", handleServiceWorkerMessage);
+    };
+  }, []);
+
   // Permission guard: automatically redirect to /dashboard if current tab is not accessible by this role
   useEffect(() => {
     if (
@@ -184,7 +226,7 @@ export function Index() {
       active !== "/hirings" &&
       active !== "/recruitment/interviews" &&
       active !== "/recruitment" &&
-      !hasModulePermission(user, active, "read")
+      !hasModulePermission(user, active.split("?")[0], "read")
     ) {
       setActive("/dashboard");
     }
@@ -339,7 +381,7 @@ export function Index() {
                     </ModuleErrorBoundary>
                   )}
                   {basePath === "/tasks" && <Tasks setActive={setActive} isNew={isNew} />}
-                  {basePath === "/chat" && <Chat />}
+                  {basePath === "/chat" && <Chat activeTabPath={active} />}
                   {basePath === "/work/research" && <Research />}
 
                   {/* Workspace */}

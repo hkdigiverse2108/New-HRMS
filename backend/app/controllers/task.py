@@ -424,29 +424,14 @@ async def get_all_tasks(
                 if "6abc98e2edafab0976cd60d4" not in team_employee_ids:
                     team_employee_ids.append("6abc98e2edafab0976cd60d4")
 
-        elif view == "all" and is_leader:
-
-            from app.repository.employee import EmployeeRepository
-
-            dept_emps = await EmployeeRepository.get_all_employees(department=user_dept, limit=1000)
-
-            dept_emp_ids = [str(e["_id"]) for e in dept_emps.get("data", [])]
-
-            if user_dept and user_dept.lower() == "creative":
-                # Posting publisher and creative execution tasks belong to Creative
-                if "6abc98e2edafab0976cd60d4" not in dept_emp_ids:
-                    dept_emp_ids.append("6abc98e2edafab0976cd60d4")
-
-            team_employee_ids = dept_emp_ids
-
+        elif view == "all":
+            # All employees can view All Tasks and filter by department
+            pass
         else:
-
-            # Regular staff (Senior, Junior, Intern) are strictly restricted to My Tasks
-
-            assigned_to = emp_id
-
+            # When in personal view without all/team view requested
+            if not assigned_to:
+                assigned_to = emp_id
             involved_emp_id = None
-
             team_employee_ids = None
 
 
@@ -640,7 +625,10 @@ async def get_task_stats(
 
         is_leader = "team leader" in desig_lower or "head" in desig_lower
 
-        if is_leader:
+        if view == "all":
+            # All employees can view All Tasks stats and filter by department
+            pass
+        elif is_leader:
 
             from app.repository.employee import EmployeeRepository
 
@@ -656,9 +644,9 @@ async def get_task_stats(
 
         else:
 
-            # Regular staff (Senior, Junior, Intern) are strictly restricted to My Tasks
-
-            assigned_to = emp_id
+            # When in personal view without all view requested
+            if not assigned_to:
+                assigned_to = emp_id
 
             involved_emp_id = None
 

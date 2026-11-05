@@ -510,8 +510,13 @@ function ReplyQuote({
   );
 }
 
+export interface ChatProps {
+  activeTabPath?: string;
+  initialChannelId?: string;
+}
+
 // --- MAIN CHAT CONTENT COMPONENT ---
-function ChatInner() {
+function ChatInner({ activeTabPath, initialChannelId }: ChatProps = {}) {
   const { user } = useAuth();
   const { employees } = useEmployeesContext();
 
@@ -521,6 +526,41 @@ function ChatInner() {
   const [inputText, setInputText] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [isMobileChannelsOpen, setIsMobileChannelsOpen] = useState(false);
+
+  const getTargetChannelFromUrlOrProps = useCallback((): string | null => {
+    if (initialChannelId) return String(initialChannelId);
+
+    if (activeTabPath && activeTabPath.includes("?")) {
+      try {
+        const query = activeTabPath.split("?")[1] || "";
+        const sp = new URLSearchParams(query);
+        const cid = sp.get("channel") || sp.get("channel_id") || sp.get("cid");
+        if (cid) return String(cid);
+      } catch {}
+    }
+
+    if (typeof window !== "undefined" && window.location.search) {
+      try {
+        const sp = new URLSearchParams(window.location.search);
+        const cid = sp.get("channel") || sp.get("channel_id") || sp.get("cid");
+        if (cid) return String(cid);
+      } catch {}
+    }
+
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("activeSidebarTab") || "";
+        if (stored.startsWith("/chat?") || stored.includes("channel=")) {
+          const query = stored.split("?")[1] || "";
+          const sp = new URLSearchParams(query);
+          const cid = sp.get("channel") || sp.get("channel_id") || sp.get("cid");
+          if (cid) return String(cid);
+        }
+      } catch {}
+    }
+
+    return null;
+  }, [activeTabPath, initialChannelId]);
 
   // WhatsApp Features State
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
@@ -1488,6 +1528,35 @@ function ChatInner() {
       const res = await api.get<ChatChannel[]>("/chat/channels", { showErrorToast: false });
       if (res && res.length > 0) {
         setChannels(res);
+        const targetCid = getTargetChannelFromUrlOrProps();
+        if (targetCid) {
+          const matched = res.find((c) => 
+            String(c.id || (c as any)._id) === String(targetCid) ||
+            (Array.isArray(c.members) && c.members.map(String).includes(String(targetCid)))
+          );
+          if (matched) {
+            const matchedId = String(matched.id || (matched as any)._id);
+            setActiveChannelId(matchedId);
+            setIsMobileChannelsOpen(false);
+            return;
+          } else {
+            // Target channel not in list yet (e.g. new DM) - attempt direct fetch
+            api.get<ChatChannel>(`/chat/channels/${targetCid}`, { showErrorToast: false })
+              .then((singleChan) => {
+                if (singleChan) {
+                  setChannels((prev) => {
+                    if (!prev.some((c) => String(c.id || (c as any)._id) === String(targetCid))) {
+                      return [singleChan, ...prev];
+                    }
+                    return prev;
+                  });
+                  setActiveChannelId(targetCid);
+                  setIsMobileChannelsOpen(false);
+                }
+              })
+              .catch(() => {});
+          }
+        }
         const currentActive = activeChannelIdRef.current;
         if (!currentActive && !hasUserDismissedActiveRef.current) {
           const firstChan = res[0] as ChatChannel | undefined;
@@ -1520,7 +1589,7 @@ function ChatInner() {
       setChannels(defaultChannels);
       if (!activeChannelIdRef.current && !hasUserDismissedActiveRef.current) setActiveChannelId("chan-engineering");
     }
-  }, []);
+  }, [getTargetChannelFromUrlOrProps]);
 
   // --- 2. FETCH MESSAGES FOR ACTIVE CHANNEL ---
   const fetchMessages = useCallback(
@@ -1621,6 +1690,89 @@ function ChatInner() {
   useEffect(() => {
     fetchChannels();
   }, [fetchChannels]);
+
+  // Synchronize channel when activeTabPath or notification requests a specific channel
+  useEffect(() => {
+    const targetCid = getTargetChannelFromUrlOrProps();
+    if (targetCid && channels.length > 0) {
+      const matched = channels.find((c) => 
+        String(c.id || (c as any)._id) === String(targetCid) ||
+        (Array.isArray(c.members) && c.members.map(String).includes(String(targetCid)))
+      );
+      if (matched) {
+        const matchedId = String(matched.id || (matched as any)._id);
+        if (activeChannelIdRef.current !== matchedId) {
+          setActiveChannelId(matchedId);
+          hasUserDismissedActiveRef.current = false;
+          setIsMobileChannelsOpen(false);
+          focusMessageInput();
+        }
+      } else {
+        api.get<ChatChannel>(`/chat/channels/${targetCid}`, { showErrorToast: false })
+          .then((singleChan) => {
+            if (singleChan) {
+              setChannels((prev) => {
+                if (!prev.some((c) => String(c.id || (c as any)._id) === String(targetCid))) {
+                  return [singleChan, ...prev];
+                }
+                return prev;
+              });
+              setActiveChannelId(targetCid);
+              hasUserDismissedActiveRef.current = false;
+              setIsMobileChannelsOpen(false);
+              focusMessageInput();
+            }
+          })
+          .catch(() => {});
+      }
+    }
+  }, [activeTabPath, channels, getTargetChannelFromUrlOrProps]);
+
+  // Listen to window navigate_tab event for dynamic in-app navigation to specific chat channels
+  useEffect(() => {
+    const handleNavigateTab = (e: any) => {
+      const detail = e.detail;
+      if (typeof detail === "string" && (detail.startsWith("/chat") || detail.includes("channel="))) {
+        try {
+          const query = detail.includes("?") ? detail.split("?")[1] : "";
+          const sp = new URLSearchParams(query);
+          const cid = sp.get("channel") || sp.get("channel_id") || sp.get("cid");
+          if (cid) {
+            const matched = channels.find((c) => 
+              String(c.id || (c as any)._id) === String(cid) ||
+              (Array.isArray(c.members) && c.members.map(String).includes(String(cid)))
+            );
+            if (matched) {
+              const matchedId = String(matched.id || (matched as any)._id);
+              setActiveChannelId(matchedId);
+              hasUserDismissedActiveRef.current = false;
+              setIsMobileChannelsOpen(false);
+              focusMessageInput();
+            } else {
+              api.get<ChatChannel>(`/chat/channels/${cid}`, { showErrorToast: false })
+                .then((singleChan) => {
+                  if (singleChan) {
+                    setChannels((prev) => {
+                      if (!prev.some((c) => String(c.id || (c as any)._id) === String(cid))) {
+                        return [singleChan, ...prev];
+                      }
+                      return prev;
+                    });
+                    setActiveChannelId(cid);
+                    hasUserDismissedActiveRef.current = false;
+                    setIsMobileChannelsOpen(false);
+                    focusMessageInput();
+                  }
+                })
+                .catch(() => {});
+            }
+          }
+        } catch {}
+      }
+    };
+    window.addEventListener("navigate_tab", handleNavigateTab);
+    return () => window.removeEventListener("navigate_tab", handleNavigateTab);
+  }, [channels]);
 
   // Load messages on channel change
   useEffect(() => {
@@ -6546,10 +6698,10 @@ class ChatErrorBoundary extends React.Component<{ children: React.ReactNode }, {
   }
 }
 
-export function Chat() {
+export function Chat({ activeTabPath, initialChannelId }: ChatProps = {}) {
   return (
     <ChatErrorBoundary>
-      <ChatInner />
+      <ChatInner activeTabPath={activeTabPath} initialChannelId={initialChannelId} />
     </ChatErrorBoundary>
   );
 }

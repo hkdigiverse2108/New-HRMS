@@ -116,23 +116,36 @@ self.addEventListener('notificationclick', (event) => {
   // Focus existing window and bring to front, or open new one
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true })
-      .then((clientList) => {
+      .then(async (clientList) => {
         // Try to find an existing HRMS window
+        let targetClient = null;
         for (const client of clientList) {
-          if (client.url.includes(self.location.origin) && 'focus' in client) {
-            client.postMessage({ 
+          if (client.url && client.url.includes(self.location.origin)) {
+            targetClient = client;
+            break;
+          }
+        }
+
+        if (targetClient) {
+          // Send notification click message to the open tab
+          targetClient.postMessage({ 
+            type: 'NOTIFICATION_CLICK', 
+            url: targetUrl, 
+            data: notificationData 
+          });
+          if (notificationData.type === 'meeting_summon' || notificationData.action === 'meeting_summon') {
+            targetClient.postMessage({ 
               type: 'OPEN_MEETING_SUMMON', 
               summonData: notificationData,
               url: targetUrl 
             });
-            client.postMessage({ 
-              type: 'NOTIFICATION_CLICK', 
-              url: targetUrl, 
-              data: notificationData 
-            });
-            return client.focus();
           }
+          if ('focus' in targetClient) {
+            await targetClient.focus();
+          }
+          return;
         }
+
         // No existing window, open new one
         if (clients.openWindow) {
           return clients.openWindow(targetUrl);

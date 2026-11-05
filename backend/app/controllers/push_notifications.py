@@ -93,7 +93,7 @@ async def test_push(current_user: dict = Depends(get_current_employee)):
         title="HRMS Test Notification",
         body=f"Hello {user_name}! Background notifications are active even when HRMS is closed.",
         icon=profile_photo,
-        action_url="/notifications",
+        action_url="/dashboard",
         data={"type": "test"}
     )
     

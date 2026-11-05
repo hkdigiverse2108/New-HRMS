@@ -144,7 +144,7 @@ export function UpdateActivityModal({
 
         // 2. Fetch all user tasks to catch any previous days' pending tasks not in overview
         try {
-          const listRes = await api.get<any>("/tasks?limit=200", { showErrorToast: false });
+          const listRes = await api.get<any>("/tasks?view=me&limit=200", { showErrorToast: false });
           const rawTasks: any[] = listRes?.data || listRes?.items || (Array.isArray(listRes) ? listRes : []);
           rawTasks.forEach((t: any) => {
             const status = String(t.status || "").toLowerCase();

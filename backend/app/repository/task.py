@@ -285,8 +285,35 @@ class TaskRepository:
             elif tf == "client_issue":
                 and_conditions.append(client_issue_cond)
         else:
-            # When viewing all tasks without timeline filter, exclude client_issue and pending from general tasks list
+            # Audio Transcript Requirement: Total Tasks = Today's Work + Upcoming Work + Completed Work
+            # Client Issue and Pending are strictly excluded and never counted or shown in Total Tasks
             and_conditions.append(exclude_issue_cond)
+            if not status or status == "All":
+                and_conditions.append({
+                    "$or": [
+                        # Today's work (due today or overdue incomplete)
+                        {"due_date": today_str},
+                        {"due_date": {"$regex": f"^{today_str}"}},
+                        {"due_date": {"$gte": start_of_today, "$lte": end_of_today}},
+                        {
+                            "$or": [
+                                {"due_date": {"$lt": today_str}},
+                                {"due_date": {"$lt": start_of_today}}
+                            ],
+                            "status": {"$nin": ["completed", "done"]}
+                        },
+                        # Upcoming work (due after today)
+                        {
+                            "$or": [
+                                {"due_date": {"$gt": today_str}},
+                                {"due_date": {"$gt": end_of_today}}
+                            ],
+                            "status": {"$nin": ["completed", "done"]}
+                        },
+                        # Completed work
+                        {"status": {"$in": ["completed", "done"]}}
+                    ]
+                })
 
         if start_date or end_date:
             date_query = {}
@@ -677,15 +704,21 @@ class TaskRepository:
             except Exception:
                 return 0
 
+        today_n = _n("today")
+        upcoming_n = _n("upcoming")
+        completed_n = _n("completed")
+        # Audio Transcript Requirement: Total Tasks = Today's Work + Upcoming Work + Completed Work (Client Issue & Pending strictly excluded)
+        total_n = today_n + upcoming_n + completed_n
+
         return {
-            "total": _n("total"),
+            "total": total_n,
             "todo": _n("todo"),
             "inprogress": _n("inprogress"),
             "inreview": _n("inreview"),
-            "completed": _n("completed"),
-            "today": _n("today"),
+            "completed": completed_n,
+            "today": today_n,
             "overdue": _n("overdue"),
-            "upcoming": _n("upcoming"),
+            "upcoming": upcoming_n,
             "client_issue": _n("client_issue"),
             "pending": _n("pending"),
             "sub_categories": {

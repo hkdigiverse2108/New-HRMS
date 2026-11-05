@@ -1142,6 +1142,7 @@ const CalendarIssuesCell = ({
           sub_category: mapRoleToSubCategory(selectedRole),
           is_client_issue: isClient,
           is_pending_issue: !isClient,
+          reason_for_pending: cleanText,
           due_date: todayYMD,
           project_id: project.id,
           content_item_id: item.id,
@@ -1209,6 +1210,7 @@ const CalendarIssuesCell = ({
             sub_category: mapRoleToSubCategory(targetIssue.role),
             is_client_issue: isClient,
             is_pending_issue: !isClient,
+            reason_for_pending: targetIssue.text,
             priority: isClient ? "High" : "Medium",
           }, { showErrorToast: false });
         } else {
@@ -1222,6 +1224,7 @@ const CalendarIssuesCell = ({
             sub_category: mapRoleToSubCategory(targetIssue.role),
             is_client_issue: isClient,
             is_pending_issue: !isClient,
+            reason_for_pending: targetIssue.text,
             due_date: todayYMD,
             project_id: project.id,
             content_item_id: item.id,

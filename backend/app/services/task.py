@@ -706,46 +706,30 @@ class TaskService:
 
     @staticmethod
     async def get_daily_overview(employee_id: str):
-        from datetime import date
-        today = date.today()
-        
-        # Get all tasks for this employee
-        all_tasks_res = await TaskRepository.get_all(assigned_to=employee_id, limit=1000)
-        tasks = all_tasks_res.get("data", [])
-        
+        # 1. Today's Work: exact same condition as My Tasks -> Today's Work (excluding Client Issue & Pending)
+        today_res = await TaskRepository.get_all(
+            assigned_to=employee_id,
+            timeline_filter="today",
+            limit=1000
+        )
+        today_tasks = today_res.get("data", [])
+
+        # 2. Upcoming Work: exact same condition as My Tasks -> Upcoming Work (excluding Client Issue & Pending)
+        upcoming_res = await TaskRepository.get_all(
+            assigned_to=employee_id,
+            timeline_filter="upcoming",
+            limit=1000
+        )
+        upcoming_tasks = upcoming_res.get("data", [])
+
         emp_cache = {}
-        today_tasks = []
-        upcoming_tasks = []
-        
-        for t in tasks:
-            if t.get("status") == "completed":
-                continue
-                
+        for t in today_tasks:
             await TaskService._populate_user_details(t, emp_cache)
-                
-            due_date_str = t.get("due_date")
-            if not due_date_str:
-                upcoming_tasks.append(t)
-                continue
-                
-            # Parse due date
-            from datetime import datetime
-            if isinstance(due_date_str, str):
-                due_date = datetime.fromisoformat(due_date_str.replace('Z', '+00:00')).date()
-            else:
-                due_date = due_date_str.date() if hasattr(due_date_str, 'date') else due_date_str
-                
-            if due_date <= today:
-                today_tasks.append((t, due_date))
-            else:
-                upcoming_tasks.append(t)
-                
-        # Sort today_tasks: Overdue first (oldest first), then today's tasks
-        today_tasks.sort(key=lambda x: x[1])
-        
-        # Return just the task dicts
+        for t in upcoming_tasks:
+            await TaskService._populate_user_details(t, emp_cache)
+
         return {
-            "today": [item[0] for item in today_tasks],
+            "today": today_tasks,
             "upcoming": upcoming_tasks
         }
 

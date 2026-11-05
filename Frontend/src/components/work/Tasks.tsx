@@ -38,7 +38,7 @@ import { useAuth } from "@/components/auth/AuthContext";
 
 import { api } from "@/lib/api";
 
-import { hasModulePermission, isUserAdmin } from "@/lib/permissions";
+import { hasModulePermission, isUserAdmin, isUserAdminOrHR } from "@/lib/permissions";
 import { ActivityHistoryModal, ActivityHistoryEvent } from "./ActivityHistoryModal";
 
 type TaskStatus = "Todo" | "In Progress" | "In Review" | "Done";
@@ -392,7 +392,15 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
   const isOperational = userDepartment.toLowerCase().includes("operation");
 
-  const isAdminOrHRRole = isAdmin || isHead || isOperational || userRole === "hr" || (userDepartment && userDepartment.toLowerCase() === "hr");
+  const isHR =
+    userRole === "hr" ||
+    /\bhr\b/i.test(userDepartment) ||
+    userDepartment.toLowerCase().includes("human resource") ||
+    /\bhr\b/i.test(userDesignation) ||
+    userDesignation.includes("human resource") ||
+    isUserAdminOrHR(user);
+
+  const isAdminOrHRRole = isAdmin || isHead || isOperational || isHR;
 
   const isAdminOrHR = isAdminOrHRRole || hasModulePermission(user, "/tasks", "update");
 
@@ -511,11 +519,10 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
   ], []);
 
-  // Audio 19: Designation-based access: Admin, Head, and Team Leader get All Tasks; others locked to My Tasks
+  // Audio 19: All employees can view All Tasks and use Department filter
+  const canViewAllTasks = true;
 
-  const canViewAllTasks = isAdmin || isHead || isTeamLeader || isOperational;
-
-  const [savedViewMode, setSavedViewMode] = usePersistentState<"my_tasks" | "all_tasks">("tasks.view", canViewAllTasks ? "all_tasks" : "my_tasks");
+  const [savedViewMode, setSavedViewMode] = usePersistentState<"my_tasks" | "all_tasks">("tasks.view", "my_tasks");
 
   const mainViewMode = canViewAllTasks ? savedViewMode : "my_tasks";
 
@@ -529,10 +536,14 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
   };
 
-  // If TL or Department Head (not Admin or Operational), default/lock department to their own department
-  const userOwnDept = (userDepartment || "").trim();
-  const isCompanyWideAdmin = isAdmin || isOperational;
-  const initialDept = !isCompanyWideAdmin && userOwnDept ? userOwnDept : "All";
+  // If TL or Department Head (not Admin or Operational), default/lock department to their own department
+
+  const userOwnDept = (userDepartment || "").trim();
+
+  const isCompanyWideAdmin = isAdmin || isOperational || isHR;
+
+  const initialDept = !isCompanyWideAdmin && userOwnDept ? userOwnDept : "All";
+
   const [departmentFilter, setDepartmentFilter] = useState<string>(initialDept);
 
   const [assignedToFilter, setAssignedToFilter] = useState<string>("All");
@@ -3122,7 +3133,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
             {/* Department Filter (Visible only for Head / Admin, NOT Team Leader and NOT other employees) */}
 
-            {mainViewMode === "all_tasks" && (isAdmin || isOperational) && (
+            {mainViewMode === "all_tasks" && (
 
               <div className="flex flex-col items-stretch sm:flex-row sm:items-center gap-1 sm:gap-1.5 min-w-0">
 
@@ -3148,7 +3159,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
             {/* Dual Filters: Assigned To AND Assigned By (Visible for Head / Admin and Team Leader) */}
 
-            {mainViewMode === "all_tasks" && (isHead || isTeamLeader || isOperational) && (
+            {mainViewMode === "all_tasks" && (
 
               <>
 
@@ -3167,7 +3178,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                       { label: "All Assignees", value: "All" },
 
                       ...((() => {
-                        const effectiveDept = (!isAdmin && !isOperational) ? userDepartment : (departmentFilter !== "All" ? departmentFilter : null);
+                        const effectiveDept = departmentFilter !== "All" ? departmentFilter : null;
                         if (!effectiveDept) return employees;
                         const effLower = effectiveDept.toLowerCase().trim();
                         return employees.filter(e => {
@@ -3594,6 +3605,16 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
                               )}
 
+                              {(task.taskCategory === "Pending" || task.title.toLowerCase().startsWith("[pending]")) && (
+
+                                <span className="text-[9px] font-black bg-amber-500/10 text-amber-600 border border-amber-500/20 px-1.5 py-0.5 rounded-md">
+
+                                  Pending
+
+                                </span>
+
+                              )}
+
                               {(task.isAuto || task.contentItemId) && (
 
                                 <button
@@ -3798,7 +3819,33 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
                             <h4 className="font-bold text-foreground text-xs leading-snug">{task.title}</h4>
 
-                            {task.description && (
+                            {(() => {
+                              const isIssueOrPending =
+                                task.taskCategory === "Client Issue" ||
+                                task.taskCategory === "Pending" ||
+                                task.title.toLowerCase().startsWith("[client issue]") ||
+                                task.title.toLowerCase().startsWith("[pending]");
+                              
+                              let reason = task.reasonForPending;
+                              if (!reason && isIssueOrPending && task.description) {
+                                if (task.description.includes('Remark: "')) {
+                                  reason = task.description.split('Remark: "')[1]?.replace(/"$/, '').trim();
+                                } else if (task.description.includes('Remark: ')) {
+                                  reason = task.description.split('Remark: ')[1]?.trim();
+                                }
+                              }
+
+                              if (!reason) return null;
+
+                              return (
+                                <div className="mt-1 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-[10px] leading-tight break-words flex items-start gap-1">
+                                  <span className="font-black text-[9px] uppercase tracking-wider text-amber-600 dark:text-amber-400 shrink-0">Reason:</span>
+                                  <span className="font-medium">{reason}</span>
+                                </div>
+                              );
+                            })()}
+
+                            {task.description && (!task.reasonForPending || (!task.description.startsWith("Client Issue reported") && !task.description.startsWith("Pending Task reported"))) && (
 
                               <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
 
@@ -4012,7 +4059,7 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
                 <tr>
 
-                  <SortableHeader label="Task Details" sortKey="title" currentSort={sortConfig} onSort={requestSort} className="px-6 py-3.5 text-xs font-bold text-muted-foreground uppercase tracking-wider" />
+                  <SortableHeader label="Task Details" sortKey="title" currentSort={sortConfig} onSort={requestSort} className="px-6 py-3.5 text-xs font-bold text-muted-foreground uppercase tracking-wider w-[320px] max-w-[380px]" />
 
                   <SortableHeader label="Brand" sortKey="brandName" currentSort={sortConfig} onSort={requestSort} className="px-5 py-3.5 text-xs font-bold text-muted-foreground uppercase tracking-wider" />
 
@@ -4086,13 +4133,13 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
                       {/* Title & Desc */}
 
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-4 max-w-[360px] min-w-[220px]">
 
-                        <div className="space-y-1">
+                        <div className="space-y-1.5 break-words">
 
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-1.5">
 
-                            <span className="font-bold text-foreground">{task.title}</span>
+                            <span className="font-bold text-foreground text-xs leading-snug break-words line-clamp-2" title={task.title}>{task.title}</span>
 
                             {task.recurrence && task.recurrence !== "none" && (
 
@@ -4116,9 +4163,19 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
                             {(task.taskCategory === "Client Issue" || task.title.toLowerCase().startsWith("[client issue]")) && (
 
-                              <span className="text-[9px] font-black bg-rose-500/10 text-rose-600 border border-rose-500/20 px-1.5 py-0.5 rounded">
+                              <span className="text-[9px] font-black bg-rose-500/10 text-rose-600 border border-rose-500/20 px-1.5 py-0.5 rounded shrink-0">
 
                                 Client Issue
+
+                              </span>
+
+                            )}
+
+                            {(task.taskCategory === "Pending" || task.title.toLowerCase().startsWith("[pending]")) && (
+
+                              <span className="text-[9px] font-black bg-amber-500/10 text-amber-600 border border-amber-500/20 px-1.5 py-0.5 rounded shrink-0">
+
+                                Pending
 
                               </span>
 
@@ -4154,9 +4211,36 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
                           </div>
 
-                          {task.description && (
+                          {/* Reason for Client Issue or Pending */}
+                          {(() => {
+                            const isIssueOrPending =
+                              task.taskCategory === "Client Issue" ||
+                              task.taskCategory === "Pending" ||
+                              task.title.toLowerCase().startsWith("[client issue]") ||
+                              task.title.toLowerCase().startsWith("[pending]");
+                            
+                            let reason = task.reasonForPending;
+                            if (!reason && isIssueOrPending && task.description) {
+                              if (task.description.includes('Remark: "')) {
+                                reason = task.description.split('Remark: "')[1]?.replace(/"$/, '').trim();
+                              } else if (task.description.includes('Remark: ')) {
+                                reason = task.description.split('Remark: ')[1]?.trim();
+                              }
+                            }
 
-                            <p className="text-[11px] text-muted-foreground line-clamp-1 max-w-sm">
+                            if (!reason) return null;
+
+                            return (
+                              <div className="mt-1 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-[11px] leading-tight break-words flex items-start gap-1">
+                                <span className="font-black text-[10px] uppercase tracking-wider text-amber-600 dark:text-amber-400 shrink-0">Reason:</span>
+                                <span className="font-medium">{reason}</span>
+                              </div>
+                            );
+                          })()}
+
+                          {task.description && (!task.reasonForPending || (!task.description.startsWith("Client Issue reported") && !task.description.startsWith("Pending Task reported"))) && (
+
+                            <p className="text-[11px] text-muted-foreground line-clamp-1 break-words">
 
                               {task.description}
 
@@ -4335,7 +4419,15 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
                           />
 
-                          <span className="font-bold text-foreground">{task.assignedToName}</span>
+                          <div className="flex flex-col min-w-0">
+                            <span className="font-bold text-foreground truncate">{task.assignedToName}</span>
+                            {(() => {
+                              const dept = task.department || empMap.get(task.assignedToId)?.department || (task.rawBackend as any)?.department;
+                              return dept ? (
+                                <span className="text-[10px] text-muted-foreground font-semibold leading-tight">{dept}</span>
+                              ) : null;
+                            })()}
+                          </div>
 
                         </div>
 
@@ -5762,6 +5854,15 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
                       </span>
 
                     )}
+
+                    {(() => {
+                      const dept = inspectingTask.department || empMap.get(inspectingTask.assignedToId)?.department || (inspectingTask.rawBackend as any)?.department;
+                      return dept ? (
+                        <span className="text-[10px] font-bold bg-muted px-2 py-0.5 rounded-md text-muted-foreground border border-border/50">
+                          Dept: {dept}
+                        </span>
+                      ) : null;
+                    })()}
 
                   </div>
 

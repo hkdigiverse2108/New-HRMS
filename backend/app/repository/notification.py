@@ -71,8 +71,48 @@ class NotificationRepository:
                         p_info.get("avatar")
                     )
             
-            action_url = notification.get("action_url") or "/notifications"
-            
+            action_url = notification.get("action_url")
+            ntype = str(notification.get("type", "general")).lower()
+            title = str(notification.get("title", "")).lower()
+
+            # If action_url is missing or defaults to invalid /notifications, resolve intelligently
+            if not action_url or action_url.strip() in ("", "/notifications"):
+                if "chat" in ntype or "chat" in title or "message" in ntype:
+                    cid = (
+                        notification.get("data", {}).get("channel_id")
+                        if isinstance(notification.get("data"), dict)
+                        else None
+                    ) or notification.get("channel_id")
+                    action_url = f"/chat?channel={cid}" if cid else "/chat"
+                elif "task" in ntype or "task" in title:
+                    action_url = "/tasks"
+                elif "leave" in ntype or "leave" in title:
+                    action_url = "/employees/leave-requests"
+                elif "attendance" in ntype or "punch" in ntype or "attendance" in title:
+                    action_url = "/employees/attendance"
+                elif "overtime" in ntype or "overtime" in title:
+                    action_url = "/employees/overtime"
+                elif "penalty" in ntype or "warning" in ntype or "penalty" in title:
+                    action_url = "/penalty"
+                elif "payroll" in ntype or "payslip" in ntype or "salary" in ntype:
+                    action_url = "/payroll/payslips"
+                elif "progress" in ntype or "daily" in ntype:
+                    action_url = "/approvals/daily-progress"
+                elif "remark" in ntype or "reminder" in ntype or "feedback" in ntype:
+                    action_url = "/remarks"
+                elif "project" in ntype or "client" in ntype:
+                    action_url = "/work/projects"
+                elif "interview" in ntype or "recruitment" in ntype or "hiring" in ntype:
+                    action_url = "/recruitment/interviews"
+                elif "invoice" in ntype:
+                    action_url = "/invoice/all"
+                elif "summon" in ntype or "meeting" in ntype:
+                    action_url = "/?meeting_summon=1"
+                else:
+                    action_url = "/dashboard"
+
+            extra_data = notification.get("data") if isinstance(notification.get("data"), dict) else {}
+
             await send_push_to_user(
                 user_id=user_id,
                 title=notification.get("title", "Notification"),
@@ -82,6 +122,8 @@ class NotificationRepository:
                 data={
                     "notificationId": str(notification.get("id") or notification.get("_id", "")),
                     "type": notification.get("type", "general"),
+                    "url": action_url,
+                    **extra_data,
                 }
             )
         except Exception as e:

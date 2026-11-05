@@ -78,6 +78,9 @@ class TaskBase(BaseModel):
     preset_id: Optional[str] = None
     preset_task_id: Optional[str] = None
     estimated_hours: Optional[float] = None
+    is_client_issue: Optional[bool] = None
+    is_pending_issue: Optional[bool] = None
+    reason_for_pending: Optional[str] = None
 
     @field_validator('status', mode='before')
     @classmethod
@@ -128,6 +131,8 @@ class TaskUpdate(BaseModel):
     sub_category: Optional[str] = None
     creative_details: Optional[dict] = None
     reason_for_pending: Optional[str] = None
+    is_client_issue: Optional[bool] = None
+    is_pending_issue: Optional[bool] = None
     module_id: Optional[str] = None
     phase: Optional[str] = None
     project_id: Optional[str] = None

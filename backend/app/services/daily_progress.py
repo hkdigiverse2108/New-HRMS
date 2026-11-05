@@ -812,7 +812,8 @@ class DailyProgressService:
                 "recipient_id": progress.get("employee_id"),
                 "title": "Daily Progress Verified",
                 "message": f"Your daily progress has been verified with a {data.rating}/10 rating.",
-                "type": "general"
+                "type": "daily_progress",
+                "action_url": "/approvals/daily-progress",
             })
             
         return result
@@ -856,7 +857,8 @@ class DailyProgressService:
                 "recipient_id": progress.get("employee_id"),
                 "title": "Daily Progress Rejected",
                 "message": "Your daily progress report has been rejected. Please review and submit again.",
-                "type": "general"
+                "type": "daily_progress",
+                "action_url": "/approvals/daily-progress",
             })
             
         return result
