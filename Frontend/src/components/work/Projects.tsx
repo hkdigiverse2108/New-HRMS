@@ -239,21 +239,34 @@ export const mapBackendContentToCalendarItem = (item: any): CalendarItem => {
     actualPostingDate: item.actual_posting_date ? String(item.actual_posting_date).split("T")[0] : "",
     remark: item.remark || "",
     logs: item.logs || [],
-    issues: (item.issues || []).map((iss: any, idx: number) =>
-      typeof iss === 'string'
-        ? { id: `iss-${idx}`, text: iss, timestamp: "", role: "Shoot", author: "Team", isClientIssue: true, isPending: false, issueType: "client_issue" }
-        : {
-          id: iss.id || `iss-${idx}`,
-          text: iss.text || "",
-          timestamp: iss.timestamp || "",
-          role: iss.role || "Shoot",
-          author: iss.author || "Team",
-          isClientIssue: iss.isClientIssue !== false && !iss.isPending,
-          isPending: Boolean(iss.isPending),
-          issueType: iss.issueType || (iss.isPending ? "pending" : (iss.isClientIssue !== false ? "client_issue" : "normal")),
-          taskId: iss.taskId || iss.task_id || undefined,
-        }
-    ),
+    issues: (item.issues || []).map((iss: any, idx: number) => {
+      if (typeof iss === 'string') {
+        const isUrl = iss.startsWith("http://") || iss.startsWith("https://");
+        return {
+          id: `iss-${idx}`,
+          text: iss,
+          timestamp: "",
+          role: isUrl ? "Posting" : "Shoot",
+          author: "Team",
+          isClientIssue: !isUrl,
+          isPending: false,
+          issueType: isUrl ? "normal" : "client_issue",
+          taskId: undefined,
+        };
+      }
+      return {
+        id: iss.id || `iss-${idx}`,
+        text: iss.text || "",
+        timestamp: iss.timestamp || "",
+        role: iss.role || "Shoot",
+        author: iss.author || "Team",
+        authorId: iss.authorId || undefined,
+        isClientIssue: Boolean(iss.isClientIssue),
+        isPending: Boolean(iss.isPending),
+        issueType: iss.issueType || (iss.isPending ? "pending" : (iss.isClientIssue ? "client_issue" : "normal")),
+        taskId: iss.taskId || iss.task_id || undefined,
+      };
+    }),
   };
 };
 
@@ -298,7 +311,32 @@ export const mapCalendarItemToBackendPayload = (form: any, projectId: string) =>
     actual_posting_date: form.actualPostingDate || null,
     instagram_link: form.postingLinkOfIg || null,
     issues: Array.isArray(form.issues)
-      ? form.issues.map((i: any) => typeof i === 'string' ? i : i.text).filter(Boolean)
+      ? form.issues.map((i: any, idx: number) => {
+          if (typeof i === 'string') {
+            const isUrl = i.startsWith("http://") || i.startsWith("https://");
+            return {
+              id: `iss-${idx}`,
+              text: i,
+              role: isUrl ? "Posting" : "Shoot",
+              author: "Team",
+              isClientIssue: !isUrl,
+              isPending: false,
+              issueType: isUrl ? "normal" : "client_issue"
+            };
+          }
+          return {
+            id: i.id || `iss-${idx}`,
+            text: i.text || "",
+            role: i.role || "Shoot",
+            author: i.author || "Team",
+            authorId: i.authorId || undefined,
+            isClientIssue: Boolean(i.isClientIssue),
+            isPending: Boolean(i.isPending),
+            issueType: i.issueType || (i.isPending ? "pending" : (i.isClientIssue ? "client_issue" : "normal")),
+            taskId: i.taskId || undefined,
+            timestamp: i.timestamp || ""
+          };
+        }).filter((i: any) => Boolean(i.text))
       : [],
   };
 };
@@ -10774,10 +10812,19 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                 {((calendarForm.issues || [])).map((issue: any) => (
                                   <div key={issue.id} className="flex justify-between items-start text-[11px] font-bold text-rose-700 bg-white/50 p-1.5 rounded-lg border border-rose-500/10">
                                     <span className="text-left">{issue.text} <span className="text-[9px] text-rose-400 font-mono">({issue.timestamp})</span></span>
-                                    <button type="button" onClick={() => {
+                                    <button type="button" onClick={async () => {
+                                      const issueToDelete = issue;
                                       const updated = (calendarForm.issues || []).filter((i: any) => i.id !== issue.id);
                                       setCalendarForm({ ...calendarForm, issues: updated });
                                       logProjectActivity(currentSelectedProject.id, "Resolved Issue", `Resolved issue "${issue.text}" on content idea "${calendarForm.topic}"`);
+                                      if (issueToDelete?.taskId) {
+                                        api.delete(`/tasks/${issueToDelete.taskId}`, { showErrorToast: false }).catch(() => {});
+                                      }
+                                      if (currentSelectedProject?.id && editingCalendarItem?.id) {
+                                        api.put(`/projects/${currentSelectedProject.id}/content/${editingCalendarItem.id}`, {
+                                          issues: updated
+                                        }).catch(() => {});
+                                      }
                                     }} className="text-[9px] text-rose-500 hover:text-rose-700 ml-1">✕</button>
                                   </div>
                                 ))}
@@ -10799,14 +10846,24 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                       const newIssue = {
                                         id: `issue-${Date.now()}`,
                                         text: input.value.trim(),
+                                        role: "Shoot",
+                                        isClientIssue: true,
+                                        isPending: false,
+                                        issueType: "client_issue",
                                         timestamp: dateStr
                                       };
+                                      const updated = [...(calendarForm.issues || []), newIssue];
                                       setCalendarForm({
                                         ...calendarForm,
-                                        issues: [...(calendarForm.issues || []), newIssue]
+                                        issues: updated
                                       });
                                       logProjectActivity(currentSelectedProject.id, "Logged Issue", `Added issue "${input.value.trim()}" on content idea "${calendarForm.topic}"`);
                                       input.value = "";
+                                      if (currentSelectedProject?.id && editingCalendarItem?.id) {
+                                        api.put(`/projects/${currentSelectedProject.id}/content/${editingCalendarItem.id}`, {
+                                          issues: updated
+                                        }).catch(() => {});
+                                      }
                                     }
                                   }}
                                   className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl transition-colors shadow-sm shrink-0"

@@ -426,6 +426,194 @@ class ContentService:
                 )
                 await TaskService.create_task(task_create, assigned_by)
 
+        # --- Content Calendar Issue Tasks Synchronization (Audio 24 & 26) ---
+        # Ensure each stage (Script, Shoot, Editing, Post/Graphics, Caption, Thumbnail, Approval, Posting)
+        # has at most ONE active issue task in Task Management.
+        # If an issue was removed or marked as normal/resolved in CC, soft-delete any issue tasks for that stage!
+        # If an issue exists, ensure exactly ONE task exists and soft-delete any older redundant duplicates!
+        def _normalize_issue_stage(role_or_subcat: str) -> str:
+            s = (role_or_subcat or "").strip().lower()
+            if "script" in s: return "Script"
+            if "shoot" in s or "video" in s: return "Shoot"
+            if "edit" in s or "reel" in s: return "Editing"
+            if "post" in s and "graphic" in s: return "Post/Graphics"
+            if "graphic" in s: return "Post/Graphics"
+            if "posting" in s or "publish" in s: return "Posting"
+            if "caption" in s: return "Caption"
+            if "thumb" in s: return "Thumbnail"
+            if "approval" in s or "brand" in s or "qc" in s: return "Approval"
+            return (role_or_subcat or "").strip().title() or "General"
+
+        raw_issues = item_data.get("issues") or []
+        normalized_issues = []
+        for idx, iss in enumerate(raw_issues):
+            if isinstance(iss, str):
+                is_url = iss.startswith("http://") or iss.startswith("https://")
+                iss_lower = iss.strip().lower()
+                role_guess = "Posting" if is_url else "Shoot"
+                if not is_url:
+                    if "edit" in iss_lower: role_guess = "Editing"
+                    elif "shoot" in iss_lower: role_guess = "Shoot"
+                    elif "script" in iss_lower: role_guess = "Script"
+                    elif "thumb" in iss_lower: role_guess = "Thumbnail"
+                    elif "caption" in iss_lower: role_guess = "Caption"
+                    elif "post" in iss_lower: role_guess = "Posting"
+                is_ignorable = is_url or iss_lower in ["done", "completed", "resolved", "schedule", "scheduled", "ok", "okay"]
+                normalized_issues.append({
+                    "id": f"iss-{idx}",
+                    "text": iss,
+                    "role": role_guess,
+                    "author": "Team",
+                    "isClientIssue": not is_ignorable,
+                    "isPending": False,
+                    "issueType": "normal" if is_ignorable else "client_issue"
+                })
+            elif isinstance(iss, dict):
+                normalized_issues.append(dict(iss))
+
+        # Group by normalized stage: only the latest issue for each stage determines its active state
+        latest_by_stage = {}
+        for iss in normalized_issues:
+            stg = _normalize_issue_stage(iss.get("role") or iss.get("sub_category") or "Shoot")
+            latest_by_stage[stg] = iss
+
+        # Find all active issue tasks for this content item
+        existing_issue_tasks_cursor = task_col.find({
+            "content_item_id": str(item_id),
+            "is_deleted": False,
+            "$or": [
+                {"task_category": {"$in": ["Client Issue", "Pending"]}},
+                {"is_client_issue": True},
+                {"is_pending_issue": True},
+                {"title": {"$regex": r"^\[(client issue|pending)\]", "$options": "i"}}
+            ]
+        }).sort("created_at", -1)
+        existing_issue_tasks = await existing_issue_tasks_cursor.to_list(length=100)
+
+        existing_tasks_by_stage = {}
+        for et in existing_issue_tasks:
+            stg = _normalize_issue_stage(et.get("sub_category") or et.get("role") or "")
+            if not stg or stg == "General":
+                t_lower = (et.get("title") or "").lower()
+                for known in ["Script", "Shoot", "Editing", "Post/Graphics", "Caption", "Thumbnail", "Approval", "Posting"]:
+                    if f"({known.lower()})" in t_lower or f"({known.lower()}ing)" in t_lower:
+                        stg = known
+                        break
+            stg = _normalize_issue_stage(stg)
+            existing_tasks_by_stage.setdefault(stg, []).append(et)
+
+        all_stages = set(list(latest_by_stage.keys()) + list(existing_tasks_by_stage.keys()))
+        for stg in all_stages:
+            target_issue = latest_by_stage.get(stg)
+            stage_tasks = existing_tasks_by_stage.get(stg, [])
+            
+            is_client = False
+            is_pending = False
+            if target_issue:
+                itype = target_issue.get("issueType")
+                if itype == "client_issue":
+                    is_client = True
+                elif itype == "pending":
+                    is_pending = True
+                elif target_issue.get("isClientIssue") is True:
+                    is_client = True
+                elif target_issue.get("isPending") is True:
+                    is_pending = True
+
+            clean_text = str(target_issue.get("text") or "").strip() if target_issue else ""
+            if clean_text.lower() in ["done", "completed", "resolved", "schedule", "scheduled", "ok", "okay"]:
+                is_client = False
+                is_pending = False
+
+            if is_client or is_pending:
+                topic_title = topic or "Content Idea"
+                task_title = f"[{'Client Issue' if is_client else 'Pending'}] {topic_title} ({stg}): {clean_text}"
+                task_desc = f"{'Client Issue' if is_client else 'Pending Task'} reported from Content Calendar ({project.get('name') or project.get('title') or 'Project'} - {topic_title})\nRole/Phase: {stg}\nRemark: \"{clean_text}\""
+                
+                role_key_mapping = {
+                    "Script": "scripting",
+                    "Shoot": "shoot_videography",
+                    "Editing": "reel_editing",
+                    "Post/Graphics": "post_graphics",
+                    "Thumbnail": "thumbnail",
+                    "Caption": "caption",
+                    "Approval": "approval_qc",
+                    "Posting": "posting_publisher"
+                }
+                stage_emp = team.get(role_key_mapping.get(stg, "")) or target_issue.get("authorId") or assigned_by
+
+                if stage_tasks:
+                    primary_task = stage_tasks[0]
+                    redundant_tasks = stage_tasks[1:]
+
+                    await task_col.update_one(
+                        {"_id": primary_task["_id"]},
+                        {"$set": {
+                            "title": task_title,
+                            "description": task_desc,
+                            "task_category": "Client Issue" if is_client else "Pending",
+                            "sub_category": stg,
+                            "is_client_issue": is_client,
+                            "is_pending_issue": is_pending,
+                            "reason_for_pending": clean_text,
+                            "priority": "high" if is_client else "medium",
+                            "status": "todo",
+                            "assigned_to": str(stage_emp) if stage_emp else str(primary_task.get("assigned_to")),
+                            "updated_at": datetime.utcnow()
+                        }}
+                    )
+                    if redundant_tasks:
+                        await task_col.update_many(
+                            {"_id": {"$in": [t["_id"] for t in redundant_tasks]}},
+                            {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}}
+                        )
+                    target_issue["taskId"] = str(primary_task["_id"])
+                else:
+                    today_str = datetime.utcnow().strftime("%Y-%m-%d")
+                    new_task_doc = {
+                        "title": task_title,
+                        "description": task_desc,
+                        "status": "todo",
+                        "priority": "high" if is_client else "medium",
+                        "due_date": today_str,
+                        "assigned_to": str(stage_emp) if stage_emp else "6aaa2a034b106fd0c7cac04d",
+                        "assigned_by": assigned_by,
+                        "created_by": assigned_by,
+                        "task_category": "Client Issue" if is_client else "Pending",
+                        "sub_category": stg,
+                        "content_item_id": str(item_id),
+                        "project_id": str(project.get("_id")),
+                        "is_client_issue": is_client,
+                        "is_pending_issue": is_pending,
+                        "reason_for_pending": clean_text,
+                        "activity_history": [{
+                            "action": "created",
+                            "performed_by": assigned_by,
+                            "timestamp": datetime.utcnow(),
+                            "details": "Client Issue / Pending task created from Content Calendar"
+                        }],
+                        "created_at": datetime.utcnow(),
+                        "updated_at": datetime.utcnow(),
+                        "is_deleted": False
+                    }
+                    ins = await task_col.insert_one(new_task_doc)
+                    target_issue["taskId"] = str(ins.inserted_id)
+            else:
+                if stage_tasks:
+                    await task_col.update_many(
+                        {"_id": {"$in": [t["_id"] for t in stage_tasks]}},
+                        {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}}
+                    )
+
+        # Update content item if issues array was enriched with taskIds or converted from strings
+        if normalized_issues != raw_issues:
+            from bson import ObjectId
+            content_col = db["content_items"]
+            await content_col.update_one(
+                {"_id": ObjectId(item_id)},
+                {"$set": {"issues": normalized_issues, "updated_at": datetime.utcnow()}}
+            )
+
         from app.redis.service import clear_pattern
         await clear_pattern("tasks:*")
 

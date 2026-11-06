@@ -878,12 +878,20 @@ async def delete_task(task_id: str, current_user: dict = Depends(get_current_emp
 
     is_operational = "operation" in user_dept
 
-    if role not in ["Admin", "Subadmin", "HR"] and not is_operational:
+    # Allow task deletion if Admin/Subadmin/HR/Operational, or task creator,
+    # or if it is a Content Calendar issue/pending task (associated with content_item_id)
+    is_cc_issue = (
+        bool(item.get("content_item_id"))
+        and (
+            bool(item.get("is_client_issue"))
+            or bool(item.get("is_pending_issue"))
+            or item.get("task_category") in ["Client Issue", "Pending"]
+        )
+    )
 
+    if role not in ["Admin", "Subadmin", "HR"] and not is_operational and not is_cc_issue:
         # Only the creator/assigner can delete, not the assignee.
-
         if item.get("assigned_by") != emp_id:
-
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to delete this task")
 
             

@@ -340,12 +340,25 @@ class TaskService:
             }).sort("created_at", -1)
             existing_issues = await existing_cursor.to_list(length=100)
 
-            target_sc = (sc or "").strip().lower()
+            def _norm_s(val: str) -> str:
+                s = (val or "").strip().lower()
+                if "script" in s: return "script"
+                if "shoot" in s or "video" in s: return "shoot"
+                if "edit" in s or "reel" in s: return "editing"
+                if "post" in s and "graphic" in s: return "post/graphics"
+                if "graphic" in s: return "post/graphics"
+                if "posting" in s or "publish" in s: return "posting"
+                if "caption" in s: return "caption"
+                if "thumb" in s: return "thumbnail"
+                if "approval" in s or "brand" in s or "qc" in s: return "approval"
+                return s
+
+            target_sc = _norm_s(sc)
             matching_issues = []
             for ei in existing_issues:
-                ei_sc = (ei.get("sub_category") or "").strip().lower()
+                ei_sc = _norm_s(ei.get("sub_category") or ei.get("role") or "")
                 ei_title = (ei.get("title") or "").strip().lower()
-                if not target_sc or ei_sc == target_sc or f"({target_sc})" in ei_title:
+                if not target_sc or ei_sc == target_sc or f"({target_sc}" in ei_title:
                     matching_issues.append(ei)
 
             if matching_issues:
