@@ -5674,8 +5674,8 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
   const currentMonthStats = useMemo(() => {
     if (!currentProject) return { targetPosts: 8, targetReels: 8, completedPosts: 0, completedReels: 0, totalTarget: 16, totalCompleted: 0 };
-    const targetPosts = currentProject.post || 8;
-    const targetReels = currentProject.reel || 8;
+    const targetPosts = typeof currentProject.post === "number" && currentProject.post > 0 ? currentProject.post : 8;
+    const targetReels = typeof currentProject.reel === "number" && currentProject.reel > 0 ? currentProject.reel : 8;
 
     const calendar = currentProject.contentCalendar || [];
     const now = new Date();
@@ -5701,15 +5701,34 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       });
     }
 
-    const completedPosts = filteredCal.filter(item =>
-      (item.type === "Post" || item.type === "Carousel" || item.type === "Story") &&
-      (item.status === "Approved" || item.status === "Published")
-    ).length;
+    const isDelivered = (item: any) => {
+      const s = String(item.status || "").toLowerCase().trim();
+      if (s.includes("publish") || s.includes("approved") || s.includes("done") || s.includes("posted") || item.is_posted) {
+        return true;
+      }
+      const igLink = (item.postingLinkOfIg || "").trim();
+      if (igLink && !["not required", "none", "-", "n/a"].includes(igLink.toLowerCase())) {
+        return true;
+      }
+      if ((item.actualPostingDate || "").trim()) {
+        return true;
+      }
+      const finalLink = (item.finalPostLink || item.finalReelLink || "").trim();
+      if (finalLink && !["not required", "none", "-", "n/a"].includes(finalLink.toLowerCase())) {
+        return true;
+      }
+      return false;
+    };
 
-    const completedReels = filteredCal.filter(item =>
-      item.type === "Reel" &&
-      (item.status === "Approved" || item.status === "Published")
-    ).length;
+    const isReel = (item: any) => {
+      const t = String(item.type || "").toLowerCase().trim();
+      if (t === "reel" || t.includes("reel") || t.includes("video")) return true;
+      if (!t && item.finalReelLink && !item.finalPostLink) return true;
+      return false;
+    };
+
+    const completedPosts = filteredCal.filter(item => !isReel(item) && isDelivered(item)).length;
+    const completedReels = filteredCal.filter(item => isReel(item) && isDelivered(item)).length;
 
     return {
       targetPosts,
@@ -6753,9 +6772,9 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                 <button
                   type="button"
                   onClick={() => {
-                    const targetProjId = activeProj?.id;
+                    const targetProjId = activeProj?.id || currentProject?.id || selectedProjectId;
                     if (targetProjId) {
-                      handleSaveTargets(targetProjId, targetsForm.post, targetsForm.reel);
+                      handleSaveTargets(targetProjId, Number(targetsForm.post) || 0, Number(targetsForm.reel) || 0);
                     }
                   }}
                   className="px-6 py-2.5 bg-primary text-primary-foreground font-bold text-xs rounded-xl shadow-md hover:bg-primary/90 transition-all cursor-pointer"
@@ -7817,7 +7836,10 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    setTargetsForm({ post: project.post || 8, reel: project.reel || 8 });
+                                    setTargetsForm({
+                                      post: typeof project.post === "number" && project.post > 0 ? project.post : 8,
+                                      reel: typeof project.reel === "number" && project.reel > 0 ? project.reel : 8
+                                    });
                                     setIsEditTargetsModalOpen(true);
                                   }}
                                   className="text-[10px] font-bold text-primary hover:underline flex items-center gap-1 bg-primary/10 px-2.5 py-1 rounded-lg transition-colors"

@@ -12,6 +12,16 @@ def _convert_dates_to_datetime(obj):
         return datetime.combine(obj, datetime.min.time())
     return obj
 
+def _flatten_update_dict(d: dict, parent_key: str = "", sep: str = ".") -> dict:
+    items = []
+    for k, v in d.items():
+        new_key = f"{parent_key}{sep}{k}" if parent_key else k
+        if isinstance(v, dict) and not isinstance(v, ObjectId):
+            items.extend(_flatten_update_dict(v, new_key, sep=sep).items())
+        else:
+            items.append((new_key, v))
+    return dict(items)
+
 class ProjectRepository:
     collection_name = "projects"
 
@@ -162,10 +172,18 @@ class ProjectRepository:
             
         data["updated_at"] = datetime.utcnow()
         data = _convert_dates_to_datetime(data)
+
+        # Flatten subdocuments (like general and finance) to dot notation so $set does not overwrite sibling fields
+        update_set = {}
+        for k, v in data.items():
+            if k in ["general", "finance"] and isinstance(v, dict):
+                update_set.update(_flatten_update_dict(v, parent_key=k))
+            else:
+                update_set[k] = v
                      
         result = await collection.update_one(
             {"_id": ObjectId(project_id)},
-            {"$set": data}
+            {"$set": update_set}
         )
         return result.modified_count > 0 or result.matched_count > 0
 

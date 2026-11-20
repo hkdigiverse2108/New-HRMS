@@ -399,42 +399,34 @@ async def get_all_tasks(
     
 
     is_my_tasks = (view == "me" or view == "my_tasks")
-
-    
+    is_assigned_by_me = (view == "assigned_by_me" or (assigned_by and str(assigned_by).strip() == str(emp_id).strip()))
+    is_transfers_view = (view == "transfers")
 
     # Strict "My Tasks" handling: ONLY tasks where assigned_to == current employee
-
     if is_my_tasks:
-
         assigned_to = emp_id
-
         involved_emp_id = None
-
         team_employee_ids = None
-
         department = None
-
+    elif is_assigned_by_me or (assigned_by and not is_admin_or_hr):
+        if not assigned_by:
+            assigned_by = emp_id
+        # When viewing assigned_by, do not restrict assigned_to
+        involved_emp_id = None
+        team_employee_ids = None
     elif not is_admin_or_hr:
-
         desig_lower = str(designation or "").lower()
-
         is_leader = "team leader" in desig_lower or "head" in desig_lower
 
-        
-
         if is_leader and view == "team":
-
             from app.repository.employee import EmployeeRepository
-
             dept_emps = await EmployeeRepository.get_all_employees(department=user_dept, limit=1000)
-
             team_employee_ids = [str(e["_id"]) for e in dept_emps.get("data", [])]
-
             if user_dept and user_dept.lower() == "creative":
                 if "6abc98e2edafab0976cd60d4" not in team_employee_ids:
                     team_employee_ids.append("6abc98e2edafab0976cd60d4")
 
-        elif view == "all":
+        elif view in ["all", "transfers"]:
             # All employees can view All Tasks and filter by department
             pass
         else:
@@ -613,50 +605,38 @@ async def get_task_stats(
 
 
     is_my_tasks = (view == "me" or view == "my_tasks")
-
-
+    is_assigned_by_me = (view == "assigned_by_me" or (assigned_by and str(assigned_by).strip() == str(emp_id).strip()))
+    is_transfers_view = (view == "transfers")
 
     if is_my_tasks:
-
         assigned_to = emp_id
-
         involved_emp_id = None
-
         team_employee_ids = None
-
         department = None
-
+    elif is_assigned_by_me or (assigned_by and not is_admin_or_hr):
+        if not assigned_by:
+            assigned_by = emp_id
+        involved_emp_id = None
+        team_employee_ids = None
     elif not is_admin_or_hr:
-
         desig_lower = str(designation or "").lower()
-
         is_leader = "team leader" in desig_lower or "head" in desig_lower
 
-        if view == "all":
+        if view in ["all", "transfers"]:
             # All employees can view All Tasks stats and filter by department
             pass
         elif is_leader:
-
             from app.repository.employee import EmployeeRepository
-
             dept_emps = await EmployeeRepository.get_all_employees(department=user_dept, limit=1000)
-
             dept_emp_ids = [str(e["_id"]) for e in dept_emps.get("data", [])]
-
             if user_dept and user_dept.lower() == "creative":
                 if "6abc98e2edafab0976cd60d4" not in dept_emp_ids:
                     dept_emp_ids.append("6abc98e2edafab0976cd60d4")
-
             team_employee_ids = dept_emp_ids
-
         else:
-
-            # When in personal view without all view requested
             if not assigned_to:
                 assigned_to = emp_id
-
             involved_emp_id = None
-
             team_employee_ids = None
 
 

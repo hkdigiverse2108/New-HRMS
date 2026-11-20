@@ -1152,39 +1152,31 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
       }
 
       if (isMyTasksMode) {
-
         params.append("view", "me");
-
       } else if (scopeFilter === "assigned_by_me") {
-
+        params.append("view", "assigned_by_me");
         params.append("assigned_by", currentUserId || "");
-
+      } else if (scopeFilter === "transfers") {
+        params.append("view", "transfers");
       } else {
-
         params.append("view", "all");
-
       }
 
       const queryString = params.toString();
 
       // Dynamic Filter-Wise Stats Calculation
-
       const statsParams = new URLSearchParams();
-
       statsParams.append("target_date", todayDateStr);
 
       if (isMyTasksMode) {
-
         statsParams.append("view", "me");
-
       } else if (scopeFilter === "assigned_by_me") {
-
+        statsParams.append("view", "assigned_by_me");
         statsParams.append("assigned_by", currentUserId || "");
-
+      } else if (scopeFilter === "transfers") {
+        statsParams.append("view", "transfers");
       } else {
-
         statsParams.append("view", "all");
-
       }
 
       if (!isMyTasksMode && departmentFilter && departmentFilter !== "All") {
@@ -1555,12 +1547,12 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
   // Tasks are dynamically queried, filtered, and paginated (25 per page) from the backend directly
 
   const filteredTasks = useMemo(() => {
-
-    // Stage filter is applied on the server (matches sub_category and Content-Calendar creative_role)
-
-    return tasks.filter(t => !t.is_archived);
-
-  }, [tasks]);
+    let list = tasks.filter(t => !t.is_archived);
+    if (scopeFilter === "transfers") {
+      list = list.filter(t => t.transferRequest && t.transferRequest.status === "pending");
+    }
+    return list;
+  }, [tasks, scopeFilter]);
 
   const { items: sortedTasks, requestSort, sortConfig } = useSortableData(filteredTasks);
 
@@ -3056,69 +3048,40 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
           </div>
 
-          {/* Sub-Tabs when in All Tasks Mode */}
-
-          {mainViewMode === "all_tasks" && (
-
-            <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar">
-
-              {[
-
-                { id: "all" as const, label: "All Team Tasks" },
-
-                { id: "assigned_by_me" as const, label: "Assigned by Me" },
-
-                {
-
-                  id: "transfers" as const,
-
-                  label: "Transfers",
-
-                  badge: pendingIncomingTransfersCount > 0 ? pendingIncomingTransfersCount : undefined,
-
-                },
-
-              ].map((tab) => (
-
-                <button
-
-                  key={tab.id}
-
-                  onClick={() => setScopeFilter(tab.id)}
-
-                  className={cn(
-
-                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap",
-
-                    scopeFilter === tab.id
-
-                      ? "bg-primary text-primary-foreground shadow-sm"
-
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-
-                  )}
-
-                >
-
-                  <span>{tab.label}</span>
-
-                  {tab.badge && (
-
-                    <span className="w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] flex items-center justify-center font-black animate-pulse">
-
-                      {tab.badge}
-
-                    </span>
-
-                  )}
-
-                </button>
-
-              ))}
-
-            </div>
-
-          )}
+          {/* Sub-Tabs: All Team Tasks, Assigned by Me, Transfers (Always visible for all employees) */}
+          <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar">
+            {[
+              { id: "all" as const, label: "All Team Tasks" },
+              { id: "assigned_by_me" as const, label: "Assigned by Me" },
+              {
+                id: "transfers" as const,
+                label: "Transfers",
+                badge: pendingIncomingTransfersCount > 0 ? pendingIncomingTransfersCount : undefined,
+              },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setMainViewMode("all_tasks");
+                  setScopeFilter(tab.id);
+                  setCurrentPage(1);
+                }}
+                className={cn(
+                  "px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap",
+                  mainViewMode === "all_tasks" && scopeFilter === tab.id
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                )}
+              >
+                <span>{tab.label}</span>
+                {tab.badge && (
+                  <span className="w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] flex items-center justify-center font-black animate-pulse">
+                    {tab.badge}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
 
         </div>
 

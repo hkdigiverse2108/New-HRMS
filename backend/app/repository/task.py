@@ -265,7 +265,15 @@ class TaskRepository:
                 ]
             })
         if assigned_by:
-            and_conditions.append({"assigned_by": assigned_by})
+            match_assigners = [str(assigned_by)]
+            if ObjectId.is_valid(str(assigned_by)):
+                match_assigners.append(ObjectId(str(assigned_by)))
+            and_conditions.append({
+                "$or": [
+                    {"assigned_by": {"$in": match_assigners}},
+                    {"created_by": {"$in": match_assigners}}
+                ]
+            })
         if status and status != "All":
             norm_status = status.lower().replace(" ", "").replace("_", "")
             if norm_status in ["done", "completed"]:
@@ -577,7 +585,15 @@ class TaskRepository:
                 ]
             })
         if assigned_by:
-            common_conditions.append({"assigned_by": assigned_by})
+            match_assigners = [str(assigned_by)]
+            if ObjectId.is_valid(str(assigned_by)):
+                match_assigners.append(ObjectId(str(assigned_by)))
+            common_conditions.append({
+                "$or": [
+                    {"assigned_by": {"$in": match_assigners}},
+                    {"created_by": {"$in": match_assigners}}
+                ]
+            })
         if department and department != "All":
             if department.lower() in ["other work", "other"]:
                 dept_assign_match = {
