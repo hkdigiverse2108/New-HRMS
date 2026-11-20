@@ -318,12 +318,13 @@ class TaskService:
         # We update that single task with the latest reason, category, and status instead of creating a duplicate!
         cid = insert_data.get("content_item_id")
         sc = insert_data.get("sub_category")
+        task_title = str(insert_data.get("title") or "")
         is_issue_task = (
             insert_data.get("task_category") in ["Client Issue", "Pending"]
             or insert_data.get("is_client_issue") is True
             or insert_data.get("is_pending_issue") is True
-            or str(title).lower().startswith("[client issue]")
-            or str(title).lower().startswith("[pending]")
+            or task_title.lower().startswith("[client issue]")
+            or task_title.lower().startswith("[pending]")
         )
 
         if cid and is_issue_task:

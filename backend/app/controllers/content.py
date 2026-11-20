@@ -44,6 +44,8 @@ async def update_content_settings(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Project ID mismatch")
     res = await ContentService.update_settings(project_id, settings)
     await clear_pattern(f"content:{project_id}:*")
+    import asyncio
+    asyncio.create_task(ContentService.sync_monthly_cc_creation_tasks())
     return res
 
 @router.post("/{project_id}/content", response_model=ContentItemResponse, status_code=status.HTTP_201_CREATED)

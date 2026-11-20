@@ -425,6 +425,11 @@ class ProjectService:
                             )
                             creator_id = current_user_id or (old_project.get("created_by") if old_project else None) or "6aaa2a034b106fd0c7cac04d"
                             await TaskService.create_task(task_create, creator_id)
+
+                # Sync monthly CC creation tasks
+                import asyncio
+                from app.services.content import ContentService
+                asyncio.create_task(ContentService.sync_monthly_cc_creation_tasks())
             except Exception as e:
                 import logging
                 logging.getLogger(__name__).warning(f"Error transferring tasks during creative team reassign: {e}")

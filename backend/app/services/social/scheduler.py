@@ -29,7 +29,20 @@ class SocialScheduler:
         cls._tasks.append(asyncio.create_task(cls._daily_token_refresh_loop()))
         cls._tasks.append(asyncio.create_task(cls._hourly_log_cleanup_loop()))
         cls._tasks.append(asyncio.create_task(cls._pending_dm_sweep_loop()))
+        cls._tasks.append(asyncio.create_task(cls._periodic_cc_task_sync_loop()))
         logger.info("Social Automation background schedulers started.")
+
+    @classmethod
+    async def _periodic_cc_task_sync_loop(cls):
+        """Periodic sync (every 2 hours) to auto-generate monthly CC creation tasks."""
+        await asyncio.sleep(15)  # Initial grace period on startup
+        while True:
+            try:
+                from app.services.content import ContentService
+                await ContentService.sync_monthly_cc_creation_tasks()
+            except Exception as e:
+                logger.warning(f"Error in _periodic_cc_task_sync_loop: {e}")
+            await asyncio.sleep(7200)  # Repeat every 2 hours
 
     @classmethod
     def stop_scheduler(cls):

@@ -137,6 +137,7 @@ async def upload_company_letterhead(
 from pydantic import BaseModel, Field
 
 class GlobalTimelineSettings(BaseModel):
+    cc_days_before: int = Field(16, ge=0, description="CC Creation days before next month")
     script_days_before: int = Field(16, ge=0, description="Script days before posting")
     shoot_days_before: int = Field(14, ge=0, description="Shoot days before posting")
     editing_graphics_days_before: int = Field(7, ge=0, description="Editing/Graphics days before posting")
@@ -148,6 +149,7 @@ async def get_global_content_timeline():
     from app.services.content import ContentService
     settings = await ContentService.get_settings("global")
     return GlobalTimelineSettings(
+        cc_days_before=settings.get("cc_days_before", 16),
         script_days_before=settings.get("script_days_before", 16),
         shoot_days_before=settings.get("shoot_days_before", 14),
         editing_graphics_days_before=settings.get("editing_graphics_days_before", 7),
@@ -161,10 +163,12 @@ async def update_global_content_timeline(
     current_user: dict = Depends(get_current_employee)
 ):
     check_admin_role(current_user)
+    import asyncio
     from app.services.content import ContentService
     from app.schemas.content import ContentTimelineSettings
     settings_dto = ContentTimelineSettings(
         project_id="global",
+        cc_days_before=data.cc_days_before,
         script_days_before=data.script_days_before,
         shoot_days_before=data.shoot_days_before,
         editing_graphics_days_before=data.editing_graphics_days_before,
@@ -174,7 +178,9 @@ async def update_global_content_timeline(
     res = await ContentService.update_settings("global", settings_dto)
     await clear_pattern("settings:*")
     await clear_pattern("content:global:*")
+    asyncio.create_task(ContentService.sync_monthly_cc_creation_tasks())
     return GlobalTimelineSettings(
+        cc_days_before=res.get("cc_days_before", 16),
         script_days_before=res.get("script_days_before", 16),
         shoot_days_before=res.get("shoot_days_before", 14),
         editing_graphics_days_before=res.get("editing_graphics_days_before", 7),

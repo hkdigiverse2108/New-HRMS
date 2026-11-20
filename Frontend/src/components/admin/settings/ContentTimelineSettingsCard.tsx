@@ -17,6 +17,7 @@ import { api } from "@/lib/api";
 import { toast } from "@/lib/toast";
 
 export interface TimelineSettingsData {
+  cc_days_before: number;
   script_days_before: number;
   shoot_days_before: number;
   editing_graphics_days_before: number;
@@ -25,6 +26,7 @@ export interface TimelineSettingsData {
 }
 
 const DEFAULT_TIMELINE_SETTINGS: TimelineSettingsData = {
+  cc_days_before: 16,
   script_days_before: 16,
   shoot_days_before: 14,
   editing_graphics_days_before: 7,
@@ -40,6 +42,7 @@ export function ContentTimelineSettingsCard({ className }: { className?: string 
         if (saved) {
           const parsed = JSON.parse(saved);
           return {
+            cc_days_before: Number(parsed.cc) || 16,
             script_days_before: Number(parsed.script) || 16,
             shoot_days_before: Number(parsed.shoot) || 14,
             editing_graphics_days_before: Number(parsed.editing) || 7,
@@ -66,6 +69,7 @@ export function ContentTimelineSettingsCard({ className }: { className?: string 
         });
         if (res) {
           setFormData({
+            cc_days_before: res.cc_days_before ?? 16,
             script_days_before: res.script_days_before ?? 16,
             shoot_days_before: res.shoot_days_before ?? 14,
             editing_graphics_days_before: res.editing_graphics_days_before ?? 7,
@@ -92,6 +96,7 @@ export function ContentTimelineSettingsCard({ className }: { className?: string 
     setIsSaving(true);
     try {
       const payload = {
+        cc_days_before: Number(formData.cc_days_before) || 16,
         script_days_before: Number(formData.script_days_before) || 0,
         shoot_days_before: Number(formData.shoot_days_before) || 0,
         editing_graphics_days_before: Number(formData.editing_graphics_days_before) || 0,
@@ -102,6 +107,7 @@ export function ContentTimelineSettingsCard({ className }: { className?: string 
       const res = await api.put<any>("/settings/content-timeline", payload);
       if (res) {
         setFormData({
+          cc_days_before: res.cc_days_before ?? payload.cc_days_before,
           script_days_before: res.script_days_before ?? payload.script_days_before,
           shoot_days_before: res.shoot_days_before ?? payload.shoot_days_before,
           editing_graphics_days_before: res.editing_graphics_days_before ?? payload.editing_graphics_days_before,
@@ -115,6 +121,7 @@ export function ContentTimelineSettingsCard({ className }: { className?: string 
         localStorage.setItem(
           "hrms_calendar_offsets",
           JSON.stringify({
+            cc: payload.cc_days_before,
             script: payload.script_days_before,
             shoot: payload.shoot_days_before,
             editing: payload.editing_graphics_days_before,
@@ -168,7 +175,36 @@ export function ContentTimelineSettingsCard({ className }: { className?: string 
       </div>
 
       {/* Form Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3.5 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5 sm:gap-4">
+        {/* 0. CC Creation */}
+        <div className="p-4 rounded-2xl border border-border/70 bg-muted/20 hover:border-indigo-500/40 transition-all flex flex-col justify-between space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                <CalendarDays className="w-3.5 h-3.5" />
+              </div>
+              <span className="text-xs font-bold text-foreground">CC Creation</span>
+            </div>
+            <span className="text-[10px] font-bold text-muted-foreground uppercase">T - {formData.cc_days_before}d</span>
+          </div>
+          <div className="min-w-0">
+            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
+              Days Before Month
+            </label>
+            <div className="relative">
+              <input
+                type="number"
+                min="0"
+                max="90"
+                value={formData.cc_days_before}
+                onChange={(e) => handleChange("cc_days_before", e.target.value)}
+                className="w-full h-10 px-3 bg-background border border-border/70 rounded-xl text-xs font-black text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground font-semibold">days</span>
+            </div>
+          </div>
+        </div>
+
         {/* 1. Scripting */}
         <div className="p-4 rounded-2xl border border-border/70 bg-muted/20 hover:border-primary/40 transition-all flex flex-col justify-between space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
@@ -322,6 +358,11 @@ export function ContentTimelineSettingsCard({ className }: { className?: string 
           <span className="text-[10px] font-semibold text-muted-foreground">Chronological Flow before Posting Date</span>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs font-bold">
+          <span className="px-3 py-1.5 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 flex items-center gap-1.5">
+            <CalendarDays className="w-3.5 h-3.5" />
+            <span>CC: -{formData.cc_days_before}d</span>
+          </span>
+          <ArrowRight className="w-3.5 h-3.5 text-muted-foreground/60 hidden sm:inline" />
           <span className="px-3 py-1.5 rounded-xl bg-primary/10 text-primary border border-primary/20 flex items-center gap-1.5">
             <FileText className="w-3.5 h-3.5" />
             <span>Script: -{formData.script_days_before}d</span>

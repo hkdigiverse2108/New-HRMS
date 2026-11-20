@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-
+import time
+import asyncio
 from typing import Optional
 
 from datetime import date
@@ -33,6 +34,7 @@ class RejectReviewPayload(BaseModel):
 
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
+_last_cc_sync_time = 0.0
 
 
 
@@ -317,6 +319,14 @@ async def get_all_tasks(
     emp_id = str(current_user.get("_id") or current_user.get("id"))
 
     
+
+    # 0. Background sync for monthly CC tasks (throttled to once every 5 minutes)
+    global _last_cc_sync_time
+    now_ts = time.time()
+    if now_ts - _last_cc_sync_time > 300:
+        _last_cc_sync_time = now_ts
+        from app.services.content import ContentService
+        asyncio.create_task(ContentService.sync_monthly_cc_creation_tasks())
 
     # 1. Check Redis Cache
 

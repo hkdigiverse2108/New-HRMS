@@ -77,7 +77,193 @@ class ContentService:
     @staticmethod
     async def update_settings(project_id: str, settings_data: ContentTimelineSettings):
         data_dict = settings_data.model_dump(exclude_unset=True)
-        return await ContentRepository.update_settings(project_id, data_dict)
+        res = await ContentRepository.update_settings(project_id, data_dict)
+        import asyncio
+        asyncio.create_task(ContentService.sync_monthly_cc_creation_tasks())
+        return res
+
+    @staticmethod
+    async def sync_monthly_cc_creation_tasks():
+        """
+        Check active Creative projects and ensure a CC creation task
+        is created for the assigned CC Creator when the current Content Calendar
+        is nearing completion (based on the last scheduled date of CC items).
+
+        Rules:
+        - Only for active projects (not deleted, not archived, not on-hold/inactive).
+        - Only for projects with an assigned CC Creator (creative_team.cc_creator).
+        - Check the last scheduled date (last_date) of existing CC items for that project.
+        - If (last_date - today).days <= cc_days_before (default 16 days) or if no CC items exist:
+          -> Create or maintain the CC creation task assigned to creative_team.cc_creator.
+        - Due date is the last_date of the current calendar (or today if overdue / no items).
+        - If task was manually deleted by user (is_deleted: True), do NOT recreate it!
+        - If task was already completed, do NOT duplicate it!
+        - If an active task is already open, do NOT duplicate it (update assignee if CC Creator changed).
+        - Non-intrusive: nobody's CC or workflow is blocked or stopped.
+        """
+        try:
+            from app.database.db import get_database
+            from app.schemas.task import TaskCreate
+            from app.services.task import TaskService
+            from datetime import datetime, date, timedelta
+            import pytz
+
+            db = get_database()
+            if db is None:
+                return
+
+            tz = pytz.timezone("Asia/Kolkata")
+            today = datetime.now(tz).date()
+
+            def _parse_schedule_date(val):
+                if not val:
+                    return None
+                if isinstance(val, datetime):
+                    return val.date()
+                if isinstance(val, date):
+                    return val
+                if isinstance(val, str):
+                    val_clean = val.strip().split("T")[0]
+                    try:
+                        return datetime.strptime(val_clean, "%Y-%m-%d").date()
+                    except Exception:
+                        pass
+                return None
+
+            # Find active creative projects with a CC Creator assigned
+            cursor = db["projects"].find({
+                "is_deleted": {"$ne": True},
+                "is_archived": {"$ne": True},
+                "general.status": {"$nin": ["Inactive", "On Hold", "on-hold", "onhold", "Completed", "Cancelled", "Closed"]},
+                "creative_team.cc_creator": {"$exists": True, "$ne": None, "$ne": ""}
+            })
+            active_projects = await cursor.to_list(length=1000)
+
+            for project in active_projects:
+                proj_id = str(project["_id"])
+                cc_creator_id = str(project.get("creative_team", {}).get("cc_creator") or "").strip()
+                if not cc_creator_id:
+                    continue
+
+                proj_name = (
+                    project.get("general", {}).get("project_name")
+                    or project.get("name")
+                    or project.get("title")
+                    or "Project"
+                )
+
+                settings_dict = await ContentService.get_settings(proj_id)
+                cc_days_before = int(settings_dict.get("cc_days_before", 16) or 16)
+
+                # Fetch all schedule_dates for this project to get the true last date
+                items_cursor = db["content_items"].find(
+                    {"project_id": proj_id, "is_deleted": {"$ne": True}},
+                    {"schedule_date": 1}
+                )
+                dates = []
+                async for item in items_cursor:
+                    d = _parse_schedule_date(item.get("schedule_date"))
+                    if d:
+                        dates.append(d)
+
+                last_date = max(dates) if dates else None
+                last_date_str = last_date.strftime("%Y-%m-%d") if last_date else "initial"
+
+                # Check if CC creation task should be triggered
+                if last_date:
+                    days_remaining = (last_date - today).days
+                    # If more days remain than cc_days_before, current CC has plenty of content
+                    if days_remaining > cc_days_before:
+                        # Auto-complete any older open CC creation tasks for this project that had an earlier last_cc_date
+                        await db["tasks"].update_many(
+                            {
+                                "project_id": proj_id,
+                                "creative_role": "cc_creator",
+                                "is_deleted": False,
+                                "status": {"$nin": ["completed", "done"]},
+                                "last_cc_date": {"$lt": last_date_str}
+                            },
+                            {"$set": {"status": "completed", "updated_at": datetime.utcnow()}}
+                        )
+                        continue
+
+                # Query existing CC creation tasks for this project
+                existing_tasks = await db["tasks"].find({
+                    "project_id": proj_id,
+                    "creative_role": "cc_creator",
+                    "task_category": "SMM",
+                    "sub_category": "Content Calendar"
+                }).to_list(100)
+
+                # 1. Check if a task for this specific last_cc_date already exists
+                matching_task = next((t for t in existing_tasks if t.get("last_cc_date") == last_date_str), None)
+                if matching_task:
+                    # If user manually deleted this task, respect user's choice and DO NOT recreate
+                    if matching_task.get("is_deleted"):
+                        continue
+                    # If already completed, do not duplicate
+                    if matching_task.get("status") in ["completed", "done"]:
+                        continue
+                    # If open, ensure assigned_to matches current cc_creator
+                    if matching_task.get("assigned_to") != cc_creator_id:
+                        await db["tasks"].update_one(
+                            {"_id": matching_task["_id"]},
+                            {"$set": {"assigned_to": cc_creator_id, "updated_at": datetime.utcnow()}}
+                        )
+                    continue
+
+                # 2. Check if ANY open CC creation task already exists for this project
+                open_task = next((t for t in existing_tasks if not t.get("is_deleted") and t.get("status") not in ["completed", "done"]), None)
+                if open_task:
+                    due_date_val = max(today, last_date) if last_date else today
+                    update_fields = {
+                        "last_cc_date": last_date_str,
+                        "due_date": due_date_val.strftime("%Y-%m-%d"),
+                        "updated_at": datetime.utcnow()
+                    }
+                    if open_task.get("assigned_to") != cc_creator_id:
+                        update_fields["assigned_to"] = cc_creator_id
+                    await db["tasks"].update_one(
+                        {"_id": open_task["_id"]},
+                        {"$set": update_fields}
+                    )
+                    continue
+
+                # 3. Create the new CC creation task
+                due_date_val = max(today, last_date) if last_date else today
+                task_title = f"📅 Create Content Calendar: {proj_name}"
+                if last_date:
+                    task_desc = f"Plan and create new Content Calendar posting ideas for {proj_name}. Current calendar ends on {last_date_str} ({cc_days_before} days threshold)."
+                else:
+                    task_desc = f"Plan and create initial Content Calendar for {proj_name}."
+
+                task_create = TaskCreate(
+                    title=task_title,
+                    assigned_to=cc_creator_id,
+                    due_date=due_date_val,
+                    task_category="SMM",
+                    sub_category="Content Calendar",
+                    project_id=proj_id,
+                    creative_role="cc_creator",
+                    description=task_desc
+                )
+                assigned_by = (
+                    project.get("created_by")
+                    or project.get("assigned_employee_id")
+                    or "6aaa2a034b106fd0c7cac04d"
+                )
+                created_task = await TaskService.create_task(task_create, str(assigned_by))
+                if created_task:
+                    created_id = created_task.id if hasattr(created_task, "id") else (created_task.get("_id") or created_task.get("id"))
+                    from bson import ObjectId
+                    task_obj_id = ObjectId(str(created_id)) if ObjectId.is_valid(str(created_id)) else created_id
+                    await db["tasks"].update_one(
+                        {"_id": task_obj_id},
+                        {"$set": {"last_cc_date": last_date_str, "is_auto": True}}
+                    )
+        except Exception as e:
+            import logging
+            logging.getLogger("hrms.content").warning(f"Error in sync_monthly_cc_creation_tasks: {e}")
 
     @staticmethod
     async def _sync_tasks_for_content(item_id: str, item_data: dict, project: dict, current_user_id: Optional[str] = None, existing_item: Optional[dict] = None):
@@ -693,6 +879,26 @@ class ContentService:
                 )
                 
             await ProjectRepository.update(project_id, {"has_content_calendar": True})
+
+            # Auto-complete pending CC creation task if new content was added extending the calendar
+            if insert_data.get("schedule_date"):
+                sched_dt_str = str(insert_data.get("schedule_date")).split("T")[0]
+                from app.database.db import get_database
+                _db = get_database()
+                if _db is not None:
+                    open_tasks = await _db["tasks"].find({
+                        "project_id": str(project_id),
+                        "creative_role": "cc_creator",
+                        "is_deleted": False,
+                        "status": {"$nin": ["completed", "done"]}
+                    }).to_list(20)
+                    for ot in open_tasks:
+                        last_cc = ot.get("last_cc_date")
+                        if not last_cc or last_cc == "initial" or sched_dt_str >= str(last_cc):
+                            await _db["tasks"].update_one(
+                                {"_id": ot["_id"]},
+                                {"$set": {"status": "completed", "updated_at": datetime.utcnow()}}
+                            )
                 
         return created_item
 

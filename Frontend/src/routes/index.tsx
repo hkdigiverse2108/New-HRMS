@@ -84,7 +84,7 @@ import { hasModulePermission } from "@/lib/permissions";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "HR Suite — Optimized Sidebar Navigation" },
+      { title: "HRMS" },
       {
         name: "description",
         content:

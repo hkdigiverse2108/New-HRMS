@@ -2963,6 +2963,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         const settings = await api.get<any>(`/projects/${projId}/content/settings`, { showLoader: false });
         if (settings) {
           setCalendarOffsets({
+            cc: settings.cc_days_before ?? 16,
             script: settings.script_days_before ?? 16,
             shoot: settings.shoot_days_before ?? 14,
             editing: settings.editing_graphics_days_before ?? 7,
@@ -4715,7 +4716,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
   const [isCalendarSettingsOpen, setIsCalendarSettingsOpen] = useState(false);
   const [calendarOffsets, setCalendarOffsets] = useState(() => {
-    let offsets = { script: 16, shoot: 14, editing: 7, thumbnail: 5, approval: 5 };
+    let offsets = { cc: 16, script: 16, shoot: 14, editing: 7, thumbnail: 5, approval: 5 };
     if (typeof window !== 'undefined') {
       try {
         const saved = (typeof window !== 'undefined' ? localStorage.getItem('hrms_calendar_offsets') : null);
@@ -10358,6 +10359,10 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                   </p>
                   <div className="space-y-3">
                     <div>
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">CC Creation (Days Before Next Month)</label>
+                      <input type="number" min="0" value={calendarOffsets.cc ?? 16} onChange={(e) => setCalendarOffsets({ ...calendarOffsets, cc: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
+                    </div>
+                    <div>
                       <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Script Date (Days Before)</label>
                       <input type="number" min="0" value={calendarOffsets.script} onChange={(e) => setCalendarOffsets({ ...calendarOffsets, script: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-muted/50 border border-border/50 rounded-xl text-xs focus:outline-none" />
                     </div>
@@ -10388,6 +10393,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                         try {
                           await api.put(`/projects/${selectedProjectId}/content/settings`, {
                             project_id: selectedProjectId,
+                            cc_days_before: Number(calendarOffsets.cc) || 16,
                             script_days_before: Number(calendarOffsets.script) || 0,
                             shoot_days_before: Number(calendarOffsets.shoot) || 0,
                             editing_graphics_days_before: Number(calendarOffsets.editing) || 0,
