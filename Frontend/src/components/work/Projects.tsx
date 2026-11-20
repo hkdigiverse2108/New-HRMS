@@ -5673,7 +5673,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   }, [currentProject, projects, projectScope, isUserAssignedToProject]);
 
   const currentMonthStats = useMemo(() => {
-    if (!currentProject) return { targetPosts: 8, targetReels: 8, completedPosts: 0, completedReels: 0, totalTarget: 16, totalCompleted: 0 };
+    if (!currentProject) return { targetPosts: 8, targetReels: 8, completedPosts: 0, completedReels: 0, completedStories: 0, totalTarget: 16, totalCompleted: 0 };
     const targetPosts = typeof currentProject.post === "number" && currentProject.post > 0 ? currentProject.post : 8;
     const targetReels = typeof currentProject.reel === "number" && currentProject.reel > 0 ? currentProject.reel : 8;
 
@@ -5720,21 +5720,38 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       return false;
     };
 
+    const isStory = (item: any) => {
+      const t = String(item.type || "").toLowerCase().trim();
+      return t === "story" || t.includes("story");
+    };
+
     const isReel = (item: any) => {
       const t = String(item.type || "").toLowerCase().trim();
+      if (t === "story" || t.includes("story")) return false;
       if (t === "reel" || t.includes("reel") || t.includes("video")) return true;
       if (!t && item.finalReelLink && !item.finalPostLink) return true;
       return false;
     };
 
-    const completedPosts = filteredCal.filter(item => !isReel(item) && isDelivered(item)).length;
+    const isPost = (item: any) => {
+      const t = String(item.type || "").toLowerCase().trim();
+      if (t === "story" || t.includes("story")) return false;
+      if (t === "reel" || t.includes("reel") || t.includes("video")) return false;
+      if (t === "post" || t.includes("post") || t === "carousel" || t.includes("carousel")) return true;
+      if (!t && item.finalPostLink && !item.finalReelLink) return true;
+      return t === "post";
+    };
+
+    const completedPosts = filteredCal.filter(item => isPost(item) && isDelivered(item)).length;
     const completedReels = filteredCal.filter(item => isReel(item) && isDelivered(item)).length;
+    const completedStories = filteredCal.filter(item => isStory(item) && isDelivered(item)).length;
 
     return {
       targetPosts,
       targetReels,
       completedPosts,
       completedReels,
+      completedStories,
       totalTarget: targetPosts + targetReels,
       totalCompleted: completedPosts + completedReels
     };
@@ -6742,7 +6759,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                     className="w-full px-4 py-2.5 bg-muted/40 border border-border/60 rounded-xl text-sm font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
                     placeholder="e.g. 8"
                   />
-                  <p className="text-[11px] text-muted-foreground">Includes Standard Posts, Carousels, and Stories</p>
+                  <p className="text-[11px] text-muted-foreground">Includes Standard Posts and Carousels (Stories excluded)</p>
                 </div>
 
                 <div className="space-y-2">
@@ -7847,11 +7864,16 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                   <Settings2 className="w-3 h-3" /> Edit Targets
                                 </button>
                               </div>
-                              <div className="flex items-baseline gap-2 my-1">
+                              <div className="flex items-baseline flex-wrap gap-2 my-1">
                                 <span className="text-3xl font-black text-foreground font-mono">
                                   {currentMonthStats.totalCompleted} / {currentMonthStats.totalTarget}
                                 </span>
                                 <span className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Deliverables</span>
+                                {(currentMonthStats.completedStories ?? 0) > 0 && (
+                                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-pink-500/10 text-pink-600 border border-pink-500/20" title="Completed Stories (tracked separately from post targets)">
+                                    +{currentMonthStats.completedStories} Stories
+                                  </span>
+                                )}
                               </div>
                               <div className="flex items-center justify-between text-[11px] pt-1 border-t border-border/40 gap-1.5">
                                 <span className="text-muted-foreground font-medium">Tracking Period:</span>
