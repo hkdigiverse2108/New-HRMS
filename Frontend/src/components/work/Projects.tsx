@@ -3858,6 +3858,11 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     "Final Link"
   ]);
 
+  // Visual Monthly Wall Calendar Grid & Client Review Share States
+  const [ccViewMode, setCcViewMode] = useState<"table" | "grid">("table");
+  const [isClientShareModalOpen, setIsClientShareModalOpen] = useState(false);
+  const [copiedShareLink, setCopiedShareLink] = useState(false);
+
   const handleGenerateCcPdf = async (mode: "download" | "print" = "download") => {
     const currentProject = projects.find(p => p.id === selectedProjectId);
     if (!currentProject) {
@@ -8143,6 +8148,47 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                 <p className="text-xs text-muted-foreground mt-0.5">Plan, schedule, and track content approval pipeline</p>
                               </div>
                               <div className="flex flex-wrap items-center gap-2">
+                              {/* View Mode Switcher (Table View vs Calendar Grid View) */}
+                              <div className="flex items-center gap-1 bg-muted/60 p-0.5 rounded-xl border border-border/50 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => setCcViewMode("table")}
+                                  className={cn(
+                                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                                    ccViewMode === "table"
+                                      ? "bg-card text-foreground shadow-xs border border-border/40"
+                                      : "text-muted-foreground hover:text-foreground"
+                                  )}
+                                >
+                                  <List className="w-3.5 h-3.5" />
+                                  <span>Table View</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setCcViewMode("grid")}
+                                  className={cn(
+                                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                                    ccViewMode === "grid"
+                                      ? "bg-primary text-primary-foreground shadow-xs"
+                                      : "text-muted-foreground hover:text-foreground"
+                                  )}
+                                >
+                                  <Calendar className="w-3.5 h-3.5" />
+                                  <span>Calendar Grid View</span>
+                                </button>
+                              </div>
+
+                              {/* Share with Client Magic Link */}
+                              <button
+                                type="button"
+                                onClick={() => setIsClientShareModalOpen(true)}
+                                className="h-8 flex items-center gap-1.5 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs rounded-xl transition-all shadow-sm shrink-0 whitespace-nowrap active:scale-95 cursor-pointer"
+                                title="Share public review link with client (No login required)"
+                              >
+                                <Share2 className="w-3.5 h-3.5 shrink-0" />
+                                <span className="whitespace-nowrap">Share With Client</span>
+                              </button>
+
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -8446,7 +8492,208 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                     </span>
                                   </div>
                                 )}
-                                {filteredCalendar.length === 0 ? (
+                                {ccViewMode === "grid" ? (
+                                  <div className="p-4 sm:p-6 bg-card/60 space-y-4">
+                                    {(() => {
+                                      // Determine month to display in grid
+                                      let ym = calendarMonthFilter;
+                                      if (!ym || ym === "Current" || !/^\d{4}-\d{2}$/.test(ym)) {
+                                        const firstItemWithDate = projectCalendar.find(i => i.postingDate && /^\d{4}-\d{2}/.test(i.postingDate));
+                                        ym = firstItemWithDate?.postingDate ? firstItemWithDate.postingDate.slice(0, 7) : new Date().toISOString().slice(0, 7);
+                                      }
+                                      const parts = ym.split("-");
+                                      const gridYear = Number(parts[0]) || new Date().getFullYear();
+                                      const gridMonth = Number(parts[1]) || (new Date().getMonth() + 1);
+                                      const firstDayOfWeek = new Date(gridYear, gridMonth - 1, 1).getDay();
+                                      const daysInMonth = new Date(gridYear, gridMonth, 0).getDate();
+                                      const monthName = new Date(gridYear, gridMonth - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+                                      const daysArray = Array.from({ length: daysInMonth }, (_, idx) => idx + 1);
+                                      const paddingCells = Array.from({ length: firstDayOfWeek });
+
+                                      // Count scheduled and gap days
+                                      let scheduledDaysCount = 0;
+                                      daysArray.forEach(d => {
+                                        const dStr = `${gridYear}-${String(gridMonth).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+                                        if (projectCalendar.some(i => i.postingDate === dStr)) scheduledDaysCount++;
+                                      });
+                                      const gapDaysCount = daysInMonth - scheduledDaysCount;
+
+                                      return (
+                                        <div className="space-y-4">
+                                          {/* Month Header in Grid */}
+                                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-muted/30 border border-border/50 rounded-2xl">
+                                            <div className="flex items-center gap-3">
+                                              <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-black">
+                                                <Calendar className="w-5 h-5" />
+                                              </div>
+                                              <div>
+                                                <h3 className="text-base sm:text-lg font-black tracking-tight">{monthName}</h3>
+                                                <p className="text-xs text-muted-foreground">Monthly Wall Schedule • Sunday to Saturday Grid</p>
+                                              </div>
+                                            </div>
+
+                                            <div className="flex flex-wrap items-center gap-3">
+                                              <div className="flex items-center gap-2 text-xs font-bold">
+                                                <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                                                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                                                  {scheduledDaysCount} Scheduled Days
+                                                </span>
+                                                <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                                                  <span className="w-2 h-2 rounded-full bg-amber-500" />
+                                                  {gapDaysCount} Gap Days
+                                                </span>
+                                              </div>
+                                            </div>
+                                          </div>
+
+                                          {/* Days of Week Header */}
+                                          <div className="grid grid-cols-7 gap-2 text-center">
+                                            {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map(dName => (
+                                              <div key={dName} className="py-2.5 px-1 bg-muted/40 border border-border/40 rounded-xl text-[11px] font-black uppercase tracking-wider text-muted-foreground">
+                                                <span className="hidden sm:inline">{dName}</span>
+                                                <span className="sm:hidden">{dName.slice(0, 3)}</span>
+                                              </div>
+                                            ))}
+                                          </div>
+
+                                          {/* Calendar Grid Cells */}
+                                          <div className="grid grid-cols-7 gap-2">
+                                            {paddingCells.map((_, pIdx) => (
+                                              <div key={`grid-pad-${pIdx}`} className="min-h-[140px] rounded-2xl bg-muted/10 border border-dashed border-border/40" />
+                                            ))}
+
+                                            {daysArray.map(day => {
+                                              const dayStr = `${gridYear}-${String(gridMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                                              const dayItems = filteredCalendar.filter(i => i.postingDate === dayStr);
+                                              const isToday = new Date().toISOString().slice(0, 10) === dayStr;
+                                              const isGapDay = dayItems.length === 0;
+
+                                              return (
+                                                <div
+                                                  key={dayStr}
+                                                  className={cn(
+                                                    "min-h-[140px] p-2 sm:p-2.5 rounded-2xl border flex flex-col justify-between transition-all group relative",
+                                                    isToday
+                                                      ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                                                      : isGapDay
+                                                        ? "border-dashed border-border/60 bg-muted/10 hover:bg-muted/20"
+                                                        : "border-border/60 bg-card hover:border-primary/40 shadow-xs"
+                                                  )}
+                                                >
+                                                  {/* Day Number & Quick Add Header */}
+                                                  <div className="flex items-center justify-between mb-2">
+                                                    <div className="flex items-center gap-1.5">
+                                                      <span className={cn(
+                                                        "w-6 h-6 rounded-full flex items-center justify-center text-xs font-black",
+                                                        isToday ? "bg-primary text-primary-foreground" : "text-foreground font-bold"
+                                                      )}>
+                                                        {day}
+                                                      </span>
+                                                      {isToday && (
+                                                        <span className="hidden sm:inline text-[9px] font-black uppercase tracking-wider text-primary">Today</span>
+                                                      )}
+                                                    </div>
+
+                                                    {isGapDay ? (
+                                                      <span className="text-[9px] font-black uppercase text-amber-500/80 tracking-wider">Gap</span>
+                                                    ) : (
+                                                      <span className="text-[10px] px-1.5 py-0.2 rounded-full font-bold bg-primary/10 text-primary">
+                                                        {dayItems.length}
+                                                      </span>
+                                                    )}
+                                                  </div>
+
+                                                  {/* Deliverables on this day */}
+                                                  <div className="space-y-1.5 flex-1">
+                                                    {dayItems.map(dItem => {
+                                                      const hasIssues = dItem.issues && dItem.issues.length > 0;
+                                                      return (
+                                                        <div
+                                                          key={dItem.id}
+                                                          onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setEditingCalendarItem(dItem);
+                                                            setCalendarForm({ ...dItem });
+                                                            setIsAddCalendarItemModalOpen(true);
+                                                          }}
+                                                          className={cn(
+                                                            "p-2 rounded-xl border text-left cursor-pointer transition-all hover:scale-[1.02] shadow-2xs space-y-1",
+                                                            dItem.status === "Approved" ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-300" :
+                                                            dItem.status === "Published" ? "bg-green-500/10 border-green-500/20 text-green-700 dark:text-green-300" :
+                                                            dItem.status === "Pending Approval" ? "bg-purple-500/10 border-purple-500/20 text-purple-700 dark:text-purple-300" :
+                                                            "bg-blue-500/10 border-blue-500/20 text-blue-700 dark:text-blue-300"
+                                                          )}
+                                                          title="Click to view & edit deliverable"
+                                                        >
+                                                          <div className="flex items-center justify-between gap-1">
+                                                            <span className={cn(
+                                                              "text-[9px] font-black uppercase px-1.5 py-0.2 rounded-md border",
+                                                              getCalTypeColor(dItem.type)
+                                                            )}>
+                                                              {dItem.type}
+                                                            </span>
+                                                            {hasIssues && (
+                                                              <span title="Has client issue" className="text-amber-600 text-[10px]">⚠️</span>
+                                                            )}
+                                                          </div>
+                                                          <p className="text-[11px] font-bold line-clamp-2 text-foreground leading-tight">
+                                                            {dItem.topic || "Untitled"}
+                                                          </p>
+                                                          <div className="flex items-center justify-between pt-0.5 text-[9px] font-semibold text-muted-foreground">
+                                                            <span>{dItem.status}</span>
+                                                            <Edit2 className="w-2.5 h-2.5 opacity-60 group-hover:opacity-100" />
+                                                          </div>
+                                                        </div>
+                                                      );
+                                                    })}
+
+                                                    {/* Gap Day UI */}
+                                                    {isGapDay && (
+                                                      <div className="h-full flex flex-col items-center justify-center py-3 text-center">
+                                                        <span className="text-[10px] text-muted-foreground/60 font-medium mb-1.5">No post scheduled</span>
+                                                        <button
+                                                          type="button"
+                                                          onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setEditingCalendarItem(null);
+                                                            setCalendarForm({ ...defaultCalendarForm, postingDate: dayStr });
+                                                            setIsAddCalendarItemModalOpen(true);
+                                                          }}
+                                                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold text-primary hover:bg-primary/10 border border-primary/20 transition-all cursor-pointer"
+                                                        >
+                                                          <Plus className="w-2.5 h-2.5" />
+                                                          <span>Add Post</span>
+                                                        </button>
+                                                      </div>
+                                                    )}
+                                                  </div>
+
+                                                  {/* Hover '+' button to add more posts if day already has posts */}
+                                                  {!isGapDay && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setEditingCalendarItem(null);
+                                                        setCalendarForm({ ...defaultCalendarForm, postingDate: dayStr });
+                                                        setIsAddCalendarItemModalOpen(true);
+                                                      }}
+                                                      className="mt-1.5 w-full py-1 text-[10px] font-bold text-muted-foreground hover:text-primary hover:bg-muted rounded-lg flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer border border-dashed border-border/60"
+                                                    >
+                                                      <Plus className="w-2.5 h-2.5" />
+                                                      <span>Add Slot</span>
+                                                    </button>
+                                                  )}
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
+                                  </div>
+                                ) : filteredCalendar.length === 0 ? (
                                   <div className="text-center py-16 text-sm text-muted-foreground font-medium">
                                     No calendar items found matching the filters.
                                   </div>
@@ -10784,6 +11031,126 @@ export function Projects({ isNew }: { isNew?: boolean }) {
               </div>
             </div>
           )}
+
+          {/* Share with Client Magic Link Modal */}
+          {isClientShareModalOpen && (() => {
+            const currentProject = projects.find(p => p.id === selectedProjectId);
+            const currentClient = clients.find(c => c.id === currentProject?.clientId);
+            const cName = currentClient?.name || currentProject?.name || "Client";
+            const targetMonth = calendarMonthFilter !== "All" && calendarMonthFilter !== "Custom" ? calendarMonthFilter : "Current";
+            const publicUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/client-review/${selectedProjectId}?month=${targetMonth}`;
+            const whatsappMsg = `Hello ${cName}! Here is your Content Calendar review link for ${targetMonth}: ${publicUrl} - Please review the scheduled posts, captions & videos, and approve or request changes directly on this link!`;
+            const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(whatsappMsg)}`;
+
+            return (
+              <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+                <div className="absolute inset-0 bg-black/70 backdrop-blur-xs" onClick={() => setIsClientShareModalOpen(false)} />
+                <div className="relative w-full max-w-lg bg-card border border-border/80 rounded-3xl p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200">
+                  <div className="flex items-center justify-between pb-3 border-b border-border/50">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-600 text-white flex items-center justify-center font-black shadow-md shadow-emerald-600/20">
+                        <Share2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="font-black text-base text-foreground">Share Content Calendar with Client</h3>
+                        <p className="text-xs text-muted-foreground">Public Magic Link • No Login Required</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsClientShareModalOpen(false)}
+                      className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-4 text-xs">
+                    <div>
+                      <label className="font-bold text-muted-foreground block mb-1">Target Project & Client:</label>
+                      <div className="p-3 bg-muted/40 rounded-xl font-bold text-foreground flex items-center justify-between">
+                        <span>{currentProject?.name}</span>
+                        <span className="text-emerald-600 font-bold">{cName}</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-muted-foreground block mb-1">Select Month to Share:</label>
+                      <Select value={calendarMonthFilter} onValueChange={(val) => setCalendarMonthFilter(val)}>
+                        <SelectTrigger className="h-9 bg-background border-border/60 rounded-xl font-bold">
+                          <SelectValue placeholder="Period" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 z-[300]">
+                          <SelectItem value="Current">Current Month</SelectItem>
+                          <SelectItem value="All">All Months</SelectItem>
+                          {getProjectMonths(currentProject?.startDate, currentProject?.endDate).months.map(m => (
+                            <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-muted-foreground block mb-1">Client Magic Review URL:</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          readOnly
+                          value={publicUrl}
+                          className="flex-1 px-3 py-2 bg-muted/40 border border-border/60 rounded-xl font-mono text-xs text-foreground truncate select-all"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(publicUrl);
+                            setCopiedShareLink(true);
+                            toast.success("Link copied to clipboard!");
+                            setTimeout(() => setCopiedShareLink(false), 2000);
+                          }}
+                          className={cn(
+                            "px-3.5 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 shrink-0 shadow-sm cursor-pointer",
+                            copiedShareLink ? "bg-emerald-500 text-white" : "bg-primary text-primary-foreground hover:bg-primary/90"
+                          )}
+                        >
+                          {copiedShareLink ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{copiedShareLink ? "Copied!" : "Copy"}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-emerald-800 dark:text-emerald-300 space-y-1">
+                      <p className="font-bold">✨ What the client can do:</p>
+                      <ul className="list-disc pl-4 space-y-0.5 text-[11px] opacity-90">
+                        <li>Open securely on mobile or laptop without password/login</li>
+                        <li>View full deliverables, thumbnails, captions & video assets</li>
+                        <li>1-Click "Approve" (instantly updates status to Approved in HRMS)</li>
+                        <li>"Request Changes" (creates a Client Issue remark & notifies team)</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-3 border-t border-border/50 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => window.open(publicUrl, "_blank")}
+                      className="px-3.5 py-2 rounded-xl font-bold text-xs bg-muted hover:bg-muted/80 text-foreground flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>Preview in New Tab</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => window.open(whatsappUrl, "_blank")}
+                      className="px-4 py-2 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                    >
+                      <span>💬 Share via WhatsApp</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Task 24: CC Custom PDF Export Modal */}
           {isPdfExportModalOpen && (() => {

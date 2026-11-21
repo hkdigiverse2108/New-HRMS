@@ -40,6 +40,7 @@ import { Tasks } from "@/components/work/Tasks";
 import { Chat } from "@/components/work/Chat";
 import { Research } from "@/components/work/Research";
 import { Projects } from "@/components/work/Projects";
+import { ClientReviewPortal } from "@/components/work/ClientReviewPortal";
 import { ModuleErrorBoundary } from "@/components/common/ModuleErrorBoundary";
 import { Penalties } from "@/components/employees/Penalties";
 import { Remarks } from "@/components/employees/Remarks";
@@ -122,6 +123,15 @@ const suggestions = [
 ];
 
 export function Index() {
+  // Public client review portal gate: NEVER redirect to login, NEVER show sidebar, NEVER replace URL
+  if (typeof window !== 'undefined') {
+    const p = window.location.pathname;
+    const s = window.location.search;
+    if (p.startsWith('/client-review') || p.startsWith('/review') || s.includes('review=1') || s.includes('portal=client')) {
+      return <ClientReviewPortal />;
+    }
+  }
+
   const { user, token, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const [isClient, setIsClient] = useState(false);
   const [active, setActiveState] = useState(() => {
@@ -145,7 +155,12 @@ export function Index() {
         try {
           window.history.replaceState({}, '', pathname);
         } catch {}
-      } else if (pathname !== "/" && pathname !== "/login") {
+      } else if (
+        pathname !== "/" && 
+        pathname !== "/login" && 
+        !pathname.startsWith("/client-review") && 
+        !pathname.startsWith("/review")
+      ) {
         try {
           // Address bar is reset to '/', so remember this page for the next refresh
           localStorage.setItem("activeSidebarTab", pathname + search);

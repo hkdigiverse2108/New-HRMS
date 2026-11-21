@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import Optional, List
-from datetime import timedelta
+from datetime import datetime, timedelta
 from bson import ObjectId
+from app.repository.project import ProjectRepository
+from app.repository.content import ContentRepository
 from app.schemas.content import (
     ContentItemCreate, 
     ContentItemUpdate, 
@@ -314,3 +316,211 @@ async def delete_content_item(
     await clear_pattern(f"content:{project_id}:*")
     await clear_pattern("projects:*")
     await clear_pattern("tasks:*")
+
+
+# -------------------------------------------------------------
+# Public Client Review Router (Magic Link for Clients - No Login Required)
+# -------------------------------------------------------------
+public_router = APIRouter(prefix="/public/content-review", tags=["Public Client Content Review"])
+
+@public_router.get("/{project_id}")
+async def get_public_content_review(
+    project_id: str,
+    month: Optional[str] = Query(None, description="Month in YYYY-MM format, 'Current', or 'All'")
+):
+    project = await ProjectRepository.get_by_id(project_id)
+    if not project or project.get("is_deleted"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    # Fetch all content items for this project
+    all_res = await ContentService.get_all_content(project_id=project_id, page=None, limit=None)
+    all_items = all_res.get("data", [])
+
+    # Extract all unique months from items
+    months_set = set()
+    for itm in all_items:
+        s_date = str(itm.get("schedule_date") or "").split("T")[0]
+        if len(s_date) >= 7:
+            months_set.add(s_date[:7])
+    available_months = sorted(list(months_set), reverse=True)
+
+    # Determine target month
+    target_month = month
+    current_ym = datetime.utcnow().strftime("%Y-%m")
+    if not target_month or target_month == "Current":
+        if current_ym in available_months:
+            target_month = current_ym
+        elif available_months:
+            target_month = available_months[0]
+        else:
+            target_month = current_ym
+
+    # Filter items
+    if target_month == "All":
+        filtered_items = all_items
+    else:
+        filtered_items = [
+            itm for itm in all_items 
+            if str(itm.get("schedule_date") or "").startswith(target_month)
+        ]
+
+    # Clean project representation for public view
+    proj_summary = {
+        "id": str(project.get("_id") or project_id),
+        "name": project.get("name") or project.get("title") or "Content Calendar",
+        "client_name": project.get("client_name") or (project.get("client") or {}).get("name") or "",
+        "company_name": project.get("company_name") or (project.get("client") or {}).get("company") or "",
+        "category": project.get("category") or "",
+        "status": project.get("general", {}).get("status") if isinstance(project.get("general"), dict) else project.get("status", "Active")
+    }
+
+    # Clean item representation
+    cleaned_items = []
+    for itm in filtered_items:
+        s_date = str(itm.get("schedule_date") or "").split("T")[0]
+        cleaned_items.append({
+            "id": str(itm.get("_id")),
+            "topic": itm.get("topic_title") or "Untitled",
+            "type": itm.get("content_type") or "Post",
+            "posting_date": s_date,
+            "status": itm.get("approval_status") or "To Do",
+            "caption": itm.get("caption_text") or "",
+            "reference_link": itm.get("reference_link") or "",
+            "final_post_link": itm.get("final_post_link") or "",
+            "final_reel_link": itm.get("final_reel_link") or "",
+            "instagram_link": itm.get("instagram_link") or "",
+            "thumbnail": itm.get("thumbnail") or {},
+            "script": itm.get("script") or {},
+            "editing": itm.get("editing") or {},
+            "shoot": itm.get("shoot") or {},
+            "issues": itm.get("issues") or [],
+            "remark": itm.get("remark") or ""
+        })
+
+    return {
+        "project": proj_summary,
+        "selected_month": target_month,
+        "available_months": available_months,
+        "items": cleaned_items,
+        "total_count": len(cleaned_items),
+        "approved_count": len([i for i in cleaned_items if i["status"] == "Approved"])
+    }
+
+
+@public_router.post("/{project_id}/action")
+async def execute_public_content_action(
+    project_id: str,
+    payload: dict
+):
+    project = await ProjectRepository.get_by_id(project_id)
+    if not project or project.get("is_deleted"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    action = payload.get("action")
+    client_name = payload.get("client_name") or "Client (Public Link)"
+
+    if action == "approve_all":
+        month = payload.get("month")
+        all_res = await ContentService.get_all_content(project_id=project_id, page=None, limit=None)
+        items_to_approve = all_res.get("data", [])
+        if month and month != "All":
+            items_to_approve = [i for i in items_to_approve if str(i.get("schedule_date") or "").startswith(month)]
+
+        for itm in items_to_approve:
+            iid = str(itm["_id"])
+            await ContentRepository.update(iid, {
+                "approval_status": "Approved",
+                "approved_by": client_name
+            })
+            # Log history on item
+            logs = list(itm.get("logs") or [])
+            logs.append({
+                "userName": client_name,
+                "action": "Status changed to Approved (Client Portal)",
+                "timestamp": datetime.utcnow().isoformat(),
+                "details": f"Bulk approved via Public Client Review Portal ({month or 'All'})"
+            })
+            await ContentRepository.update(iid, {"logs": logs})
+
+        await clear_pattern(f"content:{project_id}:*")
+        await clear_pattern("projects:*")
+        return {"success": True, "message": f"Successfully approved {len(items_to_approve)} items"}
+
+    elif action == "approve_item":
+        item_id = payload.get("item_id")
+        if not item_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="item_id is required")
+        itm = await ContentRepository.get_by_id(item_id)
+        if not itm or itm.get("project_id") != project_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Content item not found")
+
+        logs = list(itm.get("logs") or [])
+        logs.append({
+            "userName": client_name,
+            "action": "Status changed to Approved",
+            "timestamp": datetime.utcnow().isoformat(),
+            "details": "Approved via Public Client Review Portal"
+        })
+        await ContentRepository.update(item_id, {
+            "approval_status": "Approved",
+            "approved_by": client_name,
+            "logs": logs
+        })
+        await clear_pattern(f"content:{project_id}:*")
+        await clear_pattern("projects:*")
+        return {"success": True, "message": "Item approved successfully"}
+
+    elif action == "request_change":
+        item_id = payload.get("item_id")
+        feedback = (payload.get("feedback") or "").strip()
+        if not item_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="item_id is required")
+        if not feedback:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Feedback is required for changes")
+
+        itm = await ContentRepository.get_by_id(item_id)
+        if not itm or itm.get("project_id") != project_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Content item not found")
+
+        # Append client issue
+        existing_issues = list(itm.get("issues") or [])
+        new_issue = {
+            "id": f"cli-iss-{int(datetime.utcnow().timestamp())}",
+            "text": feedback,
+            "role": "Brand Person",
+            "author": client_name,
+            "isClientIssue": True,
+            "issueType": "client_issue",
+            "isPending": False,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        existing_issues.append(new_issue)
+
+        logs = list(itm.get("logs") or [])
+        logs.append({
+            "userName": client_name,
+            "action": "Client Change Requested",
+            "timestamp": datetime.utcnow().isoformat(),
+            "details": f"Client feedback: {feedback}"
+        })
+
+        await ContentRepository.update(item_id, {
+            "issues": existing_issues,
+            "approval_status": "In Progress" if itm.get("approval_status") == "Approved" else itm.get("approval_status", "In Progress"),
+            "logs": logs
+        })
+
+        # Sync tasks for content item so assigned team members get notified in Task Management
+        try:
+            itm["issues"] = existing_issues
+            await ContentService._sync_tasks_for_content(item_id, itm, project, current_user_id=None)
+        except Exception as e:
+            print("Sync task error on client review:", e)
+
+        await clear_pattern(f"content:{project_id}:*")
+        await clear_pattern("projects:*")
+        await clear_pattern("tasks:*")
+        return {"success": True, "message": "Feedback submitted successfully"}
+
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unknown action '{action}'")

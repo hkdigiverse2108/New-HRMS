@@ -18,7 +18,7 @@ from app.controllers.penalty import router as penalty_router
 from app.controllers.task import router as task_router
 from app.controllers.client import router as client_router
 from app.controllers.project import router as project_router
-from app.controllers.content import router as content_router
+from app.controllers.content import router as content_router, public_router as public_content_router
 from app.controllers.activity import router as activity_router
 from app.controllers.research import router as research_router
 from app.controllers.remark import router as remark_router
@@ -177,6 +177,7 @@ app.include_router(task_router)
 app.include_router(client_router)
 app.include_router(project_router)
 app.include_router(content_router)
+app.include_router(public_content_router)
 app.include_router(activity_router)
 app.include_router(research_router)
 app.include_router(remark_router)

@@ -315,6 +315,13 @@ useEffect(() => {
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{isOpen: boolean, id: string | null, name: string}>({isOpen: false, id: null, name: ""});
 
+  // Status Filter: Default 'Active' per user specification
+  const [statusFilter, setStatusFilter] = useState<"Active" | "Inactive" | "All">("Active");
+
+  const activeCount = useMemo(() => employees.filter(e => e.status !== "Inactive").length, [employees]);
+  const inactiveCount = useMemo(() => employees.filter(e => e.status === "Inactive").length, [employees]);
+  const totalCount = employees.length;
+
   const filteredEmployees = employees.filter(emp => {
     const query = searchQuery.trim().toLowerCase();
     const matchesSearch = !query || 
@@ -328,7 +335,13 @@ useEffect(() => {
       ? (emp.department || "").trim().toLowerCase() === selectedDept.trim().toLowerCase()
       : true;
 
-    return matchesSearch && matchesDept;
+    const matchesStatus = statusFilter === "All"
+      ? true
+      : statusFilter === "Active"
+        ? emp.status !== "Inactive"
+        : emp.status === "Inactive";
+
+    return matchesSearch && matchesDept && matchesStatus;
   });
 
   const { items: sortedEmployees, requestSort, sortConfig } = useSortableData(filteredEmployees, { key: "joined", direction: "descending" });
@@ -426,125 +439,187 @@ useEffect(() => {
       </div>
 
       {/* Filters Bar */}
-      <div className="bg-white border border-border/60 rounded-2xl p-4 shadow-sm grid grid-cols-[minmax(0,1fr)_auto] gap-3 sm:gap-4 items-center lg:flex lg:flex-row lg:justify-between mb-5 sm:mb-8">
-        <div className="contents lg:flex lg:flex-row lg:items-center lg:flex-1 lg:gap-4 lg:min-w-0">
-          <div className="order-1 relative w-full lg:w-72 lg:min-w-[220px] min-w-0 flex-shrink-0">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-            <input 
-              type="text" 
-              placeholder="Search by name or role..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full min-w-0 pl-10 pr-9 py-2.5 bg-muted/50 border border-border/50 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all font-medium text-foreground placeholder:text-muted-foreground"
-            />
-            {searchQuery && (
+      <div className="bg-white border border-border/60 rounded-2xl p-4 shadow-sm flex flex-col gap-3.5 mb-5 sm:mb-8">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 min-w-0">
+          <div className="flex flex-wrap items-center gap-3 flex-1 min-w-0">
+            <div className="relative w-full sm:w-72 min-w-[200px] flex-shrink-0">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              <input 
+                type="text" 
+                placeholder="Search by name or role..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full min-w-0 pl-10 pr-9 py-2 bg-muted/50 border border-border/50 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all font-medium text-foreground placeholder:text-muted-foreground"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                  title="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Status Segmented Control (Active (default), Inactive, All) */}
+            <div className="inline-flex items-center p-1 bg-muted/60 border border-border/50 rounded-xl shrink-0">
               <button
                 type="button"
-                onClick={() => setSearchQuery("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                title="Clear search"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-          
-          {/* Dynamic Department Tabs with 'All' First */}
-          <div className="order-3 col-span-2 lg:col-span-1 lg:order-none flex items-center gap-2 overflow-x-auto min-w-0 lg:flex-1 max-w-full pb-1 lg:pb-0 scrollbar-none">
-            {/* All Filter Option - FIRST */}
-            <button 
-              type="button"
-              onClick={() => setSelectedDept("All")}
-              className={cn(
-                "px-3.5 py-2 min-h-[44px] sm:min-h-0 inline-flex items-center rounded-xl text-[12px] font-bold transition-all border whitespace-nowrap gap-1.5 flex-shrink-0 active:scale-95 shadow-sm",
-                selectedDept === "All"
-                  ? "bg-primary text-primary-foreground border-primary shadow-primary/20"
-                  : "bg-white text-foreground/80 border-border/80 hover:bg-muted/50"
-              )}
-            >
-              <span>All</span>
-              <span className={cn(
-                "text-[10px] px-1.5 py-0.5 rounded-full font-bold",
-                selectedDept === "All" ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
-              )}>
-                {employees.length}
-              </span>
-            </button>
-
-            {/* Department Options */}
-            {allDepartments.map(dept => {
-              const isSelected = selectedDept?.toLowerCase() === dept.toLowerCase();
-              const count = employees.filter(e => (e.department || "").trim().toLowerCase() === dept.toLowerCase()).length;
-              return (
-                <button 
-                  type="button"
-                  key={dept}
-                  onClick={() => setSelectedDept(dept)}
+                onClick={() => setStatusFilter("Active")}
                 className={cn(
-                  "px-3.5 py-2 min-h-[44px] sm:min-h-0 inline-flex items-center rounded-xl text-[12px] font-bold transition-all border whitespace-nowrap gap-1.5 flex-shrink-0 active:scale-95 shadow-sm",
+                  "px-3 py-1.5 rounded-lg text-[12px] font-bold transition-all flex items-center gap-1.5 cursor-pointer",
+                  statusFilter === "Active"
+                    ? "bg-emerald-500 text-white shadow-sm shadow-emerald-500/30"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <span className={cn("w-2 h-2 rounded-full", statusFilter === "Active" ? "bg-white" : "bg-emerald-500")} />
+                <span>Active</span>
+                <span className={cn(
+                  "text-[10px] px-1.5 py-0.2 rounded-full font-bold",
+                  statusFilter === "Active" ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+                )}>
+                  {activeCount}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter("Inactive")}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-[12px] font-bold transition-all flex items-center gap-1.5 cursor-pointer",
+                  statusFilter === "Inactive"
+                    ? "bg-amber-600 text-white shadow-sm shadow-amber-600/30"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <span className={cn("w-2 h-2 rounded-full", statusFilter === "Inactive" ? "bg-white" : "bg-amber-500")} />
+                <span>Inactive</span>
+                <span className={cn(
+                  "text-[10px] px-1.5 py-0.2 rounded-full font-bold",
+                  statusFilter === "Inactive" ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+                )}>
+                  {inactiveCount}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter("All")}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-[12px] font-bold transition-all flex items-center gap-1.5 cursor-pointer",
+                  statusFilter === "All"
+                    ? "bg-primary text-primary-foreground shadow-sm shadow-primary/30"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <span>All</span>
+                <span className={cn(
+                  "text-[10px] px-1.5 py-0.2 rounded-full font-bold",
+                  statusFilter === "All" ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+                )}>
+                  {totalCount}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {viewMode === 'list' && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-2 bg-white border border-border/80 px-3 py-2 rounded-xl text-foreground/80 text-[13px] font-semibold hover:bg-muted/50 transition-colors shadow-sm">
+                    <Columns className="w-4 h-4" />
+                    Columns
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-[200px] max-h-[300px] overflow-y-auto rounded-xl p-2">
+                  <DropdownMenuLabel className="text-xs">Toggle Columns</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {COLUMN_OPTIONS.map((col) => (
+                    <DropdownMenuCheckboxItem 
+                      key={col.key}
+                      checked={!!visibleColumns[col.key]} 
+                      onCheckedChange={(c) => setVisibleColumns(prev => ({...prev, [col.key]: !!c}))}
+                    >
+                      {col.label}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
+            <div className="flex items-center gap-1 bg-muted p-1 rounded-xl">
+              <button 
+                onClick={() => setViewMode('grid')}
+                className={cn(
+                  "p-2 rounded-lg transition-all",
+                  viewMode === 'grid' ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button 
+                onClick={() => setViewMode('list')}
+                className={cn(
+                  "p-2 rounded-lg transition-all",
+                  viewMode === 'list' ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <List className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Dynamic Department Tabs with 'All' First */}
+        <div className="flex items-center gap-2 overflow-x-auto min-w-0 max-w-full pb-1 scrollbar-none border-t border-border/40 pt-3">
+          {/* All Filter Option - FIRST */}
+          <button 
+            type="button"
+            onClick={() => setSelectedDept("All")}
+            className={cn(
+              "px-3.5 py-1.5 min-h-[36px] inline-flex items-center rounded-xl text-[12px] font-bold transition-all border whitespace-nowrap gap-1.5 flex-shrink-0 active:scale-95 shadow-sm cursor-pointer",
+              selectedDept === "All"
+                ? "bg-primary text-primary-foreground border-primary shadow-primary/20"
+                : "bg-white text-foreground/80 border-border/80 hover:bg-muted/50"
+            )}
+          >
+            <span>All Departments</span>
+            <span className={cn(
+              "text-[10px] px-1.5 py-0.5 rounded-full font-bold",
+              selectedDept === "All" ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+            )}>
+              {employees.length}
+            </span>
+          </button>
+
+          {/* Department Options */}
+          {allDepartments.map(dept => {
+            const isSelected = selectedDept?.toLowerCase() === dept.toLowerCase();
+            const count = employees.filter(e => (e.department || "").trim().toLowerCase() === dept.toLowerCase()).length;
+            return (
+              <button 
+                type="button"
+                key={dept}
+                onClick={() => setSelectedDept(dept)}
+                className={cn(
+                  "px-3.5 py-1.5 min-h-[36px] inline-flex items-center rounded-xl text-[12px] font-bold transition-all border whitespace-nowrap gap-1.5 flex-shrink-0 active:scale-95 shadow-sm cursor-pointer",
                   isSelected
                     ? "bg-primary text-primary-foreground border-primary shadow-primary/20"
                     : "bg-white text-foreground/80 border-border/80 hover:bg-muted/50"
                 )}
-                >
-                  <span>{dept}</span>
-                  <span className={cn(
-                    "text-[10px] px-1.5 py-0.5 rounded-full font-bold",
-                    isSelected ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
-                  )}>
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="order-2 lg:order-none flex items-center gap-2 flex-shrink-0">
-          {viewMode === 'list' && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-2 bg-white border border-border/80 px-3 py-2 rounded-xl text-foreground/80 text-[13px] font-semibold hover:bg-muted/50 transition-colors shadow-sm">
-                  <Columns className="w-4 h-4" />
-                  Columns
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[200px] max-h-[300px] overflow-y-auto rounded-xl p-2">
-                <DropdownMenuLabel className="text-xs">Toggle Columns</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {COLUMN_OPTIONS.map((col) => (
-                  <DropdownMenuCheckboxItem 
-                    key={col.key}
-                    checked={!!visibleColumns[col.key]} 
-                    onCheckedChange={(c) => setVisibleColumns(prev => ({...prev, [col.key]: !!c}))}
-                  >
-                    {col.label}
-                  </DropdownMenuCheckboxItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-
-          <div className="flex items-center gap-1 bg-muted p-1 rounded-xl">
-            <button 
-              onClick={() => setViewMode('grid')}
-              className={cn(
-                "p-2 rounded-lg transition-all",
-                viewMode === 'grid' ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <LayoutGrid className="w-4 h-4" />
-            </button>
-            <button 
-              onClick={() => setViewMode('list')}
-              className={cn(
-                "p-2 rounded-lg transition-all",
-                viewMode === 'list' ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <List className="w-4 h-4" />
-            </button>
-          </div>
+              >
+                <span>{dept}</span>
+                <span className={cn(
+                  "text-[10px] px-1.5 py-0.5 rounded-full font-bold",
+                  isSelected ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+                )}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 

@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as SplatRouteImport } from './routes/$'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as RecycleBinRouteImport } from './routes/recycle-bin'
+import { Route as ClientReviewSplatRouteImport } from './routes/client-review.$'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -34,18 +35,25 @@ const RecycleBinRoute = RecycleBinRouteImport.update({
   path: '/recycle-bin',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ClientReviewSplatRoute = ClientReviewSplatRouteImport.update({
+  id: '/client-review/$',
+  path: '/client-review/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/login': typeof LoginRoute
   '/recycle-bin': typeof RecycleBinRoute
+  '/client-review/$': typeof ClientReviewSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/login': typeof LoginRoute
   '/recycle-bin': typeof RecycleBinRoute
+  '/client-review/$': typeof ClientReviewSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -53,13 +61,14 @@ export interface FileRoutesById {
   '/$': typeof SplatRoute
   '/login': typeof LoginRoute
   '/recycle-bin': typeof RecycleBinRoute
+  '/client-review/$': typeof ClientReviewSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/$' | '/login' | '/recycle-bin'
+  fullPaths: '/' | '/$' | '/login' | '/recycle-bin' | '/client-review/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/$' | '/login' | '/recycle-bin'
-  id: '__root__' | '/' | '/$' | '/login' | '/recycle-bin'
+  to: '/' | '/$' | '/login' | '/recycle-bin' | '/client-review/$'
+  id: '__root__' | '/' | '/$' | '/login' | '/recycle-bin' | '/client-review/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -67,6 +76,7 @@ export interface RootRouteChildren {
   SplatRoute: typeof SplatRoute
   LoginRoute: typeof LoginRoute
   RecycleBinRoute: typeof RecycleBinRoute
+  ClientReviewSplatRoute: typeof ClientReviewSplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -99,6 +109,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RecycleBinRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/client-review/$': {
+      id: '/client-review/$'
+      path: '/client-review/$'
+      fullPath: '/client-review/$'
+      preLoaderRoute: typeof ClientReviewSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -107,6 +124,7 @@ const rootRouteChildren: RootRouteChildren = {
   SplatRoute: SplatRoute,
   LoginRoute: LoginRoute,
   RecycleBinRoute: RecycleBinRoute,
+  ClientReviewSplatRoute: ClientReviewSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
