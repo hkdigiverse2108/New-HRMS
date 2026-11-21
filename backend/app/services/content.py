@@ -964,17 +964,23 @@ class ContentService:
         import json
         data_dict = json.loads(update_data.model_dump_json(exclude_unset=True))
         
+        # Compare existing_item with data_dict for Activity Logging & locking rules
+        existing_item = await ContentRepository.get_by_id(item_id)
+        
+        # Auto-publish if Instagram link or actual posting date is provided and approval_status not explicitly provided
+        has_new_ig = bool(data_dict.get("instagram_link") and str(data_dict["instagram_link"]).strip() not in ["", "-", "not required"])
+        has_new_post_date = bool(data_dict.get("actual_posting_date"))
+        if (has_new_ig or has_new_post_date) and "approval_status" not in data_dict:
+            data_dict["approval_status"] = "Published"
+
         # If approval_status changes to Approved, set approved_by
         if "approval_status" in data_dict:
             if data_dict["approval_status"] == "Approved":
                 if "approved_by" not in data_dict and current_user_id:
                     data_dict["approved_by"] = current_user_id
-            else:
+            elif data_dict["approval_status"] in ["In Progress", "To Do", "In Review", "Pending Approval"]:
                 if "approved_by" not in data_dict:
                     data_dict["approved_by"] = None
-                    
-        # Compare existing_item with data_dict for Activity Logging
-        existing_item = await ContentRepository.get_by_id(item_id)
         if current_user_id and existing_item:
             from app.services.activity import ActivityService, ActivityAction
             topic = existing_item.get("topic_title", "Untitled")

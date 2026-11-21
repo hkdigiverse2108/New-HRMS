@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "react";
 import * as XLSX from "xlsx";
 import { usePersistentState } from "@/hooks/usePersistentState";
-import { X, Search, Plus, Filter, Check, MoreHorizontal, LayoutGrid, List, Briefcase, Calendar, Clock, Star, Circle, Trash2, Edit2, Archive, ArchiveRestore, ArrowLeft, Users, IndianRupee, FolderGit2, CheckCircle2, Settings2, TrendingUp, MousePointerClick, Target, BarChart3, ChevronDown, User, Building2, CreditCard, FileText, ChevronRight, Video, Instagram, Layers, MessageSquare, Key, Copy, Eye, EyeOff, ExternalLink, Phone, ShieldCheck, Sparkles, Share2, AlertCircle, Sliders, Loader2, UserPlus, UserX, ChevronLeft, Download, Printer, Upload, FileSpreadsheet, History, Info } from "lucide-react";
+import { X, Search, Plus, Filter, Check, MoreHorizontal, LayoutGrid, List, Briefcase, Calendar, Clock, Star, Circle, Trash2, Edit2, Archive, ArchiveRestore, ArrowLeft, Users, IndianRupee, FolderGit2, CheckCircle2, Settings2, TrendingUp, MousePointerClick, Target, BarChart3, ChevronDown, User, Building2, CreditCard, FileText, ChevronRight, Video, Instagram, Layers, MessageSquare, Key, Copy, Eye, EyeOff, ExternalLink, Phone, ShieldCheck, Sparkles, Share2, AlertCircle, Sliders, Loader2, UserPlus, UserX, ChevronLeft, Download, Printer, Upload, FileSpreadsheet, History, Info, Lock } from "lucide-react";
 import { toast } from "@/lib/toast";
 import { cn, formatDate, formatPersonName } from "@/lib/utils";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -209,6 +209,14 @@ export const mapBackendContentToCalendarItem = (item: any): CalendarItem => {
   const brandName = item.brand_person_details?.employee_name || item.brand_person;
   const approverName = item.approved_by_details?.employee_name || item.approved_by;
 
+  const rawStatus = item.approval_status === "In Review" ? "Pending Approval" : (item.approval_status || "In Progress");
+  const igLink = (item.instagram_link || "").trim();
+  const hasPublishedEvidence = Boolean(
+    (igLink && igLink !== "-" && igLink.toLowerCase() !== "not required") ||
+    (item.actual_posting_date && String(item.actual_posting_date).trim())
+  );
+  const resolvedStatus = hasPublishedEvidence ? "Published" : rawStatus;
+
   return {
     id: String(item._id || item.id),
     postingDate: item.schedule_date ? (String(item.schedule_date).split("T")[0] || "") : "",
@@ -230,7 +238,7 @@ export const mapBackendContentToCalendarItem = (item: any): CalendarItem => {
     approval: approverName || "",
     approved_by: item.approved_by || "",
     approved_by_details: item.approved_by_details,
-    status: item.approval_status || "In Progress",
+    status: resolvedStatus,
     thumbnailDate: item.thumbnail?.date ? String(item.thumbnail.date).split("T")[0] : "",
     thumbnailLink: item.thumbnail?.link || "",
     captionDate: item.caption_date ? String(item.caption_date).split("T")[0] : "",
@@ -276,9 +284,22 @@ export const mapCalendarItemToBackendPayload = (form: any, projectId: string) =>
     ? (form.finalReelLink || form.finalPostLink || null)
     : (form.finalPostLink || form.finalReelLink || null);
 
+  const igLink = (form.postingLinkOfIg || "").trim();
+  const hasPublishedEvidence = Boolean(
+    (igLink && igLink !== "-" && igLink.toLowerCase() !== "not required") ||
+    (form.actualPostingDate && String(form.actualPostingDate).trim())
+  );
+
   let approvalStatus = form.status || "In Progress";
-  if (approvalStatus === "To Do") approvalStatus = "In Progress";
-  if (approvalStatus === "Pending Approval") approvalStatus = "In Review";
+  if (hasPublishedEvidence) {
+    approvalStatus = "Published";
+  } else if (!form.status || form.status === "To Do") {
+    if (editingLink) {
+      approvalStatus = "Pending Approval";
+    } else if (form.scriptLink || form.shootLink || form.thumbnailLink || form.caption) {
+      approvalStatus = "In Progress";
+    }
+  }
 
   return {
     project_id: projectId,
@@ -1604,10 +1625,12 @@ const CalendarIssuesCell = ({
 // Issue 3: Dedicated Thumbnail Cell with both Date & Link support
 const ThumbnailCell = ({
   item,
-  saveInlineEdit
+  saveInlineEdit,
+  readOnly = false,
 }: {
   item: CalendarItem;
   saveInlineEdit: (field: string, value: string) => Promise<void>;
+  readOnly?: boolean;
 }) => {
   const [open, setOpen] = useState(false);
   const [dateVal, setDateVal] = useState(item.thumbnailDate || "");
@@ -1642,6 +1665,58 @@ const ThumbnailCell = ({
   };
 
   const formattedDate = formatDateLabel(item.thumbnailDate);
+
+  if (readOnly) {
+    return (
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="flex flex-col items-center gap-1 p-1 rounded-xl cursor-default select-none"
+        title="Thumbnail Details (Locked)"
+      >
+        {formattedDate ? (
+          <span className="text-[11px] font-extrabold text-foreground flex items-center gap-1">
+            <Calendar className="w-2.5 h-2.5 text-muted-foreground" />
+            {formattedDate}
+          </span>
+        ) : (
+          <span className="text-muted-foreground/30 text-[10px] italic">-</span>
+        )}
+
+        {item.thumbnailLink ? (
+          String(item.thumbnailLink).trim().toLowerCase() === "not required" ? (
+            <span className="px-2 py-0.5 font-bold rounded-md text-[10px] bg-muted/60 text-muted-foreground border border-border/50">
+              Not Required
+            </span>
+          ) : (
+            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+              <a
+                href={item.thumbnailLink.startsWith("http") ? item.thumbnailLink : `https://${item.thumbnailLink}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-2 py-0.5 font-bold rounded-md text-[10px] flex items-center gap-1 border bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 border-blue-500/20 shadow-2xs"
+              >
+                🖼️ Design
+              </a>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigator.clipboard.writeText(item.thumbnailLink || "");
+                  toast.success("Thumbnail link copied!");
+                }}
+                className="p-0.5 hover:text-primary text-[10px]"
+                title="Copy link"
+              >
+                <Copy className="w-2.5 h-2.5" />
+              </button>
+            </div>
+          )
+        ) : (
+          <span className="text-muted-foreground/30 text-[10px] italic">-</span>
+        )}
+      </div>
+    );
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -8300,10 +8375,53 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                           const monthLabel = dynamicMonthsMap.get(itemMonth) || (itemMonth === "No Date" ? "Unscheduled Deliverables" : itemMonth);
                                           const monthItemsCount = filteredCalendar.filter(i => (i.postingDate && /^\d{4}-\d{2}/.test(i.postingDate) ? i.postingDate.slice(0, 7) : "No Date") === itemMonth).length;
                                           const isExpanded = expandedRowId === item.id;
+                                          const isRowLocked = item.status === "Approved" || item.status === "Published";
 
                                           const saveInlineEdit = async (field: string, value: string) => {
+                                            if (isRowLocked && field !== 'status') {
+                                              toast.error("This row is locked (Approved/Published). Please change status to In Progress to edit.");
+                                              return;
+                                            }
+
+                                            // Automatic status progression:
+                                            let autoStatus: string | undefined = undefined;
+                                            const cleanVal = (value || "").trim();
+
+                                            // 1. If posting link of IG is provided or actual posting date is set -> Published
+                                            if (
+                                              (field === 'postingLinkOfIg' && cleanVal && cleanVal !== '-' && cleanVal.toLowerCase() !== 'not required') ||
+                                              (field === 'actualPostingDate' && cleanVal)
+                                            ) {
+                                              autoStatus = "Published";
+                                            }
+                                            // 2. If final reel or post link is provided -> Pending Approval
+                                            else if (
+                                              (field === 'finalReelLink' || field === 'finalPostLink') &&
+                                              cleanVal && cleanVal.toLowerCase() !== 'not required'
+                                            ) {
+                                              if (item.status === 'To Do' || item.status === 'In Progress') {
+                                                autoStatus = "Pending Approval";
+                                              }
+                                            }
+                                            // 3. If work starts on script, shoot, editing, thumbnail or caption -> In Progress
+                                            else if (
+                                              (field === 'scriptLink' || field === 'scriptDate' || field === 'shootLink' || field === 'shootDate' || field === 'editingStart' || field === 'thumbnailLink' || field === 'caption') &&
+                                              cleanVal
+                                            ) {
+                                              if (item.status === 'To Do') {
+                                                autoStatus = "In Progress";
+                                              }
+                                            }
+
+                                            const updatedStatus = field === 'status' ? value : (autoStatus || item.status);
+
                                             const updated = projectCalendar.map((x: any) =>
-                                              x.id === item.id ? { ...x, [field]: value, ...(field === 'postingDate' ? { postingDay: new Date(value).toLocaleDateString("en-US", { weekday: "long" }) } : {}) } : x
+                                              x.id === item.id ? {
+                                                ...x,
+                                                [field]: value,
+                                                status: updatedStatus,
+                                                ...(field === 'postingDate' ? { postingDay: new Date(value).toLocaleDateString("en-US", { weekday: "long" }) } : {})
+                                              } : x
                                             );
                                             setProjects(projects.map(p => p.id === project.id ? { ...p, contentCalendar: updated, modules: syncSocialMediaTasksForProject(p, updated) } : p));
                                             setInlineEdit(null);
@@ -8313,6 +8431,9 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                               if (updatedItem && project.id) {
                                                 const payload = mapCalendarItemToBackendPayload(updatedItem, project.id);
                                                 await api.put(`/projects/${project.id}/content/${item.id}`, payload);
+                                                if (autoStatus && autoStatus !== item.status) {
+                                                  toast.success(`Status automatically updated to ${autoStatus}`);
+                                                }
                                               }
                                             } catch (e) {
                                               console.error("Failed to sync inline edit to backend:", e);
@@ -8321,13 +8442,14 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
                                           const startEdit = (e: React.MouseEvent, field: string, value: string) => {
                                             e.stopPropagation();
+                                            if (isRowLocked && field !== 'status') return;
                                             setInlineEdit({ id: item.id, field, value: value || '' });
                                           };
 
                                           const isEd = (field: string) => inlineEdit?.id === item.id && inlineEdit?.field === field;
 
                                           const InlineText = ({ field, value, placeholder, cls }: { field: string; value?: string | undefined; placeholder?: string | undefined; cls?: string | undefined }) =>
-                                            isEd(field) ? (
+                                            isEd(field) && !isRowLocked ? (
                                               <input
                                                 autoFocus
                                                 type="text"
@@ -8339,14 +8461,25 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                                 className="w-full px-2 py-1 bg-primary/5 border border-primary/40 rounded-lg text-xs font-bold focus:outline-none focus:ring-1 focus:ring-primary text-center"
                                               />
                                             ) : (
-                                              <span onClick={e => startEdit(e, field, value || '')} className={cn("cursor-text hover:bg-primary/5 rounded px-1 py-0.5 transition-colors block text-center group/cell", cls)} title="Click to edit">
-                                                {value || <span className="text-muted-foreground/30 italic text-[10px]">{placeholder || 'Click to add'}</span>}
-                                                <span className="ml-1 opacity-0 group-hover/cell:opacity-50 transition-opacity text-[9px]">✏️</span>
+                                              <span
+                                                onClick={e => {
+                                                  if (isRowLocked) return;
+                                                  startEdit(e, field, value || '');
+                                                }}
+                                                className={cn(
+                                                  isRowLocked ? "cursor-default" : "cursor-text hover:bg-primary/5 group/cell",
+                                                  "rounded px-1 py-0.5 transition-colors block text-center",
+                                                  cls
+                                                )}
+                                                title={isRowLocked ? `Locked (${item.status})` : "Click to edit"}
+                                              >
+                                                {value || <span className="text-muted-foreground/30 italic text-[10px]">{placeholder || (isRowLocked ? '-' : 'Click to add')}</span>}
+                                                {!isRowLocked && <span className="ml-1 opacity-0 group-hover/cell:opacity-50 transition-opacity text-[9px]">✏️</span>}
                                               </span>
                                             );
 
                                           const InlineDate = ({ field, value }: { field: string; value?: string | undefined }) =>
-                                            isEd(field) ? (
+                                            isEd(field) && !isRowLocked ? (
                                               <div onClick={e => e.stopPropagation()} className="inline-block">
                                                 <DatePicker
                                                   value={inlineEdit!.value}
@@ -8358,38 +8491,70 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                                 />
                                               </div>
                                             ) : (
-                                              <span onClick={e => startEdit(e, field, value || '')} className="cursor-text hover:bg-primary/5 rounded px-1 py-0.5 transition-colors inline-flex items-center gap-1 group/dc" title="Click to edit date">
+                                              <span
+                                                onClick={e => {
+                                                  if (isRowLocked) return;
+                                                  startEdit(e, field, value || '');
+                                                }}
+                                                className={cn(
+                                                  isRowLocked ? "cursor-default" : "cursor-text hover:bg-primary/5 group/dc",
+                                                  "rounded px-1 py-0.5 transition-colors inline-flex items-center gap-1"
+                                                )}
+                                                title={isRowLocked ? `Date (${item.status})` : "Click to edit date"}
+                                              >
                                                 {value ? (<><Calendar className="w-2.5 h-2.5 text-muted-foreground" /><span className="text-[11px] font-extrabold text-foreground">{safeFormat(value, "dd/MM/yyyy")}</span></>) : <span className="text-muted-foreground/30 text-[10px] italic">-</span>}
-                                                <span className="opacity-0 group-hover/dc:opacity-50 transition-opacity text-[9px]">✏️</span>
+                                                {!isRowLocked && <span className="opacity-0 group-hover/dc:opacity-50 transition-opacity text-[9px]">✏️</span>}
                                               </span>
                                             );
 
                                           const InlineLink = ({ field, value, label, cc }: { field: string; value?: string | undefined; label: string; cc: string }) =>
-                                            isEd(field) ? (
+                                            isEd(field) && !isRowLocked ? (
                                               <input autoFocus type="text" value={inlineEdit!.value} onChange={e => setInlineEdit({ ...inlineEdit!, value: e.target.value })} onBlur={() => saveInlineEdit(field, inlineEdit!.value)} onKeyDown={e => { if (e.key === 'Enter') saveInlineEdit(field, inlineEdit!.value); if (e.key === 'Escape') setInlineEdit(null); }} onClick={e => e.stopPropagation()} placeholder="Paste URL..." className="w-full max-w-[120px] px-2 py-1 bg-primary/5 border border-primary/40 rounded-lg text-[10px] font-bold focus:outline-none focus:ring-1 focus:ring-primary" />
                                             ) : value ? (
                                               String(value).trim().toLowerCase() === "not required" ? (
-                                                <span onClick={e => startEdit(e, field, value)} className="px-2 py-0.5 font-bold rounded-md text-[10px] bg-muted/60 text-muted-foreground border border-border/50 cursor-pointer hover:bg-muted select-none" title="Click to edit if required">
+                                                <span
+                                                  onClick={e => {
+                                                    if (isRowLocked) return;
+                                                    startEdit(e, field, value);
+                                                  }}
+                                                  className={cn(
+                                                    "px-2 py-0.5 font-bold rounded-md text-[10px] bg-muted/60 text-muted-foreground border border-border/50 select-none",
+                                                    isRowLocked ? "cursor-default" : "cursor-pointer hover:bg-muted"
+                                                  )}
+                                                  title={isRowLocked ? "Not Required (Locked)" : "Click to edit if required"}
+                                                >
                                                   Not Required
                                                 </span>
                                               ) : (
                                                 <div className="flex items-center justify-center gap-0.5 group/lc">
-                                                  <a href={value} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className={cn("px-2 py-0.5 font-bold rounded-md text-[10px] flex items-center gap-1 border", cc)}>{label}</a>
+                                                  <a
+                                                    href={value.startsWith("http") ? value : `https://${value}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    onClick={e => e.stopPropagation()}
+                                                    className={cn("px-2 py-0.5 font-bold rounded-md text-[10px] flex items-center gap-1 border shadow-2xs hover:opacity-90", cc)}
+                                                  >
+                                                    {label}
+                                                  </a>
                                                   <button
                                                     type="button"
                                                     title="Copy link"
                                                     onClick={e => {
                                                       e.stopPropagation();
                                                       navigator.clipboard.writeText(value);
-                                                      toast.success("Link copied!");
+                                                      toast.success(`${label} link copied!`);
                                                     }}
                                                     className="opacity-0 group-hover/lc:opacity-70 hover:opacity-100 p-0.5 hover:text-primary transition-opacity text-[10px]"
                                                   >
                                                     <Copy className="w-2.5 h-2.5" />
                                                   </button>
-                                                  <button onClick={e => startEdit(e, field, value)} className="opacity-0 group-hover/lc:opacity-60 text-[9px] hover:opacity-100 transition-opacity ml-0.5">✏️</button>
+                                                  {!isRowLocked && (
+                                                    <button onClick={e => startEdit(e, field, value)} className="opacity-0 group-hover/lc:opacity-60 text-[9px] hover:opacity-100 transition-opacity ml-0.5" title="Edit link">✏️</button>
+                                                  )}
                                                 </div>
                                               )
+                                            ) : isRowLocked ? (
+                                              <span className="text-muted-foreground/30 text-[10px] italic">-</span>
                                             ) : (
                                               <button onClick={e => startEdit(e, field, '')} className="text-muted-foreground/30 text-[10px] italic hover:text-primary/50 transition-colors">+ {label}</button>
                                             );
@@ -8430,7 +8595,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                               {/* Schedule */}
                                               <td className="py-2 px-5 text-center whitespace-nowrap">
                                                 <div className="flex flex-col items-center gap-0.5">
-                                                  {isEd('postingDate') ? (
+                                                  {isEd('postingDate') && !isRowLocked ? (
                                                     <div onClick={e => e.stopPropagation()} className="inline-block">
                                                       <DatePicker
                                                         value={inlineEdit!.value}
@@ -8446,9 +8611,19 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                                       />
                                                     </div>
                                                   ) : (
-                                                    <span onClick={e => startEdit(e, 'postingDate', item.postingDate)} className="font-semibold text-foreground block text-sm cursor-text hover:bg-primary/5 rounded px-1 py-0.5 transition-colors group/pd" title="Click to edit">
+                                                    <span
+                                                      onClick={e => {
+                                                        if (isRowLocked) return;
+                                                        startEdit(e, 'postingDate', item.postingDate);
+                                                      }}
+                                                      className={cn(
+                                                        "font-semibold text-foreground block text-sm rounded px-1 py-0.5 transition-colors",
+                                                        isRowLocked ? "cursor-default" : "cursor-text hover:bg-primary/5 group/pd"
+                                                      )}
+                                                      title={isRowLocked ? `Schedule (${item.status})` : "Click to edit"}
+                                                    >
                                                       {safeFormat(item.postingDate, "dd/MM/yyyy")}
-                                                      <span className="ml-1 opacity-0 group-hover/pd:opacity-50 transition-opacity text-[9px]">✏️</span>
+                                                      {!isRowLocked && <span className="ml-1 opacity-0 group-hover/pd:opacity-50 transition-opacity text-[9px]">✏️</span>}
                                                     </span>
                                                   )}
                                                   <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider block mt-0.5">
@@ -8459,6 +8634,17 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
                                               {/* Type */}
                                               <td className="py-2 px-5 text-center">
+                                                {isRowLocked ? (
+                                                  <span
+                                                    className={cn(
+                                                      "mx-auto px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-widest border rounded-full block text-center max-w-[90px] shadow-xs cursor-default select-none",
+                                                      getCalTypeColor(item.type)
+                                                    )}
+                                                    title={`Type: ${item.type} (Locked)`}
+                                                  >
+                                                    {item.type}
+                                                  </span>
+                                                ) : (
                                                   <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
                                                       <span className={cn("mx-auto px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-widest border rounded-full block text-center max-w-[90px] cursor-pointer hover:opacity-80 shadow-xs transition-opacity", getCalTypeColor(item.type))} title="Click to change">{item.type}</span>
@@ -8476,13 +8662,14 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                                       ))}
                                                     </DropdownMenuContent>
                                                   </DropdownMenu>
+                                                )}
                                               </td>
 
                                               {/* Topic / Concept */}
                                               <td className={cn("py-2 px-5 text-center min-w-[200px]", isExpanded ? "max-w-none" : "max-w-[240px]")}>
                                                 <InlineText field="topic" value={item.topic} placeholder="Enter topic..." cls={cn("font-medium text-foreground leading-normal", isExpanded ? "" : "line-clamp-1")} />
                                                 <InlineText field="concept" value={item.concept} placeholder="+ concept" cls={cn("text-muted-foreground mt-0.5 leading-normal text-[11px]", isExpanded ? "" : "line-clamp-1")} />
-                                                {isEd('reference') ? (
+                                                {isEd('reference') && !isRowLocked ? (
                                                   <input
                                                     autoFocus
                                                     type="text"
@@ -8497,7 +8684,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                                 ) : item.reference ? (
                                                   <div className="flex items-center justify-center gap-1 group/ref">
                                                     <a
-                                                      href={item.reference}
+                                                      href={item.reference.startsWith("http") ? item.reference : `https://${item.reference}`}
                                                       target="_blank"
                                                       rel="noopener noreferrer"
                                                       onClick={e => e.stopPropagation()}
@@ -8507,14 +8694,28 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                                       Ref: {item.reference}
                                                     </a>
                                                     <button
-                                                      onClick={e => startEdit(e, 'reference', item.reference || '')}
-                                                      className="opacity-0 group-hover/ref:opacity-60 text-[9px] hover:opacity-100 transition-opacity"
-                                                      title="Edit reference link"
+                                                      type="button"
+                                                      title="Copy reference link"
+                                                      onClick={e => {
+                                                        e.stopPropagation();
+                                                        navigator.clipboard.writeText(item.reference || '');
+                                                        toast.success("Reference link copied!");
+                                                      }}
+                                                      className="opacity-0 group-hover/ref:opacity-70 hover:opacity-100 p-0.5 text-muted-foreground hover:text-primary transition-opacity text-[10px]"
                                                     >
-                                                      ✏️
+                                                      <Copy className="w-2.5 h-2.5" />
                                                     </button>
+                                                    {!isRowLocked && (
+                                                      <button
+                                                        onClick={e => startEdit(e, 'reference', item.reference || '')}
+                                                        className="opacity-0 group-hover/ref:opacity-60 text-[9px] hover:opacity-100 transition-opacity"
+                                                        title="Edit reference link"
+                                                      >
+                                                        ✏️
+                                                      </button>
+                                                    )}
                                                   </div>
-                                                ) : (
+                                                ) : isRowLocked ? null : (
                                                   <span
                                                     onClick={e => startEdit(e, 'reference', '')}
                                                     className="cursor-text hover:bg-primary/5 rounded px-1 py-0.5 transition-colors block text-center text-muted-foreground/30 text-[10px] italic"
@@ -8541,6 +8742,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                                     item={item}
                                                     onSave={saveInlineEdit}
                                                     isExpanded={isExpanded}
+                                                    readOnly={isRowLocked}
                                                   />
                                                 </div>
                                               </td>
@@ -8574,7 +8776,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
                                               {/* Thumbnail */}
                                               <td className="py-2 px-5 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                                                <ThumbnailCell item={item} saveInlineEdit={saveInlineEdit} />
+                                                <ThumbnailCell item={item} saveInlineEdit={saveInlineEdit} readOnly={isRowLocked} />
                                               </td>
 
                                               {/* Caption */}
@@ -8588,6 +8790,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                                     item={item}
                                                     onSave={saveInlineEdit}
                                                     isExpanded={isExpanded}
+                                                    readOnly={isRowLocked}
                                                   />
                                                 </div>
                                               </td>
@@ -8620,16 +8823,29 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                                   <div className="flex flex-col items-center gap-1">
                                                     <DropdownMenu>
                                                       <DropdownMenuTrigger asChild>
-                                                        <span className={cn("mx-auto px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider block text-center max-w-[110px] cursor-pointer hover:opacity-80 shadow-xs", getCalStatusColor(item.status))} title="Click to change status">{item.status}</span>
+                                                        <span
+                                                          className={cn(
+                                                            "mx-auto px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider block text-center max-w-[110px] cursor-pointer hover:opacity-80 shadow-xs flex items-center justify-center gap-1",
+                                                            getCalStatusColor(item.status)
+                                                          )}
+                                                          title="Click to change status"
+                                                        >
+                                                          {isRowLocked && <span className="text-[10px]">🔒</span>}
+                                                          <span>{item.status}</span>
+                                                        </span>
                                                       </DropdownMenuTrigger>
-                                                      <DropdownMenuContent align="center" className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300] min-w-[140px] p-1">
+                                                      <DropdownMenuContent align="center" className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300] min-w-[150px] p-1">
                                                         {["To Do", "In Progress", "Pending Approval", "Approved", "Published"].map(o => (
                                                           <DropdownMenuItem
                                                             key={o}
                                                             onSelect={() => saveInlineEdit('status', o)}
                                                             className={cn("text-xs font-semibold rounded-lg cursor-pointer py-1.5 px-2.5 flex items-center justify-between", item.status === o && "bg-primary/10 text-primary font-bold")}
                                                           >
-                                                            <span>{o}</span>
+                                                            <div className="flex items-center gap-1.5">
+                                                              <span className={cn("w-2 h-2 rounded-full", o === "Published" ? "bg-green-500" : o === "Approved" ? "bg-emerald-500" : o === "Pending Approval" ? "bg-purple-500" : o === "In Progress" ? "bg-blue-500" : "bg-amber-500")} />
+                                                              <span>{o}</span>
+                                                              {(o === "Approved" || o === "Published") && <span className="text-[9px] text-muted-foreground ml-1">🔒</span>}
+                                                            </div>
                                                             {item.status === o && <Check className="w-3.5 h-3.5 text-primary" />}
                                                           </DropdownMenuItem>
                                                         ))}
@@ -8653,9 +8869,18 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                               {/* Actions */}
                                               <td className="py-2 px-5 text-center whitespace-nowrap">
                                                 <div className="flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                  <button onClick={(e) => { e.stopPropagation(); setEditingCalendarItem(item); setCalendarForm({ ...item }); setIsAddCalendarItemModalOpen(true); }} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors border border-border/30 shadow-sm bg-card" title="Full edit">
-                                                    <Edit2 className="w-3.5 h-3.5" />
-                                                  </button>
+                                                  {isRowLocked ? (
+                                                    <span
+                                                      className="p-1.5 text-muted-foreground/40 rounded-lg border border-border/30 bg-muted/40 cursor-not-allowed select-none"
+                                                      title="Row is locked (Approved / Published). Change status to In Progress to edit."
+                                                    >
+                                                      <Lock className="w-3.5 h-3.5" />
+                                                    </span>
+                                                  ) : (
+                                                    <button onClick={(e) => { e.stopPropagation(); setEditingCalendarItem(item); setCalendarForm({ ...item }); setIsAddCalendarItemModalOpen(true); }} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors border border-border/30 shadow-sm bg-card" title="Full edit">
+                                                      <Edit2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                  )}
                                                   <button
                                                     onClick={(e) => {
                                                       e.stopPropagation();
@@ -8666,34 +8891,36 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                                   >
                                                     <History className="w-3.5 h-3.5" />
                                                   </button>
-                                                  <button
-                                                    onClick={(e) => {
-                                                      e.stopPropagation();
-                                                      setConfirmModalState({
-                                                        isOpen: true,
-                                                        title: "Delete Content Idea",
-                                                        description: "Are you sure you want to delete this content idea? This action cannot be undone.",
-                                                        itemName: item.topic || "Untitled Idea",
-                                                        action: async () => {
-                                                          try {
-                                                            if (project.id && item.id) {
-                                                              await api.delete(`/projects/${project.id}/content/${item.id}`);
+                                                  {!isRowLocked && (
+                                                    <button
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setConfirmModalState({
+                                                          isOpen: true,
+                                                          title: "Delete Content Idea",
+                                                          description: "Are you sure you want to delete this content idea? This action cannot be undone.",
+                                                          itemName: item.topic || "Untitled Idea",
+                                                          action: async () => {
+                                                            try {
+                                                              if (project.id && item.id) {
+                                                                await api.delete(`/projects/${project.id}/content/${item.id}`);
+                                                              }
+                                                              const updated = projectCalendar.filter((x: any) => x.id !== item.id);
+                                                              setProjects(projects.map(p => p.id === project.id ? { ...p, contentCalendar: updated, modules: syncSocialMediaTasksForProject(p, updated) } : p));
+                                                              toast.success("Content idea deleted successfully");
+                                                            } catch (err: any) {
+                                                              toast.error(err.message || "Failed to delete content idea");
+                                                            } finally {
+                                                              setConfirmModalState(prev => ({ ...prev, isOpen: false }));
                                                             }
-                                                            const updated = projectCalendar.filter((x: any) => x.id !== item.id);
-                                                            setProjects(projects.map(p => p.id === project.id ? { ...p, contentCalendar: updated, modules: syncSocialMediaTasksForProject(p, updated) } : p));
-                                                            toast.success("Content idea deleted successfully");
-                                                          } catch (err: any) {
-                                                            toast.error(err.message || "Failed to delete content idea");
-                                                          } finally {
-                                                            setConfirmModalState(prev => ({ ...prev, isOpen: false }));
                                                           }
-                                                        }
-                                                      });
-                                                    }}
-                                                    className="p-1.5 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors border border-border/30 shadow-sm bg-card"
-                                                  >
-                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                  </button>
+                                                        });
+                                                      }}
+                                                      className="p-1.5 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors border border-border/30 shadow-sm bg-card"
+                                                    >
+                                                      <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                  )}
                                                 </div>
                                               </td>
                                             </tr>

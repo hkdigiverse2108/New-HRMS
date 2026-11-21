@@ -23,8 +23,10 @@ class ContentType(str, Enum):
     CAROUSEL = "Carousel"
 
 class ContentStatus(str, Enum):
+    TO_DO = "To Do"
     IN_PROGRESS = "In Progress"
     IN_REVIEW = "In Review"
+    PENDING_APPROVAL = "Pending Approval"
     APPROVED = "Approved"
     PUBLISHED = "Published"
     CANCELLED = "Cancelled"

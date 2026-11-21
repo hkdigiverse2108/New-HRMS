@@ -121,6 +121,7 @@ export interface ContentTextOrLinkCellProps {
   item: any; // the calendar item
   onSave: (field: string, newValue: string) => Promise<void> | void;
   isExpanded?: boolean | undefined;
+  readOnly?: boolean | undefined;
 }
 
 export function ContentTextOrLinkCell({
@@ -130,6 +131,7 @@ export function ContentTextOrLinkCell({
   item,
   onSave,
   isExpanded = false,
+  readOnly = false,
 }: ContentTextOrLinkCellProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [mode, setMode] = useState<"view" | "edit">("view");
@@ -207,22 +209,26 @@ export function ContentTextOrLinkCell({
       <div className="w-full flex justify-center items-center">
         {/* CASE 1: Empty / Null */}
         {!value || !value.trim() ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setDraftText("");
-              setMode("edit");
-              setIsModalOpen(true);
-            }}
-            className="text-[10px] text-muted-foreground/40 hover:text-primary font-medium italic transition-colors py-0.5 px-2 rounded-md hover:bg-primary/5 flex items-center gap-1 group/btn"
-            title={`Click to add ${label.toLowerCase()} or link`}
-          >
-            <span>+ {label.toLowerCase()}</span>
-            <span className="opacity-0 group-hover/btn:opacity-60 text-[9px]">
-              ✏️
-            </span>
-          </button>
+          readOnly ? (
+            <span className="text-[10px] text-muted-foreground/30 italic select-none">-</span>
+          ) : (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setDraftText("");
+                setMode("edit");
+                setIsModalOpen(true);
+              }}
+              className="text-[10px] text-muted-foreground/40 hover:text-primary font-medium italic transition-colors py-0.5 px-2 rounded-md hover:bg-primary/5 flex items-center gap-1 group/btn"
+              title={`Click to add ${label.toLowerCase()} or link`}
+            >
+              <span>+ {label.toLowerCase()}</span>
+              <span className="opacity-0 group-hover/btn:opacity-60 text-[9px]">
+                ✏️
+              </span>
+            </button>
+          )
         ) : isNotRequired ? (
           /* CASE 2: "Not Required" Badge */
           <div
@@ -231,29 +237,35 @@ export function ContentTextOrLinkCell({
           >
             <span
               onClick={(e) => {
+                if (readOnly) return;
                 e.stopPropagation();
                 setDraftText("Not Required");
                 setMode("edit");
                 setIsModalOpen(true);
               }}
-              className="px-2 py-0.5 font-bold rounded-md text-[10px] bg-muted/60 text-muted-foreground border border-border/50 cursor-pointer hover:bg-muted select-none"
-              title="Click to edit if required"
+              className={cn(
+                "px-2 py-0.5 font-bold rounded-md text-[10px] bg-muted/60 text-muted-foreground border border-border/50 select-none",
+                readOnly ? "cursor-default" : "cursor-pointer hover:bg-muted"
+              )}
+              title={readOnly ? "Not Required (Locked)" : "Click to edit if required"}
             >
               Not Required
             </span>
-            <button
-              type="button"
-              title="Edit"
-              onClick={(e) => {
-                e.stopPropagation();
-                setDraftText("Not Required");
-                setMode("edit");
-                setIsModalOpen(true);
-              }}
-              className="opacity-0 group-hover/nr:opacity-70 p-0.5 text-muted-foreground hover:text-foreground text-[9px] transition-opacity"
-            >
-              ✏️
-            </button>
+            {!readOnly && (
+              <button
+                type="button"
+                title="Edit"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDraftText("Not Required");
+                  setMode("edit");
+                  setIsModalOpen(true);
+                }}
+                className="opacity-0 group-hover/nr:opacity-70 p-0.5 text-muted-foreground hover:text-foreground text-[9px] transition-opacity"
+              >
+                ✏️
+              </button>
+            )}
           </div>
         ) : isUrl ? (
           /* CASE 3: Clean Link Badge (Prevents the ugly table-stretching bug) */
@@ -287,19 +299,21 @@ export function ContentTextOrLinkCell({
             >
               <Copy className="w-2.5 h-2.5" />
             </button>
-            <button
-              type="button"
-              title="Edit Link / Text"
-              onClick={(e) => {
-                e.stopPropagation();
-                setDraftText(value);
-                setMode("edit");
-                setIsModalOpen(true);
-              }}
-              className="opacity-0 group-hover/url-pill:opacity-70 hover:opacity-100 p-0.5 text-muted-foreground hover:text-foreground text-[9px] transition-opacity"
-            >
-              ✏️
-            </button>
+            {!readOnly && (
+              <button
+                type="button"
+                title="Edit Link / Text"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDraftText(value);
+                  setMode("edit");
+                  setIsModalOpen(true);
+                }}
+                className="opacity-0 group-hover/url-pill:opacity-70 hover:opacity-100 p-0.5 text-muted-foreground hover:text-foreground text-[9px] transition-opacity"
+              >
+                ✏️
+              </button>
+            )}
           </div>
         ) : (
           /* CASE 4: Formatted Copy / Text / Script Card */
@@ -311,7 +325,7 @@ export function ContentTextOrLinkCell({
               setIsModalOpen(true);
             }}
             className="group/text-pill cursor-pointer inline-flex flex-col items-center max-w-[170px] w-full"
-            title="Click to view & copy full content"
+            title={readOnly ? "Click to view & copy full content (Locked)" : "Click to view & copy full content"}
           >
             <div className="w-full px-2 py-1 rounded-lg border border-border/60 bg-card hover:bg-primary/5 hover:border-primary/40 shadow-2xs transition-all flex items-center justify-between gap-1.5">
               <div className="flex items-center gap-1.5 min-w-0">
@@ -335,19 +349,21 @@ export function ContentTextOrLinkCell({
                     <Copy className="w-3 h-3" />
                   )}
                 </button>
-                <button
-                  type="button"
-                  title="Edit"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDraftText(value);
-                    setMode("edit");
-                    setIsModalOpen(true);
-                  }}
-                  className="opacity-0 group-hover/text-pill:opacity-70 hover:opacity-100 p-0.5 text-[9px] text-muted-foreground hover:text-foreground transition-opacity"
-                >
-                  ✏️
-                </button>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    title="Edit"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDraftText(value);
+                      setMode("edit");
+                      setIsModalOpen(true);
+                    }}
+                    className="opacity-0 group-hover/text-pill:opacity-70 hover:opacity-100 p-0.5 text-[9px] text-muted-foreground hover:text-foreground transition-opacity"
+                  >
+                    ✏️
+                  </button>
+                )}
               </div>
             </div>
             {/* Subtle word count under pill */}
@@ -390,39 +406,45 @@ export function ContentTextOrLinkCell({
             </div>
 
             {/* View / Edit Mode Switcher */}
-            <div className="flex items-center bg-muted/60 p-0.5 rounded-xl border border-border/50 shrink-0 self-start sm:self-auto">
-              <button
-                type="button"
-                onClick={() => setMode("view")}
-                className={cn(
-                  "px-2.5 sm:px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5",
-                  mode === "view"
-                    ? "bg-background text-foreground shadow-xs"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <Eye className="w-3.5 h-3.5" />
-                <span>View & Copy</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode("edit")}
-                className={cn(
-                  "px-2.5 sm:px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5",
-                  mode === "edit"
-                    ? "bg-background text-foreground shadow-xs"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <Pencil className="w-3.5 h-3.5" />
-                <span>Edit</span>
-              </button>
-            </div>
+            {readOnly ? (
+              <div className="flex items-center bg-muted/60 px-3 py-1 rounded-xl border border-border/50 text-[11px] font-bold text-muted-foreground gap-1.5 shrink-0 select-none">
+                <span>🔒 View & Copy Only</span>
+              </div>
+            ) : (
+              <div className="flex items-center bg-muted/60 p-0.5 rounded-xl border border-border/50 shrink-0 self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setMode("view")}
+                  className={cn(
+                    "px-2.5 sm:px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5",
+                    mode === "view"
+                      ? "bg-background text-foreground shadow-xs"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>View & Copy</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode("edit")}
+                  className={cn(
+                    "px-2.5 sm:px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5",
+                    mode === "edit"
+                      ? "bg-background text-foreground shadow-xs"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  <span>Edit</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Modal Body */}
           <div className="p-4 sm:p-6 min-w-0 overflow-y-auto max-h-[calc(90vh-80px)]">
-            {mode === "view" ? (
+            {(mode === "view" || readOnly) ? (
               <div className="space-y-4 min-w-0">
                 {/* Action Banner */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-primary/5 border border-primary/20 rounded-xl min-w-0">

@@ -153,8 +153,14 @@ async def get_all_content_items(
     current_user: dict = Depends(get_current_employee)
 ):
     STATUS_MAP = {
+        "todo": "To Do",
+        "to do": "To Do",
         "inprogress": "In Progress",
+        "in progress": "In Progress",
         "inreview": "In Review",
+        "in review": "In Review",
+        "pendingapproval": "Pending Approval",
+        "pending approval": "Pending Approval",
         "approved": "Approved",
         "published": "Published",
         "cancelled": "Cancelled"
