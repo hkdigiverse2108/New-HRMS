@@ -9,6 +9,25 @@ from app.redis.service import get_cache, set_cache, delete_cache, clear_pattern,
 class ResourceInventoryService:
 
     @staticmethod
+    def is_admin_or_hr_user(current_user: dict) -> bool:
+        if not current_user:
+            return False
+        work = current_user.get("work_details", {}) or {}
+        role = str(work.get("system_role") or current_user.get("system_role", "Employee")).strip().lower()
+        dept = str(work.get("department") or current_user.get("department", "")).strip().lower()
+        sub_dept = str(work.get("sub_department") or "").strip().lower()
+        desig = str(work.get("designation") or "").strip().lower()
+
+        return (
+            role in ["admin", "ceo", "hr", "hr manager", "subadmin", "superadmin"] or
+            dept in ["hr", "human resources"] or
+            sub_dept in ["hr", "human resources"] or
+            "hr" in role or
+            "hr manager" in desig or
+            "human resource" in desig
+        )
+
+    @staticmethod
     async def check_user_permission(current_user: dict, action: str) -> bool:
         """
         Validates if current_user has access to perform `action` ('read', 'create', 'edit', 'delete')
@@ -17,30 +36,69 @@ class ResourceInventoryService:
         if not current_user:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
 
-        work = current_user.get("work_details", {}) or {}
-        role = str(work.get("system_role") or current_user.get("system_role", "Employee")).strip().lower()
-
-        # Admin, CEO, HR, SubAdmin roles have full access by default
-        if role in ["admin", "ceo", "hr", "hr manager", "subadmin"]:
+        # Admin, CEO, SubAdmin, or HR department/roles have full access by default
+        if ResourceInventoryService.is_admin_or_hr_user(current_user):
             return True
 
+        work = current_user.get("work_details", {}) or {}
+        role = str(work.get("system_role") or current_user.get("system_role", "Employee")).strip()
+        dept = str(work.get("department") or current_user.get("department", "")).strip()
         emp_id = str(current_user.get("_id") or current_user.get("id", "")).strip()
 
-        # Check manual/custom permissions for this employee
+        # Check resolved permissions (preset for department/role + custom per-employee)
+        try:
+            from app.controllers.auth import get_resolved_permissions_for_employee
+            resolved_perms = await get_resolved_permissions_for_employee(emp_id=emp_id, role=role, dept=dept)
+            for mod_key in ["/workspace/resource", "/resource", "resource"]:
+                if mod_key in resolved_perms:
+                    p = resolved_perms[mod_key]
+                    if isinstance(p, dict):
+                        if p.get("all"):
+                            return True
+                        if action == "read" and p.get("read"):
+                            return True
+                        if action == "create" and (p.get("create") or p.get("add")):
+                            return True
+                        if action in ["edit", "update"] and (p.get("edit") or p.get("update")):
+                            return True
+                        if action == "delete" and p.get("delete"):
+                            return True
+        except Exception:
+            pass
+
+        # Check manual/custom permissions for this employee if any
         user_perm = await UserPermissionRepository.get_user_permission(emp_id)
         if user_perm and user_perm.get("module_permissions"):
-            mod_perms = user_perm.get("module_permissions", [])
-            for mod in mod_perms:
-                mod_id = str(mod.get("module_id", "")).lower()
-                if mod_id in ["/workspace/resource", "/resource", "resource", "resource management"]:
-                    if action == "read" and mod.get("read"):
-                        return True
-                    if action == "create" and (mod.get("create") or mod.get("add")):
-                        return True
-                    if action in ["edit", "update"] and (mod.get("edit") or mod.get("update")):
-                        return True
-                    if action == "delete" and mod.get("delete"):
-                        return True
+            mod_perms = user_perm.get("module_permissions")
+            if isinstance(mod_perms, dict):
+                for mod_id, flags in mod_perms.items():
+                    if str(mod_id).lower() in ["/workspace/resource", "/resource", "resource", "resource management"]:
+                        if isinstance(flags, dict):
+                            if flags.get("all"):
+                                return True
+                            if action == "read" and flags.get("read"):
+                                return True
+                            if action == "create" and (flags.get("create") or flags.get("add")):
+                                return True
+                            if action in ["edit", "update"] and (flags.get("edit") or flags.get("update")):
+                                return True
+                            if action == "delete" and flags.get("delete"):
+                                return True
+            elif isinstance(mod_perms, list):
+                for mod in mod_perms:
+                    if isinstance(mod, dict):
+                        mod_id = str(mod.get("module_id", "")).lower()
+                        if mod_id in ["/workspace/resource", "/resource", "resource", "resource management"]:
+                            if mod.get("all"):
+                                return True
+                            if action == "read" and mod.get("read"):
+                                return True
+                            if action == "create" and (mod.get("create") or mod.get("add")):
+                                return True
+                            if action in ["edit", "update"] and (mod.get("edit") or mod.get("update")):
+                                return True
+                            if action == "delete" and mod.get("delete"):
+                                return True
 
         # Default fallback: logged in employees can view/read, but edit/delete requires explicit permission
         if action == "read":
@@ -64,11 +122,23 @@ class ResourceInventoryService:
     ) -> Dict[str, Any]:
         await ResourceInventoryService.check_user_permission(current_user, "read")
 
-        work = current_user.get("work_details", {}) or {}
-        role = str(work.get("system_role") or current_user.get("system_role", "Employee")).strip().lower()
+        is_admin_or_hr = ResourceInventoryService.is_admin_or_hr_user(current_user)
+        if not is_admin_or_hr:
+            try:
+                emp_id = str(current_user.get("_id") or current_user.get("id", "")).strip()
+                work = current_user.get("work_details", {}) or {}
+                role = str(work.get("system_role") or current_user.get("system_role", "Employee")).strip()
+                dept = str(work.get("department") or current_user.get("department", "")).strip()
+                from app.controllers.auth import get_resolved_permissions_for_employee
+                resolved_perms = await get_resolved_permissions_for_employee(emp_id=emp_id, role=role, dept=dept)
+                res_p = resolved_perms.get("/workspace/resource", {})
+                if isinstance(res_p, dict) and (res_p.get("update") or res_p.get("all") or res_p.get("create")):
+                    is_admin_or_hr = True
+            except Exception:
+                pass
 
         # Regular Employees can ONLY view resources allocated to them
-        if role not in ["admin", "ceo", "hr", "hr manager", "subadmin"]:
+        if not is_admin_or_hr:
             emp_id = str(current_user.get("_id") or current_user.get("id", "")).strip()
             assigned_to_employee_id = emp_id
 
@@ -128,7 +198,7 @@ class ResourceInventoryService:
         role = str(work.get("system_role") or current_user.get("system_role", "Employee")).strip().lower()
 
         # Regular employee check: item must be assigned to them
-        if role not in ["admin", "ceo", "hr", "hr manager", "subadmin"]:
+        if not ResourceInventoryService.is_admin_or_hr_user(current_user):
             emp_id = str(current_user.get("_id") or current_user.get("id", "")).strip()
             assigned = item.get("assigned_to") or {}
             assigned_emp_id = str(assigned.get("employee_id", "")).strip()

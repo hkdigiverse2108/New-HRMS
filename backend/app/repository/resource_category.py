@@ -48,7 +48,7 @@ class ResourceCategoryRepository:
         total = await collection.count_documents(query)
 
         eff_page = max(1, page)
-        eff_limit = max(1, min(100, limit))
+        eff_limit = max(1, min(2000, limit))
         skip = (eff_page - 1) * eff_limit
 
         cursor = collection.find(query).sort("created_at", -1).skip(skip).limit(eff_limit)

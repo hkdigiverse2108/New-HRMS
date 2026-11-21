@@ -42,9 +42,11 @@ class GalleryService:
 
         work = current_user.get("work_details", {}) or {}
         role = str(work.get("system_role") or current_user.get("system_role", "Employee")).strip().lower()
+        dept = str(work.get("department") or current_user.get("department", "")).strip().lower()
+        sub_dept = str(work.get("sub_department") or "").strip().lower()
 
         # Admin, CEO, HR, SubAdmin roles have full access by default
-        if role in ["admin", "ceo", "hr", "hr manager", "subadmin"]:
+        if role in ["admin", "ceo", "hr", "hr manager", "subadmin"] or dept in ["hr", "human resources"] or sub_dept in ["hr", "human resources"]:
             return True
 
         emp_id = str(current_user.get("_id") or current_user.get("id", "")).strip()

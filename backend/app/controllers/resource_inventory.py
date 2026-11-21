@@ -31,7 +31,7 @@ async def get_resource_inventory_dashboard(
 async def get_my_allocated_resources(
     search: Optional[str] = Query(None, description="Search by resource_id or category_name"),
     page: int = Query(1, ge=1, description="Page number (default: 1)"),
-    limit: int = Query(10, ge=1, le=100, description="Items per page (default: 10)"),
+    limit: int = Query(10, ge=1, le=5000, description="Items per page (default: 10)"),
     current_user: dict = Depends(get_current_employee)
 ):
     """
@@ -61,14 +61,17 @@ async def get_all_resource_inventory_items(
     assigned_to_employee_id: Optional[str] = Query(None, description="Filter by Assigned Employee ID or 'unassigned'"),
     search: Optional[str] = Query(None, description="Search by resource_id, category_name, assigned_to_name"),
     page: int = Query(1, ge=1, description="Page number (default: 1)"),
-    limit: int = Query(10, ge=1, le=100, description="Items per page (default: 10)"),
+    limit: int = Query(10, ge=1, le=5000, description="Items per page (default: 10)"),
     current_user: dict = Depends(get_current_employee)
 ):
     """
     Get all inventory items with filter options and pagination (Requires 'read' permission).
     """
+    is_admin_or_hr = ResourceInventoryService.is_admin_or_hr_user(current_user)
+    scope = "admin_hr" if is_admin_or_hr else str(current_user.get("_id", ""))
     cache_key = make_list_key(
         "res_inventory:list",
+        scope=scope,
         cat=category_id,
         st=status,
         cond=condition,

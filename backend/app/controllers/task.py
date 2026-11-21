@@ -526,9 +526,11 @@ async def get_deleted_tasks(
 
     user_dept = str(current_user.get("work_details", {}).get("department", "") or "").strip().lower()
 
-    is_operational = "operation" in user_dept
+    user_desig = str(current_user.get("work_details", {}).get("designation", "") or "").strip().lower()
 
-    if role not in ["Admin", "Subadmin", "HR"] and not is_operational:
+    is_operational = "operation" in user_dept or "operation" in str(role).lower() or "operation" in user_desig
+
+    if role not in ["Admin", "Subadmin", "HR", "admin", "subadmin", "hr"] and user_dept not in ["hr", "human resources"] and not is_operational:
 
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Admin/HR can view deleted tasks")
 
@@ -778,9 +780,9 @@ async def update_task(task_id: str, data: TaskUpdate, current_user: dict = Depen
 
     user_dept = str(current_user.get("work_details", {}).get("department", "") or "").strip().lower()
 
-    is_operational = "operation" in user_dept
+    is_operational = "operation" in user_dept or "operation" in str(role).lower() or "operation" in designation
 
-    if role not in ["Admin", "Subadmin", "HR"] and not is_operational:
+    if role not in ["Admin", "Subadmin", "HR", "admin", "subadmin", "hr"] and user_dept not in ["hr", "human resources"] and not is_operational:
 
         if item.get("assigned_to") != emp_id and item.get("assigned_by") != emp_id:
 
@@ -866,7 +868,7 @@ async def delete_task(task_id: str, current_user: dict = Depends(get_current_emp
 
     user_dept = str(current_user.get("work_details", {}).get("department", "") or "").strip().lower()
 
-    is_operational = "operation" in user_dept
+    is_operational = "operation" in user_dept or "operation" in str(role).lower() or "operation" in designation
 
     # Allow task deletion if Admin/Subadmin/HR/Operational, or task creator,
     # or if it is a Content Calendar issue/pending task (associated with content_item_id)
@@ -879,7 +881,7 @@ async def delete_task(task_id: str, current_user: dict = Depends(get_current_emp
         )
     )
 
-    if role not in ["Admin", "Subadmin", "HR"] and not is_operational and not is_cc_issue:
+    if role not in ["Admin", "Subadmin", "HR", "admin", "subadmin", "hr"] and user_dept not in ["hr", "human resources"] and not is_operational and not is_cc_issue:
         # Only the creator/assigner can delete, not the assignee.
         if item.get("assigned_by") != emp_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to delete this task")
@@ -1180,11 +1182,11 @@ async def approve_task(task_id: str, current_user: dict = Depends(get_current_em
 
     user_dept = str(current_user.get("work_details", {}).get("department", "") or "").strip().lower()
 
-    is_operational = "operation" in user_dept
+    is_operational = "operation" in user_dept or "operation" in str(role).lower() or "operation" in designation
 
     # Assigner or Admin/HR can approve
 
-    if role not in ["Admin", "Subadmin", "HR"] and not is_operational and item.get("assigned_by") != emp_id:
+    if role not in ["Admin", "Subadmin", "HR", "admin", "subadmin", "hr"] and user_dept not in ["hr", "human resources"] and not is_operational and item.get("assigned_by") != emp_id:
 
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the task assigner or Admin/HR can approve this task")
 
@@ -1222,9 +1224,9 @@ async def reject_review_task(task_id: str, data: Optional[RejectReviewPayload] =
 
     user_dept = str(current_user.get("work_details", {}).get("department", "") or "").strip().lower()
 
-    is_operational = "operation" in user_dept
+    is_operational = "operation" in user_dept or "operation" in str(role).lower() or "operation" in designation
 
-    if role not in ["Admin", "Subadmin", "HR"] and not is_operational and item.get("assigned_by") != emp_id:
+    if role not in ["Admin", "Subadmin", "HR", "admin", "subadmin", "hr"] and user_dept not in ["hr", "human resources"] and not is_operational and item.get("assigned_by") != emp_id:
 
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the task assigner or Admin/HR can reject review")
 

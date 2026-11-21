@@ -370,6 +370,7 @@ DEFAULT_HR_PERMISSIONS: Dict[str, dict] = {
     "/remarks": make_perm(all_perm=True),
     "/workspace/gallery": make_perm(all_perm=True),
     "/workspace/seating": make_perm(all_perm=True),
+    "/workspace/resource": make_perm(all_perm=True),
     "/recruitment/hirings": make_perm(all_perm=True),
     "/payroll": make_perm(all_perm=True),
     "/employees/documents": make_perm(all_perm=True),
@@ -487,6 +488,7 @@ DEFAULT_MANAGEMENT_PERMISSIONS: Dict[str, dict] = {
     "/remarks": make_perm(all_perm=True),
     "/workspace/gallery": make_perm(all_perm=True),
     "/workspace/seating": make_perm(all_perm=True),
+    "/workspace/resource": make_perm(all_perm=True),
     "/recruitment/hirings": make_perm(all_perm=True),
     "/payroll": make_perm(all_perm=True),
     "/employees/documents": make_perm(all_perm=True),
@@ -560,8 +562,16 @@ DEFAULT_PRODUCT_PERMISSIONS: Dict[str, dict] = {
     "/elections": make_perm(read=True),
 }
 
+DEFAULT_OPERATIONAL_PERMISSIONS: Dict[str, dict] = {
+    **DEFAULT_DEVELOPMENT_PERMISSIONS,
+    "/tasks": make_perm(all_perm=True),
+    "/work/projects": make_perm(all_perm=True),
+    "/approvals/daily-progress": make_perm(all_perm=True),
+}
+
 DEFAULT_DEPARTMENT_PERMISSIONS: Dict[str, Dict[str, dict]] = {
     "HR": DEFAULT_HR_PERMISSIONS,
+    "Operational": DEFAULT_OPERATIONAL_PERMISSIONS,
     "Development": DEFAULT_DEVELOPMENT_PERMISSIONS,
     "Python": DEFAULT_PYTHON_PERMISSIONS,
     "Sales": DEFAULT_SALES_PERMISSIONS,

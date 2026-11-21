@@ -1122,6 +1122,8 @@ const CalendarIssuesCell = ({
   const [newIssueText, setNewIssueText] = useState("");
   const [selectedRole, setSelectedRole] = useState("Scripting");
   const [issueType, setIssueType] = useState<"client_issue" | "pending" | "normal">("normal");
+  const [editingIssueId, setEditingIssueId] = useState<string | null>(null);
+  const [editingIssueText, setEditingIssueText] = useState<string>("");
   const issuesList = item.issues || [];
 
   // 8 Creative Stages per audio specification
@@ -1136,15 +1138,72 @@ const CalendarIssuesCell = ({
     "Posting"
   ] as const;
 
-  const isSuperAdminOrHR = ["admin", "subadmin", "hr"].includes(
-    String((user as any)?.role || (user as any)?.work_details?.system_role || "").toLowerCase()
-  );
+  const uRole = String((user as any)?.role || (user as any)?.system_role || (user as any)?.work_details?.system_role || "").toLowerCase().trim();
+  const uDept = String((user as any)?.department || (user as any)?.work_details?.department || "").toLowerCase().trim();
+  const uDesig = String((user as any)?.designation || (user as any)?.work_details?.designation || "").toLowerCase().trim();
+
+  const isSuperAdminOrHR = ["admin", "superadmin", "subadmin", "hr"].includes(uRole) || uDept.includes("hr") || uDesig.includes("hr");
+  const isOperational = uDept.includes("operation") || uRole.includes("operation") || uDesig.includes("operation");
+  const canManageIssues = isSuperAdminOrHR || isOperational;
 
   const canDeleteIssue = (issue: any) => {
-    if (isSuperAdminOrHR) return true;
+    if (canManageIssues) return true;
     if (issue.authorId && currentUserId) return String(issue.authorId) === currentUserId;
     if (issue.author && currentUserName) return issue.author.trim().toLowerCase() === currentUserName.trim().toLowerCase();
     return false;
+  };
+
+  const canEditIssue = (issue: any) => {
+    if (canManageIssues) return true;
+    if (issue.authorId && currentUserId) return String(issue.authorId) === currentUserId;
+    if (issue.author && currentUserName) return issue.author.trim().toLowerCase() === currentUserName.trim().toLowerCase();
+    return false;
+  };
+
+  const handleStartEditIssue = (issue: any) => {
+    setEditingIssueId(issue.id);
+    setEditingIssueText(issue.text || "");
+  };
+
+  const handleSaveEditIssue = async (issueId: string) => {
+    if (!editingIssueText.trim()) return;
+    const cleanText = editingIssueText.trim();
+    const targetIssue = issuesList.find((i: any) => i.id === issueId);
+    if (!targetIssue) {
+      setEditingIssueId(null);
+      return;
+    }
+
+    const updatedIssues = issuesList.map((iss: any) =>
+      iss.id === issueId ? { ...iss, text: cleanText } : iss
+    );
+
+    const updatedCalendar = projectCalendar.map((x: any) =>
+      x.id === item.id ? { ...x, issues: updatedIssues } : x
+    );
+    setProjects(projects.map(p => p.id === project.id ? { ...p, contentCalendar: updatedCalendar } : p));
+    setEditingIssueId(null);
+
+    if (targetIssue.taskId) {
+      try {
+        const isClient = targetIssue.isClientIssue || targetIssue.issueType === "client_issue";
+        const targetRole = targetIssue.role || "Scripting";
+        const ideaTitle = item.topic || "Content Idea";
+        await api.put(`/tasks/${targetIssue.taskId}`, {
+          title: `[${isClient ? 'Client Issue' : 'Pending'}] ${ideaTitle} (${targetRole}): ${cleanText}`,
+          description: `${isClient ? 'Client Issue' : 'Pending Task'} reported from Content Calendar (${project.name || project.title || 'Project'} - ${ideaTitle})\nRole/Phase: ${targetRole}\nAdded by: ${targetIssue.author || currentUserName}\nRemark: "${cleanText}"`,
+          reason_for_pending: cleanText
+        }, { showErrorToast: false });
+      } catch (err) {
+        console.warn("Could not sync task text update:", err);
+      }
+    }
+
+    if (project.id && item.id) {
+      api.put(`/projects/${project.id}/content/${item.id}`, {
+        issues: updatedIssues
+      }).catch(e => console.error("Failed to sync issue text update to backend:", e));
+    }
   };
 
   const getAssigneeForRole = (role: string) => {
@@ -1478,6 +1537,16 @@ const CalendarIssuesCell = ({
                       </div>
                       <div className="flex items-center gap-1">
                         <span className="text-[9px] text-muted-foreground font-mono">{issue.timestamp}</span>
+                        {canEditIssue(issue) && editingIssueId !== issue.id && (
+                          <button
+                            type="button"
+                            onClick={() => handleStartEditIssue(issue)}
+                            className="p-1 text-muted-foreground hover:text-primary transition-colors text-[10px]"
+                            title="Edit remark"
+                          >
+                            ✏️
+                          </button>
+                        )}
                         {canDeleteIssue(issue) && (
                           <button
                             onClick={() => handleRemoveIssue(issue.id)}
@@ -1490,7 +1559,35 @@ const CalendarIssuesCell = ({
                       </div>
                     </div>
 
-                    <p className="text-[11px] font-medium leading-relaxed">{issue.text}</p>
+                    {editingIssueId === issue.id ? (
+                      <div className="space-y-1.5 mt-1">
+                        <textarea
+                          value={editingIssueText}
+                          onChange={(e) => setEditingIssueText(e.target.value)}
+                          rows={2}
+                          className="w-full px-2 py-1 bg-background border border-primary/40 rounded-lg text-xs font-medium focus:outline-none resize-none"
+                          autoFocus
+                        />
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setEditingIssueId(null)}
+                            className="px-2 py-0.5 rounded text-[10px] bg-muted text-muted-foreground hover:bg-muted/80 cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSaveEditIssue(issue.id)}
+                            className="px-2 py-0.5 rounded text-[10px] bg-primary text-primary-foreground font-semibold hover:bg-primary/90 cursor-pointer"
+                          >
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] font-medium leading-relaxed">{issue.text}</p>
+                    )}
 
                     <div className="pt-1.5 border-t border-border/30 flex items-center justify-between gap-1 text-[10px]">
                       <span className="text-muted-foreground font-bold">Status:</span>
@@ -2322,14 +2419,17 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   const { user } = useAuth();
   const { employees } = useEmployeesContext();
 
-  // Admin & HR Access Check:
-  // Detects admin via user.role / system_role and HR via work_details.department, system_role, or designation
+  // Admin & HR & Operational Access Check:
+  // Detects admin via user.role / system_role and HR/Operational via department, role, or designation
   const isAdminOrHr = useMemo(() => {
     const uRole = String(user?.role || (user as any)?.system_role || (user as any)?.work_details?.system_role || "").toLowerCase().trim();
     const uDept = String(user?.department || (user as any)?.work_details?.department || "").toLowerCase().trim();
     const uDesig = String(user?.designation || (user as any)?.work_details?.designation || "").toLowerCase().trim();
 
-    if (uRole === "admin" || uRole === "superadmin" || uRole === "hr" || uDept === "hr" || uDesig.includes("hr")) {
+    if (
+      uRole === "admin" || uRole === "superadmin" || uRole === "hr" || uDept === "hr" || uDesig.includes("hr") ||
+      uDept.includes("operation") || uRole.includes("operation") || uDesig.includes("operation")
+    ) {
       return true;
     }
 
@@ -2349,7 +2449,10 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       const eDept = String(emp.department || (emp as any).work_details?.department || "").toLowerCase().trim();
       const eDesig = String(emp.designation || (emp as any).work_details?.designation || "").toLowerCase().trim();
 
-      if (eRole === "admin" || eRole === "superadmin" || eRole === "hr" || eDept === "hr" || eDesig.includes("hr")) {
+      if (
+        eRole === "admin" || eRole === "superadmin" || eRole === "hr" || eDept === "hr" || eDesig.includes("hr") ||
+        eDept.includes("operation") || eRole.includes("operation") || eDesig.includes("operation")
+      ) {
         return true;
       }
     }
@@ -8375,13 +8478,9 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                           const monthLabel = dynamicMonthsMap.get(itemMonth) || (itemMonth === "No Date" ? "Unscheduled Deliverables" : itemMonth);
                                           const monthItemsCount = filteredCalendar.filter(i => (i.postingDate && /^\d{4}-\d{2}/.test(i.postingDate) ? i.postingDate.slice(0, 7) : "No Date") === itemMonth).length;
                                           const isExpanded = expandedRowId === item.id;
-                                          const isRowLocked = item.status === "Approved" || item.status === "Published";
+                                          const isRowLocked = false;
 
                                           const saveInlineEdit = async (field: string, value: string) => {
-                                            if (isRowLocked && field !== 'status') {
-                                              toast.error("This row is locked (Approved/Published). Please change status to In Progress to edit.");
-                                              return;
-                                            }
 
                                             // Automatic status progression:
                                             let autoStatus: string | undefined = undefined;
@@ -8844,7 +8943,6 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                                             <div className="flex items-center gap-1.5">
                                                               <span className={cn("w-2 h-2 rounded-full", o === "Published" ? "bg-green-500" : o === "Approved" ? "bg-emerald-500" : o === "Pending Approval" ? "bg-purple-500" : o === "In Progress" ? "bg-blue-500" : "bg-amber-500")} />
                                                               <span>{o}</span>
-                                                              {(o === "Approved" || o === "Published") && <span className="text-[9px] text-muted-foreground ml-1">🔒</span>}
                                                             </div>
                                                             {item.status === o && <Check className="w-3.5 h-3.5 text-primary" />}
                                                           </DropdownMenuItem>

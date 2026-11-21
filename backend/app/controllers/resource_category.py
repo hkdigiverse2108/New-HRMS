@@ -24,7 +24,7 @@ async def create_resource_category(
 async def get_all_resource_categories(
     search: Optional[str] = Query(None, description="Search by category name or description"),
     page: int = Query(1, ge=1, description="Page number (default: 1)"),
-    limit: int = Query(10, ge=1, le=100, description="Items per page (default: 10)"),
+    limit: int = Query(10, ge=1, le=1000, description="Items per page (default: 10)"),
     current_user: dict = Depends(get_current_employee)
 ):
     """Get all resource categories with search and pagination (Requires 'read' permission)."""

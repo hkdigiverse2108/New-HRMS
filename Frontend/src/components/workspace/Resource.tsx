@@ -10,6 +10,7 @@ import {
   Image as ImageIcon,
   RefreshCw,
   Calendar as CalendarIcon,
+  ChevronLeft,
   ChevronRight,
   Pencil,
   Trash2,
@@ -191,6 +192,10 @@ export default function ResourceManagementPage() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
   useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, typeFilter, employeeFilter, searchTerm, itemsPerPage]);
+
+  useEffect(() => {
     if (isEmployeeOnly) {
       setActiveTab("registry");
     }
@@ -228,7 +233,7 @@ export default function ResourceManagementPage() {
   const fetchCategories = async () => {
     setCategoriesLoading(true);
     try {
-      const response = await api.get("/resource-categories?page=1&limit=100", { showLoader: false, showErrorToast: false });
+      const response = await api.get("/resource-categories?page=1&limit=500", { showLoader: false, showErrorToast: false });
       const rawCats = response?.items || response?.data || (Array.isArray(response) ? response : []);
       setCategories(rawCats.map((c: any) => ({
         id: c.id || c._id,
@@ -252,8 +257,8 @@ export default function ResourceManagementPage() {
     setInventoryLoading(true);
     try {
       const endpoint = isEmployeeOnly
-        ? "/resource-inventory/my-resources?page=1&limit=100"
-        : "/resource-inventory?page=1&limit=100";
+        ? "/resource-inventory/my-resources?page=1&limit=2000"
+        : "/resource-inventory?page=1&limit=2000";
       const response = await api.get(endpoint, { showLoader: false, showErrorToast: false });
       const rawItems = response?.items || response?.data || (Array.isArray(response) ? response : []);
       setInventoryItems(rawItems.map((item: any) => ({
@@ -706,8 +711,10 @@ export default function ResourceManagementPage() {
     ? rawResources.filter((r: any) => r.assignedTo && r.assignedTo.trim().toLowerCase() === currentUserName)
     : rawResources;
   const filteredResources = allResources.filter((res: any) => {
-    const matchStatus = statusFilter === "all" || res.status.toLowerCase() === statusFilter.toLowerCase();
-    const matchType = typeFilter === "all" || res.category === typeFilter;
+    const matchStatus = statusFilter === "all" || String(res.status || "").toLowerCase() === statusFilter.toLowerCase();
+    const matchType = typeFilter === "all" || 
+                      String(res.category || "").trim().toLowerCase() === String(typeFilter).trim().toLowerCase() ||
+                      String(res.categoryId || "") === String(typeFilter);
     const matchEmployee = isEmployeeOnly || employeeFilter === "all" || (res.assignedTo && res.assignedTo.trim().toLowerCase() === employeeFilter.trim().toLowerCase());
     const matchSearch = searchTerm === "" || 
                         res.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -718,10 +725,12 @@ export default function ResourceManagementPage() {
   
   const { items: sortedResources, requestSort: requestSortResources, sortConfig: sortConfigResources } = useSortableData(filteredResources);
 
-  const paginatedResources = sortedResources.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  const paginatedResources = itemsPerPage === -1
+    ? sortedResources
+    : sortedResources.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+      );
 
   // Calculate statistics using live backend dashboardData if present
   const totalAssetsCount = dashboardData?.total_assets ?? allResources.length;
@@ -1332,7 +1341,100 @@ export default function ResourceManagementPage() {
             </table>
           </div>
           
-          {/* Pagination stripped */}
+          {/* Pagination Controls */}
+          {filteredResources.length > 0 && (
+            <div className="p-4 border-t border-border flex flex-wrap items-center justify-between gap-4 bg-gray-50/50">
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                <span>
+                  Showing{" "}
+                  <strong className="text-foreground">
+                    {itemsPerPage === -1
+                      ? 1
+                      : Math.min((currentPage - 1) * itemsPerPage + 1, filteredResources.length)}
+                  </strong>{" "}
+                  to{" "}
+                  <strong className="text-foreground">
+                    {itemsPerPage === -1
+                      ? filteredResources.length
+                      : Math.min(currentPage * itemsPerPage, filteredResources.length)}
+                  </strong>{" "}
+                  of <strong className="text-foreground">{filteredResources.length}</strong> items
+                </span>
+                <span className="text-gray-300">|</span>
+                <div className="flex items-center gap-1.5">
+                  <span>Show</span>
+                  <select
+                    value={itemsPerPage}
+                    onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                    className="h-7 px-2 bg-white border border-border rounded text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-brand-teal"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value={-1}>All</option>
+                  </select>
+                  <span>per page</span>
+                </div>
+              </div>
+
+              {itemsPerPage !== -1 && Math.ceil(filteredResources.length / itemsPerPage) > 1 && (
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-8 p-0 bg-white"
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+
+                  {Array.from({ length: Math.ceil(filteredResources.length / itemsPerPage) }, (_, i) => i + 1)
+                    .filter((page) => {
+                      const totalPages = Math.ceil(filteredResources.length / itemsPerPage);
+                      return page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1;
+                    })
+                    .map((page, idx, arr) => {
+                      const prev = arr[idx - 1];
+                      return (
+                        <React.Fragment key={page}>
+                          {prev && page - prev > 1 && (
+                            <span className="px-1 text-xs text-muted-foreground">...</span>
+                          )}
+                          <Button
+                            variant={currentPage === page ? "default" : "outline"}
+                            size="sm"
+                            className={`h-8 w-8 p-0 text-xs ${
+                              currentPage === page
+                                ? "bg-brand-teal hover:bg-brand-teal-light text-white font-bold"
+                                : "bg-white text-muted-foreground hover:text-foreground"
+                            }`}
+                            onClick={() => setCurrentPage(page)}
+                          >
+                            {page}
+                          </Button>
+                        </React.Fragment>
+                      );
+                    })}
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-8 p-0 bg-white"
+                    disabled={currentPage === Math.ceil(filteredResources.length / itemsPerPage)}
+                    onClick={() =>
+                      setCurrentPage((p) =>
+                        Math.min(Math.ceil(filteredResources.length / itemsPerPage), p + 1)
+                      )
+                    }
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
