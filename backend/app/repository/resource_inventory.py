@@ -225,6 +225,29 @@ class ResourceInventoryRepository:
 
         update_payload: Dict[str, Any] = {"updated_at": datetime.utcnow()}
 
+        if "resource_id" in update_data and update_data["resource_id"]:
+            new_res_id = str(update_data["resource_id"]).strip()
+            if new_res_id:
+                update_payload["resource_id"] = new_res_id
+        elif "asset_id" in update_data and update_data["asset_id"]:
+            new_res_id = str(update_data["asset_id"]).strip()
+            if new_res_id:
+                update_payload["resource_id"] = new_res_id
+
+        if "category_name" in update_data and update_data["category_name"]:
+            update_payload["category_name"] = str(update_data["category_name"]).strip()
+        if "category_id" in update_data and update_data["category_id"]:
+            update_payload["category_id"] = str(update_data["category_id"]).strip()
+
+        if "serial_number" in update_data:
+            update_payload["serial_number"] = str(update_data.get("serial_number") or "").strip()
+
+        if "location" in update_data:
+            update_payload["location"] = str(update_data.get("location") or "").strip()
+
+        if "description" in update_data:
+            update_payload["description"] = str(update_data.get("description") or "").strip()
+
         if "condition" in update_data and update_data["condition"]:
             cond = str(update_data["condition"]).strip().title()
             if cond in ["New", "Good", "Fair", "Poor"]:

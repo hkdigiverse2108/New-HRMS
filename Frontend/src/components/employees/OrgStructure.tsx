@@ -11,6 +11,8 @@ import { toast } from "@/lib/toast";
 import { useEmployeesContext, type OrgChange } from "./EmployeeContext";
 import { useAuth } from "@/components/auth/AuthContext";
 import { useModulePermissions } from "@/hooks/useModulePermissions";
+import { getAvatarUrl, handleAvatarError } from "@/lib/config";
+import { getAppFavicon } from "@/lib/favicon";
 
 const PersonCard = ({
   person,
@@ -94,8 +96,9 @@ const PersonCard = ({
     <div className="flex flex-col items-center text-center">
       <div className="relative mb-3">
         <img
-          src={person.avatar}
+          src={isRoot ? (person.avatar || getAppFavicon()) : getAvatarUrl(person.avatar, person.name)}
           alt={person.name}
+          onError={handleAvatarError}
           className={cn(
             "pointer-events-none box-border",
             isRoot

@@ -225,6 +225,13 @@ class ResourceInventoryService:
             res_code = (updated_item or item).get("resource_id") or item_id
             cat_id = (updated_item or item).get("category_id")
 
+            # Log Asset ID change
+            if item.get("resource_id") != (updated_item or {}).get("resource_id"):
+                dt = f"Asset ID of item changed from '{item.get('resource_id')}' to '{(updated_item or {}).get('resource_id')}'."
+                await ResourceActivityLogRepository.log_activity("resource", item_id, "Asset ID Updated", dt, current_user)
+                if cat_id:
+                    await ResourceActivityLogRepository.log_activity("category", cat_id, "Asset ID Updated", dt, current_user)
+
             # Log Assignment change
             old_assigned = item.get("assigned_to")
             new_assigned = (updated_item or {}).get("assigned_to")

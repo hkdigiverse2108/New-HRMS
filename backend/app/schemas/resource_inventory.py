@@ -3,9 +3,19 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 class ResourceInventoryUpdate(BaseModel):
+    resource_id: Optional[str] = Field(None, description="Formatted Unique ID e.g. HK-PRI-001 or custom asset ID")
+    asset_id: Optional[str] = Field(None, description="Alias for resource_id")
     condition: Optional[str] = Field(None, description="Condition: New, Good, Fair, Poor")
     status: Optional[str] = Field(None, description="Status: Available, Allocated, Maintenance")
     assigned_to_employee_id: Optional[str] = Field(None, description="ID of employee to allocate resource to, or empty string to unassign")
+    assigned_to_name: Optional[str] = Field(None, description="Name of employee assigned to")
+    category_id: Optional[str] = Field(None, description="Category ID")
+    category_name: Optional[str] = Field(None, description="Category Name")
+    serial_number: Optional[str] = None
+    location: Optional[str] = None
+    description: Optional[str] = None
+
+    model_config = ConfigDict(extra="allow")
 
 class ResourceInventoryResponse(BaseModel):
     id: str = Field(alias="_id")
@@ -15,12 +25,15 @@ class ResourceInventoryResponse(BaseModel):
     condition: Optional[str] = "New"
     status: Optional[str] = "Available"
     assigned_to: Optional[Dict[str, Any]] = None
+    serial_number: Optional[str] = None
+    location: Optional[str] = None
+    description: Optional[str] = None
     created_by: Optional[Dict[str, Any]] = None
     is_deleted: Optional[bool] = False
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
 
 class ResourceInventoryPaginatedResponse(BaseModel):
     items: List[ResourceInventoryResponse]

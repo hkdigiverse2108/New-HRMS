@@ -250,5 +250,32 @@ class LeaveService:
             page=page,
             limit=limit
         )
+
+        # Enrich avatar if missing
+        missing_emp_ids = list({str(r["employee_id"]) for r in results if not r.get("avatar") and r.get("employee_id")})
+        if missing_emp_ids:
+            try:
+                from bson import ObjectId
+                from app.database.db import get_database
+                db = get_database()
+                emp_docs = await db["employees"].find(
+                    {"$or": [
+                        {"_id": {"$in": [ObjectId(eid) for eid in missing_emp_ids if ObjectId.is_valid(eid)]}},
+                        {"employee_id": {"$in": missing_emp_ids}}
+                    ]},
+                    {"profile_photo": 1, "personal_info.profile_photo": 1, "avatar": 1, "employee_id": 1}
+                ).to_list(len(missing_emp_ids) * 2)
+                photo_map = {}
+                for edoc in emp_docs:
+                    pic = edoc.get("profile_photo") or edoc.get("personal_info", {}).get("profile_photo") or edoc.get("avatar") or ""
+                    photo_map[str(edoc["_id"])] = pic
+                    if edoc.get("employee_id"):
+                        photo_map[str(edoc["employee_id"])] = pic
+                for r in results:
+                    if not r.get("avatar"):
+                        r["avatar"] = photo_map.get(str(r.get("employee_id")), "")
+            except Exception:
+                pass
+
         await set_cache(cache_key, results, ttl=300)
         return results

@@ -21,6 +21,7 @@ import { toast } from "@/lib/toast";
 import { isUserAdmin, hasModulePermission } from "@/lib/permissions";
 import { DatePicker } from "@/components/ui/date-picker";
 import { SearchableSelect } from "@/components/ui/select";
+import { getAvatarUrl, handleAvatarError } from "@/lib/config";
 
 type AttendanceStatus = "Present" | "Absent" | "Late" | "Half Day" | "On Leave" | "Company Leave" | "Holiday";
 
@@ -357,13 +358,20 @@ export function AttendanceList() {
             statusText = (rawStatus as AttendanceStatus) || "Present";
           }
 
+          const emp = employees.find(e =>
+            (item.employee_id && (String(e.id) === String(item.employee_id) || String(e.employeeId) === String(item.employee_id))) ||
+            (item.employee_name && e.name.trim().toLowerCase() === String(item.employee_name).trim().toLowerCase())
+          );
+          const rawAvatar = item.avatar || (item as any).profile_photo || emp?.avatar || emp?.profile_photo;
+          const avatarUrl = getAvatarUrl(rawAvatar, item.employee_name || emp?.name || "Employee");
+
           return {
             id: item.id || `${item.employee_id}-${item.date}`,
             employeeId: item.employee_id || "",
-            employeeName: item.employee_name || "Employee", 
-            role: item.role || "Staff",
-            department: item.department || "General",
-            avatar: item.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.employee_name || "E")}&background=random`,
+            employeeName: item.employee_name || emp?.name || "Employee", 
+            role: item.role || emp?.role || "Staff",
+            department: item.department || emp?.department || "General",
+            avatar: avatarUrl,
             date: item.date || "",
             status: statusText,
             checkIn: item.check_in && item.check_in !== "--" ? formatISTTime(item.check_in) : null,
@@ -857,8 +865,9 @@ export function AttendanceList() {
                         <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
                           <div className="flex items-center gap-3">
                             <img
-                              src={record.avatar}
+                              src={getAvatarUrl(record.avatar, record.employeeName)}
                               alt={record.employeeName}
+                              onError={handleAvatarError}
                               className="w-10 h-10 rounded-full object-cover border border-border shrink-0"
                             />
                             <div className="min-w-0">
@@ -985,8 +994,9 @@ export function AttendanceList() {
               <>
                 <div className="flex items-center gap-4 mb-6 pb-4 border-b border-border/50">
                   <img
-                    src={selectedRecord.avatar}
+                    src={getAvatarUrl(selectedRecord.avatar, selectedRecord.employeeName)}
                     alt={selectedRecord.employeeName}
+                    onError={handleAvatarError}
                     className="w-12 h-12 rounded-full border border-border object-cover"
                   />
                   <div>
@@ -1208,8 +1218,9 @@ export function AttendanceList() {
                                   {isSelected && <Check className="w-3 h-3" />}
                                 </div>
                                 <img
-                                  src={emp.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(emp.name)}&background=random`}
+                                  src={getAvatarUrl(emp.avatar || emp.profile_photo, emp.name)}
                                   alt={emp.name}
+                                  onError={handleAvatarError}
                                   className="w-6 h-6 rounded-full object-cover shrink-0 border border-border"
                                 />
                                 <div className="min-w-0">

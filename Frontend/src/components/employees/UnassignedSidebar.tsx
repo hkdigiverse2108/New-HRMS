@@ -3,6 +3,7 @@ import { Users, GripVertical, ChevronRight, ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEmployeesContext } from "./EmployeeContext";
 import { OrgNodeData } from "./org-data";
+import { getAvatarUrl, handleAvatarError } from "@/lib/config";
 
 export function UnassignedSidebar() {
   const [isOpen, setIsOpen] = useState(() => typeof window === "undefined" || window.innerWidth >= 1024);
@@ -69,8 +70,9 @@ export function UnassignedSidebar() {
                   <GripVertical className="w-4 h-4" />
                 </div>
                 <img 
-                  src={emp.avatar || `https://ui-avatars.com/api/?background=random&name=${encodeURIComponent(emp.name)}`} 
+                  src={getAvatarUrl(emp.avatar || (emp as any).profile_photo, emp.name)} 
                   alt={emp.name} 
+                  onError={handleAvatarError}
                   className="w-10 h-10 rounded-full object-cover border border-border/50 pointer-events-none" 
                 />
                 <div className="min-w-0">

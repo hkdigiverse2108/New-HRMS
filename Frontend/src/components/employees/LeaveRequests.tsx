@@ -15,6 +15,8 @@ import { SearchInput } from "@/components/common/SearchInput";
 import { formatISTDate, formatAppliedOnIST } from "@/lib/timeUtils";
 import { api } from "@/lib/api";
 import { hasModulePermission, isUserAdmin } from "@/lib/permissions";
+import { getAvatarUrl, handleAvatarError } from "@/lib/config";
+import { useEmployeesContext } from "./EmployeeContext";
 
 const getMediaUrl = (url?: string | null): string => {
   if (!url) return "";
@@ -187,6 +189,7 @@ const getLeaveTypeIcon = (type: string) => {
 export function LeaveRequests({ isNew }: { isNew?: boolean }) {
   const { leaveTypes } = useSettingsContext();
   const { user } = useAuth();
+  const { employees } = useEmployeesContext();
 
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -293,26 +296,35 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
         });
 
         if (Array.isArray(data)) {
-          const mapped: LeaveRequest[] = data.map((item) => ({
-            id: item.id || `LR-${Math.random()}`,
-            employeeId: item.employee_id || "",
-            employeeName: item.employee_name || "Employee",
-            avatar: item.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.employee_name || "E")}&background=random`,
-            role: item.role || "Staff",
-            department: item.department || "General",
-            type: item.leave_type || "Sick Leave",
-            dayType: (item.day_type as DayType) || "Full Day",
-            startDate: item.start_date || "",
-            endDate: item.end_date || "",
-            durationDays: item.duration_days ?? 1,
-            reason: item.reason || "",
-            status: (item.status as LeaveStatus) || tabStatus,
-            appliedOn: item.applied_on ? item.applied_on.split("T")[0] : "",
-            createdAt: item.created_at || item.applied_on || "",
-            isConditional: item.day_type === "First Half" || item.day_type === "Second Half",
-            rejectionReason: item.rejection_reason || undefined,
-            attachment: item.attachment || undefined,
-          }));
+          const mapped: LeaveRequest[] = data.map((item) => {
+            const emp = employees.find(e =>
+              (item.employee_id && (String(e.id) === String(item.employee_id) || String(e.employeeId) === String(item.employee_id))) ||
+              (item.employee_name && e.name.trim().toLowerCase() === String(item.employee_name).trim().toLowerCase())
+            );
+            const rawAvatar = item.avatar || (item as any).profile_photo || emp?.avatar || emp?.profile_photo;
+            const avatarUrl = getAvatarUrl(rawAvatar, item.employee_name || emp?.name || "Employee");
+
+            return {
+              id: item.id || `LR-${Math.random()}`,
+              employeeId: item.employee_id || "",
+              employeeName: item.employee_name || emp?.name || "Employee",
+              avatar: avatarUrl,
+              role: item.role || emp?.role || "Staff",
+              department: item.department || emp?.department || "General",
+              type: item.leave_type || "Sick Leave",
+              dayType: (item.day_type as DayType) || "Full Day",
+              startDate: item.start_date || "",
+              endDate: item.end_date || "",
+              durationDays: item.duration_days ?? 1,
+              reason: item.reason || "",
+              status: (item.status as LeaveStatus) || tabStatus,
+              appliedOn: item.applied_on ? item.applied_on.split("T")[0] : "",
+              createdAt: item.created_at || item.applied_on || "",
+              isConditional: item.day_type === "First Half" || item.day_type === "Second Half",
+              rejectionReason: item.rejection_reason || undefined,
+              attachment: item.attachment || undefined,
+            };
+          });
           setRequests(mapped);
           if (tabStatus === "Pending") {
             setPendingCount(mapped.length);
@@ -577,12 +589,14 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
       fetchPendingCount();
     } catch (err: any) {
       // Fallback optimistic addition
-      const targetEmp = isStrictAdmin ? employeeOptions.find((e) => e.id === selectedEmployeeId) : null;
+      const targetEmp = isStrictAdmin ? employees.find((e) => e.id === selectedEmployeeId) : null;
+      const targetPhoto = isStrictAdmin && targetEmp ? (targetEmp.avatar || targetEmp.profile_photo) : (user?.avatar || (user as any)?.profile_photo);
+      const targetAvatar = getAvatarUrl(targetPhoto, (isStrictAdmin && targetEmp?.name) || user?.name || "E");
       const optimistic: LeaveRequest = {
         id: `LR-${Math.random().toString(36).substr(2, 9)}`,
         employeeId: (isStrictAdmin ? selectedEmployeeId : user?.id) || user?.id || "EMP-CURRENT",
         employeeName: (isStrictAdmin && targetEmp?.name) ? targetEmp.name : (user?.name || "Current User"),
-        avatar: user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent((isStrictAdmin && targetEmp?.name) || user?.name || "E")}&background=random`,
+        avatar: targetAvatar,
         role: (isStrictAdmin && targetEmp?.role) ? targetEmp.role : (user?.role || "Software Engineer"),
         department: (isStrictAdmin && targetEmp?.department) ? targetEmp.department : (user?.department || "Engineering"),
         type: newLeaveType,
@@ -967,8 +981,9 @@ export function LeaveRequests({ isNew }: { isNew?: boolean }) {
                   <div className="flex flex-wrap justify-between items-start gap-2 mb-4">
                     <div className="flex items-center gap-3 min-w-0">
                       <img
-                        src={request.avatar}
+                        src={getAvatarUrl(request.avatar, request.employeeName)}
                         alt={request.employeeName}
+                        onError={handleAvatarError}
                         className="w-11 h-11 rounded-full object-cover border border-border shadow-sm shrink-0"
                       />
                       <div className="min-w-0">

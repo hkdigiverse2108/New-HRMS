@@ -298,12 +298,13 @@ class AttendanceService:
             if emp:
                 personal = emp.get("personal_info", {})
                 work = emp.get("work_details", {})
-                name = f"{personal.get('first_name', '')} {personal.get('last_name', '')}".strip() or "Employee"
+                name = f"{personal.get('first_name', '')} {personal.get('last_name', '')}".strip() or emp.get("name") or "Employee"
+                photo = emp.get("profile_photo") or personal.get("profile_photo") or emp.get("avatar") or personal.get("avatar") or ""
                 return {
                     "name": name,
                     "role": work.get("designation", "Staff"),
                     "department": work.get("department", "General"),
-                    "avatar": personal.get("profile_photo", "") or personal.get("avatar", ""),
+                    "avatar": photo,
                     "actively_using_hrms": work.get("actively_using_hrms", True)
                 }
         except Exception:
@@ -1168,6 +1169,32 @@ class AttendanceService:
             if r.get("date") == today_str and r.get("status") in ("Active", "Late", "On Break"):
                 live_times = calculate_live_work_and_break_seconds(r)
                 r.update(live_times)
+
+        # Enrich avatar if missing
+        missing_emp_ids = list({str(r["employee_id"]) for r in records if not r.get("avatar") and r.get("employee_id")})
+        if missing_emp_ids:
+            try:
+                from bson import ObjectId
+                from app.database.db import get_database
+                db = get_database()
+                emp_docs = await db["employees"].find(
+                    {"$or": [
+                        {"_id": {"$in": [ObjectId(eid) for eid in missing_emp_ids if ObjectId.is_valid(eid)]}},
+                        {"employee_id": {"$in": missing_emp_ids}}
+                    ]},
+                    {"profile_photo": 1, "personal_info.profile_photo": 1, "avatar": 1, "employee_id": 1}
+                ).to_list(len(missing_emp_ids) * 2)
+                photo_map = {}
+                for edoc in emp_docs:
+                    pic = edoc.get("profile_photo") or edoc.get("personal_info", {}).get("profile_photo") or edoc.get("avatar") or ""
+                    photo_map[str(edoc["_id"])] = pic
+                    if edoc.get("employee_id"):
+                        photo_map[str(edoc["employee_id"])] = pic
+                for r in records:
+                    if not r.get("avatar"):
+                        r["avatar"] = photo_map.get(str(r.get("employee_id")), "")
+            except Exception:
+                pass
 
         await set_cache(cache_key, records, ttl=300)
         return records

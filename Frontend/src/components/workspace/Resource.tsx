@@ -427,7 +427,20 @@ export default function ResourceManagementPage() {
 
     try {
       const payload: any = {};
-      if (field === "assignedTo") {
+      if (field === "assetId" || field === "resource_id") {
+        const cleanId = String(value || "").trim();
+        if (!cleanId) {
+          toast.error("Asset ID cannot be empty");
+          setEditingCell(null);
+          return;
+        }
+        payload.resource_id = cleanId;
+        payload.asset_id = cleanId;
+      } else if (field === "category") {
+        const cat = categories.find(c => c.name === value);
+        payload.category_name = value;
+        if (cat?.id) payload.category_id = cat.id;
+      } else if (field === "assignedTo") {
         if (value && value !== "unassigned") {
           const emp = realEmployees.find((e: any) => e.name === value || e.displayName === value || e.id === value);
           payload.assigned_to_name = emp ? emp.name : value;
@@ -530,7 +543,10 @@ export default function ResourceManagementPage() {
     setIsSaving(true);
     try {
       if (editingId) {
+        const cleanAssetId = (formData.assetId || "").trim();
         const payload: any = {
+          resource_id: cleanAssetId,
+          asset_id: cleanAssetId,
           condition: formData.condition,
           status: formData.status,
           location: formData.location,

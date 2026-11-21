@@ -4,6 +4,7 @@ import { EMPLOYEES, Employee } from './employee-data';
 import { OrgNodeData, ORG_ROOT_ID } from './org-data';
 import { api } from '@/lib/api';
 import { getAppFavicon } from "@/lib/favicon";
+import { getAvatarUrl } from "@/lib/config";
 import { toast } from "@/lib/toast";
 
 interface EmployeeContextType {
@@ -292,7 +293,7 @@ export function EmployeeProvider({ children }: { children: React.ReactNode }) {
       name: e.name,
       role: e.designation || e.role,
       department: e.department,
-      avatar: e.avatar || `https://ui-avatars.com/api/?background=random&name=${encodeURIComponent(e.name)}`,
+      avatar: getAvatarUrl(e.avatar || (e as any).profile_photo, e.name),
       status: "Active",
     });
     const visited = new Set<string>();
