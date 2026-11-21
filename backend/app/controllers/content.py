@@ -1,6 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import Optional, List
 from datetime import datetime, timedelta
+import asyncio
+import re
+import urllib.request
 from bson import ObjectId
 from app.repository.project import ProjectRepository
 from app.repository.content import ContentRepository
@@ -321,6 +324,26 @@ async def delete_content_item(
 # -------------------------------------------------------------
 # Public Client Review Router (Magic Link for Clients - No Login Required)
 # -------------------------------------------------------------
+_DRIVE_FOLDER_CACHE = {}
+
+def _fetch_folder_file_ids_sync(folder_id: str) -> list:
+    if folder_id in _DRIVE_FOLDER_CACHE:
+        return _DRIVE_FOLDER_CACHE[folder_id]
+    try:
+        embed_url = f"https://drive.google.com/embeddedfolderview?id={folder_id}#grid"
+        req = urllib.request.Request(embed_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+        html = urllib.request.urlopen(req, timeout=5).read().decode('utf-8', errors='ignore')
+        raw_ids = (
+            re.findall(r'id=([a-zA-Z0-9_-]{25,45})', html) +
+            re.findall(r'/file/d/([a-zA-Z0-9_-]{25,45})', html)
+        )
+        ids = [x for x in dict.fromkeys(raw_ids) if x != folder_id]
+        _DRIVE_FOLDER_CACHE[folder_id] = ids
+        return ids
+    except Exception as e:
+        print(f"Error fetching drive folder {folder_id}: {e}")
+        return []
+
 public_router = APIRouter(prefix="/public/content-review", tags=["Public Client Content Review"])
 
 @public_router.get("/{project_id}")
@@ -378,6 +401,33 @@ async def get_public_content_review(
     cleaned_items = []
     for itm in filtered_items:
         s_date = str(itm.get("schedule_date") or "").split("T")[0]
+        
+        # Robust reference resolution (check reference_link, reference, reference_text)
+        raw_ref = str(itm.get("reference_link") or itm.get("reference") or itm.get("reference_text") or "").strip()
+        if raw_ref in ["-", "--", "None", "null", "Not Required", "N/A", "not required", "none", "Done", "done"]:
+            raw_ref = ""
+        
+        # Topic description / notes
+        topic_desc = str(itm.get("topic_description") or "").strip()
+        if topic_desc in ["-", "--", "None", "null", "Not Required", "N/A", "none"]:
+            topic_desc = ""
+
+        # Carousel / multi-image links
+        raw_carousel = itm.get("carousel_images") or itm.get("images") or itm.get("media") or itm.get("files") or itm.get("carousel") or []
+        if isinstance(raw_carousel, str):
+            raw_carousel = [u.strip() for u in raw_carousel.split() if u.strip().startswith("http") or u.strip().startswith("/")]
+        elif not isinstance(raw_carousel, list):
+            raw_carousel = []
+
+        # Check for Google Drive folder link in any media field and resolve file IDs inside it
+        combined_links = " ".join([str(v) for v in [itm.get("editing"), itm.get("final_post_link"), itm.get("final_reel_link"), itm.get("thumbnail"), itm.get("carousel_images")]])
+        folder_matches = re.findall(r'drive\.google\.com/drive/folders/([a-zA-Z0-9_-]+)', combined_links)
+        for folder_id in dict.fromkeys(folder_matches):
+            folder_file_ids = await asyncio.to_thread(_fetch_folder_file_ids_sync, folder_id)
+            if folder_file_ids:
+                folder_urls = [f"https://drive.google.com/file/d/{fid}/view" for fid in folder_file_ids]
+                raw_carousel = folder_urls + [u for u in raw_carousel if u not in folder_urls]
+
         cleaned_items.append({
             "id": str(itm.get("_id")),
             "topic": itm.get("topic_title") or "Untitled",
@@ -385,7 +435,8 @@ async def get_public_content_review(
             "posting_date": s_date,
             "status": itm.get("approval_status") or "To Do",
             "caption": itm.get("caption_text") or "",
-            "reference_link": itm.get("reference_link") or "",
+            "reference_link": raw_ref,
+            "topic_description": topic_desc,
             "final_post_link": itm.get("final_post_link") or "",
             "final_reel_link": itm.get("final_reel_link") or "",
             "instagram_link": itm.get("instagram_link") or "",
@@ -393,6 +444,7 @@ async def get_public_content_review(
             "script": itm.get("script") or {},
             "editing": itm.get("editing") or {},
             "shoot": itm.get("shoot") or {},
+            "carousel_images": raw_carousel,
             "issues": itm.get("issues") or [],
             "remark": itm.get("remark") or ""
         })

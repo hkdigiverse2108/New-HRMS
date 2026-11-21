@@ -22,7 +22,10 @@ import {
   X,
   Eye,
   Filter,
-  Link2
+  Link2,
+  Folder,
+  Instagram,
+  Play
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getApiUrl, getMediaUrl as resolveMediaUrl } from "@/lib/config";
@@ -35,6 +38,7 @@ interface ClientReviewItem {
   status: string;
   caption: string;
   reference_link: string;
+  topic_description?: string;
   final_post_link: string;
   final_reel_link: string;
   instagram_link: string;
@@ -42,6 +46,7 @@ interface ClientReviewItem {
   script?: any;
   editing?: any;
   shoot?: any;
+  carousel_images?: string[];
   issues?: any[];
   remark?: string;
 }
@@ -53,6 +58,493 @@ interface ProjectSummary {
   company_name: string;
   category: string;
   status: string;
+}
+
+interface MediaAsset {
+  id: string;
+  kind: "image" | "video" | "gdrive_file" | "gdrive_folder" | "instagram" | "youtube" | "link";
+  url: string;
+  fileId?: string | undefined;
+  folderId?: string | undefined;
+  shortcode?: string | undefined;
+  videoId?: string | undefined;
+}
+
+// Extract and parse all media links for an item
+const extractMediaAssets = (item: ClientReviewItem): MediaAsset[] => {
+  const rawList: string[] = [];
+
+  const addCandidate = (val: any) => {
+    if (!val) return;
+    if (typeof val === "string") {
+      const tokens = val.split(/[\s,]+/);
+      for (const t of tokens) {
+        const clean = t.trim().replace(/^['"]|['"]$/g, "");
+        if (
+          clean &&
+          clean !== "-" &&
+          clean !== "--" &&
+          clean !== "None" &&
+          clean !== "null" &&
+          clean !== "Not Required" &&
+          clean !== "not required" &&
+          clean !== "Done" &&
+          clean !== "done"
+        ) {
+          if (clean.startsWith("http://") || clean.startsWith("https://") || clean.startsWith("/uploads/") || clean.startsWith("/")) {
+            rawList.push(clean);
+          }
+        }
+      }
+    } else if (typeof val === "object") {
+      if (val.link && typeof val.link === "string") {
+        addCandidate(val.link);
+      }
+      if (Array.isArray(val)) {
+        val.forEach(addCandidate);
+      }
+    }
+  };
+
+  // 1. Carousel / multiple images (including Drive folder images resolved by backend)
+  if (item.carousel_images && Array.isArray(item.carousel_images) && item.carousel_images.length > 0) {
+    addCandidate(item.carousel_images);
+  }
+
+  // 2. Editing link (often holds final videos or designs or multiple drive links)
+  addCandidate(item.editing);
+
+  // 3. Final links
+  addCandidate(item.final_reel_link);
+  addCandidate(item.final_post_link);
+
+  // 4. Thumbnail link
+  addCandidate(item.thumbnail);
+
+  // NOTE: Do NOT add reference_link or instagram_link to deliverable media assets!
+  // Reference belongs strictly in the reference section below caption.
+
+  // Deduplicate URLs while preserving order
+  let uniqueUrls: string[] = [];
+  for (const u of rawList) {
+    if (!uniqueUrls.includes(u)) {
+      uniqueUrls.push(u);
+    }
+  }
+
+  // If we already resolved individual files from a Google Drive folder, remove the raw folder URL from slides
+  const hasResolvedDriveFiles = uniqueUrls.some(u => u.includes("drive.google.com/file/d/"));
+  if (hasResolvedDriveFiles) {
+    uniqueUrls = uniqueUrls.filter(u => !u.includes("drive.google.com/drive/folders/"));
+  }
+
+  return uniqueUrls.map((rawUrl, idx) => {
+    const url = resolveMediaUrl(rawUrl);
+
+    // Google Drive Folder
+    const folderMatch = rawUrl.match(/drive\.google\.com\/drive\/folders\/([a-zA-Z0-9_-]+)/i);
+    const folderId = folderMatch?.[1];
+    if (folderMatch && folderId) {
+      return {
+        id: `asset-${idx}-${folderId}`,
+        kind: "gdrive_folder",
+        url: rawUrl,
+        folderId
+      };
+    }
+
+    // Google Drive File
+    const fileMatch = rawUrl.match(/drive\.google\.com\/(?:file\/d\/|open\?id=)([a-zA-Z0-9_-]+)/i);
+    const fileId = fileMatch?.[1];
+    if (fileMatch && fileId) {
+      return {
+        id: `asset-${idx}-${fileId}`,
+        kind: "gdrive_file",
+        url: rawUrl,
+        fileId
+      };
+    }
+
+    // Instagram
+    const igMatch = rawUrl.match(/instagram\.com\/(?:p|reel|reels)\/([a-zA-Z0-9_-]+)/i);
+    const shortcode = igMatch?.[1];
+    if (igMatch && shortcode) {
+      return {
+        id: `asset-${idx}-${shortcode}`,
+        kind: "instagram",
+        url: rawUrl,
+        shortcode
+      };
+    }
+
+    // YouTube
+    const ytMatch = rawUrl.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]+)/i);
+    const videoId = ytMatch?.[1];
+    if (ytMatch && videoId) {
+      return {
+        id: `asset-${idx}-${videoId}`,
+        kind: "youtube",
+        url: rawUrl,
+        videoId
+      };
+    }
+
+    // Direct Video
+    if (rawUrl.match(/\.(mp4|mov|webm|m4v)($|\?)/i) || (item.type === "Reel" && !rawUrl.match(/\.(jpg|jpeg|png|webp|gif)($|\?)/i))) {
+      return {
+        id: `asset-${idx}`,
+        kind: "video",
+        url
+      };
+    }
+
+    // Direct Image
+    if (rawUrl.match(/\.(jpeg|jpg|gif|png|webp|svg)($|\?)/i) || rawUrl.includes("/uploads/")) {
+      return {
+        id: `asset-${idx}`,
+        kind: "image",
+        url
+      };
+    }
+
+    return {
+      id: `asset-${idx}`,
+      kind: "link",
+      url: rawUrl
+    };
+  });
+};
+
+// Component to handle Google Drive image vs preview iframe
+function GDriveMediaViewer({
+  fileId,
+  isReel,
+  topic
+}: {
+  fileId: string;
+  isReel: boolean;
+  topic: string;
+}) {
+  const [imgError, setImgError] = useState(false);
+
+  // If it's a Reel, embed the preview iframe directly (it provides the full Google video player)
+  if (isReel) {
+    return (
+      <iframe
+        src={`https://drive.google.com/file/d/${fileId}/preview`}
+        className="w-full h-full border-0 bg-black"
+        allow="autoplay; encrypted-media"
+        allowFullScreen
+        title={topic}
+      />
+    );
+  }
+
+  // If it's a Post or Story, directly render Google Drive high-resolution thumbnail image
+  // with referrerPolicy="no-referrer" to display full visual cleanly without zoom/control bars
+  if (!imgError) {
+    return (
+      <img
+        src={`https://drive.google.com/thumbnail?id=${fileId}&sz=w1600`}
+        referrerPolicy="no-referrer"
+        alt={topic}
+        onError={() => setImgError(true)}
+        className="w-full h-full object-contain"
+      />
+    );
+  }
+
+  return (
+    <iframe
+      src={`https://drive.google.com/file/d/${fileId}/preview`}
+      className="w-full h-full border-0 bg-black"
+      allow="autoplay; encrypted-media"
+      allowFullScreen
+      title={topic}
+    />
+  );
+}
+
+// Media Gallery Component for Deliverables
+function DeliverableMediaGallery({
+  item,
+  assets,
+  onOpenPreview
+}: {
+  item: ClientReviewItem;
+  assets: MediaAsset[];
+  onOpenPreview: () => void;
+}) {
+  const [activeIdx, setActiveIdx] = useState(0);
+
+  if (assets.length === 0) {
+    return (
+      <div className="relative w-full h-[260px] bg-slate-100 dark:bg-slate-800 flex flex-col items-center justify-center text-slate-400 gap-1.5 border-b border-slate-100 dark:border-slate-800">
+        <ImageIcon className="w-8 h-8 opacity-40" />
+        <span className="text-[11px] font-semibold">Visual In Production</span>
+      </div>
+    );
+  }
+
+  const currentAsset = assets[Math.min(activeIdx, assets.length - 1)];
+  if (!currentAsset) return null;
+
+  return (
+    <div className="relative w-full h-[380px] sm:h-[430px] bg-slate-950 flex items-center justify-center overflow-hidden border-b border-slate-100 dark:border-slate-800 group">
+      {/* Current Asset Display */}
+      {currentAsset.kind === "video" && (
+        <video
+          controls
+          playsInline
+          preload="metadata"
+          src={currentAsset.url}
+          className="w-full h-full object-contain bg-black"
+        />
+      )}
+
+      {currentAsset.kind === "image" && (
+        <img
+          src={currentAsset.url}
+          referrerPolicy="no-referrer"
+          alt={item.topic}
+          className="w-full h-full object-contain hover:scale-105 transition-transform duration-300 cursor-pointer"
+          onClick={onOpenPreview}
+        />
+      )}
+
+      {currentAsset.kind === "gdrive_file" && currentAsset.fileId && (
+        <GDriveMediaViewer
+          fileId={currentAsset.fileId}
+          isReel={item.type === "Reel"}
+          topic={item.topic}
+        />
+      )}
+
+      {currentAsset.kind === "gdrive_folder" && (
+        <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-gradient-to-br from-slate-800 to-slate-900 text-center relative text-white">
+          <div className="w-12 h-12 rounded-2xl bg-primary/20 border border-primary/30 flex items-center justify-center text-primary mb-2 shadow-xs group-hover:scale-110 transition-transform">
+            <Folder className="w-6 h-6" />
+          </div>
+          <span className="text-xs font-black tracking-wide">
+            Google Drive Deliverables Folder
+          </span>
+          <p className="text-[10px] text-slate-400 max-w-xs mt-0.5 line-clamp-1">
+            Raw files, creative edits & assets
+          </p>
+          <a
+            href={currentAsset.url}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="mt-2.5 px-3 py-1.5 bg-primary hover:bg-primary/90 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+          >
+            <span>Open Folder in Drive</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        </div>
+      )}
+
+      {currentAsset.kind === "instagram" && (
+        <iframe
+          src={`https://www.instagram.com/p/${currentAsset.shortcode}/embed/captioned/`}
+          className="w-full h-full border-0 bg-white"
+          allowFullScreen
+          title={item.topic}
+        />
+      )}
+
+      {currentAsset.kind === "youtube" && (
+        <iframe
+          src={`https://www.youtube.com/embed/${currentAsset.videoId}`}
+          className="w-full h-full border-0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+          title={item.topic}
+        />
+      )}
+
+      {currentAsset.kind === "link" && (
+        <a
+          href={currentAsset.url}
+          target="_blank"
+          rel="noreferrer"
+          className="flex flex-col items-center gap-2 p-4 text-center group cursor-pointer text-white"
+        >
+          <div className="w-12 h-12 rounded-2xl bg-primary/20 border border-primary/30 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+            <ExternalLink className="w-6 h-6" />
+          </div>
+          <span className="text-xs font-bold text-white group-hover:underline flex items-center gap-1">
+            View Deliverable File <ExternalLink className="w-3 h-3" />
+          </span>
+        </a>
+      )}
+
+      {/* Multiple Assets Navigation (Gallery Carousel) */}
+      {assets.length > 1 && (
+        <>
+          {/* Slide Indicator Badge */}
+          <div className="absolute top-3 left-3 z-20 pointer-events-none">
+            <span className="px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-wider shadow-sm flex items-center gap-1 border border-white/10">
+              <Layers className="w-3 h-3 text-primary" />
+              {activeIdx + 1} / {assets.length} Slides
+            </span>
+          </div>
+
+          {/* Left / Right Arrow Buttons */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setActiveIdx(prev => (prev === 0 ? assets.length - 1 : prev - 1));
+            }}
+            className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-black/70 hover:bg-black text-white flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 shadow-lg cursor-pointer"
+            title="Previous slide"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setActiveIdx(prev => (prev === assets.length - 1 ? 0 : prev + 1));
+            }}
+            className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-black/70 hover:bg-black text-white flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 shadow-lg cursor-pointer"
+            title="Next slide"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+
+          {/* Bottom Dots Indicator */}
+          <div className="absolute bottom-2 inset-x-0 z-20 flex items-center justify-center gap-1.5 pointer-events-auto">
+            {assets.map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveIdx(i);
+                }}
+                className={cn(
+                  "h-1.5 rounded-full transition-all cursor-pointer",
+                  activeIdx === i ? "w-5 bg-primary" : "w-1.5 bg-white/60 hover:bg-white"
+                )}
+                title={`Go to slide ${i + 1}`}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Render Reference Link & Notes Section
+function ReferenceSection({
+  item,
+  onCopyRef,
+  copiedRefId
+}: {
+  item: ClientReviewItem;
+  onCopyRef: (link: string, id: string) => void;
+  copiedRefId: string | null;
+}) {
+  const ref = (item.reference_link || "").trim();
+  const desc = (item.topic_description || "").trim();
+
+  if (!ref && !desc) return null;
+
+  const isUrl = ref.startsWith("http://") || ref.startsWith("https://");
+  const isInstagram = isUrl && (ref.includes("instagram.com/p/") || ref.includes("instagram.com/reel/") || ref.includes("instagram.com/reels/"));
+  const isPinterest = isUrl && (ref.includes("pinterest.com"));
+  const isDrive = isUrl && (ref.includes("drive.google.com"));
+
+  return (
+    <div className="space-y-2">
+      {/* If it's a URL */}
+      {isUrl && (
+        <div className="space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider flex items-center gap-1.5">
+              {isInstagram ? (
+                <>
+                  <Instagram className="w-3 h-3 text-pink-500" /> Instagram Reference
+                </>
+              ) : isPinterest ? (
+                <>
+                  <Link2 className="w-3 h-3 text-red-500" /> Pinterest Inspiration
+                </>
+              ) : isDrive ? (
+                <>
+                  <Folder className="w-3 h-3 text-blue-500" /> Google Drive Reference
+                </>
+              ) : (
+                <>
+                  <Link2 className="w-3 h-3 text-primary" /> Reference / Inspiration Link
+                </>
+              )}
+            </span>
+            <span className="text-[10px] text-slate-400 font-semibold">Click to preview</span>
+          </div>
+
+          <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700/70 flex items-center justify-between gap-2 shadow-2xs hover:border-primary/40 transition-colors">
+            <a
+              href={ref}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs font-semibold text-slate-700 dark:text-slate-200 hover:text-primary dark:hover:text-primary transition-colors truncate flex-1 flex items-center gap-1.5"
+              title={ref}
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-primary shrink-0" />
+              <span className="truncate">{ref}</span>
+            </a>
+            <button
+              type="button"
+              onClick={() => onCopyRef(ref, item.id)}
+              className="p-1.5 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-500 hover:text-slate-900 dark:hover:text-white shadow-2xs transition-all cursor-pointer flex items-center gap-1 shrink-0 text-[10px] font-bold"
+              title="Copy link"
+            >
+              {copiedRefId === item.id ? (
+                <>
+                  <Check className="w-3 h-3 text-emerald-500" />
+                  <span className="text-emerald-500 text-[10px]">Copied</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3 h-3" />
+                  <span className="text-[10px]">Copy</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* If reference is plain text (not a URL) */}
+      {!isUrl && ref && (
+        <div className="space-y-1">
+          <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider flex items-center gap-1">
+            <Sparkles className="w-3 h-3 text-amber-500" /> Reference & Idea Notes
+          </span>
+          <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700/70 text-xs text-slate-700 dark:text-slate-200 font-medium">
+            "{ref}"
+          </div>
+        </div>
+      )}
+
+      {/* If there is a separate topic description */}
+      {desc && desc !== ref && (
+        <div className="space-y-1">
+          <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider flex items-center gap-1">
+            📝 Creative Brief / Direction
+          </span>
+          <div className="px-3 py-2 bg-slate-50/70 dark:bg-slate-800/60 rounded-2xl border border-slate-200/60 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300">
+            {desc}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function ClientReviewPortal() {
@@ -212,7 +704,6 @@ export function ClientReviewPortal() {
         })
       });
       if (!res.ok) throw new Error("Failed to approve item");
-      // Local state update
       setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: "Approved" } : i));
       if (previewModalItem?.id === item.id) {
         setPreviewModalItem(prev => prev ? { ...prev, status: "Approved" } : null);
@@ -261,7 +752,6 @@ export function ClientReviewPortal() {
         })
       });
       if (!res.ok) throw new Error("Failed to submit feedback");
-      // Add local issue remark
       const newIssue = {
         id: `cli-${Date.now()}`,
         text: feedbackModal.feedbackText.trim(),
@@ -307,31 +797,6 @@ export function ClientReviewPortal() {
     navigator.clipboard.writeText(link);
     setCopiedRefId(id);
     setTimeout(() => setCopiedRefId(null), 2000);
-  };
-
-  const getMediaUrl = (item: ClientReviewItem): { type: "image" | "video" | "link"; url: string } | null => {
-    const thumb = item.thumbnail?.link || item.thumbnail;
-    const vid = item.editing?.link || item.editing || item.final_reel_link;
-    const post = item.final_post_link;
-    const ref = item.reference_link;
-
-    if (thumb && typeof thumb === "string" && (thumb.startsWith("http") || thumb.startsWith("/"))) {
-      const resolved = resolveMediaUrl(thumb);
-      if (thumb.match(/\.(jpeg|jpg|gif|png|webp)($|\?)/i) || thumb.includes("/uploads/")) {
-        return { type: "image", url: resolved };
-      }
-      return { type: "link", url: resolved };
-    }
-    if (vid && typeof vid === "string" && (vid.startsWith("http") || vid.startsWith("/"))) {
-      return { type: "video", url: resolveMediaUrl(vid) };
-    }
-    if (post && typeof post === "string" && (post.startsWith("http") || post.startsWith("/"))) {
-      return { type: "link", url: resolveMediaUrl(post) };
-    }
-    if (ref && typeof ref === "string" && (ref.startsWith("http") || ref.startsWith("/"))) {
-      return { type: "link", url: ref };
-    }
-    return null;
   };
 
   const filteredItems = items.filter(item => {
@@ -559,7 +1024,7 @@ export function ClientReviewPortal() {
         {viewMode === "cards" && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredItems.map((item, idx) => {
-              const media = getMediaUrl(item);
+              const assets = extractMediaAssets(item);
               const isApproved = item.status === "Approved" || item.status === "Published";
               const issueList = item.issues || [];
               const isCaptionExpanded = !!expandedCaptions[item.id];
@@ -586,54 +1051,28 @@ export function ClientReviewPortal() {
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-slate-500">
-                      <Calendar className="w-3.5 h-3.5 text-primary" />
-                      <span>{item.posting_date || "TBD"}</span>
-                    </div>
-                  </div>
-
-                  {/* Media / Visual Box */}
-                  <div className="relative aspect-video bg-slate-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden border-b border-slate-100 dark:border-slate-800">
-                    {media?.type === "image" ? (
-                      <img 
-                        src={media.url} 
-                        alt={item.topic} 
-                        className="w-full h-full object-cover hover:scale-105 transition-transform duration-300 cursor-pointer"
-                        onClick={() => window.open(media.url, "_blank")}
-                      />
-                    ) : media?.type === "video" || media?.type === "link" ? (
-                      <a 
-                        href={media.url} 
-                        target="_blank" 
-                        rel="noreferrer"
-                        className="flex flex-col items-center gap-2 p-4 text-center group cursor-pointer"
-                      >
-                        <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
-                          {item.type === "Reel" ? <Video className="w-6 h-6" /> : <ExternalLink className="w-6 h-6" />}
-                        </div>
-                        <span className="text-xs font-bold text-primary group-hover:underline flex items-center gap-1">
-                          View Deliverable File <ExternalLink className="w-3 h-3" />
-                        </span>
-                      </a>
-                    ) : (
-                      <div className="flex flex-col items-center gap-1.5 text-slate-400">
-                        <ImageIcon className="w-8 h-8 opacity-40" />
-                        <span className="text-[11px] font-semibold">Visual In Production</span>
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-500">
+                        <Calendar className="w-3.5 h-3.5 text-primary" />
+                        <span>{item.posting_date || "TBD"}</span>
                       </div>
-                    )}
-
-                    {/* Status Pill on top of visual */}
-                    <div className="absolute top-3 right-3">
                       <span className={cn(
-                        "px-2.5 py-1 rounded-full text-[11px] font-black uppercase tracking-wider shadow-sm border",
+                        "px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border",
                         isApproved 
-                          ? "bg-emerald-500 text-white border-emerald-600" 
-                          : "bg-amber-500 text-white border-amber-600"
+                          ? "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-800" 
+                          : "bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950/40 dark:border-amber-800"
                       )}>
-                        {isApproved ? "Approved ✓" : "Pending Review"}
+                        {isApproved ? "Approved ✓" : "Pending"}
                       </span>
                     </div>
                   </div>
+
+                  {/* Media / Visual Box (Interactive Gallery with Video/Images/Drive Previews) */}
+                  <DeliverableMediaGallery
+                    item={item}
+                    assets={assets}
+                    onOpenPreview={() => setPreviewModalItem(item)}
+                  />
 
                   {/* Content Info */}
                   <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
@@ -642,7 +1081,7 @@ export function ClientReviewPortal() {
                         {item.topic || "Untitled Post Idea"}
                       </h3>
 
-                      {/* Caption Box with Copy & Expand / Read More (Issue 3) */}
+                      {/* Caption Box with Copy & Expand / Read More */}
                       {item.caption ? (
                         <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/70 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300 relative group space-y-2">
                           <div className="flex items-center justify-between border-b border-slate-200/50 dark:border-slate-700/50 pb-1.5">
@@ -703,44 +1142,12 @@ export function ClientReviewPortal() {
                         <p className="text-xs text-slate-400 italic">No caption drafted yet.</p>
                       )}
 
-                      {/* Reference / Inspiration Link Box (Issue 1) */}
-                      {item.reference_link && (
-                        <div className="space-y-1">
-                          <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider flex items-center gap-1">
-                            <Link2 className="w-3 h-3 text-primary" /> Reference / Inspiration Link
-                          </span>
-                          <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700/70 flex items-center justify-between gap-2 shadow-2xs hover:border-primary/40 transition-colors">
-                            <a
-                              href={item.reference_link.startsWith("http") ? item.reference_link : `https://${item.reference_link}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-xs font-semibold text-slate-700 dark:text-slate-200 hover:text-primary dark:hover:text-primary transition-colors truncate flex-1 flex items-center gap-1.5"
-                              title={item.reference_link}
-                            >
-                              <ExternalLink className="w-3.5 h-3.5 text-primary shrink-0" />
-                              <span className="truncate">{item.reference_link}</span>
-                            </a>
-                            <button
-                              type="button"
-                              onClick={() => copyReferenceLink(item.reference_link, item.id)}
-                              className="p-1.5 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-500 hover:text-slate-900 dark:hover:text-white shadow-2xs transition-all cursor-pointer flex items-center gap-1 shrink-0 text-[10px] font-bold"
-                              title="Copy reference link"
-                            >
-                              {copiedRefId === item.id ? (
-                                <>
-                                  <Check className="w-3 h-3 text-emerald-500" />
-                                  <span className="text-emerald-500 text-[10px]">Copied</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="w-3 h-3" />
-                                  <span className="text-[10px]">Copy</span>
-                                </>
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                      {/* Reference / Inspiration Link & Notes Box */}
+                      <ReferenceSection
+                        item={item}
+                        onCopyRef={copyReferenceLink}
+                        copiedRefId={copiedRefId}
+                      />
 
                       {/* Client Issue/Remark Preview */}
                       {issueList.length > 0 && (
@@ -757,7 +1164,8 @@ export function ClientReviewPortal() {
                       )}
                     </div>
 
-                    {/* Action Buttons for Client Approval & Changes */}
+                    {/* Action Buttons for Client Approval & Changes (Temporarily commented out per request) */}
+                    {/*
                     <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
                       {isApproved ? (
                         <div className="flex-1 py-2 px-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400">
@@ -791,6 +1199,7 @@ export function ClientReviewPortal() {
                         </>
                       )}
                     </div>
+                    */}
                   </div>
                 </div>
               );
@@ -798,7 +1207,7 @@ export function ClientReviewPortal() {
           </div>
         )}
 
-        {/* ==================== WALL CALENDAR VIEW (Issue 4 Polish) ==================== */}
+        {/* ==================== WALL CALENDAR VIEW ==================== */}
         {viewMode === "calendar" && (
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-6 shadow-sm overflow-hidden space-y-4">
             {/* Calendar Header with Navigation */}
@@ -1025,40 +1434,14 @@ export function ClientReviewPortal() {
               </button>
             </div>
 
-            {/* Media Box */}
-            {(() => {
-              const med = getMediaUrl(previewModalItem);
-              return (
-                <div className="relative aspect-video rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden border border-slate-200 dark:border-slate-700">
-                  {med?.type === "image" ? (
-                    <img 
-                      src={med.url} 
-                      alt={previewModalItem.topic} 
-                      className="w-full h-full object-cover"
-                    />
-                  ) : med?.type === "video" || med?.type === "link" ? (
-                    <a 
-                      href={med.url} 
-                      target="_blank" 
-                      rel="noreferrer"
-                      className="flex flex-col items-center gap-2 p-4 text-center group cursor-pointer"
-                    >
-                      <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
-                        {previewModalItem.type === "Reel" ? <Video className="w-7 h-7" /> : <ExternalLink className="w-7 h-7" />}
-                      </div>
-                      <span className="text-sm font-bold text-primary group-hover:underline flex items-center gap-1.5">
-                        Open Deliverable Asset <ExternalLink className="w-4 h-4" />
-                      </span>
-                    </a>
-                  ) : (
-                    <div className="flex flex-col items-center gap-1.5 text-slate-400">
-                      <ImageIcon className="w-8 h-8 opacity-40" />
-                      <span className="text-xs font-semibold">Visual in Production</span>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
+            {/* Media Gallery in Modal */}
+            <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700">
+              <DeliverableMediaGallery
+                item={previewModalItem}
+                assets={extractMediaAssets(previewModalItem)}
+                onOpenPreview={() => {}}
+              />
+            </div>
 
             {/* Topic & Caption */}
             <div className="space-y-3">
@@ -1102,45 +1485,16 @@ export function ClientReviewPortal() {
                 </div>
               )}
 
-              {/* Reference Link */}
-              {previewModalItem.reference_link && (
-                <div className="space-y-1">
-                  <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider flex items-center gap-1">
-                    <Link2 className="w-3 h-3 text-primary" /> Reference / Inspiration Link
-                  </span>
-                  <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700/70 flex items-center justify-between gap-2 shadow-2xs">
-                    <a
-                      href={previewModalItem.reference_link.startsWith("http") ? previewModalItem.reference_link : `https://${previewModalItem.reference_link}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs font-semibold text-slate-700 dark:text-slate-200 hover:text-primary dark:hover:text-primary transition-colors truncate flex-1 flex items-center gap-1.5"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5 text-primary shrink-0" />
-                      <span className="truncate">{previewModalItem.reference_link}</span>
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => copyReferenceLink(previewModalItem.reference_link, previewModalItem.id)}
-                      className="p-1.5 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-500 hover:text-slate-900 shadow-2xs transition-all cursor-pointer flex items-center gap-1 shrink-0 text-[10px] font-bold"
-                    >
-                      {copiedRefId === previewModalItem.id ? (
-                        <>
-                          <Check className="w-3 h-3 text-emerald-500" />
-                          <span className="text-emerald-500 text-[10px]">Copied</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3 h-3" />
-                          <span className="text-[10px]">Copy</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              )}
+              {/* Reference Link & Notes Section */}
+              <ReferenceSection
+                item={previewModalItem}
+                onCopyRef={copyReferenceLink}
+                copiedRefId={copiedRefId}
+              />
             </div>
 
-            {/* Modal Actions */}
+            {/* Modal Actions (Temporarily commented out per request) */}
+            {/*
             <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2.5">
               {previewModalItem.status === "Approved" || previewModalItem.status === "Published" ? (
                 <div className="py-2.5 px-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400">
@@ -1178,11 +1532,12 @@ export function ClientReviewPortal() {
                 </>
               )}
             </div>
+            */}
           </div>
         </div>
       )}
 
-      {/* ==================== FULL CAPTION READER MODAL (Issue 3) ==================== */}
+      {/* ==================== FULL CAPTION READER MODAL ==================== */}
       {fullCaptionModalItem && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full max-h-[85vh] flex flex-col p-6 shadow-2xl animate-in zoom-in-95 duration-200">
