@@ -702,7 +702,16 @@ class AttendanceService:
         if the employee is punched in and working (not on break) right now."""
         today_str = format_date_ist(get_now_ist())
         record = await AttendanceRepository.get_by_employee_and_date(employee_id, today_str)
-        if not record or record.get("status") not in ("Active", "Late", "Present"):
+        if not record:
+            return
+
+        punches = record.get("punches", [])
+        has_open_punch = any(not p.get("check_out") or p.get("check_out") == "--" for p in punches) or (
+            record.get("check_in") and record.get("check_in") != "--" and (not record.get("check_out") or record.get("check_out") == "--")
+        )
+        if record.get("status") not in ("Active", "Late", "Present") and not has_open_punch:
+            return
+        if record.get("status") == "On Break":
             return
         task_id = str(task.get("_id") or task.get("id") or "")
         if not task_id or str(record.get("current_task_id") or "") == task_id:
@@ -765,12 +774,24 @@ class AttendanceService:
         today_str = format_date_ist(now)
         record = await AttendanceRepository.get_by_employee_and_date(employee_id, today_str)
 
-        if not record or record.get("status") not in ("Active", "Late", "Present"):
-            if record and record.get("status") == "On Break":
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="You are already on a break."
-                )
+        if not record:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You must be actively punched in to take a break."
+            )
+
+        if record.get("status") == "On Break":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You are already on a break."
+            )
+
+        punches = record.get("punches", [])
+        has_open_punch = any(not p.get("check_out") or p.get("check_out") == "--" for p in punches) or (
+            record.get("check_in") and record.get("check_in") != "--" and (not record.get("check_out") or record.get("check_out") == "--")
+        )
+
+        if not has_open_punch and record.get("status") not in ("Active", "Late", "Present"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="You must be actively punched in to take a break."

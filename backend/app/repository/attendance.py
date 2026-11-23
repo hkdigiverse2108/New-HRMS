@@ -149,11 +149,22 @@ class AttendanceRepository:
                 remarks_list = existing.get("remarks", [])
                 if remark not in remarks_list:
                     remarks_list.append(remark)
+
+                punches = existing.get("punches", [])
+                has_active_punch = any(not p.get("check_out") or p.get("check_out") == "--" for p in punches) or (
+                    existing.get("check_in") and existing.get("check_in") != "--" and (not existing.get("check_out") or existing.get("check_out") == "--")
+                )
+                current_st = existing.get("status")
+
+                # If employee is actively working or on break, preserve their active status!
+                new_status = current_st if (has_active_punch or current_st in ("Active", "Late", "On Break")) else "On Leave"
+
                 await collection.update_one(
                     {"_id": existing["_id"]},
-                    {"$set": {"remarks": remarks_list, "status": "On Leave"}}
+                    {"$set": {"remarks": remarks_list, "status": new_status}}
                 )
                 existing["remarks"] = remarks_list
+                existing["status"] = new_status
                 return serialize_mongo(existing)
             else:
                 new_doc = {
