@@ -981,6 +981,75 @@ class ContentService:
             elif data_dict["approval_status"] in ["In Progress", "To Do", "In Review", "Pending Approval"]:
                 if "approved_by" not in data_dict:
                     data_dict["approved_by"] = None
+
+        # Automatic Stage Dates Shift on schedule_date change
+        if existing_item and "schedule_date" in data_dict:
+            old_sched_str = str(existing_item.get("schedule_date") or "").split("T")[0]
+            new_sched_str = str(data_dict.get("schedule_date") or "").split("T")[0]
+            if old_sched_str and new_sched_str and old_sched_str != new_sched_str:
+                try:
+                    from datetime import datetime as dt_cls, timedelta
+                    old_dt = dt_cls.strptime(old_sched_str, "%Y-%m-%d").date()
+                    new_dt = dt_cls.strptime(new_sched_str, "%Y-%m-%d").date()
+                    delta_days = (new_dt - old_dt).days
+
+                    project_id = existing_item.get("project_id") or data_dict.get("project_id")
+                    settings_dict = await ContentService.get_settings(project_id)
+                    settings = ContentTimelineSettings(**settings_dict)
+
+                    def _shift_stage_date(old_date_val, default_offset_days: int) -> str:
+                        if old_date_val:
+                            try:
+                                ods = str(old_date_val).split("T")[0]
+                                od = dt_cls.strptime(ods, "%Y-%m-%d").date()
+                                shifted = od + timedelta(days=delta_days)
+                                if shifted <= new_dt:
+                                    return shifted.isoformat()
+                            except Exception:
+                                pass
+                        return (new_dt - timedelta(days=default_offset_days)).isoformat()
+
+                    # 1. Script Date
+                    old_sc_date = (existing_item.get("script") or {}).get("date")
+                    new_sc_date = data_dict.get("script", {}).get("date") if isinstance(data_dict.get("script"), dict) else None
+                    sc_dict = dict(data_dict.get("script") or existing_item.get("script") or {})
+                    if not new_sc_date or new_sc_date == old_sc_date or str(new_sc_date).split("T")[0] > new_sched_str:
+                        sc_dict["date"] = _shift_stage_date(old_sc_date, settings.script_days_before)
+                        data_dict["script"] = sc_dict
+
+                    # 2. Shoot Date
+                    old_sh_date = (existing_item.get("shoot") or {}).get("date")
+                    new_sh_date = data_dict.get("shoot", {}).get("date") if isinstance(data_dict.get("shoot"), dict) else None
+                    sh_dict = dict(data_dict.get("shoot") or existing_item.get("shoot") or {})
+                    if not new_sh_date or new_sh_date == old_sh_date or str(new_sh_date).split("T")[0] > new_sched_str:
+                        sh_dict["date"] = _shift_stage_date(old_sh_date, settings.shoot_days_before)
+                        data_dict["shoot"] = sh_dict
+
+                    # 3. Editing Date
+                    old_ed_date = (existing_item.get("editing") or {}).get("date")
+                    new_ed_date = data_dict.get("editing", {}).get("date") if isinstance(data_dict.get("editing"), dict) else None
+                    ed_dict = dict(data_dict.get("editing") or existing_item.get("editing") or {})
+                    if not new_ed_date or new_ed_date == old_ed_date or str(new_ed_date).split("T")[0] > new_sched_str:
+                        ed_dict["date"] = _shift_stage_date(old_ed_date, settings.editing_graphics_days_before)
+                        data_dict["editing"] = ed_dict
+
+                    # 4. Thumbnail Date
+                    old_th_date = (existing_item.get("thumbnail") or {}).get("date")
+                    new_th_date = data_dict.get("thumbnail", {}).get("date") if isinstance(data_dict.get("thumbnail"), dict) else None
+                    th_dict = dict(data_dict.get("thumbnail") or existing_item.get("thumbnail") or {})
+                    if not new_th_date or new_th_date == old_th_date or str(new_th_date).split("T")[0] > new_sched_str:
+                        th_dict["date"] = _shift_stage_date(old_th_date, settings.thumbnail_days_before)
+                        data_dict["thumbnail"] = th_dict
+
+                    # 5. Caption Date
+                    old_cp_date = existing_item.get("caption_date")
+                    new_cp_date = data_dict.get("caption_date")
+                    if not new_cp_date or new_cp_date == old_cp_date or str(new_cp_date).split("T")[0] > new_sched_str:
+                        data_dict["caption_date"] = _shift_stage_date(old_cp_date, settings.approval_days_before)
+
+                except Exception as e:
+                    import logging
+                    logging.getLogger("hrms.content").error(f"Error shifting content stage dates on schedule_date change: {e}")
         if current_user_id and existing_item:
             from app.services.activity import ActivityService, ActivityAction
             topic = existing_item.get("topic_title", "Untitled")

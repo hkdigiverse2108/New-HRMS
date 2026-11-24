@@ -1988,13 +1988,15 @@ const subtractDays = (startDate: Date, days: number) => {
   return d.toISOString().split('T')[0];
 };
 
-const getPresetDates = (postingDateStr: string) => {
+const getPresetDates = (postingDateStr: string, customOffsets?: any) => {
   if (!postingDateStr) return {};
   const d = new Date(postingDateStr);
   if (isNaN(d.getTime())) return {};
 
   let offsets = { script: 16, shoot: 14, editing: 7, thumbnail: 5, approval: 5 };
-  if (typeof window !== 'undefined') {
+  if (customOffsets) {
+    offsets = { ...offsets, ...customOffsets };
+  } else if (typeof window !== 'undefined') {
     try {
       const saved = (typeof window !== 'undefined' ? localStorage.getItem('hrms_calendar_offsets') : null);
       if (saved) offsets = { ...offsets, ...JSON.parse(saved) };
@@ -2005,7 +2007,7 @@ const getPresetDates = (postingDateStr: string) => {
     scriptDate: subtractDays(d, offsets.script),
     shootDate: subtractDays(d, offsets.shoot),
     editingStart: subtractDays(d, offsets.editing),
-    captionDate: subtractDays(d, offsets.editing),
+    captionDate: subtractDays(d, offsets.approval ?? offsets.editing),
     thumbnailDate: subtractDays(d, offsets.thumbnail ?? 5),
     approval: subtractDays(d, offsets.approval)
   };
@@ -8761,12 +8763,53 @@ export function Projects({ isNew }: { isNew?: boolean }) {
 
                                             const updatedStatus = field === 'status' ? value : (autoStatus || item.status);
 
+                                            let shiftedDates: any = {};
+                                            if (field === 'postingDate' && value) {
+                                              const oldPostingDate = item.postingDate;
+                                              const newPostingDate = value;
+                                              let deltaDays: number | null = null;
+                                              if (oldPostingDate && newPostingDate) {
+                                                const oldD = new Date(oldPostingDate);
+                                                const newD = new Date(newPostingDate);
+                                                if (!isNaN(oldD.getTime()) && !isNaN(newD.getTime())) {
+                                                  deltaDays = Math.round((newD.getTime() - oldD.getTime()) / (1000 * 60 * 60 * 24));
+                                                }
+                                              }
+                                              const shift = (oldDateStr?: string, defaultOffset?: number) => {
+                                                if (deltaDays !== null && oldDateStr) {
+                                                  const od = new Date(oldDateStr);
+                                                  if (!isNaN(od.getTime())) {
+                                                    od.setDate(od.getDate() + deltaDays);
+                                                    const shiftedStr = od.toISOString().split('T')[0];
+                                                    if (shiftedStr && shiftedStr <= newPostingDate) return shiftedStr;
+                                                  }
+                                                }
+                                                if (defaultOffset !== undefined && newPostingDate) {
+                                                  const nd = new Date(newPostingDate);
+                                                  if (!isNaN(nd.getTime())) {
+                                                    nd.setDate(nd.getDate() - defaultOffset);
+                                                    return nd.toISOString().split('T')[0];
+                                                  }
+                                                }
+                                                return oldDateStr || '';
+                                              };
+                                              const offsets = calendarOffsets || { script: 16, shoot: 14, editing: 7, thumbnail: 5, approval: 5 };
+                                              shiftedDates = {
+                                                postingDay: new Date(value).toLocaleDateString("en-US", { weekday: "long" }),
+                                                scriptDate: shift(item.scriptDate, offsets.script ?? 16),
+                                                shootDate: shift(item.shootDate, offsets.shoot ?? 14),
+                                                editingStart: shift(item.editingStart, offsets.editing ?? 7),
+                                                thumbnailDate: shift(item.thumbnailDate, offsets.thumbnail ?? 5),
+                                                captionDate: shift(item.captionDate, offsets.approval ?? 5),
+                                              };
+                                            }
+
                                             const updated = projectCalendar.map((x: any) =>
                                               x.id === item.id ? {
                                                 ...x,
                                                 [field]: value,
                                                 status: updatedStatus,
-                                                ...(field === 'postingDate' ? { postingDay: new Date(value).toLocaleDateString("en-US", { weekday: "long" }) } : {})
+                                                ...(field === 'postingDate' ? shiftedDates : {})
                                               } : x
                                             );
                                             setProjects(projects.map(p => p.id === project.id ? { ...p, contentCalendar: updated, modules: syncSocialMediaTasksForProject(p, updated) } : p));
@@ -8776,7 +8819,17 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                               const updatedItem = updated.find((x: any) => x.id === item.id);
                                               if (updatedItem && project.id) {
                                                 const payload = mapCalendarItemToBackendPayload(updatedItem, project.id);
-                                                await api.put(`/projects/${project.id}/content/${item.id}`, payload);
+                                                const res = await api.put<any>(`/projects/${project.id}/content/${item.id}`, payload);
+                                                if (res) {
+                                                  const backendItem = mapBackendContentToCalendarItem(res);
+                                                  setProjects(prevProjects => prevProjects.map(p => {
+                                                    if (p.id === project.id) {
+                                                      const syncedCal = (p.contentCalendar || []).map((c: any) => c.id === item.id ? { ...c, ...backendItem } : c);
+                                                      return { ...p, contentCalendar: syncedCal, modules: syncSocialMediaTasksForProject(p, syncedCal) };
+                                                    }
+                                                    return p;
+                                                  }));
+                                                }
                                                 if (autoStatus && autoStatus !== item.status) {
                                                   toast.success(`Status automatically updated to ${autoStatus}`);
                                                 }
@@ -11487,16 +11540,36 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                               <DatePicker
                                 value={calendarForm.postingDate || ""}
                                 onChange={(newDate) => {
-                                  const dates = getPresetDates(newDate);
+                                  const oldPostingDate = calendarForm.postingDate;
+                                  let deltaDays: number | null = null;
+                                  if (oldPostingDate && newDate) {
+                                    const oldD = new Date(oldPostingDate);
+                                    const newD = new Date(newDate);
+                                    if (!isNaN(oldD.getTime()) && !isNaN(newD.getTime())) {
+                                      deltaDays = Math.round((newD.getTime() - oldD.getTime()) / (1000 * 60 * 60 * 24));
+                                    }
+                                  }
+                                  const dates = getPresetDates(newDate, calendarOffsets);
+                                  const shiftOrPreset = (oldVal: string | undefined, presetVal: string | undefined) => {
+                                    if (deltaDays !== null && oldVal) {
+                                      const od = new Date(oldVal);
+                                      if (!isNaN(od.getTime())) {
+                                        od.setDate(od.getDate() + deltaDays);
+                                        const shifted = od.toISOString().split('T')[0];
+                                        if (shifted <= newDate) return shifted;
+                                      }
+                                    }
+                                    return presetVal || oldVal || "";
+                                  };
                                   setCalendarForm({
                                     ...calendarForm,
                                     postingDate: newDate,
-                                    scriptDate: calendarForm.scriptDate || dates.scriptDate || "",
-                                    shootDate: calendarForm.shootDate || dates.shootDate || "",
-                                    editingStart: calendarForm.editingStart || dates.editingStart || "",
-                                    captionDate: calendarForm.captionDate || dates.captionDate || "",
-                                    thumbnailDate: calendarForm.thumbnailDate || dates.thumbnailDate || "",
-                                    approval: calendarForm.approval || dates.approval || ""
+                                    scriptDate: shiftOrPreset(calendarForm.scriptDate, dates.scriptDate),
+                                    shootDate: shiftOrPreset(calendarForm.shootDate, dates.shootDate),
+                                    editingStart: shiftOrPreset(calendarForm.editingStart, dates.editingStart),
+                                    captionDate: shiftOrPreset(calendarForm.captionDate, dates.captionDate),
+                                    thumbnailDate: shiftOrPreset(calendarForm.thumbnailDate, dates.thumbnailDate),
+                                    approval: shiftOrPreset(calendarForm.approval, dates.approval)
                                   });
                                 }}
                                 className="w-full h-9 px-3 py-1.5 bg-muted/50 border border-border/50 rounded-xl text-xs font-semibold"
