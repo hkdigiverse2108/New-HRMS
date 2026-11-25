@@ -115,7 +115,13 @@ export function OfficialLetters({ onNavigate }: { onNavigate?: ((path: string) =
         ]);
 
         const rawEmps = Array.isArray(empRes) ? empRes : empRes?.items || empRes?.data || [];
-        setEmployees(rawEmps.map((e: any) => {
+        const activeEmps = rawEmps.filter((e: any) => 
+          !e.work_details?.is_block && 
+          !e.work_details?.is_delete && 
+          !e.is_deleted && 
+          e.work_details?.status !== "Inactive"
+        );
+        setEmployees(activeEmps.map((e: any) => {
           const p = e.personal_info || {};
           const name = formatPersonName(p) || e.name || "Employee";
           return { id: String(e._id || e.id || e.employee_id), name, role: e.work_details?.designation || e.role || "EMP" };

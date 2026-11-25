@@ -210,8 +210,10 @@ export function SubmittedDocuments() {
     // Filter mandatory document types configured in Document Types tab
     const mandatoryTypes = docTypes.filter(t => t.isRequired);
 
-    // Filter employees - EXCLUDE Admins & Subadmins
+    // Filter employees - EXCLUDE Admins & Subadmins, and EXCLUDE Inactive/Deleted employees
     const nonAdminEmployees = employees.filter(emp => {
+      const isInactive = emp.status === "Inactive" || emp.status === "inactive" || emp.activelyUsingHRMS === false || (emp as any).is_deleted || (emp as any).is_delete || (emp as any).is_block;
+      if (isInactive) return false;
       const roleStr = String(emp.role || emp.designation || "").toLowerCase();
       const nameStr = String(emp.name || "").toLowerCase();
       return !roleStr.includes("admin") && !roleStr.includes("subadmin") && !nameStr.includes("admin");
@@ -268,9 +270,11 @@ export function SubmittedDocuments() {
     return combined;
   }, [backendDocs, docTypes, employees, isAdminOrHR, user, filterEmployee]);
 
-  // Format clean employee options without raw Mongo ObjectIds and excluding Admins
+  // Format clean employee options without raw Mongo ObjectIds and excluding Admins and Inactive employees
   const formattedEmployeeOptions = useMemo(() => {
     const nonAdmins = employees.filter(e => {
+      const isInactive = e.status === "Inactive" || e.status === "inactive" || e.activelyUsingHRMS === false || (e as any).is_deleted || (e as any).is_delete || (e as any).is_block;
+      if (isInactive) return false;
       const roleStr = String(e.role || e.designation || "").toLowerCase();
       const nameStr = String(e.name || "").toLowerCase();
       return !roleStr.includes("admin") && !roleStr.includes("subadmin") && !nameStr.includes("admin");

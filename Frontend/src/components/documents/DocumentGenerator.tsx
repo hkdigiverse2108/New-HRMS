@@ -245,9 +245,15 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
         }));
         setTemplates(mappedTemplates);
 
-        // Process employees
+        // Process employees (only active & non-deleted)
         const rawEmps = Array.isArray(empRes) ? empRes : empRes?.items || empRes?.data || [];
-        const mappedEmps: EmployeeItem[] = rawEmps.map((e: any) => {
+        const activeEmps = rawEmps.filter((e: any) => 
+          !e.work_details?.is_block && 
+          !e.work_details?.is_delete && 
+          !e.is_deleted && 
+          e.work_details?.status !== "Inactive"
+        );
+        const mappedEmps: EmployeeItem[] = activeEmps.map((e: any) => {
           const p = e.personal_info || {};
           const w = e.work_details || {};
           const c = e.compensation || {};

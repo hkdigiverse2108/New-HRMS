@@ -11,6 +11,7 @@ import { api } from "@/lib/api";
 import { toast } from "@/lib/toast";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { SearchableSelect } from "@/components/ui/select";
+import { getAvatarUrl, handleAvatarError } from "@/lib/config";
 
 export function EmployeeSignatures() {
   const { employees, refreshEmployees } = useEmployeesContext();
@@ -108,11 +109,22 @@ export function EmployeeSignatures() {
     return null;
   };
 
+  // Helper to check if employee is active & not deleted
+  const isEmpActive = (emp: Employee) => {
+    if (!emp) return false;
+    if (emp.status === "Inactive" || emp.status === "inactive") return false;
+    if (emp.activelyUsingHRMS === false) return false;
+    if ((emp as any).is_deleted || (emp as any).is_delete || (emp as any).is_block) return false;
+    return true;
+  };
+
+  const activeEmployees = employees.filter(isEmpActive);
+
   // Unique departments for filter
-  const departments = Array.from(new Set(employees.map((e) => e.department).filter(Boolean)));
+  const departments = Array.from(new Set(activeEmployees.map((e) => e.department).filter(Boolean)));
 
   // Filtered employees list
-  const filteredEmployees = employees.filter((emp) => {
+  const filteredEmployees = activeEmployees.filter((emp) => {
     const sigUrl = getEmpSignature(emp);
     const hasSig = !!sigUrl;
 
@@ -139,8 +151,8 @@ export function EmployeeSignatures() {
   const { items: sortedEmployees, requestSort, sortConfig } = useSortableData(filteredEmployees);
 
   // Statistics
-  const totalEmployees = employees.length;
-  const signedCount = employees.filter((e) => !!getEmpSignature(e)).length;
+  const totalEmployees = activeEmployees.length;
+  const signedCount = activeEmployees.filter((e) => !!getEmpSignature(e)).length;
   const pendingCount = totalEmployees - signedCount;
 
   return (
@@ -272,11 +284,12 @@ export function EmployeeSignatures() {
                       <td className="p-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-700 border border-emerald-500/20 font-black flex items-center justify-center overflow-hidden shrink-0">
-                            {emp.avatar || emp.profile_photo ? (
-                              <img src={emp.avatar || emp.profile_photo} alt={emp.name} className="w-full h-full object-cover" />
-                            ) : (
-                              emp.name.charAt(0).toUpperCase()
-                            )}
+                            <img 
+                              src={getAvatarUrl(emp.avatar || emp.profile_photo, emp.name)} 
+                              alt={emp.name} 
+                              className="w-full h-full object-cover" 
+                              onError={handleAvatarError}
+                            />
                           </div>
                           <div className="min-w-0">
                             <div className="font-bold text-foreground truncate max-w-[180px]" title={emp.name}>

@@ -8,6 +8,7 @@ import { Employee } from "@/components/employees/employee-data";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/select";
 import { toast } from "@/lib/toast";
+import { getAvatarUrl, handleAvatarError } from "@/lib/config";
 
 export type ContractStatus = "Pending" | "Verified" | "Rejected";
 
@@ -40,9 +41,13 @@ export function VerifyContracts() {
   // Selected contract modal for viewing details
   const [selectedContract, setSelectedContract] = useState<EmployeeContractItem | null>(null);
 
-  // Derive real contracts from employee list (only employees with active bond, employment contract, or bond dates)
+  // Derive real contracts from active employee list only (excluding inactive and deleted employees)
   const contractItems: EmployeeContractItem[] = employees
-    .filter((emp) => emp.hasBond || emp.hasEmployment || emp.bondStartDate || emp.bondEndDate)
+    .filter((emp) => {
+      const isInactive = emp.status === "Inactive" || emp.status === "inactive" || emp.activelyUsingHRMS === false || (emp as any).is_deleted || (emp as any).is_delete || (emp as any).is_block;
+      if (isInactive) return false;
+      return emp.hasBond || emp.hasEmployment || emp.bondStartDate || emp.bondEndDate;
+    })
     .map((emp) => {
       let status: ContractStatus = statusOverrides[emp.id] || (emp as any).contractStatus || "Pending";
 
@@ -260,11 +265,12 @@ export function VerifyContracts() {
                     <td className="p-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-700 border border-indigo-500/20 font-black flex items-center justify-center overflow-hidden shrink-0">
-                          {contract.avatar ? (
-                            <img src={contract.avatar} alt={contract.employeeName} className="w-full h-full object-cover" />
-                          ) : (
-                            contract.employeeName.charAt(0).toUpperCase()
-                          )}
+                          <img 
+                            src={getAvatarUrl(contract.avatar, contract.employeeName)} 
+                            alt={contract.employeeName} 
+                            className="w-full h-full object-cover" 
+                            onError={handleAvatarError} 
+                          />
                         </div>
                         <div className="min-w-0">
                           <div className="font-bold text-foreground truncate max-w-[180px]">{contract.employeeName}</div>
