@@ -823,6 +823,8 @@ export function Tasks({ setActive, isNew }: { setActive?: (route: string) => voi
 
       setIsNewTaskOpen(true);
 
+      if (setActive) setActive("/tasks");
+
     }
 
   }, [isNew, employees, currentUserId]);

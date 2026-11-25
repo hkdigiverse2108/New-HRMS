@@ -26,6 +26,7 @@ import { ClientFollowupModal, FollowupLogEntry } from "./ClientFollowupModal";
 import { ActivityHistoryModal, ActivityHistoryEvent } from "./ActivityHistoryModal";
 import { ContentTextOrLinkCell, isLikelyUrl } from "./ContentTextOrLinkCell";
 import { LogoUploadField } from "./LogoUploadField";
+import { TeamWorkloadHeatmap } from "./TeamWorkloadHeatmap";
 import { getMediaUrl, getAvatarUrl, uiAvatar } from "@/lib/config";
 
 type ProjectStatus = "In Progress" | "In Review" | "Completed" | "On Hold";
@@ -3863,7 +3864,10 @@ export function Projects({ isNew }: { isNew?: boolean }) {
   // Visual Monthly Wall Calendar Grid & Client Review Share States
   const [ccViewMode, setCcViewMode] = useState<"table" | "grid">("table");
   const [isClientShareModalOpen, setIsClientShareModalOpen] = useState(false);
+  const [isWorkloadHeatmapOpen, setIsWorkloadHeatmapOpen] = useState(false);
   const [copiedShareLink, setCopiedShareLink] = useState(false);
+  const [shareClientPhone, setShareClientPhone] = useState("");
+  const [shareCustomMsg, setShareCustomMsg] = useState("");
 
   const handleGenerateCcPdf = async (mode: "download" | "print" = "download") => {
     const currentProject = projects.find(p => p.id === selectedProjectId);
@@ -5852,10 +5856,13 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       }
       return baseClean(p.name) === curBase;
     }).filter(p => {
-      if (projectScope === "my") return isUserAssignedToProject(p);
+      if (activeTab === "Active Projects" && p.is_archived) return false;
+      if (activeTab === "Archived Projects" && !p.is_archived) return false;
+      if (clientFilterCategories.length > 0 && !clientFilterCategories.includes(p.category)) return false;
+      if ((!isAdminOrHr || projectScope === "my") && !isUserAssignedToProject(p)) return false;
       return true;
     });
-  }, [currentProject, projects, projectScope, isUserAssignedToProject]);
+  }, [currentProject, projects, activeTab, clientFilterCategories, isAdminOrHr, projectScope, isUserAssignedToProject]);
 
   const currentMonthStats = useMemo(() => {
     if (!currentProject) return { targetPosts: 8, targetReels: 8, completedPosts: 0, completedReels: 0, completedStories: 0, totalTarget: 16, totalCompleted: 0 };
@@ -7411,10 +7418,32 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mr-1">Brand Division:</span>
                       {sisterProjects.map(sp => {
                         const isCurrent = sp.id === project.id;
-                        const isCreative = sp.category === "Creative" || isSocialMediaCategory(sp.category);
                         const isDM = isMarketingCategory(sp.category);
                         const isDev = isDevCategory(sp.category);
-                        const label = isCreative ? "🎨 Creative (CC)" : isDM ? "📈 Digital Marketing" : isDev ? "💻 Development" : sp.category || sp.name;
+                        const isCreative = !isDM && !isDev && (sp.category === "Creative" || isSocialMediaCategory(sp.category));
+                        const sameCatCount = sisterProjects.filter(other => {
+                          const oDM = isMarketingCategory(other.category);
+                          const oDev = isDevCategory(other.category);
+                          const oCre = !oDM && !oDev && (other.category === "Creative" || isSocialMediaCategory(other.category));
+                          if (isDM) return oDM;
+                          if (isDev) return oDev;
+                          if (isCreative) return oCre;
+                          return other.category === sp.category;
+                        }).length;
+                        const clientPrefix = (client?.companyName || client?.name || "").trim();
+                        let shortName = (sp.name || "").trim();
+                        if (clientPrefix && shortName.toLowerCase().startsWith(clientPrefix.toLowerCase())) {
+                          shortName = shortName.slice(clientPrefix.length).replace(/^[\s\-–—:]+/, "").trim() || sp.name;
+                        }
+                        const label = sameCatCount > 1
+                          ? `${isCreative ? "🎨" : isDM ? "📈" : isDev ? "💻" : "📁"} ${shortName}`
+                          : isCreative
+                            ? "🎨 Creative (CC)"
+                            : isDM
+                              ? "📈 Digital Marketing"
+                              : isDev
+                                ? "💻 Development"
+                                : sp.category || sp.name;
                         return (
                           <button
                             key={sp.id}
@@ -8179,6 +8208,17 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                   <span>Calendar Grid View</span>
                                 </button>
                               </div>
+
+                              {/* Team Workload & Capacity Heatmap */}
+                              <button
+                                type="button"
+                                onClick={() => setIsWorkloadHeatmapOpen(true)}
+                                className="h-8 flex items-center gap-1.5 px-3 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30 font-bold text-xs rounded-xl transition-all shadow-sm shrink-0 whitespace-nowrap active:scale-95 cursor-pointer"
+                                title="View team weekly workload & capacity heatmap"
+                              >
+                                <BarChart3 className="w-3.5 h-3.5 shrink-0" />
+                                <span className="whitespace-nowrap">Team Workload</span>
+                              </button>
 
                               {/* Share with Client Magic Link */}
                               <button
@@ -11085,6 +11125,15 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             </div>
           )}
 
+          {/* Team Workload & Capacity Heatmap Modal */}
+          <TeamWorkloadHeatmap
+            isOpen={isWorkloadHeatmapOpen}
+            onClose={() => setIsWorkloadHeatmapOpen(false)}
+            projects={projects}
+            employees={employees}
+            selectedProjectId={selectedProjectId}
+          />
+
           {/* Share with Client Magic Link Modal */}
           {isClientShareModalOpen && (() => {
             const currentProject = projects.find(p => p.id === selectedProjectId);
@@ -11092,8 +11141,13 @@ export function Projects({ isNew }: { isNew?: boolean }) {
             const cName = currentClient?.name || currentProject?.name || "Client";
             const targetMonth = calendarMonthFilter !== "All" && calendarMonthFilter !== "Custom" ? calendarMonthFilter : "Current";
             const publicUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/client-review/${selectedProjectId}?month=${targetMonth}`;
-            const whatsappMsg = `Hello ${cName}! Here is your Content Calendar review link for ${targetMonth}: ${publicUrl} - Please review the scheduled posts, captions & videos, and approve or request changes directly on this link!`;
-            const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(whatsappMsg)}`;
+            const defaultMsg = `Hello ${cName}! Here is your Content Calendar review link for ${targetMonth}: ${publicUrl} - Please review the scheduled posts, captions & videos, and add timestamped feedback or approve directly on this link!`;
+            const activeMsg = shareCustomMsg || defaultMsg;
+            const rawPhone = (shareClientPhone || currentClient?.phone || "").replace(/[^0-9]/g, "");
+            const cleanPhone = rawPhone.length === 10 ? `91${rawPhone}` : rawPhone;
+            const whatsappUrl = cleanPhone
+              ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(activeMsg)}`
+              : `https://api.whatsapp.com/send?text=${encodeURIComponent(activeMsg)}`;
 
             return (
               <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
@@ -11171,14 +11225,36 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       </div>
                     </div>
 
-                    <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-emerald-800 dark:text-emerald-300 space-y-1">
+                      <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-emerald-800 dark:text-emerald-300 space-y-1">
                       <p className="font-bold">✨ What the client can do:</p>
                       <ul className="list-disc pl-4 space-y-0.5 text-[11px] opacity-90">
                         <li>Open securely on mobile or laptop without password/login</li>
                         <li>View full deliverables, thumbnails, captions & video assets</li>
-                        <li>1-Click "Approve" (instantly updates status to Approved in HRMS)</li>
-                        <li>"Request Changes" (creates a Client Issue remark & notifies team)</li>
+                        <li>Pin exact video timestamps (e.g. 0:14) & track V1/V2 revisions</li>
+                        <li>1-Click "Approve" or "Request Changes" directly from the portal</li>
                       </ul>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-2.5">
+                      <div>
+                        <label className="font-bold text-muted-foreground block mb-1">Client WhatsApp Number (Optional):</label>
+                        <input
+                          type="text"
+                          value={shareClientPhone || currentClient?.phone || ""}
+                          onChange={(e) => setShareClientPhone(e.target.value)}
+                          placeholder="e.g. 9876543210 (auto-adds +91 if 10 digits)"
+                          className="w-full px-3 py-1.5 bg-muted/40 border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-bold text-muted-foreground block mb-1">WhatsApp Message Template:</label>
+                        <textarea
+                          rows={3}
+                          value={activeMsg}
+                          onChange={(e) => setShareCustomMsg(e.target.value)}
+                          className="w-full p-2.5 bg-muted/40 border border-border/60 rounded-xl text-[11px] text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/20 leading-relaxed"
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -11556,7 +11632,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                                       if (!isNaN(od.getTime())) {
                                         od.setDate(od.getDate() + deltaDays);
                                         const shifted = od.toISOString().split('T')[0];
-                                        if (shifted <= newDate) return shifted;
+                                        if (shifted && shifted <= newDate) return shifted;
                                       }
                                     }
                                     return presetVal || oldVal || "";

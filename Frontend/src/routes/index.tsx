@@ -42,6 +42,7 @@ import { Research } from "@/components/work/Research";
 import { Projects } from "@/components/work/Projects";
 import { ClientReviewPortal } from "@/components/work/ClientReviewPortal";
 import { ModuleErrorBoundary } from "@/components/common/ModuleErrorBoundary";
+import { CommandPalette } from "@/components/common/CommandPalette";
 import { Penalties } from "@/components/employees/Penalties";
 import { Remarks } from "@/components/employees/Remarks";
 import { ActivityLogs } from "@/components/admin/ActivityLogs";
@@ -145,6 +146,11 @@ export function Index() {
     return "/dashboard";
   });
 
+  const stripNewParam = (url: string) => {
+    const cleaned = url.replace(/([?&])new=1(&|$)/g, (_, sep, tail) => (tail ? sep : "")).replace(/[?&]$/, "");
+    return cleaned || "/dashboard";
+  };
+
   useEffect(() => {
     setIsClient(true);
     if (typeof window !== 'undefined') {
@@ -162,8 +168,8 @@ export function Index() {
         !pathname.startsWith("/review")
       ) {
         try {
-          // Address bar is reset to '/', so remember this page for the next refresh
-          localStorage.setItem("activeSidebarTab", pathname + search);
+          // Address bar is reset to '/', so remember this page for the next refresh (without ?new=1)
+          localStorage.setItem("activeSidebarTab", stripNewParam(pathname + search));
           window.history.replaceState({}, '', '/');
         } catch {}
       }
@@ -173,9 +179,10 @@ export function Index() {
   const setActive = (val: string) => {
     setActiveState(val);
     if (typeof window !== 'undefined') {
-      localStorage.setItem("activeSidebarTab", val);
+      const persisted = stripNewParam(val);
+      localStorage.setItem("activeSidebarTab", persisted);
       try {
-        window.history.replaceState({}, '', val);
+        window.history.replaceState({}, '', persisted);
       } catch (e) {}
     }
   };
@@ -294,6 +301,7 @@ export function Index() {
             <SalesProvider>
               <div className="flex h-dvh overflow-hidden bg-gradient-to-br from-background via-background to-primary/5">
                 <AppSidebar active={active} setActive={setActive} />
+                <CommandPalette onNavigate={setActive} onQuickAction={handleQuickAction} />
                 <GlobalModalManager />
                 <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-3.5 sm:px-6 md:px-8 lg:px-10 pb-24 pt-[4.25rem] md:pb-8 md:pt-8">
                   <div className="mx-auto w-full max-w-[1600px] min-[1920px]:max-w-[1800px]">

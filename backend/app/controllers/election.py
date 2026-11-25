@@ -9,6 +9,7 @@ from app.schemas.election import (
 )
 from app.repository.election import ElectionRepository
 from app.controllers.auth import get_current_employee
+from app.redis.service import get_cache, set_cache, clear_pattern, make_list_key
 
 router = APIRouter(prefix="/elections", tags=["Elections & Voting"])
 
@@ -36,6 +37,7 @@ async def create_election(
         )
     user_id = str(current_employee.get("_id") or current_employee.get("id"))
     election = await ElectionRepository.create_election(data, user_id)
+    await clear_pattern("elections*")
     return election
 
 @router.get("", response_model=List[ElectionOut])
@@ -44,16 +46,27 @@ async def list_elections(
     year: Optional[int] = Query(None),
     current_employee: dict = Depends(get_current_employee)
 ):
-    return await ElectionRepository.get_elections(month=month, year=year)
+    cache_key = make_list_key("elections_list", month=month, year=year)
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+    res = await ElectionRepository.get_elections(month=month, year=year)
+    await set_cache(cache_key, res)
+    return res
 
 @router.get("/{election_id}", response_model=ElectionOut)
 async def get_election(
     election_id: str,
     current_employee: dict = Depends(get_current_employee)
 ):
+    cache_key = f"elections:item:{election_id}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
     election = await ElectionRepository.get_election_by_id(election_id)
     if not election:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Election not found.")
+    await set_cache(cache_key, election)
     return election
 
 @router.delete("/{election_id}")
@@ -69,6 +82,7 @@ async def delete_election(
     deleted = await ElectionRepository.soft_delete_election(election_id)
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Election not found or already deleted.")
+    await clear_pattern("elections*")
     return {"message": "Election deleted successfully."}
 
 @router.post("/{election_id}/ballots")
@@ -80,6 +94,7 @@ async def submit_ballot(
     voter_id = str(current_employee.get("_id") or current_employee.get("id"))
     try:
         ballot = await ElectionRepository.submit_ballot(election_id, voter_id, data.preferences)
+        await clear_pattern("elections*")
         return {"message": "Vote submitted successfully.", "ballot": ballot}
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -90,8 +105,14 @@ async def get_my_ballot(
     current_employee: dict = Depends(get_current_employee)
 ):
     voter_id = str(current_employee.get("_id") or current_employee.get("id"))
+    cache_key = f"elections:ballot:{election_id}:{voter_id}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
     ballot = await ElectionRepository.get_voter_ballot(election_id, voter_id)
-    return ballot or {"isSubmitted": False, "preferences": []}
+    res = ballot or {"isSubmitted": False, "preferences": []}
+    await set_cache(cache_key, res)
+    return res
 
 @router.post("/{election_id}/run")
 async def run_election_stv(
@@ -105,6 +126,7 @@ async def run_election_stv(
         )
     try:
         result = await ElectionRepository.run_stv_round_calculation(election_id)
+        await clear_pattern("elections*")
         return result
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -114,16 +136,27 @@ async def get_election_rounds(
     election_id: str,
     current_employee: dict = Depends(get_current_employee)
 ):
-    return await ElectionRepository.get_election_rounds_history(election_id)
+    cache_key = f"elections:rounds:{election_id}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+    res = await ElectionRepository.get_election_rounds_history(election_id)
+    await set_cache(cache_key, res)
+    return res
 
 @router.get("/{election_id}/result", response_model=ElectionOut)
 async def get_election_result(
     election_id: str,
     current_employee: dict = Depends(get_current_employee)
 ):
+    cache_key = f"elections:item:{election_id}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
     election = await ElectionRepository.get_election_by_id(election_id)
     if not election:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Election not found.")
+    await set_cache(cache_key, election)
     return election
 
 @router.get("/{election_id}/voter-ballots")

@@ -844,7 +844,12 @@ class ContentService:
 
 
         user_name = "Admin"
-        lookup_uid = current_user_id or project.get("creative_team", {}).get("cc_creator") or project.get("assigned_employee_id")
+        lookup_uid = current_user_id
+        if not lookup_uid and existing_item and existing_item.get("project_id"):
+            from app.services.project import ProjectService
+            proj_obj = await ProjectService.get_project_by_id(existing_item["project_id"])
+            if proj_obj:
+                lookup_uid = (proj_obj.get("creative_team") or {}).get("cc_creator") or proj_obj.get("assigned_employee_id")
         if lookup_uid:
             from app.repository.employee import EmployeeRepository
             emp = await EmployeeRepository.get_employee_by_id(str(lookup_uid))
@@ -1105,7 +1110,12 @@ class ContentService:
                     
         # 1. Content Calendar Row Activity History logging on Content Item itself
         user_name = "Admin"
-        lookup_uid = current_user_id or project.get("creative_team", {}).get("cc_creator") or project.get("assigned_employee_id")
+        lookup_uid = current_user_id
+        if not lookup_uid and existing_item and existing_item.get("project_id"):
+            from app.services.project import ProjectService
+            proj_obj = await ProjectService.get_project_by_id(existing_item["project_id"])
+            if proj_obj:
+                lookup_uid = (proj_obj.get("creative_team") or {}).get("cc_creator") or proj_obj.get("assigned_employee_id")
         if lookup_uid:
             from app.repository.employee import EmployeeRepository
             emp = await EmployeeRepository.get_employee_by_id(str(lookup_uid))
@@ -1184,6 +1194,28 @@ class ContentService:
                     "details": "\n".join(row_changes)
                 })
                 data_dict["logs"] = logs
+
+                # Track deliverable revisions (V1, V2...) when media/copy changes
+                deliverable_changes = [
+                    c for c in row_changes
+                    if any(k in c for k in ["'finalReelLink'", "'thumbnailLink'", "'caption'", "'final_post_link'", "'final_reel_link'"])
+                ]
+                if not deliverable_changes and ("final_post_link" in data_dict or "final_reel_link" in data_dict or "carousel_images" in data_dict):
+                    for fld in ["final_post_link", "final_reel_link", "carousel_images"]:
+                        if fld in data_dict and data_dict[fld] != existing_item.get(fld):
+                            deliverable_changes.append(f"• '{fld}' updated")
+                if deliverable_changes:
+                    revisions = list(existing_item.get("revisions") or [])
+                    ver_num = len(revisions) + 1
+                    revisions.append({
+                        "version": f"V{ver_num}",
+                        "timestamp": now_iso,
+                        "updated_by": user_name,
+                        "changes": deliverable_changes,
+                        "caption_snapshot": data_dict.get("caption_text") if "caption_text" in data_dict else existing_item.get("caption_text", ""),
+                        "editing_link": (data_dict.get("editing") or {}).get("link") if isinstance(data_dict.get("editing"), dict) else (existing_item.get("editing") or {}).get("link", ""),
+                    })
+                    data_dict["revisions"] = revisions
 
         updated_item = await ContentRepository.update(item_id, data_dict)
         if updated_item:

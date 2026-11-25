@@ -446,7 +446,9 @@ async def get_public_content_review(
             "shoot": itm.get("shoot") or {},
             "carousel_images": raw_carousel,
             "issues": itm.get("issues") or [],
-            "remark": itm.get("remark") or ""
+            "remark": itm.get("remark") or "",
+            "revisions": itm.get("revisions") or [],
+            "feedback_notes": itm.get("feedback_notes") or []
         })
 
     return {
@@ -522,9 +524,15 @@ async def execute_public_content_action(
         await clear_pattern("projects:*")
         return {"success": True, "message": "Item approved successfully"}
 
-    elif action == "request_change":
+    elif action in ("request_change", "add_feedback"):
         item_id = payload.get("item_id")
         feedback = (payload.get("feedback") or "").strip()
+        timestamp_label = (payload.get("timestamp_label") or "").strip()
+        timestamp_seconds = payload.get("timestamp_seconds")
+        slide_index = payload.get("slide_index")
+        pin_x = payload.get("pin_x")
+        pin_y = payload.get("pin_y")
+        feedback_tag = (payload.get("feedback_tag") or "").strip()
         if not item_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="item_id is required")
         if not feedback:
@@ -534,33 +542,69 @@ async def execute_public_content_action(
         if not itm or itm.get("project_id") != project_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Content item not found")
 
+        now_iso = datetime.utcnow().isoformat()
+        prefix_parts = []
+        if timestamp_label:
+            prefix_parts.append(timestamp_label)
+        if slide_index is not None:
+            prefix_parts.append(f"Slide {int(slide_index) + 1}")
+        if feedback_tag:
+            prefix_parts.append(feedback_tag)
+        formatted_text = f"[{' • '.join(prefix_parts)}] {feedback}" if prefix_parts else feedback
+
         # Append client issue
         existing_issues = list(itm.get("issues") or [])
         new_issue = {
             "id": f"cli-iss-{int(datetime.utcnow().timestamp())}",
-            "text": feedback,
+            "text": formatted_text,
             "role": "Brand Person",
             "author": client_name,
             "isClientIssue": True,
             "issueType": "client_issue",
             "isPending": False,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": now_iso,
+            "timestamp_label": timestamp_label or None,
+            "timestamp_seconds": timestamp_seconds,
+            "slide_index": slide_index,
+            "pin_x": pin_x,
+            "pin_y": pin_y,
+            "feedback_tag": feedback_tag or None
         }
         existing_issues.append(new_issue)
+
+        # Structured feedback notes for timestamped video & visual pin review
+        existing_notes = list(itm.get("feedback_notes") or [])
+        new_note = {
+            "id": new_issue["id"],
+            "text": feedback,
+            "author": client_name,
+            "timestamp_label": timestamp_label or None,
+            "timestamp_seconds": timestamp_seconds,
+            "slide_index": slide_index,
+            "pin_x": pin_x,
+            "pin_y": pin_y,
+            "feedback_tag": feedback_tag or None,
+            "created_at": now_iso
+        }
+        existing_notes.append(new_note)
 
         logs = list(itm.get("logs") or [])
         logs.append({
             "userName": client_name,
-            "action": "Client Change Requested",
-            "timestamp": datetime.utcnow().isoformat(),
-            "details": f"Client feedback: {feedback}"
+            "action": "Client Feedback Added" if action == "add_feedback" else "Client Change Requested",
+            "timestamp": now_iso,
+            "details": f"Client feedback: {formatted_text}"
         })
 
-        await ContentRepository.update(item_id, {
+        update_fields = {
             "issues": existing_issues,
-            "approval_status": "In Progress" if itm.get("approval_status") == "Approved" else itm.get("approval_status", "In Progress"),
+            "feedback_notes": existing_notes,
             "logs": logs
-        })
+        }
+        if action == "request_change":
+            update_fields["approval_status"] = "In Progress" if itm.get("approval_status") == "Approved" else itm.get("approval_status", "In Progress")
+
+        await ContentRepository.update(item_id, update_fields)
 
         # Sync tasks for content item so assigned team members get notified in Task Management
         try:
@@ -572,7 +616,7 @@ async def execute_public_content_action(
         await clear_pattern(f"content:{project_id}:*")
         await clear_pattern("projects:*")
         await clear_pattern("tasks:*")
-        return {"success": True, "message": "Feedback submitted successfully"}
+        return {"success": True, "message": "Feedback submitted successfully", "note": new_note}
 
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unknown action '{action}'")

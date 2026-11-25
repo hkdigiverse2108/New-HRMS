@@ -450,8 +450,15 @@ class TaskRepository:
                             ],
                             "status": {"$nin": ["completed", "done"]}
                         },
-                        # Completed work
-                        {"status": {"$in": ["completed", "done"]}}
+                        # Completed work (only due today or future; past completed tasks stay in Completed tab)
+                        {
+                            "status": {"$in": ["completed", "done"]},
+                            "$or": [
+                                {"due_date": {"$gte": today_str}},
+                                {"due_date": {"$gte": start_of_today}},
+                                {"due_date": {"$in": [None, ""]}}
+                            ]
+                        }
                     ]
                 })
 
@@ -851,8 +858,25 @@ class TaskRepository:
                 return parts[0]
             return {"$and": parts}
 
+        total_active_cond = {
+            "$and": [
+                exclude_issue_cond,
+                {
+                    "$nor": [
+                        {
+                            "status": {"$in": ["completed", "done"]},
+                            "$or": [
+                                {"due_date": {"$lt": today_str}},
+                                {"due_date": {"$lt": start_of_today}}
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+
         facet_def = {
-            "total": [{"$match": _match_with_dept(exclude_issue_cond, exclude_twins=True)}, {"$count": "n"}],
+            "total": [{"$match": _match_with_dept(total_active_cond, exclude_twins=True)}, {"$count": "n"}],
             "todo": [{"$match": _match_with_dept({"$and": [{"status": "todo"}, exclude_issue_cond]}, exclude_twins=True)}, {"$count": "n"}],
             "inprogress": [{"$match": _match_with_dept({"$and": [{"status": "inprogress"}, exclude_issue_cond]}, exclude_twins=True)}, {"$count": "n"}],
             "inreview": [{"$match": _match_with_dept({"$and": [{"status": {"$in": ["inreview", "review"]}}, exclude_issue_cond]}, exclude_twins=True)}, {"$count": "n"}],

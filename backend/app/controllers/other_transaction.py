@@ -8,6 +8,7 @@ from app.schemas.other_transaction import (
     OtherBankAccountCreate, OtherBankAccountUpdate, OtherBankAccountResponse,
 )
 from app.controllers.auth import get_current_employee
+from app.redis.service import get_cache, set_cache, clear_pattern, make_list_key
 
 router = APIRouter(prefix="/other-transactions", tags=["Client & External Transactions"])
 
@@ -59,8 +60,14 @@ async def _get_or_404(transaction_id: str) -> dict:
 # ---------- Bank accounts (this page only) ----------
 @router.get("/bank-accounts", response_model=List[OtherBankAccountResponse], response_model_exclude_none=True)
 async def get_other_bank_accounts(current_user: dict = Depends(get_current_employee)):
+    cache_key = "other_tx:bank_accounts"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
     items = await _banks().find({"is_deleted": False}).sort("created_at", 1).to_list(length=500)
-    return [_serialize(i) for i in items]
+    res = [_serialize(i) for i in items]
+    await set_cache(cache_key, res)
+    return res
 
 
 @router.post("/bank-accounts", response_model=OtherBankAccountResponse, response_model_exclude_none=True, status_code=status.HTTP_201_CREATED)
@@ -71,6 +78,7 @@ async def create_other_bank_account(data: OtherBankAccountCreate, current_user: 
     doc.update({"created_at": now, "updated_at": now, "is_deleted": False})
     result = await _banks().insert_one(doc)
     doc["_id"] = result.inserted_id
+    await clear_pattern("other_tx*")
     return _serialize(doc)
 
 
@@ -82,6 +90,7 @@ async def update_other_bank_account(account_id: str, data: OtherBankAccountUpdat
         updates["ifsc_code"] = updates["ifsc_code"].strip().upper()
     updates["updated_at"] = datetime.utcnow()
     await _banks().update_one({"_id": ObjectId(account_id)}, {"$set": updates})
+    await clear_pattern("other_tx*")
     return _serialize(await _get_bank_or_404(account_id))
 
 
@@ -91,6 +100,7 @@ async def delete_other_bank_account(account_id: str, current_user: dict = Depend
     if await _col().count_documents({"bank_account_id": account_id, "is_deleted": False}, limit=1):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This bank account has transactions. Move or delete them first.")
     await _banks().update_one({"_id": ObjectId(account_id)}, {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}})
+    await clear_pattern("other_tx*")
 
 
 # ---------- Transactions ----------
@@ -100,13 +110,19 @@ async def get_other_transactions(
     bank_account_id: Optional[str] = Query(None, description="Bank account id"),
     current_user: dict = Depends(get_current_employee),
 ):
+    cache_key = make_list_key("other_tx_list", party=party, bank_account_id=bank_account_id)
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
     query: dict = {"is_deleted": False}
     if party:
         query["party"] = party
     if bank_account_id:
         query["bank_account_id"] = bank_account_id
     items = await _col().find(query).sort([("date", -1), ("created_at", -1)]).to_list(length=5000)
-    return [_serialize(i) for i in items]
+    res = [_serialize(i) for i in items]
+    await set_cache(cache_key, res)
+    return res
 
 
 @router.post("", response_model=OtherTransactionResponse, response_model_exclude_none=True, status_code=status.HTTP_201_CREATED)
@@ -120,6 +136,7 @@ async def create_other_transaction(data: OtherTransactionCreate, current_user: d
     doc.update({"created_at": now, "updated_at": now, "is_deleted": False})
     result = await _col().insert_one(doc)
     doc["_id"] = result.inserted_id
+    await clear_pattern("other_tx*")
     return _serialize(doc)
 
 
@@ -135,6 +152,7 @@ async def update_other_transaction(transaction_id: str, data: OtherTransactionUp
     await _require_bank_account(method, updates.get("bank_account_id", current.get("bank_account_id")))
     updates["updated_at"] = datetime.utcnow()
     await _col().update_one({"_id": ObjectId(transaction_id)}, {"$set": updates})
+    await clear_pattern("other_tx*")
     return _serialize(await _get_or_404(transaction_id))
 
 
@@ -145,3 +163,4 @@ async def delete_other_transaction(transaction_id: str, current_user: dict = Dep
         {"_id": ObjectId(transaction_id)},
         {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}},
     )
+    await clear_pattern("other_tx*")

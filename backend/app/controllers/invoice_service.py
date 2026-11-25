@@ -9,6 +9,7 @@ from app.controllers.auth import get_current_employee
 from app.controllers.settings import check_admin_role
 from app.database.db import get_database
 from app.schemas.invoice_service import InvoiceServiceCreate, InvoiceServiceResponse, InvoiceServiceUpdate
+from app.redis.service import get_cache, set_cache, clear_pattern
 
 # Catalog of services picked from the "Item Description" dropdown on invoices. Editing a service here
 # never touches invoices already created from it: invoices keep their own copy of each line.
@@ -70,8 +71,14 @@ async def _ensure_unique(description: str, exclude_id: str = "") -> None:
 
 @router.get("", response_model=List[InvoiceServiceResponse], response_model_by_alias=True)
 async def list_services(current_user: dict = Depends(get_current_employee)):
+    cache_key = "invoice_services:list"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
     docs = await _col().find({"is_deleted": {"$ne": True}}).sort("description", 1).to_list(length=1000)
-    return [_serialize(d) for d in docs]
+    res = [_serialize(d) for d in docs]
+    await set_cache(cache_key, res)
+    return res
 
 
 @router.post("", response_model=InvoiceServiceResponse, response_model_by_alias=True, status_code=status.HTTP_201_CREATED)
@@ -90,6 +97,7 @@ async def create_service(data: InvoiceServiceCreate, current_user: dict = Depend
     }
     res = await _col().insert_one(doc)
     doc["_id"] = res.inserted_id
+    await clear_pattern("invoice_services:*")
     return _serialize(doc)
 
 
@@ -109,6 +117,7 @@ async def update_service(service_id: str, data: InvoiceServiceUpdate, current_us
         updates["sac"] = updates["sac"].strip()
     updates["updated_at"] = datetime.utcnow()
     await _col().update_one({"_id": ObjectId(service_id)}, {"$set": updates})
+    await clear_pattern("invoice_services:*")
     return _serialize(await _get_or_404(service_id))
 
 
@@ -120,3 +129,4 @@ async def delete_service(service_id: str, current_user: dict = Depends(get_curre
         {"_id": ObjectId(service_id)},
         {"$set": {"is_deleted": True, "deleted_at": datetime.utcnow(), "updated_at": datetime.utcnow()}},
     )
+    await clear_pattern("invoice_services:*")

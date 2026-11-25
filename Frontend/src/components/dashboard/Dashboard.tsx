@@ -1,4 +1,5 @@
 import { DashboardHeader } from "./sections/DashboardHeader";
+import { TeamPulseBar } from "./sections/TeamPulseBar";
 import { TimeTrackerWidget } from "./sections/TimeTrackerWidget";
 import { TodaySchedule } from "./sections/TodaySchedule";
 import { NotificationsStrip } from "./sections/NotificationsStrip";
@@ -56,7 +57,13 @@ export function Dashboard({ setActive, onAction }: { setActive?: (url: string) =
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 pb-24">
       <SpotlightCelebrations />
       {/* SECTION 01: Header (always) */}
-      <DashboardHeader setActive={setActive} onAction={onAction} />
+      <DashboardHeader
+        setActive={setActive}
+        onAction={onAction}
+      />
+
+      {/* #3 Live "Who is in Office" / Team Pulse Bar */}
+      <TeamPulseBar />
 
       {/* Notifications strip (Meeting PDF compulsory, top) */}
       {showSection("notifications") && <NotificationsStrip />}

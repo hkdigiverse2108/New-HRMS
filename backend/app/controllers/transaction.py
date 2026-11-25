@@ -12,6 +12,7 @@ from app.schemas.transaction import (
     OptionList, OptionName, BankOpeningBalance,
 )
 from app.controllers.auth import get_current_employee
+from app.redis.service import get_cache, set_cache, clear_pattern, make_list_key
 
 router = APIRouter(prefix="/transactions", tags=["Finance Transactions"])
 
@@ -78,8 +79,14 @@ async def _get_or_404(transaction_id: str) -> dict:
 
 @router.get("/opening-balances", response_model=OpeningBalances)
 async def get_opening_balances(current_user: dict = Depends(get_current_employee)):
+    cache_key = "transactions:opening_balances"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
     doc = await get_database()[SETTINGS_COLLECTION].find_one({"_id": OPENING_BALANCES_ID}) or {}
-    return OpeningBalances(bank=doc.get("bank", 0.0), cash=doc.get("cash", 0.0))
+    res = OpeningBalances(bank=doc.get("bank", 0.0), cash=doc.get("cash", 0.0))
+    await set_cache(cache_key, res.model_dump())
+    return res
 
 
 @router.put("/opening-balances", response_model=OpeningBalances)
@@ -101,13 +108,20 @@ async def update_opening_balances(data: OpeningBalances, current_user: dict = De
         {"$set": {**data.model_dump(), "updated_at": datetime.utcnow()}},
         upsert=True,
     )
+    await clear_pattern("transactions*")
     return data
 
 
 @router.get("/opening-balances/bank-accounts")
 async def get_bank_opening_balances(current_user: dict = Depends(get_current_employee)):
+    cache_key = "transactions:bank_opening_balances"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
     doc = await get_database()[SETTINGS_COLLECTION].find_one({"_id": BANK_OPENING_BALANCES_ID}) or {}
-    return doc.get("balances", {})
+    res = doc.get("balances", {})
+    await set_cache(cache_key, res)
+    return res
 
 
 @router.put("/opening-balances/bank-accounts/{account_id}")
@@ -126,6 +140,7 @@ async def update_bank_opening_balance(account_id: str, data: BankOpeningBalance,
         {"$set": {f"balances.{account_id}": data.amount, "updated_at": datetime.utcnow()}},
         upsert=True,
     )
+    await clear_pattern("transactions*")
     return {account_id: data.amount}
 
 
@@ -142,7 +157,13 @@ async def _get_option_list(kind: str) -> OptionList:
 
 @router.get("/options/{kind}", response_model=OptionList)
 async def get_option_list(kind: str, current_user: dict = Depends(get_current_employee)):
-    return await _get_option_list(kind)
+    cache_key = f"transactions:options:{kind}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+    res = await _get_option_list(kind)
+    await set_cache(cache_key, res.model_dump())
+    return res
 
 
 @router.post("/options/{kind}", response_model=OptionList)
@@ -155,6 +176,7 @@ async def add_option(kind: str, data: OptionName, current_user: dict = Depends(g
         {"$addToSet": {"custom": name}, "$pull": {"hidden": name}, "$set": {"updated_at": datetime.utcnow()}},
         upsert=True,
     )
+    await clear_pattern("transactions:options:*")
     return await _get_option_list(kind)
 
 
@@ -167,6 +189,7 @@ async def remove_option(kind: str, data: OptionName, current_user: dict = Depend
         {"$addToSet": {"hidden": name}, "$pull": {"custom": name}, "$set": {"updated_at": datetime.utcnow()}},
         upsert=True,
     )
+    await clear_pattern("transactions:options:*")
     return await _get_option_list(kind)
 
 
@@ -225,6 +248,7 @@ async def sync_invoices(current_user: dict = Depends(get_current_employee)):
         })
     if new_docs:
         await _col().insert_many(new_docs)
+        await clear_pattern("transactions*")
     return {"synced": len(new_docs)}
 
 
@@ -235,6 +259,10 @@ async def get_transactions(
     bank_account_id: Optional[str] = Query(None, description="Bank account id"),
     current_user: dict = Depends(get_current_employee),
 ):
+    cache_key = make_list_key("transactions_list", account=account, type=type, bank_account_id=bank_account_id)
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
     query: dict = {"is_deleted": False}
     if account:
         query["account"] = account
@@ -243,7 +271,9 @@ async def get_transactions(
     if bank_account_id:
         query["bank_account_id"] = bank_account_id
     items = await _col().find(query).sort([("date", -1), ("created_at", -1)]).to_list(length=5000)
-    return [_serialize(i) for i in items]
+    res = [_serialize(i) for i in items]
+    await set_cache(cache_key, res)
+    return res
 
 
 @router.post("", response_model=TransactionResponse, response_model_exclude_none=True, status_code=status.HTTP_201_CREATED)
@@ -259,6 +289,7 @@ async def create_transaction(data: TransactionCreate, current_user: dict = Depen
     doc.update({"source": "manual", "created_at": now, "updated_at": now, "is_deleted": False})
     result = await _col().insert_one(doc)
     doc["_id"] = result.inserted_id
+    await clear_pattern("transactions*")
     return _serialize(doc)
 
 
@@ -269,6 +300,7 @@ async def update_transaction(transaction_id: str, data: TransactionUpdate, curre
     _require_bank_account(updates.get("account", current.get("account")), updates.get("bank_account_id", current.get("bank_account_id")))
     updates["updated_at"] = datetime.utcnow()
     await _col().update_one({"_id": ObjectId(transaction_id)}, {"$set": updates})
+    await clear_pattern("transactions*")
     return _serialize(await _get_or_404(transaction_id))
 
 
@@ -279,3 +311,4 @@ async def delete_transaction(transaction_id: str, current_user: dict = Depends(g
         {"_id": ObjectId(transaction_id)},
         {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}},
     )
+    await clear_pattern("transactions*")

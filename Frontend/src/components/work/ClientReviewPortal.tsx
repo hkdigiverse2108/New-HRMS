@@ -25,7 +25,10 @@ import {
   Link2,
   Folder,
   Instagram,
-  Play
+  Play,
+  MapPin,
+  Smartphone,
+  Tag
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getApiUrl, getMediaUrl as resolveMediaUrl } from "@/lib/config";
@@ -49,6 +52,26 @@ interface ClientReviewItem {
   carousel_images?: string[];
   issues?: any[];
   remark?: string;
+  revisions?: Array<{
+    version: string;
+    timestamp: string;
+    updated_by?: string;
+    changes?: string[];
+    caption_snapshot?: string;
+    editing_link?: string;
+  }>;
+  feedback_notes?: Array<{
+    id: string;
+    text: string;
+    author?: string;
+    timestamp_label?: string | null;
+    timestamp_seconds?: number | null;
+    slide_index?: number | null;
+    pin_x?: number | null;
+    pin_y?: number | null;
+    feedback_tag?: string | null;
+    created_at?: string;
+  }>;
 }
 
 interface ProjectSummary {
@@ -265,17 +288,51 @@ function GDriveMediaViewer({
   );
 }
 
+// Helper to format seconds to M:SS
+const formatVideoTime = (secs: number) => {
+  if (!isFinite(secs) || secs < 0) return "0:00";
+  const m = Math.floor(secs / 60);
+  const s = Math.floor(secs % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+};
+
 // Media Gallery Component for Deliverables
 function DeliverableMediaGallery({
   item,
   assets,
-  onOpenPreview
+  onOpenPreview,
+  onPinTimestamp,
+  onPinImage,
+  seekRequest
 }: {
   item: ClientReviewItem;
   assets: MediaAsset[];
   onOpenPreview: () => void;
+  onPinTimestamp?: (timeLabel: string, seconds: number, slideIndex: number) => void;
+  onPinImage?: (xPct: number, yPct: number, slideIndex: number) => void;
+  seekRequest?: { itemId: string; seconds?: number; slideIndex?: number; nonce: number } | null;
 }) {
   const [activeIdx, setActiveIdx] = useState(0);
+  const [pinMode, setPinMode] = useState(false);
+  const [safeZoneMode, setSafeZoneMode] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (seekRequest && seekRequest.itemId === item.id) {
+      if (typeof seekRequest.slideIndex === "number") {
+        setActiveIdx(seekRequest.slideIndex);
+      }
+      if (typeof seekRequest.seconds === "number" && videoRef.current) {
+        videoRef.current.currentTime = seekRequest.seconds;
+        videoRef.current.play().catch(() => {});
+      }
+    }
+  }, [seekRequest, item.id]);
+
+  // Visual pins for current slide
+  const slidePins = (item.feedback_notes || []).filter(
+    n => typeof n.pin_x === "number" && typeof n.pin_y === "number" && (n.slide_index ?? 0) === activeIdx
+  );
 
   if (assets.length === 0) {
     return (
@@ -293,23 +350,143 @@ function DeliverableMediaGallery({
     <div className="relative w-full h-[380px] sm:h-[430px] bg-slate-950 flex items-center justify-center overflow-hidden border-b border-slate-100 dark:border-slate-800 group">
       {/* Current Asset Display */}
       {currentAsset.kind === "video" && (
-        <video
-          controls
-          playsInline
-          preload="metadata"
-          src={currentAsset.url}
-          className="w-full h-full object-contain bg-black"
-        />
+        <div className="relative w-full h-full flex items-center justify-center bg-black">
+          <video
+            ref={videoRef}
+            controls
+            playsInline
+            preload="metadata"
+            src={currentAsset.url}
+            className="w-full h-full object-contain bg-black"
+          />
+          {onPinTimestamp && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                const secs = Math.floor(videoRef.current?.currentTime || 0);
+                onPinTimestamp(formatVideoTime(secs), secs, activeIdx);
+              }}
+              className="absolute top-3 right-3 z-20 px-2.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[11px] flex items-center gap-1 shadow-lg cursor-pointer transition-transform active:scale-95"
+              title="Pin current video timestamp for feedback"
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>Pin Time</span>
+            </button>
+          )}
+        </div>
       )}
 
       {currentAsset.kind === "image" && (
-        <img
-          src={currentAsset.url}
-          referrerPolicy="no-referrer"
-          alt={item.topic}
-          className="w-full h-full object-contain hover:scale-105 transition-transform duration-300 cursor-pointer"
-          onClick={onOpenPreview}
-        />
+        <div
+          className={cn(
+            "relative w-full h-full flex items-center justify-center",
+            pinMode && "cursor-crosshair"
+          )}
+          onClick={(e) => {
+            if (pinMode && onPinImage) {
+              e.stopPropagation();
+              const rect = e.currentTarget.getBoundingClientRect();
+              const xPct = Math.max(0, Math.min(100, Math.round(((e.clientX - rect.left) / rect.width) * 100)));
+              const yPct = Math.max(0, Math.min(100, Math.round(((e.clientY - rect.top) / rect.height) * 100)));
+              setPinMode(false);
+              onPinImage(xPct, yPct, activeIdx);
+            } else {
+              onOpenPreview();
+            }
+          }}
+        >
+          <img
+            src={currentAsset.url}
+            referrerPolicy="no-referrer"
+            alt={item.topic}
+            className={cn(
+              "w-full h-full object-contain transition-transform duration-300",
+              !pinMode && "hover:scale-105 cursor-pointer"
+            )}
+          />
+
+          {/* Existing Visual Pin Markers */}
+          {slidePins.map((pin, pIdx) => (
+            <div
+              key={pin.id || pIdx}
+              style={{ left: `${pin.pin_x}%`, top: `${pin.pin_y}%` }}
+              onClick={(e) => e.stopPropagation()}
+              title={`${pin.author || "Client"}: ${pin.text}`}
+              className="absolute -translate-x-1/2 -translate-y-1/2 z-20 w-6 h-6 rounded-full bg-amber-500 text-slate-950 font-black text-[11px] flex items-center justify-center shadow-lg ring-2 ring-white cursor-help animate-in zoom-in-75"
+            >
+              {pIdx + 1}
+            </div>
+          ))}
+
+          {/* Pin Mode Helper Banner */}
+          {pinMode && (
+            <div className="absolute bottom-3 inset-x-0 z-30 flex justify-center pointer-events-none">
+              <span className="px-3 py-1 rounded-full bg-amber-500 text-slate-950 text-[11px] font-black shadow-lg">
+                Click anywhere on the image to drop a feedback pin
+              </span>
+            </div>
+          )}
+
+          {/* Top-Right Pin Spot & Story Safe-Zone Controls */}
+          <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5">
+            {item.type === "Story" && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSafeZoneMode(v => !v);
+                }}
+                className={cn(
+                  "px-2.5 py-1.5 rounded-xl font-black text-[11px] flex items-center gap-1 shadow-lg cursor-pointer transition-all",
+                  safeZoneMode
+                    ? "bg-pink-500 text-white"
+                    : "bg-black/70 hover:bg-black text-white border border-white/15"
+                )}
+                title="Toggle Instagram/WhatsApp Story Safe-Zone Guides"
+              >
+                <Smartphone className="w-3.5 h-3.5" />
+                <span>{safeZoneMode ? "Safe-Zone ON" : "Safe-Zone"}</span>
+              </button>
+            )}
+            {onPinImage && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPinMode(v => !v);
+                }}
+                className={cn(
+                  "px-2.5 py-1.5 rounded-xl font-black text-[11px] flex items-center gap-1 shadow-lg cursor-pointer transition-all",
+                  pinMode
+                    ? "bg-amber-500 text-slate-950 ring-2 ring-white"
+                    : "bg-black/70 hover:bg-amber-500 hover:text-slate-950 text-white border border-white/15"
+                )}
+                title="Click to pin feedback directly on this image"
+              >
+                <MapPin className="w-3.5 h-3.5" />
+                <span>{pinMode ? "Cancel Pin" : "Pin Spot"}</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Story Safe-Zone Overlay */}
+      {item.type === "Story" && safeZoneMode && (
+        <div className="absolute inset-0 z-10 pointer-events-none flex flex-col justify-between">
+          <div className="h-[14%] bg-rose-500/25 border-b-2 border-dashed border-rose-400 flex items-center px-3 gap-2">
+            <div className="w-6 h-6 rounded-full bg-white/30" />
+            <span className="text-[10px] font-black text-white drop-shadow">
+              Story Header Safe-Zone (Keep text below)
+            </span>
+          </div>
+          <div className="h-[18%] bg-rose-500/25 border-t-2 border-dashed border-rose-400 flex items-center justify-center px-3">
+            <span className="px-4 py-1 rounded-full border border-white/50 text-[10px] font-black text-white drop-shadow">
+              Send message / CTA Safe-Zone (Keep text above)
+            </span>
+          </div>
+        </div>
       )}
 
       {currentAsset.kind === "gdrive_file" && currentAsset.fileId && (
@@ -586,14 +763,29 @@ export function ClientReviewPortal() {
     item: ClientReviewItem | null;
     feedbackText: string;
     clientName: string;
+    timestampLabel: string;
+    timestampSeconds: number | null;
+    slideIndex: number | null;
+    pinX: number | null;
+    pinY: number | null;
+    feedbackTag: string;
     isSubmitting: boolean;
   }>({
     isOpen: false,
     item: null,
     feedbackText: "",
     clientName: "",
+    timestampLabel: "",
+    timestampSeconds: null,
+    slideIndex: null,
+    pinX: null,
+    pinY: null,
+    feedbackTag: "",
     isSubmitting: false
   });
+
+  const [seekRequest, setSeekRequest] = useState<{ itemId: string; seconds?: number; slideIndex?: number; nonce: number } | null>(null);
+  const [expandedRevisions, setExpandedRevisions] = useState<Record<string, boolean>>({});
 
   // Bulk approve modal
   const [isBulkApproveOpen, setIsBulkApproveOpen] = useState(false);
@@ -736,34 +928,77 @@ export function ClientReviewPortal() {
     }
   };
 
+  const parseTimeLabelToSeconds = (label: string): number | null => {
+    const clean = label.trim();
+    if (!clean) return null;
+    const m = clean.match(/^(\d+):(\d{1,2})$/);
+    if (m && m[1] && m[2]) {
+      return Number(m[1]) * 60 + Number(m[2]);
+    }
+    const num = Number(clean);
+    return isNaN(num) ? null : num;
+  };
+
   const handleSubmitFeedback = async () => {
     if (!feedbackModal.item || !feedbackModal.feedbackText.trim()) return;
     setFeedbackModal(prev => ({ ...prev, isSubmitting: true }));
+    const tsLabel = feedbackModal.timestampLabel.trim();
+    const tsSeconds = feedbackModal.timestampSeconds ?? (tsLabel ? parseTimeLabelToSeconds(tsLabel) : null);
     try {
       const baseUrl = getApiUrl();
       const res = await fetch(`${baseUrl}/public/content-review/${projectId}/action`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "request_change",
+          action: "add_feedback",
           item_id: feedbackModal.item.id,
           feedback: feedbackModal.feedbackText.trim(),
-          client_name: feedbackModal.clientName.trim() || project?.client_name || "Client"
+          client_name: feedbackModal.clientName.trim() || project?.client_name || "Client",
+          timestamp_label: tsLabel || null,
+          timestamp_seconds: tsSeconds,
+          slide_index: feedbackModal.slideIndex,
+          pin_x: feedbackModal.pinX,
+          pin_y: feedbackModal.pinY,
+          feedback_tag: feedbackModal.feedbackTag || null
         })
       });
       if (!res.ok) throw new Error("Failed to submit feedback");
+      const prefixParts: string[] = [];
+      if (tsLabel) prefixParts.push(tsLabel);
+      if (feedbackModal.slideIndex !== null) prefixParts.push(`Slide ${feedbackModal.slideIndex + 1}`);
+      if (feedbackModal.feedbackTag) prefixParts.push(feedbackModal.feedbackTag);
+      const formattedText = prefixParts.length > 0 ? `[${prefixParts.join(" • ")}] ${feedbackModal.feedbackText.trim()}` : feedbackModal.feedbackText.trim();
       const newIssue = {
         id: `cli-${Date.now()}`,
-        text: feedbackModal.feedbackText.trim(),
+        text: formattedText,
         author: feedbackModal.clientName.trim() || "Client",
         isClientIssue: true,
+        timestamp_label: tsLabel || null,
+        timestamp_seconds: tsSeconds,
+        slide_index: feedbackModal.slideIndex,
+        pin_x: feedbackModal.pinX,
+        pin_y: feedbackModal.pinY,
+        feedback_tag: feedbackModal.feedbackTag || null,
         timestamp: new Date().toISOString()
+      };
+      const newNote = {
+        id: newIssue.id,
+        text: feedbackModal.feedbackText.trim(),
+        author: newIssue.author,
+        timestamp_label: tsLabel || null,
+        timestamp_seconds: tsSeconds,
+        slide_index: feedbackModal.slideIndex,
+        pin_x: feedbackModal.pinX,
+        pin_y: feedbackModal.pinY,
+        feedback_tag: feedbackModal.feedbackTag || null,
+        created_at: newIssue.timestamp
       };
       setItems(prev => prev.map(i => {
         if (i.id === feedbackModal.item?.id) {
           return {
             ...i,
-            issues: [...(i.issues || []), newIssue]
+            issues: [...(i.issues || []), newIssue],
+            feedback_notes: [...(i.feedback_notes || []), newNote]
           };
         }
         return i;
@@ -771,7 +1006,8 @@ export function ClientReviewPortal() {
       if (previewModalItem?.id === feedbackModal.item.id) {
         setPreviewModalItem(prev => prev ? {
           ...prev,
-          issues: [...(prev.issues || []), newIssue]
+          issues: [...(prev.issues || []), newIssue],
+          feedback_notes: [...(prev.feedback_notes || []), newNote]
         } : null);
       }
       setFeedbackModal({
@@ -779,6 +1015,12 @@ export function ClientReviewPortal() {
         item: null,
         feedbackText: "",
         clientName: "",
+        timestampLabel: "",
+        timestampSeconds: null,
+        slideIndex: null,
+        pinX: null,
+        pinY: null,
+        feedbackTag: "",
         isSubmitting: false
       });
     } catch (err: any) {
@@ -1072,6 +1314,37 @@ export function ClientReviewPortal() {
                     item={item}
                     assets={assets}
                     onOpenPreview={() => setPreviewModalItem(item)}
+                    seekRequest={seekRequest}
+                    onPinTimestamp={(timeLabel, secs, slideIdx) => {
+                      setFeedbackModal({
+                        isOpen: true,
+                        item,
+                        feedbackText: "",
+                        clientName: project?.client_name || "",
+                        timestampLabel: timeLabel,
+                        timestampSeconds: secs,
+                        slideIndex: slideIdx,
+                        pinX: null,
+                        pinY: null,
+                        feedbackTag: "",
+                        isSubmitting: false
+                      });
+                    }}
+                    onPinImage={(xPct, yPct, slideIdx) => {
+                      setFeedbackModal({
+                        isOpen: true,
+                        item,
+                        feedbackText: "",
+                        clientName: project?.client_name || "",
+                        timestampLabel: "",
+                        timestampSeconds: null,
+                        slideIndex: slideIdx,
+                        pinX: xPct,
+                        pinY: yPct,
+                        feedbackTag: "",
+                        isSubmitting: false
+                      });
+                    }}
                   />
 
                   {/* Content Info */}
@@ -1149,16 +1422,124 @@ export function ClientReviewPortal() {
                         copiedRefId={copiedRefId}
                       />
 
-                      {/* Client Issue/Remark Preview */}
-                      {issueList.length > 0 && (
-                        <div className="p-2.5 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/40 rounded-2xl space-y-1">
+                      {/* Client Issue/Remark & Timestamped Feedback Preview */}
+                      {(issueList.length > 0 || (item.feedback_notes && item.feedback_notes.length > 0)) && (
+                        <div className="p-2.5 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/40 rounded-2xl space-y-1.5">
                           <span className="text-[10px] font-black uppercase text-amber-700 dark:text-amber-400 tracking-wider flex items-center gap-1">
                             <MessageSquare className="w-3 h-3" /> Feedback Notes:
                           </span>
-                          {issueList.map((iss, iIdx) => (
-                            <p key={iIdx} className="text-xs text-amber-900 dark:text-amber-200 pl-3 border-l-2 border-amber-400">
-                              "{typeof iss === "object" ? iss.text : iss}"
-                            </p>
+                          {(item.feedback_notes && item.feedback_notes.length > 0 ? item.feedback_notes : issueList).map((iss: any, iIdx: number) => {
+                            const tsLabel = typeof iss === "object" ? iss.timestamp_label : null;
+                            const tsSec = typeof iss === "object" ? iss.timestamp_seconds : null;
+                            const sIdx = typeof iss === "object" ? iss.slide_index : null;
+                            const hasPin = typeof iss === "object" && typeof iss.pin_x === "number" && typeof iss.pin_y === "number";
+                            const tag = typeof iss === "object" ? iss.feedback_tag : null;
+                            const txt = typeof iss === "object" ? iss.text : iss;
+                            return (
+                              <div key={iIdx} className="text-xs text-amber-900 dark:text-amber-200 pl-2.5 border-l-2 border-amber-400 flex items-start gap-1.5 flex-wrap">
+                                {tsLabel && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (typeof tsSec === "number") {
+                                        setSeekRequest({ itemId: item.id, seconds: tsSec, nonce: Date.now() });
+                                      }
+                                    }}
+                                    className="px-1.5 py-0.5 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-800 dark:text-amber-300 font-mono text-[10px] font-black shrink-0 cursor-pointer"
+                                    title="Jump video to this timestamp"
+                                  >
+                                    ⏱️ {tsLabel}
+                                  </button>
+                                )}
+                                {typeof sIdx === "number" && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setSeekRequest({ itemId: item.id, slideIndex: sIdx, nonce: Date.now() })}
+                                    className="px-1.5 py-0.5 rounded-md bg-sky-500/15 hover:bg-sky-500/25 text-sky-700 dark:text-sky-300 text-[10px] font-black shrink-0 cursor-pointer"
+                                    title="Jump to this slide"
+                                  >
+                                    {hasPin ? "📍" : "🖼️"} Slide {sIdx + 1}
+                                  </button>
+                                )}
+                                {tag && (
+                                  <span className="px-1.5 py-0.5 rounded-md bg-purple-500/15 text-purple-700 dark:text-purple-300 text-[10px] font-bold shrink-0">
+                                    #{tag}
+                                  </span>
+                                )}
+                                <span className="leading-snug">"{txt}"</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Revisions (V1, V2...) & Smart Feedback Button Bar */}
+                      <div className="flex items-center justify-between gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setFeedbackModal({
+                            isOpen: true,
+                            item,
+                            feedbackText: "",
+                            clientName: project?.client_name || "",
+                            timestampLabel: "",
+                            timestampSeconds: null,
+                            slideIndex: item.type !== "Reel" && assets.length > 0 ? 0 : null,
+                            pinX: null,
+                            pinY: null,
+                            feedbackTag: "",
+                            isSubmitting: false
+                          })}
+                          className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer border border-slate-200/80 dark:border-slate-700"
+                        >
+                          {item.type === "Reel" ? (
+                            <>
+                              <Clock className="w-3 h-3 text-amber-500" />
+                              <span>Add Timestamp Note</span>
+                            </>
+                          ) : item.type === "Story" ? (
+                            <>
+                              <Smartphone className="w-3 h-3 text-pink-500" />
+                              <span>Add Story Note</span>
+                            </>
+                          ) : (
+                            <>
+                              <MapPin className="w-3 h-3 text-emerald-500" />
+                              <span>Pin Visual / Slide Note</span>
+                            </>
+                          )}
+                        </button>
+
+                        {item.revisions && item.revisions.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setExpandedRevisions(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
+                            className="px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-[11px] font-bold flex items-center gap-1 border border-indigo-200/80 dark:border-indigo-800 cursor-pointer"
+                          >
+                            <Layers className="w-3 h-3" />
+                            <span>V{item.revisions.length} ({item.revisions.length} rev)</span>
+                            {expandedRevisions[item.id] ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                          </button>
+                        )}
+                      </div>
+
+                      {expandedRevisions[item.id] && item.revisions && item.revisions.length > 0 && (
+                        <div className="p-2.5 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/70 dark:border-indigo-800/50 rounded-2xl space-y-1.5 text-[11px]">
+                          <span className="text-[10px] font-black uppercase text-indigo-700 dark:text-indigo-400 tracking-wider block">
+                            Revision History
+                          </span>
+                          {[...item.revisions].reverse().map((rev, rIdx) => (
+                            <div key={rIdx} className="pl-2.5 border-l-2 border-indigo-400 space-y-0.5">
+                              <div className="flex items-center justify-between font-bold text-indigo-900 dark:text-indigo-200">
+                                <span>{rev.version} • {rev.updated_by || "Team"}</span>
+                                <span className="text-[10px] opacity-70">{rev.timestamp ? String(rev.timestamp).split("T")[0] : ""}</span>
+                              </div>
+                              {rev.changes && rev.changes.length > 0 && (
+                                <p className="text-[10px] text-slate-600 dark:text-slate-300 line-clamp-2">
+                                  {rev.changes.join(", ").replace(/• /g, "")}
+                                </p>
+                              )}
+                            </div>
                           ))}
                         </div>
                       )}
@@ -1440,6 +1821,37 @@ export function ClientReviewPortal() {
                 item={previewModalItem}
                 assets={extractMediaAssets(previewModalItem)}
                 onOpenPreview={() => {}}
+                seekRequest={seekRequest}
+                onPinTimestamp={(timeLabel, secs, slideIdx) => {
+                  setFeedbackModal({
+                    isOpen: true,
+                    item: previewModalItem,
+                    feedbackText: "",
+                    clientName: project?.client_name || "",
+                    timestampLabel: timeLabel,
+                    timestampSeconds: secs,
+                    slideIndex: slideIdx,
+                    pinX: null,
+                    pinY: null,
+                    feedbackTag: "",
+                    isSubmitting: false
+                  });
+                }}
+                onPinImage={(xPct, yPct, slideIdx) => {
+                  setFeedbackModal({
+                    isOpen: true,
+                    item: previewModalItem,
+                    feedbackText: "",
+                    clientName: project?.client_name || "",
+                    timestampLabel: "",
+                    timestampSeconds: null,
+                    slideIndex: slideIdx,
+                    pinX: xPct,
+                    pinY: yPct,
+                    feedbackTag: "",
+                    isSubmitting: false
+                  });
+                }}
               />
             </div>
 
@@ -1647,6 +2059,102 @@ export function ClientReviewPortal() {
                   placeholder="e.g. Rahul Sharma"
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
+              </div>
+
+              {/* Adaptive Feedback Context based on Deliverable Type (Reel vs Post/Carousel vs Story) */}
+              {feedbackModal.item?.type === "Reel" ? (
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Video Timestamp (Optional — e.g. 0:14):
+                  </label>
+                  <input
+                    type="text"
+                    value={feedbackModal.timestampLabel}
+                    onChange={(e) => setFeedbackModal(prev => ({
+                      ...prev,
+                      timestampLabel: e.target.value,
+                      timestampSeconds: parseTimeLabelToSeconds(e.target.value)
+                    }))}
+                    placeholder="e.g. 0:14 (or click 'Pin Time' on the video)"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                  />
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {feedbackModal.item && extractMediaAssets(feedbackModal.item).length > 1 && (
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                        Target Slide:
+                      </label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {extractMediaAssets(feedbackModal.item).map((_, sIdx) => (
+                          <button
+                            key={sIdx}
+                            type="button"
+                            onClick={() => setFeedbackModal(prev => ({ ...prev, slideIndex: sIdx }))}
+                            className={cn(
+                              "px-2.5 py-1 rounded-lg text-xs font-bold border cursor-pointer transition-all",
+                              (feedbackModal.slideIndex ?? 0) === sIdx
+                                ? "bg-sky-500 text-white border-sky-500"
+                                : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                            )}
+                          >
+                            Slide {sIdx + 1}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {feedbackModal.pinX !== null && feedbackModal.pinY !== null && (
+                    <div className="px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5" />
+                        Pinned Spot on Slide {(feedbackModal.slideIndex ?? 0) + 1} ({feedbackModal.pinX}%, {feedbackModal.pinY}%)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setFeedbackModal(prev => ({ ...prev, pinX: null, pinY: null }))}
+                        className="text-[10px] underline cursor-pointer"
+                      >
+                        Clear Pin
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Quick Feedback Area Tags */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5">
+                  Focus Area (Optional):
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {(feedbackModal.item?.type === "Reel"
+                    ? ["Hook / Intro", "Audio / Music", "Subtitles / Text", "Color / Cut", "Caption"]
+                    : feedbackModal.item?.type === "Story"
+                      ? ["Safe-Zone Crop", "Sticker / Poll / Link", "Text Readability", "CTA / Link", "Music"]
+                      : ["Headline / Text", "Product Photo", "Logo / Branding", "Color / Layout", "Caption"]
+                  ).map(tagOpt => (
+                    <button
+                      key={tagOpt}
+                      type="button"
+                      onClick={() => setFeedbackModal(prev => ({
+                        ...prev,
+                        feedbackTag: prev.feedbackTag === tagOpt ? "" : tagOpt
+                      }))}
+                      className={cn(
+                        "px-2.5 py-1 rounded-lg text-[11px] font-bold border cursor-pointer transition-all flex items-center gap-1",
+                        feedbackModal.feedbackTag === tagOpt
+                          ? "bg-purple-600 text-white border-purple-600"
+                          : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100"
+                      )}
+                    >
+                      <Tag className="w-2.5 h-2.5" />
+                      <span>{tagOpt}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div>

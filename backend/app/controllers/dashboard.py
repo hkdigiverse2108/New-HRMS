@@ -346,3 +346,320 @@ async def delete_company_news(news_id: str, current_user: dict = Depends(get_cur
     await db[NEWS_COLLECTION].update_one({"_id": oid, "kind": NEWS_KIND}, {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}})
     return {"status": "success", "deleted_id": news_id}
 
+
+# ==================== UNIFIED APPROVALS HUB (#1) ====================
+
+@router.get("/approvals-hub")
+async def get_approvals_hub(current_user: dict = Depends(get_current_employee)):
+    """Unified pending approvals across Leaves, Overtime, Daily Progress, and Invoices (Redis cached)."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin or HR only")
+
+    from app.redis.service import get_cache, set_cache
+    cache_key = "dashboard:approvals_hub"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    from app.database.db import get_database
+    from app.repository.overtime import OvertimeRepository
+    from app.repository.daily_progress import DailyProgressRepository
+
+    db = get_database()
+
+    # Build employee name map for enrichment
+    emps = await db["employees"].find({"is_deleted": {"$ne": True}}, {"personal_info": 1, "name": 1, "work_details": 1}).to_list(length=1000)
+    emp_map = {}
+    for e in emps:
+        eid = str(e["_id"])
+        pi = e.get("personal_info") or {}
+        full = f"{pi.get('first_name', '')} {pi.get('last_name', '')}".strip() or e.get("name") or "Employee"
+        emp_map[eid] = {"name": full, "department": (e.get("work_details") or {}).get("department", "")}
+
+    # 1. Pending Leave Requests
+    raw_leaves = await db["leave_requests"].find({
+        "status": {"$in": ["Pending", "pending"]},
+        "is_deleted": {"$ne": True}
+    }).sort("created_at", -1).limit(50).to_list(length=50)
+    leaves = []
+    for lv in raw_leaves:
+        eid = str(lv.get("employee_id") or "")
+        info = emp_map.get(eid, {})
+        leaves.append({
+            "id": str(lv["_id"]),
+            "type": "leave",
+            "employee_id": eid,
+            "employee_name": lv.get("employee_name") or info.get("name", "Employee"),
+            "department": info.get("department", ""),
+            "title": f"{lv.get('leave_type', 'Leave')} ({lv.get('total_days', 1)}d)",
+            "subtitle": f"{lv.get('start_date', '')} to {lv.get('end_date', '')}",
+            "reason": lv.get("reason") or "",
+            "created_at": str(lv.get("created_at") or ""),
+        })
+
+    # 2. Pending Overtime Requests
+    ot_col = await OvertimeRepository.get_collection()
+    raw_ot = await ot_col.find({
+        "status": {"$in": ["Pending", "pending"]},
+        "is_deleted": {"$ne": True}
+    }).sort("created_at", -1).limit(50).to_list(length=50)
+    overtime = []
+    for ot in raw_ot:
+        eid = str(ot.get("employee_id") or "")
+        info = emp_map.get(eid, {})
+        overtime.append({
+            "id": str(ot["_id"]),
+            "type": "overtime",
+            "employee_id": eid,
+            "employee_name": ot.get("employee_name") or info.get("name", "Employee"),
+            "department": info.get("department", ""),
+            "title": f"Overtime: {ot.get('hours', 0)} hrs",
+            "subtitle": f"Date: {ot.get('date', '')}",
+            "reason": ot.get("reason") or ot.get("description") or "",
+            "created_at": str(ot.get("created_at") or ""),
+        })
+
+    # 3. Pending Daily Progress
+    dp_col = await DailyProgressRepository.get_collection()
+    raw_dp = await dp_col.find({
+        "status": {"$in": ["Pending", "pending"]},
+        "is_deleted": {"$ne": True}
+    }).sort("date", -1).limit(50).to_list(length=50)
+    daily_progress = []
+    for dp in raw_dp:
+        eid = str(dp.get("employee_id") or "")
+        info = emp_map.get(eid, {})
+        daily_progress.append({
+            "id": str(dp["_id"]),
+            "type": "daily_progress",
+            "employee_id": eid,
+            "employee_name": dp.get("employee_name") or info.get("name", "Employee"),
+            "department": info.get("department", ""),
+            "title": f"Daily Progress ({dp.get('date', '')})",
+            "subtitle": f"Tasks: {len(dp.get('tasks') or [])} logged",
+            "reason": dp.get("summary") or dp.get("notes") or "",
+            "created_at": str(dp.get("created_at") or ""),
+        })
+
+    # 4. Pending Invoices
+    raw_inv = await db["invoices"].find({
+        "approval_status": {"$in": ["Pending", "pending"]},
+        "is_deleted": {"$ne": True}
+    }).sort("created_at", -1).limit(50).to_list(length=50)
+    invoices = []
+    for inv in raw_inv:
+        invoices.append({
+            "id": str(inv["_id"]),
+            "type": "invoice",
+            "employee_id": str(inv.get("created_by") or ""),
+            "employee_name": inv.get("client_name") or "Client",
+            "department": "Finance",
+            "title": f"Invoice #{inv.get('invoice_number') or str(inv['_id'])[-6:]}",
+            "subtitle": f"Amount: ₹{inv.get('total_due', 0)}",
+            "reason": inv.get("notes") or "",
+            "created_at": str(inv.get("created_at") or ""),
+        })
+
+    result = {
+        "leaves": leaves,
+        "overtime": overtime,
+        "daily_progress": daily_progress,
+        "invoices": invoices,
+        "total_pending": len(leaves) + len(overtime) + len(daily_progress) + len(invoices)
+    }
+    await set_cache(cache_key, result, ttl=30)
+    return result
+
+
+class ApprovalHubActionIn(BaseModel):
+    type: str  # leave | overtime | daily_progress | invoice
+    id: str
+    decision: str  # approve | reject
+    reason: Optional[str] = ""
+
+
+@router.post("/approvals-hub/action")
+async def execute_approvals_hub_action(
+    payload: ApprovalHubActionIn,
+    current_user: dict = Depends(get_current_employee)
+):
+    """1-click approve/reject from Unified Approvals Hub + invalidates all related Redis caches."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin or HR only")
+
+    from datetime import datetime
+    from bson import ObjectId
+    from app.database.db import get_database
+    from app.redis.service import clear_pattern
+
+    db = get_database()
+    actor_id = str(current_user.get("_id") or current_user.get("id"))
+    is_approve = payload.decision.lower() == "approve"
+    now = datetime.utcnow()
+
+    if payload.type == "leave":
+        from app.services.leave import LeaveService
+        from app.schemas.leave import LeaveStatusUpdate
+        new_status = "Approved" if is_approve else "Rejected"
+        await LeaveService.update_leave_status(
+            payload.id,
+            LeaveStatusUpdate(status=new_status, rejection_reason=payload.reason or None),
+            actor_id
+        )
+    elif payload.type == "overtime":
+        from app.services.overtime import OvertimeService
+        from app.schemas.overtime import OvertimeStatusUpdate
+        new_status = "Approved" if is_approve else "Rejected"
+        await OvertimeService.decide(
+            payload.id,
+            OvertimeStatusUpdate(status=new_status, note=payload.reason or None),
+            current_user
+        )
+    elif payload.type == "daily_progress":
+        from app.services.daily_progress import DailyProgressService
+        from app.schemas.daily_progress import DailyProgressApprove
+        if is_approve:
+            await DailyProgressService.approve_progress(
+                payload.id,
+                DailyProgressApprove(rating=8.0, remarks=payload.reason or "Approved via Unified Approvals Hub"),
+                current_user
+            )
+        else:
+            await DailyProgressService.reject_progress(payload.id, current_user)
+    elif payload.type == "invoice":
+        oid = ObjectId(payload.id) if ObjectId.is_valid(payload.id) else payload.id
+        new_status = "approved" if is_approve else "rejected"
+        await db["invoices"].update_one(
+            {"_id": oid},
+            {"$set": {
+                "approval_status": new_status,
+                "approved_by": actor_id,
+                "approved_at": now,
+                "updated_at": now
+            }}
+        )
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unsupported approval type: {payload.type}")
+
+    # Clear all related Redis caches
+    for pat in ["dashboard:*", "leaves*", "overtime*", "daily_progress*", "invoices*"]:
+        await clear_pattern(pat)
+
+    return {"success": True, "type": payload.type, "id": payload.id, "decision": payload.decision}
+
+
+# ==================== LIVE TEAM PULSE (#3) ====================
+
+@router.get("/team-pulse")
+async def get_team_pulse(current_user: dict = Depends(get_current_employee)):
+    """Real-time 'Who is in Office' status breakdown for Active Employees only (Redis cached)."""
+    from datetime import datetime, timezone, timedelta
+    from app.redis.service import get_cache, set_cache
+    from app.database.db import get_database
+
+    ist = timezone(timedelta(hours=5, minutes=30))
+    today_str = datetime.now(ist).strftime("%Y-%m-%d")
+    cache_key = f"dashboard:team_pulse:{today_str}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    db = get_database()
+    # Only Active, non-deleted, non-blocked, non-Admin Employees
+    emps = await db["employees"].find(
+        {
+            "is_deleted": {"$ne": True},
+            "work_details.is_delete": {"$ne": True},
+            "work_details.is_block": {"$ne": True},
+            "status": {"$nin": ["Inactive", "inactive", "Terminated", "Blocked"]},
+            "work_details.system_role": {"$nin": ["Admin", "admin", "Super Admin", "superadmin", "Superadmin"]},
+        },
+        {"personal_info": 1, "name": 1, "avatar": 1, "profile_photo": 1, "work_details": 1, "role": 1}
+    ).to_list(length=1000)
+
+    # Extra safety filter for top-level role
+    active_emps = []
+    for e in emps:
+        wd = e.get("work_details") or {}
+        sys_role = str(wd.get("system_role") or e.get("role") or "Employee").strip().lower()
+        if sys_role in ("admin", "super admin", "superadmin", "administrator"):
+            continue
+        active_emps.append(e)
+
+    att_records = await db["attendance"].find({"date": today_str}).to_list(length=1000)
+    att_by_emp = {}
+    for a in att_records:
+        eid = str(a.get("employee_id") or "")
+        if eid:
+            att_by_emp[eid] = a
+
+    approved_leaves = await db["leave_requests"].find({
+        "status": {"$in": ["Approved", "approved"]},
+        "start_date": {"$lte": today_str},
+        "end_date": {"$gte": today_str},
+        "is_deleted": {"$ne": True}
+    }).to_list(length=500)
+    leave_by_emp = {str(lv.get("employee_id") or ""): lv for lv in approved_leaves}
+
+    active, on_break, half_day, punched_out, absent_or_leave = [], [], [], [], []
+
+    for e in active_emps:
+        eid = str(e["_id"])
+        pi = e.get("personal_info") or {}
+        wd = e.get("work_details") or {}
+        name = f"{pi.get('first_name', '')} {pi.get('last_name', '')}".strip() or e.get("name") or "Employee"
+        base = {
+            "id": eid,
+            "name": name,
+            "avatar": e.get("profile_photo") or e.get("avatar") or pi.get("avatar") or "",
+            "department": wd.get("department") or "",
+            "designation": wd.get("designation") or "",
+        }
+        att = att_by_emp.get(eid)
+        lv = leave_by_emp.get(eid)
+
+        check_in_val = str(att.get("check_in") or att.get("punch_in") or "").strip() if att else ""
+        check_out_val = str(att.get("check_out") or att.get("punch_out") or "").strip() if att else ""
+        has_checked_in = bool(check_in_val and check_in_val != "--")
+        has_checked_out = bool(check_out_val and check_out_val != "--")
+
+        if att and has_checked_in:
+            att_status = str(att.get("status") or "").strip().lower()
+            breaks = att.get("breaks") or []
+            open_brk = next(
+                (b for b in reversed(breaks) if isinstance(b, dict) and (b.get("start_time") or b.get("break_in")) and not (b.get("end_time") or b.get("break_out"))),
+                None
+            )
+            if has_checked_out or att_status in ("checked out", "punched out", "completed"):
+                punched_out.append({**base, "punch_in": check_in_val, "punch_out": check_out_val})
+            elif open_brk or att_status == "on break":
+                brk_start = str(open_brk.get("start_time") or open_brk.get("break_in") or "") if open_brk else ""
+                on_break.append({**base, "punch_in": check_in_val, "break_in": brk_start})
+            elif att_status in ("half day", "half_day", "half-day"):
+                half_day.append({**base, "punch_in": check_in_val})
+            else:
+                active.append({**base, "punch_in": check_in_val})
+        elif lv:
+            absent_or_leave.append({**base, "leave_type": lv.get("leave_type") or "On Leave", "on_leave": True})
+        else:
+            absent_or_leave.append({**base, "leave_type": "Not Punched In", "on_leave": False})
+
+    result = {
+        "date": today_str,
+        "counts": {
+            "active": len(active),
+            "on_break": len(on_break),
+            "half_day": len(half_day),
+            "punched_out": len(punched_out),
+            "absent_or_leave": len(absent_or_leave),
+            "total": len(active_emps),
+        },
+        "active": active,
+        "on_break": on_break,
+        "half_day": half_day,
+        "punched_out": punched_out,
+        "absent_or_leave": absent_or_leave,
+    }
+    await set_cache(cache_key, result, ttl=30)
+    return result
+

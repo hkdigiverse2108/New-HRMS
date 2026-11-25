@@ -657,13 +657,22 @@ function SidebarBody({
               placeholder="Search menu…"
               className="h-9 w-full rounded-lg border border-sidebar-border bg-sidebar-surface pl-8 pr-8 text-sm outline-none placeholder:text-sidebar-muted focus:ring-2 focus:ring-sidebar-ring/40"
             />
-            {query && (
+            {query ? (
               <button
                 onClick={() => setQuery("")}
                 aria-label="Clear search"
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-sidebar-muted hover:text-sidebar-accent-foreground"
               >
                 <X className="h-4 w-4" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new Event("open-command-palette"))}
+                title="Open Universal Search (Ctrl+K)"
+                className="absolute right-2 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded border border-sidebar-border bg-background/70 text-[10px] font-mono font-bold text-sidebar-muted hover:text-foreground cursor-pointer"
+              >
+                ⌘K
               </button>
             )}
           </div>

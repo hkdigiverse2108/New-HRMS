@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
-import { UserPlus, CheckSquare, Briefcase, Receipt, Clock, Settings, X, Plus, Search, BellRing, Timer } from "lucide-react";
+import { UserPlus, CheckSquare, Briefcase, Receipt, Clock, Settings, X, Plus, Search, BellRing, Timer, Zap } from "lucide-react";
 import { formatDate, cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog";
 import { useAuth } from "@/components/auth/AuthContext";
 import { isUserAdmin } from "@/lib/permissions";
 import { SendUrgentMeetingModal } from "@/components/common/SendUrgentMeetingModal";
+import { ApprovalsHubDrawer } from "./ApprovalsHubDrawer";
+import { api } from "@/lib/api";
 
 import { navItems } from "@/components/nav-data";
 import { Link2 } from "lucide-react";
@@ -50,7 +52,13 @@ navItems.forEach(item => {
   }
 });
 
-export function DashboardHeader({ setActive, onAction }: { setActive?: ((url: string) => void) | undefined; onAction?: ((action: string) => void) | undefined }) {
+export function DashboardHeader({
+  setActive,
+  onAction,
+}: {
+  setActive?: ((url: string) => void) | undefined;
+  onAction?: ((action: string) => void) | undefined;
+}) {
   const { user } = useAuth();
   const [now, setNow] = useState(() => new Date());
 
@@ -79,13 +87,27 @@ export function DashboardHeader({ setActive, onAction }: { setActive?: ((url: st
   const passedWorkdays = Array.from({ length: istNow.getDate() }, (_, i) => i + 1).filter(isWorkday).length;
   const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
   const [isSummonOpen, setIsSummonOpen] = useState(false);
-
+  const [isApprovalsHubOpen, setIsApprovalsHubOpen] = useState(false);
+  const [pendingApprovalsCount, setPendingApprovalsCount] = useState<number>(0);
 
   const [searchQuery, setSearchQuery] = useState("");
   const isLeaderOrAdmin = Boolean(
     isUserAdmin(user) || 
     ["Admin", "HR", "Manager", "Sub-Admin", "Team Lead", "CEO", "CTO"].includes((user as any)?.role || (user as any)?.work_details?.system_role || "")
   );
+
+  useEffect(() => {
+    if (!isUserAdmin(user)) return;
+    let mounted = true;
+    api.get<{ total_pending: number }>("/dashboard/approvals-hub", { showLoader: false })
+      .then(res => {
+        if (mounted && typeof res?.total_pending === "number") {
+          setPendingApprovalsCount(res.total_pending);
+        }
+      })
+      .catch(() => {});
+    return () => { mounted = false; };
+  }, [user]);
   const [selectedActionIds, setSelectedActionIds] = useState<string[]>(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("hrms_dashboard_actions");
@@ -119,6 +141,22 @@ export function DashboardHeader({ setActive, onAction }: { setActive?: ((url: st
           <p className="text-xs sm:text-[14px] text-muted-foreground">Today's overview — everything moving across the company, in one screen.</p>
         </div>
         <div className="flex flex-wrap gap-2 sm:gap-3 justify-start xl:justify-end w-full xl:max-w-xl items-center">
+          {isUserAdmin(user) && (
+            <button
+              type="button"
+              onClick={() => setIsApprovalsHubOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-full text-[12px] font-black shadow-md shadow-amber-500/20 transition-all cursor-pointer"
+              title="Unified 1-Click Approvals Hub"
+            >
+              <Zap className="h-3.5 w-3.5" />
+              <span>Approvals Hub</span>
+              {pendingApprovalsCount > 0 && (
+                <span className="ml-0.5 px-1.5 py-0.2 rounded-full bg-slate-950 text-amber-400 text-[10px] font-black">
+                  {pendingApprovalsCount}
+                </span>
+              )}
+            </button>
+          )}
           {isLeaderOrAdmin && (
             <button
               type="button"
@@ -240,6 +278,12 @@ export function DashboardHeader({ setActive, onAction }: { setActive?: ((url: st
       <SendUrgentMeetingModal
         isOpen={isSummonOpen}
         onClose={() => setIsSummonOpen(false)}
+      />
+
+      <ApprovalsHubDrawer
+        isOpen={isApprovalsHubOpen}
+        onClose={() => setIsApprovalsHubOpen(false)}
+        onCountChange={setPendingApprovalsCount}
       />
 
     </>
