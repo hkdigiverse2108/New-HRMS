@@ -11,7 +11,7 @@ from app.config import settings
 import random
 import uuid
 from fastapi import BackgroundTasks
-from app.redis.service import redis_client
+from app.redis.service import redis_client, get_cache, set_cache
 from app.utils.email import send_otp_email, public_base_url
 
 # --- Schemas ---
@@ -88,6 +88,22 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     except JWTError:
         raise credentials_exception
 
+async def _resolve_employee_cached_by_email(email: str):
+    clean_email = str(email or "").strip().lower()
+    if not clean_email:
+        return None
+    cache_key = f"auth:emp:{clean_email}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+    employee = await EmployeeRepository.get_employee_by_email(email)
+    if employee:
+        work_details = employee.get("work_details", {})
+        if work_details.get("is_delete") is not True and work_details.get("is_block") is not True:
+            await set_cache(cache_key, employee, ttl=60)
+            return employee
+    return None
+
 async def get_current_employee(token: str = Depends(oauth2_scheme)):
     if not token:
         return DEFAULT_ADMIN_EMPLOYEE
@@ -95,26 +111,27 @@ async def get_current_employee(token: str = Depends(oauth2_scheme)):
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         email: str = payload.get("sub")
         if email:
-            employee = await EmployeeRepository.get_employee_by_email(email)
+            employee = await _resolve_employee_cached_by_email(email)
             if employee:
-                work_details = employee.get("work_details", {})
-                if work_details.get("is_delete") is not True and work_details.get("is_block") is not True:
-                    return employee
+                return employee
     except Exception:
         try:
             # Fallback: decode claims ignoring exp to resolve real employee identity
             unverified = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM], options={"verify_exp": False})
             email: str = unverified.get("sub")
             if email:
-                employee = await EmployeeRepository.get_employee_by_email(email)
+                employee = await _resolve_employee_cached_by_email(email)
                 if employee:
-                    work_details = employee.get("work_details", {})
-                    if work_details.get("is_delete") is not True and work_details.get("is_block") is not True:
-                        return employee
+                    return employee
         except Exception:
             pass
 
     # Fallback: check if token is employee_id or email directly
+    emp_cache_key = f"auth:emp_id:{str(token).strip()}"
+    cached_emp = await get_cache(emp_cache_key)
+    if cached_emp is not None:
+        return cached_emp
+
     employee = await EmployeeRepository.get_employee_by_id(token)
     if not employee:
         employee = await EmployeeRepository.get_employee_by_email(token)
@@ -127,6 +144,7 @@ async def get_current_employee(token: str = Depends(oauth2_scheme)):
                 detail="Your account is blocked or deleted.",
                 headers={"WWW-Authenticate": "Bearer"}
             )
+        await set_cache(emp_cache_key, employee, ttl=60)
         return employee
 
     return {
