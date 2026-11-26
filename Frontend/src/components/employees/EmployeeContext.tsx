@@ -209,8 +209,10 @@ function mapEmployeeToBackendPayload(fe: Partial<Employee>) {
 export function EmployeeProvider({ children }: { children: React.ReactNode }) {
   const [employees, setEmployees] = useState<Employee[]>(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('hrms_employees');
-      if (saved) return JSON.parse(saved);
+      try {
+        const saved = localStorage.getItem('hrms_employees');
+        if (saved) return JSON.parse(saved);
+      } catch {}
     }
     return EMPLOYEES;
   });
@@ -250,7 +252,19 @@ export function EmployeeProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('hrms_employees', JSON.stringify(employees));
+      try {
+        // Strip large base64 data URIs / document blobs before caching to avoid localStorage 5MB QuotaExceededError
+        const slim = employees.map((emp: any) => ({
+          ...emp,
+          avatar: typeof emp.avatar === 'string' && emp.avatar.startsWith('data:') ? '' : emp.avatar,
+          documents: undefined,
+        }));
+        localStorage.setItem('hrms_employees', JSON.stringify(slim));
+      } catch {
+        try {
+          localStorage.removeItem('hrms_employees');
+        } catch {}
+      }
     }
   }, [employees]);
 
