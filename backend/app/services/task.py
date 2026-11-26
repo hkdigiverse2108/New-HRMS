@@ -10,8 +10,8 @@ from app.redis.service import get_cache, set_cache, delete_cache, clear_pattern,
 
 class TaskService:
     @staticmethod
-    async def _batch_prefetch(items: list[dict]) -> tuple[dict, dict, dict]:
-        """Pre-fetch all employees, projects, and clients for the given tasks in 3 batch queries."""
+    async def _batch_prefetch(items: list[dict]) -> tuple[dict, dict, dict, dict]:
+        """Pre-fetch all employees, projects, clients, and content items for the given tasks in batch queries."""
         from app.database.db import get_database
         from bson import ObjectId
         db = get_database()
@@ -19,11 +19,13 @@ class TaskService:
         emp_cache: Dict[str, dict] = {}
         proj_cache: Dict[str, dict] = {}
         client_cache: Dict[str, dict] = {}
+        content_cache: Dict[str, Any] = {}
         if not items or db is None:
-            return emp_cache, proj_cache, client_cache
+            return emp_cache, proj_cache, client_cache, content_cache
 
         emp_ids = set()
         proj_ids = set()
+        content_ids = set()
 
         for item in items:
             for f in ["assigned_to", "assigned_by", "created_by", "approved_by"]:
@@ -44,14 +46,62 @@ class TaskService:
             pid = item.get("project_id")
             if pid and str(pid).strip():
                 proj_ids.add(str(pid).strip())
+            cid = item.get("content_item_id")
+            if cid and ObjectId.is_valid(str(cid).strip()):
+                content_ids.add(str(cid).strip())
 
-        # 1. Batch fetch employees in ONE single database query
-        if emp_ids:
+        # 1. Fetch projects & content_items concurrently first (projects may add cc_creator to emp_ids and client_ids)
+        async def _fetch_projects():
+            c_ids = set()
+            if not proj_ids:
+                return c_ids
+            obj_ids = [ObjectId(sid) for sid in proj_ids if ObjectId.is_valid(sid)]
+            str_ids = list(proj_ids)
+            query = {"$or": [{"_id": {"$in": obj_ids}}, {"id": {"$in": str_ids}}]} if obj_ids else {"id": {"$in": str_ids}}
+            try:
+                cursor = db["projects"].find(query, {"_id": 1, "id": 1, "general": 1, "name": 1, "title": 1, "client_id": 1, "creative_team.cc_creator": 1})
+                async for proj in cursor:
+                    pid_str = str(proj.get("_id") or proj.get("id"))
+                    proj_cache[pid_str] = proj
+                    if proj.get("id"):
+                        proj_cache[str(proj["id"])] = proj
+                    cid = proj.get("client_id")
+                    if cid and str(cid).strip():
+                        c_ids.add(str(cid).strip())
+                    cc_creator = (proj.get("creative_team") or {}).get("cc_creator")
+                    if cc_creator and str(cc_creator).strip():
+                        emp_ids.add(str(cc_creator).strip())
+            except Exception:
+                pass
+            return c_ids
+
+        async def _fetch_contents():
+            if not content_ids:
+                return
+            c_oids = [ObjectId(sid) for sid in content_ids]
+            try:
+                cursor = db["content_items"].find({"_id": {"$in": c_oids}})
+                async for doc in cursor:
+                    doc["_id"] = str(doc["_id"])
+                    content_cache[doc["_id"]] = doc
+            except Exception:
+                pass
+            for sid in content_ids:
+                content_cache.setdefault(sid, None)
+
+        client_ids, _ = await asyncio.gather(_fetch_projects(), _fetch_contents())
+        for pid in proj_ids:
+            proj_cache.setdefault(pid, None)
+
+        # 2. Fetch employees & clients concurrently
+        async def _fetch_employees():
+            if not emp_ids:
+                return
             obj_ids = [ObjectId(sid) for sid in emp_ids if ObjectId.is_valid(sid)]
             str_ids = list(emp_ids)
             query = {"$or": [{"_id": {"$in": obj_ids}}, {"id": {"$in": str_ids}}]} if obj_ids else {"id": {"$in": str_ids}}
             try:
-                cursor = db["employees"].find(query)
+                cursor = db["employees"].find(query, {"_id": 1, "id": 1, "name": 1, "personal_info.first_name": 1, "personal_info.last_name": 1})
                 async for emp in cursor:
                     eid_str = str(emp.get("_id") or emp.get("id"))
                     personal = emp.get("personal_info", {})
@@ -65,32 +115,14 @@ class TaskService:
             except Exception:
                 pass
 
-        # 2. Batch fetch projects in ONE single database query
-        client_ids = set()
-        if proj_ids:
-            obj_ids = [ObjectId(sid) for sid in proj_ids if ObjectId.is_valid(sid)]
-            str_ids = list(proj_ids)
-            query = {"$or": [{"_id": {"$in": obj_ids}}, {"id": {"$in": str_ids}}]} if obj_ids else {"id": {"$in": str_ids}}
-            try:
-                cursor = db["projects"].find(query)
-                async for proj in cursor:
-                    pid_str = str(proj.get("_id") or proj.get("id"))
-                    proj_cache[pid_str] = proj
-                    if proj.get("id"):
-                        proj_cache[str(proj["id"])] = proj
-                    cid = proj.get("client_id")
-                    if cid and str(cid).strip():
-                        client_ids.add(str(cid).strip())
-            except Exception:
-                pass
-
-        # 3. Batch fetch clients in ONE single database query
-        if client_ids:
+        async def _fetch_clients():
+            if not client_ids:
+                return
             obj_ids = [ObjectId(sid) for sid in client_ids if ObjectId.is_valid(sid)]
             str_ids = list(client_ids)
             query = {"$or": [{"_id": {"$in": obj_ids}}, {"id": {"$in": str_ids}}]} if obj_ids else {"id": {"$in": str_ids}}
             try:
-                cursor = db["clients"].find(query)
+                cursor = db["clients"].find(query, {"_id": 1, "id": 1, "company_name": 1, "contact_person_name": 1})
                 async for cl in cursor:
                     cid_str = str(cl.get("_id") or cl.get("id"))
                     client_cache[cid_str] = cl
@@ -98,8 +130,12 @@ class TaskService:
                         client_cache[str(cl["id"])] = cl
             except Exception:
                 pass
+            for cid in client_ids:
+                client_cache.setdefault(cid, None)
 
-        return emp_cache, proj_cache, client_cache
+        await asyncio.gather(_fetch_employees(), _fetch_clients())
+
+        return emp_cache, proj_cache, client_cache, content_cache
     @staticmethod
     async def _populate_user_details(item: dict, emp_cache: dict, proj_cache: Optional[dict] = None, client_cache: Optional[dict] = None, content_cache: Optional[dict] = None):
         if "_id" in item:
@@ -602,8 +638,7 @@ class TaskService:
         )
         
         items = result.get("data", [])
-        emp_cache, proj_cache, client_cache = await TaskService._batch_prefetch(items)
-        content_cache = {}
+        emp_cache, proj_cache, client_cache, content_cache = await TaskService._batch_prefetch(items)
         for item in items:
             await TaskService._populate_user_details(item, emp_cache, proj_cache, client_cache, content_cache)
             

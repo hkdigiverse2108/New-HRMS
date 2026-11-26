@@ -278,17 +278,24 @@ class NewsIn(BaseModel):
 @router.get("/news")
 async def get_company_news():
     from app.database.db import get_database
-    from datetime import datetime
+    from app.redis.service import get_cache, set_cache
+    cache_key = "dashboard:news"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
     db = get_database()
     news_items = []
-    
+
     cursor = db[NEWS_COLLECTION].find({"kind": NEWS_KIND, "is_deleted": {"$ne": True}}).sort([("priority", -1), ("created_at", -1)]).limit(50)
     async for n in cursor:
         n["_id"] = str(n["_id"])
         n["id"] = str(n["_id"])
         news_items.append(n)
 
-    return {"news": news_items}
+    res = {"news": news_items}
+    await set_cache(cache_key, res, ttl=120)
+    return res
 
 
 @router.post("/news")
@@ -309,6 +316,8 @@ async def create_company_news(data: NewsIn, current_user: dict = Depends(get_cur
     }
     res = await db[NEWS_COLLECTION].insert_one(doc)
     doc["_id"] = str(res.inserted_id)
+    from app.redis.service import delete_cache
+    await delete_cache("dashboard:news")
     return doc
 
 
@@ -331,6 +340,8 @@ async def update_company_news(news_id: str, data: NewsIn, current_user: dict = D
             "updated_at": datetime.utcnow()
         }}
     )
+    from app.redis.service import delete_cache
+    await delete_cache("dashboard:news")
     return {"status": "success", "news_id": news_id}
 
 
@@ -344,6 +355,8 @@ async def delete_company_news(news_id: str, current_user: dict = Depends(get_cur
     db = get_database()
     oid = ObjectId(news_id) if ObjectId.is_valid(news_id) else news_id
     await db[NEWS_COLLECTION].update_one({"_id": oid, "kind": NEWS_KIND}, {"$set": {"is_deleted": True, "updated_at": datetime.utcnow()}})
+    from app.redis.service import delete_cache
+    await delete_cache("dashboard:news")
     return {"status": "success", "deleted_id": news_id}
 
 
@@ -467,7 +480,7 @@ async def get_approvals_hub(current_user: dict = Depends(get_current_employee)):
         "invoices": invoices,
         "total_pending": len(leaves) + len(overtime) + len(daily_progress) + len(invoices)
     }
-    await set_cache(cache_key, result, ttl=30)
+    await set_cache(cache_key, result, ttl=60)
     return result
 
 
@@ -564,18 +577,45 @@ async def get_team_pulse(current_user: dict = Depends(get_current_employee)):
     if cached is not None:
         return cached
 
+    import asyncio
     db = get_database()
-    # Only Active, non-deleted, non-blocked, non-Admin Employees
-    emps = await db["employees"].find(
-        {
-            "is_deleted": {"$ne": True},
-            "work_details.is_delete": {"$ne": True},
-            "work_details.is_block": {"$ne": True},
-            "status": {"$nin": ["Inactive", "inactive", "Terminated", "Blocked"]},
-            "work_details.system_role": {"$nin": ["Admin", "admin", "Super Admin", "superadmin", "Superadmin"]},
-        },
-        {"personal_info": 1, "name": 1, "avatar": 1, "profile_photo": 1, "work_details": 1, "role": 1}
-    ).to_list(length=1000)
+    # Run all 3 queries concurrently with slim projections
+    emps, att_records, approved_leaves = await asyncio.gather(
+        db["employees"].find(
+            {
+                "is_deleted": {"$ne": True},
+                "work_details.is_delete": {"$ne": True},
+                "work_details.is_block": {"$ne": True},
+                "status": {"$nin": ["Inactive", "inactive", "Terminated", "Blocked"]},
+                "work_details.system_role": {"$nin": ["Admin", "admin", "Super Admin", "superadmin", "Superadmin"]},
+            },
+            {
+                "personal_info.first_name": 1,
+                "personal_info.last_name": 1,
+                "personal_info.avatar": 1,
+                "name": 1,
+                "avatar": 1,
+                "profile_photo": 1,
+                "work_details.department": 1,
+                "work_details.designation": 1,
+                "work_details.system_role": 1,
+                "role": 1,
+            },
+        ).to_list(length=1000),
+        db["attendance"].find(
+            {"date": today_str},
+            {"employee_id": 1, "check_in": 1, "punch_in": 1, "check_out": 1, "punch_out": 1, "status": 1, "breaks": 1},
+        ).to_list(length=1000),
+        db["leave_requests"].find(
+            {
+                "status": {"$in": ["Approved", "approved"]},
+                "start_date": {"$lte": today_str},
+                "end_date": {"$gte": today_str},
+                "is_deleted": {"$ne": True},
+            },
+            {"employee_id": 1, "leave_type": 1},
+        ).to_list(length=500),
+    )
 
     # Extra safety filter for top-level role
     active_emps = []
@@ -586,19 +626,12 @@ async def get_team_pulse(current_user: dict = Depends(get_current_employee)):
             continue
         active_emps.append(e)
 
-    att_records = await db["attendance"].find({"date": today_str}).to_list(length=1000)
     att_by_emp = {}
     for a in att_records:
         eid = str(a.get("employee_id") or "")
         if eid:
             att_by_emp[eid] = a
 
-    approved_leaves = await db["leave_requests"].find({
-        "status": {"$in": ["Approved", "approved"]},
-        "start_date": {"$lte": today_str},
-        "end_date": {"$gte": today_str},
-        "is_deleted": {"$ne": True}
-    }).to_list(length=500)
     leave_by_emp = {str(lv.get("employee_id") or ""): lv for lv in approved_leaves}
 
     active, on_break, half_day, punched_out, absent_or_leave = [], [], [], [], []
@@ -660,6 +693,6 @@ async def get_team_pulse(current_user: dict = Depends(get_current_employee)):
         "punched_out": punched_out,
         "absent_or_leave": absent_or_leave,
     }
-    await set_cache(cache_key, result, ttl=30)
+    await set_cache(cache_key, result, ttl=60)
     return result
 
