@@ -23,7 +23,10 @@ class ContentService:
             valid_obj_ids = [ObjectId(x) for x in ids_to_fetch if ObjectId.is_valid(x)]
             if valid_obj_ids:
                 collection = await EmployeeRepository.get_collection()
-                async for emp in collection.find({"_id": {"$in": valid_obj_ids}}):
+                async for emp in collection.find(
+                    {"_id": {"$in": valid_obj_ids}},
+                    {"_id": 1, "personal_info.first_name": 1, "personal_info.last_name": 1},
+                ):
                     e_id = str(emp["_id"])
                     personal = emp.get("personal_info", {})
                     name = f"{personal.get('first_name', '')} {personal.get('last_name', '')}".strip() or "Employee"
@@ -919,15 +922,7 @@ class ContentService:
         page: Optional[int] = None, 
         limit: Optional[int] = None
     ):
-        result = await ContentRepository.get_all(project_id, content_type, status, month, year, start_date, end_date, page, limit)
-        
-        emp_cache = {}
-        items = result.get("data", [])
-        await ContentService._preload_employee_cache(items, emp_cache)
-        for item in items:
-            await ContentService._populate_details(item, emp_cache)
-            
-        # Calculate start_date and end_date directly from content collection
+        import asyncio
         pipeline = [
             {"$match": {"project_id": project_id, "is_deleted": False}},
             {"$group": {
@@ -936,16 +931,24 @@ class ContentService:
                 "last_date": {"$max": "$schedule_date"}
             }}
         ]
-        
-        cursor = ContentRepository._collection.aggregate(pipeline) if hasattr(ContentRepository, '_collection') and ContentRepository._collection is not None else None
-        
-        if cursor is None:
-            collection = await ContentRepository.get_collection()
-            cursor = collection.aggregate(pipeline)
-            
-        dates = []
-        async for doc in cursor:
-            dates.append(doc)
+
+        async def _get_date_bounds():
+            cursor = ContentRepository._collection.aggregate(pipeline) if hasattr(ContentRepository, '_collection') and ContentRepository._collection is not None else None
+            if cursor is None:
+                collection = await ContentRepository.get_collection()
+                cursor = collection.aggregate(pipeline)
+            return [doc async for doc in cursor]
+
+        result, dates = await asyncio.gather(
+            ContentRepository.get_all(project_id, content_type, status, month, year, start_date, end_date, page, limit),
+            _get_date_bounds(),
+        )
+
+        emp_cache = {}
+        items = result.get("data", [])
+        await ContentService._preload_employee_cache(items, emp_cache)
+        for item in items:
+            await ContentService._populate_details(item, emp_cache)
             
         if dates:
             result["start_date"] = dates[0].get("first_date")

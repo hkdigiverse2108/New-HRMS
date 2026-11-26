@@ -1164,7 +1164,10 @@ async def calculate_eom_leaderboard(month_year: str):
     
     # Fetch active employees
     inactive_statuses = ["inactive", "Inactive", "INACTIVE", "terminated", "Terminated", "TERMINATED", "resigned", "Resigned", "RESIGNED"]
-    raw_employees = await db.employees.find({"status": {"$nin": inactive_statuses}}).to_list(length=1000)
+    raw_employees = await db.employees.find(
+        {"status": {"$nin": inactive_statuses}},
+        {"_id": 1, "name": 1, "role": 1, "personal_info.first_name": 1, "personal_info.last_name": 1, "personal_info.profile_photo": 1, "profile_photo": 1, "avatar": 1, "work_details": 1},
+    ).to_list(length=1000)
 
     # Always exclude Admins from EOM candidates
     non_admin_employees = [e for e in raw_employees if not is_admin_employee(e)]

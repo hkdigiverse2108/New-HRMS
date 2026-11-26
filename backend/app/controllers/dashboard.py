@@ -58,6 +58,8 @@ async def set_eom_winners(data: EomMonthIn, current_user: dict = Depends(get_cur
     try:
         from app.redis.service import clear_pattern
         await clear_pattern("dashboard:overview:*")
+        await clear_pattern("dashboard:spotlights*")
+        await clear_pattern("dashboard:prev_eom:*")
     except Exception:
         pass
     return {"month": data.month, "year": data.year, "count": len(docs)}
@@ -109,7 +111,14 @@ async def get_spotlights():
     followed by any spotlights an admin added manually."""
     from app.database.db import get_database
     from app.services.dashboard import get_previous_month_eom
+    from app.redis.service import get_cache, set_cache
     from bson import ObjectId
+
+    cache_key = "dashboard:spotlights"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
     db = get_database()
 
     manual = []
@@ -124,7 +133,10 @@ async def get_spotlights():
         photo = ""
         dept = winner.get("department") or ""
         try:
-            emp = await db["employees"].find_one({"_id": ObjectId(str(winner.get("employeeId")))})
+            emp = await db["employees"].find_one(
+                {"_id": ObjectId(str(winner.get("employeeId")))},
+                {"personal_info.profile_photo": 1, "profile_photo": 1, "avatar": 1, "work_details.department": 1},
+            )
             if emp:
                 pi = emp.get("personal_info") or {}
                 photo = pi.get("profile_photo") or emp.get("profile_photo") or emp.get("avatar") or ""
@@ -145,7 +157,9 @@ async def get_spotlights():
 
     winner_name = spotlights[0]["name"].strip().lower() if spotlights else None
     spotlights += [i for i in manual if str(i.get("name", "")).strip().lower() != winner_name]
-    return {"spotlights": spotlights}
+    res = {"spotlights": spotlights}
+    await set_cache(cache_key, res, ttl=300)
+    return res
 
 
 @router.put("/spotlights")
@@ -162,6 +176,8 @@ async def update_spotlights(data: SpotlightsListIn, current_user: dict = Depends
         {"$set": {"kind": "dashboard_spotlights", "key": SPOTLIGHT_KEY, "items": items, "updated_at": datetime.utcnow()}},
         upsert=True
     )
+    from app.redis.service import delete_cache
+    await delete_cache("dashboard:spotlights")
     return {"status": "success", "spotlights": items}
 
 
@@ -374,14 +390,40 @@ async def get_approvals_hub(current_user: dict = Depends(get_current_employee)):
     if cached is not None:
         return cached
 
+    import asyncio
     from app.database.db import get_database
     from app.repository.overtime import OvertimeRepository
     from app.repository.daily_progress import DailyProgressRepository
 
     db = get_database()
+    ot_col, dp_col = await asyncio.gather(
+        OvertimeRepository.get_collection(),
+        DailyProgressRepository.get_collection(),
+    )
 
-    # Build employee name map for enrichment
-    emps = await db["employees"].find({"is_deleted": {"$ne": True}}, {"personal_info": 1, "name": 1, "work_details": 1}).to_list(length=1000)
+    emps, raw_leaves, raw_ot, raw_dp, raw_inv = await asyncio.gather(
+        db["employees"].find(
+            {"is_deleted": {"$ne": True}},
+            {"personal_info.first_name": 1, "personal_info.last_name": 1, "name": 1, "work_details.department": 1},
+        ).to_list(length=1000),
+        db["leave_requests"].find({
+            "status": {"$in": ["Pending", "pending"]},
+            "is_deleted": {"$ne": True},
+        }).sort("created_at", -1).limit(50).to_list(length=50),
+        ot_col.find({
+            "status": {"$in": ["Pending", "pending"]},
+            "is_deleted": {"$ne": True},
+        }).sort("created_at", -1).limit(50).to_list(length=50),
+        dp_col.find(
+            {"status": {"$in": ["Pending", "pending"]}, "is_deleted": {"$ne": True}},
+            {"employee_id": 1, "employee_name": 1, "date": 1, "tasks": 1, "summary": 1, "notes": 1, "created_at": 1},
+        ).sort("date", -1).limit(50).to_list(length=50),
+        db["invoices"].find({
+            "approval_status": {"$in": ["Pending", "pending"]},
+            "is_deleted": {"$ne": True},
+        }).sort("created_at", -1).limit(50).to_list(length=50),
+    )
+
     emp_map = {}
     for e in emps:
         eid = str(e["_id"])
@@ -390,10 +432,6 @@ async def get_approvals_hub(current_user: dict = Depends(get_current_employee)):
         emp_map[eid] = {"name": full, "department": (e.get("work_details") or {}).get("department", "")}
 
     # 1. Pending Leave Requests
-    raw_leaves = await db["leave_requests"].find({
-        "status": {"$in": ["Pending", "pending"]},
-        "is_deleted": {"$ne": True}
-    }).sort("created_at", -1).limit(50).to_list(length=50)
     leaves = []
     for lv in raw_leaves:
         eid = str(lv.get("employee_id") or "")
@@ -411,11 +449,6 @@ async def get_approvals_hub(current_user: dict = Depends(get_current_employee)):
         })
 
     # 2. Pending Overtime Requests
-    ot_col = await OvertimeRepository.get_collection()
-    raw_ot = await ot_col.find({
-        "status": {"$in": ["Pending", "pending"]},
-        "is_deleted": {"$ne": True}
-    }).sort("created_at", -1).limit(50).to_list(length=50)
     overtime = []
     for ot in raw_ot:
         eid = str(ot.get("employee_id") or "")
@@ -433,11 +466,6 @@ async def get_approvals_hub(current_user: dict = Depends(get_current_employee)):
         })
 
     # 3. Pending Daily Progress
-    dp_col = await DailyProgressRepository.get_collection()
-    raw_dp = await dp_col.find({
-        "status": {"$in": ["Pending", "pending"]},
-        "is_deleted": {"$ne": True}
-    }).sort("date", -1).limit(50).to_list(length=50)
     daily_progress = []
     for dp in raw_dp:
         eid = str(dp.get("employee_id") or "")
@@ -455,10 +483,6 @@ async def get_approvals_hub(current_user: dict = Depends(get_current_employee)):
         })
 
     # 4. Pending Invoices
-    raw_inv = await db["invoices"].find({
-        "approval_status": {"$in": ["Pending", "pending"]},
-        "is_deleted": {"$ne": True}
-    }).sort("created_at", -1).limit(50).to_list(length=50)
     invoices = []
     for inv in raw_inv:
         invoices.append({

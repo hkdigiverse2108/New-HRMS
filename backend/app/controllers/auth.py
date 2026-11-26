@@ -347,6 +347,38 @@ class ResetPasswordRequest(BaseModel):
     new_password: str
 
 
+async def _warm_user_cache(employee: dict) -> None:
+    """Pre-warm per-employee & shared dashboard Redis caches in the background on login/session."""
+    try:
+        import asyncio
+        emp_id = str(employee.get("_id") or employee.get("id") or "").strip()
+        if not emp_id or emp_id == "default-admin-id":
+            return
+        warm_key = f"auth:warmed:{emp_id}"
+        if await get_cache(warm_key) is not None:
+            return
+        await set_cache(warm_key, "1", ttl=300)
+
+        personal = employee.get("personal_info", {}) or {}
+        email = str(personal.get("email_address") or employee.get("email") or "").strip().lower()
+        if email:
+            await set_cache(f"auth:emp:{email}", employee, ttl=120)
+
+        from app.services.dashboard import DashboardService, get_previous_month_eom
+        from app.repository.chat import ChatRepository
+        from app.services.task import TaskService
+
+        await asyncio.gather(
+            DashboardService.get_overview(emp_id),
+            ChatRepository.get_channels_for_user(emp_id),
+            TaskService.get_all_tasks(is_deleted=False, assigned_to=emp_id, page=1, limit=25),
+            get_previous_month_eom(),
+            return_exceptions=True,
+        )
+    except Exception:
+        pass
+
+
 @router.get("/me")
 async def get_me(current_employee: dict = Depends(get_current_employee)):
     """Returns authenticated user details along with their full dynamic permissions."""
@@ -364,6 +396,12 @@ async def get_me(current_employee: dict = Depends(get_current_employee)):
     )
 
     perms = await resolve_effective_permissions_for_employee(current_employee)
+
+    try:
+        import asyncio
+        asyncio.create_task(_warm_user_cache(current_employee))
+    except Exception:
+        pass
 
     return {
         "id": emp_id,
@@ -499,6 +537,12 @@ async def verify_otp(verify_data: VerifyOTPRequest):
         )
     except Exception as e:
         print(f"[ActivityLog] Login activity notice: {e}")
+
+    try:
+        import asyncio
+        asyncio.create_task(_warm_user_cache(employee))
+    except Exception:
+        pass
 
     return {"access_token": access_token, "token_type": "bearer"}
 

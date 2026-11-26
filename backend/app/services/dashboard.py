@@ -26,15 +26,19 @@ def _month_bounds(month: Optional[int], year: Optional[int]):
 
 
 async def get_previous_month_eom() -> Dict[str, Any]:
-    """Previous calendar month's Employee-of-the-Month result (read-only).
-
-    Returns {"period": {...}, "board": [entries sorted by rank], "max_total": float}.
-    Board is empty when that month has no EOM criteria/scores yet.
-    """
+    """Previous calendar month's Employee-of-the-Month result (read-only, Redis cached)."""
     db = get_database()
     today = datetime.now()
     py, pm = (today.year - 1, 12) if today.month == 1 else (today.year, today.month - 1)
     month_year = f"{py:04d}-{pm:02d}"
+    cache_key = f"dashboard:prev_eom:{month_year}"
+    try:
+        cached = await get_cache(cache_key)
+        if cached is not None:
+            return cached
+    except Exception:
+        pass
+
     period = {"month": pm, "year": py, "label": datetime(py, pm, 1).strftime("%B %Y")}
     out: Dict[str, Any] = {"period": period, "board": [], "max_total": 100.0}
     try:
@@ -46,6 +50,7 @@ async def get_previous_month_eom() -> Dict[str, Any]:
             if any(float(e.get("totalScore") or 0) > 0 for e in board):
                 out["board"] = board
                 out["max_total"] = sum(float(c.get("maxScore") or 0) for c in res.get("criteria") or []) or 100.0
+        await set_cache(cache_key, out, ttl=600)
     except Exception as exc:
         logger.warning("Previous month EOM lookup failed: %s", exc)
     return out
