@@ -1,38 +1,59 @@
 version: '3.8'
 
 services:
-  web:
-    build: ./backend
-    container_name: fastapi_backend
+  # 1. FastAPI Backend (1 Worker, Normal Flow)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: hrms_backend
+    restart: unless-stopped
     ports:
-      - "${PORT:-8000}:${PORT:-8000}"
+      - "${BACKEND_PORT:-8001}:${BACKEND_PORT:-8001}"
     env_file:
       - ./.env
     environment:
-      # Pass the PORT variable so the container knows what port to listen on
-      - PORT=${PORT:-8000}
-    depends_on:
-      - redis
-      - mongodb
+      - PORT=${BACKEND_PORT:-8001}
+      - REDIS_URL=redis://redis:6379/0
     volumes:
-      - ./backend:/app # Sync code changes for development
+      - ./uploads:/uploads
+    depends_on:
+      redis:
+        condition: service_healthy
 
+  # 2. Nitro Frontend (Web UI)
+  frontend:
+    build:
+      context: ./Frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8001}
+    container_name: hrms_frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-7788}:${FRONTEND_PORT:-7788}"
+    env_file:
+      - ./.env
+    environment:
+      - FRONTEND_PORT=${FRONTEND_PORT:-7788}
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:8001}
+    depends_on:
+      - backend
+
+  # 3. Redis In-Memory Cache
   redis:
     image: redis:alpine
-    container_name: redis_cache
+    container_name: hrms_redis
+    restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
-      - redis_data:/data # Persist Redis data
-
-  mongodb:
-    image: mongo:latest
-    container_name: mongodb_db
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongodb_data:/data/db # Persist MongoDB data
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
 volumes:
   redis_data:
-  mongodb_data:
