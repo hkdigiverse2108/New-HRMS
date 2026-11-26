@@ -1,7 +1,14 @@
 from fastapi import WebSocket
+from starlette.websockets import WebSocketState
 from typing import Dict, List, Any
 from app.repository.chat import ChatRepository
 import json
+
+def _is_ws_connected(ws: WebSocket) -> bool:
+    return (
+        ws.client_state == WebSocketState.CONNECTED
+        and ws.application_state == WebSocketState.CONNECTED
+    )
 
 class ConnectionManager:
     def __init__(self):
@@ -49,34 +56,18 @@ class ConnectionManager:
 
     async def disconnect(self, websocket: WebSocket, user_id: str):
         uid = str(user_id).strip()
-        all_uids = {uid}
-        try:
-            db = await ChatRepository.get_db()
-            from bson import ObjectId
-            emp = None
-            if ObjectId.is_valid(uid):
-                emp = await db["employees"].find_one({"_id": ObjectId(uid)})
-            if not emp:
-                emp = await db["employees"].find_one({"$or": [{"id": uid}, {"employee_id": uid}, {"_id": uid}]})
-            if emp:
-                if emp.get("_id"):
-                    all_uids.add(str(emp["_id"]))
-                if emp.get("id"):
-                    all_uids.add(str(emp["id"]))
-                if emp.get("employee_id"):
-                    all_uids.add(str(emp["employee_id"]))
-        except Exception:
-            pass
-
+        # Synchronously remove this websocket from every user bucket before any await
         has_other_active = False
-        for u in all_uids:
-            if u in self.active_connections:
-                if websocket in self.active_connections[u]:
-                    self.active_connections[u].remove(websocket)
-                if len(self.active_connections[u]) == 0:
+        for u in list(self.active_connections.keys()):
+            conns = self.active_connections.get(u, [])
+            if websocket in conns:
+                conns.remove(websocket)
+                if len(conns) == 0:
                     del self.active_connections[u]
-                else:
+                elif u == uid:
                     has_other_active = True
+            elif u == uid and len(conns) > 0:
+                has_other_active = True
 
         if not has_other_active:
             try:
@@ -100,6 +91,9 @@ class ConnectionManager:
                 if sock_id in seen_sockets:
                     continue
                 seen_sockets.add(sock_id)
+                if not _is_ws_connected(conn):
+                    dead_conns.append(conn)
+                    continue
                 try:
                     await conn.send_text(msg_str)
                 except Exception:
@@ -120,6 +114,9 @@ class ConnectionManager:
                 if sock_id in seen_sockets:
                     continue
                 seen_sockets.add(sock_id)
+                if not _is_ws_connected(connection):
+                    dead_conns.append(connection)
+                    continue
                 try:
                     await connection.send_text(message)
                 except Exception:

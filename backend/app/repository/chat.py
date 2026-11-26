@@ -68,52 +68,84 @@ class ChatRepository:
         cursor = db[cls.channels_collection].find({"members": user_id, "is_deleted": {"$ne": True}}).sort("created_at", -1)
         raw_channels = await cursor.to_list(length=100)
         channels = serialize_mongo(raw_channels)
-        
-        for ch in channels:
-            ch_id = str(ch.get("id") or ch.get("_id"))
-            
-            # Fetch last message
-            last_msg_doc = await db[cls.messages_collection].find_one(
-                {"channel_id": ch_id, "is_deleted": {"$ne": True}},
-                sort=[("timestamp", pymongo.DESCENDING)]
-            )
-            
-            if last_msg_doc:
-                ch["last_message"] = {
-                    "content": last_msg_doc.get("content", ""),
-                    "sender_id": str(last_msg_doc.get("sender_id", "")),
-                    "message_type": last_msg_doc.get("message_type", "text"),
-                    "timestamp": last_msg_doc.get("timestamp")
-                }
-            else:
-                ch["last_message"] = None
-                
-            # Count unread messages for this user
-            unread_count = await db[cls.messages_collection].count_documents({
-                "channel_id": ch_id,
-                "sender_id": {"$ne": user_id},
-                "is_read_by": {"$ne": user_id},
-                "is_deleted": {"$ne": True}
-            })
-            ch["unread_count"] = unread_count
 
-            # Ensure name is never None
-            if not ch.get("name"):
-                if ch.get("type") == "direct":
-                    other_members = [m for m in ch.get("members", []) if str(m) != str(user_id)]
+        if channels:
+            ch_ids = [str(ch.get("id") or ch.get("_id")) for ch in channels]
+
+            # Batch-fetch last message per channel in a single aggregation
+            last_msg_pipeline = [
+                {"$match": {"channel_id": {"$in": ch_ids}, "is_deleted": {"$ne": True}}},
+                {"$sort": {"timestamp": -1}},
+                {"$group": {"_id": "$channel_id", "doc": {"$first": "$$ROOT"}}},
+            ]
+            last_msg_docs = await db[cls.messages_collection].aggregate(last_msg_pipeline).to_list(length=len(ch_ids))
+            last_msg_map = {str(d["_id"]): d["doc"] for d in last_msg_docs if d.get("doc")}
+
+            # Batch-fetch unread counts per channel in a single aggregation
+            unread_pipeline = [
+                {
+                    "$match": {
+                        "channel_id": {"$in": ch_ids},
+                        "sender_id": {"$ne": user_id},
+                        "is_read_by": {"$ne": user_id},
+                        "is_deleted": {"$ne": True},
+                    }
+                },
+                {"$group": {"_id": "$channel_id", "count": {"$sum": 1}}},
+            ]
+            unread_docs = await db[cls.messages_collection].aggregate(unread_pipeline).to_list(length=len(ch_ids))
+            unread_map = {str(d["_id"]): int(d.get("count", 0)) for d in unread_docs}
+
+            # Batch-fetch employees for any unnamed direct channels
+            other_user_ids = set()
+            for ch in channels:
+                if not ch.get("name") and ch.get("type") == "direct":
+                    other_members = [str(m) for m in ch.get("members", []) if str(m) != str(user_id)]
                     if other_members:
-                        other_user_id = str(other_members[0])
-                        try:
-                            emp = await db["employees"].find_one({"_id": ObjectId(other_user_id)})
-                        except Exception:
-                            emp = None
-                        if not emp:
-                            emp = await db["employees"].find_one({"id": other_user_id})
-                        ch["name"] = emp.get("name") if emp else "Direct Message"
-                    else:
-                        ch["name"] = "Direct Message"
+                        other_user_ids.add(other_members[0])
+
+            emp_name_map: Dict[str, str] = {}
+            if other_user_ids:
+                oids = [ObjectId(uid) for uid in other_user_ids if ObjectId.is_valid(uid)]
+                emp_docs = await db["employees"].find(
+                    {"$or": [{"_id": {"$in": oids}}, {"id": {"$in": list(other_user_ids)}}]},
+                    {"name": 1, "personal_info.first_name": 1, "personal_info.last_name": 1, "id": 1}
+                ).to_list(length=len(other_user_ids) * 2)
+                for emp in emp_docs:
+                    ename = emp.get("name")
+                    if not ename:
+                        pi = emp.get("personal_info") or {}
+                        ename = f"{pi.get('first_name', '')} {pi.get('last_name', '')}".strip()
+                    if ename:
+                        emp_name_map[str(emp["_id"])] = ename
+                        if emp.get("id"):
+                            emp_name_map[str(emp["id"])] = ename
+
+            for ch in channels:
+                ch_id = str(ch.get("id") or ch.get("_id"))
+                last_msg_doc = last_msg_map.get(ch_id)
+                if last_msg_doc:
+                    ch["last_message"] = {
+                        "content": last_msg_doc.get("content", ""),
+                        "sender_id": str(last_msg_doc.get("sender_id", "")),
+                        "message_type": last_msg_doc.get("message_type", "text"),
+                        "timestamp": last_msg_doc.get("timestamp")
+                    }
                 else:
-                    ch["name"] = "General"
+                    ch["last_message"] = None
+
+                ch["unread_count"] = unread_map.get(ch_id, 0)
+
+                if not ch.get("name"):
+                    if ch.get("type") == "direct":
+                        other_members = [m for m in ch.get("members", []) if str(m) != str(user_id)]
+                        if other_members:
+                            other_user_id = str(other_members[0])
+                            ch["name"] = emp_name_map.get(other_user_id, "Direct Message")
+                        else:
+                            ch["name"] = "Direct Message"
+                    else:
+                        ch["name"] = "General"
 
         # Sort channels by last message timestamp (or created_at if no messages yet)
         def get_sort_key(c):
@@ -746,23 +778,15 @@ class ChatRepository:
 
     @classmethod
     async def get_unread_counts_for_user(cls, user_id: str) -> List[Dict[str, Any]]:
-        db = await cls.get_db()
         channels = await cls.get_channels_for_user(user_id)
-        results = []
-        for ch in channels:
-            ch_id = ch["id"]
-            unread_count = await db[cls.messages_collection].count_documents({
-                "channel_id": ch_id,
-                "sender_id": {"$ne": user_id},
-                "is_read_by": {"$ne": user_id},
-                "is_deleted": {"$ne": True}
-            })
-            results.append({
-                "channel_id": ch_id,
+        return [
+            {
+                "channel_id": ch["id"],
                 "channel_name": ch.get("name", "Chat"),
-                "unread_count": unread_count
-            })
-        return results
+                "unread_count": int(ch.get("unread_count", 0))
+            }
+            for ch in channels
+        ]
 
     @classmethod
     async def get_user_profile_card(cls, user_id: str) -> Dict[str, Any]:

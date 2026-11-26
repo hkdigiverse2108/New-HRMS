@@ -837,17 +837,30 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
         pass
     resolved_user_name = (current_user.get("name") if isinstance(current_user, dict) else None) or "User"
 
+    connected = False
     try:
         await manager.connect(websocket, user_id)
+        connected = True
         # Send current online users list over websocket immediately (eliminates HTTP batch presence calls)
-        online_list = [uid for uid, conns in manager.active_connections.items() if len(conns) > 0]
-        await websocket.send_text(json.dumps({
-            "action": "presence_state",
-            "type": "presence_state",
-            "online_users": online_list
-        }))
+        from starlette.websockets import WebSocketState
+        if (
+            websocket.client_state == WebSocketState.CONNECTED
+            and websocket.application_state == WebSocketState.CONNECTED
+        ):
+            online_list = [uid for uid, conns in manager.active_connections.items() if len(conns) > 0]
+            await websocket.send_text(json.dumps({
+                "action": "presence_state",
+                "type": "presence_state",
+                "online_users": online_list
+            }))
+    except (WebSocketDisconnect, RuntimeError):
+        if connected:
+            await manager.disconnect(websocket, user_id)
+        return
     except Exception as e:
-        print(f"WebSocket Connect Error for user {user_id}: {e}")
+        if connected:
+            await manager.disconnect(websocket, user_id)
+        print(f"WebSocket Connect Error for user {user_id}: {e!r}")
         return
 
     try:
@@ -1201,6 +1214,8 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                 await manager.send_personal_message(err_payload, user_id)
                 
     except WebSocketDisconnect:
+        pass
+    finally:
         await manager.disconnect(websocket, user_id)
 
 class MeetingSummonRequest(BaseModel):

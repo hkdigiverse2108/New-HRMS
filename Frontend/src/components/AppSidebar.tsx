@@ -393,12 +393,12 @@ function SidebarBody({
 
           // Daily Progress approvals for HR / Admin
           try {
-            const dpRes = await api.get<any[]>("/daily-progress?status=pending_verification", {
+            const dpRes = await api.get<{ count?: number }>("/daily-progress/pending-count", {
               showLoader: false,
               showErrorToast: false,
             });
-            if (Array.isArray(dpRes)) {
-              counts["/approvals/daily-progress"] = dpRes.length;
+            if (typeof dpRes?.count === "number") {
+              counts["/approvals/daily-progress"] = dpRes.count;
             }
           } catch {}
         } else {

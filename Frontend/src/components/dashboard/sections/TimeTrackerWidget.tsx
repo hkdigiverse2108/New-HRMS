@@ -170,12 +170,25 @@ export function TimeTrackerWidget() {
   // Initial load check & react to user login / employeeId availability
   useEffect(() => {
     if (!isAdmin && employeeId && employeeId !== "EMP-CURRENT") {
-      checkPendingSession().then((hasPending) => {
-        if (!hasPending) {
+      checkPendingSession();
+      syncTodayStatus();
+
+      const handleVisibilityOrFocus = () => {
+        if (typeof document === "undefined" || document.visibilityState === "visible") {
           syncTodayStatus();
         }
-      });
+      };
+      window.addEventListener("focus", handleVisibilityOrFocus);
+      document.addEventListener("visibilitychange", handleVisibilityOrFocus);
+      const pollInterval = setInterval(syncTodayStatus, 60000);
+
+      return () => {
+        window.removeEventListener("focus", handleVisibilityOrFocus);
+        document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
+        clearInterval(pollInterval);
+      };
     }
+    return undefined;
   }, [checkPendingSession, syncTodayStatus, isAdmin, employeeId]);
 
   // Real-time synchronization event listener across tabs and actions

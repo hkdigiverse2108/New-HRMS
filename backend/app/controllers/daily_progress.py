@@ -47,6 +47,34 @@ async def get_average_rating(
     await set_cache(cache_key, result, ttl=60)
     return result
 
+@router.get("/pending-count")
+async def get_pending_count(current_user: dict = Depends(get_current_employee)):
+    """Lightweight pending verification count for sidebar badge (avoids loading full 800KB+ payloads)."""
+    emp_id = str(current_user.get("_id") or current_user.get("id"))
+    role = current_user.get("work_details", {}).get("system_role", "Employee")
+    cache_key = f"daily_progress:pending_count:{emp_id}:{role}"
+    cached = await get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    scoped_emps = await DailyProgressService._get_scoped_employees(current_user)
+    scoped_ids = [str(e.get("_id") or e.get("id")) for e in scoped_emps]
+    if not scoped_ids:
+        res = {"count": 0}
+        await set_cache(cache_key, res, ttl=60)
+        return res
+
+    from app.database.db import get_database
+    db = get_database()
+    count = await db["daily_progress"].count_documents({
+        "employee_id": {"$in": scoped_ids},
+        "status": "PENDING",
+        "is_deleted": {"$ne": True},
+    })
+    res = {"count": int(count)}
+    await set_cache(cache_key, res, ttl=60)
+    return res
+
 @router.get("", response_model=List[DailyProgressResponse])
 async def get_all_progress(
     search: Optional[str] = Query(None, description="Search by employee name"),

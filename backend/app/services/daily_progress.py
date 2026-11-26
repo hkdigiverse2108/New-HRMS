@@ -133,9 +133,29 @@ class DailyProgressService:
 
     @staticmethod
     async def _get_scoped_employees(current_user: dict, group_filter: Optional[str] = None) -> List[dict]:
-        from app.repository.employee import EmployeeRepository
-        emp_res = await EmployeeRepository.get_all_employees(exclude_role="Admin")
-        raw_emps = emp_res.get("data", [])
+        from app.database.db import get_database
+        db = get_database()
+        raw_emps = await db["employees"].find(
+            {
+                "work_details.is_delete": {"$ne": True},
+                "work_details.is_block": {"$ne": True},
+                "work_details.system_role": {"$ne": "Admin"},
+            },
+            {
+                "_id": 1,
+                "id": 1,
+                "role": 1,
+                "personal_info.first_name": 1,
+                "personal_info.last_name": 1,
+                "work_details.system_role": 1,
+                "work_details.department": 1,
+                "work_details.designation": 1,
+                "work_details.sub_department": 1,
+                "work_details.joining_date": 1,
+                "work_details.is_delete": 1,
+                "work_details.is_block": 1,
+            },
+        ).to_list(length=1000)
 
         # Filter: only active users (not deleted, not blocked)
         all_emps = [e for e in raw_emps if DailyProgressService._is_active_emp(e)]
@@ -524,33 +544,49 @@ class DailyProgressService:
                     valid_sync_emps.append(emp)
 
                 # Batch lookup existing records for target_date
+                valid_emp_ids = [str(e.get("_id") or e.get("id")) for e in valid_sync_emps]
                 start_day = datetime(target_date.year, target_date.month, target_date.day)
                 end_day = datetime(target_date.year, target_date.month, target_date.day, 23, 59, 59)
                 existing_for_day = await DailyProgressRepository.get_all_progress({
-                    "employee_id": {"$in": [str(e.get("_id") or e.get("id")) for e in valid_sync_emps]},
+                    "employee_id": {"$in": valid_emp_ids},
                     "submitted_at": {"$gte": start_day, "$lte": end_day}
                 })
                 existing_map = {str(d.get("employee_id")): d for d in existing_for_day}
 
-                needs_refetch = False
+                # Batch-fetch all tasks for valid employees in ONE query instead of N+1 TaskRepository.get_all calls
+                from app.database.db import get_database
+                import asyncio
+                db = get_database()
+                all_tasks_cursor = db["tasks"].find(
+                    {"$or": [{"assigned_to": {"$in": valid_emp_ids}}, {"assigned_to_ids": {"$in": valid_emp_ids}}]},
+                    {"_id": 1, "title": 1, "status": 1, "updated_at": 1, "due_date": 1, "assigned_to": 1, "assigned_to_ids": 1}
+                )
+                all_tasks_docs = await all_tasks_cursor.to_list(length=5000)
+                tasks_by_emp: Dict[str, List[dict]] = {}
+                for t in all_tasks_docs:
+                    assigned = set()
+                    if t.get("assigned_to"):
+                        assigned.add(str(t["assigned_to"]))
+                    for aid in (t.get("assigned_to_ids") or []):
+                        if aid:
+                            assigned.add(str(aid))
+                    for eid_key in assigned:
+                        tasks_by_emp.setdefault(eid_key, []).append(t)
+
+                write_coros = []
                 for emp in valid_sync_emps:
                     emp_id_str = str(emp.get("_id") or emp.get("id"))
                     if search:
                         emp_name = f"{emp.get('personal_info', {}).get('first_name', '')} {emp.get('personal_info', {}).get('last_name', '')}".strip()
                         if search.lower() not in emp_name.lower():
                             continue
-                            
+
                     emp_record = existing_map.get(emp_id_str)
+                    emp_tasks = tasks_by_emp.get(emp_id_str, [])
                     if not emp_record:
-                        tasks_res = await TaskRepository.get_all(assigned_to=emp_id_str, limit=1000)
-                        emp_tasks = tasks_res.get("data", [])
                         draft = await DailyProgressService._generate_draft(emp, emp_tasks, target_date)
-                        await DailyProgressRepository.create_progress(draft)
-                        needs_refetch = True
+                        write_coros.append(DailyProgressRepository.create_progress(draft))
                     elif emp_record.get("status") == "PENDING":
-                        # If pending and user wants latest tasks synced
-                        tasks_res = await TaskRepository.get_all(assigned_to=emp_id_str, limit=1000)
-                        emp_tasks = tasks_res.get("data", [])
                         draft = await DailyProgressService._generate_draft(emp, emp_tasks, target_date)
                         update_payload = {
                             "assigned_tasks": draft["assigned_tasks"],
@@ -558,10 +594,14 @@ class DailyProgressService:
                             "upcoming_tasks": draft["upcoming_tasks"],
                             "completed_today_tasks": draft["completed_today_tasks"]
                         }
-                        await DailyProgressRepository.update_progress(str(emp_record.get("_id") or emp_record.get("id")), update_payload)
-                        needs_refetch = True
-                            
-                if needs_refetch:
+                        # Only write to DB if task lists actually changed
+                        if any(emp_record.get(k) != v for k, v in update_payload.items()):
+                            write_coros.append(
+                                DailyProgressRepository.update_progress(str(emp_record.get("_id") or emp_record.get("id")), update_payload)
+                            )
+
+                if write_coros:
+                    await asyncio.gather(*write_coros)
                     records = await DailyProgressRepository.get_all_progress(query)
 
         # Attach designation, sub_department, and leave flags
