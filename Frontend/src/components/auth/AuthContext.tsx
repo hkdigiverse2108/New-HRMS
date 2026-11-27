@@ -302,7 +302,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const res = await api.post<{ message: string; email?: string }>(
         "/login",
         { email, password },
-        { showErrorToast: false, showLoader: false, skipAuth: true }
+        { showErrorToast: false, showLoader: false, skipAuth: true, timeout: 60000 }
       );
 
       if (res && res.message) {
@@ -319,7 +319,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const res = await api.post<{ access_token: string; token_type: string }>(
         "/verify-otp",
         { email, otp },
-        { showErrorToast: false, showLoader: false, skipAuth: true }
+        { showErrorToast: false, showLoader: false, skipAuth: true, timeout: 60000 }
       );
 
       if (res && res.access_token) {

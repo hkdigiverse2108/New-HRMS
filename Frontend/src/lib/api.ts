@@ -200,8 +200,16 @@ async function apiRequest<T = any>(endpoint: string, options: RequestOptions = {
 
       return (await response.json()) as T;
     } catch (error: any) {
-      if (shouldToast && (error.name === "TypeError" || error.message === "Failed to fetch" || error.name === "AbortError")) {
-        showApiToastError("Unable to reach the server. Please check your network connection.");
+      const isAbort = error?.name === "AbortError" || String(error?.message || "").toLowerCase().includes("aborted");
+      if (shouldToast && (error?.name === "TypeError" || error?.message === "Failed to fetch" || isAbort)) {
+        showApiToastError(
+          isAbort
+            ? "Request timed out. Server is busy, please try again."
+            : "Unable to reach the server. Please check your network connection."
+        );
+      }
+      if (isAbort) {
+        throw new Error("Request timed out. Server is busy, please try again.");
       }
       throw error;
     } finally {

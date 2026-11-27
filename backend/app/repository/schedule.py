@@ -256,7 +256,20 @@ class ScheduleRepository:
         out: List[Dict[str, Any]] = []
         if categories and "birthday" not in categories and "work_anniversary" not in categories:
             return out
-        emp_cursor = db["employees"].find({})
+        emp_cursor = db["employees"].find(
+            {"work_details.is_delete": {"$ne": True}},
+            {
+                "_id": 1,
+                "name": 1,
+                "dob": 1,
+                "joining_date": 1,
+                "personal_info.first_name": 1,
+                "personal_info.last_name": 1,
+                "personal_info.date_of_birth": 1,
+                "work_details.employee_id": 1,
+                "work_details.joining_date": 1,
+            },
+        )
         employees = await emp_cursor.to_list(length=1000)
 
         for emp in employees:
@@ -600,37 +613,52 @@ class ScheduleRepository:
             except Exception:
                 pass
 
-        # 2. Auto-generated Birthdays & Work Anniversaries (company-wide)
-        try:
-            all_events.extend(await cls._company_day_events(db, start_date, end_date, reference_date, categories))
-        except Exception:
-            pass
+        # Run company day events, Google Calendar, and Google Holidays concurrently (with 5s cap on Google APIs)
+        import asyncio
+        async def _get_company():
+            try:
+                return await cls._company_day_events(db, start_date, end_date, reference_date, categories)
+            except Exception:
+                return []
 
-        # 3. Google Calendar Events
-        if not categories or "google_calendar" in categories:
+        async def _get_gcal():
+            if categories and "google_calendar" not in categories:
+                return []
             try:
                 from app.services.google_calendar import GoogleCalendarService
-                g_events = await GoogleCalendarService.fetch_google_calendar_events(
-                    employee_id=user_id,
-                    start_date=start_date,
-                    end_date=end_date
+                return await asyncio.wait_for(
+                    GoogleCalendarService.fetch_google_calendar_events(
+                        employee_id=user_id,
+                        start_date=start_date,
+                        end_date=end_date
+                    ),
+                    timeout=5.0,
                 )
-                all_events.extend(g_events)
             except Exception as e:
                 print(f"[GOOGLE CALENDAR FEED WARNING] {e}")
+                return []
 
-        # 3b. Google Festival/Holiday Events (e.g. Holidays in India: Diwali, Dussehra)
-        if not categories or "google_holidays" in categories:
+        async def _get_ghol():
+            if categories and "google_holidays" not in categories:
+                return []
             try:
                 from app.services.google_calendar import GoogleCalendarService
-                h_events = await GoogleCalendarService.fetch_holiday_events(
-                    employee_id=user_id,
-                    start_date=start_date,
-                    end_date=end_date
+                return await asyncio.wait_for(
+                    GoogleCalendarService.fetch_holiday_events(
+                        employee_id=user_id,
+                        start_date=start_date,
+                        end_date=end_date
+                    ),
+                    timeout=5.0,
                 )
-                all_events.extend(h_events)
             except Exception as e:
                 print(f"[GOOGLE HOLIDAY FEED WARNING] {e}")
+                return []
+
+        comp_ev, g_ev, h_ev = await asyncio.gather(_get_company(), _get_gcal(), _get_ghol())
+        all_events.extend(comp_ev)
+        all_events.extend(g_ev)
+        all_events.extend(h_ev)
 
         # Permanently exclude deleted events/holidays
         all_events = [ev for ev in all_events if not is_event_excluded(ev)]
