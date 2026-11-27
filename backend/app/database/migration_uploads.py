@@ -88,5 +88,35 @@ async def run_uploads_and_disk_migration(db):
     except Exception as e:
         logger.error(f"[MIGRATION ERROR] Database migration issue: {e}")
 
-    return {"status": "success", "total_migrated": total_migrated}
+    # 3. Migrate embedded base64 data:image/... strings in employees to /uploads/signatures/
+    base64_migrated = 0
+    try:
+        from app.utils.storage import normalize_base64_images_in_dict
+        emp_cursor = db["employees"].find({
+            "$or": [
+                {"signature": {"$regex": "^data:image/"}},
+                {"signature_url": {"$regex": "^data:image/"}},
+                {"personal_info.signature": {"$regex": "^data:image/"}},
+                {"personal_info.signature_url": {"$regex": "^data:image/"}},
+                {"profile_photo": {"$regex": "^data:image/"}},
+                {"personal_info.profile_photo": {"$regex": "^data:image/"}},
+                {"avatar": {"$regex": "^data:image/"}},
+            ]
+        })
+        async for doc in emp_cursor:
+            doc_id = doc["_id"]
+            cleaned = normalize_base64_images_in_dict(doc, default_subfolder="signatures", prefix=f"emp_{doc_id}")
+            update_fields = {k: v for k, v in cleaned.items() if k != "_id" and cleaned.get(k) != doc.get(k)}
+            if update_fields:
+                await db["employees"].update_one({"_id": doc_id}, {"$set": update_fields})
+                base64_migrated += 1
+        if base64_migrated > 0:
+            logger.info(f"[MIGRATION] Migrated {base64_migrated} employee base64 images to /uploads/ files.")
+            from app.redis.service import clear_pattern
+            await clear_pattern("employees:*")
+            await clear_pattern("auth:emp*")
+    except Exception as e:
+        logger.error(f"[MIGRATION ERROR] Base64 migration issue: {e}")
+
+    return {"status": "success", "total_migrated": total_migrated, "base64_migrated": base64_migrated}
 

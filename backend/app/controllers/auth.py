@@ -72,7 +72,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         if email is None:
             raise credentials_exception
             
-        employee = await EmployeeRepository.get_employee_by_email(email)
+        employee = await EmployeeRepository.get_employee_by_email(email, slim_auth=True)
         if not employee:
             raise credentials_exception
             
@@ -96,7 +96,7 @@ async def _resolve_employee_cached_by_email(email: str):
     cached = await get_cache(cache_key)
     if cached is not None:
         return cached
-    employee = await EmployeeRepository.get_employee_by_email(email)
+    employee = await EmployeeRepository.get_employee_by_email(email, slim_auth=True)
     if employee:
         work_details = employee.get("work_details", {})
         if work_details.get("is_delete") is not True and work_details.get("is_block") is not True:
@@ -419,7 +419,7 @@ async def get_me(current_employee: dict = Depends(get_current_employee)):
 async def login_for_access_token(login_data: LoginRequest, background_tasks: BackgroundTasks, http_request: Request):
     print(f"\n[Auth] Login attempt for email: {login_data.email}")
     # Find employee by email
-    employee = await EmployeeRepository.get_employee_by_email(login_data.email)
+    employee = await EmployeeRepository.get_employee_by_email(login_data.email, slim_auth=True)
     if not employee:
         print(f"[Auth] Login failed: {login_data.email} not found")
         raise HTTPException(
@@ -483,7 +483,7 @@ async def login_for_access_token(login_data: LoginRequest, background_tasks: Bac
 
 @router.post("/verify-otp", response_model=Token)
 async def verify_otp(verify_data: VerifyOTPRequest):
-    employee = await EmployeeRepository.get_employee_by_email(verify_data.email)
+    employee = await EmployeeRepository.get_employee_by_email(verify_data.email, slim_auth=True)
     if not employee:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
