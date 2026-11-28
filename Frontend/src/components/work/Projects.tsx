@@ -4114,7 +4114,7 @@ export function Projects({ isNew }: { isNew?: boolean }) {
         return `${formattedDate === "-" ? "" : formattedDate} ${linkHtml}`.trim();
       },
       "Editing": (i) => {
-        const formattedDate = formatDayMonthYear(i.editingDate);
+        const formattedDate = formatDayMonthYear(i.editingDate || i.editingStart);
         const rawUrl = cleanLink(i.finalPostLink) || cleanLink(i.finalReelLink);
         const linkHtml = rawUrl ? `<a href="${rawUrl.startsWith("http") ? rawUrl : "https://" + rawUrl}" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 700; display: inline-block; margin-left: 2px;">[Draft]</a>` : "";
         if (formattedDate === "-" && !linkHtml) return "-";
@@ -5970,8 +5970,38 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       "Instagram Link"
     ];
 
-    const todayStr = format(new Date(), "yyyy-MM-dd");
-    const futureStr = format(new Date(Date.now() + 86400000 * 2), "yyyy-MM-dd");
+    const now = new Date();
+    let baseDate = now;
+    let monthTag = format(now, "MMM_yyyy");
+    let monthDisplay = format(now, "MMM yyyy");
+
+    if (calendarMonthFilter && /^\d{4}-\d{2}$/.test(calendarMonthFilter)) {
+      const parts = calendarMonthFilter.split("-").map(Number);
+      const yy = parts[0] ?? now.getFullYear();
+      const mm = parts[1] ?? (now.getMonth() + 1);
+      baseDate = new Date(yy, mm - 1, 1);
+      monthTag = format(baseDate, "MMM_yyyy");
+      monthDisplay = format(baseDate, "MMM yyyy");
+    } else if (calendarMonthFilter?.toLowerCase() === "custom" && ccCustomStartDate) {
+      const parsed = new Date(ccCustomStartDate + "T00:00:00");
+      if (!isNaN(parsed.getTime())) {
+        baseDate = parsed;
+        monthTag = format(parsed, "MMM_yyyy");
+        monthDisplay = format(parsed, "MMM yyyy");
+      }
+    } else if (calendarMonthFilter === "All") {
+      monthTag = "All_Months";
+      monthDisplay = "All Months";
+    }
+
+    const isSameMonthAsToday =
+      baseDate.getFullYear() === now.getFullYear() && baseDate.getMonth() === now.getMonth();
+    const todayStr = isSameMonthAsToday
+      ? format(now, "yyyy-MM-dd")
+      : format(new Date(baseDate.getFullYear(), baseDate.getMonth(), 1), "yyyy-MM-dd");
+    const futureStr = isSameMonthAsToday
+      ? format(new Date(Date.now() + 86400000 * 2), "yyyy-MM-dd")
+      : format(new Date(baseDate.getFullYear(), baseDate.getMonth(), 3), "yyyy-MM-dd");
 
     const dummyRows = [
       {
@@ -6014,7 +6044,69 @@ export function Projects({ isNew }: { isNew?: boolean }) {
       }
     ];
 
-    const worksheet = XLSX.utils.json_to_sheet(dummyRows, { header: headers });
+    const toYmd = (v: any): string => {
+      if (!v) return "";
+      const s = String(v).trim();
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+      const d = new Date(s);
+      return !isNaN(d.getTime()) ? format(d, "yyyy-MM-dd") : "";
+    };
+
+    const resolveBrandPerson = (item: any): string => {
+      if (item.brand_person_details?.employee_name) return item.brand_person_details.employee_name;
+      const raw = String(item.brand_person || "").trim();
+      if (!raw) return "";
+      const emp = employees.find((e: any) => String(e.id || e._id) === raw);
+      if (emp) {
+        const p = (emp as any)?.personal_info || {};
+        const full = `${p.first_name || ""} ${p.last_name || ""}`.trim();
+        return full || (emp as any).name || (emp as any).username || raw;
+      }
+      return raw;
+    };
+
+    const allCalItems = currentProject?.contentCalendar || [];
+    const targetYm = calendarMonthFilter && /^\d{4}-\d{2}$/.test(calendarMonthFilter)
+      ? calendarMonthFilter
+      : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+    const liveItems = allCalItems
+      .filter((item) => {
+        const itemDate = toYmd(item.postingDate || item.scheduledDate);
+        if (calendarMonthFilter === "All") return true;
+        if (calendarMonthFilter?.toLowerCase() === "custom") {
+          if (!itemDate) return false;
+          if (ccCustomStartDate && itemDate < ccCustomStartDate) return false;
+          if (ccCustomEndDate && itemDate > ccCustomEndDate) return false;
+          return true;
+        }
+        return itemDate.startsWith(targetYm);
+      })
+      .sort((a, b) => toYmd(a.postingDate || a.scheduledDate).localeCompare(toYmd(b.postingDate || b.scheduledDate)));
+
+    const liveRows = liveItems.map((item) => ({
+      "Scheduled Date* (YYYY-MM-DD)": toYmd(item.postingDate || item.scheduledDate),
+      "Content Type (Post/Reel/Story/Carousel)": item.type || "Post",
+      "Topic Title": item.topic || "",
+      "Topic Description/Concept": item.concept || "",
+      "Reference Link": item.reference || "",
+      "Brand Person": resolveBrandPerson(item),
+      "Script Date (YYYY-MM-DD)": toYmd(item.scriptDate),
+      "Script Link": item.scriptLink || "",
+      "Shoot Date (YYYY-MM-DD)": toYmd(item.shootDate),
+      "Shoot Link": item.shootLink || "",
+      "Editing Date (YYYY-MM-DD)": toYmd(item.editingStart),
+      "Editing/Reel Link": item.finalReelLink || item.finalPostLink || "",
+      "Thumbnail Date (YYYY-MM-DD)": toYmd(item.thumbnailDate),
+      "Thumbnail Link": item.thumbnailLink || "",
+      "Caption Date (YYYY-MM-DD)": toYmd(item.captionDate),
+      "Caption Text": item.caption || "",
+      "Instagram Link": item.postingLinkOfIg || ""
+    }));
+
+    const rowsToExport = liveRows.length > 0 ? liveRows : dummyRows;
+
+    const worksheet = XLSX.utils.json_to_sheet(rowsToExport, { header: headers });
     worksheet["!cols"] = [
       { wch: 28 }, // Scheduled Date
       { wch: 38 }, // Content Type
@@ -6038,8 +6130,12 @@ export function Projects({ isNew }: { isNew?: boolean }) {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Content Calendar");
     const cleanName = (projectName || "Project").replace(/[^a-zA-Z0-9_-]/g, "_");
-    XLSX.writeFile(workbook, `${cleanName}_Content_Calendar_Template.xlsx`);
-    toast.success("Content Calendar Dummy Template downloaded successfully!");
+    XLSX.writeFile(workbook, `${cleanName}_${monthTag}_Content_Calendar_Template.xlsx`);
+    toast.success(
+      liveRows.length > 0
+        ? `Exported ${liveRows.length} Content Calendar rows (${monthDisplay})!`
+        : `Content Calendar Template (${monthDisplay}) downloaded!`
+    );
   };
 
   const handleUploadCCExcel = async (e: React.ChangeEvent<HTMLInputElement>, project: any) => {
@@ -8351,10 +8447,13 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  // Only offer values that exist in the export dropdown; anything else defaults to the current month
                                   const norm = calendarMonthFilter.toLowerCase() === "custom"
                                     ? "custom"
-                                    : calendarMonthFilter === "All" ? "All" : "Current";
+                                    : calendarMonthFilter === "All"
+                                      ? "All"
+                                      : /^\d{4}-\d{2}$/.test(calendarMonthFilter)
+                                        ? calendarMonthFilter
+                                        : "Current";
                                   setPdfMonthFilter(norm);
                                   if (norm === "custom") {
                                     setPdfCustomStartDate(ccCustomStartDate);
@@ -11320,40 +11419,63 @@ export function Projects({ isNew }: { isNew?: boolean }) {
                       <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
                         Calendar Month
                       </label>
-                      <Select value={pdfMonthFilter} onValueChange={(val) => setPdfMonthFilter(val)}>
-                        <SelectTrigger className="h-9 w-full bg-background border border-border/60 rounded-xl text-xs font-bold">
-                          <SelectValue placeholder="Select Month" />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
-                          <SelectItem value="Current" className="text-xs font-semibold">Current Month ({format(new Date(), "MMM yyyy")})</SelectItem>
-                          <SelectItem value="lastMonth" className="text-xs font-semibold">Last Month ({format(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1), "MMM yyyy")})</SelectItem>
-                          <SelectItem value="thisWeek" className="text-xs font-semibold">This Week</SelectItem>
-                          <SelectItem value="lastWeek" className="text-xs font-semibold">Last Week</SelectItem>
-                          <SelectItem value="last7" className="text-xs font-semibold">Last 7 Days</SelectItem>
-                          <SelectItem value="last15" className="text-xs font-semibold">Last 15 Days</SelectItem>
-                          <SelectItem value="last30" className="text-xs font-semibold">Last 30 Days</SelectItem>
-                          <SelectItem value="All" className="text-xs font-semibold">All Months</SelectItem>
-                          <SelectItem value="custom" className="text-xs font-semibold">Custom Date Range</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      {(() => {
+                        const calForMonths = projects.find(p => p.id === selectedProjectId)?.contentCalendar || [];
+                        const ymSet = new Set<string>();
+                        calForMonths.forEach((it: any) => {
+                          const d = String(it.postingDate || it.schedule_date || "");
+                          if (/^\d{4}-\d{2}/.test(d)) ymSet.add(d.slice(0, 7));
+                        });
+                        if (/^\d{4}-\d{2}$/.test(calendarMonthFilter)) ymSet.add(calendarMonthFilter);
+                        if (/^\d{4}-\d{2}$/.test(pdfMonthFilter)) ymSet.add(pdfMonthFilter);
+                        const sortedMonths = Array.from(ymSet).sort();
+                        return (
+                          <Select value={pdfMonthFilter} onValueChange={(val) => setPdfMonthFilter(val)}>
+                            <SelectTrigger className="h-9 w-full bg-background border border-border/60 rounded-xl text-xs font-bold">
+                              <SelectValue placeholder="Select Month" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl border-border/60 shadow-xl bg-background/95 backdrop-blur-md z-[300]">
+                              <SelectItem value="Current" className="text-xs font-semibold">Current Month ({format(new Date(), "MMM yyyy")})</SelectItem>
+                              {sortedMonths.map((ym) => {
+                                const [yy, mm] = ym.split("-").map(Number);
+                                const lbl = format(new Date(yy || 2026, (mm || 1) - 1, 1), "MMM yyyy");
+                                return (
+                                  <SelectItem key={ym} value={ym} className="text-xs font-semibold">
+                                    {lbl}
+                                  </SelectItem>
+                                );
+                              })}
+                              <SelectItem value="lastMonth" className="text-xs font-semibold">Last Month ({format(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1), "MMM yyyy")})</SelectItem>
+                              <SelectItem value="thisWeek" className="text-xs font-semibold">This Week</SelectItem>
+                              <SelectItem value="lastWeek" className="text-xs font-semibold">Last Week</SelectItem>
+                              <SelectItem value="last7" className="text-xs font-semibold">Last 7 Days</SelectItem>
+                              <SelectItem value="last15" className="text-xs font-semibold">Last 15 Days</SelectItem>
+                              <SelectItem value="last30" className="text-xs font-semibold">Last 30 Days</SelectItem>
+                              <SelectItem value="All" className="text-xs font-semibold">All Months</SelectItem>
+                              <SelectItem value="custom" className="text-xs font-semibold">Custom Date Range</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        );
+                      })()}
                       {pdfMonthFilter === "custom" && (
-                        <div className="pt-2 grid grid-cols-2 gap-2">
+                        <div className="pt-2 grid grid-cols-2 gap-2.5">
                           <div className="space-y-1">
                             <label className="text-[10px] font-bold text-muted-foreground uppercase">Start Date</label>
-                            <input
-                              type="date"
+                            <DatePicker
                               value={pdfCustomStartDate}
-                              onChange={(e) => setPdfCustomStartDate(e.target.value)}
-                              className="w-full h-8 px-2 rounded-lg border border-border bg-background text-xs font-medium focus:ring-1 focus:ring-primary"
+                              onChange={(val) => setPdfCustomStartDate(val)}
+                              placeholder="Select start date"
+                              className="w-full h-9 bg-background border-border/60 rounded-xl text-xs font-semibold"
                             />
                           </div>
                           <div className="space-y-1">
                             <label className="text-[10px] font-bold text-muted-foreground uppercase">End Date</label>
-                            <input
-                              type="date"
+                            <DatePicker
                               value={pdfCustomEndDate}
-                              onChange={(e) => setPdfCustomEndDate(e.target.value)}
-                              className="w-full h-8 px-2 rounded-lg border border-border bg-background text-xs font-medium focus:ring-1 focus:ring-primary"
+                              minDate={pdfCustomStartDate}
+                              onChange={(val) => setPdfCustomEndDate(val)}
+                              placeholder="Select end date"
+                              className="w-full h-9 bg-background border-border/60 rounded-xl text-xs font-semibold"
                             />
                           </div>
                         </div>
