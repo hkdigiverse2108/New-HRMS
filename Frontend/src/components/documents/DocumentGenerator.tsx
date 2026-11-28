@@ -45,13 +45,13 @@ const DEFAULT_LETTERHEAD: LetterheadConfig = {
 };
 
 // ─── A4 PAGINATION CONSTANTS & HELPERS ─────────────────────────────────────
-const A4_PAGE1_CONTENT_PX = 870;
-const A4_PAGE_N_CONTENT_PX = 1010;
-const LINE_HEIGHT_PX = 19.2;
+const A4_PAGE1_CONTENT_PX = 955;
+const A4_PAGE_N_CONTENT_PX = 955;
+const LINE_HEIGHT_PX = 18.6;
 
 function estimateBlockHeight(html: string): number {
   const text = html.replace(/<[^>]*>/g, "");
-  const lines = Math.max(1, Math.ceil(text.length / 90));
+  const lines = Math.max(1, Math.ceil(text.length / 96));
   const isTable = html.includes("<table");
   const isHeading = /<h[1-3]/i.test(html);
   const isList = /<[uo]l/i.test(html);
@@ -59,11 +59,22 @@ function estimateBlockHeight(html: string): number {
 
   if (isTable) {
     const rows = (html.match(/<tr/gi) || []).length || 1;
-    return rows * 28 + 20;
+    return rows * 28 + 16;
   }
-  if (isList) return listItems * LINE_HEIGHT_PX + 12;
-  if (isHeading) return LINE_HEIGHT_PX * lines * 1.6 + 8;
-  return lines * LINE_HEIGHT_PX + 6;
+  if (isList) return listItems * LINE_HEIGHT_PX + 8;
+  if (isHeading) return LINE_HEIGHT_PX * lines * 1.5 + 6;
+  return lines * LINE_HEIGHT_PX + 2;
+}
+
+function hasVisibleContent(html: string): boolean {
+  if (!html) return false;
+  if (/<(img|table|hr)\b/i.test(html)) return true;
+  const text = html
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\u200B/g, "")
+    .trim();
+  return text.length > 0;
 }
 
 function parseHtmlToBlocks(html: string): string[] {
@@ -109,14 +120,18 @@ function parseHtmlToBlocks(html: string): string[] {
 
 function distributeBlocksToPages(blocks: string[]): string[] {
   if (blocks.length === 0) return [""];
+  const trimmedBlocks = [...blocks];
+  while (trimmedBlocks.length > 1 && !hasVisibleContent(trimmedBlocks[trimmedBlocks.length - 1] ?? "")) {
+    trimmedBlocks.pop();
+  }
   const pages: string[] = [];
   let pageHtml = "";
   let usedPx = 0;
   let maxPx = A4_PAGE1_CONTENT_PX;
 
-  for (const block of blocks) {
+  for (const block of trimmedBlocks) {
     const h = estimateBlockHeight(block);
-    if (pageHtml && usedPx + h > maxPx) {
+    if (pageHtml && usedPx + h > maxPx && hasVisibleContent(block)) {
       pages.push(pageHtml);
       pageHtml = block;
       usedPx = h;
@@ -126,7 +141,12 @@ function distributeBlocksToPages(blocks: string[]): string[] {
       usedPx += h;
     }
   }
-  if (pageHtml.trim()) pages.push(pageHtml);
+  if (pageHtml.trim() && (pages.length === 0 || hasVisibleContent(pageHtml))) {
+    pages.push(pageHtml);
+  }
+  while (pages.length > 1 && !hasVisibleContent(pages[pages.length - 1] ?? "")) {
+    pages.pop();
+  }
   return pages.length > 0 ? pages : [""];
 }
 
@@ -206,24 +226,7 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
     };
   }, []);
 
-  // Company letterhead uploaded in Admin Settings takes priority over the local default
-  useEffect(() => {
-    const loadSettingsLetterhead = async () => {
-      try {
-        const res = await api.get<any>("/settings", { showLoader: false, showErrorToast: false });
-        const url: string | null = res?.letterhead_url || null;
-        if (!url) return;
-        const full = /^(https?:|data:)/.test(url)
-          ? url
-          : `${getApiUrl().replace(/\/+$/, "")}${url.startsWith("/") ? "" : "/"}${url}`;
-        settingsLetterheadRef.current = full;
-        setLetterhead((prev) => ({ ...prev, enabled: true, headerImageUrl: full }));
-      } catch (e) {
-        console.warn("Failed to load company letterhead from settings", e);
-      }
-    };
-    loadSettingsLetterhead();
-  }, []);
+  // Keep letterhead synced with DocumentTemplates (use document_letterhead_config / default HariKrushn DigiVerse LLP header)
 
   // Fetch templates and employees from backend API
   useEffect(() => {
@@ -904,27 +907,27 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
     if (!letterhead.enabled) return null;
     if (letterhead.headerImageUrl) {
       return (
-        <div className="relative w-full overflow-hidden bg-white select-none shrink-0 mb-6">
-          <img src={letterhead.headerImageUrl} alt="Letterhead Header" className="w-full max-h-36 object-cover" />
+        <div className="relative w-full overflow-hidden bg-white select-none shrink-0 mb-4 border-b border-slate-100">
+          <img src={letterhead.headerImageUrl} alt="Letterhead Header" className="w-full max-h-36 object-contain" />
         </div>
       );
     }
     return (
-      <div className="relative w-full overflow-hidden bg-white select-none shrink-0 mb-8">
-        <div className="flex items-center justify-between min-h-[90px] px-6 sm:px-8 py-3">
+      <div className="relative w-full overflow-hidden bg-white select-none shrink-0 mb-5 border-b border-slate-200/60">
+        <div className="flex items-center justify-between min-h-[80px] px-6 sm:px-8 py-2">
           <div className="flex items-center gap-4 z-10">
             {letterhead.logoUrl ? (
-              <img src={letterhead.logoUrl} alt="Logo" className="h-12 sm:h-14 w-auto object-contain" />
+              <img src={letterhead.logoUrl} alt="Logo" className="h-10 sm:h-12 w-auto object-contain" />
             ) : (
-              <div className="w-12 h-12 rounded-xl bg-[#0f2552] text-white flex items-center justify-center font-black text-xl shadow-md">
+              <div className="w-10 h-10 rounded-xl bg-[#0f2552] text-white flex items-center justify-center font-black text-lg shadow-md">
                 {(letterhead.companyName || "H").charAt(0)}
               </div>
             )}
             <div>
-              <h2 className="text-xl sm:text-2xl font-black text-[#0f2552] tracking-tight leading-tight">
+              <h2 className="text-lg sm:text-xl font-black text-[#0f2552] tracking-tight leading-tight">
                 {letterhead.companyName || "HariKrushn DigiVerse LLP"}
               </h2>
-              <p className="text-xs sm:text-sm font-bold text-emerald-600 flex items-center gap-1.5 mt-0.5">
+              <p className="text-xs font-bold text-emerald-600 flex items-center gap-1.5 mt-0.5">
                 <span className="text-[#0f2552]">|</span> {letterhead.tagline || "Innovate • Transform • Grow"}
               </p>
             </div>
@@ -1166,7 +1169,7 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
 
           {/* Dynamic Variables Form */}
           {selectedTemp && (
-            <div className="bg-card border border-border/50 p-4 sm:p-5 rounded-2xl shadow-sm flex-grow space-y-4">
+            <div className="bg-card border border-border/50 p-4 sm:p-5 rounded-2xl shadow-sm flex-grow flex flex-col gap-4 min-h-0">
               <div className="flex items-center justify-between border-b border-border/50 pb-3">
                 <div>
                   <h3 className="font-bold flex items-center gap-2 text-foreground">
@@ -1221,7 +1224,7 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
                 </div>
               )}
 
-              <div className="space-y-3.5 overflow-y-auto max-h-[420px] xl:max-h-[480px] pr-2 custom-scrollbar">
+              <div className="space-y-3.5 flex-1 min-h-0 overflow-y-auto xl:max-h-[820px] pr-2 custom-scrollbar">
                 {templatePlaceholders.map((varKey) => {
                   const currentVal = getVarValue(varKey);
                   const isAutoFilled = selectedEmpId !== "manual" && Boolean(selectedEmp) && Boolean(currentVal);

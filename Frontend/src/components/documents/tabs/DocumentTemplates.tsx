@@ -84,11 +84,13 @@ const AVAILABLE_VARIABLES = [
   { label: "Signatory Title", value: "{{signatoryTitle}}" },
   { label: "Employee Name", value: "{{employee_name}}" },
   { label: "Joining Date", value: "{{joining_date}}" },
+  { label: "End Date", value: "{{end_date}}" },
   { label: "Company Name", value: "{{company_name}}" },
   { label: "Internship Position", value: "{{internshipPosition}}" },
   { label: "College / Institute", value: "{{collegeInstitute}}" },
   { label: "Internship Type", value: "{{internshipType}}" },
   { label: "Monthly Stipend", value: "{{monthlyStipend}}" },
+  { label: "Performance Rating", value: "{{performanceRating}}" },
 ];
 
 const SAMPLE_PREVIEW_VARS: Record<string, string> = {
@@ -103,6 +105,9 @@ const SAMPLE_PREVIEW_VARS: Record<string, string> = {
   internName: "Vruti Nileshbhai Balar",
   joining_date: "01/10/2026",
   joiningDate: "01/10/2026",
+  end_date: "31/10/2026",
+  endDate: "31/10/2026",
+  performanceRating: "Excellent",
   startDate: "01/10/2026",
   internshipStartDate: "01/10/2026",
   internship_start_date: "01/10/2026",
@@ -143,14 +148,14 @@ const QUILL_MODULES = {
 // A4 at 96 DPI: 210mm × 297mm
 // Header ~90px + footer ~40px + padding ~60px = ~190px overhead for page 1
 // Page 2+ only footer + padding overhead
-const A4_PAGE1_CONTENT_PX = 870; // pixels available on page 1 (with header)
-const A4_PAGE_N_CONTENT_PX = 1010; // pixels available on page 2+ (no header)
-const LINE_HEIGHT_PX = 19.2; // 10pt × 1.4 line-height × 1.333 px/pt
+const A4_PAGE1_CONTENT_PX = 955; // pixels available on page 1 (with header)
+const A4_PAGE_N_CONTENT_PX = 955; // pixels available on page 2+ (letterhead header repeats)
+const LINE_HEIGHT_PX = 18.6; // 10pt × 1.4 line-height × 1.333 px/pt
 
 // Estimate rendered height of an HTML block string
 function estimateBlockHeight(html: string): number {
   const text = html.replace(/<[^>]*>/g, "");
-  const lines = Math.max(1, Math.ceil(text.length / 90));
+  const lines = Math.max(1, Math.ceil(text.length / 96));
   const isTable = html.includes("<table");
   const isHeading = /<h[1-3]/i.test(html);
   const isList = /<[uo]l/i.test(html);
@@ -158,11 +163,11 @@ function estimateBlockHeight(html: string): number {
 
   if (isTable) {
     const rows = (html.match(/<tr/gi) || []).length || 1;
-    return rows * 28 + 20;
+    return rows * 28 + 16;
   }
-  if (isList) return listItems * LINE_HEIGHT_PX + 12;
-  if (isHeading) return LINE_HEIGHT_PX * lines * 1.6 + 8;
-  return lines * LINE_HEIGHT_PX + 6;
+  if (isList) return listItems * LINE_HEIGHT_PX + 8;
+  if (isHeading) return LINE_HEIGHT_PX * lines * 1.5 + 6;
+  return lines * LINE_HEIGHT_PX + 2;
 }
 
 // Parse HTML into block-level elements
@@ -207,19 +212,43 @@ function parseHtmlToBlocks(html: string): string[] {
   return blocks;
 }
 
-// Distribute blocks across A4 pages based on pixel height estimation
-function distributeBlocksToPages(blocks: string[]): string[] {
-  if (blocks.length === 0) return [""];
+function hasVisibleContent(html: string): boolean {
+  if (!html) return false;
+  if (/<(img|table|hr)\b/i.test(html)) return true;
+  const text = html
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\u200B/g, "")
+    .trim();
+  return text.length > 0;
+}
+
+// Distribute blocks across A4 pages based on pixel height estimation, returning exact block index ranges
+function distributeBlocksToPagesWithRanges(blocks: string[]): { pages: string[]; ranges: [number, number][] } {
+  if (blocks.length === 0) return { pages: [""], ranges: [[0, 0]] };
+
+  // Trim trailing empty blocks (e.g. trailing <p><br></p>) so they don't spawn an empty extra page
+  const trimmedBlocks = [...blocks];
+  while (trimmedBlocks.length > 1 && !hasVisibleContent(trimmedBlocks[trimmedBlocks.length - 1] ?? "")) {
+    trimmedBlocks.pop();
+  }
+
   const pages: string[] = [];
+  const ranges: [number, number][] = [];
   let pageHtml = "";
+  let pageStart = 0;
   let usedPx = 0;
   let maxPx = A4_PAGE1_CONTENT_PX;
 
-  for (const block of blocks) {
+  for (let i = 0; i < trimmedBlocks.length; i++) {
+    const block = trimmedBlocks[i] ?? "";
     const h = estimateBlockHeight(block);
-    if (pageHtml && usedPx + h > maxPx) {
+    // Do not start a brand-new page for an empty spacer block
+    if (pageHtml && usedPx + h > maxPx && hasVisibleContent(block)) {
       pages.push(pageHtml);
+      ranges.push([pageStart, i]);
       pageHtml = block;
+      pageStart = i;
       usedPx = h;
       maxPx = A4_PAGE_N_CONTENT_PX;
     } else {
@@ -227,17 +256,158 @@ function distributeBlocksToPages(blocks: string[]): string[] {
       usedPx += h;
     }
   }
-  if (pageHtml.trim()) pages.push(pageHtml);
-  return pages.length > 0 ? pages : [""];
+  if (pageHtml.trim() && (pages.length === 0 || hasVisibleContent(pageHtml))) {
+    pages.push(pageHtml);
+    ranges.push([pageStart, trimmedBlocks.length]);
+  }
+  while (pages.length > 1 && !hasVisibleContent(pages[pages.length - 1] ?? "")) {
+    pages.pop();
+    ranges.pop();
+  }
+  if (pages.length === 0) return { pages: [""], ranges: [[0, 0]] };
+  return { pages, ranges };
+}
+
+function distributeBlocksToPages(blocks: string[]): string[] {
+  return distributeBlocksToPagesWithRanges(blocks).pages;
+}
+
+// Check if caret is truly at the very beginning of the editable container
+function isCaretAtVeryStart(target: HTMLElement, range: Range): boolean {
+  try {
+    const preRange = document.createRange();
+    preRange.selectNodeContents(target);
+    preRange.setEnd(range.startContainer, range.startOffset);
+    const textBefore = preRange.toString().replace(/\u200B/g, "");
+    if (textBefore.length > 0) return false;
+    const frag = preRange.cloneContents();
+    if (frag.querySelector("img, hr, table, span[data-var]")) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Wrap plain {{variable}} text outside data-var spans so brackets are automatically highlighted
+function highlightBracketVars(html: string): string {
+  if (!html || !html.includes("{{")) return html;
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(`<div>${html}</div>`, "text/html");
+    const root = doc.body.firstElementChild as HTMLElement | null;
+    if (!root) return html;
+    const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const textNodes: Text[] = [];
+    let cur = walker.nextNode();
+    while (cur) {
+      const parentEl = cur.parentElement;
+      if (parentEl && !parentEl.closest("[data-var]") && /{{[a-zA-Z0-9_]+}}/.test(cur.nodeValue || "")) {
+        textNodes.push(cur as Text);
+      }
+      cur = walker.nextNode();
+    }
+    textNodes.forEach((tn) => {
+      const val = tn.nodeValue || "";
+      const frag = doc.createDocumentFragment();
+      let lastIdx = 0;
+      const re = /{{([a-zA-Z0-9_]+)}}/g;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(val)) !== null) {
+        if (m.index > lastIdx) {
+          frag.appendChild(doc.createTextNode(val.slice(lastIdx, m.index)));
+        }
+        const rawKey = (m[1] || "").trim();
+        const span = doc.createElement("span");
+        span.className = "var-pill-sample";
+        span.setAttribute("data-var", rawKey);
+        span.setAttribute("title", `Variable: {{${rawKey}}}`);
+        span.textContent = `{{${rawKey}}}`;
+        frag.appendChild(span);
+        lastIdx = m.index + m[0].length;
+      }
+      if (lastIdx < val.length) {
+        frag.appendChild(doc.createTextNode(val.slice(lastIdx)));
+      }
+      tn.parentNode?.replaceChild(frag, tn);
+    });
+    return root.innerHTML;
+  } catch {
+    return html;
+  }
+}
+
+// Find the nearest scrollable ancestor so we can preserve scrollTop across edits
+function getScrollParent(el: HTMLElement | null): HTMLElement | Window {
+  let node: HTMLElement | null = el?.parentElement || null;
+  while (node) {
+    const style = getComputedStyle(node);
+    const oy = style.overflowY;
+    if ((oy === "auto" || oy === "scroll") && node.scrollHeight > node.clientHeight) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return window;
+}
+
+function getScrollTop(sp: HTMLElement | Window): number {
+  return sp === window ? window.scrollY : (sp as HTMLElement).scrollTop;
+}
+
+function setScrollTop(sp: HTMLElement | Window, top: number) {
+  if (sp === window) {
+    window.scrollTo({ top });
+  } else {
+    (sp as HTMLElement).scrollTop = top;
+  }
+}
+
+// Sanitize pasted HTML into clean blocks/inline tags
+function sanitizePastedHtml(html: string): string {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(`<div>${html}</div>`, "text/html");
+  const root = doc.body.firstElementChild as HTMLElement | null;
+  if (!root) return "";
+  root.querySelectorAll("script, style, meta, link, title").forEach((el) => el.remove());
+
+  const walk = (node: Node): string => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return (node.textContent || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return "";
+    const el = node as HTMLElement;
+    const tag = el.tagName.toLowerCase();
+    const inner = Array.from(el.childNodes).map(walk).join("");
+
+    if (tag === "br") return "<br>";
+    if (tag === "span" && el.getAttribute("data-var")) {
+      const v = el.getAttribute("data-var") || "";
+      return `<span class="var-pill-sample" data-var="${v}" title="Variable: {{${v}}}">${inner}</span>`;
+    }
+    if (tag === "b" || tag === "strong") return `<strong>${inner}</strong>`;
+    if (tag === "i" || tag === "em") return `<em>${inner}</em>`;
+    if (tag === "u") return `<u>${inner}</u>`;
+    if (tag === "s" || tag === "strike" || tag === "del") return `<s>${inner}</s>`;
+    if (tag === "h1" || tag === "h2" || tag === "h3") return `<${tag}>${inner}</${tag}>`;
+    if (tag === "ul" || tag === "ol" || tag === "li" || tag === "blockquote") return `<${tag}>${inner}</${tag}>`;
+    if (tag === "p" || tag === "div") return inner.trim() ? `<p>${inner}</p>` : "<p><br></p>";
+    return inner;
+  };
+
+  return highlightBracketVars(Array.from(root.childNodes).map(walk).join(""));
 }
 
 // ─── SINGLE-PAGE EDITOR ────────────────────────────────────────────────────
-// A stable contenteditable page that does NOT re-render its innerHTML when focused
+// A stable contenteditable page that preserves caret & avoids overflow duplication
 const EditablePageCard = memo(({
   pIdx,
   totalPages,
   pageHtml,
   onContentChange,
+  onFocusPage,
   onBackspaceAtStart,
   onArrowUpAtTop,
   onArrowDownAtBottom,
@@ -247,6 +417,7 @@ const EditablePageCard = memo(({
   totalPages: number;
   pageHtml: string;
   onContentChange: (html: string) => void;
+  onFocusPage: () => void;
   onBackspaceAtStart: () => void;
   onArrowUpAtTop: () => void;
   onArrowDownAtBottom: () => void;
@@ -255,14 +426,44 @@ const EditablePageCard = memo(({
   const divRef = useRef<HTMLDivElement>(null);
   const isFocusedRef = useRef(false);
   const lastHtmlRef = useRef(pageHtml);
+  const savedRangeRef = useRef<Range | null>(null);
 
-  // Only update DOM when NOT focused and content actually changed externally
+  const saveCurrentSelection = () => {
+    if (!divRef.current) return;
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const r = sel.getRangeAt(0);
+      if (divRef.current.contains(r.commonAncestorContainer)) {
+        savedRangeRef.current = r.cloneRange();
+      }
+    }
+  };
+
+  // Sync DOM when external pageHtml changes (never clobber focused DOM unless blocks actually moved across pages)
   useLayoutEffect(() => {
     if (!divRef.current) return;
-    if (isFocusedRef.current) return; // never touch DOM while user is typing
     if (lastHtmlRef.current === pageHtml) return;
+    if (isFocusedRef.current) {
+      const prevCount = parseHtmlToBlocks(lastHtmlRef.current).length;
+      const nextCount = parseHtmlToBlocks(pageHtml).length;
+      if (prevCount === nextCount) return; // keep exact DOM & caret while editing same page
+    }
+    const sp = getScrollParent(divRef.current);
+    const prevTop = getScrollTop(sp);
     lastHtmlRef.current = pageHtml;
     divRef.current.innerHTML = pageHtml;
+    if (isFocusedRef.current) {
+      const sel = window.getSelection();
+      if (sel) {
+        const r = document.createRange();
+        r.selectNodeContents(divRef.current);
+        r.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(r);
+        savedRangeRef.current = r.cloneRange();
+      }
+      setScrollTop(sp, prevTop);
+    }
   }, [pageHtml]);
 
   // Initial mount
@@ -274,13 +475,34 @@ const EditablePageCard = memo(({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Insert variable at cursor position
+  // Insert variable at cursor position (restores saved range even if button stole focus)
   useEffect(() => {
-    if (!insertSignal || !isFocusedRef.current || !divRef.current) return;
+    if (!insertSignal || !divRef.current) return;
+    const el = divRef.current;
+    el.focus({ preventScroll: true });
     const sel = window.getSelection();
-    if (!sel || !sel.rangeCount) return;
-    const range = sel.getRangeAt(0);
-    if (!divRef.current.contains(range.commonAncestorContainer)) return;
+    if (!sel) return;
+
+    let range: Range | null = null;
+    if (sel.rangeCount > 0) {
+      const cur = sel.getRangeAt(0);
+      if (el.contains(cur.commonAncestorContainer)) {
+        range = cur;
+      }
+    }
+    if (!range && savedRangeRef.current && el.contains(savedRangeRef.current.commonAncestorContainer)) {
+      range = savedRangeRef.current.cloneRange();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+    if (!range) {
+      range = document.createRange();
+      range.selectNodeContents(el);
+      range.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+
     range.deleteContents();
     const frag = document.createRange().createContextualFragment(insertSignal.html);
     const lastNode = frag.lastChild;
@@ -291,8 +513,11 @@ const EditablePageCard = memo(({
       r2.collapse(true);
       sel.removeAllRanges();
       sel.addRange(r2);
+      savedRangeRef.current = r2.cloneRange();
     }
-    onContentChange(divRef.current.innerHTML);
+    const updated = el.innerHTML;
+    lastHtmlRef.current = updated;
+    onContentChange(updated);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [insertSignal]);
 
@@ -304,31 +529,131 @@ const EditablePageCard = memo(({
       suppressContentEditableWarning={true}
       onFocus={() => {
         isFocusedRef.current = true;
+        onFocusPage();
+        saveCurrentSelection();
+      }}
+      onMouseUp={saveCurrentSelection}
+      onKeyUp={(e) => {
+        // Auto-highlight {{varName}} as soon as user finishes typing '}}'
+        if (e.key === "}" && divRef.current) {
+          const sel = window.getSelection();
+          if (sel && sel.isCollapsed && sel.rangeCount > 0) {
+            const r = sel.getRangeAt(0);
+            const node = r.startContainer;
+            if (node.nodeType === Node.TEXT_NODE && !(node.parentElement?.closest("[data-var]"))) {
+              const text = node.nodeValue || "";
+              const beforeCursor = text.slice(0, r.startOffset);
+              const m = beforeCursor.match(/{{([a-zA-Z0-9_]+)}}$/);
+              if (m && m[1]) {
+                const rawKey = m[1];
+                const matchStart = beforeCursor.length - m[0].length;
+                const beforeText = text.slice(0, matchStart);
+                const afterText = text.slice(r.startOffset);
+                const parent = node.parentNode;
+                if (parent) {
+                  const span = document.createElement("span");
+                  span.className = "var-pill-sample";
+                  span.setAttribute("data-var", rawKey);
+                  span.setAttribute("title", `Variable: {{${rawKey}}}`);
+                  span.textContent = `{{${rawKey}}}`;
+                  const spaceNode = document.createTextNode("\u00A0" + afterText);
+                  if (beforeText) {
+                    node.nodeValue = beforeText;
+                    parent.insertBefore(span, node.nextSibling);
+                    parent.insertBefore(spaceNode, span.nextSibling);
+                  } else {
+                    parent.replaceChild(spaceNode, node);
+                    parent.insertBefore(span, spaceNode);
+                  }
+                  const r2 = document.createRange();
+                  r2.setStart(spaceNode, 1);
+                  r2.collapse(true);
+                  sel.removeAllRanges();
+                  sel.addRange(r2);
+                  const html = divRef.current.innerHTML;
+                  lastHtmlRef.current = html;
+                  onContentChange(html);
+                }
+              }
+            }
+          }
+        }
+        saveCurrentSelection();
       }}
       onBlur={(e) => {
+        saveCurrentSelection();
         isFocusedRef.current = false;
         const html = e.currentTarget.innerHTML;
-        lastHtmlRef.current = html;
-        onContentChange(html);
+        if (html !== lastHtmlRef.current) {
+          lastHtmlRef.current = html;
+          onContentChange(html);
+        }
       }}
-      onInput={(e) => {
+      onPaste={(e) => {
+        e.preventDefault();
+        const htmlData = e.clipboardData.getData("text/html");
+        const plainData = e.clipboardData.getData("text/plain");
+        let cleanHtml = "";
+        if (htmlData && htmlData.trim()) {
+          cleanHtml = sanitizePastedHtml(htmlData);
+        } else if (plainData) {
+          const lines = plainData.replace(/\r\n/g, "\n").split("\n");
+          cleanHtml = highlightBracketVars(
+            lines
+              .map((line) => {
+                const escaped = line
+                  .replace(/&/g, "&amp;")
+                  .replace(/</g, "&lt;")
+                  .replace(/>/g, "&gt;");
+                return escaped.trim() ? `<p>${escaped}</p>` : "<p><br></p>";
+              })
+              .join("")
+          );
+        }
+        if (!cleanHtml) return;
+        const sp = getScrollParent(e.currentTarget);
+        const prevTop = getScrollTop(sp);
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0) {
+          const range = sel.getRangeAt(0);
+          range.deleteContents();
+          const frag = document.createRange().createContextualFragment(cleanHtml);
+          const lastNode = frag.lastChild;
+          range.insertNode(frag);
+          if (lastNode) {
+            const r2 = document.createRange();
+            r2.setStartAfter(lastNode);
+            r2.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(r2);
+            savedRangeRef.current = r2.cloneRange();
+          }
+        }
         const html = e.currentTarget.innerHTML;
         lastHtmlRef.current = html;
         onContentChange(html);
+        requestAnimationFrame(() => setScrollTop(sp, prevTop));
+      }}
+      onInput={(e) => {
+        const sp = getScrollParent(e.currentTarget);
+        const prevTop = getScrollTop(sp);
+        saveCurrentSelection();
+        const html = e.currentTarget.innerHTML;
+        lastHtmlRef.current = html;
+        onContentChange(html);
+        requestAnimationFrame(() => {
+          if (Math.abs(getScrollTop(sp) - prevTop) > 8) {
+            setScrollTop(sp, prevTop);
+          }
+        });
       }}
       onKeyDown={(e) => {
         if (e.key === "Backspace") {
           const sel = window.getSelection();
-          if (sel && sel.isCollapsed) {
+          if (sel && sel.isCollapsed && sel.rangeCount > 0) {
             const target = e.currentTarget;
             const range = sel.getRangeAt(0);
-            const atStart =
-              range.startOffset === 0 &&
-              (range.startContainer === target ||
-                range.startContainer === target.firstChild ||
-                range.startContainer.parentNode === target ||
-                (range.startContainer.parentNode as HTMLElement)?.parentNode === target);
-            if (atStart && pIdx > 0) {
+            if (pIdx > 0 && isCaretAtVeryStart(target, range)) {
               e.preventDefault();
               onBackspaceAtStart();
               return;
@@ -336,23 +661,17 @@ const EditablePageCard = memo(({
           }
         } else if (e.key === "ArrowUp") {
           const sel = window.getSelection();
-          if (sel && sel.isCollapsed) {
+          if (sel && sel.isCollapsed && sel.rangeCount > 0) {
             const target = e.currentTarget;
             const range = sel.getRangeAt(0);
-            const atTop =
-              range.startOffset === 0 &&
-              (range.startContainer === target ||
-                range.startContainer === target.firstChild ||
-                range.startContainer.parentNode === target ||
-                (range.startContainer.parentNode as HTMLElement)?.parentNode === target);
-            if (atTop && pIdx > 0) {
+            if (pIdx > 0 && isCaretAtVeryStart(target, range)) {
               e.preventDefault();
               onArrowUpAtTop();
             }
           }
         } else if (e.key === "ArrowDown") {
           const sel = window.getSelection();
-          if (sel && sel.isCollapsed && pIdx < totalPages - 1) {
+          if (sel && sel.isCollapsed && sel.rangeCount > 0 && pIdx < totalPages - 1) {
             const target = e.currentTarget;
             const lastChild = target.lastChild || target;
             const range = sel.getRangeAt(0);
@@ -360,6 +679,7 @@ const EditablePageCard = memo(({
               range.startContainer === lastChild ||
               (range.startContainer.parentNode as Node | null) === (lastChild as Node) ||
               (range.startContainer.nodeType === Node.TEXT_NODE &&
+                range.startContainer === lastChild.lastChild &&
                 range.startOffset === (range.startContainer.textContent?.length || 0));
             if (atBottom) {
               e.preventDefault();
@@ -376,7 +696,7 @@ const EditablePageCard = memo(({
 
 // Focus helper: move caret to end of element
 function focusAtEnd(el: HTMLElement) {
-  el.focus();
+  el.focus({ preventScroll: true });
   const s = window.getSelection();
   if (s) {
     const r = document.createRange();
@@ -389,7 +709,7 @@ function focusAtEnd(el: HTMLElement) {
 
 // Focus helper: move caret to start of element
 function focusAtStart(el: HTMLElement) {
-  el.focus();
+  el.focus({ preventScroll: true });
   const s = window.getSelection();
   if (s) {
     const r = document.createRange();
@@ -718,7 +1038,16 @@ export function DocumentTemplates() {
 
   const handleSaveTemplate = async () => {
     const fullHtml = docBlocks.join("");
-    if (!tempName.trim() || !fullHtml.replace(/<[^>]*>/g, "").trim()) return;
+    if (!tempName.trim()) {
+      toast.error("Please enter a Template Name");
+      const nameInput = document.getElementById("template-name-input") as HTMLInputElement | null;
+      nameInput?.focus();
+      return;
+    }
+    if (!fullHtml.replace(/<[^>]*>/g, "").trim()) {
+      toast.error("Please add template content before saving");
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -760,28 +1089,19 @@ export function DocumentTemplates() {
   };
 
   // ── Page content change handler ────────────────────────────────────────
-  // When a page's content changes, update that page's blocks and redistribute
+  // When a page's content changes, replace that exact page's block range and trim trailing empty blocks
   const handlePageContentChange = useCallback((pIdx: number, updatedPageHtml: string) => {
     setDocBlocks((prevBlocks) => {
-      // Re-distribute all blocks to know page boundaries
-      const pages = distributeBlocksToPages(prevBlocks);
-      // Replace the current page's blocks with updated HTML blocks
-      const pageStartBlocks: number[] = [];
-      let blockIdx = 0;
-      for (let i = 0; i < pages.length; i++) {
-        pageStartBlocks[i] = blockIdx;
-        const pageBlocks = parseHtmlToBlocks(pages[i] ?? "");
-        blockIdx += pageBlocks.length || 1;
-      }
-
+      const { ranges } = distributeBlocksToPagesWithRanges(prevBlocks);
       const updatedBlocks = parseHtmlToBlocks(updatedPageHtml);
+      const range = ranges[pIdx];
+      const startIdx = range ? range[0] : prevBlocks.length;
+      const endIdx = range ? (pIdx === ranges.length - 1 ? prevBlocks.length : range[1]) : prevBlocks.length;
       const newAllBlocks = [...prevBlocks];
-
-      // Find block range for this page
-      const startIdx = pageStartBlocks[pIdx] ?? 0;
-      const nextPageStart = pageStartBlocks[pIdx + 1];
-      const endIdx = nextPageStart !== undefined ? nextPageStart : prevBlocks.length;
-      newAllBlocks.splice(startIdx, endIdx - startIdx, ...updatedBlocks);
+      newAllBlocks.splice(startIdx, Math.max(0, endIdx - startIdx), ...updatedBlocks);
+      while (newAllBlocks.length > 1 && !hasVisibleContent(newAllBlocks[newAllBlocks.length - 1] ?? "")) {
+        newAllBlocks.pop();
+      }
       return newAllBlocks;
     });
   }, []);
@@ -1133,8 +1453,8 @@ export function DocumentTemplates() {
                   </button>
                   <button
                     onClick={handleSaveTemplate}
-                    disabled={!tempName.trim() || !docBlocks.join("").replace(/<[^>]*>/g, "").trim() || isSubmitting}
-                    className="px-6 py-2 bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm rounded-xl transition-colors disabled:opacity-50 shadow-md flex items-center gap-2"
+                    disabled={isSubmitting}
+                    className="px-6 py-2 bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm rounded-xl transition-colors disabled:opacity-50 shadow-md flex items-center gap-2 cursor-pointer"
                   >
                     {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                     {isSubmitting ? "Saving..." : editingTemplateId ? "Update Template" : "Save Template"}
@@ -1149,6 +1469,7 @@ export function DocumentTemplates() {
                     Template Name *
                   </label>
                   <input
+                    id="template-name-input"
                     type="text"
                     value={tempName}
                     onChange={(e) => setTempName(e.target.value)}
@@ -1186,6 +1507,7 @@ export function DocumentTemplates() {
                     <button
                       key={v.value}
                       type="button"
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => insertVariable(v.value)}
                       className="px-2.5 py-1 text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 rounded-lg border border-emerald-500/20 transition-colors flex items-center gap-1"
                     >
@@ -1253,6 +1575,7 @@ export function DocumentTemplates() {
                     <button
                       key={title}
                       type="button"
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => typeof document !== "undefined" && document.execCommand(cmd, false, val)}
                       className="p-1.5 hover:bg-emerald-500/15 text-slate-700 dark:text-slate-200 hover:text-emerald-600 rounded-lg transition-colors"
                       title={title}
@@ -1266,6 +1589,7 @@ export function DocumentTemplates() {
                     <button
                       key={title}
                       type="button"
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => typeof document !== "undefined" && document.execCommand(cmd, false)}
                       className="p-1.5 hover:bg-emerald-500/15 text-slate-700 dark:text-slate-200 hover:text-emerald-600 rounded-lg transition-colors"
                       title={title}
@@ -1281,6 +1605,7 @@ export function DocumentTemplates() {
                     <button
                       key={title}
                       type="button"
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => typeof document !== "undefined" && document.execCommand(cmd, false)}
                       className="p-1.5 hover:bg-emerald-500/15 text-slate-700 dark:text-slate-200 hover:text-emerald-600 rounded-lg transition-colors"
                       title={title}
@@ -1318,6 +1643,7 @@ export function DocumentTemplates() {
                               totalPages={editorPages.length}
                               pageHtml={pageHtml}
                               insertSignal={focusedPageIdx === pIdx ? insertSignal : null}
+                              onFocusPage={() => setFocusedPageIdx(pIdx)}
                               onContentChange={(updatedHtml) => handlePageContentChange(pIdx, updatedHtml)}
                               onBackspaceAtStart={() => handleBackspaceAtStart(pIdx)}
                               onArrowUpAtTop={() => {
@@ -1359,24 +1685,17 @@ export function DocumentTemplates() {
                     >
                       {renderLetterheadHeader()}
                       <div className="px-6 sm:px-10 pt-2 pb-10">
-                        {isMounted ? (
-                          <Suspense fallback={<div className="h-80 flex items-center justify-center text-sm text-muted-foreground">Loading Editor...</div>}>
-                            <ReactQuillComponent
-                              theme="snow"
-                              value={quillContent}
-                              onChange={(val: string) => setDocBlocks(parseHtmlToBlocks(val))}
-                              modules={QUILL_MODULES}
-                              placeholder="Write your document template content here..."
-                            />
-                          </Suspense>
-                        ) : (
-                          <textarea
-                            value={quillContent}
-                            onChange={(e) => setDocBlocks(parseHtmlToBlocks(e.target.value))}
-                            placeholder="Write your document template content here..."
-                            className="w-full h-[450px] p-4 bg-transparent border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-sm font-medium resize-none"
-                          />
-                        )}
+                        <EditablePageCard
+                          pIdx={0}
+                          totalPages={1}
+                          pageHtml={quillContent}
+                          insertSignal={insertSignal}
+                          onFocusPage={() => setFocusedPageIdx(0)}
+                          onContentChange={(updatedHtml) => setDocBlocks(parseHtmlToBlocks(updatedHtml))}
+                          onBackspaceAtStart={() => {}}
+                          onArrowUpAtTop={() => {}}
+                          onArrowDownAtBottom={() => {}}
+                        />
                       </div>
                     </div>
                   </div>
@@ -1402,7 +1721,7 @@ export function DocumentTemplates() {
                       className="w-full"
                     >
                      <A4Fit className="w-full flex flex-col items-center gap-4 sm:gap-6">
-                      {getPreviewPages(quillContent, showSampleDataInPreview).map((pageHtml, pIdx) => (
+                      {getPreviewPages(convertEditableHtmlToTemplate(quillContent), showSampleDataInPreview).map((pageHtml, pIdx) => (
                         <div key={pIdx} className="a4-page-card">
                           <div className="a4-page-content">
                             {renderLetterheadHeader()}
