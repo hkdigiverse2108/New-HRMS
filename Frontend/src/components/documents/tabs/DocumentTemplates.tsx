@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { api } from "@/lib/api";
+import { getApiUrl } from "@/lib/config";
 import { toast } from "@/lib/toast";
 
 const ReactQuillComponent = lazy<React.ComponentType<any>>(async () => {
@@ -869,6 +870,20 @@ export function DocumentTemplates() {
     handleSync();
     window.addEventListener("storage", handleSync);
     window.addEventListener("focus", handleSync);
+    const loadSettingsLetterhead = async () => {
+      try {
+        const res = await api.get<any>("/settings", { showLoader: false, showErrorToast: false });
+        const url: string | null = res?.letterhead_url || null;
+        if (!url) return;
+        const full = /^(https?:|data:)/.test(url)
+          ? url
+          : `${getApiUrl().replace(/\/+$/, "")}${url.startsWith("/") ? "" : "/"}${url}`;
+        setLetterheadConfig((prev) => ({ ...prev, enabled: true, headerImageUrl: full }));
+      } catch {
+        // fallback to local config
+      }
+    };
+    loadSettingsLetterhead();
     return () => {
       window.removeEventListener("storage", handleSync);
       window.removeEventListener("focus", handleSync);
@@ -1141,7 +1156,7 @@ export function DocumentTemplates() {
     if (letterheadConfig.headerImageUrl) {
       return (
         <div className="relative w-full overflow-hidden bg-white select-none shrink-0 mb-4 border-b border-slate-100">
-          <img src={letterheadConfig.headerImageUrl} alt="Letterhead Header" className="w-full max-h-36 object-cover" />
+          <img src={letterheadConfig.headerImageUrl} alt="Letterhead Header" className="w-full max-h-36 object-contain" />
         </div>
       );
     }

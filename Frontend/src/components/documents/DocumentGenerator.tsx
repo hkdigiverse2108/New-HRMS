@@ -226,7 +226,24 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
     };
   }, []);
 
-  // Keep letterhead synced with DocumentTemplates (use document_letterhead_config / default HariKrushn DigiVerse LLP header)
+  // Company letterhead uploaded in Admin Settings takes priority over the local default
+  useEffect(() => {
+    const loadSettingsLetterhead = async () => {
+      try {
+        const res = await api.get<any>("/settings", { showLoader: false, showErrorToast: false });
+        const url: string | null = res?.letterhead_url || null;
+        if (!url) return;
+        const full = /^(https?:|data:)/.test(url)
+          ? url
+          : `${getApiUrl().replace(/\/+$/, "")}${url.startsWith("/") ? "" : "/"}${url}`;
+        settingsLetterheadRef.current = full;
+        setLetterhead((prev) => ({ ...prev, enabled: true, headerImageUrl: full }));
+      } catch (e) {
+        console.warn("Failed to load company letterhead from settings", e);
+      }
+    };
+    loadSettingsLetterhead();
+  }, []);
 
   // Fetch templates and employees from backend API
   useEffect(() => {
