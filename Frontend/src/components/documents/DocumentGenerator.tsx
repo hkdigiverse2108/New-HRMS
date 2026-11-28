@@ -924,8 +924,8 @@ export function DocumentGenerator({ onBack, activeTabPath }: { onBack?: () => vo
     if (!letterhead.enabled) return null;
     if (letterhead.headerImageUrl) {
       return (
-        <div className="relative w-full overflow-hidden bg-white select-none shrink-0 mb-4 border-b border-slate-100">
-          <img src={letterhead.headerImageUrl} alt="Letterhead Header" className="w-full max-h-36 object-contain" />
+        <div className="relative w-full overflow-hidden bg-white select-none shrink-0 mb-4">
+          <img src={letterhead.headerImageUrl} alt="Letterhead Header" className="w-full h-auto block" />
         </div>
       );
     }

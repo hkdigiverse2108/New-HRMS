@@ -1155,8 +1155,8 @@ export function DocumentTemplates() {
     if (!letterheadConfig.enabled) return null;
     if (letterheadConfig.headerImageUrl) {
       return (
-        <div className="relative w-full overflow-hidden bg-white select-none shrink-0 mb-4 border-b border-slate-100">
-          <img src={letterheadConfig.headerImageUrl} alt="Letterhead Header" className="w-full max-h-36 object-contain" />
+        <div className="relative w-full overflow-hidden bg-white select-none shrink-0 mb-4">
+          <img src={letterheadConfig.headerImageUrl} alt="Letterhead Header" className="w-full h-auto block" />
         </div>
       );
     }
